@@ -1,0 +1,247 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "fontRasterizer": "Onix pure Go outline rasterizer; unhinted; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "173e13c8fc6859bf05dbfb2e9941c879158bb69efcfed8d053abf792e8e860e9",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {
+    "flex-row": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-column-wrap": {
+      "pixelsOver16": 153,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.6845959595959596,
+        0.3795454545454545,
+        0.7509090909090909
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-absolute": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "display-block": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "display-inline-block": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "display-inline-flex": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "grid-fixed": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "grid-repeat": {
+      "pixelsOver16": 200,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.8762626262626263,
+        0.5606060606060606,
+        1.1363636363636365
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "grid-align": {
+      "pixelsOver16": 60,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.05,
+        0.01818181818181818,
+        0.35
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "grid-span": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "grid-inline": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "display-none": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "display-contents": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "relative-flow": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "absolute-insets": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "absolute-percent": {
+      "pixelsOver16": 2,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0048484848484848485,
+        0.0018181818181818182,
+        0.0056565656565656566
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "absolute-right-bottom": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "absolute-nearest": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "relative-container": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    }
+  },
+  "allStructuralPass": true
+}

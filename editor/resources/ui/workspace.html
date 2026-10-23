@@ -1,0 +1,52 @@
+<body>
+  <section id="viewport-panel" data-ref="viewport" class="viewport-panel" aria-label="Scene viewport"></section>
+  <aside id="scene-panel" data-ref="scenes" class="outliner" aria-label="Scenes">
+    <h2 class="panel-title"><img src="onix-leftbar/tree.svg" alt="">Scenes<button id="outliner-exit-module" data-ref="exit-module" type="button" class="panel-title-action" aria-label="Back to scenes" title="Back to scenes (Esc)" hidden><img src="onix-leftbar/undo.svg" alt=""></button></h2>
+    <div class="panel-body"><div data-ref="scene-content"></div><div data-ref="scene-empty" class="muted">Open a project to view scenes and module instances.</div></div>
+  </aside>
+  <section id="content-browser" data-ref="resources" class="content-browser" aria-label="Module files">
+    <div class="panel-title resource-tabs" role="tablist" aria-label="Resource editors">
+      <button id="resources-tab" data-ref="resources-tab" type="button" role="tab" aria-selected="true" aria-controls="resource-panel"><img src="onix-leftbar/resource.svg" alt="">Resources</button>
+      <button id="animation-tab" data-ref="animation-tab" type="button" role="tab" aria-selected="false" aria-controls="animation-panel" tabindex="-1" hidden><img src="onix-leftbar/animation.svg" alt="">Animation</button>
+    </div>
+    <div id="resource-panel" data-ref="resource-panel" class="panel-body" role="tabpanel" aria-labelledby="resources-tab"><div data-ref="file-content"></div><div data-ref="file-empty" class="muted">Open a project to view project and module files.</div></div>
+    <div id="animation-panel" data-ref="animation-panel" class="panel-body animation-panel" role="tabpanel" aria-labelledby="animation-tab" hidden><div data-ref="animation-content"></div></div>
+  </section>
+  <section id="inspector" data-ref="inspector" class="panel inspector" aria-label="Details">
+    <h2 class="panel-title"><img src="onix-rightbar/info.svg" alt="">Details</h2>
+    <div class="panel-body"><div data-ref="detail-content"></div><div data-ref="detail-empty" class="muted">Select a module instance or resource to view its properties.</div></div>
+  </section>
+  <main data-ref="welcome" class="welcome"><h1>Onix Editor</h1><p>Create or open a project from the File menu.</p></main>
+  <div data-ref="component-picker"></div>
+  <div data-ref="animation-curve-popup"></div>
+  <div id="outliner-menu" data-ref="menu" class="outliner-menu" role="menu" aria-label="Scene actions" hidden>
+    <button id="outliner-new-scene" data-ref="new-scene" type="button" role="menuitem"><img src="onix-leftbar/tree.svg" alt=""><span>Create Scene</span></button>
+    <button id="outliner-new-module" data-ref="new-module" type="button" role="menuitem"><img src="onix-leftbar/component.svg" alt=""><span data-ref="new-module-label"></span></button>
+    <button id="outliner-duplicate-module" data-ref="duplicate-module" type="button" role="menuitem" aria-haspopup="dialog" hidden><img src="onix-leftbar/copy.svg" alt=""><span>Duplicate Module</span></button>
+    <button id="outliner-delete-module" data-ref="delete-module" type="button" role="menuitem" class="danger" hidden><img src="onix-leftbar/trash-2.svg#danger" alt=""><span>Delete Module</span></button>
+    <button id="outliner-new-element" data-ref="new-element" type="button" role="menuitem" hidden><img src="onix-leftbar/layers.svg" alt=""><span data-ref="new-element-label">Add Element</span></button>
+    <button id="outliner-delete-element" data-ref="delete-element" type="button" role="menuitem" class="danger" hidden><img src="onix-leftbar/trash-2.svg#danger" alt=""><span>Delete Element</span></button>
+    <button id="outliner-new-slot" data-ref="new-slot" type="button" role="menuitem" hidden><img src="onix-leftbar/component.svg" alt=""><span>Add Slot</span></button>
+    <button id="outliner-delete-slot" data-ref="delete-slot" type="button" role="menuitem" class="danger" hidden><img src="onix-leftbar/trash-2.svg#danger" alt=""><span>Delete Slot</span></button>
+    <button id="outliner-add-resources" data-ref="add-resources" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" aria-controls="outliner-resource-menu" hidden><img src="onix-leftbar/resource.svg" alt=""><span>Add Resources</span><img class="menu-arrow" src="onix-leftbar/arrow.svg#right" alt=""></button>
+    <button id="outliner-delete-resource" data-ref="delete-resource" type="button" role="menuitem" class="danger" hidden><img src="onix-leftbar/trash-2.svg#danger" alt=""><span>Delete Resource</span></button>
+  </div>
+  <div id="outliner-resource-menu" data-ref="resource-menu" class="outliner-menu" role="menu" aria-label="Add Resources" hidden>
+    <button id="outliner-add-resource:font" type="button" role="menuitem"><img src="onix-leftbar/text-file.svg" alt=""><span>Font</span></button>
+    <button id="outliner-add-resource:image" type="button" role="menuitem"><img src="onix-leftbar/image-file.svg" alt=""><span>Image</span></button>
+    <button id="outliner-add-resource:audio" type="button" role="menuitem"><img src="onix-leftbar/audio-file.svg" alt=""><span>Audio</span></button>
+    <button id="outliner-add-resource:video" type="button" role="menuitem"><img src="onix-leftbar/video-file.svg" alt=""><span>Video</span></button>
+    <button id="outliner-add-resource:html" type="button" role="menuitem"><img src="onix-leftbar/code-file.svg" alt=""><span>HTML</span></button>
+    <button id="outliner-add-resource:shader" type="button" role="menuitem"><img src="onix-leftbar/code-file.svg" alt=""><span>Shader</span></button>
+    <button id="outliner-add-resource:model" type="button" role="menuitem"><img src="onix-leftbar/model.svg" alt=""><span>Model</span></button>
+    <button id="outliner-add-resource:spine" type="button" role="menuitem"><img src="onix-leftbar/spine.svg" alt=""><span>Spine</span></button>
+    <button id="outliner-add-resource:atlas" type="button" role="menuitem"><img src="onix-leftbar/grid.svg" alt=""><span>Atlas</span></button>
+    <button id="outliner-add-resource:animation" type="button" role="menuitem"><img src="onix-leftbar/animation.svg" alt=""><span>Animation</span></button>
+    <button id="outliner-add-resource:tilemap" type="button" role="menuitem"><img src="onix-leftbar/tile-map.svg" alt=""><span>Tilemap</span></button>
+    <button id="outliner-add-resource:data" type="button" role="menuitem"><img src="onix-leftbar/text-file.svg" alt=""><span>Data</span></button>
+  </div>
+  <div id="file-menu" data-ref="file-menu" class="outliner-menu" role="menu" aria-label="File actions" hidden>
+    <button id="file-menu-new-folder" data-ref="file-new-folder" type="button" role="menuitem"><img src="onix-leftbar/folder.svg" alt=""><span>New Folder</span></button>
+    <button id="file-menu-delete" data-ref="file-delete" type="button" role="menuitem" class="danger" hidden><img src="onix-leftbar/trash-2.svg#danger" alt=""><span>Delete</span></button>
+  </div>
+</body>

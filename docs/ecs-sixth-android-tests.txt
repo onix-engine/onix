@@ -1,0 +1,48 @@
+Onix ECS sixth batch Android tests
+Android 12/API 32, x86_64; Go 1.26; NDK API 24; GOMAXPROCS=2.
+Baseline: batch-five source and original test font setup.
+Final: All/Discard migration and explicit repository fonts in layout fixtures.
+UI and HTML tests run in full, without skips.
+
+Original UI baseline failure log
+--- FAIL: TestHTMLClippedButtonFollowsAncestorScroll (0.00s)
+    --- FAIL: TestHTMLClippedButtonFollowsAncestorScroll/hidden (0.00s)
+        html_overflow_control_scroll_test.go:41: button clip has no enclosing scroll viewport
+    --- FAIL: TestHTMLClippedButtonFollowsAncestorScroll/clip (0.00s)
+        html_overflow_control_scroll_test.go:41: button clip has no enclosing scroll viewport
+    --- FAIL: TestHTMLClippedButtonFollowsAncestorScroll/auto (0.00s)
+        html_overflow_control_scroll_test.go:41: button clip has no enclosing scroll viewport
+    --- FAIL: TestHTMLClippedButtonFollowsAncestorScroll/scroll (0.00s)
+        html_overflow_control_scroll_test.go:41: button clip has no enclosing scroll viewport
+--- FAIL: TestHTMLScrollportCullsTextVisuals (0.01s)
+    html_scroll_cull_test.go:35: missing scroll viewport
+--- FAIL: TestHTMLScrollportCullSurvivesStaticAncestorClip (0.01s)
+    html_scroll_cull_test.go:110: missing scroll viewport
+--- FAIL: TestHTMLControlValueFilledAfterEmptyRenderKeepsCSSColor (0.00s)
+    html_test.go:1168: empty editor text color = graphics.ColorRGBA{R:0, G:0, B:0, A:0}, found=false; want transparent CSS color
+--- FAIL: TestHTMLLocalScrollTextUpdateKeepsOffsetsAcrossFrames (0.00s)
+    html_test.go:2890: missing scroll content
+--- FAIL: TestHTMLTextareaCaretUsesCSSContentOrigin (0.00s)
+    html_textarea_caret_test.go:110: textarea has no value text visual
+--- FAIL: TestHTMLWheelOverScrollableTextareaStaysInTextarea (0.00s)
+    html_wheel_test.go:69: scrollable textarea did not consume the wheel: {Device:1 X:150 Y:60 PressX:0 PressY:0 DeltaX:0 DeltaY:0 WheelX:0 WheelY:-1 Down:false Pressed:false Released:false}
+--- FAIL: TestHTMLOverflowWheelScrollsHoveredContainer (0.00s)
+    html_wheel_test.go:211: scroll areas = 0, want 2
+FAIL
+
+Original HTML baseline failure log
+--- FAIL: TestHTMLComponentStylePatchUsesIncrementalRendering (0.00s)
+    component_test.go:1346: style patch did not stay local: {UpdatedControls:0 SnapshottedControls:0 UpdatedClips:0 RoutedEntities:0 ExtentBoxes:0 Styled:2 PaintUpdated:0 Spawned:0 Despawned:0 Reused:0 LayoutWork:{Visited:0 Reflowed:0 Reused:0 Translated:0 Created:0 LocalFlexReflows:0 TopologyVisited:0 OrderContainers:0} Layouts:0 ReconciledBoxes:0 PartialReconciles:0 BindingEntities:0 OrderUpdated:0 OwnerListBoxes:0}
+FAIL
+
+Final ecs full test suite
+PASS
+
+Final scene full test suite
+PASS
+
+Final ui full test suite
+PASS
+
+Final html full test suite
+PASS

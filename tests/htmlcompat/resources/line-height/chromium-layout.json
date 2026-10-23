@@ -1,0 +1,32 @@
+{
+  "case-normal": {
+    "X": 0,
+    "Y": 0,
+    "Width": 280,
+    "Height": 120
+  },
+  "text-normal": {
+    "X": 12,
+    "Y": 12,
+    "Width": 256,
+    "Height": 48
+  },
+  "case-flex": {
+    "X": 320,
+    "Y": 0,
+    "Width": 280,
+    "Height": 120
+  },
+  "flex-box": {
+    "X": 332,
+    "Y": 12,
+    "Width": 256,
+    "Height": 72
+  },
+  "text-flex-button": {
+    "X": 340,
+    "Y": 32,
+    "Width": 112,
+    "Height": 32
+  }
+}

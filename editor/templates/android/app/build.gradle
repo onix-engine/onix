@@ -1,0 +1,65 @@
+plugins {
+    id "com.android.application"
+}
+
+def onixProperties = new Properties()
+def onixPropertiesFile = rootProject.file("onix.local.properties")
+if (onixPropertiesFile.exists()) {
+    onixPropertiesFile.withInputStream { onixProperties.load(it) }
+}
+
+def onixCompileSdk = (onixProperties.getProperty("onix.android.compileSdk") ?: "__ANDROID_COMPILE_SDK__") as Integer
+def onixTargetSdk = (onixProperties.getProperty("onix.android.targetSdk") ?: "__ANDROID_TARGET_SDK__") as Integer
+def onixBuildToolsVersion = onixProperties.getProperty("onix.android.buildToolsVersion") ?: "__ANDROID_BUILD_TOOLS__"
+def onixCMakeVersion = onixProperties.getProperty("onix.android.cmakeVersion") ?: "__ANDROID_CMAKE_VERSION__"
+def onixNdkVersion = onixProperties.getProperty("onix.android.ndkVersion")
+def onixNdkPath = onixProperties.getProperty("onix.android.ndkPath")
+
+android {
+    namespace "__JAVA_PACKAGE__"
+    compileSdk onixCompileSdk
+    buildToolsVersion onixBuildToolsVersion
+    if (onixNdkVersion != null && !onixNdkVersion.isBlank()) {
+        ndkVersion onixNdkVersion
+    }
+    if (onixNdkPath != null && !onixNdkPath.isBlank()) {
+        ndkPath onixNdkPath
+    }
+
+    defaultConfig {
+        applicationId "__JAVA_PACKAGE__"
+        minSdk __ANDROID_MIN_SDK__
+        targetSdk onixTargetSdk
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("src/main/cpp/CMakeLists.txt")
+            version onixCMakeVersion
+        }
+    }
+}

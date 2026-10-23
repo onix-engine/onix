@@ -1,0 +1,19 @@
+=== RUN   TestRetainedRender2DSparseSnapshotsAndOrder
+--- PASS: TestRetainedRender2DSparseSnapshotsAndOrder (0.00s)
+=== RUN   TestRetainedRender2DVisibilityStructureAndScopes
+--- PASS: TestRetainedRender2DVisibilityStructureAndScopes (0.00s)
+=== RUN   TestComposite2DDamageMoveRemovalAndOcclusion
+--- PASS: TestComposite2DDamageMoveRemovalAndOcclusion (0.01s)
+=== RUN   TestComposite2DScrollReusesPropertiesAndPixels
+--- PASS: TestComposite2DScrollReusesPropertiesAndPixels (0.01s)
+=== RUN   TestRetainedRender2DClipTextureAndDenseRecovery
+--- PASS: TestRetainedRender2DClipTextureAndDenseRecovery (0.00s)
+=== RUN   TestComposite2DConservativeOpaqueBounds
+--- PASS: TestComposite2DConservativeOpaqueBounds (0.00s)
+=== RUN   TestComposite2DBudgetDenseChangesAndResize
+--- PASS: TestComposite2DBudgetDenseChangesAndResize (0.00s)
+=== RUN   TestComposite2DIneligibleOutputsAndReleasedText
+--- PASS: TestComposite2DIneligibleOutputsAndReleasedText (0.01s)
+=== RUN   TestComposite2DOnlyFirstCameraOwnsOpaqueBackground
+--- PASS: TestComposite2DOnlyFirstCameraOwnsOpaqueBackground (0.00s)
+PASS

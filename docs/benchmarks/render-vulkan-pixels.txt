@@ -1,0 +1,4 @@
+=== RUN   TestNativeComposite2DMatchesFullRender
+--- PASS: TestNativeComposite2DMatchesFullRender (0.46s)
+PASS
+ok  	github.com/diiyw/onix/scene	0.500s

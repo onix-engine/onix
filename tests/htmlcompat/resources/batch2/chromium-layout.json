@@ -1,0 +1,266 @@
+{
+  "case-absolute-max": {
+    "X": 10,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-max": {
+    "X": 10,
+    "Y": 10,
+    "Width": 160,
+    "Height": 90
+  },
+  "absolute-max-child-0": {
+    "X": 20,
+    "Y": 20,
+    "Width": 80,
+    "Height": 40
+  },
+  "case-absolute-min": {
+    "X": 210,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-min": {
+    "X": 210,
+    "Y": 10,
+    "Width": 160,
+    "Height": 90
+  },
+  "absolute-min-child-0": {
+    "X": 260,
+    "Y": 20,
+    "Width": 100,
+    "Height": 40
+  },
+  "case-absolute-bottom-box": {
+    "X": 410,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-bottom-box": {
+    "X": 410,
+    "Y": 10,
+    "Width": 160,
+    "Height": 90
+  },
+  "absolute-bottom-box-child-0": {
+    "X": 490,
+    "Y": 40,
+    "Width": 70,
+    "Height": 50
+  },
+  "case-absolute-percent": {
+    "X": 610,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-percent": {
+    "X": 610,
+    "Y": 10,
+    "Width": 170,
+    "Height": 90
+  },
+  "absolute-percent-child-0": {
+    "X": 652.5,
+    "Y": 32.5,
+    "Width": 85,
+    "Height": 45
+  },
+  "case-min-height-box": {
+    "X": 810,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "min-height-box": {
+    "X": 810,
+    "Y": 10,
+    "Width": 120,
+    "Height": 70
+  },
+  "case-max-height-box": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "max-height-box": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 120,
+    "Height": 70
+  },
+  "case-flex-around": {
+    "X": 10,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-around": {
+    "X": 10,
+    "Y": 140,
+    "Width": 160,
+    "Height": 60
+  },
+  "flex-around-child-0": {
+    "X": 30,
+    "Y": 140,
+    "Width": 40,
+    "Height": 60
+  },
+  "flex-around-child-1": {
+    "X": 110,
+    "Y": 140,
+    "Width": 40,
+    "Height": 60
+  },
+  "case-flex-evenly": {
+    "X": 210,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-evenly": {
+    "X": 210,
+    "Y": 140,
+    "Width": 160,
+    "Height": 60
+  },
+  "flex-evenly-child-0": {
+    "X": 236.65625,
+    "Y": 140,
+    "Width": 40,
+    "Height": 60
+  },
+  "flex-evenly-child-1": {
+    "X": 303.328125,
+    "Y": 140,
+    "Width": 40,
+    "Height": 60
+  },
+  "case-flex-column-reverse": {
+    "X": 410,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-column-reverse": {
+    "X": 410,
+    "Y": 140,
+    "Width": 140,
+    "Height": 90
+  },
+  "flex-column-reverse-child-0": {
+    "X": 410,
+    "Y": 210,
+    "Width": 140,
+    "Height": 20
+  },
+  "flex-column-reverse-child-1": {
+    "X": 410,
+    "Y": 180,
+    "Width": 140,
+    "Height": 30
+  },
+  "case-flex-cross-auto": {
+    "X": 610,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-cross-auto": {
+    "X": 610,
+    "Y": 140,
+    "Width": 160,
+    "Height": 90
+  },
+  "flex-cross-auto-child-0": {
+    "X": 610,
+    "Y": 170,
+    "Width": 50,
+    "Height": 30
+  },
+  "flex-cross-auto-child-1": {
+    "X": 660,
+    "Y": 210,
+    "Width": 40,
+    "Height": 20
+  },
+  "case-flex-wrap-between": {
+    "X": 810,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-wrap-between": {
+    "X": 810,
+    "Y": 140,
+    "Width": 150,
+    "Height": 100
+  },
+  "flex-wrap-between-child-0": {
+    "X": 810,
+    "Y": 140,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-between-child-1": {
+    "X": 880,
+    "Y": 140,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-between-child-2": {
+    "X": 810,
+    "Y": 220,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-between-child-3": {
+    "X": 880,
+    "Y": 220,
+    "Width": 70,
+    "Height": 20
+  },
+  "case-flex-wrap-reverse": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-wrap-reverse": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 150,
+    "Height": 100
+  },
+  "flex-wrap-reverse-child-0": {
+    "X": 1010,
+    "Y": 220,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-reverse-child-1": {
+    "X": 1080,
+    "Y": 220,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-reverse-child-2": {
+    "X": 1010,
+    "Y": 200,
+    "Width": 70,
+    "Height": 20
+  },
+  "flex-wrap-reverse-child-3": {
+    "X": 1080,
+    "Y": 200,
+    "Width": 70,
+    "Height": 20
+  }
+}

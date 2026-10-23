@@ -1,0 +1,30 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHotpathTransformSingleChange/UI=false-6         	  415597	      1434 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false-6         	  445851	      1393 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false-6         	  432793	      1376 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true-6          	  280731	      1952 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true-6          	  323532	      2002 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true-6          	  307762	      1947 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathCharacterWrap-6                          	     476	   1278046 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathCharacterWrap-6                          	     469	   1357333 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathCharacterWrap-6                          	     451	   1461652 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTextBandShift-6                          	    1820	    311996 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTextBandShift-6                          	    1917	    309843 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTextBandShift-6                          	    1964	    306847 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	9.700s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHotpathTabsAbsent-6       	 2778576	       214.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTabsAbsent-6       	 2808590	       215.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTabsAbsent-6       	 2860074	       211.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathStaticControls-6   	 6381747	       103.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathStaticControls-6   	 6364147	        93.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathStaticControls-6   	 5945034	        93.86 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs/ui	4.619s

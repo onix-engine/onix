@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Lark Engine</title>
+  <desc id="desc">A flat game-engine bird emblem in vivid vermilion, with a bright golden wing, golden-yellow beak and feet, and saturated solid-color shading. No gradients or filters.</desc>
+  <defs>
+    <path id="body-shape" d="M 303 95
+             C 264 94 235 112 215 148
+             C 198 183 189 221 169 265
+             C 148 309 119 354 94 385
+             C 85 397 93 411 107 413
+             C 127 416 144 388 170 359
+             C 211 376 266 380 310 363
+             C 355 347 380 318 391 280
+             C 405 239 395 194 387 164
+             C 381 122 348 93 303 95 Z"/>
+    <clipPath id="body-clip"><use href="#body-shape"/></clipPath>
+    <path id="wing-shape" d="M 176 317
+             C 188 280 212 239 243 218
+             C 255 209 264 208 272 220
+             C 291 248 284 279 266 298
+             C 244 321 210 326 183 323
+             Q 174 322 176 317 Z"/>
+    <clipPath id="wing-clip"><use href="#wing-shape"/></clipPath>
+  </defs>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 240 355 V 400 M 297 351 V 398" stroke="#FFC237" stroke-width="24"/>
+    <path d="M 383 152 C 403 152 421 157 422 166 C 423 174 407 185 388 190 Z" fill="#FFC237"/>
+    <use href="#body-shape" fill="#F34232"/>
+    <path d="M 87 405
+             C 119 394 141 365 165 343
+             C 222 367 282 365 329 334
+             C 373 305 392 257 391 211
+             L 429 260 L 394 385 L 107 439 Z" fill="#DB2D2D" clip-path="url(#body-clip)"/>
+    <use href="#wing-shape" fill="#FFBB45"/>
+    <path d="M 172 311
+             C 209 316 239 306 261 284
+             C 275 268 280 246 277 233
+             L 307 247 L 296 337 L 170 338 Z" fill="#F39725" clip-path="url(#wing-clip)"/>
+    <ellipse cx="331" cy="164" rx="24" ry="27" fill="#F3F0E8"/>
+    <ellipse cx="335" cy="163" rx="14" ry="18" fill="#26323D"/>
+    <circle cx="340" cy="155" r="6" fill="#FFFFFF"/>
+  </g>
+</svg>

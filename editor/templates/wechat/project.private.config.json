@@ -1,0 +1,7 @@
+{
+  "description": "Private project configuration. Fields in this file override the corresponding fields in project.config.json. Project changes are saved here first. Documentation: https://developers.weixin.qq.com/miniprogram/dev/devtools/projectconfig.html",
+  "setting": {
+    "skylineRenderEnable": false
+  },
+  "libVersion": "3.7.11"
+}

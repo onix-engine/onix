@@ -1,0 +1,149 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "nativeFontRasterizer": "FreeType 2.13.2; light hinting; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "b3dde0089e0fe2e9cd22f6e10e62b916940162206a361ce75c3dd39a5618e6a2",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {
+    "scroll-y": {
+      "pixelsOver16": 40,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.37742424242424244,
+        0.286010101010101,
+        0.285
+      ],
+      "boundaryPixelsOver16": 20,
+      "structuralPass": false
+    },
+    "scroll-x": {
+      "pixelsOver16": 61,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.46126262626262626,
+        0.3883333333333333,
+        0.38772727272727275
+      ],
+      "boundaryPixelsOver16": 31,
+      "structuralPass": false
+    },
+    "scroll-both": {
+      "pixelsOver16": 109,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.6416666666666667,
+        0.5675252525252525,
+        0.5669191919191919
+      ],
+      "boundaryPixelsOver16": 60,
+      "structuralPass": false
+    },
+    "scroll-thin": {
+      "pixelsOver16": 59,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.6004545454545455,
+        0.3893434343434343,
+        0.36247474747474745
+      ],
+      "boundaryPixelsOver16": 12,
+      "structuralPass": false
+    },
+    "opacity-parent": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.6060606060606061,
+        0.0,
+        0.3333333333333333
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "opacity-deep": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.42424242424242425,
+        0.42424242424242425,
+        0.5757575757575758
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "radius-overflow": {
+      "pixelsOver16": 68,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.3592929292929293,
+        0.2062121212121212,
+        0.25833333333333336
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "radius-text": {
+      "pixelsOver16": 126,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.33934343434343434,
+        0.1557070707070707,
+        0.052626262626262625
+      ],
+      "boundaryPixelsOver16": 8,
+      "inkPixelsBeyond1px": 0,
+      "structuralPass": true
+    },
+    "scroll-color": {
+      "pixelsOver16": 59,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.32126262626262625,
+        0.56,
+        0.49712121212121213
+      ],
+      "boundaryPixelsOver16": 12,
+      "structuralPass": false
+    },
+    "opacity-overlap": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.5606060606060606,
+        0.7045454545454546,
+        0.7045454545454546
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    }
+  },
+  "allStructuralPass": false
+}

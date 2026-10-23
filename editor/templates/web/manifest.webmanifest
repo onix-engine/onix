@@ -1,0 +1,6 @@
+{
+  "name": "__WEB_TITLE_JSON__",
+  "short_name": "__WEB_TITLE_JSON__",
+  "display": "standalone",
+  "icons": __WEB_MANIFEST_ICONS__
+}

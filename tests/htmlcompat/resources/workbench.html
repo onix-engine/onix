@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box}
+.is-hidden{display:none}
+html,body{margin:0;height:100%;background:#181818;color:#cccccc;font:13px sans-serif;overflow:hidden}
+button,input,textarea{font:13px sans-serif;color:#cccccc}
+button{border:0;background:transparent;border-radius:4px;padding:5px 9px;cursor:pointer}
+button:hover{background:#2a2d2e}
+button:focus,input:focus{outline:1px solid #0078d4;outline-offset:1px}
+.icon{width:16px;height:16px;display:block;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;flex-shrink:0}
+.app{display:flex;flex-direction:column;height:100vh;min-width:620px}
+.toolbar{height:40px;flex:none;display:flex;align-items:center;gap:2px;padding:0 10px;background:#181818;border-bottom:1px solid #2b2b2b}
+.brand{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#e7e7e7;padding-right:12px;margin-right:6px;border-right:1px solid #2b2b2b}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:#0078d4;color:#ffffff;font-size:12px}
+.project-name{font-weight:600;margin:0 10px;color:#9d9d9d;max-width:190px;overflow:hidden}
+.spacer{flex:1}
+.run{color:#73c991}
+.run:hover{background:#1a2e22}
+.body{display:flex;flex:1;min-height:0}
+.project{width:240px;flex:none;display:flex;flex-direction:column;background:#181818;border-right:1px solid #2b2b2b}
+.heading{height:35px;flex:none;display:flex;align-items:center;padding:0 6px 0 16px;border-bottom:1px solid #2b2b2b;color:#cccccc;font-size:11px;font-weight:700;letter-spacing:.08em}
+.heading .icon-btn{color:#9d9d9d}
+.icon-btn{width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.icon-btn .icon{width:14px;height:14px}
+.root{flex:none;padding:8px 16px 4px;font-weight:700;color:#e7e7e7;font-size:12px}
+.tree{flex:1;overflow:auto;padding:2px 8px 8px}
+.file{width:100%;height:26px;display:flex;align-items:center;text-align:left;padding:0 8px;gap:8px;color:#cccccc}
+.file:hover{background:#2a2d2e}
+.file.sel{background:#04395e;color:#ffffff}
+.kind{flex:none;min-width:22px;color:#6ea5d8;font-size:10px;font-weight:700;text-align:center}
+.foot{flex:none;padding:8px;border-top:1px solid #2b2b2b}
+.foot .btn{width:100%;height:30px;justify-content:center;color:#ffffff;background:#0078d4}
+.foot .btn:hover{background:#026ec1}
+.workspace{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;background:#1f1f1f}
+.tabs{height:35px;flex:none;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b;overflow:auto}
+.tab{border-radius:0;padding:0 14px;color:#9d9d9d;border-right:1px solid #2b2b2b;border-top:1px solid transparent;background:#181818}
+.tab.active{background:#1f1f1f;color:#ffffff;border-top:1px solid #0078d4}
+.crumb{height:22px;flex:none;display:flex;align-items:center;padding:0 16px;color:#9d9d9d;font-size:12px;background:#1f1f1f}
+.editor-host{flex:1;min-height:0;overflow:hidden;background:#1f1f1f}
+.empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6e7681}
+.empty b{font-size:40px;line-height:1;color:#2f353c;letter-spacing:-.04em}
+.empty span{font-size:13px}
+.terminal-panel{height:235px;min-height:235px;flex:none;background:#181818;display:flex;flex-direction:column;border-top:1px solid #2b2b2b}
+.terminal-head{height:35px;min-height:35px;flex:none;display:flex;align-items:center;gap:8px;overflow:hidden;padding:0 10px;background:#181818;color:#cccccc;font-size:11px;font-weight:700;letter-spacing:.08em}
+.terminal-head .icon{width:14px;height:14px}
+.terminal-state{color:#6e7681;font-weight:400;letter-spacing:0;margin-left:4px}
+.terminal-head .btn{height:24px;padding:0 8px;color:#9d9d9d;font-size:12px}
+.terminal-head .btn:hover{color:#cccccc}
+.terminal-host{flex:1;min-height:0;overflow:hidden;background:#181818}
+.tools{height:32px;min-height:32px;flex:none;display:flex;align-items:center;padding:0 10px;background:#181818;border-top:1px solid #2b2b2b}
+.tools button{height:26px;padding:0 10px;color:#9d9d9d;font-size:12px}
+.tools button.sel{color:#cccccc;background:#2a2d2e}
+.tools small{margin-left:6px;color:#6e7681;font-size:11px}
+.status{height:22px;min-height:22px;flex:none;display:flex;align-items:center;gap:16px;padding:0 12px;color:#9d9d9d;background:#181818;font-size:11px;border-top:1px solid #2b2b2b}
+.status-msg{flex:1}
+.error{color:#f48771}
+.find{height:38px;flex:none;padding:4px 12px;display:flex;align-items:center;gap:8px;background:#252526;border-bottom:1px solid #2b2b2b}
+.find input{width:260px;background:#3c3c3c;border:1px solid #3c3c3c;border-radius:2px;padding:4px 8px;color:#cccccc}
+.find-result{color:#9d9d9d;font-size:12px}
+.dialog{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#000000b3}
+.dialog-card{width:400px;padding:20px;background:#1f1f1f;border:1px solid #454545;border-radius:6px}
+.dialog-card h2{margin:0 0 6px;font-size:15px}
+.dialog-card p{margin:0;color:#9d9d9d;font-size:12px}
+.dialog-card input{width:100%;margin:14px 0;padding:7px 9px;background:#3c3c3c;border:1px solid #3c3c3c;border-radius:2px;color:#cccccc}
+.actions{display:flex;justify-content:flex-end;gap:8px}
+.actions button{padding:5px 14px}
+.actions button.last-action{background:#0078d4;color:#ffffff}
+.actions button.last-action:hover{background:#026ec1}
+@media(max-width:800px){.project{width:200px}.project-name{display:none}.toolbar{padding:0 6px}.toolbar>.btn span{display:none}.toolbar>.btn{padding:5px}.app{min-width:0}}
+</style></head><body><main class="app"><header class="toolbar"><b class="brand"><span class="brand-mark">Z</span><span>zia</span></b><span id="project-name" class="project-name">Project</span>
+<button id="open-folder" class="btn" title="Open folder"><img class="icon" src="../../../editor/resources/images/icons/open.svg" alt=""><span>Open</span></button>
+<button id="save-file" class="btn" title="Save file"><img class="icon" src="../../../editor/resources/images/icons/save.svg" alt=""><span>Save</span></button>
+<button id="save-all" class="btn" title="Save all files"><img class="icon" src="../../../editor/resources/images/icons/layers.svg" alt=""><span>Save all</span></button>
+<button id="show-find" class="btn" title="Find in file"><img class="icon" src="../../../editor/resources/images/icons/focus.svg" alt=""><span>Find</span></button><span class="spacer"></span><button id="format-code" class="btn" title="Format Go source"><img class="icon" src="../../../editor/resources/images/icons/setting.svg" alt=""><span>Format Go</span></button><button id="run-tests" class="btn run" title="Run Go tests"><img class="icon" src="../../../editor/resources/images/icons/play.svg" alt=""><span>Run tests</span></button></header>
+<div class="body"><aside class="project"><div class="heading"><b>EXPLORER</b><span class="spacer"></span><button id="collapse-tree" class="icon-btn" title="Collapse project tree" aria-label="Collapse project tree"><img class="icon" src="../../../editor/resources/images/icons/up.svg" alt=""></button><button id="refresh-tree" class="icon-btn" title="Refresh project tree" aria-label="Refresh project tree"><img class="icon" src="../../../editor/resources/images/icons/reload.svg" alt=""></button></div><div id="root-name" class="root">zia</div><div id="file-tree" class="tree"></div><div class="foot"><button id="new-file" class="btn" title="Create a new file"><img class="icon" src="../../../editor/resources/images/icons/code-file.svg" alt=""><span>New file</span></button></div></aside><section class="workspace"><nav id="tabs" class="tabs" aria-label="Open files"></nav><div id="breadcrumb" class="crumb">Choose a file in Project</div><div id="find-bar" class="find is-hidden"><input id="find-query" placeholder="Find in current file" aria-label="Find in current file"><button id="find-next" class="btn">Next</button><span id="find-result" class="find-result"></span><span class="spacer"></span><button id="hide-find" class="icon-btn" title="Close find" aria-label="Close find"><img class="icon" src="../../../editor/resources/images/icons/close.svg" alt=""></button></div><div id="editor-host" class="editor-host"><div id="empty-editor" class="empty"><b>zia</b><span>Open a file to start editing</span></div></div><section id="terminal-panel" class="terminal-panel"><div class="terminal-head"><img class="icon" src="../../../editor/resources/images/icons/code-file.svg" alt=""><b>TERMINAL</b><span id="terminal-state" class="terminal-state">Ready</span><span class="spacer"></span><button id="stop-command" class="btn" title="Stop command"><img class="icon" src="../../../editor/resources/images/icons/stop.svg" alt=""><span>Stop</span></button><button id="clear-terminal" class="btn">Clear</button><button id="hide-terminal" class="btn">Hide</button></div><div id="terminal-host" class="terminal-host"></div></section><div class="tools"><button id="toggle-terminal" class="btn sel"><img class="icon" src="../../../editor/resources/images/icons/code-file.svg" alt=""><span>Terminal</span><small>Ctrl + `</small></button></div></section></div><footer class="status"><span id="status" class="status-msg">Ready</span><span id="cursor-position">Ln 1, Col 1</span><span id="line-ending">LF</span><span>UTF-8</span><span id="language">Text</span></footer></main><div id="dialog" class="dialog is-hidden"><div class="dialog-card"><h2 id="dialog-title">Create file</h2><p id="dialog-message">Enter a path relative to the project.</p><input id="new-path" placeholder="src/example.go" aria-label="New file path"><div class="actions"><button id="dialog-cancel">Cancel</button><button id="dialog-confirm" class="last-action">Create</button></div></div></div><div class="is-hidden"><button id="tree-template" class="file"><span id="kind-template" class="kind"></span><span id="name-template"></span></button></div></body></html>

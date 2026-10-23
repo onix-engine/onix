@@ -1,0 +1,66 @@
+# round 1
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	    1159	    183178 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    1006	    200408 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   18512	     13081 ns/op	 489.26 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	    9577	     30465 ns/op	13445.12 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	    8527	     39298 ns/op	  97.71 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    4734	     62229 ns/op	9641.86 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS
+# round 2
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	     988	    237816 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    1257	    185403 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   16035	     12618 ns/op	 507.21 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	    7308	     33505 ns/op	12225.07 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	    6296	     35327 ns/op	 108.70 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    4848	     62239 ns/op	9640.24 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS
+# round 3
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	    1254	    179280 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    1045	    217723 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   22039	     13893 ns/op	 460.66 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	    7203	     32836 ns/op	12474.05 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	    7354	     31850 ns/op	 120.57 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    4700	     56619 ns/op	10597.13 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS
+# round 4
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	    1173	    205944 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    1209	    204144 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   18475	     11527 ns/op	 555.21 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	    7833	     33945 ns/op	12066.42 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	    7389	     32103 ns/op	 119.61 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    5774	     61203 ns/op	9803.49 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS
+# round 5
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	    2247	    116777 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    1873	    125676 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   27054	      8199 ns/op	 780.57 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	   10000	     26551 ns/op	15426.89 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	   10000	     24968 ns/op	 153.80 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    5289	     46376 ns/op	12937.70 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS
+# round 6
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLDynamicMeshUploads/vertices=64         	    1834	    115493 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLDynamicMeshUploads/vertices=10000      	    2006	    125336 ns/op	         2.000 jsbuffers/op	         5.000 jsviews/op	     104 B/op	      13 allocs/op
+BenchmarkWebGLShapeUploads/instances=64              	   28540	      8136 ns/op	 786.63 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLShapeUploads/instances=4096            	    8883	     26737 ns/op	15319.48 MB/s	         0 jsbuffers/op	         1.000 jsviews/op	       8 B/op	       1 allocs/op
+BenchmarkWebGLMeshUploads/vertices=64                	   10000	     25598 ns/op	 150.01 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+BenchmarkWebGLMeshUploads/vertices=10000             	    6140	     45181 ns/op	13280.05 MB/s	         0 jsbuffers/op	         2.000 jsviews/op	      32 B/op	       4 allocs/op
+PASS

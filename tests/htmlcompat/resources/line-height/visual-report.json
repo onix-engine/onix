@@ -1,0 +1,64 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "fontRasterizer": "Onix pure Go outline rasterizer; unhinted; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "8bc6dd113f10ba608997f3c20f304770e5cfd1a9d32feef52136fb86a0109e53",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {
+    "normal": {
+      "pixelsOver16": 151,
+      "pixels": 33600,
+      "meanAbsoluteRGB": [
+        0.05098214285714286,
+        0.16214285714285714,
+        0.21348214285714287
+      ],
+      "boundaryPixelsOver16": 4,
+      "inkPixelsBeyond1px": 0,
+      "structuralPass": true
+    },
+    "flex": {
+      "pixelsOver16": 97,
+      "pixels": 33600,
+      "meanAbsoluteRGB": [
+        0.12383928571428572,
+        0.12770833333333334,
+        0.14604166666666665
+      ],
+      "boundaryPixelsOver16": 25,
+      "inkPixelsBeyond1px": 0,
+      "structuralPass": true
+    }
+  },
+  "allStructuralPass": null,
+  "automatedAcceptance": "go test ./ecs -run TestHTMLBrowserLineHeight",
+  "visualComparison": "diagnostic only; system sans-serif raster metrics differ from Onix Noto Sans SC"
+}

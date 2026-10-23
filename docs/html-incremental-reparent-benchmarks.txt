@@ -1,0 +1,31 @@
+Baseline: bf6945c with identical BenchmarkHTMLReparent copied in
+Current: stage 13 source committed with this file
+Command: go test ./ecs -run '^$' -bench '^BenchmarkHTMLReparent$' -benchmem -count=3 -benchtime=500ms
+
+BASELINE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLReparent/10-6         	    5043	    117098 ns/op	     161 B/op	       6 allocs/op
+BenchmarkHTMLReparent/10-6         	    5316	    123169 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/10-6         	    5436	    117127 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	      51	  12157883 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	      50	  11565380 ns/op	     300 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	      55	  12566289 ns/op	     288 B/op	       6 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.385s
+
+CURRENT
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLReparent/10-6         	   16826	     33756 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/10-6         	   17306	     34043 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/10-6         	   17748	     31379 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	     872	    684540 ns/op	     164 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	     991	    648504 ns/op	     160 B/op	       6 allocs/op
+BenchmarkHTMLReparent/1000-6       	     986	    656950 ns/op	     163 B/op	       6 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	5.205s

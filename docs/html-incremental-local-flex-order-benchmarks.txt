@@ -1,0 +1,32 @@
+Baseline: 0370a93
+Current: stage 17 source committed with this file
+Identical BenchmarkHTMLOrder, sequential runs
+Command: go test ./ecs -run '^$' -bench '^BenchmarkHTMLOrder$' -benchmem -count=3 -benchtime=500ms
+
+BASELINE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLOrder/10-6         	   17668	     36715 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/10-6         	   17770	     33911 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/10-6         	   18133	     37067 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	    1046	    616649 ns/op	       3 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	    1050	    617178 ns/op	       7 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	     952	    638402 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	5.321s
+
+CURRENT
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLOrder/10-6         	   19245	     28846 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/10-6         	   20338	     31754 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/10-6         	   19636	     29253 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	    4158	    149365 ns/op	       1 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	    3344	    158738 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOrder/1000-6       	    3852	    139035 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.923s

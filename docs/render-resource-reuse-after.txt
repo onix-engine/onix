@@ -1,0 +1,114 @@
+# native round 1
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  326860	       739.8 ns/op	5601.65 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	13226898	        18.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	23484590	         9.351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   15032	     16150 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   28647	      8858 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	141311218	         1.642 ns/op	       0 B/op	       0 allocs/op
+PASS
+# native round 2
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  324604	       757.4 ns/op	5471.51 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	13187143	        17.98 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	27817290	         9.158 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   13690	     15542 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   27901	      8586 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	138987330	         1.710 ns/op	       0 B/op	       0 allocs/op
+PASS
+# native round 3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  323947	       748.6 ns/op	5535.37 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	13832114	        21.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	26887227	         9.237 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   14854	     16201 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   27169	      8644 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	139948268	         1.730 ns/op	       0 B/op	       0 allocs/op
+PASS
+# native round 4
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  302650	       787.1 ns/op	5265.16 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	11957032	        18.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	27506276	         9.500 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   15021	     16111 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   27601	      8359 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	143670403	         1.740 ns/op	       0 B/op	       0 allocs/op
+PASS
+# native round 5
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  296211	       748.4 ns/op	5536.99 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	13846920	        18.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	28039911	         8.942 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   13242	     16044 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   27399	      8914 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	144186807	         1.720 ns/op	       0 B/op	       0 allocs/op
+PASS
+# native round 6
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations   	  306861	       801.4 ns/op	5171.06 MB/s	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1         	13183161	        17.79 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1        	25930597	         8.673 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024      	   14480	     17085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024     	   26874	      8722 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeMeshLookup                        	133852800	         1.677 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgpu round 1
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3591	     59673 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      72	   3110834 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS
+# webgpu round 2
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3979	     64776 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      74	   3426854 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS
+# webgpu round 3
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3391	     59802 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      78	   3192921 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS
+# webgpu round 4
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3308	     63426 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      74	   3528950 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS
+# webgpu round 5
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3410	     62255 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      73	   3005871 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS
+# webgpu round 6
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGPUResourceUploads/vertices=64         	    3452	     61151 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+BenchmarkWebGPUResourceUploads/vertices=10000      	      68	   2997907 ns/op	         0 jsbuffers/op	         0 jsbytes/op	     168 B/op	      10 allocs/op
+PASS

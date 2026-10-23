@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>__WEB_TITLE__</title>
+	<link rel="icon" type="__WEB_FAVICON_TYPE__" href="__WEB_FAVICON__">
+	<link rel="apple-touch-icon" href="__WEB_APPLE_TOUCH_ICON__">
+	<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body>
+	<script src="runtime/webgpu.js"></script>
+	<script src="runtime/wasm_exec.js"></script>
+	<script>
+	    const go = new Go();
+		const decodeCatalog = (data) => {
+			let offset = 0;
+			const take = (length) => {
+				if (offset + length > data.length) throw new Error("truncated resource catalog");
+				const value = data.subarray(offset, offset + length);
+				offset += length;
+				return value;
+			};
+			const uvarint = () => {
+				let value = 0;
+				let factor = 1;
+				for (let index = 0; index < 10; index++) {
+					const byte = take(1)[0];
+					value += (byte & 0x7f) * factor;
+					if ((byte & 0x80) === 0) {
+						if (!Number.isSafeInteger(value)) throw new Error("resource catalog integer overflow");
+						return value;
+					}
+					factor *= 128;
+				}
+				throw new Error("invalid resource catalog varint");
+			};
+				const decoder = new TextDecoder();
+				const string = () => decoder.decode(take(uvarint()));
+				const strings = () => Array.from({length: uvarint()}, string);
+				const magic = [79, 78, 73, 67, 65, 84, 50, 0];
+				if (!magic.every((value, index) => take(1)[0] === value)) throw new Error("invalid resource catalog marker");
+				if (uvarint() !== 2) throw new Error("unsupported resource catalog version");
+				const packages = Array.from({length: uvarint()}, () => {
+				const name = string();
+				const file = string();
+				take(32);
+				uvarint();
+					const requiredByte = take(1)[0];
+					if (requiredByte > 1) throw new Error("invalid resource catalog required flag");
+					const required = requiredByte === 1;
+					const dependencies = strings();
+					const assets = uvarint();
+					for (let index = 0; index < assets; index++) {
+						string();
+						uvarint();
+						take(4);
+						take(16);
+					}
+				return {name, file, required, dependencies};
+			});
+			if (offset !== data.length) throw new Error("resource catalog has trailing data");
+			return packages;
+		};
+		const loadResources = async () => {
+			const response = await fetch("resources/catalog.bin");
+			if (!response.ok) throw new Error(`load resource catalog: ${response.status}`);
+			const catalogData = new Uint8Array(await response.arrayBuffer());
+			const catalog = decodeCatalog(catalogData);
+			const packages = new Map(catalog.map((item) => [item.name, item]));
+		const required = new Set();
+		const add = (name) => {
+			if (required.has(name)) return;
+			const item = packages.get(name);
+			if (!item) throw new Error(`resource package not found: ${name}`);
+			item.dependencies?.forEach(add);
+			required.add(name);
+		};
+			catalog.filter((item) => item.required).forEach((item) => add(item.name));
+		const data = {};
+		await Promise.all([...required].map(async (name) => {
+			const item = packages.get(name);
+			const packageResponse = await fetch(`resources/${item.file}`);
+			if (!packageResponse.ok) throw new Error(`load ${item.file}: ${packageResponse.status}`);
+			data[item.file] = new Uint8Array(await packageResponse.arrayBuffer());
+		}));
+		globalThis.__onixCatalogData = catalogData;
+		globalThis.__onixPackageData = data;
+	};
+	const start = async () => {
+		if (!globalThis.isSecureContext) {
+			throw new Error("WebGPU requires a secure context. Open this page over HTTPS or http://localhost. For a remote server, forward its port to localhost.");
+		}
+		if (!navigator.gpu) {
+			throw new Error("WebGPU is unavailable. Use a browser and device with WebGPU enabled.");
+		}
+		const [, wasm] = await Promise.all([
+			loadResources(),
+			WebAssembly.instantiateStreaming(fetch("resources/__WASM_FILENAME__"), go.importObject),
+		]);
+		return go.run(wasm.instance);
+	};
+	start().catch((error) => {
+		console.error(error);
+		const message = document.createElement("pre");
+		message.setAttribute("role", "alert");
+		message.style.whiteSpace = "pre-wrap";
+		message.textContent = error.message;
+		document.body.appendChild(message);
+	});
+</script>
+</body>
+
+</html>

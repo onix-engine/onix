@@ -1,0 +1,66 @@
+Onix ECS eighth batch benchmark comparison
+Go 1.26.0, Linux amd64, GOMAXPROCS=6.
+Seventh-batch source snapshot vs final eighth-batch source, matching existing benchmarks.
+Runs serialized; 300 ms per benchmark, three repetitions; setup and warmup outside timing.
+Layout benchmarks moved from scene to ui; render/input benchmarks stay in scene.
+All raw repetitions retained; documentation reports medians.
+
+Before: seventh-batch scene
+Command: GOMAXPROCS=6 /tmp/onix-ecs-eighth-before-scene.test -test.run ^$ -test.bench ^(BenchmarkTraversalAutoGrid|BenchmarkUILayoutHierarchy|BenchmarkCollectRenderItems2D10000|BenchmarkDispatchInputSamePosition1000|BenchmarkDispatchInputDrag1000)$ -test.benchtime 300ms -test.count 3 -test.benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkDispatchInputSamePosition1000-6   	     840	    424073 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputSamePosition1000-6   	     802	    438472 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputSamePosition1000-6   	     784	    441324 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1592	    225418 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1592	    223721 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1600	    227823 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	     100	   3176433 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	     100	   3156404 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	     100	   3220305 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6               	    3778	    101631 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6               	    3643	     95748 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6               	    4042	     96367 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Stable-6        	 7079676	        52.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Stable-6        	 6638865	        54.50 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Stable-6        	 6458413	        54.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6       	   10000	     34784 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6       	   10000	     34108 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6       	   10000	     34891 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+After: eighth-batch UI layouts
+Command: GOMAXPROCS=6 /tmp/onix-ecs-eighth-after-ui.test -test.run ^$ -test.bench ^(BenchmarkTraversalAutoGrid|BenchmarkUILayoutHierarchy)$ -test.benchtime 300ms -test.count 3 -test.benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkUILayoutHierarchy/Stable-6         	 6722176	        51.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Stable-6         	 6791304	        52.21 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Stable-6         	 6940113	        52.25 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6        	   10000	     32960 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6        	   10000	     34034 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUILayoutHierarchy/Rebuild-6        	   10000	     34727 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6                	    3741	     99365 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6                	    3913	     98579 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6                	    4122	     93367 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+After: eighth-batch scene rendering and input
+Command: GOMAXPROCS=6 /tmp/onix-ecs-eighth-after-scene.test -test.run ^$ -test.bench ^(BenchmarkCollectRenderItems2D10000|BenchmarkDispatchInputSamePosition1000|BenchmarkDispatchInputDrag1000)$ -test.benchtime 300ms -test.count 3 -test.benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkDispatchInputSamePosition1000-6   	     759	    432909 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputSamePosition1000-6   	     836	    424478 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputSamePosition1000-6   	     736	    441497 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1648	    215814 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1591	    224189 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatchInputDrag1000-6           	    1678	    220227 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	     111	   3350895 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	      99	   3247003 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCollectRenderItems2D10000-6       	     116	   3160924 ns/op	       0 B/op	       0 allocs/op
+PASS

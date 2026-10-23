@@ -1,0 +1,345 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "fontRasterizer": "Onix pure Go outline rasterizer; unhinted; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "c95dc565d3025bda6f7557dd84e9bf44eb679c07c8d13b23db256acfaf654286",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2,
+    "maxMeanChannelError": 1.5
+  },
+  "cases": {
+    "black-12": {
+      "pixelsOver16": 168,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.1820775623268698,
+        0.16905817174515236,
+        0.1712465373961219
+      ],
+      "boundaryPixelsOver16": 34,
+      "inkInteriorPixels": 380,
+      "inkInteriorMeanAbsoluteRGB": [
+        17.07894736842105,
+        15.93421052631579,
+        15.865789473684211
+      ],
+      "rasterPass": true
+    },
+    "white-12": {
+      "pixelsOver16": 150,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.1551523545706371,
+        0.14689750692520775,
+        0.1471191135734072
+      ],
+      "boundaryPixelsOver16": 19,
+      "inkInteriorPixels": 394,
+      "inkInteriorMeanAbsoluteRGB": [
+        14.043147208121827,
+        13.32741116751269,
+        13.16497461928934
+      ],
+      "rasterPass": true
+    },
+    "color-12": {
+      "pixelsOver16": 109,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.15498614958448753,
+        0.10470914127423822,
+        0.01520775623268698
+      ],
+      "boundaryPixelsOver16": 14,
+      "inkInteriorPixels": 355,
+      "inkInteriorMeanAbsoluteRGB": [
+        15.56056338028169,
+        10.380281690140846,
+        1.447887323943662
+      ],
+      "rasterPass": true
+    },
+    "black-16": {
+      "pixelsOver16": 286,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.3206371191135734,
+        0.3257063711911357,
+        0.3261495844875346
+      ],
+      "boundaryPixelsOver16": 42,
+      "inkInteriorPixels": 621,
+      "inkInteriorMeanAbsoluteRGB": [
+        18.44122383252818,
+        18.8743961352657,
+        18.734299516908212
+      ],
+      "rasterPass": true
+    },
+    "white-16": {
+      "pixelsOver16": 291,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.28678670360110803,
+        0.28562326869806093,
+        0.2847645429362881
+      ],
+      "boundaryPixelsOver16": 30,
+      "inkInteriorPixels": 642,
+      "inkInteriorMeanAbsoluteRGB": [
+        15.998442367601246,
+        16.017133956386292,
+        15.87538940809969
+      ],
+      "rasterPass": true
+    },
+    "color-16": {
+      "pixelsOver16": 226,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.2775623268698061,
+        0.20232686980609418,
+        0.02742382271468144
+      ],
+      "boundaryPixelsOver16": 20,
+      "inkInteriorPixels": 583,
+      "inkInteriorMeanAbsoluteRGB": [
+        16.989708404802744,
+        12.289879931389365,
+        1.548885077186964
+      ],
+      "rasterPass": true
+    },
+    "black-24": {
+      "pixelsOver16": 408,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.49842105263157893,
+        0.49437673130193904,
+        0.5015235457063711
+      ],
+      "boundaryPixelsOver16": 8,
+      "inkInteriorPixels": 1146,
+      "inkInteriorMeanAbsoluteRGB": [
+        15.489528795811518,
+        15.549738219895287,
+        15.68324607329843
+      ],
+      "rasterPass": true
+    },
+    "white-24": {
+      "pixelsOver16": 336,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.4268421052631579,
+        0.42911357340720224,
+        0.4321883656509695
+      ],
+      "boundaryPixelsOver16": 0,
+      "inkInteriorPixels": 1193,
+      "inkInteriorMeanAbsoluteRGB": [
+        12.821458507963118,
+        12.93964794635373,
+        12.861693210393964
+      ],
+      "rasterPass": true
+    },
+    "color-24": {
+      "pixelsOver16": 235,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.42437673130193904,
+        0.29947368421052634,
+        0.04152354570637119
+      ],
+      "boundaryPixelsOver16": 0,
+      "inkInteriorPixels": 1050,
+      "inkInteriorMeanAbsoluteRGB": [
+        14.367619047619048,
+        10.145714285714286,
+        1.2780952380952382
+      ],
+      "rasterPass": true
+    },
+    "black-32": {
+      "pixelsOver16": 912,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        1.1708310249307479,
+        1.1738504155124654,
+        1.1746814404432133
+      ],
+      "boundaryPixelsOver16": 20,
+      "inkInteriorPixels": 1924,
+      "inkInteriorMeanAbsoluteRGB": [
+        21.867463617463617,
+        22.002598752598754,
+        21.85135135135135
+      ],
+      "rasterPass": true
+    },
+    "white-32": {
+      "pixelsOver16": 870,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        1.0358448753462604,
+        1.031218836565097,
+        1.0255401662049861
+      ],
+      "boundaryPixelsOver16": 20,
+      "inkInteriorPixels": 1996,
+      "inkInteriorMeanAbsoluteRGB": [
+        18.652805611222444,
+        18.624749498997996,
+        18.400300601202403
+      ],
+      "rasterPass": true
+    },
+    "color-32": {
+      "pixelsOver16": 702,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        1.0088365650969529,
+        0.7213573407202216,
+        0.09567867036011081
+      ],
+      "boundaryPixelsOver16": 18,
+      "inkInteriorPixels": 1824,
+      "inkInteriorMeanAbsoluteRGB": [
+        19.86074561403509,
+        14.009868421052632,
+        1.7604166666666667
+      ],
+      "rasterPass": true
+    },
+    "phase-0": {
+      "pixelsOver16": 178,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.0546814404432133,
+        0.1783102493074792,
+        0.2354016620498615
+      ],
+      "boundaryPixelsOver16": 17,
+      "inkInteriorPixels": 539,
+      "inkInteriorMeanAbsoluteRGB": [
+        3.49165120593692,
+        11.749536178107606,
+        15.482374768089054
+      ],
+      "rasterPass": true
+    },
+    "phase-0.25": {
+      "pixelsOver16": 186,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.05559556786703601,
+        0.17858725761772853,
+        0.2324376731301939
+      ],
+      "boundaryPixelsOver16": 23,
+      "inkInteriorPixels": 532,
+      "inkInteriorMeanAbsoluteRGB": [
+        3.5,
+        11.981203007518797,
+        15.663533834586467
+      ],
+      "rasterPass": true
+    },
+    "phase-0.5": {
+      "pixelsOver16": 263,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.43797783933518003,
+        0.3127700831024931,
+        0.2495290858725762
+      ],
+      "boundaryPixelsOver16": 30,
+      "inkInteriorPixels": 555,
+      "inkInteriorMeanAbsoluteRGB": [
+        3.165765765765766,
+        11.897297297297298,
+        15.246846846846847
+      ],
+      "rasterPass": true
+    },
+    "phase-0.75": {
+      "pixelsOver16": 251,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.15227146814404433,
+        0.20966759002770083,
+        0.2451523545706371
+      ],
+      "boundaryPixelsOver16": 21,
+      "inkInteriorPixels": 553,
+      "inkInteriorMeanAbsoluteRGB": [
+        3.394213381555154,
+        11.399638336347197,
+        15.52260397830018
+      ],
+      "rasterPass": true
+    },
+    "alpha": {
+      "pixelsOver16": 193,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.26249307479224376,
+        0.26869806094182824,
+        0.2671468144044321
+      ],
+      "boundaryPixelsOver16": 0,
+      "inkInteriorPixels": 1058,
+      "inkInteriorMeanAbsoluteRGB": [
+        8.510396975425332,
+        9.035916824196597,
+        8.710775047258979
+      ],
+      "rasterPass": true
+    },
+    "opacity": {
+      "pixelsOver16": 700,
+      "pixels": 36100,
+      "meanAbsoluteRGB": [
+        0.60797783933518,
+        0.3027700831024931,
+        0.6207756232686981
+      ],
+      "boundaryPixelsOver16": 8,
+      "inkInteriorPixels": 1064,
+      "inkInteriorMeanAbsoluteRGB": [
+        20.024436090225564,
+        10.077067669172932,
+        20.321428571428573
+      ],
+      "rasterPass": true
+    }
+  },
+  "allRasterPass": true
+}

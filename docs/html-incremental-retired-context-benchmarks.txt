@@ -1,0 +1,32 @@
+Baseline: f7291fe with identical BenchmarkHTMLRetiredSource copied in
+Current: stage 14 source committed with this file
+One op: remove source and move subtree, then reattach (two SyncHTML calls)
+Command: go test ./ecs -run '^$' -bench '^BenchmarkHTMLRetiredSource$' -benchmem -count=3 -benchtime=500ms
+
+BASELINE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLRetiredSource/10-6         	    3444	    169597 ns/op	    8785 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/10-6         	    2608	    193849 ns/op	    8785 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/10-6         	    3506	    182447 ns/op	    8787 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	      48	  12580360 ns/op	    8784 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	      45	  12340023 ns/op	    8926 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	      45	  12768012 ns/op	    8926 B/op	      47 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	3.935s
+
+CURRENT
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLRetiredSource/10-6         	    7321	     82828 ns/op	    8786 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/10-6         	    8160	     88000 ns/op	    8787 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/10-6         	    7354	     80735 ns/op	    8785 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	     340	   1743239 ns/op	    8802 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	     339	   1715271 ns/op	    8784 B/op	      47 allocs/op
+BenchmarkHTMLRetiredSource/1000-6       	     351	   1769413 ns/op	    8802 B/op	      47 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.607s

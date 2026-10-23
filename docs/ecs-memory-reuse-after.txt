@@ -1,0 +1,211 @@
+Go 1.26.0; linux/amd64; CPU affinity: 0; -test.cpu=1; alternating binaries, 6 rounds, 200ms per benchmark.
+
+Round 1
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2278618	       105.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 1904151	       121.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 2975641	        79.33 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1285299	       188.8 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1706055	       142.3 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  557727	       401.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	 1000000	       226.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  304008	       763.4 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  653204	       452.2 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  227545	       944.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  518127	       488.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  160822	      1643 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  252664	       984.9 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1800260	       129.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1212288	       196.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	 1000000	       235.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  751508	       320.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  462490	       511.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   18430	     12589 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1754	    142604 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1739976	       135.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   13136	     18044 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	    1100	    224271 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5239	     44947 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3756	     71631 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2440	    105874 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4492	     55368 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  115292	      2148 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Round 2
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2292988	       102.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 1762137	       131.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 3024903	        77.08 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1210495	       201.2 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1731152	       138.8 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  535772	       398.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	 1000000	       220.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  340305	       709.8 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  610208	       465.1 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  255186	       845.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  578101	       432.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  173710	      1560 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  282673	      1043 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1885448	       130.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1000000	       201.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	 1000000	       235.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  683968	       326.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  492626	       532.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   21762	     11296 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1825	    150381 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1874790	       128.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   13702	     17296 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	    1051	    226900 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5474	     44133 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3150	     71786 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2368	    107062 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4429	     56459 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  126316	      2056 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Round 3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2345025	       104.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 1953772	       143.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 3285528	        75.56 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1241287	       192.3 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1759644	       135.8 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  597067	       406.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	 1000000	       217.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  336124	       700.3 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  595135	       448.4 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  259136	       870.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  582237	       422.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  157000	      1677 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  272643	       997.4 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1745263	       140.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1000000	       204.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	 1000000	       218.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  856026	       321.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  430528	       528.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   19416	     12058 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1611	    144970 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1908861	       127.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   14498	     16452 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	    1069	    233088 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5822	     43536 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3568	     70959 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2445	    102998 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4557	     56097 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  113685	      2080 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Round 4
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2274122	       104.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 2023318	       118.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 3257834	        74.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1294334	       187.0 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1641448	       145.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  547780	       420.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	 1000000	       221.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  370783	       717.5 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  627198	       452.0 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  258228	       869.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  594999	       421.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  156046	      1584 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  308886	       949.1 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1877552	       136.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1000000	       200.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	  957711	       233.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  799059	       314.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  504272	       503.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   20808	     11871 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1862	    141204 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1779930	       130.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   14403	     17382 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	     883	    259942 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5791	     42357 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3376	     69797 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2263	    103612 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4612	     57606 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  117522	      2047 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Round 5
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2229112	       107.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 1949538	       121.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 3275461	        73.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1328331	       185.2 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1754349	       137.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  507904	       403.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	  977319	       223.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  358537	       721.2 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  630777	       447.5 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  248060	       888.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  530851	       428.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  164486	      1551 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  320775	       929.1 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1896836	       130.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1209588	       196.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	 1000000	       236.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  810394	       329.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  490492	       499.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   19719	     11640 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1734	    142234 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1703308	       133.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   14752	     16237 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	    1104	    233215 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5214	     46572 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3541	     68723 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2094	    106521 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4416	     58294 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  118646	      2096 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Round 6
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled 	 2025031	       101.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=false         	 2007062	       123.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=false/prepared=true          	 3312342	        72.84 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=false          	 1294293	       186.6 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=2/dynamic=true/prepared=true           	 1518646	       151.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=false         	  607352	       404.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=false/prepared=true          	 1000000	       211.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=false          	  383193	       723.4 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=8/dynamic=true/prepared=true           	  596746	       446.6 ns/op	     128 B/op	       8 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=false        	  274228	       837.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=false/prepared=true         	  587412	       426.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=false         	  182767	      1515 ns/op	     256 B/op	      16 allocs/op
+BenchmarkSpawnScratch/components=16/dynamic=true/prepared=true          	  287833	       960.5 ns/op	     256 B/op	      16 allocs/op
+BenchmarkQueryBindingScratch/1                                          	 1905808	       130.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/8                                          	 1245399	       192.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/9                                          	 1000000	       216.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/16                                         	  861867	       314.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryBindingScratch/32                                         	  495274	       506.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/100                                  	   19377	     11557 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleDependencyScratch/1000                                 	    1863	    132207 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                                          	 1857290	       127.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/100                                   	   14301	     16643 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScheduleCompileTraversal/1000                                  	    1069	    227228 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/With                                  	    5634	     42740 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilteredQueryTenThousand/Changed                               	    3553	     70479 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand                                              	    2378	    102339 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand                                               	    4582	     60871 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderAllOneHundred                                     	  120000	      2070 ns/op	       0 B/op	       0 allocs/op
+PASS

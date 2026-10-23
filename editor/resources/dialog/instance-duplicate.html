@@ -1,0 +1,38 @@
+<div id="dialog-root" data-ref="root" class="dialog-root">
+  <div id="overlay" data-ref="overlay" aria-hidden="true"></div>
+  <section id="panel" data-ref="panel" role="dialog" aria-modal="true" aria-labelledby="instance-duplicate-title">
+    <div id="content" data-ref="content">
+      <span id="instance-duplicate-title" data-ref="instance-duplicate-title" class="dialog-label dialog-title">Duplicate Module</span>
+      <span id="instance-duplicate-body" data-ref="instance-duplicate-body" class="dialog-label"></span>
+      <label id="instance-duplicate-label" data-ref="instance-duplicate-label" class="dialog-label" for="dialog-field-instance-duplicate-instance-name">Copy ID</label>
+      <input id="dialog-field-instance-duplicate-instance-name" data-ref="dialog-field-instance-duplicate-instance-name" type="text" aria-label="Copy ID">
+      <button id="instance-duplicate-confirm" data-ref="instance-duplicate-confirm" type="button">
+        <img id="instance-duplicate-confirm-icon" data-ref="instance-duplicate-confirm-icon" class="dialog-button-icon" alt="" src="onix-titlebar/copy.svg">
+        <span id="instance-duplicate-confirm-label" data-ref="instance-duplicate-confirm-label" class="dialog-button-label">Duplicate</span>
+      </button>
+      <button id="instance-duplicate-close" data-ref="instance-duplicate-close" type="button">
+        <img id="instance-duplicate-close-icon" data-ref="instance-duplicate-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg">
+        <span id="instance-duplicate-close-label" data-ref="instance-duplicate-close-label" class="dialog-button-label">Close</span>
+      </button>
+    </div>
+  </section>
+</div>
+<style>
+*{box-sizing:border-box}
+.dialog-root{position:absolute;inset:0;margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:sans-serif;color:#dce0e8}
+#overlay{position:absolute;inset:0;z-index:0;background:rgba(10,12,18,.72);pointer-events:auto}
+#panel{position:absolute;z-index:1;border:1px solid #3b404b;border-radius:10px;background:#2a2e37;box-shadow:0 18px 48px rgba(0,0,0,.38);pointer-events:auto;overflow:hidden}
+#content{position:absolute;z-index:1;inset:0;pointer-events:none}
+#content>*{position:absolute}
+#content input{margin:0;padding:7px 9px;border:1px solid #3b404b;border-radius:4px;font:14px sans-serif;color:#dce0e8;background:#1b1e25;pointer-events:auto}
+#content input:focus{border-color:#84ccff;outline:none}
+#content button{z-index:100;display:flex;align-items:center;justify-content:center;gap:8px;pointer-events:auto;margin:0;padding:0 12px;border:1px solid transparent;border-radius:5px;background:#343a46;color:#dce0e8;font:14px sans-serif;line-height:1;cursor:pointer}
+#content button:not(:disabled):hover,#content button:not(:disabled):active,#content button.active:not(:disabled),#content button:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content button.icon-only{padding:0;background:transparent}
+#content button.icon-only:not(:disabled):hover,#content button.icon-only:not(:disabled):active,#content button.icon-only:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content .dialog-button-icon{width:16px;height:16px;flex:0 0 16px;object-fit:contain}
+#content .dialog-button-label{line-height:1;white-space:nowrap}
+#content .dialog-label{pointer-events:none}
+#content label{pointer-events:auto}
+#content .dialog-title{font-size:20px;font-weight:600;line-height:24px}
+</style>

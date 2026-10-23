@@ -1,0 +1,67 @@
+package window
+
+type DecorationMode string
+
+const (
+	DecorationSystem DecorationMode = "system"
+	DecorationNone   DecorationMode = "none"
+)
+
+type Options struct {
+	RenderScale         float64
+	MaxDevicePixelRatio float64
+	Antialias           bool
+	DRMDevice           string
+	DRMConnectorID      uint32
+	Transparent         bool
+	Decorations         DecorationMode
+	TitleBarHeight      float64
+	CornerRadius        int
+	Border              bool
+	Shadow              bool
+	Resizable           bool
+}
+
+const DefaultCornerRadius = 10
+
+func DefaultOptions() Options {
+	return Options{
+		RenderScale:         1,
+		MaxDevicePixelRatio: 2,
+		Decorations:         DecorationSystem,
+		CornerRadius:        DefaultCornerRadius,
+		Border:              true,
+		Shadow:              true,
+		Resizable:           true,
+	}
+}
+
+func (o Options) normalized() Options {
+	if o.RenderScale <= 0 {
+		o.RenderScale = 1
+	}
+	if o.MaxDevicePixelRatio <= 0 {
+		o.MaxDevicePixelRatio = 2
+	}
+	if o.Decorations == "" {
+		o.Decorations = DecorationSystem
+	}
+	if o.TitleBarHeight < 0 {
+		o.TitleBarHeight = 0
+	}
+	if o.CornerRadius <= 0 {
+		o.CornerRadius = DefaultCornerRadius
+	}
+	return o
+}
+
+func (m DecorationMode) Valid() bool {
+	return m == "" || m == DecorationSystem || m == DecorationNone
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}

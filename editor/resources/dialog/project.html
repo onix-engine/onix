@@ -1,0 +1,329 @@
+<div id="dialog-root" data-ref="root" class="dialog-root">
+    <div id="overlay" data-ref="overlay" aria-hidden="true"></div>
+    <section id="panel" data-ref="panel" role="dialog" aria-modal="true">
+        <div id="content" data-ref="content"><span id="project-title" data-ref="project-title"
+                class="dialog-label dialog-title">Project Settings</span>
+            <aside id="project-sidebar" data-ref="project-sidebar"></aside>
+            <div id="project-header-divider" data-ref="project-header-divider"></div>
+            <div id="project-sidebar-divider" data-ref="project-sidebar-divider"></div><span id="project-category-title"
+                data-ref="project-category-title" class="dialog-label dialog-section-title"></span><button id="project-category-window"
+                data-ref="project-category-window" type="button"><img id="project-category-window-icon" data-ref="project-category-window-icon" class="dialog-button-icon" alt="" src="onix-titlebar/window-title-bar.svg"><span id="project-category-window-label" data-ref="project-category-window-label" class="dialog-button-label">Window</span></button><button id="project-category-rendering"
+                data-ref="project-category-rendering" type="button"><img id="project-category-rendering-icon" data-ref="project-category-rendering-icon" class="dialog-button-icon" alt="" src="onix-titlebar/camera.svg"><span id="project-category-rendering-label" data-ref="project-category-rendering-label" class="dialog-button-label">Rendering &amp; Viewport</span></button><button
+                id="project-category-features" data-ref="project-category-features" type="button"><img id="project-category-features-icon" data-ref="project-category-features-icon" class="dialog-button-icon" alt="" src="onix-titlebar/component.svg"><span id="project-category-features-label" data-ref="project-category-features-label" class="dialog-button-label">Runtime
+                Features</span></button><button id="project-category-resources" data-ref="project-category-resources"
+                type="button"><img id="project-category-resources-icon" data-ref="project-category-resources-icon" class="dialog-button-icon" alt="" src="onix-titlebar/resource.svg"><span id="project-category-resources-label" data-ref="project-category-resources-label" class="dialog-button-label">Resources &amp; Decoders</span></button><button id="project-category-resource-packages"
+                data-ref="project-category-resource-packages" type="button"><img id="project-category-resource-packages-icon" data-ref="project-category-resource-packages-icon" class="dialog-button-icon" alt="" src="onix-titlebar/folder.svg"><span id="project-category-resource-packages-label" data-ref="project-category-resource-packages-label" class="dialog-button-label">Resource Packages</span></button>
+            <input id="dialog-field-project-project-window-title" data-ref="dialog-field-project-project-window-title" type="text" hidden aria-label="Window Title">
+            <input id="dialog-field-project-project-window-icon" data-ref="dialog-field-project-project-window-icon" type="text" hidden aria-label="App Icon">
+            <button id="dialog-field-project-project-window-icon-browse" data-ref="dialog-field-project-project-window-icon-browse" type="button"><img id="dialog-field-project-project-window-icon-browse-icon" data-ref="dialog-field-project-project-window-icon-browse-icon" class="dialog-button-icon" alt="" src="onix-titlebar/folder.svg"><span id="dialog-field-project-project-window-icon-browse-label" data-ref="dialog-field-project-project-window-icon-browse-label" class="dialog-button-label"></span></button>
+            <input id="dialog-field-project-project-window-width" data-ref="dialog-field-project-project-window-width" type="number" hidden aria-label="Window Width">
+            <input id="dialog-field-project-project-window-height" data-ref="dialog-field-project-project-window-height" type="number" hidden aria-label="Window Height">
+            <select id="project-input-project.window.decorations" data-ref="project-input-project.window.decorations" hidden aria-label="Window Decorations"></select>
+            <input id="dialog-field-project-project-window-fps" data-ref="dialog-field-project-project-window-fps" type="number" hidden aria-label="Target FPS">
+            <input id="dialog-field-project-project-window-tps" data-ref="dialog-field-project-project-window-tps" type="number" hidden aria-label="Target TPS">
+            <input id="dialog-field-project-project-window-transparent" data-ref="dialog-field-project-project-window-transparent" type="checkbox" hidden class="checkbox" aria-label="Transparent">
+            <input id="dialog-field-project-project-window-border" data-ref="dialog-field-project-project-window-border" type="checkbox" hidden class="checkbox" aria-label="Window Border">
+            <input id="dialog-field-project-project-window-shadow" data-ref="dialog-field-project-project-window-shadow" type="checkbox" hidden class="checkbox" aria-label="Window Shadow">
+            <input id="dialog-field-project-project-window-resizable" data-ref="dialog-field-project-project-window-resizable" type="checkbox" hidden class="checkbox" aria-label="Resizable">
+            <input id="dialog-field-project-project-window-showInTaskbar" data-ref="dialog-field-project-project-window-showInTaskbar" type="checkbox" hidden class="checkbox" aria-label="Show In Taskbar">
+            <input id="dialog-field-project-project-window-alwaysOnTop" data-ref="dialog-field-project-project-window-alwaysOnTop" type="checkbox" hidden class="checkbox" aria-label="Always On Top">
+            <input id="dialog-field-project-project-viewport-width" data-ref="dialog-field-project-project-viewport-width" type="number" hidden aria-label="Viewport Width">
+            <input id="dialog-field-project-project-viewport-height" data-ref="dialog-field-project-project-viewport-height" type="number" hidden aria-label="Viewport Height">
+            <select id="project-input-project.viewport.mode" data-ref="project-input-project.viewport.mode" hidden aria-label="Viewport Mode"></select>
+            <input id="dialog-field-project-project-clearColor" data-ref="dialog-field-project-project-clearColor" type="text" hidden aria-label="Clear Color">
+            <input id="dialog-field-project-project-window-renderScale" data-ref="dialog-field-project-project-window-renderScale" type="number" hidden aria-label="Render Scale">
+            <input id="dialog-field-project-project-window-maxDevicePixelRatio" data-ref="dialog-field-project-project-window-maxDevicePixelRatio" type="number" hidden aria-label="Max Device Pixel Ratio">
+            <input id="dialog-field-project-project-window-vsync" data-ref="dialog-field-project-project-window-vsync" type="checkbox" hidden class="checkbox" aria-label="VSync">
+            <input id="dialog-field-project-project-window-antialias" data-ref="dialog-field-project-project-window-antialias" type="checkbox" hidden class="checkbox" aria-label="Antialias">
+            <input id="dialog-field-project-project-engine-textureCompression" data-ref="dialog-field-project-project-engine-textureCompression" type="checkbox" hidden class="checkbox" aria-label="Compress Textures">
+            <input id="dialog-field-project-project-engine-features-render2d" data-ref="dialog-field-project-project-engine-features-render2d" type="checkbox" hidden class="checkbox" aria-label="Render 2D">
+            <input id="dialog-field-project-project-engine-features-render3d" data-ref="dialog-field-project-project-engine-features-render3d" type="checkbox" hidden class="checkbox" aria-label="Render 3D">
+            <input id="dialog-field-project-project-engine-features-input2d" data-ref="dialog-field-project-project-engine-features-input2d" type="checkbox" hidden class="checkbox" aria-label="Input 2D">
+            <input id="dialog-field-project-project-engine-features-animations2d" data-ref="dialog-field-project-project-engine-features-animations2d" type="checkbox" hidden class="checkbox" aria-label="Animations 2D">
+            <input id="dialog-field-project-project-engine-features-sprite-trails2d" data-ref="dialog-field-project-project-engine-features-sprite-trails2d" type="checkbox" hidden class="checkbox" aria-label="Sprite Trails 2D">
+            <input id="dialog-field-project-project-engine-features-particles2d" data-ref="dialog-field-project-project-engine-features-particles2d" type="checkbox" hidden class="checkbox" aria-label="Particles 2D">
+            <input id="dialog-field-project-project-engine-features-tilemaps2d" data-ref="dialog-field-project-project-engine-features-tilemaps2d" type="checkbox" hidden class="checkbox" aria-label="Tilemaps 2D">
+            <input id="dialog-field-project-project-engine-features-spine2d" data-ref="dialog-field-project-project-engine-features-spine2d" type="checkbox" hidden class="checkbox" aria-label="Spine 2D">
+            <input id="dialog-field-project-project-engine-features-physics2d" data-ref="dialog-field-project-project-engine-features-physics2d" type="checkbox" hidden class="checkbox" aria-label="Physics 2D">
+            <input id="dialog-field-project-project-engine-features-physics3d" data-ref="dialog-field-project-project-engine-features-physics3d" type="checkbox" hidden class="checkbox" aria-label="Physics 3D">
+            <input id="dialog-field-project-project-engine-features-ui-controls" data-ref="dialog-field-project-project-engine-features-ui-controls" type="checkbox" hidden class="checkbox" aria-label="UI Controls">
+            <input id="dialog-field-project-project-engine-features-ui-widgets" data-ref="dialog-field-project-project-engine-features-ui-widgets" type="checkbox" hidden class="checkbox" aria-label="UI Widgets">
+            <input id="dialog-field-project-project-engine-features-ui-text-input" data-ref="dialog-field-project-project-engine-features-ui-text-input" type="checkbox" hidden class="checkbox" aria-label="UI Text Input">
+            <input id="dialog-field-project-project-engine-features-ui-markdown" data-ref="dialog-field-project-project-engine-features-ui-markdown" type="checkbox" hidden class="checkbox" aria-label="UI Markdown">
+            <input id="dialog-field-project-project-engine-features-ui-html" data-ref="dialog-field-project-project-engine-features-ui-html" type="checkbox" hidden class="checkbox" aria-label="UI HTML">
+            <input id="dialog-field-project-project-engine-features-webview" data-ref="dialog-field-project-project-engine-features-webview" type="checkbox" hidden class="checkbox" aria-label="WebView">
+            <input id="dialog-field-project-project-engine-features-file-dialogs" data-ref="dialog-field-project-project-engine-features-file-dialogs" type="checkbox" hidden class="checkbox" aria-label="File Dialogs">
+            <input id="dialog-field-project-project-engine-resources-images" data-ref="dialog-field-project-project-engine-resources-images" type="checkbox" hidden class="checkbox" aria-label="Images">
+            <input id="dialog-field-project-project-engine-resources-fonts" data-ref="dialog-field-project-project-engine-resources-fonts" type="checkbox" hidden class="checkbox" aria-label="Fonts">
+            <input id="dialog-field-project-project-engine-resources-audio" data-ref="dialog-field-project-project-engine-resources-audio" type="checkbox" hidden class="checkbox" aria-label="Audio">
+            <input id="dialog-field-project-project-engine-resources-videos" data-ref="dialog-field-project-project-engine-resources-videos" type="checkbox" hidden class="checkbox" aria-label="Video">
+            <input id="dialog-field-project-project-engine-resources-particles" data-ref="dialog-field-project-project-engine-resources-particles" type="checkbox" hidden class="checkbox" aria-label="Particles">
+            <input id="dialog-field-project-project-engine-resources-tilemaps" data-ref="dialog-field-project-project-engine-resources-tilemaps" type="checkbox" hidden class="checkbox" aria-label="Tilemaps">
+            <input id="dialog-field-project-project-engine-resources-models" data-ref="dialog-field-project-project-engine-resources-models" type="checkbox" hidden class="checkbox" aria-label="3D Models">
+            <input id="dialog-field-project-project-engine-resources-spine" data-ref="dialog-field-project-project-engine-resources-spine" type="checkbox" hidden class="checkbox" aria-label="Spine">
+            <input id="dialog-field-project-project-engine-resources-shaders" data-ref="dialog-field-project-project-engine-resources-shaders" type="checkbox" hidden class="checkbox" aria-label="Shaders">
+            <input id="dialog-field-project-project-engine-resources-html" data-ref="dialog-field-project-project-engine-resources-html" type="checkbox" hidden class="checkbox" aria-label="HTML">
+            <input id="dialog-field-project-project-engine-imageDecoders-gif" data-ref="dialog-field-project-project-engine-imageDecoders-gif" type="checkbox" hidden class="checkbox" aria-label="GIF">
+            <input id="dialog-field-project-project-engine-imageDecoders-jpeg" data-ref="dialog-field-project-project-engine-imageDecoders-jpeg" type="checkbox" hidden class="checkbox" aria-label="JPEG">
+            <input id="dialog-field-project-project-engine-imageDecoders-png" data-ref="dialog-field-project-project-engine-imageDecoders-png" type="checkbox" hidden class="checkbox" aria-label="PNG">
+            <input id="dialog-field-project-project-engine-imageDecoders-webp" data-ref="dialog-field-project-project-engine-imageDecoders-webp" type="checkbox" hidden class="checkbox" aria-label="WebP">
+            <select id="project-input-resource-packages.package" data-ref="project-input-resource-packages.package" hidden aria-label="Package"></select>
+            <textarea id="dialog-field-project-resource-packages-keep" data-ref="dialog-field-project-resource-packages-keep" hidden aria-label="Keep patterns (one per line)"></textarea>
+            <input id="dialog-field-project-resource-packages-name" data-ref="dialog-field-project-resource-packages-name" type="text" hidden aria-label="Package name">
+            <textarea id="dialog-field-project-resource-packages-include" data-ref="dialog-field-project-resource-packages-include" hidden aria-label="Include patterns (one per line)"></textarea>
+            <textarea id="dialog-field-project-resource-packages-exclude" data-ref="dialog-field-project-resource-packages-exclude" hidden aria-label="Exclude patterns (one per line)"></textarea>
+            <textarea id="dialog-field-project-resource-packages-dependencies" data-ref="dialog-field-project-resource-packages-dependencies" hidden aria-label="Dependencies (one per line)"></textarea>
+            <input id="dialog-field-project-resource-packages-required" data-ref="dialog-field-project-resource-packages-required" type="checkbox" hidden class="checkbox" aria-label="Load at startup">
+            <span id="project-label-project.window.title" data-ref="project-label-project.window.title" hidden class="dialog-label">Window Title</span>
+            <span id="project-label-project.window.icon" data-ref="project-label-project.window.icon" hidden class="dialog-label">App Icon</span>
+            <span id="project-label-project.window.width" data-ref="project-label-project.window.width" hidden class="dialog-label">Window Width</span>
+            <span id="project-label-project.window.height" data-ref="project-label-project.window.height" hidden class="dialog-label">Window Height</span>
+            <span id="project-label-project.window.decorations" data-ref="project-label-project.window.decorations" hidden class="dialog-label">Window Decorations</span>
+            <span id="project-label-project.window.fps" data-ref="project-label-project.window.fps" hidden class="dialog-label">Target FPS (0 = unlimited)</span>
+            <span id="project-label-project.window.tps" data-ref="project-label-project.window.tps" hidden class="dialog-label">Target TPS (0 = unlimited)</span>
+            <span id="project-label-project.window.transparent" data-ref="project-label-project.window.transparent" hidden class="dialog-label">Transparent</span>
+            <span id="project-label-project.window.border" data-ref="project-label-project.window.border" hidden class="dialog-label">Window Border</span>
+            <span id="project-label-project.window.shadow" data-ref="project-label-project.window.shadow" hidden class="dialog-label">Window Shadow</span>
+            <span id="project-label-project.window.resizable" data-ref="project-label-project.window.resizable" hidden class="dialog-label">Resizable</span>
+            <span id="project-label-project.window.showInTaskbar" data-ref="project-label-project.window.showInTaskbar" hidden class="dialog-label">Show In Taskbar</span>
+            <span id="project-label-project.window.alwaysOnTop" data-ref="project-label-project.window.alwaysOnTop" hidden class="dialog-label">Always On Top</span>
+            <span id="project-label-project.viewport.width" data-ref="project-label-project.viewport.width" hidden class="dialog-label">Viewport Width</span>
+            <span id="project-label-project.viewport.height" data-ref="project-label-project.viewport.height" hidden class="dialog-label">Viewport Height</span>
+            <span id="project-label-project.viewport.mode" data-ref="project-label-project.viewport.mode" hidden class="dialog-label">Viewport Mode</span>
+            <span id="project-label-project.clearColor" data-ref="project-label-project.clearColor" hidden class="dialog-label">Clear Color</span>
+            <span id="project-label-project.window.renderScale" data-ref="project-label-project.window.renderScale" hidden class="dialog-label">Render Scale</span>
+            <span id="project-label-project.window.maxDevicePixelRatio" data-ref="project-label-project.window.maxDevicePixelRatio" hidden class="dialog-label">Max Device Pixel Ratio</span>
+            <span id="project-label-project.window.vsync" data-ref="project-label-project.window.vsync" hidden class="dialog-label">VSync</span>
+            <span id="project-label-project.window.antialias" data-ref="project-label-project.window.antialias" hidden class="dialog-label">Antialias</span>
+            <span id="project-label-project.engine.textureCompression" data-ref="project-label-project.engine.textureCompression" hidden class="dialog-label">Compress Textures</span>
+            <span id="project-label-project.engine.features.render2d" data-ref="project-label-project.engine.features.render2d" hidden class="dialog-label">Render 2D</span>
+            <span id="project-label-project.engine.features.render3d" data-ref="project-label-project.engine.features.render3d" hidden class="dialog-label">Render 3D</span>
+            <span id="project-label-project.engine.features.input2d" data-ref="project-label-project.engine.features.input2d" hidden class="dialog-label">Input 2D</span>
+            <span id="project-label-project.engine.features.animations2d" data-ref="project-label-project.engine.features.animations2d" hidden class="dialog-label">Animations 2D</span>
+            <span id="project-label-project.engine.features.sprite-trails2d" data-ref="project-label-project.engine.features.sprite-trails2d" hidden class="dialog-label">Sprite Trails 2D</span>
+            <span id="project-label-project.engine.features.particles2d" data-ref="project-label-project.engine.features.particles2d" hidden class="dialog-label">Particles 2D</span>
+            <span id="project-label-project.engine.features.tilemaps2d" data-ref="project-label-project.engine.features.tilemaps2d" hidden class="dialog-label">Tilemaps 2D</span>
+            <span id="project-label-project.engine.features.spine2d" data-ref="project-label-project.engine.features.spine2d" hidden class="dialog-label">Spine 2D</span>
+            <span id="project-label-project.engine.features.physics2d" data-ref="project-label-project.engine.features.physics2d" hidden class="dialog-label">Physics 2D</span>
+            <span id="project-label-project.engine.features.physics3d" data-ref="project-label-project.engine.features.physics3d" hidden class="dialog-label">Physics 3D</span>
+            <span id="project-label-project.engine.features.ui-controls" data-ref="project-label-project.engine.features.ui-controls" hidden class="dialog-label">UI Controls</span>
+            <span id="project-label-project.engine.features.ui-widgets" data-ref="project-label-project.engine.features.ui-widgets" hidden class="dialog-label">UI Widgets</span>
+            <span id="project-label-project.engine.features.ui-text-input" data-ref="project-label-project.engine.features.ui-text-input" hidden class="dialog-label">UI Text Input</span>
+            <span id="project-label-project.engine.features.ui-markdown" data-ref="project-label-project.engine.features.ui-markdown" hidden class="dialog-label">UI Markdown</span>
+            <span id="project-label-project.engine.features.ui-html" data-ref="project-label-project.engine.features.ui-html" hidden class="dialog-label">UI HTML</span>
+            <span id="project-label-project.engine.features.webview" data-ref="project-label-project.engine.features.webview" hidden class="dialog-label">WebView</span>
+            <span id="project-label-project.engine.features.file-dialogs" data-ref="project-label-project.engine.features.file-dialogs" hidden class="dialog-label">File Dialogs</span>
+            <span id="project-label-project.engine.resources.images" data-ref="project-label-project.engine.resources.images" hidden class="dialog-label">Images</span>
+            <span id="project-label-project.engine.resources.fonts" data-ref="project-label-project.engine.resources.fonts" hidden class="dialog-label">Fonts</span>
+            <span id="project-label-project.engine.resources.audio" data-ref="project-label-project.engine.resources.audio" hidden class="dialog-label">Audio</span>
+            <span id="project-label-project.engine.resources.videos" data-ref="project-label-project.engine.resources.videos" hidden class="dialog-label">Video</span>
+            <span id="project-label-project.engine.resources.particles" data-ref="project-label-project.engine.resources.particles" hidden class="dialog-label">Particles</span>
+            <span id="project-label-project.engine.resources.tilemaps" data-ref="project-label-project.engine.resources.tilemaps" hidden class="dialog-label">Tilemaps</span>
+            <span id="project-label-project.engine.resources.models" data-ref="project-label-project.engine.resources.models" hidden class="dialog-label">3D Models</span>
+            <span id="project-label-project.engine.resources.spine" data-ref="project-label-project.engine.resources.spine" hidden class="dialog-label">Spine</span>
+            <span id="project-label-project.engine.resources.shaders" data-ref="project-label-project.engine.resources.shaders" hidden class="dialog-label">Shaders</span>
+            <span id="project-label-project.engine.resources.html" data-ref="project-label-project.engine.resources.html" hidden class="dialog-label">HTML</span>
+            <span id="project-label-project.engine.imageDecoders.gif" data-ref="project-label-project.engine.imageDecoders.gif" hidden class="dialog-label">GIF</span>
+            <span id="project-label-project.engine.imageDecoders.jpeg" data-ref="project-label-project.engine.imageDecoders.jpeg" hidden class="dialog-label">JPEG (.jpg)</span>
+            <span id="project-label-project.engine.imageDecoders.png" data-ref="project-label-project.engine.imageDecoders.png" hidden class="dialog-label">PNG</span>
+            <span id="project-label-project.engine.imageDecoders.webp" data-ref="project-label-project.engine.imageDecoders.webp" hidden class="dialog-label">WebP</span>
+            <span id="project-label-resource-packages.package" data-ref="project-label-resource-packages.package" hidden class="dialog-label">Package</span>
+            <span id="project-label-resource-packages.keep" data-ref="project-label-resource-packages.keep" hidden class="dialog-label">Keep patterns (one per line)</span>
+            <span id="project-label-resource-packages.name" data-ref="project-label-resource-packages.name" hidden class="dialog-label">Package name</span>
+            <span id="project-label-resource-packages.include" data-ref="project-label-resource-packages.include" hidden class="dialog-label">Include patterns (one per line)</span>
+            <span id="project-label-resource-packages.exclude" data-ref="project-label-resource-packages.exclude" hidden class="dialog-label">Exclude patterns (one per line)</span>
+            <span id="project-label-resource-packages.dependencies" data-ref="project-label-resource-packages.dependencies" hidden class="dialog-label">Dependencies (one per line)</span>
+            <span id="project-label-resource-packages.required" data-ref="project-label-resource-packages.required" hidden class="dialog-label">Load at startup</span>
+            <button id="project-resource-packages-add" data-ref="project-resource-packages-add" type="button" hidden style="display:none !important"><img id="project-resource-packages-add-icon" data-ref="project-resource-packages-add-icon" class="dialog-button-icon" alt="" src="onix-titlebar/plus.svg"><span id="project-resource-packages-add-label" data-ref="project-resource-packages-add-label" class="dialog-button-label">Add Package</span></button>
+            <button id="project-resource-packages-remove" data-ref="project-resource-packages-remove" type="button" hidden style="display:none !important"><img id="project-resource-packages-remove-icon" data-ref="project-resource-packages-remove-icon" class="dialog-button-icon" alt="" src="onix-titlebar/trash-2.svg#danger"><span id="project-resource-packages-remove-label" data-ref="project-resource-packages-remove-label" class="dialog-button-label">Remove</span></button>
+            <button id="project-save" data-ref="project-save"
+                type="button"><img id="project-save-icon" data-ref="project-save-icon" class="dialog-button-icon" alt="" src="onix-titlebar/save.svg"><span id="project-save-label" data-ref="project-save-label" class="dialog-button-label">Save Project</span></button><button id="project-close" data-ref="project-close"
+                type="button"><img id="project-close-icon" data-ref="project-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg"><span id="project-close-label" data-ref="project-close-label" class="dialog-button-label"></span></button>
+        </div>
+    </section>
+</div>
+<style>
+    * {
+        box-sizing: border-box
+    }
+
+    .dialog-root {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: sans-serif;
+        color: #dce0e8
+    }
+
+    #overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: rgba(10, 12, 18, .72);
+        pointer-events: auto
+    }
+
+    #panel {
+        position: absolute;
+        z-index: 1;
+        border: 1px solid #3b404b;
+        border-radius: 10px;
+        background: #21242c;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .38);
+        pointer-events: auto;
+        overflow: hidden
+    }
+
+    #content {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        pointer-events: none
+    }
+
+    #content>* {
+        position: absolute
+    }
+
+    #content input:not(.checkbox),
+    #content textarea,
+    #content select {
+        margin: 0;
+        padding: 7px 9px;
+        border: 1px solid #3b404b;
+        border-radius: 4px;
+        font: 14px sans-serif;
+        color: #dce0e8;
+        background: #1b1e25;
+        pointer-events: auto
+    }
+
+    #content input.checkbox {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        padding: 0;
+        appearance: auto;
+        border: 1px solid #3b404b;
+        border-radius: 3px;
+        color: #84ccff;
+        background: #1b1e25;
+        pointer-events: auto;
+        cursor: pointer
+    }
+
+    #content input:not(.checkbox):focus,
+    #content textarea:focus,
+    #content select:focus {
+        border-color: #84ccff;
+        outline: none
+    }
+
+    #content input.checkbox:focus-visible {
+        outline: 1px solid #84ccff;
+        outline-offset: 1px
+    }
+
+    #content textarea {
+        resize: none;
+        white-space: pre-wrap;
+        scrollbar-width: thin;
+        scrollbar-color: #65708280 transparent
+    }
+
+    #content textarea:hover,
+    #content textarea:focus {
+        scrollbar-color: #8992a280 transparent
+    }
+
+    #content button {
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        pointer-events: auto;
+        margin: 0;
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: #343a46;
+        color: #dce0e8;
+        font: 14px sans-serif;
+        line-height: 1;
+        cursor: pointer
+    }
+
+    #content #project-category-window,
+    #content #project-category-rendering,
+    #content #project-category-features,
+    #content #project-category-resources,
+    #content #project-category-resource-packages {
+        z-index: 100;
+        justify-content: flex-start
+    }
+
+    #content button:not(:disabled):hover,
+    #content button:not(:disabled):active,
+    #content button.active:not(:disabled),
+    #content button:not(:disabled):focus-visible {
+        border-color: #84ccff;
+        background: #3b5266;
+        outline: none
+    }
+
+    #content button.icon-only {
+        padding: 0;
+        background: transparent
+    }
+
+    #content button.icon-only:not(:disabled):hover,
+    #content button.icon-only:not(:disabled):active,
+    #content button.icon-only:not(:disabled):focus-visible {
+        border-color: #84ccff;
+        background: #3b5266;
+        outline: none
+    }
+
+    #content input.dialog-path-input {
+        border-radius: 4px 0 0 4px
+    }
+
+    #content button.dialog-path-browse {
+        border: 1px solid #3b404b;
+        border-radius: 0 4px 4px 0;
+        background: #343a46;
+        gap: 0
+    }
+
+    #content .dialog-button-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+        object-fit: contain
+    }
+
+    #content .dialog-button-label {
+        line-height: 1;
+        white-space: nowrap
+    }
+
+    #content button.danger {
+        color: #c45b68
+    }
+
+    #content button:disabled {
+        opacity: .45;
+        cursor: default
+    }
+
+    #content .dialog-label {
+        pointer-events: none
+    }
+#content .dialog-title{font-size:20px;font-weight:600;line-height:24px}
+#content .dialog-section-title{font-size:18px;font-weight:600;line-height:24px}
+</style>

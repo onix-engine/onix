@@ -1,0 +1,24 @@
+<div id="dialog-root" data-ref="root" class="dialog-root"><div id="overlay" data-ref="overlay" aria-hidden="true"></div><section id="panel" data-ref="panel" role="dialog" aria-modal="true" aria-labelledby="module-create-title"><div id="content" data-ref="content"><span id="module-create-title" data-ref="module-create-title" class="dialog-label dialog-title"></span><span id="module-create-body" data-ref="module-create-body" class="dialog-label"></span><span id="module-create-definition-label" data-ref="module-create-definition-label" class="dialog-label">Module directory</span><input id="dialog-field-module-create-module-name" data-ref="dialog-field-module-create-module-name" type="text" aria-label="Module directory"><span id="module-create-instance-label" data-ref="module-create-instance-label" class="dialog-label">Instance ID</span><input id="dialog-field-module-create-instance-name" data-ref="dialog-field-module-create-instance-name" type="text" aria-label="Instance ID"><button id="module-create-confirm" data-ref="module-create-confirm" type="button"><img id="module-create-confirm-icon" data-ref="module-create-confirm-icon" class="dialog-button-icon" alt="" src="onix-titlebar/plus.svg"><span id="module-create-confirm-label" data-ref="module-create-confirm-label" class="dialog-button-label"></span></button><button id="module-create-close" data-ref="module-create-close" type="button"><img id="module-create-close-icon" data-ref="module-create-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg"><span id="module-create-close-label" data-ref="module-create-close-label" class="dialog-button-label"></span></button></div></section></div><style>
+*{box-sizing:border-box}
+.dialog-root{position:absolute;inset:0;margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:sans-serif;color:#dce0e8}
+#overlay{position:absolute;inset:0;z-index:0;background:rgba(10,12,18,.72);pointer-events:auto}
+#panel{position:absolute;z-index:1;border:1px solid #3b404b;border-radius:10px;background:#2a2e37;box-shadow:0 18px 48px rgba(0,0,0,.38);pointer-events:auto;overflow:hidden}
+#content{position:absolute;z-index:1;inset:0;pointer-events:none}
+#content>*{position:absolute}
+#content input,#content textarea,#content select{margin:0;padding:7px 9px;border:1px solid #3b404b;border-radius:4px;font:14px sans-serif;color:#dce0e8;background:#1b1e25;pointer-events:auto}
+#content input:focus,#content textarea:focus,#content select:focus{border-color:#84ccff;outline:none}
+#content textarea{resize:none;white-space:pre-wrap;scrollbar-width:thin;scrollbar-color:#65708280 transparent}
+#content textarea:hover,#content textarea:focus{scrollbar-color:#8992a280 transparent}
+#content button{z-index:100;display:flex;align-items:center;justify-content:center;gap:8px;pointer-events:auto;margin:0;padding:0 12px;border:1px solid transparent;border-radius:5px;background:#343a46;color:#dce0e8;font:14px sans-serif;line-height:1;cursor:pointer}
+#content button:not(:disabled):hover,#content button:not(:disabled):active,#content button.active:not(:disabled),#content button:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content button.icon-only{padding:0;background:transparent}
+#content button.icon-only:not(:disabled):hover,#content button.icon-only:not(:disabled):active,#content button.icon-only:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content .dialog-button-icon{width:16px;height:16px;flex:0 0 16px;object-fit:contain}
+#content .dialog-button-label{line-height:1;white-space:nowrap}
+#content button.danger{color:#c45b68}
+#content button:disabled{opacity:.45;cursor:default}
+#content .dialog-label{pointer-events:none}
+
+
+#content .dialog-title{font-size:20px;font-weight:600;line-height:24px}
+</style>

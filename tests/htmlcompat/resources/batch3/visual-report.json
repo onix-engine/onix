@@ -1,0 +1,236 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "nativeFontRasterizer": "FreeType 2.13.2; light hinting; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "c6e8b4fb037e63da5c3f4c10d80c381c9fbd2fd9fe675cf2c6d717cb1f52d6e1",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {
+    "flex-grow-max": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-shrink-min": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-basis-percent": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-box-basis": {
+      "pixelsOver16": 4,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0044444444444444444,
+        0.0014141414141414141,
+        0.0012121212121212121
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-wrap-center": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-wrap-stretch": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-wrap-end": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-column-auto": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-reverse-margin": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-column-gap": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-nested": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "absolute-height-max": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-grow-partial": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-shrink-partial": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-basis-min": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-column-max": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-mixed-limits": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "flex-auto-cross-size": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    }
+  },
+  "allStructuralPass": true
+}

@@ -1,0 +1,67 @@
+ECS traversal benchmark comparison — 2026-09-14
+Go 1.26.0 linux/amd64
+Command: go test ./ecs ./ecs/ui -run '^$' -bench '^BenchmarkTraversal' -benchmem -count=3
+
+BEFORE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkTraversalCommandTrim-6   	   62319	     18492 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6   	   66634	     18733 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6   	   64507	     18559 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 2504001	       459.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 2726526	       444.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 2657670	       444.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	    7526	    157923 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	    7515	    163189 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	    7760	    158792 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	12.847s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkTraversalTextFieldCaches-6   	   33980	     35017 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalTextFieldCaches-6   	   34003	     35082 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalTextFieldCaches-6   	   33997	     34891 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	    7813	    161664 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	    8036	    155144 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	    7930	    153179 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    2964	    399822 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    3046	    403883 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    3038	    401640 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs/ui	12.240s
+
+AFTER
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkTraversalCommandTrim-6   	  358981	      3500 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6   	  372600	      3337 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6   	  359222	      3395 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 3423998	       352.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 3433221	       356.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6     	 3447811	       347.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	   13382	     89999 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	   13642	     89831 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalAutoGrid-6      	   13236	     87840 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	15.812s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkTraversalTextFieldCaches-6   	   58557	     20271 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalTextFieldCaches-6   	   60978	     22497 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalTextFieldCaches-6   	   59110	     20049 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	   12422	     97465 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	   12148	     97342 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMenuMetrics-6       	   12133	     97142 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    7634	    151547 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    7777	    156132 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalValueSurfaces-6     	    7618	    154415 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs/ui	15.622s

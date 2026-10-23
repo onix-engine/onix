@@ -1,0 +1,30 @@
+{
+  "standalone": {
+    "button": "inline-block",
+    "input": "inline-block",
+    "select": "inline-block",
+    "textarea": "inline-block"
+  },
+  "workbench": {
+    "open-folder": "flex",
+    "save-file": "flex",
+    "save-all": "flex",
+    "show-find": "flex",
+    "format-code": "flex",
+    "run-tests": "flex",
+    "collapse-tree": "flex",
+    "refresh-tree": "flex",
+    "new-file": "inline-flex",
+    "find-query": "block",
+    "find-next": "flex",
+    "hide-find": "flex",
+    "stop-command": "flex",
+    "clear-terminal": "flex",
+    "hide-terminal": "flex",
+    "toggle-terminal": "flex",
+    "new-path": "inline-block",
+    "dialog-cancel": "block",
+    "dialog-confirm": "block",
+    "tree-template": "flex"
+  }
+}

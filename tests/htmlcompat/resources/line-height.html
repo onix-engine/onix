@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Compat;src:url("../../../testdata/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf")}
+html,body{margin:0;padding:0}body{background:white;font-family:Compat;font-size:16px;line-height:normal}
+.case{position:absolute;width:280px;height:120px;background:#f1f5f9}
+.probe{position:absolute;left:12px;top:12px;background:#38bdf8}
+#text-normal{width:240px;height:48px;padding:0 8px}
+#flex-box{display:flex;align-items:center;width:240px;height:72px;padding:0 8px}
+#text-flex-button{box-sizing:border-box;width:112px;height:32px;padding:0;border:1px solid #767676;font:16px Compat;line-height:normal}
+</style></head><body>
+<div class="case" id="case-normal"><div class="probe" id="text-normal">Normal text</div></div>
+<div class="case" id="case-flex" style="left:320px"><div class="probe" id="flex-box"><button id="text-flex-button">Run</button></div></div>
+</body></html>

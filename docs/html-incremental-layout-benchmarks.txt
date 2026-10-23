@@ -1,0 +1,52 @@
+Layout full vs retained
+go test ./internal/layout -run '^$' -bench '^BenchmarkRetainedBlockLayout$' -benchmem -benchtime=200ms -count=3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRetainedBlockLayout/nodes=10/retained=false-6         	    9130	     27163 ns/op	   27440 B/op	     178 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false-6         	    9150	     22016 ns/op	   27440 B/op	     178 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false-6         	    9304	     22751 ns/op	   27440 B/op	     178 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true-6          	  229071	      1025 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true-6          	  248950	      1130 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true-6          	  239287	      1046 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false-6       	      98	   2436674 ns/op	 2435304 B/op	   16919 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false-6       	      96	   2542193 ns/op	 2435302 B/op	   16919 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false-6       	      99	   2300018 ns/op	 2435299 B/op	   16919 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true-6        	    4267	     55082 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true-6        	    4320	     53336 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true-6        	    4408	     51815 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/internal/layout	3.856s
+
+
+ECS stage 1 baseline: 0f1b6e4
+go test ./ecs -run '^$' -bench '^BenchmarkHTMLLocalTextMutation$' -benchmem -benchtime=200ms -count=3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLLocalTextMutation/10-6         	    3582	     68190 ns/op	   19123 B/op	     137 allocs/op
+BenchmarkHTMLLocalTextMutation/10-6         	    4026	     62376 ns/op	   19121 B/op	     137 allocs/op
+BenchmarkHTMLLocalTextMutation/10-6         	    3702	     70277 ns/op	   19124 B/op	     137 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	      36	   6498850 ns/op	 1746091 B/op	   12918 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	      36	   6603981 ns/op	 1746091 B/op	   12918 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	      32	   7179214 ns/op	 1746118 B/op	   12918 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	1.940s
+
+
+ECS stage 2
+go test ./ecs -run '^$' -bench '^BenchmarkHTMLLocalTextMutation$' -benchmem -benchtime=200ms -count=3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLLocalTextMutation/10-6         	   10000	     22044 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/10-6         	   10000	     21322 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/10-6         	   10000	     20764 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	     134	   1761130 ns/op	      22 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	     134	   1540433 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/1000-6       	     133	   1544288 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	2.073s

@@ -1,0 +1,422 @@
+{
+  "case-grid-implicit-rows": {
+    "X": 10,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-implicit-rows": {
+    "X": 10,
+    "Y": 10,
+    "Width": 150,
+    "Height": 50
+  },
+  "grid-implicit-rows-child-0": {
+    "X": 10,
+    "Y": 10,
+    "Width": 150,
+    "Height": 20
+  },
+  "grid-implicit-rows-child-1": {
+    "X": 10,
+    "Y": 30,
+    "Width": 150,
+    "Height": 30
+  },
+  "case-grid-implicit-columns": {
+    "X": 210,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-implicit-columns": {
+    "X": 210,
+    "Y": 10,
+    "Width": 150,
+    "Height": 40
+  },
+  "grid-implicit-columns-child-0": {
+    "X": 210,
+    "Y": 10,
+    "Width": 50,
+    "Height": 20
+  },
+  "grid-implicit-columns-child-1": {
+    "X": 265,
+    "Y": 10,
+    "Width": 60,
+    "Height": 20
+  },
+  "case-grid-explicit-row-three": {
+    "X": 410,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-explicit-row-three": {
+    "X": 410,
+    "Y": 10,
+    "Width": 150,
+    "Height": 45
+  },
+  "grid-explicit-row-three-child-0": {
+    "X": 410,
+    "Y": 10,
+    "Width": 150,
+    "Height": 20
+  },
+  "grid-explicit-row-three-child-1": {
+    "X": 410,
+    "Y": 30,
+    "Width": 150,
+    "Height": 25
+  },
+  "case-grid-auto-stretch": {
+    "X": 610,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-auto-stretch": {
+    "X": 610,
+    "Y": 10,
+    "Width": 150,
+    "Height": 80
+  },
+  "grid-auto-stretch-child-0": {
+    "X": 610,
+    "Y": 10,
+    "Width": 150,
+    "Height": 20
+  },
+  "grid-auto-stretch-child-1": {
+    "X": 610,
+    "Y": 55,
+    "Width": 150,
+    "Height": 10
+  },
+  "case-grid-auto-gap": {
+    "X": 810,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-auto-gap": {
+    "X": 810,
+    "Y": 10,
+    "Width": 150,
+    "Height": 43
+  },
+  "grid-auto-gap-child-0": {
+    "X": 810,
+    "Y": 10,
+    "Width": 70,
+    "Height": 18
+  },
+  "grid-auto-gap-child-1": {
+    "X": 890,
+    "Y": 10,
+    "Width": 70,
+    "Height": 24
+  },
+  "grid-auto-gap-child-2": {
+    "X": 810,
+    "Y": 41,
+    "Width": 70,
+    "Height": 12
+  },
+  "case-grid-mixed-align": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "grid-mixed-align": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 150,
+    "Height": 100
+  },
+  "grid-mixed-align-child-0": {
+    "X": 1060,
+    "Y": 30,
+    "Width": 20,
+    "Height": 15
+  },
+  "grid-mixed-align-child-1": {
+    "X": 1120,
+    "Y": 90,
+    "Width": 30,
+    "Height": 20
+  },
+  "case-flex-fixed-basis": {
+    "X": 10,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-fixed-basis": {
+    "X": 10,
+    "Y": 140,
+    "Width": 150,
+    "Height": 60
+  },
+  "flex-fixed-basis-child-0": {
+    "X": 10,
+    "Y": 140,
+    "Width": 80,
+    "Height": 60
+  },
+  "flex-fixed-basis-child-1": {
+    "X": 90,
+    "Y": 140,
+    "Width": 70,
+    "Height": 60
+  },
+  "case-flex-order-reverse": {
+    "X": 210,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-order-reverse": {
+    "X": 210,
+    "Y": 140,
+    "Width": 150,
+    "Height": 60
+  },
+  "flex-order-reverse-child-0": {
+    "X": 275,
+    "Y": 140,
+    "Width": 20,
+    "Height": 20
+  },
+  "flex-order-reverse-child-1": {
+    "X": 330,
+    "Y": 140,
+    "Width": 30,
+    "Height": 30
+  },
+  "flex-order-reverse-child-2": {
+    "X": 300,
+    "Y": 140,
+    "Width": 25,
+    "Height": 15
+  },
+  "case-flex-wrap-reverse": {
+    "X": 410,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "flex-wrap-reverse": {
+    "X": 410,
+    "Y": 140,
+    "Width": 100,
+    "Height": 80
+  },
+  "flex-wrap-reverse-child-0": {
+    "X": 410,
+    "Y": 200,
+    "Width": 60,
+    "Height": 20
+  },
+  "flex-wrap-reverse-child-1": {
+    "X": 410,
+    "Y": 160,
+    "Width": 60,
+    "Height": 30
+  },
+  "flex-wrap-reverse-child-2": {
+    "X": 410,
+    "Y": 140,
+    "Width": 40,
+    "Height": 10
+  },
+  "case-display-flow": {
+    "X": 610,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "display-flow-inline-block-0": {
+    "X": 610,
+    "Y": 140,
+    "Width": 40,
+    "Height": 20
+  },
+  "display-flow-inline-block-1": {
+    "X": 650,
+    "Y": 140,
+    "Width": 50,
+    "Height": 20
+  },
+  "case-display-atomic-inline": {
+    "X": 810,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "display-atomic-inline": {
+    "X": 810,
+    "Y": 140,
+    "Width": 150,
+    "Height": 60
+  },
+  "display-atomic-inline-block": {
+    "X": 810,
+    "Y": 140,
+    "Width": 45,
+    "Height": 25
+  },
+  "case-display-contents-flex": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "display-contents-flex": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 150,
+    "Height": 50
+  },
+  "display-contents-flex-child-0": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 30,
+    "Height": 20
+  },
+  "display-contents-flex-child-1": {
+    "X": 1045,
+    "Y": 140,
+    "Width": 40,
+    "Height": 25
+  },
+  "case-display-flow-root": {
+    "X": 10,
+    "Y": 400,
+    "Width": 180,
+    "Height": 110
+  },
+  "display-flow-root": {
+    "X": 10,
+    "Y": 400,
+    "Width": 150,
+    "Height": 60
+  },
+  "display-flow-root-child": {
+    "X": 10,
+    "Y": 400,
+    "Width": 40,
+    "Height": 20
+  },
+  "case-relative-right-bottom": {
+    "X": 10,
+    "Y": 270,
+    "Width": 180,
+    "Height": 110
+  },
+  "relative-right-bottom": {
+    "X": 10,
+    "Y": 270,
+    "Width": 150,
+    "Height": 70
+  },
+  "relative-right-bottom-child-0": {
+    "X": -8,
+    "Y": 263,
+    "Width": 40,
+    "Height": 20
+  },
+  "relative-right-bottom-child-1": {
+    "X": 10,
+    "Y": 290,
+    "Width": 30,
+    "Height": 15
+  },
+  "case-absolute-auto-border": {
+    "X": 210,
+    "Y": 270,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-auto-border": {
+    "X": 210,
+    "Y": 270,
+    "Width": 150,
+    "Height": 80
+  },
+  "absolute-auto-border-child": {
+    "X": 220,
+    "Y": 278,
+    "Width": 120,
+    "Height": 32
+  },
+  "case-relative-nested-flow": {
+    "X": 410,
+    "Y": 270,
+    "Width": 180,
+    "Height": 110
+  },
+  "relative-nested-flow": {
+    "X": 410,
+    "Y": 270,
+    "Width": 150,
+    "Height": 80
+  },
+  "relative-nested-flow-child-0": {
+    "X": 430,
+    "Y": 280,
+    "Width": 50,
+    "Height": 25
+  },
+  "relative-nested-flow-grandchild": {
+    "X": 460,
+    "Y": 291,
+    "Width": 15,
+    "Height": 10
+  },
+  "case-absolute-left-right-width": {
+    "X": 610,
+    "Y": 270,
+    "Width": 180,
+    "Height": 110
+  },
+  "absolute-left-right-width": {
+    "X": 610,
+    "Y": 270,
+    "Width": 150,
+    "Height": 70
+  },
+  "absolute-left-right-width-child": {
+    "X": 622,
+    "Y": 270,
+    "Width": 120,
+    "Height": 20
+  },
+  "case-positioned-z-order": {
+    "X": 810,
+    "Y": 270,
+    "Width": 180,
+    "Height": 110
+  },
+  "positioned-z-order": {
+    "X": 810,
+    "Y": 270,
+    "Width": 150,
+    "Height": 70
+  },
+  "positioned-z-order-child-0": {
+    "X": 825,
+    "Y": 280,
+    "Width": 80,
+    "Height": 45
+  },
+  "positioned-z-order-child-1": {
+    "X": 855,
+    "Y": 290,
+    "Width": 80,
+    "Height": 45
+  }
+}

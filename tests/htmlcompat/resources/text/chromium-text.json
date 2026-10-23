@@ -1,0 +1,20 @@
+{
+  "text-black-12": 20,
+  "text-white-12": 420,
+  "text-color-12": 820,
+  "text-black-16": 20,
+  "text-white-16": 420,
+  "text-color-16": 820,
+  "text-black-24": 20,
+  "text-white-24": 420,
+  "text-color-24": 820,
+  "text-black-32": 20,
+  "text-white-32": 420,
+  "text-color-32": 820,
+  "text-phase-0": 20,
+  "text-phase-0.25": 420.25,
+  "text-phase-0.5": 820.5,
+  "text-phase-0.75": 20.75,
+  "text-alpha": 420,
+  "text-opacity": 820
+}

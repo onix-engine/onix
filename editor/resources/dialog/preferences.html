@@ -1,0 +1,189 @@
+<div id="dialog-root" data-ref="root" class="dialog-root">
+    <div id="overlay" data-ref="overlay" aria-hidden="true"></div>
+    <section id="panel" data-ref="panel" role="dialog" aria-modal="true">
+        <div id="content" data-ref="content"><span id="preferences-title" data-ref="preferences-title"
+                class="dialog-label dialog-title">Preferences</span>
+            <aside id="preferences-sidebar" data-ref="preferences-sidebar"></aside>
+            <div id="preferences-header-divider" data-ref="preferences-header-divider"></div>
+            <div id="preferences-sidebar-divider" data-ref="preferences-sidebar-divider"></div><span
+                id="preferences-category-title" data-ref="preferences-category-title" class="dialog-label dialog-section-title"></span><input
+                id="dialog-field-preferences-preferences-snapToGrid"
+                data-ref="dialog-field-preferences-preferences-snapToGrid" type="checkbox" hidden class="checkbox"
+                aria-label="Snap to Grid"><span id="preferences-label-preferences.snapToGrid" data-ref="preferences-label-preferences.snapToGrid" hidden class="dialog-label">Snap to Grid</span><button id="preferences-category-editing"
+                data-ref="preferences-category-editing" type="button"><img id="preferences-category-editing-icon" data-ref="preferences-category-editing-icon" class="dialog-button-icon" alt="" src="onix-titlebar/setting.svg"><span id="preferences-category-editing-label" data-ref="preferences-category-editing-label" class="dialog-button-label">Editing</span></button><button id="preferences-save" data-ref="preferences-save" type="button"><img id="preferences-save-icon" data-ref="preferences-save-icon" class="dialog-button-icon" alt="" src="onix-titlebar/save.svg"><span id="preferences-save-label" data-ref="preferences-save-label" class="dialog-button-label">Save Preferences</span></button><button id="preferences-close" data-ref="preferences-close" type="button"><img id="preferences-close-icon" data-ref="preferences-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg"><span id="preferences-close-label" data-ref="preferences-close-label" class="dialog-button-label"></span></button>
+        </div>
+    </section>
+</div>
+<style>
+    * {
+        box-sizing: border-box
+    }
+
+    .dialog-root {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: sans-serif;
+        color: #dce0e8
+    }
+
+    #overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: rgba(10, 12, 18, .72);
+        pointer-events: auto
+    }
+
+    #panel {
+        position: absolute;
+        z-index: 1;
+        border: 1px solid #3b404b;
+        border-radius: 10px;
+        background: #2a2e37;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .38);
+        pointer-events: auto;
+        overflow: hidden
+    }
+
+    #content {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        pointer-events: none
+    }
+
+    #content>* {
+        position: absolute
+    }
+
+    #content input:not(.checkbox),
+    #content textarea,
+    #content select {
+        margin: 0;
+        padding: 7px 9px;
+        border: 1px solid #3b404b;
+        border-radius: 4px;
+        font: 14px sans-serif;
+        color: #dce0e8;
+        background: #1b1e25;
+        pointer-events: auto
+    }
+
+    #content input.checkbox {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        padding: 0;
+        appearance: auto;
+        border: 1px solid #3b404b;
+        border-radius: 3px;
+        color: #84ccff;
+        background: #1b1e25;
+        pointer-events: auto;
+        cursor: pointer
+    }
+
+    #content input.checkbox:disabled {
+        cursor: default
+    }
+
+    #content input:not(.checkbox):focus,
+    #content textarea:focus,
+    #content select:focus {
+        border-color: #84ccff;
+        outline: none
+    }
+
+    #content input.checkbox:focus-visible {
+        outline: 1px solid #84ccff;
+        outline-offset: 1px
+    }
+
+    #content textarea {
+        resize: none;
+        white-space: pre-wrap;
+        scrollbar-width: thin;
+        scrollbar-color: #65708280 transparent
+    }
+
+    #content textarea:hover,
+    #content textarea:focus {
+        scrollbar-color: #8992a280 transparent
+    }
+
+    #content button {
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        pointer-events: auto;
+        margin: 0;
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: #343a46;
+        color: #dce0e8;
+        font: 14px sans-serif;
+        line-height: 1;
+        cursor: pointer
+    }
+
+    #content #preferences-category-editing {
+        justify-content: flex-start
+    }
+
+    #content button:not(:disabled):hover,
+    #content button:not(:disabled):active,
+    #content button.active:not(:disabled),
+    #content button:not(:disabled):focus-visible {
+        border-color: #84ccff;
+        background: #3b5266;
+        outline: none
+    }
+
+    #content button.icon-only {
+        padding: 0;
+        background: transparent
+    }
+
+    #content button.icon-only:not(:disabled):hover,
+    #content button.icon-only:not(:disabled):active,
+    #content button.icon-only:not(:disabled):focus-visible {
+        border-color: #84ccff;
+        background: #3b5266;
+        outline: none
+    }
+
+    #content .dialog-button-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+        object-fit: contain
+    }
+
+    #content .dialog-button-label {
+        line-height: 1;
+        white-space: nowrap
+    }
+
+    #content button.danger {
+        color: #c45b68
+    }
+
+    #content button:disabled {
+        opacity: .45;
+        cursor: default
+    }
+
+    #content .dialog-label {
+        pointer-events: none
+    }
+#content .dialog-title{font-size:20px;font-weight:600;line-height:24px}
+#content .dialog-section-title{font-size:18px;font-weight:600;line-height:24px}
+</style>

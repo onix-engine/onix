@@ -1,0 +1,370 @@
+{
+  "pixelExact": false,
+  "scope": "Linux Vulkan DPR 1, Chromium 153.0.8010.36",
+  "metric": "Mean absolute RGB channel error over the same case rectangle, no edge tolerance",
+  "fixtures": {
+    "batch": {
+      "fixtureSHA256": "54f6cd109c0c8f8e8d42d286f21ea3e17a7760bdfe707a55687ce03463ddbc42",
+      "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+      "beforeImageSHA256": "ca67057a14b17e36a169907b4e346bf180f6fa75d1fc7fa1cd039bc0944f79f3",
+      "afterImageSHA256": "65821053ac3c372024009d5dc7148a39a4499d67d7cd9755cfb60e88a17c6859",
+      "nativeFontRasterizer": "FreeType 2.13.2; light hinting; Skia 4x LCD filter",
+      "cases": {
+        "text-normal": {
+          "beforeMeanAbsoluteRGB": 0.6197811447811448,
+          "afterMeanAbsoluteRGB": 0.2601346801346801,
+          "reductionPercent": 58.02797772647019,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            3.1705930138099108,
+            11.200649878147848,
+            14.334687246141348
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.561301084236864,
+            4.791492910758966,
+            6.191826522101752
+          ]
+        },
+        "text-pre": {
+          "beforeMeanAbsoluteRGB": 0.466969696969697,
+          "afterMeanAbsoluteRGB": 0.2048148148148148,
+          "reductionPercent": 56.1395918955945,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            2.994692144373673,
+            10.989384288747345,
+            13.813163481953291
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.528322440087146,
+            4.839869281045751,
+            6.237472766884531
+          ]
+        },
+        "text-wrap": {
+          "beforeMeanAbsoluteRGB": 0.6144612794612795,
+          "afterMeanAbsoluteRGB": 0.27715488215488215,
+          "reductionPercent": 54.894654648072546,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            2.94189852700491,
+            11.442716857610474,
+            14.02291325695581
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.593776282590412,
+            5.136248948696384,
+            6.456686291000841
+          ]
+        },
+        "text-center": {
+          "beforeMeanAbsoluteRGB": 0.35213804713804714,
+          "afterMeanAbsoluteRGB": 0.18584175084175084,
+          "reductionPercent": 47.224745422383705,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            3.758147512864494,
+            13.734133790737564,
+            17.269296740994854
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            2.2985865724381624,
+            7.236749116607774,
+            9.667844522968197
+          ]
+        },
+        "text-cjk": {
+          "beforeMeanAbsoluteRGB": 1.7127272727272729,
+          "afterMeanAbsoluteRGB": 0.36136363636363633,
+          "reductionPercent": 78.90127388535032,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            6.112568306010929,
+            21.51311475409836,
+            27.010928961748633
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.4167643610785463,
+            4.598475967174678,
+            6.104337631887456
+          ]
+        }
+      }
+    },
+    "text": {
+      "fixtureSHA256": "c95dc565d3025bda6f7557dd84e9bf44eb679c07c8d13b23db256acfaf654286",
+      "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+      "beforeImageSHA256": "b09a210ac090678dbca6d3d86cf3c30de5509b20a7cfac3b71606b7ea83556d3",
+      "afterImageSHA256": "f724635f98ae6ee9e21ee0d7022e435a409ded4bcc3dd0777f27f87157fe48d1",
+      "nativeFontRasterizer": "FreeType 2.13.2; light hinting; Skia 4x LCD filter",
+      "cases": {
+        "black-12": {
+          "beforeMeanAbsoluteRGB": 0.21380424746075719,
+          "afterMeanAbsoluteRGB": 0.054025854108956606,
+          "reductionPercent": 74.73115957676528,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            19.877984084880637,
+            20.129973474801062,
+            20.084880636604776
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            5.309139784946237,
+            5.129032258064516,
+            5.129032258064516
+          ]
+        },
+        "white-12": {
+          "beforeMeanAbsoluteRGB": 0.23329639889196674,
+          "afterMeanAbsoluteRGB": 0.04364727608494922,
+          "reductionPercent": 81.29106308873585,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            21.467532467532468,
+            21.0987012987013,
+            21.18961038961039
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            3.900523560209424,
+            4.290575916230367,
+            3.981675392670157
+          ]
+        },
+        "color-12": {
+          "beforeMeanAbsoluteRGB": 0.11937211449676825,
+          "afterMeanAbsoluteRGB": 0.028328716528162514,
+          "reductionPercent": 76.26856435643565,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            18.991477272727273,
+            14.178977272727273,
+            2.3011363636363638
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.770348837209302,
+            3.238372093023256,
+            0.6540697674418605
+          ]
+        },
+        "black-16": {
+          "beforeMeanAbsoluteRGB": 0.35207756232686976,
+          "afterMeanAbsoluteRGB": 0.1152539242843952,
+          "reductionPercent": 67.26462103330711,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            20.250403877221324,
+            20.331179321486267,
+            20.134087237479807
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            6.839195979899498,
+            6.855946398659967,
+            6.88107202680067
+          ]
+        },
+        "white-16": {
+          "beforeMeanAbsoluteRGB": 0.3653554939981533,
+          "afterMeanAbsoluteRGB": 0.10157894736842106,
+          "reductionPercent": 72.19723008491711,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            20.417460317460318,
+            20.901587301587302,
+            20.26825396825397
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            5.887438825448613,
+            5.809135399673735,
+            5.876019575856444
+          ]
+        },
+        "color-16": {
+          "beforeMeanAbsoluteRGB": 0.1923545706371191,
+          "afterMeanAbsoluteRGB": 0.060046168051708225,
+          "reductionPercent": 68.78360215053763,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            19.134380453752183,
+            14.092495636998255,
+            2.087260034904014
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            6.105169340463458,
+            4.42602495543672,
+            0.6898395721925134
+          ]
+        },
+        "black-24": {
+          "beforeMeanAbsoluteRGB": 0.5488273314866113,
+          "afterMeanAbsoluteRGB": 0.14405355493998154,
+          "reductionPercent": 73.75248157744204,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            17.019486271036314,
+            17.46324180690877,
+            17.54295837023915
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.637432188065099,
+            4.518083182640145,
+            4.688969258589512
+          ]
+        },
+        "white-24": {
+          "beforeMeanAbsoluteRGB": 0.5752816251154201,
+          "afterMeanAbsoluteRGB": 0.12683287165281623,
+          "reductionPercent": 77.95290756464375,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            17.253820033955858,
+            17.35993208828523,
+            17.453310696095077
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            3.869639794168096,
+            3.83704974271012,
+            3.9133790737564325
+          ]
+        },
+        "color-24": {
+          "beforeMeanAbsoluteRGB": 0.29674976915974144,
+          "afterMeanAbsoluteRGB": 0.07535549399815328,
+          "reductionPercent": 74.60638496483914,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            16.31153846153846,
+            11.920192307692307,
+            1.7759615384615384
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.2732673267326735,
+            3.018811881188119,
+            0.4524752475247525
+          ]
+        },
+        "black-32": {
+          "beforeMeanAbsoluteRGB": 1.214635272391505,
+          "afterMeanAbsoluteRGB": 0.24385041551246536,
+          "reductionPercent": 79.92398038693983,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            22.914556962025316,
+            22.92457805907173,
+            22.940928270042193
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.809626825310979,
+            4.656030286641427,
+            4.686857760951866
+          ]
+        },
+        "white-32": {
+          "beforeMeanAbsoluteRGB": 1.1721975992613112,
+          "afterMeanAbsoluteRGB": 0.2260387811634349,
+          "reductionPercent": 80.71666574766245,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            21.5,
+            21.393584521384927,
+            21.274949083503056
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.188894654903996,
+            4.178515827711468,
+            4.185781006746238
+          ]
+        },
+        "color-32": {
+          "beforeMeanAbsoluteRGB": 0.6480424746075716,
+          "afterMeanAbsoluteRGB": 0.1320313942751616,
+          "reductionPercent": 79.62612028553923,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            21.0958751393534,
+            15.18227424749164,
+            2.039576365663322
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            4.38076266363119,
+            3.0939100739897554,
+            0.4968696642003415
+          ]
+        },
+        "phase-0": {
+          "beforeMeanAbsoluteRGB": 0.18369344413665745,
+          "afterMeanAbsoluteRGB": 0.06071098799630656,
+          "reductionPercent": 66.94983412084045,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            4.026515151515151,
+            14.464015151515152,
+            18.28787878787879
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.4780114722753346,
+            4.782026768642448,
+            6.1529636711281075
+          ]
+        },
+        "phase-0.25": {
+          "beforeMeanAbsoluteRGB": 0.18241920590951063,
+          "afterMeanAbsoluteRGB": 0.06144044321329639,
+          "reductionPercent": 66.31909293379228,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            4.062146892655368,
+            13.935969868173258,
+            18.425612052730695
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.517509727626459,
+            4.762645914396887,
+            6.463035019455253
+          ]
+        },
+        "phase-0.5": {
+          "beforeMeanAbsoluteRGB": 0.3608864265927978,
+          "afterMeanAbsoluteRGB": 0.23663896583564173,
+          "reductionPercent": 34.42841060280421,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            3.655234657039711,
+            13.97653429602888,
+            17.810469314079423
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.3863636363636365,
+            4.875,
+            5.9981060606060606
+          ]
+        },
+        "phase-0.75": {
+          "beforeMeanAbsoluteRGB": 0.23008310249307481,
+          "afterMeanAbsoluteRGB": 0.10719298245614035,
+          "reductionPercent": 53.41118869893251,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            4.03290676416819,
+            13.76234003656307,
+            18.107861060329068
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            1.4915254237288136,
+            4.651600753295669,
+            6.374764595103578
+          ]
+        },
+        "alpha": {
+          "beforeMeanAbsoluteRGB": 0.4964081255771007,
+          "afterMeanAbsoluteRGB": 0.10323176361957526,
+          "reductionPercent": 79.20425587321664,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            20.4280193236715,
+            9.525603864734299,
+            20.52657004830918
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            3.22568093385214,
+            3.6342412451361867,
+            3.32295719844358
+          ]
+        },
+        "opacity": {
+          "beforeMeanAbsoluteRGB": 0.5057802400738689,
+          "afterMeanAbsoluteRGB": 0.384432132963989,
+          "reductionPercent": 23.992259383671676,
+          "beforeInkInteriorMeanAbsoluteRGB": [
+            19.917293233082706,
+            9.830827067669173,
+            20.201127819548873
+          ],
+          "afterInkInteriorMeanAbsoluteRGB": [
+            17.17287488061127,
+            4.55396370582617,
+            16.59694364851958
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+Onix ECS seventh batch benchmarks
+Go 1.26.0; Linux amd64; GOMAXPROCS=6; 300ms x 3; serial runs.
+MixedPatch compares sequential calls, prepared patches, and queued patches in the same final binary.
+One round trip changes two component types in each direction and retains four columns.
+Control benchmarks compare batch-six snapshot through Go overlay with the final code.
+Spawner2OneThousand includes fresh-world creation and capacity growth; it is not a warmed allocation benchmark.
+
+Batch-six controls
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled-6   	 3653872	        99.29 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6   	 3542758	        98.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6   	 3296523	       109.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2954277	       122.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2943246	       131.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2891188	       123.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 3129482	       111.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 2898968	       111.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 3182989	       118.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       339.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       331.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       356.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawner2OneThousand-6            	    5529	     76975 ns/op	  180954 B/op	     140 allocs/op
+BenchmarkSpawner2OneThousand-6            	    5526	     65874 ns/op	  180955 B/op	     140 allocs/op
+BenchmarkSpawner2OneThousand-6            	    5262	     68103 ns/op	  180955 B/op	     140 allocs/op
+PASS
+
+Batch-seven workloads and controls
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandSpawnPreparedRecycled-6   	 3503475	       100.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6   	 3669945	        99.53 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6   	 3349653	       105.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6          	  311746	      1177 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6          	  295382	      1197 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6          	  312162	      1219 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6               	 1343556	       266.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6               	 1347762	       268.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6               	 1316373	       273.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6            	  897108	       455.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6            	  783728	       442.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6            	  839946	       438.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2916542	       121.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2914602	       123.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6          	 2932604	       122.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 3038096	       120.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 2924618	       115.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedRemovalRecycled-6        	 3156562	       117.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       325.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       332.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSequentialRemovalRecycled-6      	 1000000	       317.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSpawner2OneThousand-6            	    5234	     59713 ns/op	  180954 B/op	     140 allocs/op
+BenchmarkSpawner2OneThousand-6            	    4333	     70498 ns/op	  180954 B/op	     140 allocs/op
+BenchmarkSpawner2OneThousand-6            	    4820	    104561 ns/op	  180954 B/op	     140 allocs/op
+PASS

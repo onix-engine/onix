@@ -1,0 +1,41 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkIncrementalRender2D/1000/stable-2         	  414690	      1549 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/stable-2         	  429690	      1634 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/stable-2         	  368204	      1477 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/color-2          	    9094	     61341 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/color-2          	   10000	     59570 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/color-2          	   10000	     62093 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/move-2           	    7723	     79508 ns/op	       146.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/move-2           	    7306	     83752 ns/op	       146.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/move-2           	    7388	     80029 ns/op	       146.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/scroll-2         	    3564	    183099 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/scroll-2         	    3334	    185523 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/scroll-2         	    3260	    196626 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/all-2            	     777	    779458 ns/op	      1000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/all-2            	     729	    820601 ns/op	      1000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/all-2            	     717	    796066 ns/op	      1000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/covered-2        	   23731	     25391 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/covered-2        	   24722	     25230 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/covered-2        	   25329	     23448 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/stable-2        	  378951	      1495 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/stable-2        	  411969	      1501 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/stable-2        	  407553	      1489 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/color-2         	    1329	    444438 ns/op	       152.1 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/color-2         	    1572	    414959 ns/op	       152.0 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/color-2         	    1515	    392702 ns/op	       152.1 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/move-2          	    1482	    440932 ns/op	       284.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/move-2          	    1364	    484349 ns/op	       284.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/move-2          	    1167	    470601 ns/op	       284.3 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/scroll-2        	     195	   3017375 ns/op	       325.8 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/scroll-2        	     206	   2877676 ns/op	       325.0 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/scroll-2        	     201	   2677391 ns/op	       325.8 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/all-2           	      62	   9376080 ns/op	     10000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/all-2           	      72	   9796726 ns/op	     10000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/all-2           	      61	   9761883 ns/op	     10000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/covered-2       	    2509	    201941 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/covered-2       	    3134	    223559 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/covered-2       	    2750	    209471 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+PASS

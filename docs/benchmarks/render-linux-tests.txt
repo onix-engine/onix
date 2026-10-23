@@ -1,0 +1,5 @@
+ok  	github.com/diiyw/onix/scene	0.505s
+ok  	github.com/diiyw/onix/graphics	1.274s
+ok  	github.com/diiyw/onix/ui/html	2.873s
+ok  	github.com/diiyw/onix/ui	0.257s
+ok  	github.com/diiyw/onix	0.039s

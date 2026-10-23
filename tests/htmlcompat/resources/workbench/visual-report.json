@@ -1,0 +1,162 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "fontRasterizer": "Onix pure Go outline rasterizer; unhinted; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "8479c95325e8f242b2daeb25d4eae12708ad7b83d4a89baf9c79579d70c1a07a",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {},
+  "images": {
+    "count": 13,
+    "metrics": [
+      {
+        "rect": {
+          "X": 151.421875,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 57
+      },
+      {
+        "rect": {
+          "X": 226.234375,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 89
+      },
+      {
+        "rect": {
+          "X": 298.875,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 73
+      },
+      {
+        "rect": {
+          "X": 388.125,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 45
+      },
+      {
+        "rect": {
+          "X": 997.953125,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 76
+      },
+      {
+        "rect": {
+          "X": 1103.078125,
+          "Y": 11.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 37
+      },
+      {
+        "rect": {
+          "X": 187,
+          "Y": 50,
+          "Width": 14,
+          "Height": 14
+        },
+        "nativePixelsOver16": 12
+      },
+      {
+        "rect": {
+          "X": 213,
+          "Y": 50,
+          "Width": 14,
+          "Height": 14
+        },
+        "nativePixelsOver16": 48
+      },
+      {
+        "rect": {
+          "X": 84.875,
+          "Y": 597,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 79
+      },
+      {
+        "rect": {
+          "X": 1168,
+          "Y": 108.5,
+          "Width": 14,
+          "Height": 14
+        },
+        "nativePixelsOver16": 26
+      },
+      {
+        "rect": {
+          "X": 250,
+          "Y": 372.5,
+          "Width": 14,
+          "Height": 14
+        },
+        "nativePixelsOver16": 45
+      },
+      {
+        "rect": {
+          "X": 1034.9375,
+          "Y": 372.5,
+          "Width": 14,
+          "Height": 14
+        },
+        "nativePixelsOver16": 27
+      },
+      {
+        "rect": {
+          "X": 260,
+          "Y": 604.5,
+          "Width": 16,
+          "Height": 16
+        },
+        "nativePixelsOver16": 76
+      }
+    ],
+    "allVisible": true
+  },
+  "allStructuralPass": null,
+  "automatedAcceptance": "go test ./ecs -run TestHTMLBrowserWorkbench",
+  "visualComparison": "diagnostic only; system sans-serif raster metrics differ from Onix Noto Sans SC"
+}

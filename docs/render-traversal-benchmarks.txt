@@ -1,0 +1,61 @@
+2026-09-14; baseline source: git 91271ed; 5 runs per benchmark.
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkPackMeshDeformations-6           	    2506	    506445 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations-6           	    2215	    516991 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations-6           	    2318	    506040 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations-6           	    2467	    504247 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations-6           	    2378	    527133 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselinePackMeshDeformations-6   	     926	   1269117 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselinePackMeshDeformations-6   	     942	   1308976 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselinePackMeshDeformations-6   	     920	   1304800 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselinePackMeshDeformations-6   	     961	   1290019 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselinePackMeshDeformations-6   	     877	   1257154 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/render	13.236s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLOverflowExtents-6           	    4496	    289278 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOverflowExtents-6           	    4597	    304380 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOverflowExtents-6           	    4008	    286869 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOverflowExtents-6           	    4558	    288833 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOverflowExtents-6           	    4390	    302179 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselineHTMLOverflowExtents-6   	    4069	    295052 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselineHTMLOverflowExtents-6   	    4068	    325519 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselineHTMLOverflowExtents-6   	    4324	    315028 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselineHTMLOverflowExtents-6   	    3840	    310745 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBaselineHTMLOverflowExtents-6   	    3895	    329739 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	13.961s
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRenderPhase2DTraversal/shared/materialized-6         	    1146	   1052510 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/materialized-6         	    1221	   1053996 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/materialized-6         	    1126	    993856 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/materialized-6         	    1180	   1080096 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/materialized-6         	    1032	   1020631 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/stream-6               	    1550	    820511 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/stream-6               	    1431	    832774 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/stream-6               	    1482	    824686 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/stream-6               	    1491	    813951 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/shared/stream-6               	    1492	    871314 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/materialized-6    	     782	   1471899 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/materialized-6    	     850	   1464949 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/materialized-6    	     866	   1433656 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/materialized-6    	     726	   1425554 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/materialized-6    	     853	   1440557 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/stream-6          	    1282	    842703 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/stream-6          	    1515	    816773 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/stream-6          	    1455	    855706 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/stream-6          	    1506	    853993 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRenderPhase2DTraversal/alternating/stream-6          	    1531	    838385 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	26.482s

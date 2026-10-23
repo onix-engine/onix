@@ -1,0 +1,152 @@
+{
+  "case-overflow-x": {
+    "X": 10,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "overflow-x": {
+    "X": 10,
+    "Y": 10,
+    "Width": 100,
+    "Height": 50
+  },
+  "overflow-x-child-0": {
+    "X": 10,
+    "Y": 10,
+    "Width": 180,
+    "Height": 30
+  },
+  "case-overflow-y": {
+    "X": 210,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "overflow-y": {
+    "X": 210,
+    "Y": 10,
+    "Width": 100,
+    "Height": 50
+  },
+  "overflow-y-child-0": {
+    "X": 210,
+    "Y": 10,
+    "Width": 80,
+    "Height": 100
+  },
+  "case-overflow-clip-padding": {
+    "X": 610,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "overflow-clip-padding": {
+    "X": 610,
+    "Y": 10,
+    "Width": 140,
+    "Height": 80
+  },
+  "overflow-clip-padding-child-0": {
+    "X": 620,
+    "Y": 20,
+    "Width": 140,
+    "Height": 80
+  },
+  "case-nested-clip": {
+    "X": 810,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "nested-clip": {
+    "X": 810,
+    "Y": 10,
+    "Width": 140,
+    "Height": 80
+  },
+  "nested-clip-child-0": {
+    "X": 840,
+    "Y": 10,
+    "Width": 100,
+    "Height": 60
+  },
+  "case-relative-clip": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "relative-clip": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 120,
+    "Height": 70
+  },
+  "relative-clip-child-0": {
+    "X": 1060,
+    "Y": 30,
+    "Width": 100,
+    "Height": 60
+  },
+  "case-abs-z-order": {
+    "X": 10,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "abs-z-order": {
+    "X": 10,
+    "Y": 140,
+    "Width": 150,
+    "Height": 80
+  },
+  "abs-z-order-child-0": {
+    "X": 20,
+    "Y": 150,
+    "Width": 90,
+    "Height": 60
+  },
+  "abs-z-order-child-1": {
+    "X": 50,
+    "Y": 160,
+    "Width": 90,
+    "Height": 60
+  },
+  "case-percent-padding": {
+    "X": 810,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "percent-padding": {
+    "X": 810,
+    "Y": 140,
+    "Width": 176,
+    "Height": 96
+  },
+  "percent-padding-child-0": {
+    "X": 828,
+    "Y": 158,
+    "Width": 20,
+    "Height": 20
+  },
+  "case-auto-size-abs": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 180,
+    "Height": 110
+  },
+  "auto-size-abs": {
+    "X": 1010,
+    "Y": 140,
+    "Width": 140,
+    "Height": 80
+  },
+  "auto-size-abs-child-0": {
+    "X": 1020,
+    "Y": 150,
+    "Width": 110,
+    "Height": 55
+  }
+}

@@ -1,0 +1,12 @@
+.idea
+*.wasm
+*.wasm.br
+*.exe
+dist/
+node_modules/
+onix.exe
+.gradle/
+.gocache/
+.codex-*/
+.go-*/
+*.test

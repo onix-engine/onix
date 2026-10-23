@@ -1,0 +1,89 @@
+Baseline (HEAD production Go files via overlay)
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui/html
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLNodeBindingTraversal/100-6       	   10000	     24724 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/100-6       	    8925	     24358 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/100-6       	    9225	     23956 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	     168	   1447806 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	     162	   1431085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	     170	   1600527 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   14454	     16464 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   15058	     16862 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   14668	     16312 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	     174	   1394611 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	     165	   1466658 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	     168	   1404235 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	    5728	     43841 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	    5414	     43231 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	    5215	     43277 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	      54	   4850047 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	      51	   4339977 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	      50	   4629778 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	    3027	     68788 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	    3766	     67104 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	    3513	     66484 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	      34	   6761612 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	      37	   6732791 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	      34	   6736920 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui/html	7.560s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkButtonGroupDividerTraversal/100-6         	     522	    470406 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/100-6         	     526	    444733 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/100-6         	     518	    433847 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	       6	  38614012 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	       6	  41190184 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	       6	  40135254 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui	1.954s
+
+Optimized
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui/html
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLNodeBindingTraversal/100-6       	   14883	     15107 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/100-6       	   15484	     14894 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/100-6       	   15736	     15339 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	    1570	    159802 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	    1543	    155194 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLNodeBindingTraversal/1000-6      	    1491	    159136 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   35829	      6471 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   37046	      6407 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/100-6      	   38166	      6516 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	    3429	     72250 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	    3498	     70068 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLMutationRootTraversal/1000-6     	    3628	     71036 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	   50919	      5155 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	   49336	      4818 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/100-6         	   52532	      4827 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	    5173	     50472 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	    4920	     47217 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLAnimationVisibilityTraversal/1000-6        	    5199	     47632 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	   59574	      4045 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	   58458	      4085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/100-6          	   60050	      4190 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	    5728	     43099 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	    5832	     43424 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLComponentAttributeTraversal/1000-6         	    5552	     44642 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui/html	7.033s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkButtonGroupDividerTraversal/100-6         	    4326	     56992 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/100-6         	    4268	     59549 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/100-6         	    4215	     57497 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	     415	    577855 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	     424	    573375 ns/op	       0 B/op	       0 allocs/op
+BenchmarkButtonGroupDividerTraversal/1000-6        	     422	    567060 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui	1.706s

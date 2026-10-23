@@ -1,0 +1,260 @@
+{
+  "project-name": {
+    "X": 86.34375,
+    "Y": 12,
+    "Width": 44.078125,
+    "Height": 15
+  },
+  "open-folder": {
+    "X": 142.421875,
+    "Y": 6.5,
+    "Width": 72.8125,
+    "Height": 26
+  },
+  "save-file": {
+    "X": 217.234375,
+    "Y": 6.5,
+    "Width": 70.640625,
+    "Height": 26
+  },
+  "save-all": {
+    "X": 289.875,
+    "Y": 6.5,
+    "Width": 87.25,
+    "Height": 26
+  },
+  "show-find": {
+    "X": 379.125,
+    "Y": 6.5,
+    "Width": 66.296875,
+    "Height": 26
+  },
+  "format-code": {
+    "X": 988.953125,
+    "Y": 6.5,
+    "Width": 103.125,
+    "Height": 26
+  },
+  "run-tests": {
+    "X": 1094.078125,
+    "Y": 6.5,
+    "Width": 95.921875,
+    "Height": 26
+  },
+  "collapse-tree": {
+    "X": 181,
+    "Y": 44,
+    "Width": 26,
+    "Height": 26
+  },
+  "refresh-tree": {
+    "X": 207,
+    "Y": 44,
+    "Width": 26,
+    "Height": 26
+  },
+  "root-name": {
+    "X": 0,
+    "Y": 75,
+    "Width": 239,
+    "Height": 26
+  },
+  "file-tree": {
+    "X": 0,
+    "Y": 101,
+    "Width": 239,
+    "Height": 480
+  },
+  "new-file": {
+    "X": 8,
+    "Y": 590,
+    "Width": 223,
+    "Height": 30
+  },
+  "tabs": {
+    "X": 240,
+    "Y": 40,
+    "Width": 960,
+    "Height": 35
+  },
+  "breadcrumb": {
+    "X": 240,
+    "Y": 75,
+    "Width": 960,
+    "Height": 22
+  },
+  "find-bar": {
+    "X": 240,
+    "Y": 97,
+    "Width": 960,
+    "Height": 38
+  },
+  "find-query": {
+    "X": 252,
+    "Y": 103,
+    "Width": 260,
+    "Height": 25
+  },
+  "find-next": {
+    "X": 520,
+    "Y": 103,
+    "Width": 44.734375,
+    "Height": 25
+  },
+  "find-result": {
+    "X": 572.734375,
+    "Y": 115.5,
+    "Width": 0,
+    "Height": 0
+  },
+  "hide-find": {
+    "X": 1162,
+    "Y": 102.5,
+    "Width": 26,
+    "Height": 26
+  },
+  "editor-host": {
+    "X": 240,
+    "Y": 135,
+    "Width": 960,
+    "Height": 226
+  },
+  "empty-editor": {
+    "X": 240,
+    "Y": 135,
+    "Width": 960,
+    "Height": 226
+  },
+  "terminal-panel": {
+    "X": 240,
+    "Y": 361,
+    "Width": 960,
+    "Height": 235
+  },
+  "terminal-state": {
+    "X": 347.875,
+    "Y": 373.5,
+    "Width": 31.796875,
+    "Height": 12
+  },
+  "stop-command": {
+    "X": 1026.9375,
+    "Y": 367.5,
+    "Width": 61.6875,
+    "Height": 24
+  },
+  "clear-terminal": {
+    "X": 1096.625,
+    "Y": 367.5,
+    "Width": 44.6875,
+    "Height": 24
+  },
+  "hide-terminal": {
+    "X": 1149.3125,
+    "Y": 367.5,
+    "Width": 40.6875,
+    "Height": 24
+  },
+  "terminal-host": {
+    "X": 240,
+    "Y": 397,
+    "Width": 960,
+    "Height": 199
+  },
+  "toggle-terminal": {
+    "X": 250,
+    "Y": 599.5,
+    "Width": 134.671875,
+    "Height": 26
+  },
+  "status": {
+    "X": 12,
+    "Y": 633.5,
+    "Width": 994.59375,
+    "Height": 12
+  },
+  "cursor-position": {
+    "X": 1022.59375,
+    "Y": 633.5,
+    "Width": 53.203125,
+    "Height": 12
+  },
+  "line-ending": {
+    "X": 1091.796875,
+    "Y": 633.5,
+    "Width": 12.84375,
+    "Height": 12
+  },
+  "language": {
+    "X": 1167.8125,
+    "Y": 633.5,
+    "Width": 20.1875,
+    "Height": 12
+  },
+  "dialog": {
+    "X": 0,
+    "Y": 0,
+    "Width": 1200,
+    "Height": 650
+  },
+  "dialog-title": {
+    "X": 421,
+    "Y": 264.5,
+    "Width": 358,
+    "Height": 17
+  },
+  "dialog-message": {
+    "X": 421,
+    "Y": 287.5,
+    "Width": 358,
+    "Height": 14
+  },
+  "new-path": {
+    "X": 421,
+    "Y": 315.5,
+    "Width": 358,
+    "Height": 31
+  },
+  "dialog-cancel": {
+    "X": 635.5,
+    "Y": 360.5,
+    "Width": 68.46875,
+    "Height": 25
+  },
+  "dialog-confirm": {
+    "X": 711.96875,
+    "Y": 360.5,
+    "Width": 67.03125,
+    "Height": 25
+  },
+  "tree-template": {
+    "X": 0,
+    "Y": 0,
+    "Width": 0,
+    "Height": 0
+  },
+  "kind-template": {
+    "X": 0,
+    "Y": 0,
+    "Width": 0,
+    "Height": 0
+  },
+  "name-template": {
+    "X": 0,
+    "Y": 0,
+    "Width": 0,
+    "Height": 0
+  },
+  "dialog-card": {
+    "X": 400,
+    "Y": 243.5,
+    "Width": 400,
+    "Height": 163
+  },
+  "dialog-actions": {
+    "X": 421,
+    "Y": 360.5,
+    "Width": 358,
+    "Height": 25
+  }
+}

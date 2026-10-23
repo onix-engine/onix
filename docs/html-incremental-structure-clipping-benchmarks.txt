@@ -1,0 +1,35 @@
+Baseline: ca6483d (stage 8)
+Current: stage 9 working tree
+Go 1.26, Linux amd64, Intel Core i5-11500
+Both versions use identical BenchmarkHTMLStructuralClipping.
+A fixed-height scroll container gains/loses one child; following clipped controls keep their geometry.
+Runs were sequential; remove/append and SyncHTML included, initialization and warmup excluded.
+Command (each version): go test ./ecs -run '^$' -bench '^BenchmarkHTMLStructuralClipping$' -benchmem -count=3 -benchtime=500ms
+
+BASELINE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLStructuralClipping/10-6         	    4969	    115939 ns/op	    6887 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/10-6         	    5497	    113242 ns/op	    6888 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/10-6         	    4790	    114737 ns/op	    6891 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	      54	  12589217 ns/op	    6953 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	      54	  12385526 ns/op	    6953 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	      49	  11769345 ns/op	    6892 B/op	      15 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.246s
+
+CURRENT
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLStructuralClipping/10-6         	   26949	     22211 ns/op	    6888 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/10-6         	   27092	     21574 ns/op	    6888 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/10-6         	   26720	     21301 ns/op	    6888 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	     646	    854287 ns/op	    6888 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	     658	    869863 ns/op	    6898 B/op	      15 allocs/op
+BenchmarkHTMLStructuralClipping/1000-6       	     688	    898123 ns/op	    6898 B/op	      15 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.794s

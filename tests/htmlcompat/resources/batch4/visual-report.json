@@ -1,0 +1,126 @@
+{
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "fullVersionList": [
+    {
+      "brand": "Chromium",
+      "version": "153.0.8010.36"
+    },
+    {
+      "brand": "Not_A Brand",
+      "version": "8.0.0.0"
+    }
+  ],
+  "dpr": 1,
+  "width": 1200,
+  "height": 650,
+  "nativeFontRasterizer": "FreeType 2.13.2; light hinting; Skia 4x LCD filter",
+  "textRasterProfile": {
+    "gamma": 1.2,
+    "effectiveGamma": 1.1875,
+    "contrast": 0.2,
+    "horizontalSamples": 4,
+    "lcdFilterTaps": 12
+  },
+  "fixtureSHA256": "58192ade6f3a7ee3f9df20f04c6c04994c2f66796e100e2ca046f1c65ac6989f",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "criteria": {
+    "geometryToleranceCSSPixels": 0.1,
+    "boundaryRadiusPixels": 1,
+    "colorChannelTolerance": 16,
+    "textInkLuminanceThreshold": 90,
+    "pixelExact": false,
+    "inkInteriorBackgroundDistance": 12,
+    "inkInteriorBoxInset": 2
+  },
+  "cases": {
+    "overflow-x": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "overflow-y": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "overflow-clip-padding": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "nested-clip": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "relative-clip": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "abs-z-order": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "percent-padding": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    },
+    "auto-size-abs": {
+      "pixelsOver16": 0,
+      "pixels": 19800,
+      "meanAbsoluteRGB": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "boundaryPixelsOver16": 0,
+      "structuralPass": true
+    }
+  },
+  "allStructuralPass": true
+}

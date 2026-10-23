@@ -1,0 +1,24 @@
+<div id="dialog-root" data-ref="root" class="dialog-root"><div id="overlay" data-ref="overlay" aria-hidden="true"></div><section id="panel" data-ref="panel" role="dialog" aria-modal="true"><div id="content" data-ref="content"><span id="close-confirm-title" data-ref="close-confirm-title" class="dialog-label dialog-title"></span><span id="close-confirm-body" data-ref="close-confirm-body" class="dialog-label">This project has unsaved changes.</span><button id="close-confirm-save" data-ref="close-confirm-save" type="button"><img id="close-confirm-save-icon" data-ref="close-confirm-save-icon" class="dialog-button-icon" alt="" src="onix-titlebar/save.svg"><span id="close-confirm-save-label" data-ref="close-confirm-save-label" class="dialog-button-label"></span></button><button id="close-confirm-discard" data-ref="close-confirm-discard" type="button"><img id="close-confirm-discard-icon" data-ref="close-confirm-discard-icon" class="dialog-button-icon" alt="" src="onix-titlebar/trash-2.svg#danger"><span id="close-confirm-discard-label" data-ref="close-confirm-discard-label" class="dialog-button-label">Don't Save</span></button><button id="close-confirm-cancel" data-ref="close-confirm-cancel" type="button"><img id="close-confirm-cancel-icon" data-ref="close-confirm-cancel-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg"><span id="close-confirm-cancel-label" data-ref="close-confirm-cancel-label" class="dialog-button-label">Cancel</span></button></div></section></div><style>
+*{box-sizing:border-box}
+.dialog-root{position:absolute;inset:0;margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:sans-serif;color:#dce0e8}
+#overlay{position:absolute;inset:0;z-index:0;background:rgba(10,12,18,.72);pointer-events:auto}
+#panel{position:absolute;z-index:1;border:1px solid #3b404b;border-radius:10px;background:#2a2e37;box-shadow:0 18px 48px rgba(0,0,0,.38);pointer-events:auto;overflow:hidden}
+#content{position:absolute;z-index:1;inset:0;pointer-events:none}
+#content>*{position:absolute}
+#content input,#content textarea,#content select{margin:0;padding:7px 9px;border:1px solid #3b404b;border-radius:4px;font:14px sans-serif;color:#dce0e8;background:#1b1e25;pointer-events:auto}
+#content input:focus,#content textarea:focus,#content select:focus{border-color:#84ccff;outline:none}
+#content textarea{resize:none;white-space:pre-wrap;scrollbar-width:thin;scrollbar-color:#65708280 transparent}
+#content textarea:hover,#content textarea:focus{scrollbar-color:#8992a280 transparent}
+#content button{z-index:100;display:flex;align-items:center;justify-content:center;gap:8px;pointer-events:auto;margin:0;padding:0 12px;border:1px solid transparent;border-radius:5px;background:#343a46;color:#dce0e8;font:14px sans-serif;line-height:1;cursor:pointer}
+#content button:not(:disabled):hover,#content button:not(:disabled):active,#content button.active:not(:disabled),#content button:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content button.icon-only{padding:0;background:transparent}
+#content button.icon-only:not(:disabled):hover,#content button.icon-only:not(:disabled):active,#content button.icon-only:not(:disabled):focus-visible{border-color:#84ccff;background:#3b5266;outline:none}
+#content .dialog-button-icon{width:16px;height:16px;flex:0 0 16px;object-fit:contain}
+#content .dialog-button-label{line-height:1;white-space:nowrap}
+#content button.danger{color:#c45b68}
+#content button:disabled{opacity:.45;cursor:default}
+#content .dialog-label{pointer-events:none}
+
+
+#content .dialog-title{font-size:20px;font-weight:600;line-height:24px}
+</style>

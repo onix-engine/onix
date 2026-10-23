@@ -1,0 +1,43 @@
+Fifth batch: 3D renderer extraction and deformation updates
+Go test binaries run sequentially, GOMAXPROCS=6, 300 ms x 3.
+Prepared frames include two cameras, extraction, resource preparation, sorting and instance packing; GPU submission excluded.
+Deformation updates include 1,000 entities; active entities reference eight joints.
+All workloads prewarmed.
+
+Before (binary saved before this migration):
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRender3DPreparedFrame/100-6         	    3541	    100815 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    3692	     99834 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    3559	    103631 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     360	   1005695 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     344	   1022366 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     360	   1003476 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   62361	      5840 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   60936	      5827 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   62538	      5748 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     457	    796092 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     468	    770769 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     463	    775549 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+After:
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene/render3d
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRender3DPreparedFrame/100-6         	    3271	     98969 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    3472	    105540 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    3697	     98953 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     358	   1009522 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     366	   1046380 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     344	   1059445 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   84790	      4356 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   87760	      4117 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/false-6       	   91260	      4108 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     468	    796538 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     465	    782142 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationUpdate/true-6        	     466	    772676 ns/op	       0 B/op	       0 allocs/op
+PASS

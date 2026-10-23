@@ -1,0 +1,332 @@
+{
+  "frames": [
+    {
+      "filename": "json",
+      "frame": {
+        "x": 32,
+        "y": 36,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "font",
+      "frame": {
+        "x": 340,
+        "y": 36,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "model",
+      "frame": {
+        "x": 648,
+        "y": 36,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "audio",
+      "frame": {
+        "x": 956,
+        "y": 36,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "image",
+      "frame": {
+        "x": 32,
+        "y": 332,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "material",
+      "frame": {
+        "x": 340,
+        "y": 332,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "shader",
+      "frame": {
+        "x": 648,
+        "y": 332,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "scene",
+      "frame": {
+        "x": 956,
+        "y": 332,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "prefab",
+      "frame": {
+        "x": 32,
+        "y": 630,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "script",
+      "frame": {
+        "x": 340,
+        "y": 630,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "video",
+      "frame": {
+        "x": 648,
+        "y": 630,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "binary",
+      "frame": {
+        "x": 956,
+        "y": 630,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "folder",
+      "frame": {
+        "x": 32,
+        "y": 920,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "animation",
+      "frame": {
+        "x": 340,
+        "y": 920,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "text",
+      "frame": {
+        "x": 648,
+        "y": 920,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    },
+    {
+      "filename": "tile",
+      "frame": {
+        "x": 956,
+        "y": 920,
+        "w": 288,
+        "h": 288
+      },
+      "rotated": false,
+      "sourceSize": {
+        "w": 288,
+        "h": 288
+      },
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 288,
+        "h": 288
+      }
+    }
+  ],
+  "meta": {
+    "format": "RGBA8888",
+    "image": "file-icons.png",
+    "size": {
+      "w": 1254,
+      "h": 1254
+    }
+  }
+}

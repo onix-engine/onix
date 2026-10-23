@@ -1,0 +1,186 @@
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3445	     64052 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2774	     85705 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1362	    179409 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1586	    141139 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      56	   3820154 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      39	   6057316 ns/op	  264900 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     236	    973724 ns/op	  155648 B/op	       2 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3562	     70518 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2521	     88660 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1413	    182444 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1672	    153373 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      64	   4009487 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      39	   6602299 ns/op	  264900 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     249	    989051 ns/op	  155648 B/op	       2 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3489	     69111 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2876	     89303 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1318	    183542 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1708	    152776 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      61	   3681930 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      38	   6046228 ns/op	  264900 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     238	    974511 ns/op	  155648 B/op	       2 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3831	     69550 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2947	     95104 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1286	    192015 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1682	    146249 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      61	   3636174 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      40	   6067660 ns/op	  264900 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     210	   1044328 ns/op	  155648 B/op	       2 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3768	     71339 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2677	     90051 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1266	    196241 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1516	    164869 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      57	   3913617 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      38	   6116546 ns/op	  264900 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     252	    962946 ns/op	  155648 B/op	       2 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/typedbin
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/typedbin
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCodecScratch/StructSlice/Marshal         	    3594	     68203 ns/op	   17976 B/op	      14 allocs/op
+BenchmarkCodecScratch/StructSlice/Unmarshal       	    2740	     92607 ns/op	   43056 B/op	     771 allocs/op
+BenchmarkCodecScratch/NestedMaps/Marshal          	    1374	    190564 ns/op	  101288 B/op	    2191 allocs/op
+BenchmarkCodecScratch/NestedMaps/Unmarshal        	    1671	    157740 ns/op	  131168 B/op	    1797 allocs/op
+PASS
+pkg: github.com/diiyw/onix/internal/texcompress
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/texcompress
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkEncodeChain/bc1-srgb         	      61	   3971101 ns/op	  180240 B/op	      18 allocs/op
+BenchmarkEncodeChain/bc5              	      36	   6106166 ns/op	  264901 B/op	      18 allocs/op
+BenchmarkEncodeChain/astc-4x4-srgb    	     255	   1005983 ns/op	  155648 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     180	   1228848 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     241	   1078456 ns/op	 1085738 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     405	    514763 ns/op	  852617 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    6086	     33568 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   51915	      4002 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      67	   3250101 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3716	     60786 ns/op	    8192 B/op	       1 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     176	   1210602 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     235	    986145 ns/op	 1085738 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     459	    559460 ns/op	  852618 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    6994	     33028 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   60601	      3869 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      63	   3348904 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3840	     67366 ns/op	    8192 B/op	       1 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     198	   1199692 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     231	    955188 ns/op	 1085738 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     428	    529568 ns/op	  852618 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    5856	     34357 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   57516	      4198 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      62	   3276923 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3922	     60403 ns/op	    8192 B/op	       1 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     180	   1242119 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     228	   1028633 ns/op	 1085739 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     427	    546198 ns/op	  852618 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    7374	     32382 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   59516	      3906 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      76	   3237600 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3669	     61428 ns/op	    8192 B/op	       1 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     187	   1202046 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     243	   1062995 ns/op	 1085738 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     378	    590089 ns/op	  852618 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    7453	     32897 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   58491	      4109 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      64	   3263830 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3890	     60437 ns/op	    8192 B/op	       1 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/internal/layout
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBuildTextDocument     	     189	   1224997 ns/op	 1363584 B/op	    6311 allocs/op
+BenchmarkBuildFlexDocument     	     243	   1013120 ns/op	 1085738 B/op	    1913 allocs/op
+BenchmarkBuildControlsDocument 	     448	    537956 ns/op	  852618 B/op	    1461 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=false         	    7387	     32441 ns/op	   38920 B/op	     182 allocs/op
+BenchmarkRetainedBlockLayout/nodes=10/retained=true          	   59680	      3985 ns/op	    8192 B/op	       1 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=false       	      63	   3458326 ns/op	 2668536 B/op	   16923 allocs/op
+BenchmarkRetainedBlockLayout/nodes=1000/retained=true        	    3744	     59167 ns/op	    8192 B/op	       1 allocs/op
+PASS

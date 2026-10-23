@@ -1,0 +1,182 @@
+{
+  "case-scroll-y": {
+    "X": 10,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "scroll-y": {
+    "X": 10,
+    "Y": 10,
+    "Width": 120,
+    "Height": 80
+  },
+  "scroll-y-child-0": {
+    "X": 10,
+    "Y": 10,
+    "Width": 240,
+    "Height": 180
+  },
+  "case-scroll-x": {
+    "X": 210,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "scroll-x": {
+    "X": 210,
+    "Y": 10,
+    "Width": 120,
+    "Height": 80
+  },
+  "scroll-x-child-0": {
+    "X": 210,
+    "Y": 10,
+    "Width": 240,
+    "Height": 180
+  },
+  "case-scroll-both": {
+    "X": 410,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "scroll-both": {
+    "X": 410,
+    "Y": 10,
+    "Width": 120,
+    "Height": 80
+  },
+  "scroll-both-child-0": {
+    "X": 410,
+    "Y": 10,
+    "Width": 240,
+    "Height": 180
+  },
+  "case-scroll-thin": {
+    "X": 610,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "scroll-thin": {
+    "X": 610,
+    "Y": 10,
+    "Width": 120,
+    "Height": 80
+  },
+  "scroll-thin-child-0": {
+    "X": 610,
+    "Y": 10,
+    "Width": 240,
+    "Height": 180
+  },
+  "case-opacity-parent": {
+    "X": 810,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "opacity-parent": {
+    "X": 810,
+    "Y": 10,
+    "Width": 150,
+    "Height": 80
+  },
+  "opacity-parent-child-0": {
+    "X": 810,
+    "Y": 10,
+    "Width": 110,
+    "Height": 60
+  },
+  "case-opacity-deep": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 180,
+    "Height": 110
+  },
+  "opacity-deep": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 150,
+    "Height": 80
+  },
+  "opacity-deep-child-0": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 120,
+    "Height": 65
+  },
+  "opacity-deep-child-1": {
+    "X": 1010,
+    "Y": 10,
+    "Width": 80,
+    "Height": 45
+  },
+  "case-radius-overflow": {
+    "X": 10,
+    "Y": 150,
+    "Width": 180,
+    "Height": 110
+  },
+  "radius-overflow": {
+    "X": 10,
+    "Y": 150,
+    "Width": 130,
+    "Height": 80
+  },
+  "radius-overflow-child-0": {
+    "X": 10,
+    "Y": 150,
+    "Width": 190,
+    "Height": 120
+  },
+  "case-radius-text": {
+    "X": 210,
+    "Y": 150,
+    "Width": 180,
+    "Height": 110
+  },
+  "radius-text": {
+    "X": 210,
+    "Y": 150,
+    "Width": 130,
+    "Height": 80
+  },
+  "radius-text-child-0": {
+    "X": 192,
+    "Y": 170,
+    "Width": 180,
+    "Height": 40
+  },
+  "case-scroll-color": {
+    "X": 410,
+    "Y": 150,
+    "Width": 180,
+    "Height": 110
+  },
+  "scroll-color": {
+    "X": 410,
+    "Y": 150,
+    "Width": 120,
+    "Height": 80
+  },
+  "scroll-color-child-0": {
+    "X": 410,
+    "Y": 150,
+    "Width": 240,
+    "Height": 180
+  },
+  "case-opacity-overlap": {
+    "X": 610,
+    "Y": 150,
+    "Width": 180,
+    "Height": 110
+  },
+  "opacity-overlap": {
+    "X": 610,
+    "Y": 150,
+    "Width": 150,
+    "Height": 80
+  }
+}

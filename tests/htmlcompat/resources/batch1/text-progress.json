@@ -1,0 +1,33 @@
+{
+  "metric": "Mean absolute RGB channel error over the same 180x110 case; 0..255, no edge tolerance",
+  "fixtureSHA256": "54f6cd109c0c8f8e8d42d286f21ea3e17a7760bdfe707a55687ce03463ddbc42",
+  "fontSHA256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+  "cases": {
+    "text-normal": {
+      "beforeMeanAbsoluteRGB": 1.5293602693602695,
+      "afterMeanAbsoluteRGB": 0.6197811447811448,
+      "reductionPercent": 59.47448373035093
+    },
+    "text-pre": {
+      "beforeMeanAbsoluteRGB": 1.2135858585858585,
+      "afterMeanAbsoluteRGB": 0.466969696969697,
+      "reductionPercent": 61.52149486037703
+    },
+    "text-wrap": {
+      "beforeMeanAbsoluteRGB": 1.5917676767676767,
+      "afterMeanAbsoluteRGB": 0.6144612794612795,
+      "reductionPercent": 61.397552643546874
+    },
+    "text-center": {
+      "beforeMeanAbsoluteRGB": 0.7362289562289562,
+      "afterMeanAbsoluteRGB": 0.35213804713804714,
+      "reductionPercent": 52.17003567181926
+    },
+    "text-cjk": {
+      "beforeMeanAbsoluteRGB": 2.6370370370370373,
+      "afterMeanAbsoluteRGB": 1.7127272727272729,
+      "reductionPercent": 35.05107252298264
+    }
+  },
+  "pixelExact": false
+}

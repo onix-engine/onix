@@ -1,0 +1,14 @@
+{
+  "text-normal": {
+    "X": 20,
+    "Y": 12,
+    "Width": 11.578125,
+    "Height": 24
+  },
+  "text-flex-button": {
+    "X": 381.171875,
+    "Y": 36,
+    "Width": 10.171875,
+    "Height": 24
+  }
+}

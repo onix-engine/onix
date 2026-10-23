@@ -1,0 +1,131 @@
+Onix ECS sixth batch benchmarks
+Go 1.26.0; Linux amd64; GOMAXPROCS=6; 300ms x 3; serial execution.
+Before: batch-five snapshot via Go overlay. After: final dual-buffer All/Discard.
+Both direct B.Loop and normal consumption-function workloads are retained.
+Discard consumes the reader cursor in both versions to prevent dead-store elimination.
+
+core before
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMessageIteration/1-6       	18048346	        19.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/1-6       	18373570	        19.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/1-6       	17959947	        18.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1481416	       243.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1480646	       245.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1438345	       248.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   15610	     22974 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   15657	     23302 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   15682	     23149 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	18943150	        18.83 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	18802248	        19.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	19765586	        19.53 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	 2034848	       175.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	 2072426	       172.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	 2065394	       174.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	   22856	     15931 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	   22318	     15794 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	   21601	     15880 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	16173854	        22.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	15851481	        22.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	16279171	        21.83 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 1439088	       251.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 1398960	       257.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 1405280	       256.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   15384	     23353 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   15570	     23308 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   15397	     23505 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+core after
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMessageIteration/1-6       	19100175	        18.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/1-6       	20501180	        18.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/1-6       	20032216	        17.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1285401	       280.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1296445	       276.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/100-6     	 1303226	       277.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   13777	     26214 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   13888	     25809 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIteration/10000-6   	   13474	     26533 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	23786047	        15.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	24563388	        15.87 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/1-6         	23438540	        15.50 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	21810650	        15.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	24940833	        15.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/100-6       	23979162	        15.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	22879682	        15.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	24087522	        15.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageDiscard/10000-6     	22252249	        15.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	21064998	        16.34 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	23512762	        16.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/1-6 	23022285	        16.11 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 2986052	       118.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 2900322	       122.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/100-6         	 3080858	       116.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   35395	     10587 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   35656	     10119 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageIterationSystem/10000-6       	   35390	     10907 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+scene before
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMessageReaderInputEvents/Read-6    	   93908	      3231 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/Read-6    	  121458	      3507 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/Read-6    	  100928	      3437 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/Each-6    	 1411191	       251.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEvents/Each-6    	 1465947	       245.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEvents/Each-6    	 1456442	       245.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 1411076	       255.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 1430097	       250.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 1401438	       267.7 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+scene after
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMessageReaderInputEvents/Read-6    	   92965	      3908 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/Read-6    	  104061	      3415 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/Read-6    	  100314	      3422 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkMessageReaderInputEvents/All-6     	 1000000	       309.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEvents/All-6     	 1191552	       293.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEvents/All-6     	 1265368	       285.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 3236289	       110.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 3236300	       110.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMessageReaderInputEventsSystem-6   	 3086976	       113.7 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+project before
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/project
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3521232	       100.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3545133	       100.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3550280	       100.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8137	     44854 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8212	     45260 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8197	     45208 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+project after
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/project
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3258682	       100.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3647822	        98.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/PointerFiltered-6         	 3757725	        97.20 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8125	     44290 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8202	     45110 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSceneScriptGlobalInputMask10000/KeyboardSubscribers-6     	    8148	     44330 ns/op	       0 B/op	       0 allocs/op
+PASS

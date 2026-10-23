@@ -1,0 +1,34 @@
+Baseline: 9ae6977 (stage 5)
+Current: stage 6 working tree
+Go 1.26, Linux amd64, Intel Core i5-11500
+Both versions use identical BenchmarkHTMLBindingLocalResize and htmlBindingArea helpers.
+All inputs have nonempty values. Runs were sequential.
+Command (each version): go test ./ecs -run '^$' -bench '^BenchmarkHTMLBindingLocalResize$' -benchmem -count=3 -benchtime=200ms
+
+BASELINE
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLBindingLocalResize/10-6         	    3043	     80205 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/10-6         	    3056	     77958 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/10-6         	    3151	     85491 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	      31	   8321815 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	      32	   9935653 ns/op	     246 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	      33	   8331872 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	1.929s
+
+CURRENT
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLBindingLocalResize/10-6         	   16334	     15274 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/10-6         	   16611	     15010 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/10-6         	   16657	     14473 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	    2409	     92638 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	    2980	     76696 ns/op	       1 B/op	       0 allocs/op
+BenchmarkHTMLBindingLocalResize/1000-6       	    2943	     87985 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	2.427s

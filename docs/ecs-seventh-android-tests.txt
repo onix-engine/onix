@@ -1,0 +1,134 @@
+Onix ECS seventh batch Android tests
+Android 12/API 32, x86_64; Go 1.26; NDK API 24; GOMAXPROCS=2.
+Full ECS, font, text, scene, UI and HTML test suites; no command-line skips.
+System default font test reads Android configuration and loads the actual system font.
+Layout fixtures explicitly using Noto Sans SC retain repository fonts and saved Chromium baselines.
+CFF tests used /system/fonts/NotoSansAhom-Regular.otf. All six suites passed with no skips.
+Binaries, test resources and fonts are copied into a unique temporary directory and removed afterward.
+
+Final ecs full test suite
+PASS
+
+Final font full test suite
+=== RUN   TestParseOTFCFF
+--- PASS: TestParseOTFCFF (0.00s)
+=== RUN   TestParseCFFIndexBorrowsSourceData
+--- PASS: TestParseCFFIndexBorrowsSourceData (0.00s)
+=== RUN   TestCFFType2AdditionalOperators
+=== RUN   TestCFFType2AdditionalOperators/hhcurveto
+=== RUN   TestCFFType2AdditionalOperators/vvcurveto
+=== RUN   TestCFFType2AdditionalOperators/hvcurveto
+=== RUN   TestCFFType2AdditionalOperators/vhcurveto
+=== RUN   TestCFFType2AdditionalOperators/rcurveline
+=== RUN   TestCFFType2AdditionalOperators/rlinecurve
+=== RUN   TestCFFType2AdditionalOperators/hflex
+=== RUN   TestCFFType2AdditionalOperators/flex
+=== RUN   TestCFFType2AdditionalOperators/hflex1
+=== RUN   TestCFFType2AdditionalOperators/flex1
+--- PASS: TestCFFType2AdditionalOperators (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/hhcurveto (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/vvcurveto (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/hvcurveto (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/vhcurveto (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/rcurveline (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/rlinecurve (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/hflex (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/flex (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/hflex1 (0.00s)
+    --- PASS: TestCFFType2AdditionalOperators/flex1 (0.00s)
+=== RUN   TestCFFType2ReturnPreservesStack
+--- PASS: TestCFFType2ReturnPreservesStack (0.00s)
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/hmoveto_width_trimmed
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/vmoveto_width_trimmed
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/hhcurveto_optional_dy1
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/vvcurveto_optional_dx1
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/hvcurveto_final_dxf
+=== RUN   TestCFFType2MoveWidthAndCurvetoOptionalArguments/vhcurveto_final_dyf
+--- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/hmoveto_width_trimmed (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/vmoveto_width_trimmed (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/hhcurveto_optional_dy1 (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/vvcurveto_optional_dx1 (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/hvcurveto_final_dxf (0.00s)
+    --- PASS: TestCFFType2MoveWidthAndCurvetoOptionalArguments/vhcurveto_final_dyf (0.00s)
+=== RUN   TestFaceCloseReleasesOwnedBackingOnce
+--- PASS: TestFaceCloseReleasesOwnedBackingOnce (0.00s)
+=== RUN   TestLoadTTF
+--- PASS: TestLoadTTF (0.00s)
+=== RUN   TestParseFontCollectionIndex
+--- PASS: TestParseFontCollectionIndex (0.05s)
+=== RUN   TestGlyphMappingAndMetrics
+--- PASS: TestGlyphMappingAndMetrics (0.00s)
+=== RUN   TestExtractSimpleGlyph
+--- PASS: TestExtractSimpleGlyph (0.00s)
+=== RUN   TestExtractCompositeGlyph
+--- PASS: TestExtractCompositeGlyph (0.00s)
+=== RUN   TestOutlineExtraction
+--- PASS: TestOutlineExtraction (0.00s)
+=== RUN   TestFlattenContourHandlesConsecutiveOffCurvePoints
+--- PASS: TestFlattenContourHandlesConsecutiveOffCurvePoints (0.00s)
+=== RUN   TestRasterizeGlyph
+--- PASS: TestRasterizeGlyph (0.00s)
+=== RUN   TestRasterizeGlyphCachesBitmap
+--- PASS: TestRasterizeGlyphCachesBitmap (0.00s)
+=== RUN   TestLoadOTFCFF
+    font_test.go:288: CFF font: /system/fonts/NotoSansAhom-Regular.otf
+--- PASS: TestLoadOTFCFF (0.00s)
+=== RUN   TestOTFCFFOutlineAndRasterize
+    font_test.go:301: CFF font: /system/fonts/NotoSansAhom-Regular.otf
+--- PASS: TestOTFCFFOutlineAndRasterize (0.00s)
+=== RUN   TestRasterizerUsesNonZeroWindingFill
+--- PASS: TestRasterizerUsesNonZeroWindingFill (0.00s)
+=== RUN   TestRasterizerFractionalCoverage
+--- PASS: TestRasterizerFractionalCoverage (0.00s)
+=== RUN   TestRasterizerTriangleAndHole
+--- PASS: TestRasterizerTriangleAndHole (0.00s)
+=== RUN   TestGlyphFractionalOriginAndWarmCache
+--- PASS: TestGlyphFractionalOriginAndWarmCache (0.00s)
+=== RUN   TestGPOSNotoKerning
+--- PASS: TestGPOSNotoKerning (0.01s)
+=== RUN   TestPairPositionFormatsAndTruncation
+--- PASS: TestPairPositionFormatsAndTruncation (0.00s)
+=== RUN   TestLCDPreblendPreservesEndpointsAndMonotonicity
+--- PASS: TestLCDPreblendPreservesEndpointsAndMonotonicity (0.00s)
+=== RUN   TestLCDPreblendUsesIndependentForegroundChannels
+--- PASS: TestLCDPreblendUsesIndependentForegroundChannels (0.00s)
+=== RUN   TestLCDFIRChannelSymmetryAndBlankPadding
+--- PASS: TestLCDFIRChannelSymmetryAndBlankPadding (0.00s)
+=== RUN   TestGrayPreblendRetainsEightBitCoverage
+--- PASS: TestGrayPreblendRetainsEightBitCoverage (0.00s)
+=== RUN   TestAndroidLoadsConfiguredSystemFontWithoutBundledAssets
+    system_android_test.go:24: system font: /system/fonts/Roboto-Regular.ttf, collection index: 0
+--- PASS: TestAndroidLoadsConfiguredSystemFontWithoutBundledAssets (0.00s)
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/vendor
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/variable
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/missing
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/first-family
+=== RUN   TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/named-default
+--- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex (0.00s)
+    --- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/vendor (0.00s)
+    --- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/variable (0.00s)
+    --- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/missing (0.00s)
+    --- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/first-family (0.00s)
+    --- PASS: TestAndroidFontConfigurationSelectsRegularFaceAndCollectionIndex/named-default (0.00s)
+=== RUN   TestAndroidFontConfigurationRejectsUnusableEntries
+--- PASS: TestAndroidFontConfigurationRejectsUnusableEntries (0.00s)
+=== RUN   TestDefaultFontReferenceDoesNotAllocateAfterWarmup
+--- PASS: TestDefaultFontReferenceDoesNotAllocateAfterWarmup (0.00s)
+PASS
+
+Final text full test suite
+PASS
+
+Final scene full test suite
+PASS
+
+Final ui full test suite
+PASS
+
+Final ui/html full test suite
+PASS
+
+Temporary device directory removed.

@@ -1,0 +1,126 @@
+# native round 1
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   54652	      4317 ns/op	2610.04 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3346	     64329 ns/op	2801.65 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     378	    627328 ns/op	2805.56 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  185696	      1244 ns/op	3331.33 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  273890	       885.3 ns/op	4681.07 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1710	    134474 ns/op	1972.25 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    5481	     45756 ns/op	5796.31 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  345560	       743.7 ns/op	5571.93 MB/s	       0 B/op	       0 allocs/op
+PASS
+# native round 2
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   60009	      3885 ns/op	2900.65 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3850	     64327 ns/op	2801.73 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     339	    607511 ns/op	2897.07 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  179052	      1517 ns/op	2731.12 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  277436	       905.0 ns/op	4578.79 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1777	    139085 ns/op	1906.86 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    4815	     49245 ns/op	5385.68 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  338575	       778.1 ns/op	5325.52 MB/s	       0 B/op	       0 allocs/op
+PASS
+# native round 3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   56994	      3908 ns/op	2883.49 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3739	     72182 ns/op	2496.85 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     393	    624271 ns/op	2819.29 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  165781	      1262 ns/op	3282.64 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  273313	       880.6 ns/op	4705.84 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1627	    138055 ns/op	1921.08 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    5355	     47968 ns/op	5529.02 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  337526	       763.4 ns/op	5428.50 MB/s	       0 B/op	       0 allocs/op
+PASS
+# native round 4
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   53499	      4138 ns/op	2722.77 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3728	     71826 ns/op	2509.24 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     388	    623112 ns/op	2824.54 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  154992	      1309 ns/op	3165.46 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  289450	       915.8 ns/op	4525.09 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1423	    164058 ns/op	1616.60 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    4648	     46587 ns/op	5692.96 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  349056	       745.7 ns/op	5556.91 MB/s	       0 B/op	       0 allocs/op
+PASS
+# native round 5
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   59511	      4017 ns/op	2804.90 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3385	     64757 ns/op	2783.15 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     390	    622433 ns/op	2827.62 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  187340	      1293 ns/op	3205.33 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  279038	       863.2 ns/op	4800.89 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1825	    160017 ns/op	1657.43 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    4471	     47096 ns/op	5631.37 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  332229	       780.5 ns/op	5309.44 MB/s	       0 B/op	       0 allocs/op
+PASS
+# native round 6
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkMeshDeformationStatic/vertices=64         	   58935	      4165 ns/op	2705.38 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=1024       	    3384	     67440 ns/op	2672.43 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationStatic/vertices=10000      	     369	    655990 ns/op	2682.97 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=false         	  163228	      1315 ns/op	3152.23 MB/s	    4864 B/op	       1 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=1/warm=true          	  257677	       944.3 ns/op	4388.54 MB/s	       0 B/op	       0 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=false        	    1675	    137958 ns/op	1922.44 MB/s	 1158784 B/op	      13 allocs/op
+BenchmarkMeshDeformationAnimated/deformations=64/warm=true         	    5320	     49272 ns/op	5382.74 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPackMeshDeformations                                      	  326233	       754.3 ns/op	5493.91 MB/s	       0 B/op	       0 allocs/op
+PASS
+# webgl round 1
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   25368	      8908 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     343	    618286 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgl round 2
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   24172	      9516 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     400	    607446 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgl round 3
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   25231	      9250 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     356	    617571 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgl round 4
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   24260	      9510 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     342	    664325 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgl round 5
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   24613	      9024 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     405	    586856 ns/op	       0 B/op	       0 allocs/op
+PASS
+# webgl round 6
+goos: js
+goarch: wasm
+pkg: github.com/diiyw/onix/render
+BenchmarkWebGLTextureUpdates/textures=1         	   26498	      9005 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWebGLTextureUpdates/textures=64        	     342	    594877 ns/op	       0 B/op	       0 allocs/op
+PASS

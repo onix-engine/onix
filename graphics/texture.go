@@ -1,0 +1,682 @@
+package graphics
+
+import (
+	"errors"
+	"image"
+	"sync"
+	"sync/atomic"
+
+	"github.com/diiyw/onix/render"
+)
+
+var (
+	errTextureDevice        = errors.New("graphics: texture has no CPU payload for this device")
+	textureColorImageLocker sync.Mutex
+	textureColorImageCache  = make(map[int]*Texture)
+	textureBatchCounter     atomic.Uint64
+)
+
+type Texture struct {
+	wrapU, wrapV       render.TextureAddressMode
+	U, V               float32
+	MaxU               float32
+	MaxV               float32
+	Width              int
+	Height             int
+	SourceWidth        int
+	SourceHeight       int
+	OffsetX            int
+	OffsetY            int
+	Angle              float32
+	rasterScaleX       float32
+	rasterScaleY       float32
+	batchKey           uint64
+	mipmap             bool
+	mipLevels          int
+	premultipliedAlpha bool
+	usage              ResourceUsage
+	format             render.TextureFormat
+	zeroInitialized    bool
+	source             *Texture
+	pix                []byte
+	handle             render.TextureHandle
+	device             *render.Device
+	residencies        render.DeviceValues[render.TextureHandle]
+	err                error
+	updates            []render.TextureUpdate
+	external           bool
+	externalDevice     *render.Device
+	renderTarget       *render.RenderTarget
+	contentRevision    uint64
+}
+
+var textureRevision atomic.Uint64
+
+// TextureRevision invalidates retained geometry when texture content or its
+// lifetime changes outside an ECS component write.
+func TextureRevision() uint64 { return textureRevision.Load() }
+
+// ContentRevision is shared by atlas views of the same backing texture.
+func (t *Texture) ContentRevision() uint64 {
+	if base := t.baseTexture(); base != nil {
+		return max(t.contentRevision, base.contentRevision)
+	}
+	return 0
+}
+
+// DynamicContent identifies textures produced outside the retained paint
+// lifecycle. Their consumers must be redrawn even without component writes.
+func (t *Texture) DynamicContent() bool {
+	base := t.baseTexture()
+	return base != nil && (base.external || base.renderTarget != nil)
+}
+
+func CreateTextureByColor(clr ColorRGBA) *Texture {
+	key := clr.Int32()
+	textureColorImageLocker.Lock()
+	defer textureColorImageLocker.Unlock()
+	if texture, ok := textureColorImageCache[key]; ok && texture.Valid() {
+		return texture
+	}
+	texture := newTexture(1, 1, true, ResourceUsageDefault, []byte{
+		uint8(clr.R * 255),
+		uint8(clr.G * 255),
+		uint8(clr.B * 255),
+		uint8(clr.A * 255),
+	})
+	textureColorImageCache[key] = texture
+	return texture
+}
+
+func CreateTextureByImageNoMipmap(im *image.RGBA) *Texture {
+	return CreateTextureByImageWithUsage(im, false, ResourceUsageDefault)
+}
+
+// CreateTextureFromExternal imports a platform-owned surface without copying
+// pixels through Go memory. The active render driver must implement
+// render.ExternalTextureDriver.
+func CreateTextureFromExternal(descriptor render.ExternalTextureDescriptor) (*Texture, error) {
+	if err := descriptor.Validate(); err != nil {
+		return nil, err
+	}
+	driver, ok := render.Current().(render.ExternalTextureDriver)
+	if !ok {
+		return nil, errors.New("graphics: active render driver cannot import external textures")
+	}
+	handle, err := driver.CreateExternalTexture(descriptor)
+	if err != nil {
+		return nil, err
+	}
+	if !handle.Valid() {
+		return nil, errors.New("graphics: render driver returned an invalid external texture")
+	}
+	texture := &Texture{
+		Width: descriptor.Width, Height: descriptor.Height,
+		SourceWidth: descriptor.Width, SourceHeight: descriptor.Height,
+		MaxU: 1, MaxV: 1, batchKey: nextTextureBatchKey(),
+		usage: ResourceUsageGPU, handle: handle, device: render.ActiveDevice(), external: true, externalDevice: render.ActiveDevice(),
+	}
+	texture.residencies.Set(texture.device, handle)
+	return texture, nil
+}
+
+// CreateTextureFromRenderTarget exposes a target color attachment to 2D/UI
+// rendering without transferring ownership of the attachment.
+func CreateTextureFromRenderTarget(target *render.RenderTarget) (*Texture, error) {
+	if target == nil {
+		return nil, errors.New("graphics: nil render target")
+	}
+	descriptor := target.Descriptor()
+	if descriptor.ColorFormat != render.RenderTargetRGBA8 {
+		return nil, errors.New("graphics: only RGBA8 render targets can be sampled as canvas textures")
+	}
+	texture := &Texture{
+		Width: descriptor.Width, Height: descriptor.Height,
+		SourceWidth: descriptor.Width, SourceHeight: descriptor.Height,
+		MaxU: 1, MaxV: 1, batchKey: nextTextureBatchKey(), usage: ResourceUsageGPU,
+		renderTarget: target,
+	}
+	texture.ensureUploaded()
+	if texture.err != nil {
+		return nil, texture.err
+	}
+	return texture, nil
+}
+
+// RefreshExternal marks a newly produced version of an imported surface ready
+// for rendering. The native texture handle and graphics.Texture remain stable.
+func (t *Texture) RefreshExternal() error {
+	if t == nil || !t.external || t.externalDevice.Driver() == nil {
+		return errors.New("graphics: invalid external texture refresh")
+	}
+	t.contentRevision = textureRevision.Add(1)
+	handle, valid := t.residencies.Get(t.externalDevice)
+	if !valid {
+		return errors.New("graphics: invalid external texture refresh")
+	}
+	driver, ok := t.externalDevice.Driver().(render.ExternalTextureRefreshDriver)
+	if !ok {
+		return errors.New("graphics: active render driver cannot refresh external textures")
+	}
+	return driver.RefreshExternalTexture(handle)
+}
+
+func CreateTextureByImageWithUsage(im *image.RGBA, mipmap bool, usage ResourceUsage) *Texture {
+	return createTextureByImageWithUsage(im, mipmap, usage, false)
+}
+
+// CreateTextureR8 creates a single-channel unorm texture. The pixel slice is
+// retained for device recreation when usage includes ResourceUsageCPU.
+func CreateTextureR8(width, height int, pixels []byte, mipmap bool, usage ResourceUsage) *Texture {
+	if width <= 0 || height <= 0 || len(pixels) != width*height {
+		return &Texture{batchKey: nextTextureBatchKey(), usage: usage, format: render.TextureFormatR8}
+	}
+	return newTextureWithFormat(width, height, mipmap, usage, pixels, render.TextureFormatR8)
+}
+
+// CreateEmptyTexture creates a zero-filled, single-level texture. Its CPU shadow
+// grows only through the last updated texel; the untouched suffix remains zero.
+// Device recreation expands this compact shadow into a temporary upload payload.
+// GPU storage is created on first use, including any pending region updates.
+func CreateEmptyTexture(width, height int, format render.TextureFormat, usage ResourceUsage) *Texture {
+	texture := &Texture{batchKey: nextTextureBatchKey(), usage: usage, format: format}
+	if width <= 0 || height <= 0 || format.TexelBytes() == 0 {
+		return texture
+	}
+	texture.Width, texture.SourceWidth = width, width
+	texture.Height, texture.SourceHeight = height, height
+	texture.MaxU, texture.MaxV = 1, 1
+	texture.zeroInitialized = true
+	return texture
+}
+
+func createTextureByOwnedImageWithUsage(im *image.RGBA, mipmap bool, usage ResourceUsage) *Texture {
+	if im == nil {
+		return &Texture{batchKey: nextTextureBatchKey(), usage: usage}
+	}
+	return createTextureByOwnedPixels(im.Bounds(), im.Stride, im.Pix, mipmap, usage)
+}
+
+func createTextureByImageWithUsage(im *image.RGBA, mipmap bool, usage ResourceUsage, takeOwnership bool) *Texture {
+	if im == nil {
+		return &Texture{batchKey: nextTextureBatchKey(), usage: usage}
+	}
+	width, height := im.Bounds().Dx(), im.Bounds().Dy()
+	if takeOwnership {
+		return createTextureByOwnedPixels(im.Bounds(), im.Stride, im.Pix, mipmap, usage)
+	}
+	pixels := make([]byte, width*height*4)
+	for y := range height {
+		sourceOffset := im.PixOffset(im.Bounds().Min.X, im.Bounds().Min.Y+y)
+		source := im.Pix[sourceOffset : sourceOffset+width*4]
+		copy(pixels[y*width*4:], source)
+	}
+	return newTexture(width, height, mipmap, usage, pixels)
+}
+
+func createTextureByOwnedPixels(bounds image.Rectangle, stride int, source []byte, mipmap bool, usage ResourceUsage) *Texture {
+	width, height := bounds.Dx(), bounds.Dy()
+	if bounds.Min == (image.Point{}) && stride == width*4 && len(source) == width*height*4 {
+		return newTexture(width, height, mipmap, usage, source)
+	}
+	pixels := make([]byte, width*height*4)
+	for y := range height {
+		sourceOffset := y * stride
+		copy(pixels[y*width*4:], source[sourceOffset:sourceOffset+width*4])
+	}
+	return newTexture(width, height, mipmap, usage, pixels)
+}
+
+func newTexture(width, height int, mipmap bool, usage ResourceUsage, pixels []byte) *Texture {
+	return newTextureWithFormat(width, height, mipmap, usage, pixels, render.TextureFormatRGBA8)
+}
+
+func newTextureWithFormat(width, height int, mipmap bool, usage ResourceUsage, pixels []byte, format render.TextureFormat) *Texture {
+	texture := &Texture{
+		Width:        width,
+		Height:       height,
+		SourceWidth:  width,
+		SourceHeight: height,
+		MaxU:         1,
+		MaxV:         1,
+		batchKey:     nextTextureBatchKey(),
+		mipmap:       mipmap,
+		usage:        usage,
+		format:       format,
+		pix:          pixels,
+	}
+	texture.ensureUploaded()
+	return texture
+}
+
+// Format reports the texture's texel layout.
+func (t *Texture) Format() render.TextureFormat {
+	if t == nil {
+		return render.TextureFormatRGBA8
+	}
+	return t.baseTexture().format
+}
+
+func (t *Texture) Dispose() error {
+	if t == nil {
+		return nil
+	}
+	t.contentRevision = textureRevision.Add(1)
+	if t.source != nil {
+		t.source = nil
+		t.Width = 0
+		t.Height = 0
+		return nil
+	}
+	if t.renderTarget != nil {
+		t.renderTarget = nil
+		t.handle = render.TextureHandle{}
+		t.device = nil
+		t.Width = 0
+		t.Height = 0
+		return nil
+	}
+	if err := t.destroyHandle(); err != nil {
+		return err
+	}
+	t.Width = 0
+	t.Height = 0
+	t.pix = nil
+	t.zeroInitialized = false
+	t.err = nil
+	t.updates = nil
+	t.externalDevice = nil
+	return nil
+}
+
+type TextureRegionUpdate struct {
+	X      int
+	Y      int
+	Width  int
+	Height int
+	Pixels []byte
+}
+
+func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
+	base := t.baseTexture()
+	if base == nil || len(updates) == 0 {
+		return
+	}
+	// Block-compressed texels are not independently addressable, so a partial
+	// region cannot be re-encoded in place.
+	texelBytes := base.format.TexelBytes()
+	if texelBytes == 0 {
+		return
+	}
+	pixelCount := len(base.pix)
+	for _, update := range updates {
+		if update.X < 0 || update.Y < 0 || update.Width <= 0 || update.Height <= 0 ||
+			update.X+update.Width > base.Width || update.Y+update.Height > base.Height ||
+			len(update.Pixels) != update.Width*update.Height*texelBytes {
+			return
+		}
+		pixelCount = max(pixelCount, ((update.Y+update.Height-1)*base.Width+update.X+update.Width)*texelBytes)
+	}
+
+	_, wasResident := base.residencies.Get(render.ActiveDevice())
+	if !base.usage.Has(ResourceUsageCPU) && len(base.pix) == 0 && !base.zeroInitialized && !wasResident {
+		return
+	}
+	base.contentRevision = textureRevision.Add(1)
+	retainPixels := base.usage.Has(ResourceUsageCPU) || !wasResident
+	if retainPixels {
+		if !base.zeroInitialized {
+			pixelCount = base.Width * base.Height * texelBytes
+		}
+		if pixelCount > cap(base.pix) {
+			pixels := make([]byte, pixelCount, min(base.payloadBytes(), max(pixelCount, 2*cap(base.pix))))
+			copy(pixels, base.pix)
+			base.pix = pixels
+		} else {
+			base.pix = base.pix[:pixelCount]
+		}
+		for _, update := range updates {
+			rowSize := update.Width * texelBytes
+			for row := range update.Height {
+				dstOffset := ((update.Y+row)*base.Width + update.X) * texelBytes
+				srcOffset := row * rowSize
+				copy(base.pix[dstOffset:dstOffset+rowSize], update.Pixels[srcOffset:srcOffset+rowSize])
+			}
+		}
+	}
+
+	base.err = nil
+	base.ensureUploaded()
+	if !base.gpuResident() {
+		return
+	}
+	base.err = base.residencies.Each(func(device *render.Device, handle render.TextureHandle) error {
+		// A newly created residency already includes the updates in its upload.
+		if !wasResident && device == base.device {
+			return nil
+		}
+		if cap(base.updates) < len(updates) {
+			base.updates = make([]render.TextureUpdate, len(updates))
+		} else {
+			base.updates = base.updates[:len(updates)]
+		}
+		for index, update := range updates {
+			base.updates[index] = render.TextureUpdate{Texture: handle,
+				Region: render.TextureRegion{X: update.X, Y: update.Y, Width: update.Width, Height: update.Height}, Pixels: update.Pixels}
+		}
+		return device.Driver().UpdateTextures(base.updates)
+	})
+	clear(base.updates)
+	base.updates = base.updates[:0]
+	if base.err == nil && !base.usage.Has(ResourceUsageCPU) {
+		base.pix = nil
+	}
+}
+
+func (t *Texture) Valid() bool {
+	return t.ValidFor(render.ActiveDevice())
+}
+
+func (t *Texture) ValidFor(device *render.Device) bool {
+	base := t.baseTexture()
+	if base != nil {
+		base.ensureUploadedFor(device)
+	}
+	return base != nil && base.Width > 0 && base.Height > 0 &&
+		(base.hasPixelPayload() || base.handle.Valid() && base.device == device && device.Driver() != nil)
+}
+
+func (t *Texture) hasPixelPayload() bool {
+	return len(t.pix) == t.payloadBytes() || t.zeroInitialized
+}
+
+// payloadLevels reports how many mip levels the CPU payload holds. Uncompressed
+// textures hold exactly one, because the device generates the chain; compressed
+// textures ship a prebuilt chain.
+func (t *Texture) payloadLevels() int {
+	if t.format.Compressed() {
+		return max(t.mipLevels, 1)
+	}
+	return 1
+}
+
+// payloadBytes reports the encoded size of the texture's CPU pixel payload.
+func (t *Texture) payloadBytes() int {
+	return t.format.ChainSize(t.Width, t.Height, t.payloadLevels())
+}
+
+// MipLevels reports the depth the uploaded texture will have. It differs from
+// payloadLevels for uncompressed textures, whose chain the device builds.
+func (t *Texture) MipLevels() int {
+	if t == nil {
+		return 0
+	}
+	base := t.baseTexture()
+	if base.format.Compressed() {
+		return max(base.mipLevels, 1)
+	}
+	if base.mipmap {
+		return render.MipLevels(base.Width, base.Height)
+	}
+	return 1
+}
+
+func (t *Texture) RenderHandle() render.TextureHandle {
+	return t.RenderHandleFor(render.ActiveDevice())
+}
+
+func (t *Texture) RenderHandleFor(device *render.Device) render.TextureHandle {
+	base := t.baseTexture()
+	if base == nil {
+		return render.TextureHandle{}
+	}
+	base.ensureUploadedFor(device)
+	return base.handle
+}
+
+func (t *Texture) UploadError() error {
+	base := t.baseTexture()
+	if base == nil {
+		return nil
+	}
+	return base.err
+}
+
+func (t *Texture) BatchKey() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.batchKey
+}
+
+func (t *Texture) PremultipliedAlpha() bool {
+	return t != nil && t.premultipliedAlpha
+}
+
+func (t *Texture) Mipmapped() bool {
+	return t != nil && t.mipmap
+}
+
+func NewSubTexture(parent *Texture, width, height int, u, v, maxU, maxV, angle float32) *Texture {
+	texture := &Texture{
+		Width:        width,
+		Height:       height,
+		SourceWidth:  width,
+		SourceHeight: height,
+		U:            u,
+		V:            v,
+		MaxU:         maxU,
+		MaxV:         maxV,
+		Angle:        angle,
+		batchKey:     nextTextureBatchKey(),
+	}
+	if parent != nil {
+		texture.batchKey = parent.batchKey
+		texture.source = parent
+	}
+	return texture
+}
+
+// SetSourceRect records the untrimmed logical size and the trimmed frame offset.
+// Atlas formats use this information to draw packed sprites without stretching
+// the cropped pixels across the original sprite bounds.
+func (t *Texture) SetSourceRect(width, height, offsetX, offsetY int) {
+	if t == nil {
+		return
+	}
+	t.contentRevision = textureRevision.Add(1)
+	if width <= 0 {
+		width = t.Width
+	}
+	if height <= 0 {
+		height = t.Height
+	}
+	t.SourceWidth = width
+	t.SourceHeight = height
+	t.OffsetX = offsetX
+	t.OffsetY = offsetY
+	t.rasterScaleX = 0
+	t.rasterScaleY = 0
+}
+
+// SetLogicalSize records the layout size of a higher-resolution texture.
+// Unlike SetSourceRect, it preserves the complete texture as drawable content.
+func (t *Texture) SetLogicalSize(width, height int) {
+	if t == nil {
+		return
+	}
+	t.contentRevision = textureRevision.Add(1)
+	if width <= 0 {
+		width = t.Width
+	}
+	if height <= 0 {
+		height = t.Height
+	}
+	t.SourceWidth = width
+	t.SourceHeight = height
+	t.OffsetX = 0
+	t.OffsetY = 0
+	if t.Width > 0 {
+		t.rasterScaleX = float32(t.Width) / float32(width)
+	}
+	if t.Height > 0 {
+		t.rasterScaleY = float32(t.Height) / float32(height)
+	}
+}
+
+func (t *Texture) Trimmed() bool {
+	return t != nil && (t.OffsetX != 0 || t.OffsetY != 0 || t.SourceWidth != t.packedLogicalWidth() || t.SourceHeight != t.packedLogicalHeight())
+}
+
+// RasterScale returns the physical pixels represented by one logical texture unit.
+func (t *Texture) RasterScale() (x, y float32) {
+	if t == nil {
+		return 1, 1
+	}
+	x, y = t.rasterScaleX, t.rasterScaleY
+	if x <= 0 {
+		x = 1
+	}
+	if y <= 0 {
+		y = 1
+	}
+	return x, y
+}
+
+func (t *Texture) packedLogicalWidth() int {
+	if t == nil {
+		return 0
+	}
+	scale, _ := t.RasterScale()
+	return int(float32(t.Width)/scale + .5)
+}
+
+func (t *Texture) packedLogicalHeight() int {
+	if t == nil {
+		return 0
+	}
+	_, scale := t.RasterScale()
+	return int(float32(t.Height)/scale + .5)
+}
+
+func (t *Texture) LogicalWidth() int {
+	if t == nil {
+		return 0
+	}
+	if t.SourceWidth > 0 {
+		return t.SourceWidth
+	}
+	return t.Width
+}
+
+func (t *Texture) LogicalHeight() int {
+	if t == nil {
+		return 0
+	}
+	if t.SourceHeight > 0 {
+		return t.SourceHeight
+	}
+	return t.Height
+}
+
+func (t *Texture) ensureUploaded() {
+	t.ensureUploadedFor(render.ActiveDevice())
+}
+
+func (t *Texture) ensureUploadedFor(device *render.Device) {
+	if t == nil {
+		return
+	}
+	if t.renderTarget != nil {
+		descriptor := t.renderTarget.Descriptor()
+		t.Width, t.Height = descriptor.Width, descriptor.Height
+		t.SourceWidth, t.SourceHeight = descriptor.Width, descriptor.Height
+		t.handle, t.err = t.renderTarget.ColorTextureFor(device)
+		t.device = device
+		return
+	}
+	if handle, ok := t.residencies.Get(device); ok {
+		t.device, t.handle, t.err = device, handle, nil
+		return
+	}
+	t.device, t.handle = device, render.TextureHandle{}
+	if !t.usage.Has(ResourceUsageGPU) || t.Width <= 0 || t.Height <= 0 || !t.hasPixelPayload() {
+		if t.Width > 0 && t.usage.Has(ResourceUsageGPU) && len(t.pix) == 0 && device.Driver() != nil {
+			t.err = errTextureDevice
+		}
+		return
+	}
+	driver := device.Driver()
+	if driver == nil {
+		return
+	}
+	// A mipmap sampler filter is only valid when the texture actually has a
+	// chain; asking for one on a single-level texture samples undefined data.
+	filter := render.TextureFilterLinear
+	if t.mipmap && t.MipLevels() > 1 {
+		filter = render.TextureFilterLinearMipmapLinear
+	}
+	pixels := t.pix
+	if t.zeroInitialized && len(pixels) < t.payloadBytes() {
+		pixels = make([]byte, t.payloadBytes())
+		copy(pixels, t.pix)
+	}
+	t.handle, t.err = driver.CreateTexture(render.TextureDescriptor{
+		WrapU: t.wrapU, WrapV: t.wrapV,
+		Width:  t.Width,
+		Height: t.Height,
+		Filter: filter,
+		Format: t.format,
+		Levels: t.payloadLevels(),
+	}, pixels)
+	if t.err == nil {
+		t.residencies.Set(device, t.handle)
+		if !t.usage.Has(ResourceUsageCPU) {
+			t.pix = nil
+			t.zeroInitialized = false
+		}
+	}
+}
+
+func (t *Texture) destroyHandle() error {
+	if t != nil && t.renderTarget != nil {
+		t.handle = render.TextureHandle{}
+		t.device = nil
+		return nil
+	}
+	if t == nil {
+		return nil
+	}
+	if err := t.residencies.Release(func(device *render.Device, handle render.TextureHandle) error {
+		return device.Driver().DestroyTexture(handle)
+	}); err != nil {
+		return err
+	}
+	t.handle = render.TextureHandle{}
+	t.device = nil
+	return nil
+}
+
+func (t *Texture) baseTexture() *Texture {
+	if t == nil || t.source == nil {
+		return t
+	}
+	return t.source.baseTexture()
+}
+
+func (t *Texture) gpuResident() bool {
+	return t.handle.Valid() && t.device == render.ActiveDevice() && t.device.Driver() != nil
+}
+
+func nextTextureBatchKey() uint64 {
+	return textureBatchCounter.Add(1)
+}
+
+// AddressModes reports the sampler addressing shared by all views of a texture.
+func (t *Texture) AddressModes() (render.TextureAddressMode, render.TextureAddressMode) {
+	if t == nil {
+		return render.TextureAddressClamp, render.TextureAddressClamp
+	}
+	base := t.baseTexture()
+	return base.wrapU, base.wrapV
+}
