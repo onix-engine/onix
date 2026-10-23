@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/css"
-	"github.com/diiyw/onix/internal/dom"
+	"github.com/diiyw/onix/html/css"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 )
 

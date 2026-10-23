@@ -8,10 +8,10 @@ import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/internal/style"
 )
 
 type htmlTextureKey struct {

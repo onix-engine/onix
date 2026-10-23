@@ -17,6 +17,6 @@ References: [RenderingNG](https://developer.chrome.com/docs/chromium/renderingng
 ## Examples and commands
 
 ```sh
-GOMAXPROCS=2 go test -p 1 ./ui/html ./ui ./internal/style ./internal/layout -count=1 -timeout=180s
+GOMAXPROCS=2 go test -p 1 ./ui/html ./ui ./html/style ./html/layout -count=1 -timeout=180s
 GOMAXPROCS=2 go test -p 1 ./ui/html -run '^$' -bench '^BenchmarkHTMLPaintCull' -benchmem -benchtime=200x -count=1 -timeout=120s
 ```

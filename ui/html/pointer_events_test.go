@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/dom"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
 )

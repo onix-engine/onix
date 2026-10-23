@@ -1,8 +1,8 @@
 package html
 
 import (
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
 )
 
 func htmlNodeParent(node *dom.Node) *dom.Node   { return node.Parent }

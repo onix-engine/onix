@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
 )
 
 type htmlMutation uint8

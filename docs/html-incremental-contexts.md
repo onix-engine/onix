@@ -13,8 +13,8 @@ Historical fallbacks remain for topology, content attributes, environment, z-ind
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css ./project
-go vet ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css
+go test ./ecs/... ./html/layout ./html/style ./html/dom ./html/css ./project
+go vet ./ecs/... ./html/layout ./html/style ./html/dom ./html/css
 go test ./ecs -run TestHTMLContextWarmScrollTextDoesNotAllocate -count=5
 ```
 

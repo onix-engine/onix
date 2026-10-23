@@ -1,0 +1,8 @@
+{
+  "modules": [
+    {
+      "id": "animations",
+      "mod": "resources/animations"
+    }
+  ]
+}

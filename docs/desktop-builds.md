@@ -56,9 +56,11 @@ Portable produces `<AppName>-windows-<arch>.zip` with `<AppName>.exe`. MSI produ
 MSI tool lookup checks WiX v4 `wix`, then `wixl`, then WiX v3 `candle` and `light`.
 Missing tooling produces an installation error.
 
-Linux cross-compilation requires MinGW-w64, `VCPKG_ROOT` and static target codecs.
-Default triplets are `x64-mingw-static` / `arm64-mingw-static`; override with
-`ONIX_VCPKG_WINDOWS_TRIPLET`. For amd64:
+Windows builds and Play use MinGW-w64 on both Windows and Linux hosts. When
+`VCPKG_ROOT` is set, default codec triplets are `x64-mingw-static` /
+`arm64-mingw-static`; override with `ONIX_VCPKG_WINDOWS_TRIPLET`. These must match
+the MinGW toolchain; MSVC `*-windows-static` libraries are not suitable. Linux
+cross-compilation requires `VCPKG_ROOT` and static target codecs. For amd64:
 
 ```sh
 vcpkg install --triplet x64-mingw-static aom libvpx libyuv

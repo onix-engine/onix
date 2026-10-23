@@ -311,6 +311,9 @@ func (c *Canvas2D) DrawShapeAffine(
 		c.DrawFrame()
 	}
 	model = multiplyAffine(affineFromMat4(c.viewMatrix), model)
+	if kind == render.ShapeRoundedRect {
+		model, local = c.shapeCoverageQuad(model, local)
+	}
 	c.shapes = append(c.shapes, render.ShapeInstance2D{
 		Model:      model,
 		LocalModel: local,

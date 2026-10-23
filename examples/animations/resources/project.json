@@ -1,0 +1,22 @@
+{
+  "entry": "main.json",
+  "scenes": [
+    "main.json"
+  ],
+  "clearColor": "#14161b",
+  "window": {
+    "width": 1280,
+    "height": 900,
+    "title": "Onix CSS animations",
+    "icon": "",
+    "vsync": null,
+    "fps": null,
+    "tps": null
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 900,
+    "mode": "contain"
+  },
+  "engine": {}
+}

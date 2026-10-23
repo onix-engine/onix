@@ -2,7 +2,7 @@ package html
 
 import (
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/layout"
+	"github.com/diiyw/onix/html/layout"
 	"github.com/diiyw/onix/scene"
 )
 

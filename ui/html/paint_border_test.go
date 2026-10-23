@@ -6,12 +6,61 @@ import (
 	"image/color"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/html/layout"
 	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/scene"
 )
+
+func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
+	// Match the Color transition reversal case in examples/animations.
+	world, owner, clock := htmlAnimationFixture(t, `<style>
+	#box {margin:12px;width:150px;height:44px;border:3px solid #267d50;background:white;transition:background-color 1s linear,border-color 1s linear}
+	#box:hover {background:#c7383b;border-color:#234d95}
+	</style><div id="box"></div>`)
+	defer Dispose(world)
+	node := incrementalHTMLNode(t, world, owner, "box")
+	visual := htmlAnimationRole(t, world, owner, "box", htmlRoleSurface)
+	var edges [4]ecs.Entity
+	for i := range edges {
+		edges[i] = htmlAnimationRole(t, world, owner, "box", htmlRoleBorderTop+htmlRenderRole(i))
+	}
+	check := func(t *testing.T) {
+		t.Helper()
+		state := ecs.GetRef[htmlRenderState](world, owner)
+		box := state.BoxesByNode[node.node]
+		r := box.BorderBox()
+		want := [...]layout.Rect{
+			{X: r.X, Y: r.Y, Width: r.Width, Height: box.Border.Top},
+			{X: r.X + r.Width - box.Border.Right, Y: r.Y, Width: box.Border.Right, Height: r.Height},
+			{X: r.X, Y: r.Y + r.Height - box.Border.Bottom, Width: r.Width, Height: box.Border.Bottom},
+			{X: r.X, Y: r.Y, Width: box.Border.Left, Height: r.Height},
+		}
+		for i, entity := range edges {
+			if htmlAnimationRole(t, world, owner, "box", htmlRoleBorderTop+htmlRenderRole(i)) != entity {
+				t.Fatal("color transition replaced a border edge")
+			}
+			transform := ecs.GetRef[scene.UITransform](world, entity)
+			sprite := ecs.GetRef[scene.Sprite2D](world, entity)
+			got := layout.Rect{X: float64(transform.Translation.X.Value), Y: float64(transform.Translation.Y.Value), Width: float64(sprite.Width), Height: float64(sprite.Height)}
+			if got != want[i] {
+				t.Errorf("border edge %d = %+v, want %+v", i, got, want[i])
+			}
+		}
+	}
+	t.Run("initial", check)
+	SetVisualHover(world, visual, true)
+	htmlAnimationStep(t, world, clock, 400*time.Millisecond)
+	t.Run("hover", check)
+	SetVisualHover(world, visual, false)
+	htmlAnimationStep(t, world, clock, 200*time.Millisecond)
+	t.Run("reversing", check)
+	htmlAnimationStep(t, world, clock, 200*time.Millisecond)
+	t.Run("returned", check)
+}
 
 func TestHTMLTransparentRoundedElbowsCreatePaintSurface(t *testing.T) {
 	for _, test := range []struct {

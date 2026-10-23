@@ -13,8 +13,8 @@ Overflow mode, tree styles, z-index, reparenting and shared ownership still fall
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css ./project
-go vet ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css
+go test ./ecs/... ./html/layout ./html/style ./html/dom ./html/css ./project
+go vet ./ecs/... ./html/layout ./html/style ./html/dom ./html/css
 git diff --check
 ```
 

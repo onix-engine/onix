@@ -15,8 +15,8 @@ The original full-layout boundary is historical: see [phase 2](html-incremental-
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/css ./internal/dom ./internal/style ./internal/layout ./project
-go vet ./ecs/... ./internal/style ./internal/layout ./internal/dom ./internal/css
+go test ./ecs/... ./html/css ./html/dom ./html/style ./html/layout ./project
+go vet ./ecs/... ./html/style ./html/layout ./html/dom ./html/css
 go test ./ecs -run '^$' -bench '^BenchmarkHTMLLocalClassMutation$' -benchmem -benchtime=100ms -count=3
 ```
 

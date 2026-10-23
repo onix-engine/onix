@@ -13,8 +13,8 @@ Benchmarks compare phase 4 `1842f0a`, three 200ms runs on Linux amd64/i5-11500/G
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css ./project
-go vet ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css
+go test ./ecs/... ./html/layout ./html/style ./html/dom ./html/css ./project
+go vet ./ecs/... ./html/layout ./html/style ./html/dom ./html/css
 ```
 
 ## Recorded results

@@ -1,6 +1,6 @@
 module github.com/diiyw/onix
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/binzume/modelconv v0.3.6-0.20240207142816-1eb06bec8e82

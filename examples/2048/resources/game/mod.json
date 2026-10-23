@@ -1,0 +1,7 @@
+{
+  "name": "2048",
+  "behavior": "Mod",
+  "space": "ui",
+  "components": {"size": [540, 850], "html": {"resource": "page"}, "input": {"pointer": true}},
+  "resources": {"page": {"kind": "html", "path": "game.html"}}
+}

@@ -29,7 +29,7 @@ References: [CSS Animations](https://www.w3.org/TR/css-animations-1/), [Transiti
 ## Examples and commands
 
 ```sh
-env GOCACHE=/tmp/onix-animation-go-build go test ./internal/css ./internal/style ./internal/layout ./ecs ./ui ./project -run 'Test.*(HTML|Html|CSS|Css|Compute|Parse|Scope|Transform|Incremental|Cascade)' -count=1
+env GOCACHE=/tmp/onix-animation-go-build go test ./html/css ./html/style ./html/layout ./ecs ./ui ./project -run 'Test.*(HTML|Html|CSS|Css|Compute|Parse|Scope|Transform|Incremental|Cascade)' -count=1
 env GOCACHE=/tmp/onix-animation-go-build go test ./ecs -run '^$' -bench '^BenchmarkHTMLCSS(Color)?AnimationFrame$' -benchtime=200ms -benchmem
 ```
 

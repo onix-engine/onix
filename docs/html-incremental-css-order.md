@@ -11,8 +11,8 @@ Benchmarks compare `f512ec0`, three 500ms runs on Linux amd64/i5-11500. A fixed-
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css ./project
-go vet ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css
+go test ./ecs/... ./html/layout ./html/style ./html/dom ./html/css ./project
+go vet ./ecs/... ./html/layout ./html/style ./html/dom ./html/css
 git diff --check
 ```
 

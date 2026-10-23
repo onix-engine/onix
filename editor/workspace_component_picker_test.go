@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/internal/dom"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
 	htmlui "github.com/diiyw/onix/ui/html"

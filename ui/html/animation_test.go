@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )

@@ -8,8 +8,8 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	editorresources "github.com/diiyw/onix/editor/resources"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/internal/dom"
 	"github.com/diiyw/onix/project"
 	engineui "github.com/diiyw/onix/ui"
 	"github.com/diiyw/onix/ui/html"

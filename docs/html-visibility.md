@@ -17,6 +17,6 @@ References: [CSS visibility](https://drafts.csswg.org/css-display-3/#visibility)
 ## Examples and commands
 
 ```sh
-GOMAXPROCS=2 go test -p 1 ./ui/html ./ui ./internal/style ./internal/layout -count=1 -timeout=180s
+GOMAXPROCS=2 go test -p 1 ./ui/html ./ui ./html/style ./html/layout -count=1 -timeout=180s
 GOMAXPROCS=2 go test -p 1 ./ui/html -run '^$' -bench '^BenchmarkHTMLVisibility' -benchmem -benchtime=200x -count=1 -timeout=120s
 ```

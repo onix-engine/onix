@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/html/style"
 )
 
 func TestHTMLMetadataPassPreservesCSSSourceOrder(t *testing.T) {

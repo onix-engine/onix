@@ -1,0 +1,4 @@
+{
+  "behavior": "Main",
+  "modules": [{"id": "game", "mod": "resources/game"}]
+}

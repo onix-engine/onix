@@ -162,7 +162,7 @@ func windowsBuildEnvironment(hostOS, architecture string, lookPath func(string) 
 	env := append(append([]string{}, os.Environ()...),
 		"GOOS=windows", "GOARCH="+architecture, "CGO_ENABLED=1", "CC="+cc, "CXX="+cxx,
 	)
-	return appendVcpkgEnvironment(env, "windows", hostOS, architecture)
+	return appendVcpkgEnvironment(env, "windows", architecture)
 }
 
 func buildMacOSPackage(root string, options BuildOptions) (string, error) {

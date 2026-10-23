@@ -1,6 +1,6 @@
 package html
 
-import "github.com/diiyw/onix/internal/layout"
+import "github.com/diiyw/onix/html/layout"
 
 // The owner list uses box preorder, including each box's clip before its
 // descendants. Full, structural and local membership rebuilds share this order.

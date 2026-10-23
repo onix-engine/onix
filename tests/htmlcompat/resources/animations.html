@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Onix CSS animations</title>
@@ -41,25 +41,25 @@ button:hover { transform: translate(12px, 6px) rotate(5deg) scale(1.1); opacity:
 </style>
 </head>
 <body>
-<h1>CSS 动画人工验证</h1>
-<p>循环动画应持续刷新；可将此文件在 Chromium 与 Onix 中分别打开观察。</p>
+<h1>CSS animation manual checks</h1>
+<p>Looping animations should update continuously. Open this file in Chromium and Onix to compare their behavior.</p>
 <div class="row">
- <div class="case"><h2>旋转循环</h2><div class="stage"><div class="square spinner"></div></div><p class="note">1.5s / linear / infinite</p></div>
- <div class="case"><h2>缩放与透明度</h2><div class="stage"><div class="square pulse"></div></div><p class="note">alternate / ease-in-out</p></div>
- <div class="case"><h2>多段关键帧</h2><div class="stage"><div class="square bounce"></div></div><p class="note">0%, 50%, 100% / cubic-bezier</p></div>
- <div class="case pause"><h2>悬停暂停</h2><div class="stage"><div class="square spinner"></div></div><p class="note">移开鼠标后从暂停处继续</p></div>
+ <div class="case"><h2>Looping rotation</h2><div class="stage"><div class="square spinner"></div></div><p class="note">1.5s / linear / infinite</p></div>
+ <div class="case"><h2>Scale and opacity</h2><div class="stage"><div class="square pulse"></div></div><p class="note">alternate / ease-in-out</p></div>
+ <div class="case"><h2>Multiple keyframes</h2><div class="stage"><div class="square bounce"></div></div><p class="note">0%, 50%, 100% / cubic-bezier</p></div>
+ <div class="case pause"><h2>Pause on hover</h2><div class="stage"><div class="square spinner"></div></div><p class="note">Move the pointer away to resume.</p></div>
 </div>
 <div class="row">
- <div class="case"><h2>阶梯缓动</h2><div class="stage"><div class="square steps"></div></div><p class="note">steps(4, end)</p></div>
- <div class="case"><h2>负延迟与方向</h2><div class="stage"><div class="square delayed"></div></div><p class="note">-1s / alternate-reverse</p></div>
- <div class="case"><h2>整体透明度</h2><div class="stage"><div class="group"><div class="group-child"></div></div></div><p class="note">蓝色与绿色整体淡入淡出</p></div>
- <div class="case"><h2>悬停过渡</h2><div class="stage"><button>悬停此按钮</button></div><p class="note">平移 / 旋转 / 缩放 / opacity</p></div>
+ <div class="case"><h2>Step easing</h2><div class="stage"><div class="square steps"></div></div><p class="note">steps(4, end)</p></div>
+ <div class="case"><h2>Negative delay and direction</h2><div class="stage"><div class="square delayed"></div></div><p class="note">-1s / alternate-reverse</p></div>
+ <div class="case"><h2>Group opacity</h2><div class="stage"><div class="group"><div class="group-child"></div></div></div><p class="note">Blue and green fade together.</p></div>
+ <div class="case"><h2>Hover transition</h2><div class="stage"><button>Hover over this button</button></div><p class="note">translate / rotate / scale / opacity</p></div>
 </div>
 <div class="row">
- <div class="case"><h2>文字继承与 currentColor</h2><div class="stage ink">跟随颜色 <span class="fixed-ink">固定绿色</span><div class="inherit-swatch"></div></div><p class="note">文字、背景和默认边框同步变化</p></div>
- <div class="case"><h2>透明颜色与独立边框</h2><div class="stage"><div class="square paint"></div></div><p class="note">透明端点不应让实色变黑</p></div>
- <div class="case"><h2>颜色过渡与反向缩短</h2><div class="stage"><div class="color-hover"></div></div><p class="note">进入后快速移开，应按进度缩短回程</p></div>
- <div class="case"><h2>阶梯动画正延迟</h2><div class="stage"><div class="square step-delay"></div></div><p class="note">延迟 2s 时停在起点，开始时跳第一格</p></div>
+ <div class="case"><h2>Inheritance and currentColor</h2><div class="stage ink">Inherited color <span class="fixed-ink">Fixed green</span><div class="inherit-swatch"></div></div><p class="note">Text, background and default border colors change together.</p></div>
+ <div class="case"><h2>Transparency and border colors</h2><div class="stage"><div class="square paint"></div></div><p class="note">Transparent endpoints should not darken solid colors.</p></div>
+ <div class="case"><h2>Color transition reversal</h2><div class="stage"><div class="color-hover"></div></div><p class="note">Leave soon after hovering: the return duration should shorten based on progress.</p></div>
+ <div class="case"><h2>Step animation delay</h2><div class="stage"><div class="square step-delay"></div></div><p class="note">Hold at the start for 2s, then jump to the first step.</p></div>
 </div>
 </body>
 </html>

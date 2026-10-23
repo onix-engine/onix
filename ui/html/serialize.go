@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/dom"
+	"github.com/diiyw/onix/html/dom"
 )
 
 // Serialize returns the current retained HTML document for page.

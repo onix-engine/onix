@@ -164,15 +164,15 @@ func defaultBuildArchitecture() BuildArchitecture {
 
 func linuxBuildEnvironment() ([]string, error) {
 	env := append(append([]string{}, os.Environ()...), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=1")
-	return appendVcpkgEnvironment(env, "linux", runtime.GOOS, runtime.GOARCH)
+	return appendVcpkgEnvironment(env, "linux", runtime.GOARCH)
 }
 
-func appendVcpkgEnvironment(env []string, targetOS, hostOS, architecture string) ([]string, error) {
+func appendVcpkgEnvironment(env []string, targetOS, architecture string) ([]string, error) {
 	vcpkgRoot := strings.TrimSpace(os.Getenv("VCPKG_ROOT"))
 	if vcpkgRoot == "" {
 		return env, nil
 	}
-	triplet, err := vcpkgTargetTriplet(targetOS, hostOS, architecture)
+	triplet, err := vcpkgTargetTriplet(targetOS, architecture)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func appendVcpkgEnvironment(env []string, targetOS, hostOS, architecture string)
 	return env, nil
 }
 
-func vcpkgTargetTriplet(targetOS, hostOS, architecture string) (string, error) {
+func vcpkgTargetTriplet(targetOS, architecture string) (string, error) {
 	envOS := strings.ToUpper(targetOS)
 	if targetOS == "darwin" {
 		envOS = "MACOS"
@@ -212,16 +212,11 @@ func vcpkgTargetTriplet(targetOS, hostOS, architecture string) (string, error) {
 			return "arm64-linux", nil
 		}
 	case "windows":
+		// Windows CGO builds use MinGW on both native and cross hosts.
 		switch architecture {
 		case "amd64":
-			if hostOS == "windows" {
-				return "x64-windows-static", nil
-			}
 			return "x64-mingw-static", nil
 		case "arm64":
-			if hostOS == "windows" {
-				return "arm64-windows-static", nil
-			}
 			return "arm64-mingw-static", nil
 		}
 	case "darwin":
@@ -458,7 +453,7 @@ func macOSBuildEnvironment(hostOS string, architecture BuildArchitecture, lookPa
 		"CGO_CXXFLAGS="+archFlag,
 		"CGO_LDFLAGS="+archFlag,
 	)
-	return appendVcpkgEnvironment(env, "darwin", hostOS, string(architecture))
+	return appendVcpkgEnvironment(env, "darwin", string(architecture))
 }
 
 func setEnvironmentValue(env []string, name, value string) []string {

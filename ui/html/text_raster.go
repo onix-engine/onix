@@ -6,8 +6,8 @@ import (
 	"math"
 
 	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/internal/layout"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/html/style"
 )
 
 func htmlVisibilityHash(computed *style.ComputedStyle) uint64 {

@@ -2,7 +2,7 @@ package html
 
 import (
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/dom"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )

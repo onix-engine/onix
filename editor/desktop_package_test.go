@@ -183,30 +183,33 @@ func TestWindowsBuildEnvironmentUsesMinGWCrossCompiler(t *testing.T) {
 	}
 }
 
-func TestVcpkgTargetTripletUsesStaticCrossTriplets(t *testing.T) {
+func TestVcpkgTargetTripletUsesStaticTargetTriplets(t *testing.T) {
+	t.Setenv("ONIX_VCPKG_LINUX_TRIPLET", "")
+	t.Setenv("ONIX_VCPKG_WINDOWS_TRIPLET", "")
+	t.Setenv("ONIX_VCPKG_MACOS_TRIPLET", "")
 	tests := []struct {
-		targetOS, hostOS, architecture, want string
+		targetOS, architecture, want string
 	}{
-		{targetOS: "linux", hostOS: "linux", architecture: "amd64", want: "x64-linux"},
-		{targetOS: "windows", hostOS: "linux", architecture: "amd64", want: "x64-mingw-static"},
-		{targetOS: "windows", hostOS: "linux", architecture: "arm64", want: "arm64-mingw-static"},
-		{targetOS: "windows", hostOS: "windows", architecture: "amd64", want: "x64-windows-static"},
-		{targetOS: "darwin", hostOS: "linux", architecture: "amd64", want: "x64-osx"},
-		{targetOS: "darwin", hostOS: "linux", architecture: "arm64", want: "arm64-osx"},
+		{targetOS: "linux", architecture: "amd64", want: "x64-linux"},
+		{targetOS: "linux", architecture: "arm64", want: "arm64-linux"},
+		{targetOS: "windows", architecture: "amd64", want: "x64-mingw-static"},
+		{targetOS: "windows", architecture: "arm64", want: "arm64-mingw-static"},
+		{targetOS: "darwin", architecture: "amd64", want: "x64-osx"},
+		{targetOS: "darwin", architecture: "arm64", want: "arm64-osx"},
 	}
 	for _, test := range tests {
-		got, err := vcpkgTargetTriplet(test.targetOS, test.hostOS, test.architecture)
+		got, err := vcpkgTargetTriplet(test.targetOS, test.architecture)
 		if err != nil || got != test.want {
-			t.Errorf("vcpkg triplet for %s/%s/%s = %q, %v; want %q", test.targetOS, test.hostOS, test.architecture, got, err, test.want)
+			t.Errorf("vcpkg triplet for %s/%s = %q, %v; want %q", test.targetOS, test.architecture, got, err, test.want)
 		}
 	}
 	t.Setenv("ONIX_VCPKG_WINDOWS_TRIPLET", "custom-windows-static")
-	got, err := vcpkgTargetTriplet("windows", "linux", "amd64")
+	got, err := vcpkgTargetTriplet("windows", "amd64")
 	if err != nil || got != "custom-windows-static" {
 		t.Fatalf("custom Windows vcpkg triplet = %q, %v", got, err)
 	}
 	t.Setenv("ONIX_VCPKG_MACOS_TRIPLET", "custom-macos-static")
-	got, err = vcpkgTargetTriplet("darwin", "linux", "amd64")
+	got, err = vcpkgTargetTriplet("darwin", "amd64")
 	if err != nil || got != "custom-macos-static" {
 		t.Fatalf("custom macOS vcpkg triplet = %q, %v", got, err)
 	}
@@ -223,22 +226,30 @@ func TestWindowsBuildEnvironmentAddsTargetVcpkgPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("VCPKG_ROOT", root)
-	env, err := windowsBuildEnvironment("linux", "amd64", func(name string) (string, error) { return "/toolchain/" + name, nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	values := make(map[string]string, 8)
-	for _, entry := range env {
-		name, value, ok := strings.Cut(entry, "=")
-		if ok {
-			values[name] = value
-		}
-	}
-	if values["CGO_CFLAGS"] != "-I"+includeDir || values["CGO_CXXFLAGS"] != "-I"+includeDir {
-		t.Fatalf("target vcpkg include flags = %q/%q", values["CGO_CFLAGS"], values["CGO_CXXFLAGS"])
-	}
-	if values["CGO_LDFLAGS"] != "-L"+libraryDir {
-		t.Fatalf("target vcpkg linker flags = %q", values["CGO_LDFLAGS"])
+	t.Setenv("ONIX_VCPKG_WINDOWS_TRIPLET", "")
+	t.Setenv("CGO_CFLAGS", "")
+	t.Setenv("CGO_CXXFLAGS", "")
+	t.Setenv("CGO_LDFLAGS", "")
+	for _, hostOS := range []string{"windows", "linux"} {
+		t.Run(hostOS, func(t *testing.T) {
+			env, err := windowsBuildEnvironment(hostOS, "amd64", func(name string) (string, error) { return "/toolchain/" + name, nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			values := make(map[string]string, 8)
+			for _, entry := range env {
+				name, value, ok := strings.Cut(entry, "=")
+				if ok {
+					values[name] = value
+				}
+			}
+			if values["CGO_CFLAGS"] != "-I"+includeDir || values["CGO_CXXFLAGS"] != "-I"+includeDir {
+				t.Fatalf("target vcpkg include flags = %q/%q", values["CGO_CFLAGS"], values["CGO_CXXFLAGS"])
+			}
+			if values["CGO_LDFLAGS"] != "-L"+libraryDir {
+				t.Fatalf("target vcpkg linker flags = %q", values["CGO_LDFLAGS"])
+			}
+		})
 	}
 }
 

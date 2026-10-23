@@ -27,6 +27,6 @@ References: [HTML parsing](https://html.spec.whatwg.org/multipage/parsing.html),
 ## Examples and commands
 
 ```sh
-go test ./internal/dom ./internal/css ./internal/style ./internal/layout ./ecs ./ui -count=1
+go test ./html/dom ./html/css ./html/style ./html/layout ./ecs ./ui -count=1
 git diff --check
 ```

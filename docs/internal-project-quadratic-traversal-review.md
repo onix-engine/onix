@@ -17,7 +17,7 @@ Targeted default tests passed. Release CSS/style/layout and generic prepared pro
 ## Examples and commands
 
 ```sh
-go test ./internal/css ./internal/style ./internal/layout ./project ./scene ./ui ./ui/html ./ui/markdown -p=1 -count=1
+go test ./html/css ./html/style ./html/layout ./project ./scene ./ui ./ui/html ./ui/markdown -p=1 -count=1
 ```
 
 ```sh

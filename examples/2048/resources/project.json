@@ -1,0 +1,8 @@
+{
+  "entry": "main.json",
+  "scenes": ["main.json"],
+  "clearColor": "#faf8ef",
+  "window": {"width": 540, "height": 850, "title": "Onix · 2048"},
+  "viewport": {"width": 540, "height": 850, "mode": "contain"},
+  "engine": {}
+}

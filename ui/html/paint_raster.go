@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/style"
 )
 
 type htmlRasterGradient struct {

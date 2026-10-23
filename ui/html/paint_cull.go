@@ -4,9 +4,9 @@ import (
 	"math"
 
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 	onixtext "github.com/diiyw/onix/text"
 	"github.com/go-gl/mathgl/mgl32"

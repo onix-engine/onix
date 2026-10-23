@@ -12,10 +12,10 @@ import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/css"
-	"github.com/diiyw/onix/internal/dom"
-	"github.com/diiyw/onix/internal/layout"
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/css"
+	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 	onixtext "github.com/diiyw/onix/text"
 	"github.com/go-gl/mathgl/mgl32"
@@ -4137,7 +4137,7 @@ func spawnHTMLBorderSurfaces(world *ecs.World, owner ecs.Entity, state *htmlRend
 		return
 	}
 	spawnHTMLBorderSurface(
-		world, owner, state, rect.X, rect.Y+1, rect.Width, box.Border.Top, box.Border.Top,
+		world, owner, state, rect.X, rect.Y, rect.Width, box.Border.Top, box.Border.Top,
 		box.Style.BorderStyle.Top, box.Style.BorderColor.Top, stackIndex+1, box.Node, htmlRoleBorderTop, visible,
 	)
 	spawnHTMLBorderSurface(

@@ -15,8 +15,8 @@ Recorded Linux amd64/i5-11500/Go 1.26 medians use three 200ms runs. One large-do
 ## Commands
 
 ```sh
-go test ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css ./project
-go vet ./ecs/... ./internal/layout ./internal/style ./internal/dom ./internal/css
+go test ./ecs/... ./html/layout ./html/style ./html/dom ./html/css ./project
+go vet ./ecs/... ./html/layout ./html/style ./html/dom ./html/css
 go test ./ecs -run TestHTMLWarmTextMutationAllocations -count=5
 ```
 

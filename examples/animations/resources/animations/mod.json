@@ -1,0 +1,16 @@
+{
+  "name": "CSS animations",
+  "space": "ui",
+  "components": {
+    "size": [1280, 900],
+    "html": {
+      "resource": "page"
+    }
+  },
+  "resources": {
+    "page": {
+      "kind": "html",
+      "path": "animations.html"
+    }
+  }
+}

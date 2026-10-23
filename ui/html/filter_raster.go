@@ -6,7 +6,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/diiyw/onix/internal/style"
+	"github.com/diiyw/onix/html/style"
 )
 
 type htmlFilterScratch struct {

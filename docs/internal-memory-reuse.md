@@ -13,7 +13,7 @@ Targeted codec/layout/style/reuse/HTML and race checks passed. Regressions cover
 ## Examples and commands
 
 ```sh
-go test ./internal/typedbin ./internal/texcompress ./internal/layout \
+go test ./internal/typedbin ./internal/texcompress ./html/layout \
   -run '^$' \
   -bench 'Benchmark(CodecScratch|EncodeChain|Build.*Document|RetainedBlockLayout)$' \
   -benchmem -benchtime=200ms -count=6 -cpu=1

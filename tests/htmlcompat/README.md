@@ -180,7 +180,7 @@ Additional references: [WPT reftests](https://web-platform-tests.org/writing-tes
 ## Commands
 
 ```sh
-go test ./font ./internal/css ./internal/style ./internal/layout ./ecs ./ui ./project ./text ./graphics
+go test ./font ./html/css ./html/style ./html/layout ./ecs ./ui ./project ./text ./graphics
 python3 tests/htmlcompat/capture.py
 ```
 
@@ -218,12 +218,12 @@ go test ./ui/html -run TestHTMLBrowserBatch7
 
 ```sh
 python3 tests/htmlcompat/capture.py --fixture text
-go test ./font ./text ./ecs ./graphics ./render ./internal/css ./internal/style ./internal/layout ./ui ./project
+go test ./font ./text ./ecs ./graphics ./render ./html/css ./html/style ./html/layout ./ui ./project
 ```
 
 ```sh
 go test ./ui/html -run 'TestHTMLBrowserBatch[123]|TestHTMLFlexConstraintMutation'
-go test ./internal/layout -run TestRetainedFlexConstraints
+go test ./html/layout -run TestRetainedFlexConstraints
 python3 tests/htmlcompat/capture.py --fixture batch2
 python3 tests/htmlcompat/capture.py --fixture batch3
 ```
