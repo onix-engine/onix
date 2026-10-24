@@ -7,7 +7,42 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/ui"
 )
+
+func TestProceduralPainterOrderSurvivesModuleChanges(t *testing.T) {
+	r, content, _ := boundaryContent(t)
+	bundle := ecs.NewBundle(2)
+	ecs.Put(&bundle, scene.UIStackIndex(1_000_000))
+	ecs.Put(&bundle, scene.RenderOrder2D(500))
+	visual := content.Spawn(bundle)
+	node := ContentSpawnNode(content, ui.NodeOptions{StackIndex: 700}, boundaryValue{})
+	var queued ecs.Entity
+	for range ContentQuery[boundaryValue](content) {
+		queued = ContentSpawnNode(content, ui.NodeOptions{StackIndex: 900}, boundaryExtra{})
+	}
+	must(t, r.flushStructural())
+	// Applications can move an existing visual without surrendering its order.
+	ContentSetIfChanged(content, visual, scene.UIStackIndex(1_000_001))
+	content.Spawn(ecs.NewBundle(0))
+	must(t, r.flushStructural())
+	for entity, want := range map[ecs.Entity]scene.UIStackIndex{visual: 1_000_001, node: 700, queued: 900} {
+		if got, _ := ContentGet[scene.UIStackIndex](content, entity); got != want {
+			t.Fatalf("procedural paint order=%d, want %d", got, want)
+		}
+	}
+	if got, _ := ContentGet[scene.RenderOrder2D](content, visual); got != 500 {
+		t.Fatalf("world paint order=%d, want 500", got)
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		content.context.dirtyDrawOrder()
+		if err := r.syncDrawOrder(); err != nil {
+			panic(err)
+		}
+	}); allocs != 0 {
+		t.Fatalf("warm paint order synchronization allocated %g times", allocs)
+	}
+}
 
 func drawOrderFixture(tb testing.TB) (*Runtime, *Scene) {
 	tb.Helper()

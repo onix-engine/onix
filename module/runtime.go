@@ -778,6 +778,9 @@ func (r *Runtime) reparentPrivate(command structuralCommand) error {
 	return nil
 }
 
+// Procedural visuals with their own paint order keep it across module changes.
+type explicitPainterOrder struct{}
+
 func (r *Runtime) syncDrawOrder() error {
 	// The inherited group fixes module placement. Local edits only renumber
 	// that module and never rewrite later modules or parked scenes.
@@ -788,6 +791,9 @@ func (r *Runtime) syncDrawOrder() error {
 				continue
 			}
 			for index, entity := range c.entities {
+				if ecs.Has[explicitPainterOrder](r.world, entity) {
+					continue
+				}
 				var err error
 				if c.ui {
 					err = setPainterOrder(r.world, entity, scene.UIStackIndex(index+1))

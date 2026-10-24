@@ -230,6 +230,7 @@ func (c *Content) queueNode(o ui.NodeOptions, additional int) ecs.Entity {
 		ecs.Put(&bundle, scene.AnchorTopLeft)
 		ecs.Put(&bundle, scene.Visibility{Visible: true})
 		ecs.Put(&bundle, scene.UIStackIndex(0))
+		ecs.Put(&bundle, explicitPainterOrder{})
 		ecs.Put(&bundle, entityOwner{context: c.context})
 		ecs.Put(&bundle, scene.Activity{Active: c.context.enabled})
 		c.context.nodeBundle = r.world.PrepareBundle(bundle)

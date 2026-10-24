@@ -164,6 +164,9 @@ func ContentQuery[T any](c *Content) iter.Seq2[ecs.Entity, ecs.ComponentAccess[T
 func (c *Content) adopt(e ecs.Entity) ecs.Entity {
 	w := c.context.runtime.world
 	_ = ecs.Insert(w, e, entityOwner{context: c.context})
+	if ecs.Has[scene.UIStackIndex](w, e) || ecs.Has[scene.RenderOrder2D](w, e) {
+		_ = ecs.Insert(w, e, explicitPainterOrder{})
+	}
 	if p, ok := ecs.Get[scene.Parent](w, e); !ok || p.Entity == 0 {
 		_ = ecs.Insert(w, e, scene.Parent{Entity: c.context.root})
 	}
@@ -178,6 +181,11 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 	}
 	if _, grouped := ecs.BundleValue[scene.PainterGroup2D](bundle); grouped {
 		panic(ErrOwnership)
+	}
+	_, uiOrder := ecs.BundleValue[scene.UIStackIndex](bundle)
+	_, worldOrder := ecs.BundleValue[scene.RenderOrder2D](bundle)
+	if uiOrder || worldOrder {
+		ecs.Put(&bundle, explicitPainterOrder{})
 	}
 	parent, hasParent := ecs.BundleValue[scene.Parent](bundle)
 	if parent.Entity != 0 && !c.owns(parent.Entity) {

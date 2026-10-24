@@ -326,6 +326,14 @@ func (textarea *Textarea) ResetScroll() {
 	textarea.scrollInitialized = false
 }
 
+// RestoreScroll restores a saved viewport without revealing the caret on the
+// next layout pass. Layout still clamps the offset to the current content.
+func (textarea *Textarea) RestoreScroll(x, y float32) {
+	textarea.ResetScroll()
+	textarea.ScrollX, textarea.ScrollY = x, y
+	textarea.preserveScroll = true
+}
+
 type TextControlMode interface {
 	Input | Textarea
 }
