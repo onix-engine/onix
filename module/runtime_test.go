@@ -582,7 +582,9 @@ func TestPainterOrderSurvivesEntityReuseAndPrivateContent(t *testing.T) {
 				v, _ := ecs.Get[scene.RenderOrder2D](r.world, entity)
 				return int(v)
 			}
-			if !(order(s.modules[0].root) < order(private.entity) && order(private.entity) < order(s.modules[1].root)) {
+			firstGroup, firstOK := ecs.Get[scene.PainterGroup2D](r.world, s.modules[0].root)
+			secondGroup, secondOK := ecs.Get[scene.PainterGroup2D](r.world, s.modules[1].root)
+			if !firstOK || !secondOK || firstGroup >= secondGroup || order(s.modules[0].root) >= order(private.entity) {
 				t.Fatal("private content escaped module painter order")
 			}
 		})

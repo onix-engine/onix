@@ -202,8 +202,9 @@ Discard stays about 15.5 ns across counts. Copied Read intentionally allocates.
 ## Phase 7: mixed generic patches and system fonts
 
 Patch1..Patch8 combine inserts/replacements/removals into one source-to-target migration.
-Plans bind a World; generic values are not boxed. Reserve prepares current source
-archetypes/target capacities; new structures, growth and first command streams can
+Plans bind a World; generic values are not boxed. Reserve prepares populated or
+preallocated source archetypes and migration target capacities; new structures,
+unused source shapes, growth and first command streams can
 allocate. Insert2..Insert8 handles multiwrites without removals.
 
 Retained components preserve values/Added/Changed. Replacements preserve Added and
@@ -391,7 +392,7 @@ removal := ecs.PrepareRemoval(world,
     ecs.Type[scene.InputState2D](),
     ecs.Type[ui.Button](),
 )
-removal.Reserve(128) // Prepare existing archetypes and target column capacity.
+removal.Reserve(128) // Prepare populated/preallocated sources and target capacity.
 changed := removal.Apply(entity)
 
 // Defer through Commands during iteration.

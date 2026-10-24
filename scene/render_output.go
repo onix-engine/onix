@@ -183,7 +183,7 @@ func appendOutputRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, 
 		start := len(items)
 		items = text.appendRenderItems(items, entity, base, clip, ui, info.sortIndex)
 		for i := start; i < len(items); i++ {
-			items[i].entity, items[i].layers, items[i].ui, items[i].target, items[i].scene = entity, info.layers, ui, info.target, info.scene
+			items[i].entity, items[i].layers, items[i].ui, items[i].target, items[i].scene, items[i].group = entity, info.layers, ui, info.target, info.scene, info.group
 			items[i].width, items[i].height = o.width, o.height
 		}
 	}

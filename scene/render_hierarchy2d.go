@@ -4,6 +4,7 @@ import "github.com/diiyw/onix/ecs"
 
 type renderHierarchy2DInfo struct {
 	scene    SceneLayer
+	group    uint64
 	layers   RenderLayers
 	target   ecs.Entity
 	stack    int
@@ -12,6 +13,7 @@ type renderHierarchy2DInfo struct {
 
 type renderEntity2DInfo struct {
 	scene     SceneLayer
+	group     uint64
 	layers    RenderLayers
 	target    ecs.Entity
 	sortIndex int
@@ -22,7 +24,7 @@ type renderHierarchy2DCacheScratch struct{}
 type renderHierarchy2DCache struct {
 	values    map[ecs.Entity]renderHierarchy2DInfo
 	visiting  map[ecs.Entity]bool
-	versions  [6]uint64
+	versions  [7]uint64
 	structure uint64
 }
 
@@ -33,10 +35,10 @@ func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
 func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 	cache := ecs.ScopeValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache](world)
-	versions := [6]uint64{
+	versions := [7]uint64{
 		ecs.ComponentVersion[Parent](world), ecs.ComponentVersion[SceneLayer](world),
 		ecs.ComponentVersion[RenderLayers](world), ecs.ComponentVersion[UITargetCamera](world),
-		ecs.ComponentVersion[UIStackIndex](world), ecs.ComponentVersion[RenderOrder2D](world),
+		ecs.ComponentVersion[UIStackIndex](world), ecs.ComponentVersion[RenderOrder2D](world), ecs.ComponentVersion[PainterGroup2D](world),
 	}
 	if cache.values == nil {
 		cache.values = make(map[ecs.Entity]renderHierarchy2DInfo)
@@ -57,12 +59,12 @@ func renderEntityInfo2D(world *ecs.World, entity ecs.Entity, ui bool, fallback i
 		if order, ok := ecs.Get[RenderOrder2D](world, entity); ok {
 			fallback = int(order)
 		}
-		return renderEntity2DInfo{scene: resolved.scene, layers: layers, sortIndex: fallback}
+		return renderEntity2DInfo{scene: resolved.scene, group: resolved.group, layers: layers, sortIndex: fallback}
 	}
 	if resolved.hasStack {
 		fallback = resolved.stack
 	}
-	return renderEntity2DInfo{scene: resolved.scene, layers: resolved.layers, target: resolved.target, sortIndex: fallback}
+	return renderEntity2DInfo{scene: resolved.scene, group: resolved.group, layers: resolved.layers, target: resolved.target, sortIndex: fallback}
 }
 
 func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) renderHierarchy2DInfo {
@@ -82,6 +84,9 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	}
 	if layer, ok := ecs.Get[SceneLayer](world, entity); ok {
 		info.scene = layer
+	}
+	if group, ok := ecs.Get[PainterGroup2D](world, entity); ok {
+		info.group = uint64(group)
 	}
 	if target, ok := ecs.Get[UITargetCamera](world, entity); ok {
 		info.target = target.Entity

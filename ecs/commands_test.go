@@ -44,6 +44,14 @@ func assertCommandStorageRecycled(t *testing.T, commands *Commands) {
 			t.Fatal("queue storage retained a command")
 		}
 	}
+	if len(commands.removals) != 0 {
+		t.Fatal("prepared removal payloads were not recycled")
+	}
+	for _, plan := range commands.removals[:cap(commands.removals)] {
+		if plan != nil {
+			t.Fatal("prepared removal storage retained a plan")
+		}
+	}
 }
 
 func TestCommandStorageRecycledAfterFailure(t *testing.T) {

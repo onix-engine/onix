@@ -1,0 +1,11 @@
+{
+  "name": "Spine selectors",
+  "space": "ui",
+  "behavior": "Mod",
+  "resources": {
+    "shell": {"kind":"html","path":"selectors.html"},
+    "ui": {"kind":"font","path":"fonts/ui.ttf"},
+    "license": {"kind":"data","path":"fonts/OFL.txt"}
+  },
+  "components": {"size":[612,64],"html":{"resource":"shell","font":"ui"},"input":{"keyboard":true}}
+}

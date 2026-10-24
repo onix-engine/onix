@@ -179,7 +179,7 @@ func typedStore[T any](r *Runtime) *store[T] {
 	if s, ok := r.typedStores[key]; ok {
 		return s.(*store[T])
 	}
-	s := newStore[T](r.options.EventCapacity)
+	s := newStore[T](r.options.PayloadCapacity)
 	// Lease policy belongs to the Go payload type, independently of slot aliases.
 	switch owned := any(s).(type) {
 	case *store[RenderOutputHandle]:
@@ -449,7 +449,7 @@ func enqueue[T any](r *Runtime, s *store[T], value T, e envelope) error {
 	}
 	e.buffer = r.buffer()
 	if s.values[e.buffer] == nil {
-		s.values[e.buffer] = make([]T, 0, r.options.EventCapacity)
+		s.values[e.buffer] = make([]T, 0, r.options.PayloadCapacity)
 	}
 	e.value = len(s.values[e.buffer])
 	e.store = s

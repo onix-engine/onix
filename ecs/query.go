@@ -212,15 +212,20 @@ func (cursor *queryCursor) nextEntity() bool {
 	return false
 }
 
-// nextArchetype binds one matching table. Typed adapters traverse its contiguous
+// nextArchetype binds one matching nonempty table. Typed adapters traverse its contiguous
 // rows directly, keeping cursor calls and column binding out of the hot loop.
 func (cursor *queryCursor) nextArchetype() bool {
-	cursor.archetypeIndex++
-	if cursor.archetypeIndex >= len(cursor.view.plan.archetypes) {
-		return false
+	for {
+		cursor.archetypeIndex++
+		if cursor.archetypeIndex >= len(cursor.view.plan.archetypes) {
+			return false
+		}
+		archetype := cursor.view.world.archetypes[cursor.view.plan.archetypes[cursor.archetypeIndex]]
+		if len(archetype.entities) != 0 {
+			cursor.bindArchetype(archetype)
+			return true
+		}
 	}
-	cursor.bindArchetype(cursor.view.world.archetypes[cursor.view.plan.archetypes[cursor.archetypeIndex]])
-	return true
 }
 
 func (cursor *queryCursor) bindArchetype(archetype *archetype) {
@@ -236,15 +241,40 @@ func (cursor *queryCursor) bindArchetype(archetype *archetype) {
 	}
 }
 
-func (cursor *queryCursor) blockMatches() bool {
-	block := cursor.row / queryTickBlockSize
+func (cursor *queryCursor) rangeMatches(rangeIndex int) bool {
 	for index := 0; index < cursor.view.filters.count; index++ {
 		binding := cursor.binding(index)
-		if !binding.ranges[block].matches(rowFilter{lastRun: binding.lastRun, thisRun: binding.thisRun}) {
+		if !binding.ranges[rangeIndex].matches(rowFilter{lastRun: binding.lastRun, thisRun: binding.thisRun}) {
 			return false
 		}
 	}
 	return true
+}
+
+func (cursor *queryCursor) groupMatches(group int) bool {
+	for index := 0; index < cursor.view.filters.count; index++ {
+		binding := cursor.binding(index)
+		if !tickGroupRange(binding.ranges, group, len(binding.ticks)).matches(rowFilter{lastRun: binding.lastRun, thisRun: binding.thisRun}) {
+			return false
+		}
+	}
+	return true
+}
+
+// nextBlock skips unchanged groups before testing individual blocks. The
+// generated adapters only run row filters inside matching 64-row blocks.
+func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
+	for start < length {
+		if start%queryTickGroupSize == 0 && !cursor.groupMatches(start/queryTickGroupSize) {
+			start += queryTickGroupSize
+			continue
+		}
+		if cursor.rangeMatches(start / queryTickBlockSize) {
+			return start, min(start+queryTickBlockSize, length)
+		}
+		start += queryTickBlockSize
+	}
+	return length, length
 }
 
 func (cursor *queryCursor) mutationTick() Tick {

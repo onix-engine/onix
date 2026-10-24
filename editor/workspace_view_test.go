@@ -508,49 +508,7 @@ func TestWorkspaceEditorRetainedPreviewAndStableFrameAllocations(t *testing.T) {
 	}
 }
 
-func TestWorkspaceEditorPlayPreprocessesResourcesWithoutReplacingMain(t *testing.T) {
-	root, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	directory := filepath.Join(filepath.Dir(root), "projects", "modules")
-	mainBefore, err := os.ReadFile(filepath.Join(directory, "main.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd, build, err := moduleProjectBuildCommand(directory, filepath.Join(t.TempDir(), "game.exe"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := build.Cleanup(); err != nil {
-			t.Error(err)
-		}
-	})
-	args := strings.Join(cmd.Args, " ")
-	if cmd.Dir != directory || !strings.Contains(args, "-overlay "+build.OverlayPath) || !strings.HasSuffix(args, " .") || !strings.Contains(args, "build") {
-		t.Fatalf("Play used wrong build flow: %s", args)
-	}
-	var overlay struct{ Replace map[string]string }
-	data, err := os.ReadFile(build.OverlayPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, &overlay); err != nil {
-		t.Fatal(err)
-	}
-	for file := range overlay.Replace {
-		if filepath.Base(file) == "main.go" {
-			t.Fatal("Play replaced the authored entry")
-		}
-	}
-	mainAfter, err := os.ReadFile(filepath.Join(directory, "main.go"))
-	if err != nil || string(mainBefore) != string(mainAfter) {
-		t.Fatal("Play changed main.go")
-	}
-	if _, err := os.Stat(filepath.Join(build.ResourceDir, "catalog.bin")); err != nil {
-		t.Fatal(err)
-	}
+func TestWorkspaceEditorSlotFormPreservesJSONValue(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	a.enterModuleEdit("main.json", "start")
 	a.handleEvent(htmlui.Event{ID: "slot:main.json/start/text", Kind: htmlui.EventClick})

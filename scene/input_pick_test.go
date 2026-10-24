@@ -18,10 +18,12 @@ func inputPickCamera(entity ecs.Entity, x, y float32) inputCamera2D {
 }
 
 func inputPickQuad(entity ecs.Entity, x, y float32, ui bool) inputPickTarget2D {
-	return inputPickTarget2D{
-		entity: entity, receiver: entity, matrix: mgl32.Translate3D(x, y, 0),
+	target := inputPickTarget2D{
+		entity: entity, receiver: entity,
 		width: 20, height: 20, anchor: AnchorCenter, layers: RenderLayer(0), ui: ui,
 	}
+	target.prepare(mgl32.Translate3D(x, y, 0))
+	return target
 }
 
 func TestInputPickingKeepsCameraAndUICoordinatesSeparate(t *testing.T) {

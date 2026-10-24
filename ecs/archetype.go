@@ -137,6 +137,21 @@ func (a *archetype) appendEntity(entity Entity) int {
 	return row
 }
 
+// reserve grows table rows without reserving new world entity slots. Migration
+// reuses existing slots; only spawners need to reserve both kinds of storage.
+func (a *archetype) reserve(capacity int) {
+	if capacity <= 0 {
+		return
+	}
+	if capacity > cap(a.entities) {
+		a.entities = slices.Grow(a.entities, capacity-len(a.entities))
+	}
+	additional := capacity - len(a.entities)
+	for _, storage := range a.columns {
+		storage.reserve(additional)
+	}
+}
+
 // sortUniqueIDs sorts component IDs in place and reports the duplicate that
 // broke the sort order, if any.
 func sortUniqueIDs(ids []componentID) (componentID, bool) {

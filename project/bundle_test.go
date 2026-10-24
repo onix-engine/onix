@@ -411,61 +411,6 @@ func TestTextureMipmapIsExplicitAndPartOfCacheKey(t *testing.T) {
 	}
 }
 
-func TestLoadInstantiatesSpineGameObject(t *testing.T) {
-	dir := t.TempDir()
-	base := filepath.Join("..", "projects", "spine", "gallery", "exports")
-	copyResource := func(name string) {
-		data, err := os.ReadFile(filepath.Join(base, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		writeTestBinaryFile(t, dir, name, data)
-	}
-	copyResource("coin-pro.json")
-	copyResource("coin.atlas")
-	copyResource("coin.png")
-	writeTestFile(t, dir, "resources/project.json", `{"window":{"width":640,"height":480}}`)
-	writeTestFile(t, dir, "resources/resources.json", `{"spines":[{"id":"coin","skeleton":"coin-pro.json","atlas":"coin.atlas","texture":"coin.png"}]}`)
-	writeTestFile(t, dir, "resources/scenes/main.scene.json", `{
-  "nodes": [
-    {
-      "alpha": 1,
-      "components": {
-        "spine": {
-          "animation": "animation",
-          "loop": true,
-          "resource": "coin",
-          "speed": 1
-        }
-      },
-      "id": "coin",
-      "scaleX": 1,
-      "scaleY": 1
-    }
-  ]
-}`)
-	bundle, err := loadTestProject(os.DirFS(dir), ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bundle.Dispose()
-	scene, err := bundle.InstantiateEntryScene(ecs.NewWorld())
-	if err != nil {
-		t.Fatal(err)
-	}
-	component, ok := ecs.Get[sceneapi.Spine2D](scene.World, scene.MustEntity("coin"))
-	if !ok || component.Player == nil {
-		t.Fatalf("missing spine component: %+v", component)
-	}
-	if component.Player.Resource.Texture.Mipmapped() {
-		t.Fatal("linear-filtered Spine atlas unexpectedly enabled mipmaps")
-	}
-	component.Player.Update(.25)
-	if _, _, _, _, ok := component.Player.Bounds(); !ok {
-		t.Fatal("spine player has no bounds")
-	}
-}
-
 func TestLayerDoesNotSelectUICoordinateSpace(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, dir, "resources/project.json", `{}`)

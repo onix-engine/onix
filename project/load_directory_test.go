@@ -8,7 +8,7 @@ import (
 
 func TestLoadDirectoryFromManifestFindsModuleRoot(t *testing.T) {
 	root := t.TempDir()
-	projectDir := filepath.Join(root, "projects", "game")
+	projectDir := filepath.Join(root, "apps", "game")
 	if err := os.MkdirAll(filepath.Join(projectDir, "resources", "scenes"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestLoadDirectoryFromManifestFindsModuleRoot(t *testing.T) {
 
 func TestLoadDirectoryWithRender2DProfile(t *testing.T) {
 	root := t.TempDir()
-	projectDir := filepath.Join(root, "projects", "game")
+	projectDir := filepath.Join(root, "apps", "game")
 	resourceDir := filepath.Join(projectDir, "resources")
 	sceneDir := filepath.Join(resourceDir, "scenes")
 	if err := os.MkdirAll(sceneDir, 0o755); err != nil {

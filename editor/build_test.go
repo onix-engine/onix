@@ -393,7 +393,7 @@ func TestAndroidCommandEnvironmentOverridesSDKAndJava(t *testing.T) {
 func TestProjectBuildLayoutUsesPlatformDirectoryUnderProjectDist(t *testing.T) {
 	root := t.TempDir()
 	writeBuildTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n")
-	projectDir := filepath.Join(root, "projects", "demo")
+	projectDir := filepath.Join(root, "apps", "demo")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -405,10 +405,10 @@ func TestProjectBuildLayoutUsesPlatformDirectoryUnderProjectDist(t *testing.T) {
 	if layout.BaseDir != want {
 		t.Fatalf("unexpected output directory: got %s want %s", layout.BaseDir, want)
 	}
-	if layout.ProjectRelPath != filepath.Join("projects", "demo") {
+	if layout.ProjectRelPath != filepath.Join("apps", "demo") {
 		t.Fatalf("project source path changed with output path: %s", layout.ProjectRelPath)
 	}
-	if layout.OutputRelPath != filepath.Join("projects", "demo", "dist", "macos") {
+	if layout.OutputRelPath != filepath.Join("apps", "demo", "dist", "macos") {
 		t.Fatalf("unexpected relative output directory: %s", layout.OutputRelPath)
 	}
 	if !strings.HasPrefix(layout.BaseDir, filepath.Join(projectDir, "dist")+string(filepath.Separator)) {
@@ -419,7 +419,7 @@ func TestProjectBuildLayoutUsesPlatformDirectoryUnderProjectDist(t *testing.T) {
 func TestProjectBuildLayoutResetOnlyRemovesPlatformDirectory(t *testing.T) {
 	root := t.TempDir()
 	writeBuildTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n")
-	projectDir := filepath.Join(root, "projects", "demo")
+	projectDir := filepath.Join(root, "apps", "demo")
 	layout, err := newProjectBuildLayout(root, projectDir, BuildPlatformWeb, "main")
 	if err != nil {
 		t.Fatal(err)

@@ -165,6 +165,7 @@ func setupShadowAtlas3D(view *renderView3D, settings [render.MaxMeshLights]extra
 				atlas.views[mapIndex] = shadow
 			}
 			shadow.frame = render.NewRenderView(extractedView3D{viewProjection: matrices[face]})
+			shadow.frustum = newFrustum3D(matrices[face])
 			shadow.frame.Target, shadow.frame.Viewport = atlas.target, viewport
 			shadow.frame.Mode = render.RenderViewLit
 			shadow.frame.Clear = render.RenderTargetClear{Color: render.Color{A: 1}, ClearColor: mapIndex == 0, ClearDepth: mapIndex == 0}

@@ -64,9 +64,9 @@ func main() {
 		fmt.Fprintln(&source, "if v.view.filters.count == 0 {\nfor row := 0; row < len(entities); row++ {\nentity := entities[row]")
 		writeYield(&source, letters, count, params, true)
 		fmt.Fprintln(&source, "}\ncontinue\n}")
-		source.WriteString("for row := 0; row < len(entities); row++ {\ncursor.row = row\nif row%queryTickBlockSize == 0 && !cursor.blockMatches() {\nrow = min(row+queryTickBlockSize, len(entities))-1\ncontinue\n}\nif !cursor.rowMatches() { continue }\nentity := entities[row]\n")
+		source.WriteString("for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {\nfor row := start; row < end; row++ {\ncursor.row = row\nif !cursor.rowMatches() { continue }\nentity := entities[row]\n")
 		writeYield(&source, letters, count, params, true)
-		fmt.Fprintln(&source, "}\n}\n}")
+		fmt.Fprintln(&source, "}\n}\n}\n}")
 	}
 	writeSource(*output, source.Bytes())
 	writeSpawners(*spawnOutput)
@@ -169,7 +169,7 @@ func writePatches(path string) {
 			fmt.Fprintf(&source, "registerComponent[%s](world),", letter)
 		}
 		fmt.Fprintf(&source, "}\nreturn %s[%s]{plan: newPatchPlan(world, ids[:], removed)}\n}\n", name, params)
-		fmt.Fprintf(&source, "\n// Reserve prepares existing source transitions and destination capacities.\nfunc (p %s[%s]) Reserve(capacity int) { p.plan.reserve(capacity) }\n", name, params)
+		fmt.Fprintf(&source, "\n// Reserve prepares populated or preallocated source tables and reserves their migration targets.\nfunc (p %s[%s]) Reserve(capacity int) { p.plan.reserve(capacity) }\n", name, params)
 		fmt.Fprintln(&source, "\n// Apply preserves Added for replacements and both ticks for retained values.")
 		fmt.Fprintln(&source, "// Cleanup hooks run before any writes; warmed transitions and capacities allocate nothing.")
 		fmt.Fprintf(&source, "func (p %s[%s]) Apply(entity Entity, %s) error {\nrow, err := p.plan.begin(entity)\nif err != nil { return err }\n", name, params, args)

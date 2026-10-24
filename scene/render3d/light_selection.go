@@ -22,6 +22,7 @@ type extractedLight3D struct {
 // spheres conservatively cull off-screen lights, including box/area extents.
 func selectViewLights3D(view *renderView3D, candidates []extractedLight3D, layers scene.RenderLayers, limit int) [render.MaxMeshLights]extractedShadowLight3D {
 	limit = min(max(limit, 1), render.MaxMeshLights)
+	view.frustum = newFrustum3D(view.frame.Camera.screenProjection)
 	var shadows [render.MaxMeshLights]extractedShadowLight3D
 	var selected [render.MaxMeshLights]int
 	var scores [render.MaxMeshLights]float64
@@ -78,7 +79,7 @@ func selectViewLights3D(view *renderView3D, candidates []extractedLight3D, layer
 			case render.Light3DTube:
 				radius += light.Right[3] * .5
 			}
-			if !sphereVisible3D(view.frame.Camera.screenProjection, center, radius) {
+			if !view.frustum.containsSphere(center, radius) {
 				continue
 			}
 			distance := center.Sub(view.frame.Camera.position).LenSqr()

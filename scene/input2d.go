@@ -58,8 +58,6 @@ type inputTracker2D struct {
 	hovered         ecs.Entity
 	hoveredReceiver ecs.Entity
 	hasActive       bool
-	cachedStructure uint64
-	cacheValid      bool
 }
 
 // RemapInputEntity2D preserves pointer tracking when a retained UI
@@ -109,10 +107,11 @@ type inputPickTarget2D struct {
 	entity    ecs.Entity
 	sequence  uint32
 	sortIndex int
+	group     uint64
 	depth     float32
 	width     float32
 	height    float32
-	matrix    mgl32.Mat4
+	inverse   mgl32.Mat4
 	anchor    Anchor
 	layers    RenderLayers
 	target    ecs.Entity
@@ -145,7 +144,7 @@ type inputCaptureLookup2D struct {
 }
 
 func (c *inputCaptureLookup2D) consider(target *inputPickTarget2D) {
-	if c == nil || !c.cameraFound || target.entity != c.entity || !inputTargetVisibleInCamera(*target, c.camera, c.defaultUICamera) {
+	if c == nil || !c.cameraFound || target.entity != c.entity || !inputTargetVisibleInCamera(target, c.camera, c.defaultUICamera) {
 		return
 	}
 	if !c.targetFound || compareInputPickTarget2D(*target, c.target) < 0 {
@@ -181,6 +180,9 @@ func compareInputPickTarget2D(a, b inputPickTarget2D) int {
 			return 1
 		}
 		return -1
+	}
+	if a.group != b.group {
+		return cmp.Compare(a.group, b.group)
 	}
 	if a.sortIndex != b.sortIndex {
 		return cmp.Compare(a.sortIndex, b.sortIndex)
@@ -234,15 +236,13 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 	}
 	pointer := inputState.Pointer()
 	pointerActive := pointer.Pressed || pointer.Released || pointer.DeltaX != 0 || pointer.DeltaY != 0 || pointer.WheelX != 0 || pointer.WheelY != 0
-	if tracker.cacheValid && !pointerActive && tracker.cachedStructure == world.StructureVersion() && !inputPickSceneChanged(context) {
+	cache := ecs.ScopeValue[inputPickCache2D, inputPickCache2D](world)
+	changed := cache.refresh(world, tracker.active, tracker.activeCamera)
+	if !changed && !pointerActive {
 		return nil
 	}
-
-	lookup := inputCaptureLookup2D{entity: tracker.active, cameraEntity: tracker.activeCamera}
-	cameras, defaultUICamera := collectInputCameras2D(world, &lookup)
-	targets := collectInputTargets2D(world, &lookup)
-	tracker.cachedStructure = world.StructureVersion()
-	tracker.cacheValid = true
+	cameras, targets, defaultUICamera := cache.cameras, cache.targets, cache.defaultUICamera
+	lookup := cache.lookup
 	hovered, hoverX, hoverY, hoverPicked := pickInputTarget2D(cameras, defaultUICamera, targets, pointer.X, pointer.Y)
 	updateInputHover2D(world, tracker, pointer.Device, hovered, hoverX, hoverY, hoverPicked)
 	if hoverPicked && (pointer.WheelX != 0 || pointer.WheelY != 0) {
@@ -304,45 +304,6 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 		capture.Camera = 0
 	}
 	return nil
-}
-
-func inputPickSceneChanged(context *ecs.SystemContext) bool {
-	if context == nil || context.World == nil {
-		return true
-	}
-	world := context.World
-	return changedInputComponent[Camera](world, context) ||
-		changedInputComponent[Projection](world, context) ||
-		changedInputComponent[Camera2D](world, context) ||
-		cameraPipelineInputsChanged(context) ||
-		changedInputComponent[GlobalTransform](world, context) ||
-		changedInputComponent[UIGlobalTransform](world, context) ||
-		changedInputComponent[InputTarget2D](world, context) ||
-		changedInputComponent[InputBlocker2D](world, context) ||
-		changedInputComponent[Visibility](world, context) ||
-		changedInputComponent[Parent](world, context) ||
-		changedInputComponent[RenderLayers](world, context) ||
-		changedInputComponent[UITargetCamera](world, context) ||
-		changedInputComponent[UIStackIndex](world, context) ||
-		changedInputComponent[RenderOrder2D](world, context) ||
-		changedInputComponent[SiblingOrder](world, context) ||
-		changedInputComponent[UITransform](world, context) ||
-		changedInputComponent[Size2D](world, context) ||
-		changedInputComponent[Anchor](world, context) ||
-		changedInputComponent[ClipRect2D](world, context) ||
-		changedInputComponent[RoundedClip2D](world, context) ||
-		changedInputComponent[ClipExempt2D](world, context) ||
-		changedInputComponent[Sprite2D](world, context) ||
-		changedInputComponent[Text2D](world, context)
-}
-
-func changedInputComponent[T any](world *ecs.World, context *ecs.SystemContext) bool {
-	changed := false
-	for range ecs.Query[T](world, ecs.Changed[T](context)).All {
-		changed = true
-		break
-	}
-	return changed
 }
 
 func updateInputHover2D(world *ecs.World, tracker *inputTracker2D, device input.PointerDevice, target inputPickTarget2D, x, y float32, picked bool) {
@@ -479,6 +440,14 @@ func inputEventPath2D(world *ecs.World, entity ecs.Entity) []ecs.Entity {
 
 func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
 	scratch := ecs.FrameScratch[inputCameras2DScratch, inputCamera2D](world)
+	var captureDefaultCamera ecs.Entity
+	scratch.Values, captureDefaultCamera = collectInputCamerasInto2D(world, scratch.Values, capture)
+	scratch.ReleaseUnused()
+	return scratch.Values, captureDefaultCamera
+}
+
+func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
+	cameras = cameras[:0]
 	state, _ := ecs.GetResource[*RenderWorld](world)
 	var defaultCamera inputCamera2D
 	var fallback inputCamera2D
@@ -508,7 +477,7 @@ func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]i
 			fallback = candidate
 			continue
 		}
-		scratch.Values = append(scratch.Values, candidate)
+		cameras = append(cameras, candidate)
 		if pipeline == CameraPipeline2D && (defaultCamera.entity == 0 || compareInputCamera2D(candidate, defaultCamera) < 0) {
 			defaultCamera = candidate
 		}
@@ -518,30 +487,33 @@ func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]i
 	}
 	if defaultCamera.entity == 0 && fallback.entity != 0 {
 		defaultCamera = fallback
-		scratch.Values = append(scratch.Values, fallback)
+		cameras = append(cameras, fallback)
 		if capture != nil && capture.cameraEntity == fallback.entity {
 			capture.camera, capture.cameraFound = fallback, true
 		}
 	}
-	smallsort.InsertionSortFunc(scratch.Values, compareInputCamera2D)
+	smallsort.InsertionSortFunc(cameras, compareInputCamera2D)
 	if capture != nil {
 		capture.defaultUICamera = defaultCamera.entity
 	}
-	scratch.ReleaseUnused()
-	return scratch.Values, defaultCamera.entity
+	return cameras, defaultCamera.entity
 }
 
 func collectInputTargets2D(world *ecs.World, capture *inputCaptureLookup2D) []inputPickTarget2D {
 	scratch := ecs.FrameScratch[inputTargets2DScratch, inputPickTarget2D](world)
-	hierarchy := frameRenderHierarchy2DCache(world)
-	targets := scratch.Reserve(world.EntityCount())
-	targets = collectInputTargetsWithTransform2D[GlobalTransform](world, &hierarchy, targets, false, capture)
-	targets = collectInputTargetsWithTransform2D[UIGlobalTransform](world, &hierarchy, targets, true, capture)
-	targets = collectInputBlockersWithTransform2D[GlobalTransform](world, &hierarchy, targets, false, capture)
-	targets = collectInputBlockersWithTransform2D[UIGlobalTransform](world, &hierarchy, targets, true, capture)
-	slices.SortFunc(targets, compareInputPickTarget2D)
-	scratch.Values = targets
+	scratch.Values = collectInputTargetsInto2D(world, scratch.Reserve(world.EntityCount()), capture)
 	scratch.ReleaseUnused()
+	return scratch.Values
+}
+
+func collectInputTargetsInto2D(world *ecs.World, targets []inputPickTarget2D, capture *inputCaptureLookup2D) []inputPickTarget2D {
+	targets = targets[:0]
+	hierarchy := frameRenderHierarchy2DCachePtr(world)
+	targets = collectInputTargetsWithTransform2D[GlobalTransform](world, hierarchy, targets, false, capture)
+	targets = collectInputTargetsWithTransform2D[UIGlobalTransform](world, hierarchy, targets, true, capture)
+	targets = collectInputBlockersWithTransform2D[GlobalTransform](world, hierarchy, targets, false, capture)
+	targets = collectInputBlockersWithTransform2D[UIGlobalTransform](world, hierarchy, targets, true, capture)
+	slices.SortFunc(targets, compareInputPickTarget2D)
 	return targets
 }
 
@@ -571,18 +543,18 @@ func collectInputTargetsWithTransform2D[T renderGlobalTransform2D](world *ecs.Wo
 		targets = append(targets, inputPickTarget2D{
 			entity:    entity,
 			sequence:  uint32(len(targets)),
-			sortIndex: info.sortIndex,
-			depth:     transformMatrix[14],
-			width:     width,
-			height:    height,
-			matrix:    transformMatrix,
-			anchor:    anchorForEntity2D(world, entity),
-			layers:    info.layers,
-			target:    info.target,
-			clip:      (*transform).renderClip2D(),
-			ui:        ui,
-			receiver:  receiver,
+			sortIndex: info.sortIndex, group: info.group,
+			depth:    transformMatrix[14],
+			width:    width,
+			height:   height,
+			anchor:   anchorForEntity2D(world, entity),
+			layers:   info.layers,
+			target:   info.target,
+			clip:     (*transform).renderClip2D(),
+			ui:       ui,
+			receiver: receiver,
 		})
+		targets[len(targets)-1].prepare(transformMatrix)
 		if capture != nil && entity == capture.entity {
 			capture.consider(&targets[len(targets)-1])
 		}
@@ -607,10 +579,11 @@ func collectInputBlockersWithTransform2D[T renderGlobalTransform2D](world *ecs.W
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		receiver := blocker.Receiver
 		targets = append(targets, inputPickTarget2D{
-			entity: entity, sequence: uint32(len(targets)), sortIndex: info.sortIndex, depth: transformMatrix[14], width: width, height: height,
-			matrix: transformMatrix, anchor: anchorForEntity2D(world, entity), layers: info.layers, target: info.target, clip: (*transform).renderClip2D(), ui: ui,
+			entity: entity, sequence: uint32(len(targets)), sortIndex: info.sortIndex, group: info.group, depth: transformMatrix[14], width: width, height: height,
+			anchor: anchorForEntity2D(world, entity), layers: info.layers, target: info.target, clip: (*transform).renderClip2D(), ui: ui,
 			blocked: receiver == 0, receiver: receiver,
 		})
+		targets[len(targets)-1].prepare(transformMatrix)
 		if capture != nil && entity == capture.entity {
 			capture.consider(&targets[len(targets)-1])
 		}
@@ -627,7 +600,7 @@ func pickInputTarget2D(cameras []inputCamera2D, defaultUICamera ecs.Entity, targ
 		var worldX, worldY float32
 		worldCoordsReady, worldCoordsValid := false, false
 		for targetIndex := len(targets) - 1; targetIndex >= 0; targetIndex-- {
-			target := targets[targetIndex]
+			target := &targets[targetIndex]
 			if !inputTargetVisibleInCamera(target, camera, defaultUICamera) {
 				continue
 			}
@@ -648,8 +621,9 @@ func pickInputTarget2D(cameras []inputCamera2D, defaultUICamera ecs.Entity, targ
 			if target.blocked {
 				return inputPickTarget2D{}, 0, 0, false
 			}
-			target.camera = camera.entity
-			return target, x, y, true
+			picked := *target
+			picked.camera = camera.entity
+			return picked, x, y, true
 		}
 	}
 	return inputPickTarget2D{}, 0, 0, false
@@ -667,18 +641,20 @@ func targetByEntity2D(cameras []inputCamera2D, defaultUICamera ecs.Entity, targe
 	if !foundCamera {
 		return inputPickTarget2D{}, 0, 0, false
 	}
-	for _, target := range targets {
+	for i := range targets {
+		target := &targets[i]
 		if target.entity != entity || !inputTargetVisibleInCamera(target, camera, defaultUICamera) {
 			continue
 		}
 		x, y, inViewport := inputCoordsForCamera2D(camera, target.ui, screenX, screenY)
-		target.camera = camera.entity
-		return target, x, y, inViewport
+		picked := *target
+		picked.camera = camera.entity
+		return picked, x, y, inViewport
 	}
 	return inputPickTarget2D{}, 0, 0, false
 }
 
-func inputTargetVisibleInCamera(target inputPickTarget2D, camera inputCamera2D, defaultUICamera ecs.Entity) bool {
+func inputTargetVisibleInCamera(target *inputPickTarget2D, camera inputCamera2D, defaultUICamera ecs.Entity) bool {
 	if !camera.layers.Intersects(target.layers) {
 		return false
 	}
@@ -707,16 +683,23 @@ func inputCoordsForCamera2D(camera inputCamera2D, ui bool, screenX, screenY floa
 	return worldPoint.X(), worldPoint.Y(), true
 }
 
-func inputTargetContains2D(target inputPickTarget2D, x, y float32) bool {
+// Prepare geometry once per scene change, instead of inverting every candidate
+// for every pointer event. Keep the exact 4D test, including boundary rounding.
+func (target *inputPickTarget2D) prepare(matrix mgl32.Mat4) {
+	base := quadBaseTransform(matrix, target.anchor, target.width, target.height, target.ui)
+	model := base.Mul4(mgl32.Scale3D(target.width, target.height, 1))
+	if math.Abs(float64(model.Det())) <= 1e-8 {
+		target.inverse = mgl32.Mat4{}
+		return
+	}
+	target.inverse = model.Inv()
+}
+
+func inputTargetContains2D(target *inputPickTarget2D, x, y float32) bool {
 	if target.clip.valid && (x < target.clip.minX || x > target.clip.maxX || y < target.clip.minY || y > target.clip.maxY) {
 		return false
 	}
-	base := quadBaseTransform(target.matrix, target.anchor, target.width, target.height, target.ui)
-	model := base.Mul4(mgl32.Scale3D(target.width, target.height, 1))
-	if math.Abs(float64(model.Det())) <= 1e-8 {
-		return false
-	}
-	local := model.Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
+	local := target.inverse.Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	if local.W() == 0 {
 		return false
 	}

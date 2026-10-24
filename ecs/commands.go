@@ -21,15 +21,40 @@ type commandStream interface {
 	truncate(int)
 	retain(int)
 	trimRetained()
+	setStreamID(uint32)
 }
 
 type commandValues[T any] struct {
 	values   []T
 	retained int
+	streamID uint32
 }
 
 type typedInsertCommandStream[T any] struct {
 	commandValues[T]
+}
+
+type commandValue interface {
+	apply(*World, Entity) error
+}
+
+type valueCommandStream[T commandValue] struct {
+	commandValues[T]
+}
+
+func (s *valueCommandStream[T]) apply(world *World, entity Entity, index int) error {
+	return s.values[index].apply(world, entity)
+}
+
+func queueCommandValue[T commandValue](commands *Commands, entity Entity, value T) {
+	stream := commandStreamFor(commands, func() *valueCommandStream[T] { return &valueCommandStream[T]{} })
+	stream.queue(commands, entity, value)
+}
+
+func (s *valueCommandStream[T]) queue(commands *Commands, entity Entity, value T) {
+	index := len(s.values)
+	s.values = append(s.values, value)
+	commands.queue = append(commands.queue, queuedCommand{kind: commandInsert, entity: entity, data: s.streamID, valueIndex: index})
 }
 
 func (s *typedInsertCommandStream[T]) apply(world *World, entity Entity, index int) error {
@@ -43,6 +68,8 @@ func (s *typedInsertCommandStream[T]) apply(world *World, entity Entity, index i
 func (s *commandValues[T]) retain(length int) {
 	s.retained = max(s.retained, length)
 }
+
+func (s *commandValues[T]) setStreamID(id uint32) { s.streamID = id }
 
 func (s *commandValues[T]) trimRetained() {
 	s.truncate(s.retained)
@@ -58,13 +85,12 @@ func (s *commandValues[T]) truncate(length int) {
 }
 
 type queuedCommand struct {
-	kind       commandKind
 	entity     Entity
-	stream     commandStream
 	valueIndex int
-	spawnStart int
-	spawnEnd   int
-	removal    *removalPlan
+	// data is a stream ID, or the component count for commandSpawn. Keeping
+	// references in the shared stream list makes the queue pointer-free.
+	data uint32
+	kind commandKind
 }
 
 type Commands struct {
@@ -72,6 +98,8 @@ type Commands struct {
 	queue        []queuedCommand
 	spawnEntries []preparedBundleEntry
 	streams      map[reflect.Type]commandStream
+	streamList   []commandStream
+	removals     []*removalPlan
 }
 
 func (c *Commands) checkpoint() int {
@@ -114,19 +142,24 @@ func (c *Commands) trimStorage() {
 		panic("ecs: commands is nil")
 	}
 	spawnLength := 0
+	removalLength := 0
 	for _, queued := range c.queue {
 		switch queued.kind {
 		case commandInsert:
-			queued.stream.retain(queued.valueIndex + 1)
+			c.streamList[queued.data].retain(queued.valueIndex + 1)
 		case commandSpawn:
-			spawnLength = max(spawnLength, queued.spawnEnd)
+			spawnLength = max(spawnLength, queued.valueIndex+int(queued.data))
+		case commandRemovePrepared:
+			removalLength = max(removalLength, queued.valueIndex+1)
 		}
 	}
-	for _, stream := range c.streams {
+	for _, stream := range c.streamList {
 		stream.trimRetained()
 	}
 	clear(c.spawnEntries[spawnLength:])
 	c.spawnEntries = c.spawnEntries[:spawnLength]
+	clear(c.removals[removalLength:])
+	c.removals = c.removals[:removalLength]
 }
 
 func (w *World) Commands() *Commands {
@@ -144,7 +177,7 @@ func CommandInsert[T any](commands *Commands, entity Entity, value T) {
 	commands.queue = append(commands.queue, queuedCommand{
 		kind:       commandInsert,
 		entity:     entity,
-		stream:     stream,
+		data:       stream.streamID,
 		valueIndex: index,
 	})
 }
@@ -153,10 +186,11 @@ func CommandRemove[T any](commands *Commands, entity Entity) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
+	stream := insertCommandStreamFor[T](commands)
 	commands.queue = append(commands.queue, queuedCommand{
 		kind:   commandRemove,
 		entity: entity,
-		stream: insertCommandStreamFor[T](commands),
+		data:   stream.streamID,
 	})
 }
 
@@ -169,9 +203,9 @@ func CommandRemovePrepared(commands *Commands, entity Entity, removal PreparedRe
 	if plan.world != commands.world {
 		panic("ecs: prepared removal belongs to a different world")
 	}
-	commands.queue = append(commands.queue, queuedCommand{
-		kind: commandRemovePrepared, entity: entity, removal: plan,
-	})
+	index := len(commands.removals)
+	commands.removals = append(commands.removals, plan)
+	commands.queue = append(commands.queue, queuedCommand{kind: commandRemovePrepared, entity: entity, valueIndex: index})
 }
 
 func CommandDespawn(commands *Commands, entity Entity) {
@@ -199,12 +233,15 @@ func CommandSpawn(commands *Commands, bundle Bundle) Entity {
 	commands.spawnEntries = slices.Grow(commands.spawnEntries, len(bundle.entries))
 	commands.spawnEntries = commands.spawnEntries[:start+len(bundle.entries)]
 	entries := commands.world.prepareBundle(bundle, commands.spawnEntries[start:])
+	if uint64(len(entries)) > uint64(^uint32(0)) {
+		panic("ecs: command spawn component capacity exhausted")
+	}
 	entity := commands.world.reserveEntity()
 	commands.queue = append(commands.queue, queuedCommand{
 		kind:       commandSpawn,
 		entity:     entity,
-		spawnStart: start,
-		spawnEnd:   start + len(entries),
+		valueIndex: start,
+		data:       uint32(len(entries)),
 	})
 	return entity
 }
@@ -221,6 +258,9 @@ func CommandSpawnPrepared(commands *Commands, bundle PreparedBundle) Entity {
 	if bundle.world != commands.world {
 		panic("ecs: prepared bundle belongs to a different world")
 	}
+	if uint64(len(bundle.entries)) > uint64(^uint32(0)) {
+		panic("ecs: command spawn component capacity exhausted")
+	}
 	start := len(commands.spawnEntries)
 	defer func() {
 		if value := recover(); value != nil {
@@ -234,8 +274,8 @@ func CommandSpawnPrepared(commands *Commands, bundle PreparedBundle) Entity {
 	commands.queue = append(commands.queue, queuedCommand{
 		kind:       commandSpawn,
 		entity:     entity,
-		spawnStart: start,
-		spawnEnd:   len(commands.spawnEntries),
+		valueIndex: start,
+		data:       uint32(len(bundle.entries)),
 	})
 	return entity
 }
@@ -253,6 +293,11 @@ func commandStreamFor[S commandStream](commands *Commands, create func() S) S {
 		return stream.(S)
 	}
 	stream := create()
+	if uint64(len(commands.streamList)) > uint64(^uint32(0)) {
+		panic("ecs: command stream capacity exhausted")
+	}
+	stream.setStreamID(uint32(len(commands.streamList)))
+	commands.streamList = append(commands.streamList, stream)
 	commands.streams[typ] = stream
 	return stream
 }
@@ -260,17 +305,17 @@ func commandStreamFor[S commandStream](commands *Commands, create func() S) S {
 func (c queuedCommand) apply(world *World, spawnEntries []preparedBundleEntry) error {
 	switch c.kind {
 	case commandInsert:
-		return c.stream.apply(world, c.entity, c.valueIndex)
+		return world.commands.streamList[c.data].apply(world, c.entity, c.valueIndex)
 	case commandRemove:
-		return c.stream.apply(world, c.entity, -1)
+		return world.commands.streamList[c.data].apply(world, c.entity, -1)
 	case commandDespawn:
 		world.Despawn(c.entity)
 		return nil
 	case commandSpawn:
-		world.spawnReserved(c.entity, spawnEntries[c.spawnStart:c.spawnEnd], world.mutationTick())
+		world.spawnReserved(c.entity, spawnEntries[c.valueIndex:c.valueIndex+int(c.data)], world.mutationTick())
 		return nil
 	case commandRemovePrepared:
-		PreparedRemoval{plan: c.removal}.Apply(c.entity)
+		PreparedRemoval{plan: world.commands.removals[c.valueIndex]}.Apply(c.entity)
 		return nil
 	default:
 		panic("ecs: unknown command kind")
@@ -314,9 +359,11 @@ func (c *Commands) resetStorage() {
 	if c == nil {
 		panic("ecs: commands is nil")
 	}
-	for _, stream := range c.streams {
+	for _, stream := range c.streamList {
 		stream.truncate(0)
 	}
 	clear(c.spawnEntries)
 	c.spawnEntries = c.spawnEntries[:0]
+	clear(c.removals)
+	c.removals = c.removals[:0]
 }

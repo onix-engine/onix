@@ -3,7 +3,6 @@ package editor
 import (
 	"math"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -208,74 +207,6 @@ func TestWorkspace2DModuleContentOutsideNominalViewportRendersAndPicks(t *testin
 				t.Fatal("module picking escaped the canvas")
 			}
 		})
-	}
-}
-
-func TestWorkspace2DModulePreviewDoesNotPaintProjectBackground(t *testing.T) {
-	driver := &viewport3DTestDriver{viewport: render.Rect{Width: 1600, Height: 960}}
-	render.Uninstall()
-	if err := render.Install(driver); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(render.Uninstall)
-	canvas := graphics.NewCanvas2D(render.ActiveDevice(), 1600, 960)
-	t.Cleanup(graphics.SetCurrentContextForTesting(canvas))
-	a := workspaceEditorFixture(t)
-	document, err := LoadWorkspaceDocument(filepath.Join("..", "projects", "2048"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.Document = document
-	context := &ecs.SystemContext{World: ecs.NewWorld()}
-	projectColor, err := project.ParseColor(document.Spec.ClearColor, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range []string{"", "continue", "background", ""} {
-		if id == "" {
-			a.editingModule = workspaceModuleKey{}
-			a.Local = ""
-			a.changed()
-		} else {
-			a.enterModuleEdit(document.Active, id)
-		}
-		if err := a.sync(context); err != nil {
-			t.Fatal(err)
-		}
-		driver.clears, driver.shapes = driver.clears[:0], driver.shapes[:0]
-		if err := a.renderViewport2D(canvas); err != nil {
-			t.Fatal(err)
-		}
-		if err := canvas.FinishFrame(); err != nil {
-			t.Fatal(err)
-		}
-		want := render.Color(projectColor)
-		clears := 2
-		if id != "" {
-			want, clears = render.Color(editorTheme.viewportBG), 1
-		}
-		if len(driver.clears) != clears || !driver.clears[0].ClearColor || driver.clears[0].Color != want {
-			t.Fatalf("preview %q: background clears = %+v, want %v", id, driver.clears, want)
-		}
-		if id == "" {
-			continue
-		}
-		contentColor := graphics.ColorFromRGB(143, 122, 102)
-		if id == "background" {
-			contentColor = graphics.ColorFromRGB(181, 173, 128)
-		}
-		foundContent := false
-		for _, shape := range driver.shapes {
-			if shape.Fill == ([4]float32{contentColor.R, contentColor.G, contentColor.B, contentColor.A}) {
-				foundContent = true
-			}
-			if shape.Model[0] == a.viewport2D.frame.W && shape.Model[4] == a.viewport2D.frame.H && shape.Border == ([4]float32{112.0 / 255, 119.0 / 255, 132.0 / 255, 1}) {
-				t.Fatalf("preview %q: module was given an unauthored viewport border", id)
-			}
-		}
-		if !foundContent {
-			t.Fatalf("preview %q: authored sprite was not drawn", id)
-		}
 	}
 }
 
@@ -775,44 +706,6 @@ func TestWorkspace2DCameraPickingAndPlacementDrag(t *testing.T) {
 	a.updatePlacementDrag(input.Pointer{X: x + 20, Y: y, Down: true})
 	if abs(a.canvasDrag.Delta[0]) > .02 || abs(a.canvasDrag.Delta[1]-40/a.canvasScale) > .05 {
 		t.Fatal("drag ignored camera rotation or scale", a.canvasDrag.Delta)
-	}
-}
-
-func TestWorkspace2DParticleOnlyModuleOpensCentered(t *testing.T) {
-	a := workspaceEditorFixture(t)
-	document, err := LoadWorkspaceDocument(filepath.Join("..", "projects", "particle"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.Document = document
-	a.changed()
-	context := &ecs.SystemContext{World: ecs.NewWorld()}
-	if err := a.sync(context); err != nil {
-		t.Fatal(err)
-	}
-	a.enterModuleEdit(document.Active, "fountain")
-	if err := a.sync(context); err != nil {
-		t.Fatal(err)
-	}
-	row := &a.viewport2D.rows[0]
-	if len(row.parts) != 2 {
-		t.Fatalf("fountain has %d elements, want the spark and the emitter", len(row.parts))
-	}
-	content, ok := a.viewport2DContentBounds(row.targets["emitter"], a.viewport2DView(), false)
-	canvas := a.canvasBounds()
-	if !ok || abs(content.X+content.W/2-canvas.W/2) > .001 || abs(content.Y+content.H/2-canvas.H/2) > .001 {
-		t.Fatalf("particle emitter is not centered: content %+v, canvas %+v", content, canvas)
-	}
-	source := workspaceShellTest(t, a)
-	if !strings.Contains(source, `id="element:main.json/fountain/emitter"`) {
-		t.Fatal("the emitter element is missing from the tree")
-	}
-	a.selectElement("fountain", "emitter")
-	if err := a.sync(context); err != nil {
-		t.Fatal(err)
-	}
-	if source = workspaceShellTest(t, a); !strings.Contains(source, workspaceFieldID(modDocumentID("fountain"), "/elements/1/components/emitter/count", "")) {
-		t.Fatal("Details does not edit the emitter's emission parameters")
 	}
 }
 

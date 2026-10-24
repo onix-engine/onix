@@ -1,0 +1,11 @@
+{
+  "entry": "main.json",
+  "scenes": ["main.json"],
+  "clearColor": "#20242b",
+  "window": {"width":1000,"height":760,"title":"Onix Spine","vsync":true,"fps":60,"tps":60},
+  "viewport": {"width":1000,"height":760},
+  "types": {
+    "AnimationOption": {"fields":{"index":"int","label":"string"}},
+    "GallerySelection": {"fields":{"resource":"int","animation":"int","count":"int"}}
+  }
+}

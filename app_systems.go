@@ -486,7 +486,15 @@ func (app *App) ensureUIRuntime() error {
 		return err
 	}
 	if err := app.AddSystem(StagePostUpdate, ecs.SystemConfig{
-		Name: "sync_ui_global_transform", After: []string{"sync_ui"}, System: scene.SyncUIGlobalTransformSystem("").System,
+		Name: "sync_ui_global_transform", After: []string{"sync_ui"},
+		System: func(context *ecs.SystemContext) error {
+			// UI reconciliation can create descendants after the stage's scope
+			// snapshot. Include them before transforms and scroll offsets sync.
+			if app.moduleRuntime != nil {
+				app.moduleRuntime.SyncScopes()
+			}
+			return scene.SyncUIGlobalTransformSystem("").System(context)
+		},
 	}); err != nil {
 		return err
 	}

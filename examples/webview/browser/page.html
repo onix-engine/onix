@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onix WebView</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #111827; color: #e5e7eb; }
+    main { box-sizing: border-box; padding: 32px; }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    p { color: #9ca3af; line-height: 1.5; }
+    button { border: 0; border-radius: 6px; padding: 10px 16px; background: #14b8a6; color: #042f2e; font-weight: 700; cursor: pointer; }
+    pre { min-height: 72px; padding: 14px; border-radius: 6px; background: #1f2937; color: #a7f3d0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Onix WebView</h1>
+    <p>This page is rendered by the platform browser and calls Go through the ECS bridge.</p>
+    <button id="ping" type="button">Call Go</button>
+    <pre id="result">Waiting for a Go response...</pre>
+  </main>
+  <script>
+    document.getElementById("ping").addEventListener("click", async function () {
+      const result = await onix.invoke("ping", JSON.stringify({ source: "browser" }));
+      document.getElementById("result").textContent = result;
+    });
+  </script>
+</body>
+</html>

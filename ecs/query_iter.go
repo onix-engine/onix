@@ -62,18 +62,16 @@ func (v QueryView1[A]) All(yield func(Entity, ComponentAccess[A]) bool) {
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
+					return
+				}
 			}
 		}
 	}
@@ -155,21 +153,19 @@ func (v QueryView2[A, B]) All(yield func(Entity, Components2[A, B]) bool) {
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components2[A, B]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components2[A, B]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}
@@ -258,22 +254,20 @@ func (v QueryView3[A, B, C]) All(yield func(Entity, Components3[A, B, C]) bool) 
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components3[A, B, C]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components3[A, B, C]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}
@@ -369,23 +363,21 @@ func (v QueryView4[A, B, C, D]) All(yield func(Entity, Components4[A, B, C, D]) 
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components4[A, B, C, D]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components4[A, B, C, D]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}
@@ -488,24 +480,22 @@ func (v QueryView5[A, B, C, D, E]) All(yield func(Entity, Components5[A, B, C, D
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components5[A, B, C, D, E]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components5[A, B, C, D, E]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}
@@ -615,25 +605,23 @@ func (v QueryView6[A, B, C, D, E, F]) All(yield func(Entity, Components6[A, B, C
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components6[A, B, C, D, E, F]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-				F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components6[A, B, C, D, E, F]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}
@@ -750,26 +738,24 @@ func (v QueryView7[A, B, C, D, E, F, G]) All(yield func(Entity, Components7[A, B
 			}
 			continue
 		}
-		for row := 0; row < len(entities); row++ {
-			cursor.row = row
-			if row%queryTickBlockSize == 0 && !cursor.blockMatches() {
-				row = min(row+queryTickBlockSize, len(entities)) - 1
-				continue
-			}
-			if !cursor.rowMatches() {
-				continue
-			}
-			entity := entities[row]
-			if !yield(entity, Components7[A, B, C, D, E, F, G]{
-				A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-				F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-				G: ComponentAccess[G]{value: &gValues[row], state: &g.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
+		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+			for row := start; row < end; row++ {
+				cursor.row = row
+				if !cursor.rowMatches() {
+					continue
+				}
+				entity := entities[row]
+				if !yield(entity, Components7[A, B, C, D, E, F, G]{
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
+					G: ComponentAccess[G]{value: &gValues[row], state: &g.columnState, rowTick: tickBits | uint64(uint32(row))},
+				}) {
+					return
+				}
 			}
 		}
 	}

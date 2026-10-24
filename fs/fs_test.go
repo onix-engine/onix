@@ -224,7 +224,7 @@ func TestNewRejectsFileAsRoot(t *testing.T) {
 func TestFindResourcesRootFromPrefersNearestResourcesDirectory(t *testing.T) {
 	base := t.TempDir()
 	rootResources := filepath.Join(base, "resources")
-	projectDir := filepath.Join(base, "projects", "hello")
+	projectDir := filepath.Join(base, "apps", "hello")
 	projectResources := filepath.Join(projectDir, "resources")
 	for _, dir := range []string{rootResources, projectResources} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {

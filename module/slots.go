@@ -226,7 +226,7 @@ func (r *Runtime) slotBuffer(shape project.SlotValue) *slotBuffer {
 	}
 	buffer := &slotBuffer{shape: cloneValue(shape)}
 	for i := range 2 {
-		buffer.values[i] = make([]project.SlotValue, r.options.EventCapacity)
+		buffer.values[i] = make([]project.SlotValue, r.options.PayloadCapacity)
 		for j := range buffer.values[i] {
 			buffer.values[i][j] = cloneValue(shape)
 		}
@@ -268,13 +268,10 @@ func (w SlotWriter) Write(value project.SlotValue) error {
 		return ErrQueueFull
 	}
 	buffer := r.buffer()
-	if w.buffer.values[buffer] == nil {
-		w.buffer.values[buffer] = make([]project.SlotValue, r.options.EventCapacity)
-		for i := range w.buffer.values[buffer] {
-			w.buffer.values[buffer][i] = cloneValue(w.buffer.shape)
-		}
-	}
 	index := w.buffer.lengths[buffer]
+	if index == len(w.buffer.values[buffer]) {
+		w.buffer.values[buffer] = append(w.buffer.values[buffer], cloneValue(w.buffer.shape))
+	}
 	copyValue(&w.buffer.values[buffer][index], value)
 	if index == 0 {
 		r.usedSlots[buffer] = append(r.usedSlots[buffer], w.buffer)

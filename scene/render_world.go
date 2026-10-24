@@ -45,9 +45,9 @@ type CameraRenderOptions struct {
 type CameraRenderer func(*graphics.Canvas2D, *ecs.World, ExtractedCamera) error
 
 type cameraSettingsReader struct {
-	typ     reflect.Type
-	read    func(*ecs.World, ecs.Entity) (CameraRenderOptions, bool)
-	changed func(*ecs.SystemContext) bool
+	typ      reflect.Type
+	read     func(*ecs.World, ecs.Entity) (CameraRenderOptions, bool)
+	revision func(*ecs.World) uint64
 }
 
 type RenderWorld struct {
@@ -94,7 +94,11 @@ func NewRenderWorld() *RenderWorld {
 	return &RenderWorld{registeredMaterials2D: make(map[reflect.Type]struct{})}
 }
 
-type material2DReader func(*ecs.World, ecs.Entity) (graphics.Material2DData, bool)
+type material2DReader struct {
+	read      func(*ecs.World, ecs.Entity) (graphics.Material2DData, bool)
+	structure func(*ecs.World) uint64
+	poll      func(*ecs.World, *retainedRender2D)
+}
 
 // RegisterMaterial2D enables extraction of MeshMaterial2D[T] components. It
 // mirrors Bevy's Material2dPlugin<T> registration boundary.
@@ -106,20 +110,34 @@ func RegisterMaterial2D[T graphics.Material2D](world *ecs.World) {
 	}
 	state.registeredMaterials2D[typ] = struct{}{}
 	state.registry2D++
-	state.materials2D = append(state.materials2D, func(world *ecs.World, entity ecs.Entity) (graphics.Material2DData, bool) {
+	state.materials2D = append(state.materials2D, material2DReader{read: func(world *ecs.World, entity ecs.Entity) (graphics.Material2DData, bool) {
 		component, ok := ecs.Get[MeshMaterial2D[T]](world, entity)
 		if !ok || component.Material == nil {
 			return graphics.Material2DData{}, false
 		}
 		return (*component.Material).Material2D(), true
-	})
+	}, structure: ecs.ComponentStructureVersion[MeshMaterial2D[T]], poll: func(world *ecs.World, cache *retainedRender2D) {
+		// Material pointers may be edited without replacing their ECS component.
+		// Inspect only entities using this type, preserving the static scene cache.
+		for entity := range ecs.Query[MeshMaterial2D[T]](world).All {
+			if node := cache.nodes[entity]; node != nil && !node.queued {
+				material := material2DForEntity(world, entity)
+				for position := range node.positions {
+					if cache.items[position].material2D != material {
+						cache.mark(entity)
+						break
+					}
+				}
+			}
+		}
+	}})
 }
 
 func material2DForEntity(world *ecs.World, entity ecs.Entity) graphics.Material2DData {
 	var result graphics.Material2DData
 	readers := renderWorld(world).materials2D
 	for index := len(readers) - 1; index >= 0; index-- {
-		if material, ok := readers[index](world, entity); ok {
+		if material, ok := readers[index].read(world, entity); ok {
 			result = material
 			break
 		}
@@ -250,20 +268,6 @@ func cameraSettingsForEntity(state *RenderWorld, world *ecs.World, entity ecs.En
 		}
 	}
 	return CameraPipeline2D, CameraRenderOptions{ViewMode: render.RenderViewLit}, ecs.Has[Camera2D](world, entity)
-}
-
-func cameraPipelineInputsChanged(context *ecs.SystemContext) bool {
-	if ecs.ResourceChanged[*RenderWorld](context) {
-		return true
-	}
-	if state, ok := ecs.GetResource[*RenderWorld](context.World); ok && state != nil {
-		for _, source := range state.cameraSettings {
-			if source.changed != nil && source.changed(context) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func compareExtractedCamera(a, b ExtractedCamera) int {

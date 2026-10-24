@@ -105,10 +105,10 @@ func TestLoadImportedTextureUsesResolvedGLTFPath(t *testing.T) {
 	if err := png.Encode(&imageData, image.NewNRGBA(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatal(err)
 	}
-	const imagePath = "projects/game/resources/models/textures/albedo.png"
+	const imagePath = "apps/game/resources/models/textures/albedo.png"
 	resources := newResources()
 	resources.source = fstest.MapFS{imagePath: {Data: imageData.Bytes()}}
-	resources.baseDir = "projects/game"
+	resources.baseDir = "apps/game"
 	resources.imageDecoder = graphics.ImageDecoderSet[
 		graphicspng.Decoder,
 		graphics.NoImageDecoder,

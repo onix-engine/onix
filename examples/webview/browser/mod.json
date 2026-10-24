@@ -1,0 +1,5 @@
+{
+ "name":"Native browser", "space":"ui", "behavior":"Mod",
+ "resources":{"page":{"kind":"data","path":"page.html"}},
+ "slots":{"bounds":{"type":"BrowserBounds","default":{"x":20,"y":20,"width":760,"height":500}}}
+}

@@ -15,7 +15,11 @@ import (
 )
 
 type Options struct {
-	EventCapacity     int
+	EventCapacity int
+	// PayloadCapacity is the initial capacity per payload type and bank.
+	// Zero selects min(8, EventCapacity); storage grows on demand while
+	// EventCapacity continues to bound the total event queue.
+	PayloadCapacity   int
 	RequestCapacity   int
 	CommandCapacity   int
 	TimeoutTicks      uint64
@@ -107,6 +111,9 @@ func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options
 	if options.EventCapacity == 0 {
 		options.EventCapacity = 256
 	}
+	if options.PayloadCapacity == 0 {
+		options.PayloadCapacity = min(8, options.EventCapacity)
+	}
 	if options.RequestCapacity == 0 {
 		options.RequestCapacity = 128
 	}
@@ -128,7 +135,7 @@ func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options
 	if options.StartupEvents == 0 {
 		options.StartupEvents = 4096
 	}
-	if options.EventCapacity < 1 || options.RequestCapacity < 1 || options.CommandCapacity < 1 || options.OutputCapacity < 1 || options.TextCacheCapacity < 1 || options.StartupBatches < 1 || options.StartupEvents < 1 {
+	if options.EventCapacity < 1 || options.PayloadCapacity < 1 || options.PayloadCapacity > options.EventCapacity || options.RequestCapacity < 1 || options.CommandCapacity < 1 || options.OutputCapacity < 1 || options.TextCacheCapacity < 1 || options.StartupBatches < 1 || options.StartupEvents < 1 {
 		return nil, ErrInvalid
 	}
 	r := &Runtime{world: world, plan: plan, options: options, pendingFirst: -1, pendingLast: -1,
@@ -202,7 +209,7 @@ func (r *Runtime) initContext(c *Context, s *Scene, mod *project.ModPlan, enable
 	if r.nextIdentity == 0 {
 		panic("module: instance identity exhausted")
 	}
-	*c = Context{runtime: r, scene: s, definition: mod, identity: r.nextIdentity, live: true, enabled: enabled}
+	*c = Context{runtime: r, scene: s, definition: mod, identity: r.nextIdentity, live: true, enabled: enabled, orderDirty: mod != nil}
 }
 
 func (r *Runtime) MountEntry() (*Scene, error) { return r.Mount(r.plan.Spec.Entry) }
@@ -307,6 +314,7 @@ func (r *Runtime) mount(id project.SceneID, state SceneState) (*Scene, error) {
 		}
 		c.entities = append(c.entities, c.root)
 		_ = ecs.Insert(r.world, c.root, entityOwner{context: c})
+		_ = ecs.Insert(r.world, c.root, scene.PainterGroup2D(c.identity))
 		c.slots = make([]slotState, len(definition.Slots))
 		if len(instance.Slots) != len(c.slots) {
 			return fail(ErrInvalid)
@@ -740,7 +748,7 @@ func (r *Runtime) despawnPrivate(c *Context, root ecs.Entity) {
 		c.entitiesDirty = true
 		r.dirtyEntities = append(r.dirtyEntities, c)
 	}
-	r.orderDirty = true
+	c.dirtyDrawOrder()
 }
 
 func (r *Runtime) reparentPrivate(command structuralCommand) error {
@@ -771,27 +779,36 @@ func (r *Runtime) reparentPrivate(command structuralCommand) error {
 }
 
 func (r *Runtime) syncDrawOrder() error {
-	order := 0
-	// Structural boundaries compile a stable painter sequence. ECS slot reuse
-	// must never determine module order; private content stays within its module.
+	// The inherited group fixes module placement. Local edits only renumber
+	// that module and never rewrite later modules or parked scenes.
 	for _, s := range r.scenes {
 		for i := range s.modules {
 			c := &s.modules[i]
-			for _, entity := range c.entities {
-				order++
+			if !c.live || !c.orderDirty {
+				continue
+			}
+			for index, entity := range c.entities {
 				var err error
 				if c.ui {
-					err = ecs.Insert(r.world, entity, scene.UIStackIndex(order))
+					err = setPainterOrder(r.world, entity, scene.UIStackIndex(index+1))
 				} else {
-					err = ecs.Insert(r.world, entity, scene.RenderOrder2D(order))
+					err = setPainterOrder(r.world, entity, scene.RenderOrder2D(index+1))
 				}
 				if err != nil {
 					return err
 				}
 			}
+			c.orderDirty = false
 		}
 	}
 	return nil
+}
+
+func setPainterOrder[T comparable](world *ecs.World, entity ecs.Entity, order T) error {
+	if current, ok := ecs.Get[T](world, entity); ok && current == order {
+		return nil
+	}
+	return ecs.Insert(world, entity, order)
 }
 
 func (r *Runtime) disposeContext(c *Context) error {

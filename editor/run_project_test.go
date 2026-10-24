@@ -10,11 +10,11 @@ import (
 func TestCachedProjectBuildLayoutUsesProjectDistCache(t *testing.T) {
 	root := t.TempDir()
 	writeBuildTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n")
-	layout, err := newCachedProjectBuildLayout(root, filepath.Join(root, "projects", "demo"))
+	layout, err := newCachedProjectBuildLayout(root, filepath.Join(root, "apps", "demo"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(root, "projects", "demo", "dist", "cache")
+	want := filepath.Join(root, "apps", "demo", "dist", "cache")
 	if layout.BaseDir != want {
 		t.Fatalf("cached project directory = %q, want %q", layout.BaseDir, want)
 	}

@@ -116,16 +116,16 @@ func TestSetDefaultManagerLoadsNamedPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer manager.Close()
-	if err := SetDefaultProject(manager, "projects/game"); err != nil {
+	if err := SetDefaultProject(manager, "apps/game"); err != nil {
 		t.Fatal(err)
 	}
 	source, root, ok := Default()
-	if !ok || root != "projects/game" {
+	if !ok || root != "apps/game" {
 		t.Fatalf("default project source root = %q, mounted = %t", root, ok)
 	}
 	for name, want := range map[string]string{
-		"projects/game/resources/project.json": "{}",
-		"shared/font.txt":                      "font",
+		"apps/game/resources/project.json": "{}",
+		"shared/font.txt":                  "font",
 	} {
 		data, err := fs.ReadFile(source, name)
 		if err != nil || string(data) != want {

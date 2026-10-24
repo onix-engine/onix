@@ -82,7 +82,7 @@ func ContentMut[T any](c *Content, e ecs.Entity) *T {
 }
 func contentProtected[T any]() bool {
 	t := reflect.TypeFor[T]()
-	return t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.UITargetCamera]()
+	return t == reflect.TypeFor[scene.PainterGroup2D]() || t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.UITargetCamera]()
 }
 func ContentInsert[T any](c *Content, e ecs.Entity, value T) error {
 	if !c.owns(e) {
@@ -169,12 +169,15 @@ func (c *Content) adopt(e ecs.Entity) ecs.Entity {
 	}
 	_ = ecs.Insert(w, e, scene.Activity{Active: c.context.enabled})
 	c.context.entities = append(c.context.entities, e)
-	c.context.runtime.orderDirty = true
+	c.context.dirtyDrawOrder()
 	return e
 }
 func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 	if !c.context.usable() {
 		panic(ErrDisposed)
+	}
+	if _, grouped := ecs.BundleValue[scene.PainterGroup2D](bundle); grouped {
+		panic(ErrOwnership)
 	}
 	parent, hasParent := ecs.BundleValue[scene.Parent](bundle)
 	if parent.Entity != 0 && !c.owns(parent.Entity) {
@@ -223,7 +226,7 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 		}
 	}
 	c.context.entities = append(c.context.entities, entity)
-	c.context.runtime.orderDirty = true
+	c.context.dirtyDrawOrder()
 	return entity
 }
 

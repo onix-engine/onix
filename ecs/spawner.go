@@ -1,9 +1,6 @@
 package ecs
 
-import (
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 type spawnPlan struct {
 	world     *World
@@ -16,13 +13,7 @@ func (p *spawnPlan) reserve(capacity int) {
 	}
 	p.world.assertStructuralMutationAllowed()
 	p.world.ReserveEntities(capacity)
-	if capacity > cap(p.archetype.entities) {
-		p.archetype.entities = slices.Grow(p.archetype.entities, capacity-len(p.archetype.entities))
-	}
-	additional := capacity - len(p.archetype.entities)
-	for _, storage := range p.archetype.columns {
-		storage.reserve(additional)
-	}
+	p.archetype.reserve(capacity)
 }
 
 func newSpawnPlan(world *World, ids []componentID) spawnPlan {

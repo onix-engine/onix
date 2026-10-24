@@ -1,0 +1,24 @@
+{
+ "entry":"main.json",
+ "scenes":["main.json"],
+ "types":{"BrowserBounds":{"fields":{"x":"number","y":"number","width":"number","height":"number"}}},
+  "clearColor": "#ffffff",
+  "window": {
+    "width": 800,
+    "height": 560,
+    "title": "Onix WebView",
+    "vsync": true,
+    "fps": 60,
+    "tps": 60
+  },
+  "viewport": {
+    "width": 800,
+    "height": 560
+  },
+  "engine": {
+    "features": [
+      "webview"
+    ],
+    "resources": []
+  }
+}

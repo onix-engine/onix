@@ -7,6 +7,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -175,11 +176,18 @@ func finitePaintBounds2D(values ...float32) bool {
 }
 
 type compositeTile2D struct {
+	candidates     []int // all overlapping items, including occluded content
 	items          []int // front to back, replayed in reverse
 	hash, previous uint64
 	covered        bool
 	slot           int
 	dirty          bool
+	changed        bool
+}
+
+type compositeCoverage2D struct {
+	visible uint32
+	present bool
 }
 
 type compositeReuse2D struct {
@@ -195,12 +203,13 @@ type CompositeSettings2D struct{ MaxCacheBytes int64 }
 // CompositeStatistics2D distinguishes cached pixels from draw submission work.
 // RasterPixels is the area redrawn, not a GPU time or fragment-count estimate.
 type CompositeStatistics2D struct {
-	Tiles, DirtyTiles   int
-	ReusedTiles         int
-	RasterPixels        int
-	Submitted, Occluded int
-	CacheBytes          int64
-	Direct              bool
+	Tiles, DirtyTiles            int
+	ReusedTiles                  int
+	RasterPixels                 int
+	Submitted, Occluded          int
+	PreparedItems, PreparedTiles int
+	CacheBytes                   int64
+	Direct                       bool
 }
 
 type compositor2D struct {
@@ -219,12 +228,17 @@ type compositor2D struct {
 	reuse                  []compositeReuse2D
 	usedSlots              []bool
 	occluded               int
+	coverage               []compositeCoverage2D
+	damageTiles            []int
+	retained               *retainedRender2D
+	spatial                bool
 	replay                 renderItem2D
 }
 
 // compositeUI2D consumes a full UI output. Other camera pipelines, transparent
 // outputs and custom materials keep their normal rendering semantics.
-func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, camera ExtractedCamera, defaultUICamera ecs.Entity, generation uint64, budget int64) (bool, error) {
+func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, camera ExtractedCamera, defaultUICamera ecs.Entity, cache *retainedRender2D, budget int64) (bool, error) {
+	generation := cache.generation
 	widthValue, heightValue := c.Size()
 	width, height := int(widthValue), int(heightValue)
 	bytes := int64(width) * int64(height) * 4
@@ -271,53 +285,82 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				*entry = compositeReuse2D{hash: tile.previous, slot: tile.slot, used: true}
 			}
 		}
-		view.occluded = 0
-		for i := range view.tiles {
-			tile := &view.tiles[i]
-			tile.items = tile.items[:0]
-			r := view.tileRect(i)
-			tile.hash, tile.covered = paintMix2D(uint64(r.Dx()), uint64(r.Dy())), false
-		}
-		screen := image.Rect(0, 0, width, height)
-		// One reverse traversal builds spatial bins, computes damage and rejects
-		// occluded content. No separate scene pass is needed for each concern.
-		for i := len(state.Items2D) - 1; i >= 0; i-- {
-			item := &state.Items2D[i]
-			if !renderItemForCamera2D(item, camera, defaultUICamera) {
-				continue
-			}
-			paint := item.paint
-			if paint == nil || !paint.cacheable {
+		if view.prepared && view.spatial && view.retained == cache && view.generation+1 == generation && cache.damageValid && !clearChanged && view.cameraKey == cameraKey && view.textureRevision == graphics.TextureRevision() && len(view.coverage) == len(state.Items2D) {
+			if !view.updateDamage(state, camera, defaultUICamera, cache.damage) {
 				view.stats.Direct = true
 				return false, view.dispose()
 			}
-			bounds := paint.bounds.Intersect(screen)
-			if bounds.Empty() {
-				continue
+		} else {
+			view.stats.PreparedTiles = len(view.tiles)
+			view.occluded = 0
+			// Dense scrolling uses sequential preparation without maintaining a
+			// spatial index that will be replaced again on the next frame.
+			spatial := cache.stats.PropertiesUpdated <= max(16, len(state.Items2D)/8)
+			if spatial {
+				view.coverage = reuse.Resize(view.coverage, len(state.Items2D))
+				clear(view.coverage)
 			}
-			x0, y0 := bounds.Min.X/compositeTileSize2D, bounds.Min.Y/compositeTileSize2D
-			x1, y1 := (bounds.Max.X-1)/compositeTileSize2D, (bounds.Max.Y-1)/compositeTileSize2D
-			visible := false
-			for y := y0; y <= y1; y++ {
-				for x := x0; x <= x1; x++ {
-					index := y*view.columns + x
-					tile := &view.tiles[index]
-					if tile.covered {
-						continue
-					}
-					visible = true
-					tile.items = append(tile.items, i)
-					tile.hash = paintMix2D(tile.hash, paint.tileHash(item, view.tileRect(index)))
-					if view.tileRect(index).In(paint.opaque) {
-						tile.covered = true
+			for i := range view.tiles {
+				tile := &view.tiles[i]
+				tile.candidates = tile.candidates[:0]
+				tile.changed = false
+				tile.items = tile.items[:0]
+				r := view.tileRect(i)
+				tile.hash, tile.covered = paintMix2D(uint64(r.Dx()), uint64(r.Dy())), false
+			}
+			screen := image.Rect(0, 0, width, height)
+			// One reverse traversal builds spatial bins, computes damage and rejects
+			// occluded content. No separate scene pass is needed for each concern.
+			for i := len(state.Items2D) - 1; i >= 0; i-- {
+				view.stats.PreparedItems++
+				item := &state.Items2D[i]
+				if !renderItemForCamera2D(item, camera, defaultUICamera) {
+					continue
+				}
+				paint := item.paint
+				if paint == nil || !paint.cacheable {
+					view.stats.Direct = true
+					return false, view.dispose()
+				}
+				bounds := paint.bounds.Intersect(screen)
+				if bounds.Empty() {
+					continue
+				}
+				if spatial {
+					view.coverage[i].present = true
+				}
+				x0, y0 := bounds.Min.X/compositeTileSize2D, bounds.Min.Y/compositeTileSize2D
+				x1, y1 := (bounds.Max.X-1)/compositeTileSize2D, (bounds.Max.Y-1)/compositeTileSize2D
+				visible := false
+				for y := y0; y <= y1; y++ {
+					for x := x0; x <= x1; x++ {
+						index := y*view.columns + x
+						tile := &view.tiles[index]
+						if spatial {
+							tile.candidates = append(tile.candidates, i)
+						}
+						if tile.covered {
+							continue
+						}
+						visible = true
+						if spatial {
+							view.coverage[i].visible++
+						}
+						tile.items = append(tile.items, i)
+						tile.hash = paintMix2D(tile.hash, paint.tileHash(item, view.tileRect(index)))
+						if view.tileRect(index).In(paint.opaque) {
+							tile.covered = true
+						}
 					}
 				}
+				if !visible {
+					view.occluded++
+				}
 			}
-			if !visible {
-				view.occluded++
-			}
+			view.spatial = spatial
 		}
 		view.generation, view.prepared = generation, true
+		view.retained = cache
 		view.cameraKey = cameraKey
 	}
 	view.stats.Tiles, view.stats.CacheBytes, view.stats.Occluded = len(view.tiles), bytes, view.occluded

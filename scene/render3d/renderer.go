@@ -165,6 +165,7 @@ type renderPhase3D struct {
 }
 
 type renderView3D struct {
+	frustum            frustum3D
 	scene              uint64
 	fxaa               *antialiasing3D
 	fxaaActive         bool
@@ -555,7 +556,7 @@ func extractRender3D(context *ecs.SystemContext) error {
 				}
 				position := transform.Mul4x1(bounds.Center.Vec4(1)).Vec3()
 				scale := max(transform.Col(0).Vec3().Len(), transform.Col(1).Vec3().Len(), transform.Col(2).Vec3().Len())
-				visible := gpuDeformed || sphereVisible3D(view.frame.Camera.screenProjection, position, bounds.Radius*scale)
+				visible := gpuDeformed || view.frustum.containsSphere(position, bounds.Radius*scale)
 				delta := position.Sub(view.frame.Camera.position)
 				item := extractedMesh3D{
 					noReflection: noReflection,
@@ -570,7 +571,7 @@ func extractRender3D(context *ecs.SystemContext) error {
 				}
 				if view.shadowActive && !noShadow && material.AlphaMode != graphics.AlphaBlend && !material.Surface.Unlit && material.Shader == nil {
 					for _, shadow := range view.shadow.views[:view.shadow.count] {
-						if gpuDeformed || sphereVisible3D(shadow.frame.Camera.viewProjection, position, bounds.Radius*scale) {
+						if gpuDeformed || shadow.frustum.containsSphere(position, bounds.Radius*scale) {
 							shadow.extracted = append(shadow.extracted, item)
 						}
 					}
@@ -1021,20 +1022,33 @@ func meshVertexBounds3D(vertices []render.Vertex3D) graphics.BoundingSphere {
 	return graphics.BoundingSphere{Center: center, Radius: float32(math.Sqrt(float64(radiusSquared)))}
 }
 
-func sphereVisible3D(clipFromWorld mgl32.Mat4, center mgl32.Vec3, radius float32) bool {
+type frustum3D struct {
+	planes  [6]mgl32.Vec4
+	lengths [6]float32
+}
+
+func newFrustum3D(clipFromWorld mgl32.Mat4) frustum3D {
 	rows := [4]mgl32.Vec4{
 		{clipFromWorld[0], clipFromWorld[4], clipFromWorld[8], clipFromWorld[12]},
 		{clipFromWorld[1], clipFromWorld[5], clipFromWorld[9], clipFromWorld[13]},
 		{clipFromWorld[2], clipFromWorld[6], clipFromWorld[10], clipFromWorld[14]},
 		{clipFromWorld[3], clipFromWorld[7], clipFromWorld[11], clipFromWorld[15]},
 	}
-	for _, plane := range [...]mgl32.Vec4{
+	frustum := frustum3D{planes: [6]mgl32.Vec4{
 		rows[3].Add(rows[0]), rows[3].Sub(rows[0]),
 		rows[3].Add(rows[1]), rows[3].Sub(rows[1]),
 		rows[2], rows[3].Sub(rows[2]),
-	} {
-		normal := plane.Vec3()
-		if normal.Dot(center)+plane.W() < -radius*normal.Len() {
+	}}
+	for i, plane := range frustum.planes {
+		frustum.lengths[i] = plane.Vec3().Len()
+	}
+	return frustum
+}
+
+func (frustum *frustum3D) containsSphere(center mgl32.Vec3, radius float32) bool {
+	for i := range frustum.planes {
+		plane := frustum.planes[i]
+		if plane.Vec3().Dot(center)+plane.W() < -radius*frustum.lengths[i] {
 			return false
 		}
 	}

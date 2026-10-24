@@ -53,8 +53,14 @@ func (p *patchPlan) reserve(capacity int) {
 		return
 	}
 	for _, source := range p.world.archetypes {
-		storage := spawnPlan{world: p.world, archetype: p.transition(source).target}
-		storage.reserve(capacity)
+		// A source with no allocated rows has never been populated or reserved.
+		// Do not create speculative transitions and tables for unused shapes.
+		if cap(source.entities) == 0 {
+			continue
+		}
+		if target := p.transition(source).target; target != source {
+			target.reserve(capacity)
+		}
 	}
 }
 
@@ -159,19 +165,7 @@ func (p *patchPlan) transition(source *archetype) *patchTransition {
 	return t
 }
 
-type patchCommandValue interface {
-	apply(*World, Entity) error
-}
-
-type patchCommandStream[T patchCommandValue] struct {
-	commandValues[T]
-}
-
-func (s *patchCommandStream[T]) apply(world *World, entity Entity, index int) error {
-	return s.values[index].apply(world, entity)
-}
-
-func queuePatch[T patchCommandValue](commands *Commands, entity Entity, plan *patchPlan, value T) {
+func queuePatch[T commandValue](commands *Commands, entity Entity, plan *patchPlan, value T) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
@@ -179,8 +173,5 @@ func queuePatch[T patchCommandValue](commands *Commands, entity Entity, plan *pa
 	if commands.world != plan.world {
 		panic("ecs: patch belongs to a different world")
 	}
-	stream := commandStreamFor(commands, func() *patchCommandStream[T] { return &patchCommandStream[T]{} })
-	index := len(stream.values)
-	stream.values = append(stream.values, value)
-	commands.queue = append(commands.queue, queuedCommand{kind: commandInsert, entity: entity, stream: stream, valueIndex: index})
+	queueCommandValue(commands, entity, value)
 }

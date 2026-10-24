@@ -1,0 +1,19 @@
+{
+  "name": "Spine gallery",
+  "space": "ui",
+  "behavior": "Mod",
+  "slots": {
+    "resource": {"type":"int","default":0},
+    "animation": {"type":"int","default":-1}
+  },
+  "elements": [
+    {"id":"coin","transform":{"scale":[1.6,1.6]},"components":{"spine":{"source":{"id":"coin","skeleton":"exports/coin-pro.json","atlas":"exports/coin.atlas","texture":"exports/coin.png"},"animation":"animation","loop":true}}},
+    {"id":"goblins","visible":false,"transform":{"position":[-39.411785,287.38004],"scale":[1.597266,1.597266]},"components":{"spine":{"source":{"id":"goblins","skeleton":"exports/goblins-pro.json","atlas":"exports/goblins.atlas","texture":"exports/goblins.png"},"animation":"walk","loop":true}}},
+    {"id":"raptor","visible":false,"transform":{"position":[-30.310135,275.6884],"scale":[0.5376521,0.5376521]},"components":{"spine":{"source":{"id":"raptor","skeleton":"exports/raptor-pro.json","atlas":"exports/raptor.atlas","texture":"exports/raptor.png"},"animation":"walk","loop":true}}},
+    {"id":"spineboy","visible":false,"transform":{"position":[-23.311031,289.8882],"scale":[0.8788342,0.8788342]},"components":{"spine":{"source":{"id":"spineboy","skeleton":"exports/spineboy-pro.json","atlas":"exports/spineboy.atlas","texture":"exports/spineboy.png"},"animation":"walk","loop":true}}},
+    {"id":"stretchyman","visible":false,"transform":{"position":[-332.76892,104.14597],"scale":[0.41531205,0.41531205]},"components":{"spine":{"source":{"id":"stretchyman","skeleton":"exports/stretchyman-pro.json","atlas":"exports/stretchyman.atlas","texture":"exports/stretchyman.png"},"animation":"sneak","loop":true}}},
+    {"id":"stretchyman-ik","visible":false,"transform":{"position":[-332.84625,104.06861],"scale":[0.4150382,0.4150382]},"components":{"spine":{"source":{"id":"stretchyman-ik","skeleton":"exports/stretchyman-stretchy-ik-pro.json","atlas":"exports/stretchyman.atlas","texture":"exports/stretchyman.png"},"animation":"sneak","loop":true}}},
+    {"id":"tank","visible":false,"transform":{"position":[281.31616,40.935326],"scale":[0.12495471,0.12495471]},"components":{"spine":{"source":{"id":"tank","skeleton":"exports/tank-pro.json","atlas":"exports/tank.atlas","texture":"exports/tank.png"},"animation":"drive","loop":true}}},
+    {"id":"vine","visible":false,"transform":{"position":[0.5089472,295.18582],"scale":[0.5529753,0.5529753]},"components":{"spine":{"source":{"id":"vine","skeleton":"exports/vine-pro.json","atlas":"exports/vine.atlas","texture":"exports/vine.png"},"animation":"grow","loop":true}}}
+  ]
+}

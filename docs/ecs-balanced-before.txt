@@ -1,0 +1,99 @@
+Onix ECS balanced optimization: Go 1.27.0, Linux amd64, GOMAXPROCS=6.
+Baseline: 53411652cb8a7c28394aac1ffeb115ba7d636e59 ECS with identical new benchmarks.
+300 ms per case; three alternating before/after runs; no concurrent test or profiling work.
+
+Repetition 1
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandBatch/Insert-6            	    6158	     56829 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn-6             	    3784	     98860 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared-6    	    3734	     91556 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkPatchReserveShapes-6             	    3015	    115018 ns/op	  303201 B/op	     235 allocs/op
+BenchmarkChangedQueryDistribution/10000/None-6         	  479890	       742.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/One-6          	  340695	      1136 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/Scattered-6    	    9325	     36691 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/All-6          	    6385	     62843 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/None-6        	   64874	      5622 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/One-6         	   50708	      7556 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/Scattered-6   	     986	    363621 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/All-6         	     612	    615533 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryFrames-6                          	   52534	      7355 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6                	 3518646	       102.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQuerySparse-6                          	  371655	       925.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6                       	  340617	      1068 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6                            	 1510291	       237.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6                         	  903916	       409.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6                       	 3027964	       117.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6                        	  147805	      2520 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6                          	 1000000	       358.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand-6                           	    3846	     96573 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand-6                            	    6843	     51127 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryAccess2TenThousand-6                     	    5036	     75988 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetMutTenThousand-6                           	    1641	    224977 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Repetition 2
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandBatch/Insert-6            	    6067	     58920 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn-6             	    3777	    103161 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared-6    	    4194	     99293 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkPatchReserveShapes-6             	    3532	     99075 ns/op	  303199 B/op	     235 allocs/op
+BenchmarkChangedQueryDistribution/10000/None-6         	  474913	       745.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/One-6          	  335779	      1115 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/Scattered-6    	    8509	     36923 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/All-6          	    5878	     62324 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/None-6        	   64969	      5709 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/One-6         	   52560	      7135 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/Scattered-6   	    1041	    357636 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/All-6         	     616	    586744 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryFrames-6                          	   53376	      7138 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6                	 3603457	        99.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQuerySparse-6                          	  421537	       904.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6                       	  346435	      1073 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6                            	 1517697	       237.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6                         	  898502	       411.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6                       	 3001112	       120.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6                        	  137668	      2585 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6                          	  879805	       360.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand-6                           	    3904	     95207 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand-6                            	    7578	     51170 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryAccess2TenThousand-6                     	    5226	     74184 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetMutTenThousand-6                           	    1639	    222338 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+Repetition 3
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCommandBatch/Insert-6            	    6324	     61809 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn-6             	    3716	    103219 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared-6    	    3961	     91809 ns/op	        64.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkPatchReserveShapes-6             	    4075	     86089 ns/op	  303199 B/op	     235 allocs/op
+BenchmarkChangedQueryDistribution/10000/None-6         	  494832	       815.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/One-6          	  333230	      1084 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/Scattered-6    	   10000	     36115 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/10000/All-6          	    6184	     61846 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/None-6        	   66278	      5638 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/One-6         	   50638	      7044 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/Scattered-6   	     998	    379079 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryDistribution/100000/All-6         	     544	    611498 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQueryFrames-6                          	   51878	      7152 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandSpawnPreparedRecycled-6                	 3612862	       100.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkChangedQuerySparse-6                          	  414252	       909.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential-6                       	  355077	      1085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch-6                            	 1514661	       235.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands-6                         	  875682	       412.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled-6                       	 2955094	       120.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim-6                        	  138139	      2532 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration-6                          	  949632	       354.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQuery2TenThousand-6                           	    3880	     96072 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRead2TenThousand-6                            	    7330	     52298 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQueryAccess2TenThousand-6                     	    5331	     73354 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetMutTenThousand-6                           	    1620	    217709 ns/op	       0 B/op	       0 allocs/op
+PASS

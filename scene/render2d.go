@@ -545,7 +545,7 @@ func appendSpriteTrailRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 				continue
 			}
 			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material, sample.anchor, sample.transform, sample.clip, sample.width, sample.height, ui, info.sortIndex)
-			item.entity, item.layers, item.target, item.scene = entity, info.layers, info.target, info.scene
+			item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 			items = append(items, item)
 		}
 	}
@@ -575,7 +575,7 @@ func appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snap
 		}
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(*sprite), material2DForEntity(world, entity), anchor, matrix, clip, width, height, ui, info.sortIndex)
-		item.entity, item.layers, item.target, item.scene = entity, info.layers, info.target, info.scene
+		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
 	return items
@@ -616,7 +616,7 @@ func appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 				continue
 			}
 			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material, layer.Anchor, matrix, clip, width, height, ui, info.sortIndex+layer.Order)
-			item.entity, item.layers, item.target, item.scene = entity, info.layers, info.target, info.scene
+			item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 			items = append(items, item)
 		}
 	}
@@ -645,7 +645,7 @@ func appendParticleRenderItems2D[T renderGlobalTransform2D](world *ecs.World, sn
 			fallbackTexture = particleFallbackTexture2D(world)
 		}
 		item := newParticleRenderItem2D(uint32(len(items)), entity, snapshots.addEmitter(*emitter), matrix, clip, ui, info.sortIndex, fallbackTexture)
-		item.entity, item.layers, item.target, item.scene = entity, info.layers, info.target, info.scene
+		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
 	return items
@@ -667,7 +667,7 @@ func appendTilemapRenderItems2D[T renderGlobalTransform2D](world *ecs.World, sna
 		}
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		item := newTilemapRenderItem2D(uint32(len(items)), entity, snapshots.addTilemap(*tilemap), anchor, matrix, clip, ui, info.sortIndex)
-		item.entity, item.layers, item.target, item.scene = entity, info.layers, info.target, info.scene
+		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
 	return items
@@ -685,7 +685,7 @@ func appendSpineRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snaps
 		matrix, clip := (*transform).renderMatrix2D(), (*transform).renderClip2D()
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		item := renderItem2D{
-			entity: entity, layers: info.layers, scene: info.scene, order: renderOrder2D(entity), sequence: uint32(len(items)),
+			entity: entity, layers: info.layers, scene: info.scene, group: info.group, order: renderOrder2D(entity), sequence: uint32(len(items)),
 			depth: matrix[14], ui: ui, sortIndex: info.sortIndex, material: renderMaterialKey{pipeline: render.PipelineMesh, textureID: component.Player.Resource.Texture.BatchKey()},
 			kind: renderItemSpine2D, spine: snapshots.addSpine(*component), texture: component.Player.Resource.Texture, transform: matrix, clip: clip, target: info.target,
 		}
@@ -736,7 +736,7 @@ func appendTextRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, wo
 		items = snapshot.appendRenderItems(items, entity, base, clip, ui, info.sortIndex)
 		for index := start; index < len(items); index++ {
 			items[index].entity = entity
-			items[index].layers, items[index].scene = info.layers, info.scene
+			items[index].layers, items[index].scene, items[index].group = info.layers, info.scene, info.group
 			items[index].ui = ui
 			items[index].target = info.target
 			items[index].width = width
@@ -1279,6 +1279,7 @@ const (
 
 type renderItem2D struct {
 	scene      SceneLayer
+	group      uint64
 	entity     ecs.Entity
 	layers     RenderLayers
 	order      uint64
@@ -2681,6 +2682,7 @@ func shapeMaterialKey() renderMaterialKey {
 func (item renderItem2D) renderSortKey() renderSortKey2D {
 	return renderSortKey2D{
 		scene:     item.scene.Order,
+		group:     item.group,
 		ui:        item.ui,
 		sortIndex: item.sortIndex,
 		depth:     item.depth,
@@ -2690,7 +2692,7 @@ func (item renderItem2D) renderSortKey() renderSortKey2D {
 }
 
 func (item *renderItem2D) renderPhaseKeys() (renderSortKey2D, renderMaterialKey) {
-	return renderSortKey2D{scene: item.scene.Order, ui: item.ui, sortIndex: item.sortIndex, depth: item.depth, order: item.order, sequence: item.sequence}, item.material
+	return renderSortKey2D{scene: item.scene.Order, group: item.group, ui: item.ui, sortIndex: item.sortIndex, depth: item.depth, order: item.order, sequence: item.sequence}, item.material
 }
 
 func (item renderItem2D) renderMaterial() renderMaterialKey {

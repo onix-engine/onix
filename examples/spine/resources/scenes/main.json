@@ -1,0 +1,7 @@
+{
+  "modules": [
+    {"id":"gallery","mod":"gallery","placement":{"position":[500,380]}},
+    {"id":"controls","mod":"controls","placement":{"position":[194,676]}}
+  ],
+  "behavior": "SceneMain"
+}

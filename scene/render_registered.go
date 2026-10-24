@@ -106,8 +106,9 @@ func RegisterCameraRenderer[T any](world *ecs.World, pipeline CameraPipeline, de
 			}
 			return describe(component), true
 		},
-		changed: func(context *ecs.SystemContext) bool { return changedInputComponent[T](context.World, context) },
+		revision: ecs.ComponentVersion[T],
 	}
+	state.registry2D++
 	state.cameraRenderers[pipeline] = draw
 	ecs.InsertResource(world, state)
 }
@@ -246,13 +247,15 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 				budget -= int64(other.width) * int64(other.height) * 4
 			}
 		}
-		drawn, err := view.draw(c, world, state, camera, defaultUICamera, cache.generation, budget)
+		drawn, err := view.draw(c, world, state, camera, defaultUICamera, cache, budget)
 		state.Composite2D.Tiles += view.stats.Tiles
 		state.Composite2D.DirtyTiles += view.stats.DirtyTiles
 		state.Composite2D.ReusedTiles += view.stats.ReusedTiles
 		state.Composite2D.RasterPixels += view.stats.RasterPixels
 		state.Composite2D.Submitted += view.stats.Submitted
 		state.Composite2D.Occluded += view.stats.Occluded
+		state.Composite2D.PreparedItems += view.stats.PreparedItems
+		state.Composite2D.PreparedTiles += view.stats.PreparedTiles
 		state.Composite2D.CacheBytes += view.stats.CacheBytes
 		state.Composite2D.Direct = state.Composite2D.Direct || view.stats.Direct
 		if drawn || err != nil {

@@ -26,6 +26,7 @@ type Context struct {
 	entities                                                         []ecs.Entity
 	ownedEntities                                                    []ecs.Entity
 	entitiesDirty                                                    bool
+	orderDirty                                                       bool
 	elements                                                         map[string]ecs.Entity
 	resources                                                        *privateResources
 	managed                                                          []ManagedResource
@@ -51,6 +52,11 @@ type entityOwner struct {
 type Entity struct {
 	owner  *Context
 	entity ecs.Entity
+}
+
+func (c *Context) dirtyDrawOrder() {
+	c.orderDirty = true
+	c.runtime.orderDirty = true
 }
 
 func (c *Context) Generation() uint64 { return c.identity }
@@ -86,7 +92,7 @@ func (c *Context) owns(e Entity) bool {
 
 func protectedComponent[T any]() bool {
 	t := reflect.TypeFor[T]()
-	return t == reflect.TypeFor[scene.UITargetCamera]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.Activity]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.SiblingOrder]() || t == reflect.TypeFor[scene.UIStackIndex]() || t == reflect.TypeFor[scene.RenderOrder2D]() || t == reflect.TypeFor[scene.RenderOutput2D]()
+	return t == reflect.TypeFor[scene.PainterGroup2D]() || t == reflect.TypeFor[scene.UITargetCamera]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.Activity]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.SiblingOrder]() || t == reflect.TypeFor[scene.UIStackIndex]() || t == reflect.TypeFor[scene.RenderOrder2D]() || t == reflect.TypeFor[scene.RenderOutput2D]()
 }
 
 func Get[T any](c *Context, e Entity) (T, bool) {
@@ -199,7 +205,7 @@ func (c *Context) Spawn(parent Entity) (Entity, error) {
 		entity = c.runtime.world.Spawn(b)
 	}
 	c.entities = append(c.entities, entity)
-	c.runtime.orderDirty = true
+	c.dirtyDrawOrder()
 	return Entity{c, entity}, nil
 }
 

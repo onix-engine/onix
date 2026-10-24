@@ -1,0 +1,39 @@
+Onix ECS balanced optimization validation, 2026-10-24. Go 1.27.0, Linux amd64.
+Generated query/spawn/patch adapters reproduced byte-for-byte with go generate ./ecs.
+
+Full ECS suite: GOMAXPROCS=6 go test ./ecs -p=1 -count=1
+ok  	github.com/diiyw/onix/ecs	0.024s
+
+Targeted ECS race regressions and concurrent-world tests: GOMAXPROCS=6 go test ./ecs -p=1 -race -run <regression test names> -count=1
+ok  	github.com/diiyw/onix/ecs	1.130s
+
+Vet: GOMAXPROCS=6 go vet -p=1 ./ecs ./internal/ecsgen (exit 0, no diagnostics)
+
+Integration: GOMAXPROCS=6 go test ./scene ./ui ./ui/html ./physics -p=1 -count=1
+ok  	github.com/diiyw/onix/scene	0.455s
+--- FAIL: TestBindControlExpandsGenericTextControlMode (0.00s)
+    control_composition_test.go:162: input field = {Buffer:<nil> Value:Onix Placeholder:Name Password:true Composition: ScrollX:0 Caret:4 Anchor:0 Selecting:false Focused:false MaxRunes:80 Submitted:false FontSize:0 DPI:0 lastScrollValue: lastScrollComposition: lastScrollCaret:0 lastScrollFocused:false lastScrollViewport:0 scrollInitialized:false}, ok=true
+--- FAIL: TestHTMLInputEditsAndEmitsEvents (0.00s)
+    html_test.go:63: missing HTML event owner=4294967297 id="name" kind="input" value="Onix!" in []html.Event{html.Event{Entity:0x100000001, Target:0x100000002, ID:"name", FormID:"", Name:"display_name", Kind:"input", Value:"Oni!x", Checked:false, Selected:-1, SelectedCount:0, InputType:"", Data:"", Bubbles:true, Cancelable:false, DefaultPrevented:false, Anchor:0, Focus:0}}
+FAIL
+FAIL	github.com/diiyw/onix/ui	0.227s
+ok  	github.com/diiyw/onix/ui/html	2.378s
+--- FAIL: TestDynamicPoseRetainsPrecisionBetweenECSWrites (0.00s)
+    ecs_test.go:79: ECS rounded simulation pose: position={1.0000000001666667e+06 0.06666658998189194} want={1.0000000333333388e+06 0.06666666399999978} rotation=0.4100048144121634 want=0.40999998359999884
+FAIL
+FAIL	github.com/diiyw/onix/physics	3.107s
+FAIL
+
+Baseline reproduction: same current integration sources with pre-optimization ECS production files overlaid from 53411652cb8a7c28394aac1ffeb115ba7d636e59; rerun the three failed tests only
+ok  	github.com/diiyw/onix/scene	0.012s [no tests to run]
+--- FAIL: TestBindControlExpandsGenericTextControlMode (0.00s)
+    control_composition_test.go:162: input field = {Buffer:<nil> Value:Onix Placeholder:Name Password:true Composition: ScrollX:0 Caret:4 Anchor:0 Selecting:false Focused:false MaxRunes:80 Submitted:false FontSize:0 DPI:0 lastScrollValue: lastScrollComposition: lastScrollCaret:0 lastScrollFocused:false lastScrollViewport:0 scrollInitialized:false}, ok=true
+--- FAIL: TestHTMLInputEditsAndEmitsEvents (0.01s)
+    html_test.go:63: missing HTML event owner=4294967297 id="name" kind="input" value="Onix!" in []html.Event{html.Event{Entity:0x100000001, Target:0x100000002, ID:"name", FormID:"", Name:"display_name", Kind:"input", Value:"Oni!x", Checked:false, Selected:-1, SelectedCount:0, InputType:"", Data:"", Bubbles:true, Cancelable:false, DefaultPrevented:false, Anchor:0, Focus:0}}
+FAIL
+FAIL	github.com/diiyw/onix/ui	0.028s
+--- FAIL: TestDynamicPoseRetainsPrecisionBetweenECSWrites (0.00s)
+    ecs_test.go:79: ECS rounded simulation pose: position={1.0000000001666667e+06 0.06666658998189194} want={1.0000000333333388e+06 0.06666666399999978} rotation=0.4100048144121634 want=0.40999998359999884
+FAIL
+FAIL	github.com/diiyw/onix/physics	0.003s
+FAIL

@@ -249,7 +249,7 @@ func (c *Content) queueNode(o ui.NodeOptions, additional int) ecs.Entity {
 	ecs.CommandInsert(commands, entity, scene.UIStackIndex(o.StackIndex))
 	r.privateSpawns[entity] = privateSpawn{owner: c.context, parent: o.Parent}
 	c.context.entities = append(c.context.entities, entity)
-	r.orderDirty = true
+	c.context.dirtyDrawOrder()
 	return entity
 }
 func ContentBindControl[T any](c *Content, id string, v T) error {

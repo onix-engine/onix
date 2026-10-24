@@ -20,6 +20,7 @@ type renderPhaseReader2D[T any] interface {
 
 type renderSortKey2D struct {
 	scene     uint64
+	group     uint64
 	ui        bool
 	sortIndex int
 	depth     float32
@@ -29,6 +30,7 @@ type renderSortKey2D struct {
 
 type renderBatch2D struct {
 	scene     uint64
+	group     uint64
 	start     int
 	end       int
 	ui        bool
@@ -49,6 +51,12 @@ func compareRenderPhaseItem2D[T renderPhaseItem2D](a, b T) int {
 			return 1
 		}
 		return -1
+	}
+	if aKey.group < bKey.group {
+		return -1
+	}
+	if aKey.group > bKey.group {
+		return 1
 	}
 	if aKey.sortIndex < bKey.sortIndex {
 		return -1
@@ -86,8 +94,8 @@ func drawRenderPhase2D[T renderPhaseItem2D, P renderPhaseReader2D[T]](c *graphic
 	var previous renderBatch2D
 	for start := 0; start < len(items); {
 		key, material := P(&items[start]).renderPhaseKeys()
-		batch := renderBatch2D{scene: key.scene, start: start, end: start + 1, ui: key.ui, sortIndex: key.sortIndex, material: material}
-		begin := start == 0 || previous.scene != batch.scene || previous.ui != batch.ui || previous.sortIndex != batch.sortIndex || previous.material != batch.material
+		batch := renderBatch2D{scene: key.scene, group: key.group, start: start, end: start + 1, ui: key.ui, sortIndex: key.sortIndex, material: material}
+		begin := start == 0 || previous.scene != batch.scene || previous.group != batch.group || previous.ui != batch.ui || previous.sortIndex != batch.sortIndex || previous.material != batch.material
 
 		if !spaceReady || currentUI != batch.ui {
 			currentUI = batch.ui
@@ -115,7 +123,7 @@ func drawRenderPhase2D[T renderPhaseItem2D, P renderPhaseReader2D[T]](c *graphic
 		if begin && batched != nil && batched(&items[start]) {
 			for batch.end < len(items) {
 				next, nextMaterial := P(&items[batch.end]).renderPhaseKeys()
-				if next.scene != key.scene || next.ui != key.ui || next.sortIndex != key.sortIndex || nextMaterial != material {
+				if next.scene != key.scene || next.group != key.group || next.ui != key.ui || next.sortIndex != key.sortIndex || nextMaterial != material {
 					break
 				}
 				batch.end++

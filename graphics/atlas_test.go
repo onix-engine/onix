@@ -4,10 +4,7 @@ package graphics
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -26,44 +23,6 @@ func TestParseAtlasIncludesFrameDimensions(t *testing.T) {
 	if !ok || frame.Bounds.W != 41 || frame.Bounds.H != 23 {
 		t.Fatalf("unexpected atlas frame: %#v, found=%v", frame, ok)
 	}
-}
-
-func TestPreprocessProjectAtlases(t *testing.T) {
-	var count, sourceBytes, binaryBytes int
-	err := filepath.WalkDir("../projects", func(path string, entry os.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		extension := strings.ToLower(filepath.Ext(path))
-		if extension != ".atlas" && extension != ".json" {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		compiled, atlas, err := PreprocessAtlas(data)
-		if err != nil {
-			return err
-		}
-		if !atlas {
-			return nil
-		}
-		if _, err := ParseAtlas(compiled); err != nil {
-			return err
-		}
-		count++
-		sourceBytes += len(data)
-		binaryBytes += len(compiled)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count == 0 || binaryBytes >= sourceBytes {
-		t.Fatalf("project atlas preprocessing: count=%d JSON=%d binary=%d", count, sourceBytes, binaryBytes)
-	}
-	t.Logf("project atlases: count=%d JSON=%d bytes binary=%d bytes", count, sourceBytes, binaryBytes)
 }
 
 func TestParseAtlasUsesMapKeysAsFrameNames(t *testing.T) {

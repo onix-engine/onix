@@ -13,7 +13,7 @@ func NewPatch1[A any](world *World, removed ...ComponentType) Patch1[A] {
 	return Patch1[A]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch1[A]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -51,7 +51,7 @@ func NewPatch2[A, B any](world *World, removed ...ComponentType) Patch2[A, B] {
 	return Patch2[A, B]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch2[A, B]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -104,7 +104,7 @@ func NewPatch3[A, B, C any](world *World, removed ...ComponentType) Patch3[A, B,
 	return Patch3[A, B, C]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch3[A, B, C]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -159,7 +159,7 @@ func NewPatch4[A, B, C, D any](world *World, removed ...ComponentType) Patch4[A,
 	return Patch4[A, B, C, D]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch4[A, B, C, D]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -216,7 +216,7 @@ func NewPatch5[A, B, C, D, E any](world *World, removed ...ComponentType) Patch5
 	return Patch5[A, B, C, D, E]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch5[A, B, C, D, E]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -275,7 +275,7 @@ func NewPatch6[A, B, C, D, E, F any](world *World, removed ...ComponentType) Pat
 	return Patch6[A, B, C, D, E, F]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch6[A, B, C, D, E, F]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -336,7 +336,7 @@ func NewPatch7[A, B, C, D, E, F, G any](world *World, removed ...ComponentType) 
 	return Patch7[A, B, C, D, E, F, G]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch7[A, B, C, D, E, F, G]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.
@@ -399,7 +399,7 @@ func NewPatch8[A, B, C, D, E, F, G, H any](world *World, removed ...ComponentTyp
 	return Patch8[A, B, C, D, E, F, G, H]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
-// Reserve prepares existing source transitions and destination capacities.
+// Reserve prepares populated or preallocated source tables and reserves their migration targets.
 func (p Patch8[A, B, C, D, E, F, G, H]) Reserve(capacity int) { p.plan.reserve(capacity) }
 
 // Apply preserves Added for replacements and both ticks for retained values.

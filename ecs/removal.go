@@ -68,8 +68,8 @@ func componentTypeMask(world *World, types []ComponentType) componentMask {
 	return mask
 }
 
-// Reserve prepares transitions for existing archetypes and reserves each
-// destination for capacity entities. New component shapes still need warming.
+// Reserve prepares populated or preallocated source archetypes and reserves
+// each destination for capacity entities. Unused shapes still need warming.
 func (r PreparedRemoval) Reserve(capacity int) {
 	p := r.requirePlan()
 	p.world.assertStructuralMutationAllowed()
@@ -77,9 +77,11 @@ func (r PreparedRemoval) Reserve(capacity int) {
 		return
 	}
 	for _, source := range p.world.archetypes {
+		if cap(source.entities) == 0 {
+			continue
+		}
 		if target := p.transition(source).target; target != source {
-			storage := spawnPlan{world: p.world, archetype: target}
-			storage.reserve(capacity)
+			target.reserve(capacity)
 		}
 	}
 }

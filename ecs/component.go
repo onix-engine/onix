@@ -55,19 +55,68 @@ type columnState struct {
 
 const queryTickBlockSize = 64
 
-// Bounds may retain removed ticks, which only causes conservative extra scans.
-type tickRange struct{ min, max Tick }
+const queryTickGroupBlocks = 64
+const queryTickGroupSize = queryTickBlockSize * queryTickGroupBlocks
+
+// Blocks grow from the front and group caches from the back of the same slice.
+// This preserves direct block indexing on writes without extra slice headers.
+func tickRangeCount(rows int) int {
+	blocks := (rows + queryTickBlockSize - 1) / queryTickBlockSize
+	return blocks + (blocks+queryTickGroupBlocks-1)/queryTickGroupBlocks
+}
+
+func growTickRanges(ranges []tickRange, rows, capacity int) []tickRange {
+	needed := tickRangeCount(capacity)
+	if needed <= len(ranges) {
+		return ranges
+	}
+	ranges = slices.Grow(ranges, needed-len(ranges))
+	ranges = ranges[:cap(ranges)]
+	// Moving the group cache to the new tail invalidates it. Only leaf block
+	// bounds are persistent; the gap and all group slots start empty.
+	clear(ranges[(rows+queryTickBlockSize-1)/queryTickBlockSize:])
+	return ranges
+}
+
+func includeTick(ranges []tickRange, row int, tick Tick) {
+	// Component insertion and mutation clocks never produce the zero sentinel.
+	ranges[row/queryTickBlockSize].includeNonzero(tick)
+	// Zero invalidates the group cache. Rebuild only when a query needs it,
+	// instead of updating a second min/max pair on every component write.
+	ranges[len(ranges)-1-row/queryTickGroupSize].max = 0
+}
+
+func tickGroupRange(ranges []tickRange, group, rows int) tickRange {
+	index := len(ranges) - 1 - group
+	if bounds := ranges[index]; bounds.max != 0 {
+		return bounds
+	}
+	var bounds tickRange
+	start := group * queryTickGroupBlocks
+	end := min(start+queryTickGroupBlocks, (rows+queryTickBlockSize-1)/queryTickBlockSize)
+	for _, block := range ranges[start:end] {
+		bounds.invertedMin = max(bounds.invertedMin, block.invertedMin)
+		bounds.max = max(bounds.max, block.max)
+	}
+	ranges[index] = bounds
+	return bounds
+}
+
+// Inverting the lower bound lets both bounds accumulate with max, starting at
+// zero without a special case for the first tick. Removed ticks are retained
+// conservatively and may cause extra scans.
+type tickRange struct{ invertedMin, max Tick }
 
 func (bounds *tickRange) include(tick Tick) {
 	if tick == 0 {
 		return
 	}
-	if bounds.min == 0 || tick < bounds.min {
-		bounds.min = tick
-	}
-	if tick > bounds.max {
-		bounds.max = tick
-	}
+	bounds.includeNonzero(tick)
+}
+
+func (bounds *tickRange) includeNonzero(tick Tick) {
+	bounds.invertedMin = max(bounds.invertedMin, ^tick)
+	bounds.max = max(bounds.max, tick)
 }
 
 func (bounds tickRange) matches(filter rowFilter) bool {
@@ -77,9 +126,9 @@ func (bounds tickRange) matches(filter rowFilter) bool {
 	}
 	first := filter.thisRun - Tick(window-1)
 	if first <= filter.thisRun {
-		return bounds.max >= first && bounds.min <= filter.thisRun
+		return bounds.max >= first && ^bounds.invertedMin <= filter.thisRun
 	}
-	return bounds.max >= first || bounds.min <= filter.thisRun
+	return bounds.max >= first || ^bounds.invertedMin <= filter.thisRun
 }
 
 func (c *columnState) touch() {
@@ -94,9 +143,8 @@ func (c *typedColumn[T]) reserve(additional int) {
 	c.values = slices.Grow(c.values, additional)
 	c.added = slices.Grow(c.added, additional)
 	c.changed = slices.Grow(c.changed, additional)
-	blocks := (len(c.values) + additional + queryTickBlockSize - 1) / queryTickBlockSize
-	c.addedRanges = slices.Grow(c.addedRanges, max(0, blocks-len(c.addedRanges)))
-	c.changedRanges = slices.Grow(c.changedRanges, max(0, blocks-len(c.changedRanges)))
+	c.addedRanges = growTickRanges(c.addedRanges, len(c.values), len(c.values)+additional)
+	c.changedRanges = growTickRanges(c.changedRanges, len(c.values), len(c.values)+additional)
 }
 
 func (c *typedColumn[T]) append(value T, tick Tick) {
@@ -107,13 +155,17 @@ func (c *typedColumn[T]) appendWithTicks(value T, added, changed Tick) {
 	c.values = append(c.values, value)
 	c.added = append(c.added, added)
 	c.changed = append(c.changed, changed)
-	block := (len(c.values) - 1) / queryTickBlockSize
-	if block == len(c.addedRanges) {
-		c.addedRanges = append(c.addedRanges, tickRange{})
-		c.changedRanges = append(c.changedRanges, tickRange{})
+	row := len(c.values) - 1
+	if tickRangeCount(len(c.values)) > len(c.addedRanges) {
+		c.addedRanges = growTickRanges(c.addedRanges, row, len(c.values))
+		c.changedRanges = growTickRanges(c.changedRanges, row, len(c.values))
 	}
-	c.addedRanges[block].include(added)
-	c.changedRanges[block].include(changed)
+	if row%queryTickBlockSize == 0 {
+		c.addedRanges[row/queryTickBlockSize] = tickRange{}
+		c.changedRanges[row/queryTickBlockSize] = tickRange{}
+	}
+	includeTick(c.addedRanges, row, added)
+	includeTick(c.changedRanges, row, changed)
 	c.touch()
 	c.world.componentInfos[c.id].structure++
 }
@@ -137,17 +189,14 @@ func (c *typedColumn[T]) swapRemove(row int) {
 		c.values[row] = c.values[last]
 		c.added[row] = c.added[last]
 		c.changed[row] = c.changed[last]
-		c.addedRanges[row/queryTickBlockSize].include(c.added[row])
-		c.changedRanges[row/queryTickBlockSize].include(c.changed[row])
+		includeTick(c.addedRanges, row, c.added[row])
+		includeTick(c.changedRanges, row, c.changed[row])
 	}
 	var zero T
 	c.values[last] = zero
 	c.values = c.values[:last]
 	c.added = c.added[:last]
 	c.changed = c.changed[:last]
-	blocks := (last + queryTickBlockSize - 1) / queryTickBlockSize
-	c.addedRanges = c.addedRanges[:blocks]
-	c.changedRanges = c.changedRanges[:blocks]
 	c.touch()
 	c.world.componentInfos[c.id].structure++
 }
@@ -161,7 +210,7 @@ func (c *columnState) ticks(kind filterKind) []Tick {
 
 func (c *columnState) markChanged(row int, tick Tick) {
 	c.changed[row] = tick
-	c.changedRanges[row/queryTickBlockSize].include(tick)
+	includeTick(c.changedRanges, row, tick)
 	c.touch()
 }
 

@@ -95,7 +95,7 @@ func TestPatchCommandsKeepValuesAndPlansAndClearReferences(t *testing.T) {
 	if Has[testVelocity](w, first) || !Has[testVelocity](w, second) || *GetRef[*int](w, first) != &a || *GetRef[*int](w, second) != &b {
 		t.Fatal("queued patch lost per-command values or plan")
 	}
-	stream := commandStreamFor(w.Commands(), func() *patchCommandStream[patchCommand1[*int]] { return &patchCommandStream[patchCommand1[*int]]{} })
+	stream := commandStreamFor(w.Commands(), func() *valueCommandStream[patchCommand1[*int]] { return &valueCommandStream[patchCommand1[*int]]{} })
 	for _, value := range stream.values[:cap(stream.values)] {
 		if value.a != nil || value.patch.plan != nil {
 			t.Fatal("flushed command storage retained references")

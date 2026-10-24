@@ -447,16 +447,17 @@ func TestWorldInputCoordinatesRejectOutsideCameraViewport(t *testing.T) {
 
 func TestInputTargetContainsUsesLocalQuadInsteadOfWorldAABB(t *testing.T) {
 	target := inputPickTarget2D{
-		matrix: mgl32.HomogRotate3DZ(float32(math.Pi / 4)),
 		anchor: AnchorTopLeft,
 		width:  100,
 		height: 20,
 		ui:     true,
 	}
-	model := quadBaseTransform(target.matrix, target.anchor, target.width, target.height, target.ui).
+	matrix := mgl32.HomogRotate3DZ(float32(math.Pi / 4))
+	target.prepare(matrix)
+	model := quadBaseTransform(matrix, target.anchor, target.width, target.height, target.ui).
 		Mul4(mgl32.Scale3D(target.width, target.height, 1))
 	inside := model.Mul4x1(mgl32.Vec4{0.5, 0.5, 0, 1})
-	if !inputTargetContains2D(target, inside.X(), inside.Y()) {
+	if !inputTargetContains2D(&target, inside.X(), inside.Y()) {
 		t.Fatal("rotated target rejected its center")
 	}
 	corners := [...]mgl32.Vec4{
@@ -470,7 +471,7 @@ func TestInputTargetContainsUsesLocalQuadInsteadOfWorldAABB(t *testing.T) {
 		minX = min(minX, corner.X())
 		maxY = max(maxY, corner.Y())
 	}
-	if inputTargetContains2D(target, minX+1, maxY-1) {
+	if inputTargetContains2D(&target, minX+1, maxY-1) {
 		t.Fatal("rotated target accepted a point only contained by its world AABB")
 	}
 }
