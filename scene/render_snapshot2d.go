@@ -22,17 +22,20 @@ type renderSnapshots2D struct {
 	inlineObjects       []TextInlineObject2D
 	lastObjects         []TextInlineObject2D
 
-	previousSprites  int
-	previousEmitters int
-	previousTilemaps int
-	previousTexts    int
-	previousSpines   int
+	previousSprites     int
+	previousEmitters    int
+	previousTilemaps    int
+	previousTexts       int
+	previousSpines      int
+	previousAppearances int
+	previousParticles   int
 }
 
 func (s *renderSnapshots2D) reset() {
 	s.previousSprites, s.previousEmitters = len(s.sprites), len(s.emitters)
 	s.previousTilemaps, s.previousTexts = len(s.tilemaps), len(s.texts)
 	s.previousSpines = len(s.spines)
+	s.previousAppearances, s.previousParticles = len(s.particleAppearances), len(s.particles)
 	s.sprites = s.sprites[:0]
 	s.emitters = s.emitters[:0]
 	s.tilemaps = s.tilemaps[:0]
@@ -53,6 +56,8 @@ func (s *renderSnapshots2D) releaseUnused() {
 	clearSnapshotTail(s.tilemaps, s.previousTilemaps)
 	clearSnapshotTail(s.texts, s.previousTexts)
 	clearSnapshotTail(s.spines, s.previousSpines)
+	clearSnapshotTail(s.particleAppearances, s.previousAppearances)
+	clearSnapshotTail(s.particles, s.previousParticles)
 }
 
 func clearSnapshotTail[T any](values []T, previousLen int) {

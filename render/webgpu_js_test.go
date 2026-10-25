@@ -180,7 +180,7 @@ func TestWebGPUMeshBindingsReuseAcrossAnimatedOffsets(t *testing.T) {
 	defer create.Release()
 	bind := js.FuncOf(func(_ js.Value, args []js.Value) any { return nil })
 	defer bind.Release()
-	d := webGPUDriver{device: webGPUObject("createBindGroup", create), frame: webGPUObject("setBindGroup", bind), dynamicOffsets: webGPUArray(0), meshBindGroups: make(map[webGPUTexturePair]*webGPUMaterialBinding), meshDataGroups: make(map[int][webGPUFramesInFlight]webGPUTextureBindGroup), meshTextureLayout: webGPUObject(), meshDataLayout: webGPUObject(), emptyDeformation: webGPUObject()}
+	d := webGPUDriver{device: webGPUObject("createBindGroup", create), frame: webGPUObject("setBindGroup", bind), dynamicOffsets: webGPUArray(0), meshTextureLayout: webGPUObject(), meshDataLayout: webGPUObject(), emptyDeformation: webGPUObject()}
 	texture := &webGPUTexture{view: webGPUObject(), sampler: webGPUObject()}
 	mesh := &webGPUMesh{deformationBuffer: webGPUObject()}
 	var extra [MeshExtraTextureSlots]*webGPUTexture
@@ -213,7 +213,7 @@ func TestWebGPUMeshBindingsReuseAcrossAnimatedOffsets(t *testing.T) {
 		t.Fatalf("buffer growth failed to invalidate groups: %d", creations)
 	}
 	d.deleteTexture(texture, false)
-	if len(d.meshBindGroups) != 0 {
+	if len(d.meshBindGroups.entries) != 0 {
 		t.Fatal("destroyed texture remains cached")
 	}
 }
@@ -268,17 +268,22 @@ func TestWebGPUMeshDestructionRetiresUnsubmittedBuffers(t *testing.T) {
 	for _, active := range [...]bool{false, true} {
 		destroyed := 0
 		destroy := js.FuncOf(func(_ js.Value, _ []js.Value) any { destroyed++; return nil })
-		d := webGPUDriver{frameActive: active, meshDataGroups: make(map[int][webGPUFramesInFlight]webGPUTextureBindGroup)}
+		d := webGPUDriver{frameActive: active}
 		mesh := &webGPUMesh{vertexBuffer: webGPUObject("destroy", destroy), indexBuffer: webGPUObject("destroy", destroy), deformationBuffer: webGPUObject("destroy", destroy)}
 		handle := d.meshes.Insert(mesh)
-		mesh.bindGroups = make(map[int][webGPUFramesInFlight]webGPUTextureBindGroup)
-		mesh.bindGroups[64] = [webGPUFramesInFlight]webGPUTextureBindGroup{}
-		mesh.bindGroups[128] = [webGPUFramesInFlight]webGPUTextureBindGroup{}
-		d.meshDataGroups[4] = [webGPUFramesInFlight]webGPUTextureBindGroup{}
+		d.device = webGPUObject("createBindGroup", js.Global().Get("Function").New("return {};"))
+		d.frame = webGPUObject("setBindGroup", js.Global().Get("Function").New(""))
+		d.dynamicOffsets = webGPUArray(0)
+		for _, size := range []int{64, 128} {
+			d.deformationSize = size
+			d.setMeshDataBindGroup(mesh)
+		}
+		d.deformationSize = 4
+		d.setMeshDataBindGroup(nil)
 		if err := d.DestroyMesh(handle); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := d.meshes.Get(handle); ok || len(mesh.bindGroups) != 0 || len(d.meshDataGroups) != 1 {
+		if _, ok := d.meshes.Get(handle); ok || mesh.bindGroups != nil || len(d.meshDataGroups.entries) != 1 {
 			t.Fatal("destroyed mesh or its bindings remain cached")
 		}
 		if active && (destroyed != 0 || len(d.frames[0].retired) != 3) || !active && (destroyed != 3 || len(d.frames[0].retired) != 0) {
@@ -299,7 +304,7 @@ func TestWebGPUTextureDestructionKeepsUnrelatedBindings(t *testing.T) {
 	defer bind.Release()
 	d := webGPUDriver{
 		device: webGPUObject("createBindGroup", create), frame: webGPUObject("setBindGroup", bind),
-		dynamicOffsets: webGPUArray(0), meshBindGroups: make(map[webGPUTexturePair]*webGPUMaterialBinding),
+		dynamicOffsets:    webGPUArray(0),
 		meshTextureLayout: webGPUObject(),
 	}
 	d.frames[0].generation = 1
@@ -319,12 +324,12 @@ func TestWebGPUTextureDestructionKeepsUnrelatedBindings(t *testing.T) {
 	}
 	d.setMeshTextureBindGroup(unrelated, unrelated, unrelated, independent, 0)
 	d.deleteTexture(extra[len(extra)-1], false)
-	if len(d.meshBindGroups) != 2 || base.materials == nil {
+	if len(d.meshBindGroups.entries) != 2 || base.materials == nil {
 		t.Fatal("destroyed extra texture left material bindings behind or removed unrelated bindings")
 	}
 	for _, texture := range extra {
 		for link := texture.materials; link != nil; link = link.next {
-			if d.meshBindGroups[link.binding.pair] != link.binding {
+			if d.meshBindGroups.entries[link.binding.key] != link.binding {
 				t.Fatal("a material peer retains a removed binding")
 			}
 		}
@@ -334,7 +339,7 @@ func TestWebGPUTextureDestructionKeepsUnrelatedBindings(t *testing.T) {
 		t.Fatal("unrelated material lost its cached binding")
 	}
 	d.deleteTexture(base, false)
-	if len(d.meshBindGroups) != 1 {
+	if len(d.meshBindGroups.entries) != 1 {
 		t.Fatal("destroying a former material peer removed an unrelated binding")
 	}
 	for _, texture := range extra {
@@ -343,7 +348,7 @@ func TestWebGPUTextureDestructionKeepsUnrelatedBindings(t *testing.T) {
 		}
 	}
 	d.deleteTexture(unrelated, false)
-	if len(d.meshBindGroups) != 0 || unrelated.materials != nil {
+	if len(d.meshBindGroups.entries) != 0 || unrelated.materials != nil {
 		t.Fatal("duplicated texture slots prevent complete cache cleanup")
 	}
 }

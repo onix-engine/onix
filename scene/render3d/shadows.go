@@ -122,6 +122,9 @@ func setupShadowAtlas3D(view *renderView3D, settings [render.MaxMeshLights]extra
 		view.shadow = &shadowAtlas3D{target: target}
 	}
 	atlas := view.shadow
+	if count < atlas.count {
+		clear(atlas.views[count:atlas.count])
+	}
 	atlas.count = count
 	atlas.target.Resize(width, height)
 	for index, light := range view.lights {
@@ -169,7 +172,7 @@ func setupShadowAtlas3D(view *renderView3D, settings [render.MaxMeshLights]extra
 			shadow.frame.Target, shadow.frame.Viewport = atlas.target, viewport
 			shadow.frame.Mode = render.RenderViewLit
 			shadow.frame.Clear = render.RenderTargetClear{Color: render.Color{A: 1}, ClearColor: mapIndex == 0, ClearDepth: mapIndex == 0}
-			shadow.extracted = shadow.extracted[:0]
+			shadow.resetExtracted()
 			shadow.lighting = render.MeshLighting{Params: [4]float32{1, 1}}
 			params := [4]float32{bias, normalBias}
 			if maps > 1 && light.Kind == render.Light3DDirectional {

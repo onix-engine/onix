@@ -338,8 +338,9 @@ func Insert[T any](world *World, entity Entity, value T) error {
 	newArchetype := world.archetypeWithAdded(oldArchetype, id)
 	newRow := newArchetype.appendEntity(entity)
 	oldRow := int(meta.row)
-	componentColumn[T](newArchetype, id).append(value, tick)
-	moveSharedRow(oldArchetype, newArchetype, oldRow, newArchetype.columnIndex(id))
+	addedIndex := newArchetype.columnIndex(id)
+	newArchetype.columns[addedIndex].(*typedColumn[T]).append(value, tick)
+	moveSharedRow(oldArchetype, newArchetype, oldRow, addedIndex)
 	world.removeArchetypeEntity(oldArchetype, oldRow)
 	world.commitMigration(index, newArchetype, newRow)
 	return nil
@@ -383,9 +384,9 @@ func Remove[T any](world *World, entity Entity) (T, bool) {
 	if !registered || !oldArchetype.has(id) {
 		return zero, false
 	}
-	removed := componentColumn[T](oldArchetype, id).values[meta.row]
 	oldRow := int(meta.row)
 	removedIndex := oldArchetype.columnIndex(id)
+	removed := oldArchetype.columns[removedIndex].(*typedColumn[T]).values[oldRow]
 	if world.componentInfos[id].onRemove != nil {
 		world.cleanupComponent(id, entity, oldArchetype.columns[removedIndex], oldRow)
 	}

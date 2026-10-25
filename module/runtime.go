@@ -148,10 +148,6 @@ func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options
 	r.fonts = make(map[[32]byte]*fontResource)
 	r.contentResources = make(map[project.ModID]*privateResources)
 	r.manager = SceneManager{runtime: r, switches: make([]switchCommand, 0, options.CommandCapacity)}
-	r.prepareWorkspace = preparation{
-		queues:  [2][]envelope{make([]envelope, 0, options.EventCapacity), make([]envelope, 0, options.EventCapacity)},
-		pending: make([]pendingRequest, options.RequestCapacity), free: make([]int, options.RequestCapacity),
-	}
 	// Registration can subsequently be edited without mutating this runtime.
 	r.registry.mods = cloneMap(registry.mods)
 	r.registry.scenes = cloneMap(registry.scenes)
@@ -167,12 +163,15 @@ func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options
 	}
 	r.inputStore = &store[Input]{values: [4][]Input{make([]Input, 1), nil}}
 	world.Commands().Reserve(options.CommandCapacity)
-	// At most one distinct store per queued event; recording used stores cannot grow.
-	for i := range 4 {
-		r.usedStores[i] = make([]valueStore, 0, options.EventCapacity)
-		r.usedSlots[i] = make([]*slotBuffer, 0, options.EventCapacity)
-	}
 	return r, nil
+}
+
+// Each registered type appears at most once per bank. Reserve on registration
+// so enqueue needs no allocation for bookkeeping, even on its first use.
+func reserveUsedBuffers[T any](buffers *[4][]T, count int) {
+	for i := range buffers {
+		buffers[i] = slices.Grow(buffers[i], count-len(buffers[i]))
+	}
 }
 
 func cloneMap[K comparable, V any](source map[K]V) map[K]V {
@@ -864,6 +863,12 @@ func (r *Runtime) disposeContext(c *Context) error {
 	c.message = nil
 	c.destroy = nil
 	c.enter, c.resume, c.exit, c.suspend = nil, nil, nil, nil
+	c.elements, c.pausedVisibility = nil, nil
+	c.nodeBundle, c.nodePrepared = ecs.PreparedBundle{}, false
+	if c.content != nil {
+		c.content.state, c.content.input = nil, nil
+		c.content = nil
+	}
 	return err
 }
 

@@ -33,6 +33,7 @@ func (r *Runtime) SyncScopes() {
 	clear(r.scopeNodes)
 	r.despawnEntities = slices.Grow(r.despawnEntities[:0], w.EntityCount())
 	r.renderBackground = false
+	previousUpdates, previousFrameUpdates := len(r.runningUpdates), len(r.runningFrameUpdates)
 	r.runningUpdates = r.runningUpdates[:0]
 	r.runningFrameUpdates = r.runningFrameUpdates[:0]
 	for _, s := range r.scenes {
@@ -65,6 +66,12 @@ func (r *Runtime) SyncScopes() {
 				r.scopeNodes[index] = sceneScopeNode{entity: root, scene: s, resolved: true}
 			}
 		}
+	}
+	if len(r.runningUpdates) < previousUpdates {
+		clear(r.runningUpdates[len(r.runningUpdates):previousUpdates])
+	}
+	if len(r.runningFrameUpdates) < previousFrameUpdates {
+		clear(r.runningFrameUpdates[len(r.runningFrameUpdates):previousFrameUpdates])
 	}
 	r.runningEntities = r.runningEntities[:0]
 	r.renderEntities = r.renderEntities[:0]

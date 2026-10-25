@@ -1,0 +1,33 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/module
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkContentCreation-6       	  458586	       434.0 ns/op	     776 B/op	       5 allocs/op
+BenchmarkContentCreation-6       	  581983	       360.9 ns/op	     776 B/op	       5 allocs/op
+BenchmarkContentCreation-6       	  744044	       356.2 ns/op	     776 B/op	       5 allocs/op
+BenchmarkDispatch-6              	 1231002	       153.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch-6              	 1381041	       130.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch-6              	 1331989	       135.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStructuredSlotEvent-6   	 1000000	       198.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStructuredSlotEvent-6   	 1000000	       189.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStructuredSlotEvent-6   	 1000000	       189.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRequestReply-6          	  533559	       326.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRequestReply-6          	  591272	       320.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRequestReply-6          	  630945	       322.0 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/module	2.383s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene/render3d
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRender3DPreparedFrame/100-6         	    1682	    101893 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    1951	     95609 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    1731	    107988 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     168	   1007756 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     192	    930130 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     189	    960262 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    3007	     53802 ns/op	   1179648 snapshot-reserved-B	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    3565	     57072 ns/op	   1179648 snapshot-reserved-B	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    3068	     53507 ns/op	   1179648 snapshot-reserved-B	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene/render3d	1.657s

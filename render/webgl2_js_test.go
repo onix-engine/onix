@@ -11,7 +11,8 @@ import (
 func TestCopyTextureToJSReusesUploadBuffer(t *testing.T) {
 	var storage js.Value
 	firstData := []byte{1, 2, 3, 4}
-	first := copyBytesToJS(&storage, firstData)
+	var retention scratchRetention
+	first := copyBytesToJS(&storage, &retention, firstData)
 	if first.Get("byteLength").Int() < len(firstData) {
 		t.Fatalf("first upload buffer is too small: %d", first.Get("byteLength").Int())
 	}
@@ -22,7 +23,7 @@ func TestCopyTextureToJSReusesUploadBuffer(t *testing.T) {
 	}
 
 	secondData := []byte{9, 8}
-	second := copyBytesToJS(&storage, secondData)
+	second := copyBytesToJS(&storage, &retention, secondData)
 	if !second.Equal(first) {
 		t.Fatal("upload buffer was replaced without growing")
 	}
@@ -32,7 +33,7 @@ func TestCopyTextureToJSReusesUploadBuffer(t *testing.T) {
 	}
 
 	larger := make([]byte, first.Get("byteLength").Int()+1)
-	third := copyBytesToJS(&storage, larger)
+	third := copyBytesToJS(&storage, &retention, larger)
 	if third.Equal(first) {
 		t.Fatal("upload buffer was not replaced when growing")
 	}

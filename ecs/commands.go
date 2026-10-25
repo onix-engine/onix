@@ -20,7 +20,7 @@ type commandStream interface {
 	apply(*World, Entity, int) error
 	truncate(int)
 	retain(int)
-	trimRetained()
+	trimRetained() bool
 	setStreamID(uint32)
 }
 
@@ -51,8 +51,11 @@ func queueCommandValue[T commandValue](commands *Commands, entity Entity, value 
 	stream.queue(commands, entity, value)
 }
 
-func (s *valueCommandStream[T]) queue(commands *Commands, entity Entity, value T) {
+func (s *commandValues[T]) queue(commands *Commands, entity Entity, value T) {
 	index := len(s.values)
+	if index == 0 {
+		commands.activeStreams = append(commands.activeStreams, s.streamID)
+	}
 	s.values = append(s.values, value)
 	commands.queue = append(commands.queue, queuedCommand{kind: commandInsert, entity: entity, data: s.streamID, valueIndex: index})
 }
@@ -71,9 +74,10 @@ func (s *commandValues[T]) retain(length int) {
 
 func (s *commandValues[T]) setStreamID(id uint32) { s.streamID = id }
 
-func (s *commandValues[T]) trimRetained() {
+func (s *commandValues[T]) trimRetained() bool {
 	s.truncate(s.retained)
 	s.retained = 0
+	return len(s.values) != 0
 }
 
 func (s *commandValues[T]) truncate(length int) {
@@ -94,12 +98,13 @@ type queuedCommand struct {
 }
 
 type Commands struct {
-	world        *World
-	queue        []queuedCommand
-	spawnEntries []preparedBundleEntry
-	streams      map[reflect.Type]commandStream
-	streamList   []commandStream
-	removals     []*removalPlan
+	world         *World
+	queue         []queuedCommand
+	spawnEntries  []preparedBundleEntry
+	streams       map[reflect.Type]commandStream
+	streamList    []commandStream
+	activeStreams []uint32 // streams with queued values; capacity is reused
+	removals      []*removalPlan
 }
 
 func (c *Commands) checkpoint() int {
@@ -153,9 +158,13 @@ func (c *Commands) trimStorage() {
 			removalLength = max(removalLength, queued.valueIndex+1)
 		}
 	}
-	for _, stream := range c.streamList {
-		stream.trimRetained()
+	active := c.activeStreams[:0]
+	for _, id := range c.activeStreams {
+		if c.streamList[id].trimRetained() {
+			active = append(active, id)
+		}
 	}
+	c.activeStreams = active
 	clear(c.spawnEntries[spawnLength:])
 	c.spawnEntries = c.spawnEntries[:spawnLength]
 	clear(c.removals[removalLength:])
@@ -172,14 +181,7 @@ func CommandInsert[T any](commands *Commands, entity Entity, value T) {
 		panic("ecs: commands is nil")
 	}
 	stream := insertCommandStreamFor[T](commands)
-	index := len(stream.values)
-	stream.values = append(stream.values, value)
-	commands.queue = append(commands.queue, queuedCommand{
-		kind:       commandInsert,
-		entity:     entity,
-		data:       stream.streamID,
-		valueIndex: index,
-	})
+	stream.queue(commands, entity, value)
 }
 
 func CommandRemove[T any](commands *Commands, entity Entity) {
@@ -326,6 +328,9 @@ func (w *World) FlushCommands() error {
 	requireWorld(w)
 	w.assertStructuralMutationAllowed()
 	queue := w.commands.queue
+	if len(queue) == 0 {
+		return nil
+	}
 	spawnEntries := w.commands.spawnEntries
 	w.commands.queue = nil
 	w.commands.spawnEntries = nil
@@ -359,9 +364,10 @@ func (c *Commands) resetStorage() {
 	if c == nil {
 		panic("ecs: commands is nil")
 	}
-	for _, stream := range c.streamList {
-		stream.truncate(0)
+	for _, id := range c.activeStreams {
+		c.streamList[id].truncate(0)
 	}
+	c.activeStreams = c.activeStreams[:0]
 	clear(c.spawnEntries)
 	c.spawnEntries = c.spawnEntries[:0]
 	clear(c.removals)

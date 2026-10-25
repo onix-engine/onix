@@ -71,13 +71,12 @@ func (pair webGPUTexturePair) textures() [3 + MeshExtraTextureSlots]*webGPUTextu
 // Each cached material owns its texture links; no per-texture maps or separate
 // adjacency nodes are allocated. Removing a material unlinks all fixed slots.
 type webGPUMaterialBinding struct {
-	pair   webGPUTexturePair
 	groups [webGPUFramesInFlight]webGPUTextureBindGroup
 	links  [3 + MeshExtraTextureSlots]webGPUMaterialLink
 }
 
 type webGPUMaterialLink struct {
-	binding        *webGPUMaterialBinding
+	binding        *frameCacheEntry[webGPUTexturePair, webGPUMaterialBinding]
 	previous, next *webGPUMaterialLink
 }
 
@@ -96,7 +95,7 @@ type webGPUTexture struct {
 }
 
 type webGPUMesh struct {
-	bindGroups        map[int][webGPUFramesInFlight]webGPUTextureBindGroup
+	bindGroups        *frameCacheEntry[webGPUDataKey, webGPUDataBinding]
 	deformation       meshDeformationLayout
 	deformationBuffer js.Value
 	vertexCount       int
@@ -185,7 +184,7 @@ type webGPUDriver struct {
 	texturePipelineLayout js.Value
 	meshDataLayout        js.Value
 	emptyDeformation      js.Value
-	meshDataGroups        map[int][webGPUFramesInFlight]webGPUTextureBindGroup
+	meshDataGroups        frameCache[webGPUDataKey, webGPUDataBinding]
 	meshTextureLayout     js.Value
 	meshPipelineLayout    js.Value
 	spritePipelineLayout  js.Value
@@ -193,7 +192,7 @@ type webGPUDriver struct {
 	textures              GenerationPool[TextureResource, *webGPUTexture]
 	targets               GenerationPool[RenderTargetResource, *webGPURenderTarget]
 	activeTarget          RenderTargetHandle
-	meshBindGroups        map[webGPUTexturePair]*webGPUMaterialBinding
+	meshBindGroups        frameCache[webGPUTexturePair, webGPUMaterialBinding]
 	meshes                GenerationPool[MeshResource, *webGPUMesh]
 	meshBuiltins          [meshVariantCount - 1]*webGPUShader
 	meshShaders           GenerationPool[MeshShaderResource, *webGPUShader]
@@ -206,6 +205,13 @@ type webGPUDriver struct {
 	deformationSize       int
 	spriteUniformData     [16 * 64]float32
 	spriteUniformOffsets  []int
+
+	cacheFrame                    uint64
+	textureDataRetention          scratchRetention
+	uploadDataRetention           scratchRetention
+	deformationWordsRetention     scratchRetention
+	deformationUniformsRetention  scratchRetention
+	spriteUniformOffsetsRetention scratchRetention
 }
 
 // NewWebGPUDriver creates the browser renderer. Device acquisition is awaited
@@ -266,12 +272,10 @@ func NewWebGPUDriver(canvas js.Value, transparent, antialias bool) (Driver, erro
 		frameIndex:     webGPUFramesInFlight - 1,
 		dynamicOffsets: webGPUArray(0),
 		blendConstant:  webGPUObject("r", 0, "g", 0, "b", 0, "a", 0),
-		meshBindGroups: make(map[webGPUTexturePair]*webGPUMaterialBinding),
 	}
 	d.textureLayout, d.shapeLayout = d.createBindGroupLayouts()
 	d.texturePipelineLayout = d.createPipelineLayout(d.textureLayout)
 	d.meshPipelineLayout = d.createPipelineLayout(d.meshTextureLayout, d.meshDataLayout)
-	d.meshDataGroups = make(map[int][webGPUFramesInFlight]webGPUTextureBindGroup)
 	d.emptyDeformation = d.device.Call("createBuffer", webGPUObject("size", 4, "usage", webGPUBufferStorage|webGPUBufferCopyDst))
 	d.spritePipelineLayout = d.createPipelineLayout(d.textureLayout, d.textureLayout, d.textureLayout, d.textureLayout)
 	d.shapePipelineLayout = d.createPipelineLayout(d.shapeLayout)
@@ -387,6 +391,14 @@ func (d *webGPUDriver) RendererInfo() RendererInfo {
 	return RendererInfo{Backend: "WebGPU", Device: d.deviceName}
 }
 
+func (d *webGPUDriver) trimScratch() {
+	trimJSUpload(&d.textureData, &d.textureDataRetention)
+	trimJSUpload(&d.uploadData, &d.uploadDataRetention)
+	d.deformationWords = trimScratch(d.deformationWords, &d.deformationWordsRetention, 1024)
+	d.deformationUniforms = trimScratch(d.deformationUniforms, &d.deformationUniformsRetention, 64)
+	d.spriteUniformOffsets = trimScratch(d.spriteUniformOffsets, &d.spriteUniformOffsetsRetention, 64)
+}
+
 func (d *webGPUDriver) BeginFrame(clear Color) error {
 	if d.frameActive || d.activeTarget.Valid() {
 		return errors.New("render: WebGPU frame is already active")
@@ -414,6 +426,9 @@ func (d *webGPUDriver) BeginFrame(clear Color) error {
 	d.applyViewport()
 	d.applyScissor()
 	d.blendSet = false
+	d.trimScratch()
+	d.cacheFrame++
+	d.trimBindingCaches()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
 }
@@ -577,7 +592,7 @@ func (d *webGPUDriver) CreateTexture(descriptor TextureDescriptor, pixels []byte
 }
 
 func (d *webGPUDriver) writeCompressedTexture(texture *webGPUTexture, descriptor TextureDescriptor, pixels []byte) error {
-	data := copyBytesToJS(&d.textureData, pixels)
+	data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 	for level, mip := range descriptor.MipChain {
 		rowBytes := ((mip.Width + 3) / 4) * 16
 		rows := (mip.Height + 3) / 4
@@ -594,7 +609,7 @@ func (d *webGPUDriver) writeTexture(texture *webGPUTexture, region TextureRegion
 	if bytesPerPixel == 0 || region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 || len(pixels) != region.Width*region.Height*bytesPerPixel {
 		return errors.New("render: invalid WebGPU texture update")
 	}
-	data := copyBytesToJS(&d.textureData, pixels)
+	data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 	destination := webGPUObject("texture", texture.value, "origin", webGPUArray(region.X, region.Y, 0), "mipLevel", 0)
 	layout := webGPUObject("offset", 0, "bytesPerRow", region.Width*bytesPerPixel, "rowsPerImage", region.Height)
 	size := webGPUArray(region.Width, region.Height, 1)
@@ -806,19 +821,7 @@ func (d *webGPUDriver) deleteTexture(texture *webGPUTexture, retire bool) {
 		return
 	}
 	for texture.materials != nil {
-		binding := texture.materials.binding
-		delete(d.meshBindGroups, binding.pair)
-		for index, owner := range binding.pair.textures() {
-			link := &binding.links[index]
-			if link.previous != nil {
-				link.previous.next = link.next
-			} else {
-				owner.materials = link.next
-			}
-			if link.next != nil {
-				link.next.previous = link.previous
-			}
-		}
+		d.meshBindGroups.remove(texture.materials.binding, unlinkWebGPUMaterial)
 	}
 	if retire && d.frameActive {
 		d.frames[d.frameIndex].retired = append(d.frames[d.frameIndex].retired, texture.value)
@@ -996,7 +999,9 @@ func (d *webGPUDriver) DestroyMesh(handle MeshHandle) error {
 			buffer.Call("destroy")
 		}
 	}
-	clear(mesh.bindGroups)
+	for mesh.bindGroups != nil {
+		d.meshDataGroups.remove(mesh.bindGroups, unlinkWebGPUData)
+	}
 	return nil
 }
 
@@ -1114,6 +1119,7 @@ func (d *webGPUDriver) drawMeshes(batch MeshBatch3D, gpuDeformation bool) error 
 	}
 	if gpuDeformation {
 		var err error
+		d.deformationWords = resetScratch(d.deformationWords, &d.deformationWordsRetention)
 		d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 		if err != nil {
 			return fmt.Errorf("render: invalid WebGPU deformation: %w", err)
@@ -1332,7 +1338,6 @@ func (d *webGPUDriver) Destroy() {
 		return true
 	})
 	d.textures.Range(func(texture *webGPUTexture) bool {
-		texture.materials = nil
 		texture.value.Call("destroy")
 		return true
 	})
@@ -1354,8 +1359,8 @@ func (d *webGPUDriver) Destroy() {
 	if d.emptyDeformation.Truthy() {
 		d.emptyDeformation.Call("destroy")
 	}
-	clear(d.meshDataGroups)
-	clear(d.meshBindGroups)
+	d.meshDataGroups.clear(unlinkWebGPUData)
+	d.meshBindGroups.clear(unlinkWebGPUMaterial)
 	d.textures.Clear()
 	d.targets.Clear()
 	d.meshes.Clear()
@@ -1456,7 +1461,7 @@ func (d *webGPUDriver) uploadSprite2D(projection [16]float32, instanceBytes []by
 	instanceOffset := align(frame.offset, 4)
 	uniformOffset := align(instanceOffset+len(instanceBytes), 256)
 	projection = d.transformProjection(projection)
-	d.spriteUniformOffsets = growSlice(d.spriteUniformOffsets, len(draws))
+	d.spriteUniformOffsets = growSlice(resetScratch(d.spriteUniformOffsets, &d.spriteUniformOffsetsRetention), len(draws))
 	var offsets [16]int
 	var seen uint16
 	count := 0
@@ -1514,7 +1519,7 @@ func (d *webGPUDriver) uploadMesh(batch MeshBatch3D, gpuDeformation bool) (int, 
 	storageOffset := align(instanceOffset+len(sliceBytes(batch.Instances)), 256)
 	storageBytes := 0
 	if gpuDeformation && len(batch.Deformations) != 0 {
-		d.deformationUniforms = d.deformationUniforms[:0]
+		d.deformationUniforms = resetScratch(d.deformationUniforms, &d.deformationUniformsRetention)
 		storageBytes = len(sliceBytes(d.deformationWords))
 	}
 	d.deformationOffset = storageOffset
@@ -1571,7 +1576,7 @@ func (d *webGPUDriver) writeBuffer(offset int, data []byte) {
 	if len(data) == 0 {
 		return
 	}
-	d.queue.Call("writeBuffer", d.frames[d.frameIndex].buffer.value, offset, copyBytesToJS(&d.uploadData, data), 0, len(data))
+	d.queue.Call("writeBuffer", d.frames[d.frameIndex].buffer.value, offset, copyBytesToJS(&d.uploadData, &d.uploadDataRetention, data), 0, len(data))
 }
 
 func (d *webGPUDriver) writeStaticBuffer(buffer js.Value, data []byte) {
@@ -1582,7 +1587,7 @@ func (d *webGPUDriver) writeStaticBuffer(buffer js.Value, data []byte) {
 	}
 	// Share the frame upload array. The explicit size excludes unused capacity
 	// when the next upload is smaller than the previous one.
-	d.queue.Call("writeBuffer", buffer, 0, copyBytesToJS(&d.uploadData, data), 0, len(data))
+	d.queue.Call("writeBuffer", buffer, 0, copyBytesToJS(&d.uploadData, &d.uploadDataRetention, data), 0, len(data))
 }
 
 func (d *webGPUDriver) textureBindGroup(texture *webGPUTexture) js.Value {
@@ -1605,18 +1610,17 @@ func (d *webGPUDriver) textureBindGroup(texture *webGPUTexture) js.Value {
 func (d *webGPUDriver) setMeshTextureBindGroup(texture, normal, metallicRoughness *webGPUTexture, extra [MeshExtraTextureSlots]*webGPUTexture, uniformOffset int) {
 	frame := &d.frames[d.frameIndex]
 	pair := webGPUTexturePair{base: texture, normal: normal, metallicRoughness: metallicRoughness, extra: extra}
-	binding := d.meshBindGroups[pair]
-	if binding == nil {
-		binding = &webGPUMaterialBinding{pair: pair}
+	entry, created := d.meshBindGroups.getOrCreate(pair, d.cacheFrame)
+	binding := &entry.value
+	if created {
 		for index, owner := range pair.textures() {
 			link := &binding.links[index]
-			*link = webGPUMaterialLink{binding: binding, next: owner.materials}
+			*link = webGPUMaterialLink{binding: entry, next: owner.materials}
 			if link.next != nil {
 				link.next.previous = link
 			}
 			owner.materials = link
 		}
-		d.meshBindGroups[pair] = binding
 	}
 	cached := &binding.groups
 	if cached[d.frameIndex].generation != frame.generation || !cached[d.frameIndex].value.Truthy() {
@@ -2201,14 +2205,15 @@ func (d *webGPUDriver) SetMeshDeformation(handle MeshHandle, descriptor MeshDefo
 
 func (d *webGPUDriver) setMeshDataBindGroup(mesh *webGPUMesh) {
 	frame := &d.frames[d.frameIndex]
-	groups := d.meshDataGroups
-	if mesh != nil {
-		if mesh.bindGroups == nil {
-			mesh.bindGroups = make(map[int][webGPUFramesInFlight]webGPUTextureBindGroup)
+	entry, created := d.meshDataGroups.getOrCreate(webGPUDataKey{mesh: mesh, size: d.deformationSize}, d.cacheFrame)
+	if created && mesh != nil {
+		entry.value.next = mesh.bindGroups
+		if mesh.bindGroups != nil {
+			mesh.bindGroups.value.previous = entry
 		}
-		groups = mesh.bindGroups
+		mesh.bindGroups = entry
 	}
-	cached := groups[d.deformationSize]
+	cached := &entry.value.groups
 	if cached[d.frameIndex].generation != frame.generation || !cached[d.frameIndex].value.Truthy() {
 		staticBuffer := d.emptyDeformation
 		if mesh != nil {
@@ -2219,7 +2224,6 @@ func (d *webGPUDriver) setMeshDataBindGroup(mesh *webGPUMesh) {
 			webGPUObject("binding", 1, "resource", webGPUObject("buffer", staticBuffer)),
 		)))
 		cached[d.frameIndex].generation = frame.generation
-		groups[d.deformationSize] = cached
 	}
 	d.dynamicOffsets.SetIndex(0, d.deformationOffset)
 	d.frame.Call("setBindGroup", 1, cached[d.frameIndex].value, d.dynamicOffsets)

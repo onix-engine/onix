@@ -194,6 +194,7 @@ func typedStore[T any](r *Runtime) *store[T] {
 		}
 	}
 	r.typedStores[key] = s
+	reserveUsedBuffers(&r.usedStores, min(len(r.typedStores), r.options.EventCapacity))
 	return s
 }
 func BindEmitter[T any](c *Context, topic string) (Emitter[T], error) {

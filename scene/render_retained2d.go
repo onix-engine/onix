@@ -509,6 +509,9 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 		cache.paints = reuse.Resize(cache.paints, len(items))
 		for _, node := range cache.nodes {
 			node.reset()
+			// Rebuild membership from the current component queries, including
+			// entities whose dynamic component or visibility was removed.
+			node.dynamic = 0
 			node.first = -1
 			node.extra = node.extra[:0]
 			node.queued = false

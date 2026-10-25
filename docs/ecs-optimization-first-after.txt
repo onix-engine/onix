@@ -1,0 +1,110 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkAuditEmptyCommandFlush/0 	100000000	         2.690 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/0 	100000000	         2.462 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/0 	99872329	         2.550 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/0 	85803704	         2.721 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/0 	100000000	         2.525 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/64         	88090009	         2.431 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/64         	100000000	         2.520 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/64         	100000000	         2.424 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/64         	100000000	         2.417 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/64         	91669572	         2.519 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/1024       	100000000	         2.467 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/1024       	93393426	         2.406 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/1024       	100000000	         2.404 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/1024       	100000000	         2.628 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditEmptyCommandFlush/1024       	100000000	         2.535 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/0        	 3131794	        75.15 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/0        	 3186486	        77.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/0        	 2993089	        79.50 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/0        	 2993778	        79.84 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/0        	 3132826	        76.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/64       	 3184084	        77.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/64       	 3036811	        78.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/64       	 3115578	        77.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/64       	 3173509	        75.65 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/64       	 3185601	        75.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/1024     	 3121173	        78.74 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/1024     	 3144536	        76.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/1024     	 3085899	        76.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/1024     	 3076125	        75.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditSingleActiveCommand/1024     	 3223622	        77.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAuditTransitionBinding/8/Removal  	  714315	       359.5 ns/op	     424 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/8/Removal  	  621930	       367.1 ns/op	     424 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/8/Removal  	  753864	       367.6 ns/op	     424 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/8/Removal  	  830730	       373.3 ns/op	     424 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/8/Removal  	  623048	       392.1 ns/op	     424 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/8/Patch    	  512397	       553.4 ns/op	     504 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/8/Patch    	  410808	       490.5 ns/op	     504 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/8/Patch    	  419724	       570.1 ns/op	     504 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/8/Patch    	  489931	       523.0 ns/op	     504 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/8/Patch    	  523213	       508.1 ns/op	     504 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/64/Removal 	  129914	      1797 ns/op	    3016 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/64/Removal 	  130347	      2017 ns/op	    3016 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/64/Removal 	  137942	      1722 ns/op	    3016 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/64/Removal 	  151844	      1748 ns/op	    3016 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/64/Removal 	  137636	      1657 ns/op	    3016 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/64/Patch   	  145423	      1870 ns/op	    3112 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/64/Patch   	  129140	      1942 ns/op	    3112 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/64/Patch   	  137656	      1778 ns/op	    3112 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/64/Patch   	  148362	      1793 ns/op	    3112 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/64/Patch   	  127520	      1865 ns/op	    3112 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/256/Removal         	   36259	      6549 ns/op	   11976 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/256/Removal         	   36516	      6202 ns/op	   11976 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/256/Removal         	   41772	      6160 ns/op	   11976 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/256/Removal         	   41473	      5918 ns/op	   11976 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/256/Removal         	   38204	      6384 ns/op	   11976 B/op	       4 allocs/op
+BenchmarkAuditTransitionBinding/256/Patch           	   40852	      5971 ns/op	   12168 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/256/Patch           	   38466	      6093 ns/op	   12168 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/256/Patch           	   40639	      6073 ns/op	   12168 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/256/Patch           	   40966	      6252 ns/op	   12168 B/op	       5 allocs/op
+BenchmarkAuditTransitionBinding/256/Patch           	   39678	      5994 ns/op	   12168 B/op	       5 allocs/op
+BenchmarkCommandBatch/Insert                        	    4398	     55689 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Insert                        	    4038	     57093 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Insert                        	    4638	     57602 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Insert                        	    4326	     57220 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Insert                        	    4590	     56466 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn                         	    2353	    103560 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn                         	    2343	    100544 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn                         	    2412	    109030 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn                         	    2359	     98640 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/Spawn                         	    2522	     97761 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared                	    2166	    104489 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared                	    2539	     99167 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared                	    2493	    101279 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared                	    2515	    100412 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkCommandBatch/RemovePrepared                	    2622	     95721 ns/op	        24.00 B/command	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential                      	  233029	      1112 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential                      	  225147	      1067 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential                      	  197818	      1090 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential                      	  224064	      1064 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Sequential                      	  220398	      1085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch                           	  939367	       248.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch                           	  925664	       254.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch                           	  926971	       263.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch                           	  937072	       262.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Patch                           	  990495	       265.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands                        	  656208	       382.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands                        	  633390	       378.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands                        	  669270	       373.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands                        	  677895	       369.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMixedPatch/Commands                        	  668437	       383.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                      	 3016621	        79.57 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                      	 3080887	        78.12 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                      	 3074474	        78.40 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                      	 2786606	        91.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommandInsertRecycled                      	 3049974	        78.49 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim                       	   91029	      2720 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim                       	   89252	      2653 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim                       	   90916	      2777 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim                       	   88164	      2749 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalCommandTrim                       	   89934	      2734 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration                         	  605434	       390.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration                         	  669888	       401.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration                         	  640567	       392.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration                         	  656827	       381.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTraversalMigration                         	  660368	       378.2 ns/op	       0 B/op	       0 allocs/op
+PASS

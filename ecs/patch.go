@@ -1,22 +1,27 @@
 package ecs
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 )
 
 type patchPlan struct {
-	world        *World
-	writes       []componentID // caller order, independent of archetype order
-	sortedWrites []componentID
-	removed      componentMask
-	transitions  map[uint32]*patchTransition
+	world       *World
+	writes      []patchWrite // sorted IDs with their caller argument positions
+	removed     componentMask
+	transitions map[uint32]*patchTransition
+}
+
+type patchWrite struct {
+	id    componentID
+	index uint32
 }
 
 type patchTransition struct {
 	source, target *archetype
 	columns        []removalColumn
-	removed        []removalColumn
+	removed        []int // indices into columns
 	writes         []patchColumn
 }
 
@@ -35,15 +40,21 @@ type patchRow struct {
 func newPatchPlan(world *World, writes []componentID, removed []ComponentType) *patchPlan {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := slices.Clone(writes)
-	if duplicate, ok := sortUniqueIDs(ids); !ok {
-		panic(fmt.Sprintf("ecs: duplicate component %s in patch", world.componentInfos[duplicate].typ))
+	entries := make([]patchWrite, len(writes))
+	for i, id := range writes {
+		entries[i] = patchWrite{id: id, index: uint32(i)}
+	}
+	slices.SortFunc(entries, func(a, b patchWrite) int { return cmp.Compare(a.id, b.id) })
+	for i := 1; i < len(entries); i++ {
+		if entries[i-1].id == entries[i].id {
+			panic(fmt.Sprintf("ecs: duplicate component %s in patch", world.componentInfos[entries[i].id].typ))
+		}
 	}
 	mask := componentTypeMask(world, removed)
-	for _, id := range ids {
-		mask = mask.without(id)
+	for _, entry := range entries {
+		mask = mask.without(entry.id)
 	}
-	return &patchPlan{world: world, writes: slices.Clone(writes), sortedWrites: ids, removed: mask, transitions: make(map[uint32]*patchTransition)}
+	return &patchPlan{world: world, writes: entries, removed: mask, transitions: make(map[uint32]*patchTransition)}
 }
 
 func (p *patchPlan) reserve(capacity int) {
@@ -81,7 +92,8 @@ func (p *patchPlan) begin(entity Entity) (patchRow, error) {
 	t := p.transition(w.archetypes[meta.archetypeID])
 	row := int(meta.row)
 	if t.source.hasCleanup {
-		for _, entry := range t.removed {
+		for _, index := range t.removed {
+			entry := t.columns[index]
 			w.cleanupComponent(entry.id, entity, entry.source, row)
 		}
 	}
@@ -127,39 +139,41 @@ func (p *patchPlan) transition(source *archetype) *patchTransition {
 	writeIndex := 0
 	for i, id := range source.ids {
 		// Source IDs and write IDs are sorted; each cursor only moves forward.
-		for writeIndex < len(p.sortedWrites) && p.sortedWrites[writeIndex] < id {
-			ids = append(ids, p.sortedWrites[writeIndex])
+		for writeIndex < len(p.writes) && p.writes[writeIndex].id < id {
+			ids = append(ids, p.writes[writeIndex].id)
 			writeIndex++
 		}
-		if writeIndex < len(p.sortedWrites) && p.sortedWrites[writeIndex] == id {
+		if writeIndex < len(p.writes) && p.writes[writeIndex].id == id {
+			t.writes[p.writes[writeIndex].index].source = source.columns[i]
 			writeIndex++
 		}
-		entry := removalColumn{id: id, source: source.column(id)}
+		entry := removalColumn{id: id, source: source.columns[i]}
 		if p.removed.has(id) {
-			t.removed = append(t.removed, entry)
+			t.removed = append(t.removed, i)
 		} else {
 			ids = append(ids, id)
 		}
 		t.columns[i] = entry
 	}
-	ids = append(ids, p.sortedWrites[writeIndex:]...)
+	for _, write := range p.writes[writeIndex:] {
+		ids = append(ids, write.id)
+	}
 	t.target = p.world.archetypeForOwned(ids)
-	// Source IDs, write IDs and columns are all sorted, so one forward cursor
-	// decides which columns move. Overwritten and removed columns keep a nil
-	// target and are dropped instead of being copied.
+	// Bind targets with forward cursors. Overwritten and removed source
+	// columns keep nil targets, while writes retain their caller order.
 	writeIndex = 0
-	for i := range t.columns {
-		entry := &t.columns[i]
-		for writeIndex < len(p.sortedWrites) && p.sortedWrites[writeIndex] < entry.id {
+	sourceIndex := 0
+	for i, id := range t.target.ids {
+		if writeIndex < len(p.writes) && p.writes[writeIndex].id == id {
+			t.writes[p.writes[writeIndex].index].target = t.target.columns[i]
 			writeIndex++
-		}
-		if writeIndex < len(p.sortedWrites) && p.sortedWrites[writeIndex] == entry.id {
 			continue
 		}
-		entry.target = t.target.column(entry.id)
-	}
-	for i, id := range p.writes {
-		t.writes[i] = patchColumn{source: source.column(id), target: t.target.column(id)}
+		for source.ids[sourceIndex] < id {
+			sourceIndex++
+		}
+		t.columns[sourceIndex].target = t.target.columns[i]
+		sourceIndex++
 	}
 	p.transitions[source.id] = t
 	return t

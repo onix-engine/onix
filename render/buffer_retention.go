@@ -34,3 +34,22 @@ func trimUploadBuffer[T any](buffer []T, retention *bufferRetention, used, minim
 	}
 	return buffer[:0]
 }
+
+// scratchRetention measures the largest batch between frame starts, including
+// batches overwritten or flushed before the frame ends. Scratch is consumed
+// synchronously and never owns resources referenced by submitted GPU work.
+type scratchRetention struct {
+	retention bufferRetention
+	used      int
+}
+
+func resetScratch[T any](buffer []T, retention *scratchRetention) []T {
+	retention.used = max(retention.used, len(buffer))
+	return buffer[:0]
+}
+
+func trimScratch[T any](buffer []T, retention *scratchRetention, minimum int) []T {
+	used := max(retention.used, len(buffer))
+	retention.used = 0
+	return trimUploadBuffer(buffer, &retention.retention, used, minimum)
+}

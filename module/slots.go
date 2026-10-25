@@ -225,13 +225,15 @@ func (r *Runtime) slotBuffer(shape project.SlotValue) *slotBuffer {
 		return buffer
 	}
 	buffer := &slotBuffer{shape: cloneValue(shape)}
+	clearValue(&buffer.shape)
 	for i := range 2 {
 		buffer.values[i] = make([]project.SlotValue, r.options.PayloadCapacity)
 		for j := range buffer.values[i] {
-			buffer.values[i][j] = cloneValue(shape)
+			buffer.values[i][j] = cloneValue(buffer.shape)
 		}
 	}
 	r.slotBuffers[shape.Type] = buffer
+	reserveUsedBuffers(&r.usedSlots, min(len(r.slotBuffers), r.options.EventCapacity))
 	return buffer
 }
 

@@ -402,10 +402,16 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 	parkedQueues, parkedPending, parkedFree := r.queues, r.pending, r.freePending
 	parkedFirst, parkedLast, parkedWrite, parkedTick := r.pendingFirst, r.pendingLast, r.write, r.tick
 	p := &r.prepareWorkspace
+	if p.pending == nil {
+		p.pending = make([]pendingRequest, r.options.RequestCapacity)
+		p.free = make([]int, r.options.RequestCapacity)
+		for i := range p.queues {
+			p.queues[i] = make([]envelope, 0, r.options.EventCapacity)
+		}
+	}
 	p.scene = target
 	r.preparation = p
 	r.queues, r.pending, r.freePending = p.queues, p.pending, p.free[:r.options.RequestCapacity]
-	clear(r.pending)
 	for i := range r.freePending {
 		r.freePending[i] = r.options.RequestCapacity - 1 - i
 	}
@@ -431,6 +437,11 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 				r.busy = false
 				err = joinError(err, r.flushStructural())
 			}
+		}
+		// Failed hooks may leave requests unsettled. Release their references
+		// before parking the workspace, rather than at the next preparation.
+		for r.pendingFirst >= 0 {
+			r.releasePending(r.pendingFirst)
 		}
 		r.resetBuffer(2)
 		r.resetBuffer(3)

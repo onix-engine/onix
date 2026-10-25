@@ -41,10 +41,20 @@ type nativeDrawState struct {
 	draws            []C.OnixNativeSpriteDraw
 	draws3D          []C.OnixNativeMeshDraw3D
 	deformationWords []uint32
+
+	drawRetention        scratchRetention
+	meshDrawRetention    scratchRetention
+	deformationRetention scratchRetention
+}
+
+func (d *nativeDrawState) trimScratch() {
+	d.draws = trimScratch(d.draws, &d.drawRetention, 64)
+	d.draws3D = trimScratch(d.draws3D, &d.meshDrawRetention, 64)
+	d.deformationWords = trimScratch(d.deformationWords, &d.deformationRetention, 1024)
 }
 
 func (d *nativeDrawState) packSpriteDraws(batch *SpriteBatch, backend nativeBackend) (uint64, error) {
-	d.draws = d.draws[:0]
+	d.draws = resetScratch(d.draws, &d.drawRetention)
 	d.spriteBytes = 0
 	var sprites uint64
 	for _, draw := range batch.Draws {
@@ -86,9 +96,9 @@ func (d *nativeDrawState) packMeshDraws(batch *MeshBatch3D, backend nativeBacken
 	if dynamic && (len(batch.Vertices) == 0 || len(batch.Indices) == 0) {
 		return counts, nativeGeometryError(backend, "render: incomplete %s dynamic mesh data")
 	}
-	d.draws3D = d.draws3D[:0]
+	d.draws3D = resetScratch(d.draws3D, &d.meshDrawRetention)
 	if !gpuDeformation {
-		d.deformationWords = d.deformationWords[:0]
+		d.deformationWords = resetScratch(d.deformationWords, &d.deformationRetention)
 	}
 	if len(d.deformationWords) == 0 {
 		d.deformationWords = append(d.deformationWords, 0)
@@ -172,7 +182,7 @@ func (d *nativeDrawState) packMeshPickingDraws(batch *MeshBatch3D, backend nativ
 	if dynamic && (len(batch.Vertices) == 0 || len(batch.Indices) == 0) {
 		return nativeGeometryError(backend, "render: incomplete %s dynamic mesh picking data")
 	}
-	d.draws3D = d.draws3D[:0]
+	d.draws3D = resetScratch(d.draws3D, &d.meshDrawRetention)
 	for _, draw := range batch.Draws {
 		mesh := uint32(0)
 		if draw.Mesh.Valid() {

@@ -23,8 +23,11 @@ type Content struct {
 }
 
 func (c *Context) Content() *Content {
+	if c == nil || !c.live {
+		return nil
+	}
 	if c.content == nil {
-		c.content = &Content{context: c, state: make(map[reflect.Type]any), input: input.NewState()}
+		c.content = &Content{context: c}
 	}
 	return c.content
 }
@@ -115,6 +118,9 @@ func ContentResource[T any](c *Content) (T, bool) {
 		if !ok || state == nil {
 			return zero, false
 		}
+		if c.input == nil {
+			c.input = input.NewState()
+		}
 		c.input.CopyFrom(state)
 		return any(c.input).(T), true
 	case *scene.Time:
@@ -131,6 +137,12 @@ func ContentResource[T any](c *Content) (T, bool) {
 	return zero, false
 }
 func ContentStore[T any](c *Content, value T) {
+	if c == nil || !c.context.live {
+		return
+	}
+	if c.state == nil {
+		c.state = make(map[reflect.Type]any)
+	}
 	t := reflect.TypeFor[T]()
 	if slot, ok := c.state[t].(*T); ok {
 		*slot = value
@@ -139,6 +151,9 @@ func ContentStore[T any](c *Content, value T) {
 	c.state[t] = &value
 }
 func ContentResourceMut[T any](c *Content) (*T, bool) {
+	if c == nil || !c.context.live {
+		return nil, false
+	}
 	value, ok := c.state[reflect.TypeFor[T]()].(*T)
 	return value, ok
 }

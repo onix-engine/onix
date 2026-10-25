@@ -124,6 +124,8 @@ type vulkanDriver struct {
 	scissor        Rect
 	scissorEnabled bool
 	scissorSet     bool
+
+	updateRetention scratchRetention
 }
 
 func NewVulkanDriver(surface VulkanSurface) (Driver, error) {
@@ -209,6 +211,8 @@ func (d *vulkanDriver) BeginFrame(clear Color) error {
 	if C.onix_vk_begin_frame(d.native, &values[0]) == 0 {
 		return vulkanError("begin frame")
 	}
+	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
+	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
 }
@@ -342,7 +346,7 @@ func (d *vulkanDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = d.updates[:0]
+	d.updates = resetScratch(d.updates, &d.updateRetention)
 	var length int
 	var uploadBytes uint64
 	for _, update := range updates {
@@ -651,6 +655,7 @@ func vulkanMeshPush(batch *MeshBatch3D) C.OnixVkMeshPush {
 
 func (d *vulkanDriver) DrawMeshesDeformed(batch MeshBatch3D) error {
 	var err error
+	d.deformationWords = resetScratch(d.deformationWords, &d.deformationRetention)
 	d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 	if err != nil {
 		return fmt.Errorf("render: invalid Vulkan deformation: %w", err)

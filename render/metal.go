@@ -62,6 +62,8 @@ type metalDriver struct {
 	scissor        Rect
 	scissorEnabled bool
 	scissorSet     bool
+
+	updateRetention scratchRetention
 }
 
 func NewMetalDriver(surface MetalSurface) (Driver, error) {
@@ -113,6 +115,8 @@ func (d *metalDriver) BeginFrame(clear Color) error {
 	}
 	d.pixels = trimUploadBuffer(d.pixels, &d.pixelRetention, d.pixelBytes, 64<<10)
 	d.pixelBytes = 0
+	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
+	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
 }
@@ -233,10 +237,11 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = d.updates[:0]
+	d.updates = resetScratch(d.updates, &d.updateRetention)
 	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
+	var length int
 	for _, update := range updates {
 		native, ok := d.textures.Get(update.Texture)
 		region := update.Region
@@ -244,10 +249,11 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 			len(update.Pixels) == 0 {
 			return errors.New("render: invalid Metal texture update")
 		}
-		offset := len(d.pixels)
-		if len(updates) > 1 {
-			d.pixels = append(d.pixels, update.Pixels...)
+		offset := length
+		if len(update.Pixels) > int(^uint(0)>>1)-length {
+			return errors.New("render: texture updates are too large")
 		}
+		length += len(update.Pixels)
 		uploadBytes += uint64(len(update.Pixels))
 		d.updates = append(d.updates, C.OnixMetalTextureUpdate{
 			texture:     C.uint32_t(native),
@@ -260,6 +266,7 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 		})
 	}
 	if len(updates) > 1 {
+		d.pixels = packTexturePixels(d.pixels, updates, length)
 		pixels = d.pixels
 		d.pixelBytes = max(d.pixelBytes, len(pixels))
 	}
@@ -525,6 +532,7 @@ func (d *metalDriver) DrawMeshPicking(batch MeshBatch3D) error {
 
 func (d *metalDriver) DrawMeshesDeformed(batch MeshBatch3D) error {
 	var err error
+	d.deformationWords = resetScratch(d.deformationWords, &d.deformationRetention)
 	d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 	if err != nil {
 		return fmt.Errorf("render: invalid Metal deformation: %w", err)

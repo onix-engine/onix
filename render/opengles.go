@@ -679,6 +679,11 @@ type openGLESDriver struct {
 	blendEnabled   bool
 	depthEnabled   bool
 	destroyed      bool
+
+	updateRetention       scratchRetention
+	spriteDrawsRetention  scratchRetention
+	meshDrawsRetention    scratchRetention
+	pickingDrawsRetention scratchRetention
 }
 
 func newOpenGLESDriver(display C.EGLDisplay, window uintptr, width, height int) (Driver, error) {
@@ -854,6 +859,10 @@ func (d *openGLESDriver) BeginFrame(clear Color) error {
 	}
 	d.pixels = trimUploadBuffer(d.pixels, &d.pixelRetention, d.pixelBytes, 64<<10)
 	d.pixelBytes = 0
+	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
+	d.spriteDraws = trimScratch(d.spriteDraws, &d.spriteDrawsRetention, 64)
+	d.meshDraws = trimScratch(d.meshDraws, &d.meshDrawsRetention, 64)
+	d.pickingDraws = trimScratch(d.pickingDraws, &d.pickingDrawsRetention, 64)
 	d.beginFrameStatistics(d.width, d.height)
 	return glError("begin frame")
 }
@@ -951,10 +960,11 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = d.updates[:0]
+	d.updates = resetScratch(d.updates, &d.updateRetention)
 	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
+	var length int
 	for _, update := range updates {
 		texture, ok := d.textures.Get(update.Texture)
 		region := update.Region
@@ -966,10 +976,11 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 		if texture.format == TextureFormatR8 {
 			format = C.GL_RED
 		}
-		offset := len(d.pixels)
-		if len(updates) > 1 {
-			d.pixels = append(d.pixels, update.Pixels...)
+		offset := length
+		if len(update.Pixels) > int(^uint(0)>>1)-length {
+			return errors.New("render: texture updates are too large")
 		}
+		length += len(update.Pixels)
 		uploadBytes += uint64(len(update.Pixels))
 		d.updates = append(d.updates, C.OnixGLESTextureUpdate{
 			texture: texture.value, x: C.GLint(region.X), y: C.GLint(region.Y),
@@ -978,6 +989,7 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 		})
 	}
 	if len(updates) > 1 {
+		d.pixels = packTexturePixels(d.pixels, updates, length)
 		pixels = d.pixels
 		d.pixelBytes = max(d.pixelBytes, len(pixels))
 	}
@@ -1223,7 +1235,7 @@ func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 		}
 		d.useProgram(program)
 		d.setProjection(program, batch.Projection)
-		d.spriteDraws = d.spriteDraws[:0]
+		d.spriteDraws = resetScratch(d.spriteDraws, &d.spriteDrawsRetention)
 		for index < len(batch.Draws) {
 			draw := batch.Draws[index]
 			drawProgram := &d.programs[PipelineSprite]
@@ -1346,7 +1358,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
 	var counts meshDrawStatistics
-	d.meshDraws = d.meshDraws[:0]
+	d.meshDraws = resetScratch(d.meshDraws, &d.meshDrawsRetention)
 	flush := func(program *glesProgram, vertexBuffer, indexBuffer C.GLuint) {
 		if len(d.meshDraws) == 0 {
 			return
@@ -1354,7 +1366,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 		d.boundTexture = C.onix_gl_draw_mesh_run(&d.meshDraws[0], C.size_t(len(d.meshDraws)), d.meshGeometry.instanceBuffer,
 			vertexBuffer, indexBuffer, program.hasNormalTexture, program.hasMetallicRoughnessTexture,
 			C.GLsizei(unsafe.Sizeof(Vertex3D{})), C.GLsizei(unsafe.Sizeof(Instance3D{})), d.boundTexture)
-		d.meshDraws = d.meshDraws[:0]
+		d.meshDraws = resetScratch(d.meshDraws, &d.meshDrawsRetention)
 	}
 	var currentDrawProgram *glesProgram
 	for _, draw := range batch.Draws {
@@ -1477,14 +1489,14 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 	boundGeometry := false
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
-	d.pickingDraws = d.pickingDraws[:0]
+	d.pickingDraws = resetScratch(d.pickingDraws, &d.pickingDrawsRetention)
 	flush := func() {
 		if len(d.pickingDraws) == 0 {
 			return
 		}
 		C.onix_gl_draw_mesh_picking_run(&d.pickingDraws[0], C.size_t(len(d.pickingDraws)), d.meshGeometry.instanceBuffer,
 			currentVertexBuffer, currentIndexBuffer, C.GLsizei(unsafe.Sizeof(Vertex3D{})), C.GLsizei(unsafe.Sizeof(Instance3D{})))
-		d.pickingDraws = d.pickingDraws[:0]
+		d.pickingDraws = resetScratch(d.pickingDraws, &d.pickingDrawsRetention)
 	}
 	for _, draw := range batch.Draws {
 		if !boundGeometry || draw.Mesh != boundMesh {

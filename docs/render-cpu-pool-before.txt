@@ -1,0 +1,23 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/render
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkGenerationPoolColdLifecycle/resources=1024         	    7833	     30204 ns/op	   51824 B/op	      23 allocs/op
+BenchmarkGenerationPoolColdLifecycle/resources=1024         	   10000	     33375 ns/op	   51824 B/op	      23 allocs/op
+BenchmarkGenerationPoolColdLifecycle/resources=1024         	   11910	     36265 ns/op	   51824 B/op	      23 allocs/op
+BenchmarkGenerationPoolColdLifecycle/resources=65536        	      99	   2463595 ns/op	 5521272 B/op	      50 allocs/op
+BenchmarkGenerationPoolColdLifecycle/resources=65536        	     116	   1803898 ns/op	 5521272 B/op	      50 allocs/op
+BenchmarkGenerationPoolColdLifecycle/resources=65536        	     176	   1502769 ns/op	 5521272 B/op	      50 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1                    	12745158	        19.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1                    	12489994	        20.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1                    	11710170	        23.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1                   	14195876	        18.30 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1                   	18266976	        13.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1                   	16204731	        12.79 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024                 	   12878	     17660 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024                 	   12829	     16993 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/meshes=1024                 	   12015	     20898 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024                	   11180	     18208 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024                	   15240	     15795 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeResourceRegistry/targets=1024                	   19136	     12680 ns/op	       0 B/op	       0 allocs/op
+PASS

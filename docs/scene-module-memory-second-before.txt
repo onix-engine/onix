@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/module
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkContentCreation-6   	  187554	       924.0 ns/op	    1624 B/op	      13 allocs/op
+BenchmarkContentCreation-6   	  140898	      1181 ns/op	    1624 B/op	      13 allocs/op
+BenchmarkContentCreation-6   	  294750	       812.1 ns/op	    1624 B/op	      13 allocs/op
+PASS
+ok  	github.com/diiyw/onix/module	0.590s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene/render3d
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRender3DPreparedFrame/100-6         	    1532	    105858 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    1731	    104143 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/100-6         	    1858	    107442 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     170	   1062104 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     176	   1040477 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000-6        	     165	   1047183 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    1717	    104839 ns/op	   2702592 snapshot-reserved-B	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    1536	    113151 ns/op	   2702592 snapshot-reserved-B	       0 B/op	       0 allocs/op
+BenchmarkPreparedSnapshotMemory-6            	    1659	    103732 ns/op	   2702592 snapshot-reserved-B	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene/render3d	1.669s

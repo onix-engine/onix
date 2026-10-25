@@ -187,6 +187,7 @@ type renderView3D struct {
 	lighting           render.MeshLighting
 	frame              render.RenderView[extractedView3D]
 	extracted          []extractedMesh3D
+	previousExtracted  int
 	opaque             renderPhase3D
 	transparent        renderPhase3D
 	instances          []render.Instance3D
@@ -197,6 +198,34 @@ type renderView3D struct {
 	meshKeys           map[*graphics.Mesh]uint32
 	dynamicGeometry    map[meshGeometryKey3D]uint32
 	deformationIndices map[meshGeometryKey3D]uint32
+}
+
+func (view *renderView3D) resetExtracted() {
+	view.previousExtracted = max(view.previousExtracted, len(view.extracted))
+	view.extracted = view.extracted[:0]
+	view.opaque.items, view.transparent.items = nil, nil
+	if view.occlusion != nil {
+		view.occlusion.opaque.items = nil
+	}
+	if s := view.reflection; s != nil {
+		for _, pass := range [...]*renderView3D{&s.depth, &s.radiance, &s.occlusion, &s.resolve} {
+			pass.opaque.items = nil
+		}
+	}
+}
+
+func (view *renderView3D) releaseUnusedExtracted() {
+	if view.previousExtracted > len(view.extracted) {
+		clear(view.extracted[len(view.extracted):view.previousExtracted])
+	}
+	view.previousExtracted = len(view.extracted)
+	if view.shadow != nil {
+		for _, shadow := range view.shadow.views[:view.shadow.count] {
+			if shadow != nil {
+				shadow.releaseUnusedExtracted()
+			}
+		}
+	}
 }
 
 // World stores per-camera frame snapshots. Simulation components are
@@ -373,9 +402,16 @@ func renderWorld3D(world *ecs.World) *World {
 	return state
 }
 
-func extractRender3D(context *ecs.SystemContext) error {
+func extractRender3D(context *ecs.SystemContext) (err error) {
 	world := context.World
 	state := renderWorld3D(world)
+	defer func() {
+		if err != nil {
+			for _, view := range state.views {
+				view.releaseUnusedExtracted()
+			}
+		}
+	}()
 	state.viewOrder = state.viewOrder[:0]
 	activeViews := ecs.FrameScratchMap[activeRenderViews3DScratch, ecs.Entity, bool](world)
 	renderState, _ := ecs.GetResource[*scene.RenderWorld](world)
@@ -471,9 +507,7 @@ func extractRender3D(context *ecs.SystemContext) error {
 		}
 		view := state.viewFor(camera.Entity)
 		activeViews[camera.Entity] = true
-		view.extracted = view.extracted[:0]
-		view.opaque.items = view.opaque.items[:0]
-		view.transparent.items = view.transparent.items[:0]
+		view.resetExtracted()
 		clear(view.meshKeys)
 		viewport := camera.Camera.ResolvedViewport()
 		view.frame = render.NewRenderView(extractedView3D{
@@ -583,7 +617,8 @@ func extractRender3D(context *ecs.SystemContext) error {
 		}
 		state.viewOrder = append(state.viewOrder, camera.Entity)
 	}
-	for entity := range state.views {
+	for entity, view := range state.views {
+		view.releaseUnusedExtracted()
 		if !activeViews[entity] {
 			if err := disposeViewTargets3D(state.views[entity]); err != nil {
 				return err
@@ -601,8 +636,7 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 		if err != nil {
 			for _, entity := range state.viewOrder {
 				view := state.views[entity]
-				view.opaque.items = view.opaque.items[:0]
-				view.transparent.items = view.transparent.items[:0]
+				view.opaque.items, view.transparent.items = nil, nil
 			}
 		}
 	}()
@@ -612,6 +646,11 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 	meshHandles := ecs.FrameScratchMap[preparedMeshHandles3DScratch, *graphics.Mesh, render.MeshHandle](context.World)
 	shaderHandles := ecs.FrameScratchMap[preparedShaderHandles3DScratch, *graphics.MeshShader, render.MeshShaderHandle](context.World)
 	textureHandles := ecs.FrameScratchMap[preparedTextureHandles3DScratch, *graphics.Texture, render.TextureHandle](context.World)
+	defer func() {
+		clear(meshHandles)
+		clear(shaderHandles)
+		clear(textureHandles)
+	}()
 	whiteHandle, err := prepareRenderResource3D(textureHandles, state.white)
 	if err != nil {
 		return err
@@ -627,6 +666,7 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 			if viewIndex > 0 {
 				view = main.shadow.views[viewIndex-1]
 			}
+			opaqueCount := 0
 			for index := range view.extracted {
 				item := &view.extracted[index]
 				if len(item.vertices) == 0 {
@@ -678,14 +718,18 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 						return fmt.Errorf("ecs: prepare 3D metallic roughness texture: %w", err)
 					}
 				}
-				// Shadow items are submitted directly; only the main view has phases.
-				if view == main {
-					if view.frame.Mode != render.RenderViewPicking && item.material.AlphaMode == graphics.AlphaBlend {
-						view.transparent.items = append(view.transparent.items, *item)
-					} else {
-						view.opaque.items = append(view.opaque.items, *item)
+				// Partition prepared snapshots in place. The two phases borrow
+				// disjoint ranges instead of retaining duplicate material records.
+				if view == main && (view.frame.Mode == render.RenderViewPicking || item.material.AlphaMode != graphics.AlphaBlend) {
+					if opaqueCount != index {
+						view.extracted[opaqueCount], view.extracted[index] = *item, view.extracted[opaqueCount]
 					}
+					opaqueCount++
 				}
+			}
+			if view == main {
+				view.opaque.items = view.extracted[:opaqueCount:opaqueCount]
+				view.transparent.items = view.extracted[opaqueCount:len(view.extracted):len(view.extracted)]
 			}
 		}
 	}
@@ -806,7 +850,13 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 	view.draws = view.draws[:0]
 	view.vertices = view.vertices[:0]
 	view.indices = view.indices[:0]
+	previousDeformations := len(view.deformations)
 	view.deformations = view.deformations[:0]
+	defer func() {
+		if len(view.deformations) < previousDeformations {
+			clear(view.deformations[len(view.deformations):previousDeformations])
+		}
+	}()
 	clear(view.dynamicGeometry)
 	clear(view.deformationIndices)
 	picking := view.frame.Mode == render.RenderViewPicking

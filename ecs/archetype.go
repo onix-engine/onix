@@ -90,8 +90,8 @@ func hashComponentID(hash uint64, id componentID) uint64 {
 
 type archetype struct {
 	id uint32
-	// ids is sorted and columns is aligned with it, so a lookup is a mask test
-	// plus a short binary search instead of a hash map probe.
+	// ids is sorted and columns is aligned with it. Single-column lookups use
+	// a short linear scan; bulk bindings can merge the sorted IDs directly.
 	mask        componentMask
 	ids         []componentID
 	columns     []column

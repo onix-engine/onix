@@ -187,6 +187,9 @@ type webGL2Driver struct {
 	surfaceSamples    int
 	surfaceMSAA       [3]js.Value // framebuffer, color renderbuffer, depth renderbuffer
 	surfaceProgram    webGLProgram
+
+	instanceDataRetention scratchRetention
+	textureDataRetention  scratchRetention
 }
 
 func NewWebGL2Driver(context js.Value) (Driver, error) {
@@ -385,6 +388,11 @@ void main() { color=texelFetch(tex,ivec2(gl_FragCoord.xy),0); }`)
 	return nil
 }
 
+func (d *webGL2Driver) trimScratch() {
+	trimJSUpload(&d.textureData, &d.textureDataRetention)
+	trimJSUpload(&d.instanceData, &d.instanceDataRetention)
+}
+
 func (d *webGL2Driver) BeginFrame(clear Color) error {
 	if d.activeTarget.Valid() {
 		return errors.New("render: WebGL2 render target is still active")
@@ -416,6 +424,7 @@ func (d *webGL2Driver) BeginFrame(clear Color) error {
 	if restoreScissor && d.scissor != nil {
 		d.applyScissor(*d.scissor)
 	}
+	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
 }
@@ -496,13 +505,13 @@ func (d *webGL2Driver) CreateTexture(descriptor TextureDescriptor, pixels []byte
 			d.gl.Call("deleteTexture", texture)
 			return TextureHandle{}, errors.New("render: WebGL2 ASTC texture extension is unavailable")
 		}
-		data := copyBytesToJS(&d.textureData, pixels)
+		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 		for level, mip := range descriptor.MipChain {
 			d.gl.Call("compressedTexImage2D", webGLTexture2D, level, compressedInternal, mip.Width, mip.Height, 0,
 				data, mip.Offset, mip.Bytes)
 		}
 	} else {
-		data := copyBytesToJS(&d.textureData, pixels)
+		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 		d.gl.Call("texImage2D", webGLTexture2D, 0, internalFormat, descriptor.Width, descriptor.Height, 0, format, webGLUnsignedByte, data)
 		if descriptor.Filter == TextureFilterLinearMipmapLinear {
 			d.gl.Call("generateMipmap", webGLTexture2D)
@@ -535,7 +544,7 @@ func (d *webGL2Driver) UpdateTextures(updates []TextureUpdate) error {
 			return errors.New("render: invalid WebGL2 texture update")
 		}
 		d.bindTexture(texture.value)
-		data := copyBytesToJS(&d.textureData, update.Pixels)
+		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, update.Pixels)
 		format := webGLRGBA
 		if texture.format == TextureFormatR8 {
 			format = webGLRed
@@ -791,7 +800,7 @@ func (d *webGL2Driver) DrawSprites(batch SpriteBatch) error {
 	d.setBlendEnabled(true)
 	geometry := &d.spriteGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	data, byteLength := copySliceToJS(&d.instanceData, scratch.data)
+	data, byteLength := copySliceToJS(&d.instanceData, &d.instanceDataRetention, scratch.data)
 	d.uploadInstances(geometry, data, byteLength)
 	packedOffset := 0
 	var currentProgram *webGLProgram
@@ -868,7 +877,7 @@ func (d *webGL2Driver) DrawShapes(batch ShapeBatch) error {
 	d.setProjection(program, batch.Projection)
 	geometry := &d.shapeGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	data, byteLength := copySliceToJS(&d.instanceData, batch.Instances)
+	data, byteLength := copySliceToJS(&d.instanceData, &d.instanceDataRetention, batch.Instances)
 	d.uploadInstances(geometry, data, byteLength)
 	d.gl.Call("drawElementsInstanced", webGLTriangles, 6, webGLUnsignedShort, 0, len(batch.Instances))
 	d.recordShapeStatistics(batch)
@@ -890,10 +899,10 @@ func (d *webGL2Driver) CreateMesh(vertices []Vertex3D, indices []uint32) (MeshHa
 		return MeshHandle{}, errors.New("render: WebGL2 could not create mesh buffers")
 	}
 	d.bindVertexArray(js.Null())
-	vertexData, vertexBytes := copySliceToJS(&d.instanceData, vertices)
+	vertexData, vertexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, vertices)
 	d.bindArrayBuffer(mesh.vertexBuffer)
 	d.gl.Call("bufferData", webGLArrayBuffer, vertexData, webGLStaticDraw, 0, vertexBytes)
-	indexData, indexBytes := copySliceToJS(&d.instanceData, indices)
+	indexData, indexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, indices)
 	d.gl.Call("bindBuffer", webGLElementArrayBuffer, mesh.indexBuffer)
 	d.gl.Call("bufferData", webGLElementArrayBuffer, indexData, webGLStaticDraw, 0, indexBytes)
 	return d.meshes.Insert(mesh), nil
@@ -1142,14 +1151,14 @@ func (d *webGL2Driver) validateMeshBatch(batch *MeshBatch3D, picking bool) (mesh
 
 func (d *webGL2Driver) uploadMeshBatch(batch *MeshBatch3D) {
 	if len(batch.Vertices) != 0 {
-		vertices, vertexBytes := copySliceToJS(&d.instanceData, batch.Vertices)
+		vertices, vertexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, batch.Vertices)
 		d.bindArrayBuffer(d.meshGeometry.vertexBuffer)
 		d.gl.Call("bufferData", webGLArrayBuffer, vertices, webGLDynamicDraw, 0, vertexBytes)
-		indices, indexBytes := copySliceToJS(&d.instanceData, batch.Indices)
+		indices, indexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, batch.Indices)
 		d.gl.Call("bindBuffer", webGLElementArrayBuffer, d.meshGeometry.indexBuffer)
 		d.gl.Call("bufferData", webGLElementArrayBuffer, indices, webGLDynamicDraw, 0, indexBytes)
 	}
-	instances, instanceBytes := copySliceToJS(&d.instanceData, batch.Instances)
+	instances, instanceBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, batch.Instances)
 	d.bindArrayBuffer(d.meshGeometry.instanceBuffer)
 	d.gl.Call("bufferData", webGLArrayBuffer, instances, webGLDynamicDraw, 0, instanceBytes)
 }
@@ -1407,7 +1416,7 @@ func (d *webGL2Driver) createQuadResources() {
 	d.quadVBO = d.gl.Call("createBuffer")
 	d.quadEBO = d.gl.Call("createBuffer")
 	d.gl.Call("bindBuffer", webGLArrayBuffer, d.quadVBO)
-	vertices, vertexBytes := copySliceToJS(&d.instanceData, []float32{
+	vertices, vertexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, []float32{
 		0, 0, 0, 0, 0,
 		1, 0, 0, 1, 0,
 		1, 1, 0, 1, 1,
@@ -1415,7 +1424,7 @@ func (d *webGL2Driver) createQuadResources() {
 	})
 	d.gl.Call("bufferData", webGLArrayBuffer, vertices, webGLStaticDraw, 0, vertexBytes)
 	d.gl.Call("bindBuffer", webGLElementArrayBuffer, d.quadEBO)
-	indices, indexBytes := copySliceToJS(&d.instanceData, []uint16{0, 1, 2, 0, 2, 3})
+	indices, indexBytes := copySliceToJS(&d.instanceData, &d.instanceDataRetention, []uint16{0, 1, 2, 0, 2, 3})
 	d.gl.Call("bufferData", webGLElementArrayBuffer, indices, webGLStaticDraw, 0, indexBytes)
 	for index := range webGLFramesInFlight {
 		d.spriteGeometry[index] = d.createGeometry(false)
@@ -1669,9 +1678,9 @@ func (d *webGL2Driver) setTextureParameters(filter TextureFilter, wrapU, wrapV T
 	d.gl.Call("texParameteri", webGLTexture2D, webGLTextureWrapT, wrapV.glValue())
 }
 
-func copySliceToJS[T any](storage *js.Value, values []T) (js.Value, int) {
+func copySliceToJS[T any](storage *js.Value, retention *scratchRetention, values []T) (js.Value, int) {
 	data := sliceBytes(values)
-	return copyBytesToJS(storage, data), len(data)
+	return copyBytesToJS(storage, retention, data), len(data)
 }
 
 func webGLBlendFactor(factor BlendFactor) int {

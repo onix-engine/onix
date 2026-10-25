@@ -44,7 +44,7 @@ type removalTransition struct {
 	source  *archetype
 	target  *archetype
 	columns []removalColumn
-	removed []removalColumn
+	removed []int // indices into columns, without duplicating column references
 }
 
 // PrepareRemoval registers the supplied types and binds a reusable removal set.
@@ -104,7 +104,8 @@ func (r PreparedRemoval) Apply(entity Entity) bool {
 	}
 	row := int(meta.row)
 	if transition.source.hasCleanup {
-		for _, removed := range transition.removed {
+		for _, index := range transition.removed {
+			removed := transition.columns[index]
 			if w.componentInfos[removed.id].onRemove != nil {
 				w.cleanupComponent(removed.id, entity, removed.source, row)
 			}
@@ -133,9 +134,9 @@ func (p *removalPlan) transition(source *archetype) *removalTransition {
 		ids := make([]componentID, 0, len(source.ids))
 		transition.columns = make([]removalColumn, len(source.ids))
 		for i, id := range source.ids {
-			entry := removalColumn{id: id, source: source.column(id)}
+			entry := removalColumn{id: id, source: source.columns[i]}
 			if p.mask.has(id) {
-				transition.removed = append(transition.removed, entry)
+				transition.removed = append(transition.removed, i)
 			} else {
 				ids = append(ids, id)
 			}
@@ -144,9 +145,13 @@ func (p *removalPlan) transition(source *archetype) *removalTransition {
 		transition.target = p.world.archetypeForOwned(ids)
 		// Removed columns keep a nil target; Apply drops their storage instead
 		// of moving it into the destination table.
+		targetIndex := 0
 		for i := range transition.columns {
 			entry := &transition.columns[i]
-			entry.target = transition.target.column(entry.id)
+			if targetIndex < len(ids) && ids[targetIndex] == entry.id {
+				entry.target = transition.target.columns[targetIndex]
+				targetIndex++
+			}
 		}
 	}
 	p.transitions[source.id] = transition

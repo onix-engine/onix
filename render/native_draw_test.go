@@ -150,3 +150,59 @@ func BenchmarkNativeUniformPacking(b *testing.B) {
 		writeMeshSceneUniforms(data, &batch)
 	}
 }
+
+func TestNativeDrawScratchTrimsAfterScenePeak(t *testing.T) {
+	var d nativeDrawState
+	texture := d.textures.Insert(1)
+	mesh := d.meshes.Insert(nativeMesh{native: 1})
+	sprites := SpriteBatch{Draws: make([]SpriteDraw, 4096)}
+	meshes := MeshBatch3D{Draws: make([]MeshDraw3D, 4096)}
+	for i := range sprites.Draws {
+		sprites.Draws[i] = SpriteDraw{Texture: texture, InstanceCount: 1}
+		meshes.Draws[i] = MeshDraw3D{Mesh: mesh, Texture: texture, IndexCount: 3, InstanceCount: 1}
+	}
+	pack := func() {
+		t.Helper()
+		if _, err := d.packSpriteDraws(&sprites, nativeVulkan); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.packMeshDraws(&meshes, nativeVulkan, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pack()
+	before := sliceCapacityBytes(d.draws) + sliceCapacityBytes(d.draws3D)
+	d.trimScratch()
+	sprites.Draws, meshes.Draws = sprites.Draws[:1], meshes.Draws[:1]
+	for range bufferTrimDelay {
+		pack()
+		d.trimScratch()
+	}
+	after := sliceCapacityBytes(d.draws) + sliceCapacityBytes(d.draws3D)
+	if cap(d.draws) != 64 || cap(d.draws3D) != 64 {
+		t.Fatalf("retained draw capacities: %d/%d", cap(d.draws), cap(d.draws3D))
+	}
+	t.Logf("draw scratch: %d -> %d bytes", before, after)
+	// A large batch followed by a smaller batch must stay warm, including picking.
+	meshes.Draws = meshes.Draws[:4096]
+	for range bufferTrimDelay * 2 {
+		if err := d.packMeshPickingDraws(&meshes, nativeVulkan); err != nil {
+			t.Fatal(err)
+		}
+		small := meshes
+		small.Draws = small.Draws[:1]
+		if _, err := d.packMeshDraws(&small, nativeVulkan, false); err != nil {
+			t.Fatal(err)
+		}
+		d.trimScratch()
+		if cap(d.draws3D) < 4096 {
+			t.Fatal("picking demand was lost")
+		}
+	}
+	for range bufferTrimDelay {
+		d.trimScratch()
+	}
+	if d.draws3D != nil {
+		t.Fatal("idle scene retained mesh draw peak")
+	}
+}

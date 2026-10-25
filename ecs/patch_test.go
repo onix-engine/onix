@@ -1,6 +1,61 @@
 package ecs
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func TestPatchWriteOrderAcrossSourceSubsets(t *testing.T) {
+	for shape := range 32 {
+		t.Run(fmt.Sprint(shape), func(t *testing.T) {
+			world := NewWorld()
+			registerComponent[testName](world)
+			registerComponent[testSize](world)
+			registerComponent[testPosition](world)
+			registerComponent[testVelocity](world)
+			bundle := NewBundle(5)
+			if shape&1 != 0 {
+				Put(&bundle, testName{Value: "old"})
+			}
+			if shape&2 != 0 {
+				Put(&bundle, testSize{Width: 5})
+			}
+			if shape&4 != 0 {
+				Put(&bundle, testPosition{X: 6})
+			}
+			if shape&8 != 0 {
+				Put(&bundle, testVelocity{X: 7})
+			}
+			if shape&16 != 0 {
+				Put(&bundle, testAnchor{8, 0})
+			}
+			entity := world.Spawn(bundle)
+			other := world.Spawn(bundle)
+			cleanups := 0
+			OnComponentRemove[testSize](world, func(w *World, e Entity, value *testSize) {
+				cleanups++
+				if e != entity || value.Width != 5 || Has[testName](w, e) != (shape&1 != 0) {
+					t.Fatal("cleanup observed the wrong source row")
+				}
+			})
+			// Caller order differs from ID order; a written type also appears in
+			// the removal set, and some sources have no retained components.
+			patch := NewPatch3[testVelocity, testName, testPosition](world, Type[testSize](), Type[testPosition]())
+			if err := patch.Apply(entity, testVelocity{X: 17}, testName{Value: "new"}, testPosition{X: 16}); err != nil {
+				t.Fatal(err)
+			}
+			if GetRef[testVelocity](world, entity).X != 17 || GetRef[testName](world, entity).Value != "new" || GetRef[testPosition](world, entity).X != 16 || Has[testSize](world, entity) {
+				t.Fatal("patch mixed write arguments or removed a written component")
+			}
+			if Has[testAnchor](world, entity) != (shape&16 != 0) || Has[testSize](world, other) != (shape&2 != 0) || cleanups != (shape>>1)&1 {
+				t.Fatal("patch corrupted retained/swapped components or cleanup count")
+			}
+			if shape&16 != 0 && GetRef[testAnchor](world, entity)[0] != 8 {
+				t.Fatal("retained component value changed")
+			}
+		})
+	}
+}
 
 func TestPatchMigratesOncePreservingTicksAndSwappedEntity(t *testing.T) {
 	w := NewWorld()
