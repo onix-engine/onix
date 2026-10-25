@@ -21,6 +21,102 @@ static OnixVkShader load_shader(const char *path) {
     return (OnixVkShader){code, (size_t)length};
 }
 
+static void check_mesh_resources_cold(OnixVkDriver *driver) {
+    require(!driver->mesh_layout && !driver->deformation_layout && !driver->surface_layout &&
+        !driver->empty_deformation_buffer && !driver->empty_deformation_memory, "mesh resources stay lazy");
+}
+
+static PFN_vkCreateGraphicsPipelines create_graphics_pipelines;
+static VkPipelineCache imported_cache;
+static int pipeline_creations;
+
+static VKAPI_ATTR VkResult VKAPI_CALL check_graphics_cache(VkDevice device, VkPipelineCache cache, uint32_t count,
+    const VkGraphicsPipelineCreateInfo *info, const VkAllocationCallbacks *allocator, VkPipeline *pipelines) {
+    require(cache == imported_cache, "pipeline uses imported cache");
+    pipeline_creations += count;
+    return create_graphics_pipelines(device, cache, count, info, allocator, pipelines);
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL fail_mesh_layout(VkDevice device, const VkPipelineLayoutCreateInfo *info,
+    const VkAllocationCallbacks *allocator, VkPipelineLayout *layout) {
+    *layout = VK_NULL_HANDLE;
+    return VK_ERROR_OUT_OF_HOST_MEMORY;
+}
+
+static PFN_vkDestroyBuffer destroy_buffer;
+static PFN_vkFreeMemory free_memory;
+static PFN_vkDestroyDescriptorSetLayout destroy_descriptor_layout;
+static int freed_buffers, freed_memory, freed_layouts;
+
+static VKAPI_ATTR void VKAPI_CALL count_destroy_buffer(VkDevice device, VkBuffer buffer, const VkAllocationCallbacks *allocator) {
+    freed_buffers++;
+    destroy_buffer(device, buffer, allocator);
+}
+
+static VKAPI_ATTR void VKAPI_CALL count_free_memory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks *allocator) {
+    freed_memory++;
+    free_memory(device, memory, allocator);
+}
+
+static VKAPI_ATTR void VKAPI_CALL count_destroy_layout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks *allocator) {
+    freed_layouts++;
+    destroy_descriptor_layout(device, layout, allocator);
+}
+
+static void check_mesh_retry_and_picking(OnixVkDriver *driver) {
+    PFN_vkCreatePipelineLayout create_layout = vkCreatePipelineLayout;
+    destroy_buffer = vkDestroyBuffer;
+    free_memory = vkFreeMemory;
+    destroy_descriptor_layout = vkDestroyDescriptorSetLayout;
+    vkCreatePipelineLayout = fail_mesh_layout;
+    vkDestroyBuffer = count_destroy_buffer;
+    vkFreeMemory = count_free_memory;
+    vkDestroyDescriptorSetLayout = count_destroy_layout;
+    require(!onix_vk_ensure_mesh_resources(driver), "mesh initialization reports allocation failure");
+    check_mesh_resources_cold(driver);
+    require(freed_buffers == 1 && freed_memory == 1 && freed_layouts == 2, "failed mesh initialization releases local resources");
+    vkCreatePipelineLayout = create_layout;
+    vkDestroyBuffer = destroy_buffer;
+    vkFreeMemory = free_memory;
+    vkDestroyDescriptorSetLayout = destroy_descriptor_layout;
+
+    uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 1, 1, &color);
+    require(target != 0, "create picking target");
+    const float clear[] = {0,0,0,0};
+    OnixVkMeshPush push = {.view_projection = {[0]=1,[5]=1,[10]=1,[15]=1}};
+    OnixVkVertex3D vertices[] = {
+        {.position={-1,-1,.5f}}, {.position={1,-1,.5f}}, {.position={0,1,.5f}},
+    };
+    uint32_t indices[] = {0,1,2}, identifier = 1234567, pixel = 0;
+    OnixVkInstance3D instance = {.model = {[0]=1,[5]=1,[10]=1,[15]=1}};
+    memcpy(&instance.custom[3][3], &identifier, sizeof(identifier));
+    OnixNativeMeshDraw3D draw = {.index_count=3,.instance_count=1};
+    require(onix_vk_begin_frame(driver, clear), "begin picking frame");
+    require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin picking target");
+    onix_vk_set_viewport(driver, 0, 0, 16, 16);
+    require(onix_vk_draw_mesh_picking(driver, &push, vertices, 3, indices, 3, &instance, 1, &draw, 1), "picking initializes mesh resources after failure");
+    require(onix_vk_end_render_target(driver) && onix_vk_present(driver), "submit picking frame");
+    require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, (uint8_t *)&pixel, sizeof(pixel)), "read picking identifier");
+    require(pixel == identifier, "first picking draw renders correctly");
+    VkPipelineLayout layout = driver->mesh_layout;
+    VkBuffer buffer = driver->empty_deformation_buffer;
+    require(onix_vk_ensure_mesh_resources(driver) && driver->mesh_layout == layout && driver->empty_deformation_buffer == buffer,
+        "warm mesh initialization reuses resources");
+    require(onix_vk_destroy_render_target(driver, target), "destroy picking target");
+    printf("Lazy mesh failure cleanup, retry and picking-first rendering passed\n");
+}
+
+static void check_lazy_samplers(OnixVkDriver *driver) {
+    for (int i = 0; i < 18; i++) require((driver->texture_samplers[i] != VK_NULL_HANDLE) == (i == 0), "2D creates only its sampler");
+    const uint8_t white[] = {255,255,255,255};
+    uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 1, white, sizeof(white), 1, 2);
+    require(texture != 0 && driver->texture_samplers[14] != VK_NULL_HANDLE, "create repeat/mirror mipmap sampler on demand");
+    VkSampler sampler = driver->texture_samplers[14];
+    require(onix_vk_ensure_texture_sampler(driver, 14) && driver->texture_samplers[14] == sampler, "warm sampler reuse");
+    for (int i = 1; i < 18; i++) if (i != 14) require(driver->texture_samplers[i] == VK_NULL_HANDLE, "unused samplers stay lazy");
+    require(onix_vk_destroy_texture(driver, texture), "destroy wrapped texture");
+}
+
 static void check_sprite_uploads(OnixVkDriver *driver) {
     const uint8_t white[] = {255,255,255,255};
     uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
@@ -109,8 +205,25 @@ int main(void) {
     OnixVkSurface surface = {.kind = ONIX_VK_SURFACE_WIN32, .window = (uintptr_t)window, .width = 64, .height = 64};
     OnixVkDriver *driver = onix_vk_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], shaders[6], shaders[7], shaders[8], shaders[9], shaders[10]);
     require(driver != NULL, "create Vulkan driver");
-    check_sprite_uploads(driver);
+    check_mesh_resources_cold(driver);
+    for (int i = 0; i < 18; i++) require(driver->texture_samplers[i] == VK_NULL_HANDLE, "samplers start lazy");
+    for (size_t i = 0; i < sizeof(driver->color_only_pipelines)/sizeof(driver->color_only_pipelines[0]); i++)
+        require(driver->color_only_pipelines[i] == VK_NULL_HANDLE, "2D pipelines start lazy");
     check_pipeline_cache(driver);
+    imported_cache = driver->pipeline_cache;
+    create_graphics_pipelines = vkCreateGraphicsPipelines;
+    vkCreateGraphicsPipelines = check_graphics_cache;
+    check_sprite_uploads(driver);
+    require(pipeline_creations > 0, "first drawing compiles pipelines after cache import");
+    vkCreateGraphicsPipelines = create_graphics_pipelines;
+    check_mesh_resources_cold(driver);
+    check_lazy_samplers(driver);
+    check_mesh_retry_and_picking(driver);
+    onix_vk_destroy(driver);
+    // Exercise normal mesh rendering from a fresh driver as well as picking.
+    driver = onix_vk_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], shaders[6], shaders[7], shaders[8], shaders[9], shaders[10]);
+    require(driver != NULL, "recreate Vulkan driver for mesh-first rendering");
+    check_mesh_resources_cold(driver);
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(driver->physical_device, &props);
     printf("GPU: %s\n", props.deviceName);

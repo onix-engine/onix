@@ -63,7 +63,7 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 	case htmlRoleBorderTop, htmlRoleBorderRight, htmlRoleBorderBottom, htmlRoleBorderLeft:
 		index := style.AnimationBorderTop + int(child.role-htmlRoleBorderTop)
 		fill = htmlAnimationColor(value.Colors[index].Resolve(foreground))
-	case htmlRoleSurface, htmlRoleControl, htmlRoleCanvas:
+	case htmlRoleSurface, htmlRoleInlineBackground, htmlRoleControl, htmlRoleCanvas:
 		if htmlNeedsRasterPaint(computed) {
 			if animation == nil || computed.AnimatedPaint&(style.AnimatedBackgroundColor|style.AnimatedBorders) == 0 {
 				return

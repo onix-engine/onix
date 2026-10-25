@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -84,9 +85,6 @@ type openFileName struct {
 }
 
 var (
-	comdlg32                    = syscall.NewLazyDLL("comdlg32.dll").Handle()
-	shell32                     = syscall.NewLazyDLL("shell32.dll").Handle()
-	ole32                       = syscall.NewLazyDLL("ole32.dll").Handle()
 	getOpenFileName             func(*openFileName) bool
 	commDlgExtendedError        func() uint32
 	coTaskMemFree               func(unsafe.Pointer)
@@ -96,15 +94,20 @@ var (
 	shCreateItemFromParsingName func(*uint16, unsafe.Pointer, *guid, *unsafe.Pointer) int32
 )
 
-func init() {
+var loadWindowsFileDialog = sync.OnceFunc(func() {
+	comdlg32 := xwindows.NewLazySystemDLL("comdlg32.dll").Handle()
 	purego.RegisterLibFunc(&getOpenFileName, comdlg32, "GetOpenFileNameW")
 	purego.RegisterLibFunc(&commDlgExtendedError, comdlg32, "CommDlgExtendedError")
+})
+
+var loadWindowsFolderDialog = sync.OnceFunc(func() {
+	ole32 := xwindows.NewLazySystemDLL("ole32.dll").Handle()
 	purego.RegisterLibFunc(&coTaskMemFree, ole32, "CoTaskMemFree")
 	purego.RegisterLibFunc(&coInitializeEx, ole32, "CoInitializeEx")
 	purego.RegisterLibFunc(&coUninitialize, ole32, "CoUninitialize")
 	purego.RegisterLibFunc(&coCreateInstance, ole32, "CoCreateInstance")
 	purego.RegisterLibFunc(&shCreateItemFromParsingName, shell32, "SHCreateItemFromParsingName")
-}
+})
 
 func openNativeFileDialog(context *Context, options FileDialogOptions) ([]string, error) {
 	owner := hwnd(0)
@@ -118,6 +121,7 @@ func openNativeFileDialog(context *Context, options FileDialogOptions) ([]string
 }
 
 func openWindowsFileDialog(owner hwnd, options FileDialogOptions) ([]string, error) {
+	loadWindowsFileDialog()
 	filter := windowsDialogFilter(options.Filters)
 	filterPtr := &filter[0]
 	initialDir := utf16PtrOrNil(options.DefaultPath)
@@ -154,6 +158,7 @@ func openWindowsFileDialog(owner hwnd, options FileDialogOptions) ([]string, err
 }
 
 func openWindowsFolderDialog(owner hwnd, options FileDialogOptions) ([]string, error) {
+	loadWindowsFolderDialog()
 	// COM apartments are thread-local. Keep the dialog and its COM objects on
 	// the same OS thread, including when callers invoke this from a worker.
 	runtime.LockOSThread()

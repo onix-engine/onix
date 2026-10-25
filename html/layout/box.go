@@ -50,6 +50,8 @@ type Box struct {
 	Margin            Edges
 	FlowMarginBox     Rect
 	TextFragments     []TextFragment
+	InlineBackgrounds []InlineBackground
+	inlinePaintIndex  map[inlineBackgroundKey]int
 	ImageFragments    []ImageFragment
 	ControlFragments  []ControlFragment
 	TextHeight        float64

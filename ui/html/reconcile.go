@@ -20,6 +20,7 @@ const (
 	htmlRoleBorderBottom
 	htmlRoleBorderLeft
 	htmlRoleDecoration
+	htmlRoleInlineBackground
 	htmlRoleText
 	htmlRoleImage
 	htmlRoleControl

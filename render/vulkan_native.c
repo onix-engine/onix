@@ -1729,8 +1729,11 @@ static int onix_vk_ensure_corner_mask_pipeline(OnixVkDriver *driver) {
 	return onix_vk_2d_pipeline(driver, 3, &driver->corner_mask_pipeline) != VK_NULL_HANDLE;
 }
 
+static int onix_vk_ensure_mesh_resources(OnixVkDriver *driver);
+
 static int onix_vk_ensure_picking_pipeline(OnixVkDriver *driver) {
 	if (driver->mesh_picking_pipeline != VK_NULL_HANDLE) return 1;
+	if (!onix_vk_ensure_mesh_resources(driver)) return 0;
 	driver->mesh_picking_pipeline = onix_vk_create_builtin_pipeline(driver, driver->picking_vertex_shader,
 		driver->picking_fragment_shader, driver->mesh_layout, 8);
 	return driver->mesh_picking_pipeline != VK_NULL_HANDLE;
@@ -1939,37 +1942,14 @@ static VkPipeline onix_vk_mesh_pipeline(OnixVkDriver *driver, const OnixNativeMe
 	return *pipeline;
 }
 
-static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
-	VkPipelineCacheCreateInfo cache = {.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
-	if (!onix_vk_result(vkCreatePipelineCache(driver->device, &cache, NULL, &driver->pipeline_cache), "vkCreatePipelineCache")) return 0;
-    VkDescriptorSetLayoutBinding texture_bindings[] = {
-        {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        },
-        {
-            .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        },
-        {
-            .binding = 2,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        },
-    };
-    VkDescriptorSetLayoutCreateInfo descriptor_layout = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = sizeof(texture_bindings) / sizeof(texture_bindings[0]),
-        .pBindings = texture_bindings,
-    };
-    if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &descriptor_layout, NULL, &driver->texture_layout), "vkCreateDescriptorSetLayout")) {
-        return 0;
-    }
+// A 2D window never needs mesh layouts or the fallback deformation buffer.
+// Publish them together so a failed first use can be retried without leaks.
+static int onix_vk_ensure_mesh_resources(OnixVkDriver *driver) {
+	if (driver->mesh_layout != VK_NULL_HANDLE) return 1;
+	VkDescriptorSetLayout deformation = VK_NULL_HANDLE, surface = VK_NULL_HANDLE;
+	VkBuffer empty_buffer = VK_NULL_HANDLE;
+	VkDeviceMemory empty_memory = VK_NULL_HANDLE;
+	VkPipelineLayout layout = VK_NULL_HANDLE;
 	VkDescriptorSetLayoutBinding deformation_binding = {
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1982,31 +1962,55 @@ static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
 		.bindingCount = 2,
 		.pBindings = deformation_bindings,
 	};
-	if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &deformation_layout, NULL, &driver->deformation_layout), "vkCreateDescriptorSetLayout(deformation)")) {
-		return 0;
-	}
+	if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &deformation_layout, NULL, &deformation), "vkCreateDescriptorSetLayout(deformation)")) goto failed;
 	VkDescriptorSetLayoutBinding surface_bindings[15];
 	for (uint32_t i = 0; i < 14; i++) surface_bindings[i] = (VkDescriptorSetLayoutBinding){.binding=i, .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount=1, .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT};
 	surface_bindings[14] = (VkDescriptorSetLayoutBinding){.binding=14,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.stageFlags=VK_SHADER_STAGE_VERTEX_BIT};
 	VkDescriptorSetLayoutCreateInfo surface_layout = {.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .bindingCount=15, .pBindings=surface_bindings};
-	if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &surface_layout, NULL, &driver->surface_layout), "surface descriptor layout")) return 0;
+	if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &surface_layout, NULL, &surface), "surface descriptor layout")) goto failed;
 	uint32_t empty_deformation = 0;
-	if (!onix_vk_create_buffer(driver, 4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &driver->empty_deformation_buffer, &driver->empty_deformation_memory) || !onix_vk_upload_memory(driver, driver->empty_deformation_memory, &empty_deformation, 4)) return 0;
-    VkSamplerCreateInfo sampler = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.maxLod = 0.0f,
-    };
-    VkSamplerAddressMode modes[] = {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,VK_SAMPLER_ADDRESS_MODE_REPEAT,VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
-    for (int mipmap=0;mipmap<2;mipmap++) for (int u=0;u<3;u++) for (int v=0;v<3;v++) {
-        sampler.addressModeU=modes[u]; sampler.addressModeV=modes[v]; sampler.maxLod=mipmap ? 1000.0f : 0.0f;
-        if (!onix_vk_result(vkCreateSampler(driver->device,&sampler,NULL,&driver->texture_samplers[mipmap*9+u*3+v]),"vkCreateSampler")) return 0;
-    }
+	if (!onix_vk_create_buffer(driver, 4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &empty_buffer, &empty_memory) || !onix_vk_upload_memory(driver, empty_memory, &empty_deformation, 4)) goto failed;
+	VkPushConstantRange mesh_push = {
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.size = sizeof(OnixVkMeshPush),
+	};
+	VkPipelineLayoutCreateInfo mesh_layout = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 4,
+		.pSetLayouts = (VkDescriptorSetLayout[]){driver->texture_layout, driver->texture_layout, deformation, surface},
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &mesh_push,
+	};
+	if (!onix_vk_result(vkCreatePipelineLayout(driver->device, &mesh_layout, NULL, &layout), "vkCreatePipelineLayout(mesh)")) goto failed;
+	driver->deformation_layout = deformation;
+	driver->surface_layout = surface;
+	driver->empty_deformation_buffer = empty_buffer;
+	driver->empty_deformation_memory = empty_memory;
+	driver->mesh_layout = layout;
+	return 1;
+failed:
+	if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, layout, NULL);
+	if (empty_buffer != VK_NULL_HANDLE) vkDestroyBuffer(driver->device, empty_buffer, NULL);
+	if (empty_memory != VK_NULL_HANDLE) vkFreeMemory(driver->device, empty_memory, NULL);
+	if (surface != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(driver->device, surface, NULL);
+	if (deformation != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(driver->device, deformation, NULL);
+	return 0;
+}
+
+static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
+	VkPipelineCacheCreateInfo cache = {.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+	if (!onix_vk_result(vkCreatePipelineCache(driver->device, &cache, NULL, &driver->pipeline_cache), "vkCreatePipelineCache")) return 0;
+	VkDescriptorSetLayoutBinding texture_bindings[] = {
+		{.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
+		{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+		{.binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+	};
+	VkDescriptorSetLayoutCreateInfo descriptor_layout = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = sizeof(texture_bindings) / sizeof(texture_bindings[0]),
+		.pBindings = texture_bindings,
+	};
+	if (!onix_vk_result(vkCreateDescriptorSetLayout(driver->device, &descriptor_layout, NULL, &driver->texture_layout), "vkCreateDescriptorSetLayout")) return 0;
     VkPushConstantRange sprite_push = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
@@ -2030,26 +2034,9 @@ static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
 	if (!onix_vk_result(vkCreatePipelineLayout(driver->device, &shape_layout, NULL, &driver->shape_layout), "vkCreatePipelineLayout(shape)")) {
 		return 0;
 	}
-	VkPushConstantRange mesh_push = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.offset = 0,
-		.size = sizeof(OnixVkMeshPush),
-	};
-	VkPipelineLayoutCreateInfo mesh_layout = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 4,
-		.pSetLayouts = (VkDescriptorSetLayout[]){driver->texture_layout, driver->texture_layout, driver->deformation_layout, driver->surface_layout},
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &mesh_push,
-	};
-	if (!onix_vk_result(vkCreatePipelineLayout(driver->device, &mesh_layout, NULL, &driver->mesh_layout), "vkCreatePipelineLayout(mesh)")) return 0;
-	driver->color_only_pipelines[0] = onix_vk_create_builtin_pipeline(
-		driver,
-		driver->sprite_vertex_shader,
-		driver->sprite_fragment_shader,
-		driver->sprite_layout,
-		ONIX_VK_PIPELINE_NO_DEPTH);
-	return driver->color_only_pipelines[0] != VK_NULL_HANDLE;
+	// The caller imports the persisted cache after driver creation. Compile all
+	// pipelines on first draw so even the initial sprite pipeline uses it.
+	return 1;
 }
 
 const uint8_t *onix_vk_pipeline_cache_uuid(OnixVkDriver *driver) {
@@ -3681,7 +3668,24 @@ static int onix_vk_acquire_texture_slot(OnixVkDriver *driver, uint32_t *slot) {
 	return 0;
 }
 
+static int onix_vk_ensure_texture_sampler(OnixVkDriver *driver, uint32_t index) {
+	if (driver->texture_samplers[index] != VK_NULL_HANDLE) return 1;
+	const VkSamplerAddressMode modes[] = {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
+	VkSamplerCreateInfo sampler = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.addressModeU = modes[index % 9 / 3],
+		.addressModeV = modes[index % 3],
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.maxLod = index >= 9 ? 1000.0f : 0.0f,
+	};
+	return onix_vk_result(vkCreateSampler(driver->device, &sampler, NULL, &driver->texture_samplers[index]), "vkCreateSampler");
+}
+
 static int onix_vk_create_texture_descriptor(OnixVkDriver *driver, OnixVkTexture *texture, VkFormat format) {
+	if (!onix_vk_ensure_texture_sampler(driver, texture->sampler_index)) return 0;
     VkImageViewCreateInfo view = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = texture->image,
@@ -4720,7 +4724,7 @@ int onix_vk_draw_meshes(
 		onix_vk_set_error("incomplete Vulkan dynamic mesh data");
 		return 0;
 	}
-	if (!onix_vk_require_surface_depth(driver) || !onix_vk_prepare_draw(driver)) return 0;
+	if (!onix_vk_ensure_mesh_resources(driver) || !onix_vk_require_surface_depth(driver) || !onix_vk_prepare_draw(driver)) return 0;
 	onix_vk_prepare_surface_depth(driver);
 
 	OnixNativeUpload vertex_upload = {0}, index_upload = {0}, instance_upload;

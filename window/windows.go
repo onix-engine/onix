@@ -225,6 +225,7 @@ var (
 	user32   = user32DLL.Handle()
 	gdi32    = syscall.NewLazyDLL("gdi32.dll").Handle()
 	imm32    = syscall.NewLazyDLL("imm32.dll").Handle()
+	shell32  = syscall.NewLazyDLL("shell32.dll").Handle()
 
 	// The message pump bypasses the registered wrappers below: a pumped event
 	// otherwise pays six allocations, and the queue drains every frame.

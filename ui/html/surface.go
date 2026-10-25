@@ -2496,6 +2496,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		spawnHTMLTextVisuals(world, owner, state, control, control, 0, controlRect, fragment, fontValue, boldFont, dpi, baseStack+2, passThrough, visible)
 	} else if !suppressPaint && !flattened && spawnHTMLEditableText(world, owner, state, focusOwner, box, fontValue, boldFont, dpi, baseStack+2, passThrough, visible) {
 	} else if !suppressPaint && !flattened && (control == 0 || !isHTMLCheckboxNode(box.Node)) {
+		spawnHTMLInlineBackgrounds(world, owner, state, box, window, control, controlRect, baseStack+1, visible)
 		var memo htmlFocusableMemo
 		for _, fragment := range box.TextFragments {
 			if !htmlPaintFragmentVisible(window, fragment.Rect, fragment.Style) {
@@ -2509,7 +2510,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 			if fragmentFocusOwner != 0 {
 				receiver = 0
 			}
-			spawnHTMLTextVisuals(world, owner, state, control, receiver, fragmentFocusOwner, controlRect, fragment, fontValue, boldFont, dpi, baseStack+1, passThrough, visible)
+			spawnHTMLTextVisuals(world, owner, state, control, receiver, fragmentFocusOwner, controlRect, fragment, fontValue, boldFont, dpi, baseStack+2, passThrough, visible)
 		}
 	}
 	var memo htmlFocusableMemo
@@ -3941,6 +3942,11 @@ func htmlCompositePaintBounds(state *htmlRenderState, box *layout.Box, face *fon
 		if current.Style.BackgroundImage != "" && !isHTMLLinearGradient(current.Style.BackgroundImage) {
 			return layout.Rect{}, false
 		}
+		for _, background := range current.InlineBackgrounds {
+			if background.Style.AnimatedPaint != 0 {
+				return layout.Rect{}, false
+			}
+		}
 		for _, layer := range current.Style.BackgroundLayers {
 			if layer.Image != "" && layer.Image != "none" && !isHTMLLinearGradient(layer.Image) {
 				return layout.Rect{}, false
@@ -4181,7 +4187,7 @@ func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node,
 	if state := ecs.GetMut[htmlRenderState](world, owner); state != nil {
 		if computed, ok := state.Styles.Get(node); ok {
 			sprite.Alpha = float32(computed.Opacity.Number)
-			if (role == htmlRoleSurface || role == htmlRoleCanvas) && computed.BackgroundImage != "" {
+			if (role == htmlRoleSurface || role == htmlRoleInlineBackground || role == htmlRoleCanvas) && computed.BackgroundImage != "" {
 				texture := htmlGradientTextureFor(state, computed.BackgroundImage, width, height)
 				if texture != nil {
 					sprite.Texture = texture

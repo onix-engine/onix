@@ -43,14 +43,14 @@ func htmlOwnVisiblePaintBounds(box *layout.Box) layout.Rect {
 // generation avoids a separate tree walk and repeated fragment restyling when
 // a compositor visits descendants before their individual entities are emitted.
 func restyleHTMLVisualBox(state *htmlRenderState, box *layout.Box) {
-	if !state.PendingVisual {
-		return
-	}
 	if rendered := state.BoxRenderings[box.Node]; rendered != nil {
 		if rendered.StyleGeneration == state.RenderGeneration {
 			return
 		}
 		rendered.StyleGeneration = state.RenderGeneration
 	}
-	box.Restyle(state.Styles)
+	if state.PendingVisual {
+		box.Restyle(state.Styles)
+	}
+	box.UpdateInlineBackgrounds(state.Styles)
 }

@@ -152,6 +152,14 @@ type htmlOpacityChild struct {
 	version uint64
 }
 
+type htmlOpacityInline struct {
+	node       *dom.Node
+	style      *style.ComputedStyle
+	background style.Value
+	radii      style.Corners
+	rect       layout.Rect
+}
+
 type htmlOpacityRaster struct {
 	image               image.RGBA
 	rect                layout.Rect
@@ -161,6 +169,7 @@ type htmlOpacityRaster struct {
 	radius              float32
 	radii               style.Corners
 	children            []htmlOpacityChild
+	inline              []htmlOpacityInline
 	version             uint64
 	uploaded            uint64
 	style               *style.ComputedStyle
@@ -188,6 +197,12 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 	radius := htmlOverflowClipRadius(box.Style, r.Width, r.Height)
 	geometry, textPaint := box.OwnGeometryHash(), htmlTextRasterHash(box)
 	dirty := raster.version == 0 || raster.style != box.Style || raster.background != background || raster.opacity != opacity || raster.radii != box.Style.BorderRadius || raster.geometry != geometry || raster.textPaint != textPaint || raster.face != cache.face || raster.boldFace != cache.boldFace
+	for index, background := range box.InlineBackgrounds {
+		dirty = reuse.UpdateAt(&raster.inline, index, htmlOpacityInline{background.Node, background.Style, background.Style.BackgroundColor, background.Style.BorderRadius, background.Rect}) || dirty
+	}
+	dirty = len(raster.inline) != len(box.InlineBackgrounds) || dirty
+	clear(raster.inline[len(box.InlineBackgrounds):])
+	raster.inline = raster.inline[:len(box.InlineBackgrounds)]
 	for index, child := range box.Children {
 		value := htmlOpacityRasterFor(cache, child)
 		bounds = htmlUnionPaintBounds(bounds, value.rect)
@@ -230,6 +245,15 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 	if htmlStyleVisible(box.Style) {
 		raster.paint.gradients = prepareHTMLRasterGradients(raster.paint.gradients, box.Style)
 		rasterHTMLBoxPaintPrepared(&raster.paint.image, box.Style, r.Width, r.Height, 1, raster.paint.gradients)
+		htmlCompositeRGBA(&raster.image, &raster.paint.image, int(math.Round(r.X-minX)), int(math.Round(r.Y-minY)))
+	}
+	for _, background := range box.InlineBackgrounds {
+		if !htmlStyleVisible(background.Style) {
+			continue
+		}
+		r := background.Rect
+		raster.paint.gradients = prepareHTMLRasterGradients(raster.paint.gradients, background.Style)
+		rasterHTMLBoxPaintPrepared(&raster.paint.image, background.Style, r.Width, r.Height, 1, raster.paint.gradients)
 		htmlCompositeRGBA(&raster.image, &raster.paint.image, int(math.Round(r.X-minX)), int(math.Round(r.Y-minY)))
 	}
 	rasterHTMLText(&raster.image, box, cache.face, cache.boldFace, minX, minY)
