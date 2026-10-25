@@ -3554,6 +3554,10 @@ func emitHTMLScrollbarPart(world *ecs.World, owner ecs.Entity, node *dom.Node, a
 	putHTML(&bundle, scene.Parent{Entity: area})
 	putHTML(&bundle, sprite)
 	putHTML(&bundle, scene.Size2D{Width: sprite.Width, Height: sprite.Height})
+	// Keep scrollbar drags above the content input target. Without an input
+	// target of their own, presses on a thumb fall through to an underlying
+	// textarea and start text selection while the scroll position changes.
+	putHTML(&bundle, scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
 	putHTML(&bundle, ScrollbarPart{Area: area, Axis: axis, Kind: kind})
 	putHTML(&bundle, htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()

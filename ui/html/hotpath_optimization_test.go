@@ -32,6 +32,9 @@ func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {
 		if thumb == 0 {
 			t.Fatal("overflow thumb missing")
 		}
+		if target, ok := ecs.Get[scene.InputTarget2D](world, thumb); !ok || target.Width <= 0 || target.Height <= 0 {
+			t.Fatalf("overflow thumb input target = %+v, ok=%v", target, ok)
+		}
 		size, _ := ecs.Get[scene.Size2D](world, thumb)
 		origin, _ := ecs.Get[scene.UIGlobalTransform](world, thumb)
 		x, y := float64(origin.Matrix[12]+size.Width/2), float64(origin.Matrix[13]+size.Height/2)
