@@ -433,6 +433,7 @@ type Context struct {
 	transparent         bool
 	decorations         DecorationMode
 	cornerRadius        int
+	customCorners       bool
 	roundedCorners      bool
 	border              bool
 	shadow              bool
@@ -473,7 +474,7 @@ func newContext(width, height int, title string, options Options) *Context {
 		transparent:      options.Transparent,
 		decorations:      options.Decorations,
 		cornerRadius:     options.CornerRadius,
-		roundedCorners:   options.Decorations == DecorationNone && !options.Transparent,
+		customCorners:    options.Decorations == DecorationNone && !options.Transparent && options.CornerRadius > 8,
 		border:           options.Border,
 		shadow:           options.Shadow,
 		resizable:        options.Resizable,
@@ -499,10 +500,16 @@ func newContext(width, height int, title string, options Options) *Context {
 	registerClassExW(wc)
 
 	windowStyle := nativeWindowStyle(options.Decorations, options.Resizable)
+	extendedStyle := uint32(0)
+	if options.Transparent || c.customCorners {
+		// The Vulkan swapchain supplies the alpha-composited surface. A GDI
+		// redirection bitmap would add an opaque backing when DWM activates it.
+		extendedStyle = wsExNoRedirectionBitmap
+	}
 	windowRect := &rect{Left: 0, Top: 0, Right: int32(clientWidth), Bottom: int32(clientHeight)}
 	adjustWindowRectForDPI(windowRect, windowStyle, dpi)
 	c.window = createWindowExW(
-		0,
+		extendedStyle,
 		className,
 		mustUTF16Ptr(title),
 		windowStyle,
@@ -536,13 +543,18 @@ func newContext(width, height int, title string, options Options) *Context {
 	c.applyNonClientAppearance()
 	c.devicePixelRatio = devicePixelRatioFromDPI(windowDPI(c.window))
 	c.updateClientSize()
+	if options.Transparent || c.customCorners {
+		if err := c.enableSurfaceAlpha(); err != nil {
+			panic(err)
+		}
+	}
 
 	driver, err := render.NewVulkanDriver(render.VulkanSurface{
 		Kind:        render.VulkanSurfaceWin32,
 		Window:      uintptr(c.window),
 		Width:       c.Width,
 		Height:      c.Height,
-		Transparent: options.Transparent,
+		Transparent: options.Transparent || c.customCorners,
 	})
 	if err != nil {
 		panic(err)
@@ -686,10 +698,11 @@ func (c *Context) LoopGame(f func() (bool, error)) error {
 			if err := c.Device.ResizeSurface(c.Width, c.Height); err != nil {
 				return err
 			}
-			// Apply the native region after the resize messages have been
-			// dispatched. During WM_SIZE Windows may still report the previous
-			// client bounds, which can make a maximize snap back to its restored
-			// region when the window is undecorated.
+			// Input regions and surface masks use the final client bounds after
+			// resize and DPI messages have been dispatched.
+			if c.inputRegion != nil {
+				c.applyWindowRegion()
+			}
 			c.applyRoundedCorners()
 			c.adjustViewport()
 			c.resizePending = false

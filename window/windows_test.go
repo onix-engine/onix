@@ -98,17 +98,20 @@ func TestContextReleasesHeldMouseButtonsWhenFocusIsLost(t *testing.T) {
 }
 
 func TestContextKeepsExplicitMouseCaptureDuringCancelMode(t *testing.T) {
-	originalActiveContext := activeContext
+	originalContext := windowContexts[1]
 	originalDefWindowProcW := defWindowProcW
 	t.Cleanup(func() {
-		activeContext = originalActiveContext
+		delete(windowContexts, 1)
+		if originalContext != nil {
+			windowContexts[1] = originalContext
+		}
 		defWindowProcW = originalDefWindowProcW
 	})
 
 	defWindowProcW = func(hwnd hwnd, message uint32, wParam, lParam uintptr) uintptr { return 0 }
 	context := &Context{window: 1}
 	context.updateMouseCapture(true)
-	activeContext = context
+	windowContexts[context.window] = context
 	wndProc(context.window, wmCancelMode, 0, 0)
 
 	if !context.mouseCaptured {
@@ -117,10 +120,13 @@ func TestContextKeepsExplicitMouseCaptureDuringCancelMode(t *testing.T) {
 }
 
 func TestContextDoesNotRecaptureMouseButtonsWhileCaptured(t *testing.T) {
-	originalActiveContext := activeContext
+	originalContext := windowContexts[1]
 	originalSetCapture := setCapture
 	t.Cleanup(func() {
-		activeContext = originalActiveContext
+		delete(windowContexts, 1)
+		if originalContext != nil {
+			windowContexts[1] = originalContext
+		}
 		setCapture = originalSetCapture
 	})
 
@@ -131,7 +137,7 @@ func TestContextDoesNotRecaptureMouseButtonsWhileCaptured(t *testing.T) {
 	}
 	context := &Context{window: 1}
 	context.updateMouseCapture(true)
-	activeContext = context
+	windowContexts[context.window] = context
 	wndProc(context.window, wmRButtonDown, 0, 0)
 
 	if calls != 0 {

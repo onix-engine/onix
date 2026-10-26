@@ -3,11 +3,11 @@
 package window
 
 import (
+	"fmt"
 	"math"
 	"syscall"
 	"unsafe"
 
-	"github.com/diiyw/onix/render"
 	"github.com/ebitengine/purego"
 )
 
@@ -16,6 +16,7 @@ const (
 	gwlStyle                    = -16
 	wsExToolWindow              = 0x00000080
 	wsExAppWindow               = 0x00040000
+	wsExNoRedirectionBitmap     = 0x00200000
 	wsPopup                     = 0x80000000
 	wsThickFrame                = 0x00040000
 	wsMinimizeBox               = 0x00020000
@@ -43,7 +44,6 @@ const (
 	dwmwaWindowCornerPreference = 33
 	dwmwaBorderColor            = 34
 	dwmwaNCRenderingPolicy      = 2
-	dwmWindowCornerDefault      = 0
 	dwmWindowCornerDoNotRound   = 1
 	dwmWindowCornerRound        = 2
 	dwmNCRenderingUseStyle      = 0
@@ -53,8 +53,16 @@ const (
 	hwndTopmost                 = ^hwnd(0)
 	hwndNotTopmost              = ^hwnd(1)
 	rgnOr                       = 2
-	rgnAnd                      = 1
+	dwmBBEnable                 = 1
+	dwmBBBlurRegion             = 2
 )
+
+type dwmBlurBehind struct {
+	Flags                uint32
+	Enable               int32
+	Region               handle
+	TransitionOnMaximize int32
+}
 
 var (
 	getWindowLongPtrW     func(window hwnd, index int32) uintptr
@@ -63,8 +71,8 @@ var (
 	isZoomed              func(window hwnd) bool
 	getWindowRect         func(window hwnd, rect *rect) bool
 	dwmSetWindowAttribute func(window hwnd, attribute uint32, value unsafe.Pointer, size uint32) int32
+	dwmEnableBlurBehind   func(window hwnd, blur *dwmBlurBehind) int32
 	createRectRgn         func(left, top, right, bottom int32) handle
-	createRoundRectRgn    func(left, top, right, bottom, ellipseWidth, ellipseHeight int32) handle
 	combineRgn            func(destination, source1, source2 handle, mode int32) int32
 	setWindowRgn          func(window hwnd, region handle, redraw bool) int32
 )
@@ -77,8 +85,8 @@ func init() {
 	purego.RegisterLibFunc(&getWindowRect, user32, "GetWindowRect")
 	dwmapi := syscall.NewLazyDLL("dwmapi.dll").Handle()
 	purego.RegisterLibFunc(&dwmSetWindowAttribute, dwmapi, "DwmSetWindowAttribute")
+	purego.RegisterLibFunc(&dwmEnableBlurBehind, dwmapi, "DwmEnableBlurBehindWindow")
 	purego.RegisterLibFunc(&createRectRgn, gdi32, "CreateRectRgn")
-	purego.RegisterLibFunc(&createRoundRectRgn, gdi32, "CreateRoundRectRgn")
 	purego.RegisterLibFunc(&combineRgn, gdi32, "CombineRgn")
 	purego.RegisterLibFunc(&setWindowRgn, user32, "SetWindowRgn")
 }
@@ -128,24 +136,12 @@ func (c *Context) applyWindowRegion() {
 	if c == nil || c.window == 0 {
 		return
 	}
-	// Win10 ignores the DWM corner preference, so keep the native window
-	// region in sync with the renderer's rounded surface.
+	// A window region disables DWM's antialiased corners. Only explicit
+	// input regions should replace the system-managed window silhouette.
 	var region handle
-	if c.roundedCorners && c.decorations == DecorationNone && !c.transparent && !c.fullscreen && !isZoomed(c.window) {
-		radius := int32(math.Round(float64(c.cornerRadius) * c.devicePixelRatio))
-		if radius < 1 {
-			radius = 1
-		}
-		// SetWindowRgn clips the outer edge of the region; include the final
-		// client pixel so the right and bottom border remain visible.
-		region = createRoundRectRgn(0, 0, int32(c.Width+1), int32(c.Height+1), radius*2, radius*2)
-	}
 	if c.inputRegion != nil {
-		inputRegion := createRectRgn(0, 0, 0, 0)
-		if inputRegion == 0 {
-			if region != 0 {
-				deleteObject(region)
-			}
+		region = createRectRgn(0, 0, 0, 0)
+		if region == 0 {
 			return
 		}
 		for _, rect := range c.viewport.nativeInputRegion(c.inputRegion) {
@@ -158,14 +154,8 @@ func (c *Context) applyWindowRegion() {
 			if part == 0 {
 				continue
 			}
-			combineRgn(inputRegion, inputRegion, part, rgnOr)
+			combineRgn(region, region, part, rgnOr)
 			deleteObject(part)
-		}
-		if region == 0 {
-			region = inputRegion
-		} else {
-			combineRgn(region, region, inputRegion, rgnAnd)
-			deleteObject(inputRegion)
 		}
 	}
 	if region == 0 {
@@ -281,25 +271,41 @@ func (c *Context) SetRoundedCorners(enabled bool) {
 	if c == nil || c.window == 0 {
 		return
 	}
-	c.roundedCorners = enabled
 	preference := uint32(dwmWindowCornerDoNotRound)
-	if enabled {
+	if enabled && !c.customCorners {
 		preference = dwmWindowCornerRound
 	}
 	dwmSetWindowAttribute(c.window, dwmwaWindowCornerPreference, unsafe.Pointer(&preference), uint32(unsafe.Sizeof(preference)))
+	c.roundedCorners = enabled
 	c.applyRoundedCorners()
 }
 
-func (c *Context) applyRoundedCorners() {
-	radius := 0
-	if c.roundedCorners && c.decorations == DecorationNone && !c.transparent && !c.fullscreen && !isZoomed(c.window) {
-		// The swapchain and the native region use device pixels. Keeping the
-		// same scaled radius on both sides preserves the renderer's antialiased
-		// edge instead of clipping it at a smaller logical radius.
-		radius = int(math.Round(float64(c.cornerRadius) * c.devicePixelRatio))
+func (c *Context) enableSurfaceAlpha() error {
+	// An empty blur region enables per-pixel DWM composition without blurring
+	// the desktop. No window region is installed, so fractional alpha survives.
+	region := createRectRgn(0, 0, -1, -1)
+	if region == 0 {
+		return fmt.Errorf("create DWM composition region")
 	}
-	render.SetSurfaceCornerRadius(radius)
-	c.applyWindowRegion()
+	defer deleteObject(region)
+	blur := dwmBlurBehind{Flags: dwmBBEnable | dwmBBBlurRegion, Enable: 1, Region: region}
+	if result := dwmEnableBlurBehind(c.window, &blur); result < 0 {
+		return fmt.Errorf("enable DWM surface alpha: HRESULT %#x", uint32(result))
+	}
+	return nil
+}
+
+func (c *Context) surfaceCornerRadius() int {
+	if !c.customCorners || !c.roundedCorners || c.decorations != DecorationNone || c.fullscreen || isZoomed(c.window) {
+		return 0
+	}
+	return int(math.Round(float64(c.cornerRadius) * c.devicePixelRatio))
+}
+
+func (c *Context) applyRoundedCorners() {
+	if c.customCorners && c.Device != nil {
+		c.Device.SetSurfaceCornerRadius(c.surfaceCornerRadius())
+	}
 }
 
 func undecoratedHitTestRect(windowRect rect, x, y, margin int32) uintptr {

@@ -16,10 +16,12 @@ type Options struct {
 	Transparent         bool
 	Decorations         DecorationMode
 	TitleBarHeight      float64
-	CornerRadius        int
-	Border              bool
-	Shadow              bool
-	Resizable           bool
+	// CornerRadius controls renderer-owned window corners in logical pixels.
+	// Windows uses alpha composition for radii larger than its native 8 DIP.
+	CornerRadius int
+	Border       bool
+	Shadow       bool
+	Resizable    bool
 }
 
 const DefaultCornerRadius = 10
