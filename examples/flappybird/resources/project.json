@@ -1,0 +1,39 @@
+{
+  "entry": "main.json",
+  "scenes": [
+    "main.json",
+    "result.json"
+  ],
+  "clearColor": "#87cfeb",
+  "window": {
+    "width": 375,
+    "height": 667,
+    "title": "Flappy Bird",
+    "border": true,
+    "vsync": true,
+    "fps": 30,
+    "tps": 60
+  },
+  "viewport": {
+    "width": 750,
+    "height": 1334
+  },
+  "engine": {
+    "textureCompression": true,
+    "textureCompressionExcludes": [
+      "resources/presentation/flappy.png",
+      "resources/flappy.png"
+    ]
+  },
+  "types": {
+    "FlappyFrame": {
+      "fields": {
+        "bird": "vec2",
+        "pipes": "vec2",
+        "ground": "number",
+        "score": "int",
+        "phase": "int"
+      }
+    }
+  }
+}

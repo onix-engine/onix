@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>鹈鹕快递 · 逆风海岸</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1280px; height: 800px; font-family: sans-serif; color: #244b50; }
+main { position: relative; width: 1280px; height: 800px; pointer-events: none; }
+.brand { position: absolute; left: 48px; top: 28px; }
+.brand p { margin: 0 0 5px; font-size: 10px; letter-spacing: 3px; color: #537c77; }
+.brand h1 { margin: 0; font-size: 29px; letter-spacing: 2px; }
+.brand span { font-weight: 400; font-size: 13px; margin-left: 15px; letter-spacing: 1px; }
+.stats { position: absolute; right: 142px; top: 29px; display: flex; gap: 35px; }
+.stat { min-width: 84px; }
+.label { display: block; font-size: 11px; color: #527b75; margin-bottom: 4px; }
+.value { font-size: 27px; font-weight: 700; }
+.unit { font-size: 12px; color: #527b75; margin-left: 5px; }
+button { border: 0; border-radius: 12px; padding: 0 20px; height: 48px; font-family: sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; pointer-events: auto; background: #fff6df; color: #244b50; }
+button:hover { background: #f9d589; }
+button:focus { outline: 3px solid #e57c57; outline-offset: 4px; }
+button:disabled { color: #8d9e88; background: #e7e7cd; cursor: default; }
+#pause { position: absolute; right: 48px; top: 31px; width: 66px; height: 47px; padding: 0; border: 1px solid #91b5a7; background: transparent; }
+.route { position: absolute; left: 48px; top: 105px; width: 1184px; height: 5px; border-radius: 4px; background: #aecbb9; }
+#progress { height: 5px; width: 0; background: #df7757; border-radius: 4px; }
+.route-label { position: absolute; left: 48px; top: 122px; margin: 0; font-size: 12px; }
+.distance { position: absolute; right: 48px; top: 122px; margin: 0; font-size: 12px; }
+.chapter { position: absolute; right: 48px; top: 180px; text-align: right; }
+.chapter p { margin: 0 0 8px; font-size: 10px; letter-spacing: 3px; color: #618a7e; }
+.chapter h2 { margin: 0; font-size: 24px; font-weight: 400; letter-spacing: 3px; }
+.chapter .weather { margin: 10px 0 0; font-size: 12px; letter-spacing: 1px; }
+#notice { position: absolute; left: 380px; top: 634px; width: 620px; margin: 0; text-align: center; font-size: 14px; color: #49695b; }
+#station-hint { position: absolute; left: 400px; top: 568px; padding: 12px 22px; border-radius: 10px; background: #ffe49a; font-size: 17px; font-weight: 700; }
+.controls { position: absolute; left: 48px; right: 48px; top: 709px; height: 60px; display: flex; align-items: center; gap: 12px; }
+.control-copy { flex: 1; }
+.control-copy b { display: block; font-size: 14px; margin-bottom: 7px; }
+.control-copy span { font-size: 12px; color: #667b64; }
+#jump { width: 178px; height: 58px; background: #244b50; color: #fff4d9; }
+#jump:hover { background: #35686a; }
+#deliver { width: 164px; height: 58px; background: #f6edd0; border: 2px solid #b3b493; }
+#deliver.lit { background: #f6bd57; border-color: #244b50; }
+#veil { position: absolute; left: 0; top: 154px; width: 1280px; height: 540px; }
+#veil.center { background: rgba(36,75,80,.16); }
+.sheet { position: absolute; left: 64px; top: 26px; width: 550px; padding: 29px 34px 30px; border: 2px solid #244b50; border-radius: 22px; background: #fff8e5; box-shadow: 7px 7px 0 rgba(36,75,80,.13); pointer-events: auto; }
+.center .sheet { left: 365px; top: 20px; }
+.eyebrow { margin: 0 0 14px; color: #bd674c; font-size: 11px; letter-spacing: 3px; font-weight: 700; }
+.sheet h2 { margin: 0 0 15px; font-size: 49px; letter-spacing: -2px; line-height: 1.2; }
+.sheet .description { margin: 0 0 19px; font-size: 14px; line-height: 24px; color: #5a7465; }
+.rules { padding: 16px 0; margin-bottom: 17px; border-top: 1px solid #dbdebf; border-bottom: 1px solid #dbdebf; }
+.rules p { margin: 0 0 10px; font-size: 13px; line-height: 20px; }
+.rules p:last-child { margin: 0; }
+.rules b { display: inline-block; width: 96px; color: #bc654b; }
+.sheet-actions { display: flex; gap: 10px; align-items: center; }
+#start { background: #df7757; color: #fff9e9; height: 50px; min-width: 180px; font-size: 16px; }
+#start:hover { background: #c86649; }
+#restart { border: 1px solid #b7bda1; height: 50px; }
+#best { margin: 17px 0 0; color: #789079; font-size: 11px; }
+[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><p>THE PELICAN POST / ONIX</p><h1>鹈鹕快递<span>逆风海岸</span></h1></div>
+  <div class="stats">
+    <div class="stat"><span class="label">嘴袋</span><span id="cargo" class="value">0</span><span class="unit">/ 6 鱼</span></div>
+    <div class="stat"><span class="label">已送达</span><span id="delivered" class="value">0</span><span class="unit">/ 18 鱼</span></div>
+    <div class="stat"><span class="label">车况</span><span id="hearts" class="value">3</span><span class="unit">/ 3</span></div>
+    <div class="stat"><span class="label">积分</span><span id="score" class="value">0</span></div>
+  </div>
+  <button id="pause" type="button" aria-label="暂停或继续游戏">暂停</button>
+  <div class="route" aria-label="路线进度"><div id="progress"></div></div>
+  <p class="route-label">贝壳湾 → 风车岬 → 灯塔终点</p><p class="distance" id="distance">0.0 / 15.6 km</p>
+  <div class="chapter"><p id="chapter-number">COASTAL ROUTE / 01</p><h2 id="chapter">贝壳湾的早晨</h2><p class="weather" id="weather">海风轻轻，鲜鱼正好。</p></div>
+  <div id="station-hint" hidden>灯塔小站到了！按 X 或点击投递</div>
+  <p id="notice" role="status">今天的任务：把 18 条鲜鱼送到海岸小站。</p>
+  <div class="controls">
+    <div class="control-copy"><b>一辆单车，一张装得下海的大嘴。</b><span>空格 / ↑ 跳跃 · 长按滑翔 · 再按耗 1 鱼翼扑 · X 投递 · P 暂停 · R 重来</span></div>
+    <button id="jump" type="button">跳跃 / 长按滑翔</button><button id="deliver" type="button">投递鲜鱼 X</button>
+  </div>
+  <div id="veil"><section class="sheet" aria-label="游戏说明与结算">
+    <p class="eyebrow" id="sheet-label">一份有点摇晃的海岸工作</p>
+    <h2 id="sheet-title">大嘴巴，小单车。</h2>
+    <p class="description" id="sheet-description">今天你是海岸邮差阿鹈。接住飞鱼，把新鲜送到灯塔。<br>别让横行的螃蟹，打乱你的送货节奏。</p>
+    <div class="rules" id="rules"><p><b>01 接住鲜鱼</b>沿着鱼群起跳。嘴袋越满，起跳越费劲。</p><p><b>02 借风飞一会</b>长按展开翅膀；再按一次，用 1 条鱼换一次翼扑。</p><p><b>03 新鲜送到站</b>靠近灯塔按 X。连续送达有加分，还能顺风冲刺。</p></div>
+    <div class="sheet-actions"><button id="start" type="button">开始送鲜鱼 →</button><button id="restart" type="button" hidden>重新出发 R</button></div>
+    <p id="best">15.6 km 海岸线 · 6 座小站 · 目标送达 18 条鱼</p>
+  </section></div>
+</main>
+</body>
+</html>

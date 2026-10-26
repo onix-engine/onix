@@ -28,16 +28,16 @@ func Decode(data []byte, renderOptions onixsvg.Options, textureOptions graphics.
 	return graphics.TextureFromOwnedNRGBA(image, textureOptions), nil
 }
 
-// RasterScale supplies the physical resolution multiplier for an SVG decoder.
+// RasterScale selects a physical resolution multiplier from intrinsic dimensions.
 // The texture keeps the SVG's intrinsic size as its logical sprite size.
 type RasterScale interface {
-	SVGTextureRasterScale() int
+	SVGTextureRasterScale(width, height int) int
 }
 
 // DoubleRasterScale rasterizes SVG textures at twice their logical dimensions.
 type DoubleRasterScale struct{}
 
-func (DoubleRasterScale) SVGTextureRasterScale() int { return 2 }
+func (DoubleRasterScale) SVGTextureRasterScale(_, _ int) int { return 2 }
 
 // ScaledDecoder rasterizes SVG files at the scale selected by S and enables
 // mipmaps so minification integrates thin contours instead of undersampling them.
@@ -46,9 +46,14 @@ type ScaledDecoder[S RasterScale] struct{}
 func (ScaledDecoder[S]) ImageExtension() string { return ".svg" }
 
 func (ScaledDecoder[S]) DecodeImage(data []byte, options graphics.TextureOptions) (*graphics.Texture, error) {
+	document, err := onixsvg.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
 	var scale S
 	options.Mipmap = true
-	return DecodeAtScale(data, scale.SVGTextureRasterScale(), options)
+	width, height := int(document.Width+0.5), int(document.Height+0.5)
+	return decodeDocument(document, scale.SVGTextureRasterScale(width, height), options)
 }
 
 // DecodeAtScale rasterizes an SVG at a higher physical resolution without
@@ -63,6 +68,13 @@ func DecodeAtScale(data []byte, scale int, textureOptions graphics.TextureOption
 	document, err := onixsvg.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
+	}
+	return decodeDocument(document, scale, textureOptions)
+}
+
+func decodeDocument(document *onixsvg.Document, scale int, textureOptions graphics.TextureOptions) (*graphics.Texture, error) {
+	if scale < 1 {
+		return nil, fmt.Errorf("svg: raster scale must be at least 1")
 	}
 	width, height := int(document.Width+0.5), int(document.Height+0.5)
 	image, err := document.Render(onixsvg.Options{Width: width * scale, Height: height * scale})

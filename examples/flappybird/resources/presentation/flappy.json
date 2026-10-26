@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "image": "flappy.png",
+    "prefix": ""
+  },
+  "frames": {
+    "background.png": {
+      "frame": {"idx": 0, "x": 546, "y": 1, "w": 720, "h": 1280},
+      "sourceSize": {"w": 720, "h": 1280},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "bird1.png": {
+      "frame": {"idx": 0, "x": 289, "y": 950, "w": 86, "h": 60},
+      "sourceSize": {"w": 86, "h": 60},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "bird2.png": {
+      "frame": {"idx": 0, "x": 377, "y": 950, "w": 86, "h": 60},
+      "sourceSize": {"w": 86, "h": 60},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "bird3.png": {
+      "frame": {"idx": 0, "x": 465, "y": 950, "w": 86, "h": 60},
+      "sourceSize": {"w": 86, "h": 60},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "bottom_pipe.png": {
+      "frame": {"idx": 0, "x": 284, "y": 1, "w": 129, "h": 801},
+      "sourceSize": {"w": 129, "h": 801},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "game_name.png": {
+      "frame": {"idx": 0, "x": 1828, "y": 1, "w": 466, "h": 140},
+      "sourceSize": {"w": 466, "h": 140},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "game_over.png": {
+      "frame": {"idx": 0, "x": 1828, "y": 469, "w": 500, "h": 136},
+      "sourceSize": {"w": 500, "h": 136},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "get_ready.png": {
+      "frame": {"idx": 0, "x": 289, "y": 804, "w": 508, "h": 144},
+      "sourceSize": {"w": 508, "h": 144},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "ground.png": {
+      "frame": {"idx": 0, "x": 1, "y": 1, "w": 840, "h": 281},
+      "sourceSize": {"w": 840, "h": 281},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "medal_gold.png": {
+      "frame": {"idx": 0, "x": 1639, "y": 838, "w": 113, "h": 111},
+      "sourceSize": {"w": 113, "h": 111},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "medal_silver.png": {
+      "frame": {"idx": 0, "x": 639, "y": 723, "w": 123, "h": 113},
+      "sourceSize": {"w": 123, "h": 113},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "result_board.png": {
+      "frame": {"idx": 0, "x": 799, "y": 723, "w": 590, "h": 298},
+      "sourceSize": {"w": 590, "h": 298},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "start.png": {
+      "frame": {"idx": 0, "x": 1, "y": 843, "w": 286, "h": 166},
+      "sourceSize": {"w": 286, "h": 166},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    },
+    "tap.png": {
+      "frame": {"idx": 0, "x": 1391, "y": 723, "w": 286, "h": 246},
+      "sourceSize": {"w": 286, "h": 246},
+      "spriteSourceSize": {"x": 0, "y": 0},
+      "rotated": true
+    },
+    "top_pipe.png": {
+      "frame": {"idx": 0, "x": 415, "y": 1, "w": 129, "h": 801},
+      "sourceSize": {"w": 129, "h": 801},
+      "spriteSourceSize": {"x": 0, "y": 0}
+    }
+  }
+}

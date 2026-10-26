@@ -1,0 +1,6 @@
+{
+  "name":"Flappy input",
+  "space":"ui",
+  "behavior":"Mod",
+  "components":{"size":[750,1334],"input":{"pointer":true,"keyboard":true}}
+}

@@ -1,0 +1,62 @@
+{
+  "name": "Result",
+  "space": "ui",
+  "resources": {
+    "atlas": {
+      "kind": "atlas",
+      "path": "flappy.json"
+    }
+  },
+  "elements": [
+    {
+      "id": "start",
+      "transform": {
+        "position": [
+          375,
+          832
+        ]
+      },
+      "components": {
+        "size": [
+          286,
+          166
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "start.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "gameOver",
+      "transform": {
+        "position": [
+          375,
+          337
+        ]
+      },
+      "components": {
+        "size": [
+          500,
+          136
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "game_over.png"
+          }
+        }
+      }
+    }
+  ]
+}

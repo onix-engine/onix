@@ -1,0 +1,17 @@
+{
+  "modules": [
+    {
+      "id": "simulation",
+      "mod": "simulation"
+    },
+    {
+      "id": "presentation",
+      "mod": "resources/presentation"
+    },
+    {
+      "id": "input",
+      "mod": "input"
+    }
+  ],
+  "behavior": "SceneMain"
+}

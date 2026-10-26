@@ -1,0 +1,14 @@
+{
+  "name": "simulation",
+  "space": "ui",
+  "slots": {
+    "birdStart": {
+      "type": "vec2",
+      "default": [
+        375,
+        470
+      ]
+    }
+  },
+  "behavior": "Mod"
+}

@@ -7,6 +7,38 @@ import (
 	onixsvg "github.com/diiyw/onix/images/svg"
 )
 
+type sizeRasterScale struct{}
+
+func (sizeRasterScale) SVGTextureRasterScale(width, height int) int {
+	if width*height > 500 {
+		return 1
+	}
+	return 2
+}
+
+func TestScaledDecoderSelectsResolutionFromIntrinsicSize(t *testing.T) {
+	for _, test := range []struct {
+		name, source         string
+		width, height, scale int
+	}{
+		{"small", `<svg width="12" height="8"><rect width="12" height="8"/></svg>`, 12, 8, 2},
+		{"large", `<svg width="30" height="20"><rect width="30" height="20"/></svg>`, 30, 20, 1},
+		{"viewbox", `<svg viewBox="0 0 30 20"><circle cx="15" cy="10" r="8"/></svg>`, 30, 20, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			texture, err := (ScaledDecoder[sizeRasterScale]{}).DecodeImage([]byte(test.source), graphics.TextureOptions{Usage: graphics.ResourceUsageCPU})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer texture.Dispose()
+			if texture.Width != test.width*test.scale || texture.Height != test.height*test.scale ||
+				texture.LogicalWidth() != test.width || texture.LogicalHeight() != test.height || !texture.Mipmapped() {
+				t.Fatalf("physical=%dx%d logical=%dx%d mipmaps=%v", texture.Width, texture.Height, texture.LogicalWidth(), texture.LogicalHeight(), texture.Mipmapped())
+			}
+		})
+	}
+}
+
 func TestDefaultDecoderRetainsResolutionAndFiltersMinification(t *testing.T) {
 	texture, err := (Decoder{}).DecodeImage([]byte(`<svg width="16" height="12"><circle cx="8" cy="6" r="5"/></svg>`), graphics.TextureOptions{Usage: graphics.ResourceUsageCPU})
 	if err != nil {

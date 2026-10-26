@@ -1,0 +1,13 @@
+{
+  "behavior": "SceneResult",
+  "modules": [
+    {
+      "id": "menu",
+      "mod": "resources"
+    },
+    {
+      "id": "input",
+      "mod": "input"
+    }
+  ]
+}

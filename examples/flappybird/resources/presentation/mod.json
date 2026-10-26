@@ -1,0 +1,313 @@
+{
+  "name": "presentation",
+  "space": "ui",
+  "elements": [
+    {
+      "id": "background",
+      "transform": {
+        "position": [
+          375,
+          667
+        ]
+      },
+      "components": {
+        "size": [
+          750,
+          1334
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "background.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "groundA",
+      "transform": {
+        "position": [
+          420,
+          1190.5
+        ]
+      },
+      "components": {
+        "size": [
+          840,
+          281
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "ground.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "groundB",
+      "transform": {
+        "position": [
+          1260,
+          1190.5
+        ]
+      },
+      "components": {
+        "size": [
+          840,
+          281
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "ground.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "pipeTop",
+      "transform": {
+        "position": [
+          815,
+          26.5
+        ]
+      },
+      "components": {
+        "size": [
+          129,
+          801
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "top_pipe.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "pipeBottom",
+      "transform": {
+        "position": [
+          815,
+          1127.5
+        ]
+      },
+      "components": {
+        "size": [
+          129,
+          801
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "bottom_pipe.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "bird",
+      "transform": {
+        "position": [
+          375,
+          470
+        ]
+      },
+      "components": {
+        "size": [
+          86,
+          60
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "bird1.png"
+          }
+        },
+        "animation": {
+          "clip": {
+            "duration": 0.36,
+            "sampleRate": 25,
+            "loop": true,
+            "textureTracks": [
+              {
+                "binding": {
+                  "target": "sprite.texture"
+                },
+                "keyframes": [
+                  {
+                    "time": 0,
+                    "value": {
+                      "atlas": "flappy.json",
+                      "frame": "bird1.png"
+                    },
+                    "tween": "step"
+                  },
+                  {
+                    "time": 0.12,
+                    "value": {
+                      "atlas": "flappy.json",
+                      "frame": "bird2.png"
+                    },
+                    "tween": "step"
+                  },
+                  {
+                    "time": 0.24,
+                    "value": {
+                      "atlas": "flappy.json",
+                      "frame": "bird3.png"
+                    },
+                    "tween": "step"
+                  }
+                ]
+              }
+            ]
+          },
+          "speed": 1
+        }
+      }
+    },
+    {
+      "id": "getReady",
+      "transform": {
+        "position": [
+          375,
+          232
+        ]
+      },
+      "components": {
+        "size": [
+          508,
+          144
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "get_ready.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "start",
+      "transform": {
+        "position": [
+          375,
+          832
+        ]
+      },
+      "components": {
+        "size": [
+          286,
+          166
+        ],
+        "anchor": [
+          0,
+          0
+        ],
+        "sprite": {
+          "texture": {
+            "atlas": "flappy.json",
+            "frame": "start.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "title",
+      "transform": {
+        "position": [
+          34,
+          34
+        ]
+      },
+      "components": {
+        "text": {
+          "value": "Flappy Bird",
+          "font": "ui",
+          "fontSize": 26,
+          "color": "#ffffff"
+        }
+      }
+    },
+    {
+      "id": "status",
+      "transform": {
+        "position": [
+          34,
+          68
+        ]
+      },
+      "components": {
+        "text": {
+          "value": "Space / tap to flap",
+          "font": "ui",
+          "fontSize": 16,
+          "color": "#ffffff"
+        }
+      }
+    },
+    {
+      "id": "scoreLabel",
+      "transform": {
+        "position": [
+          34,
+          96
+        ]
+      },
+      "components": {
+        "text": {
+          "value": "Score: 0",
+          "font": "ui",
+          "fontSize": 18,
+          "color": "#fff7cc"
+        }
+      }
+    }
+  ],
+  "resources": {
+    "atlas": {
+      "kind": "atlas",
+      "path": "flappy.json"
+    },
+    "license": {
+      "kind": "data",
+      "path": "fonts/OFL.txt"
+    },
+    "ui": {
+      "kind": "font",
+      "path": "fonts/ui.ttf"
+    }
+  },
+  "behavior": "Mod"
+}

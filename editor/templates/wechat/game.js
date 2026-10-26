@@ -28,7 +28,7 @@ const decodeCatalog = (data) => {
   const decoder = new textEncoder.TextDecoder();
   const string = () => decoder.decode(take(uvarint()));
   const strings = () => Array.from({length: uvarint()}, string);
-  const magic = [79, 78, 73, 67, 65, 84, 50, 0];
+  const magic = [79, 78, 73, 88, 67, 65, 84, 50];
   if (!magic.every((value) => take(1)[0] === value)) throw new Error("invalid resource catalog marker");
   if (uvarint() !== 2) throw new Error("unsupported resource catalog version");
   const packages = Array.from({length: uvarint()}, () => {

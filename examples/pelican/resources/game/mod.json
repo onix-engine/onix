@@ -1,0 +1,1159 @@
+{
+  "name": "鹈鹕快递 · 逆风海岸",
+  "behavior": "Mod",
+  "space": "ui",
+  "components": {
+    "size": [
+      1280,
+      800
+    ],
+    "input": {
+      "pointer": true
+    }
+  },
+  "resources": {
+    "regular": {
+      "kind": "font",
+      "path": "fonts/PelicanSansSC-Regular.ttf"
+    },
+    "bold": {
+      "kind": "font",
+      "path": "fonts/PelicanSansSC-Bold.ttf"
+    },
+    "font-license": {
+      "kind": "data",
+      "path": "fonts/OFL.txt"
+    },
+    "hud": {
+      "kind": "html",
+      "path": "game.html"
+    }
+  },
+  "elements": [
+    {
+      "id": "sky",
+      "transform": {
+        "position": [
+          0,
+          0
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/sky.svg"
+          },
+          "size": [
+            1280,
+            610
+          ]
+        }
+      }
+    },
+    {
+      "id": "coast-0",
+      "transform": {
+        "position": [
+          0,
+          270
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/coast.svg"
+          },
+          "size": [
+            1280,
+            330
+          ]
+        }
+      }
+    },
+    {
+      "id": "coast-1",
+      "transform": {
+        "position": [
+          1280,
+          270
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/coast.svg"
+          },
+          "size": [
+            1280,
+            330
+          ]
+        }
+      }
+    },
+    {
+      "id": "road-0",
+      "transform": {
+        "position": [
+          0,
+          600
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/road.svg"
+          },
+          "size": [
+            1280,
+            200
+          ]
+        }
+      }
+    },
+    {
+      "id": "road-1",
+      "transform": {
+        "position": [
+          1280,
+          600
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/road.svg"
+          },
+          "size": [
+            1280,
+            200
+          ]
+        }
+      }
+    },
+    {
+      "id": "template-0",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "template-1",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/crab.svg"
+          },
+          "size": [
+            90,
+            62
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "template-2",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/crate.svg"
+          },
+          "size": [
+            78,
+            83
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "template-3",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/station.svg"
+          },
+          "size": [
+            150,
+            255
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "template-4",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/finish.svg"
+          },
+          "size": [
+            170,
+            220
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-0",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-1",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-2",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-3",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-4",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-5",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-6",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-7",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-8",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-9",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-10",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-11",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-12",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-13",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-14",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-15",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-16",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-17",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-18",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "object-19",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "shadow",
+      "transform": {
+        "position": [
+          180,
+          596
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/shadow.svg"
+          },
+          "size": [
+            180,
+            28
+          ]
+        }
+      }
+    },
+    {
+      "id": "rider",
+      "transform": {
+        "position": [
+          270,
+          606
+        ]
+      }
+    },
+    {
+      "id": "rear-wheel",
+      "transform": {
+        "position": [
+          -83,
+          -70
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wheel.svg"
+          },
+          "size": [
+            70,
+            70
+          ]
+        }
+      },
+      "parent": "rider"
+    },
+    {
+      "id": "front-wheel",
+      "transform": {
+        "position": [
+          42,
+          -70
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wheel.svg"
+          },
+          "size": [
+            70,
+            70
+          ]
+        }
+      },
+      "parent": "rider"
+    },
+    {
+      "id": "body",
+      "transform": {
+        "position": [
+          -84,
+          -236
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/rider.svg"
+          },
+          "size": [
+            230,
+            236
+          ]
+        }
+      },
+      "parent": "rider"
+    },
+    {
+      "id": "pouch",
+      "transform": {
+        "position": [
+          69,
+          -176
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/pouch.svg"
+          },
+          "size": [
+            74,
+            42
+          ]
+        }
+      },
+      "parent": "rider"
+    },
+    {
+      "id": "crank",
+      "transform": {
+        "position": [
+          12,
+          -52
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/crank.svg"
+          },
+          "size": [
+            36,
+            36
+          ]
+        }
+      },
+      "parent": "rider"
+    },
+    {
+      "id": "wing",
+      "transform": {
+        "position": [
+          -64,
+          -245
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wing.svg"
+          },
+          "size": [
+            130,
+            94
+          ]
+        }
+      },
+      "parent": "rider",
+      "visible": false
+    },
+    {
+      "id": "delivery",
+      "visible": false,
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/fish.svg"
+          },
+          "size": [
+            58,
+            42
+          ]
+        }
+      }
+    },
+    {
+      "id": "particle-0",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-1",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-2",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-3",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-4",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-5",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-6",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-7",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-8",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-9",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-10",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "particle-11",
+      "transform": {
+        "position": [
+          -500,
+          -500
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/spark.svg"
+          },
+          "size": [
+            20,
+            20
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "wind-0",
+      "transform": {
+        "position": [
+          600,
+          380
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wind.svg"
+          },
+          "size": [
+            160,
+            65
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "wind-1",
+      "transform": {
+        "position": [
+          840,
+          430
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wind.svg"
+          },
+          "size": [
+            160,
+            65
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "wind-2",
+      "transform": {
+        "position": [
+          1080,
+          480
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/wind.svg"
+          },
+          "size": [
+            160,
+            65
+          ]
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "hud",
+      "components": {
+        "size": [
+          1280,
+          800
+        ],
+        "html": {
+          "resource": "hud",
+          "font": "regular",
+          "boldFont": "bold"
+        }
+      }
+    }
+  ]
+}
