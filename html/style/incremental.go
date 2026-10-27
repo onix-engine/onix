@@ -90,16 +90,22 @@ func RecomputeInputStateInPlaceWithImpact(root *dom.Node, stylesheet *css.Styles
 }
 
 func RecomputeInputStateInPlaceWithImpactAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment) (Map, ChangeImpact, error) {
-	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, queries, nil)
+	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, queries, nil, nil)
 }
 
 // RecomputeInputStateWithCache shares immutable styles with full and mutation
 // cascades, so toggling back to a previous input state reuses its values.
 func RecomputeInputStateWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, cache *MutationCache) (Map, ChangeImpact, error) {
-	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, &QueryEnvironment{ContainerMetrics: cache.ContainerMetrics}, cache)
+	return RecomputeInputStateWithChanges(root, stylesheet, viewport, previous, current, styles, nil, cache)
 }
 
-func recomputeInputState(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment, cache *MutationCache) (Map, ChangeImpact, error) {
+// RecomputeInputStateWithChanges emits changed styles during the input cascade.
+// The caller owns and reuses the output slice, as with subtree mutations.
+func RecomputeInputStateWithChanges(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, changes *[]NodeChange, cache *MutationCache) (Map, ChangeImpact, error) {
+	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, &QueryEnvironment{ContainerMetrics: cache.ContainerMetrics}, cache, changes)
+}
+
+func recomputeInputState(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment, cache *MutationCache, changes *[]NodeChange) (Map, ChangeImpact, error) {
 	if styles == nil {
 		if cache != nil {
 			computed, err := ComputeWithCache(root, stylesheet, viewport, current, nil, cache)
@@ -123,6 +129,7 @@ func recomputeInputState(root *dom.Node, stylesheet *css.Stylesheet, viewport Vi
 		return nil, ChangeNone, err
 	}
 	scratch := acquireCascadeScratch()
+	scratch.changes = changes
 	if cache != nil {
 		scratch.compiled = cache.matcher(stylesheet)
 		cache.prepareStyleIndex()

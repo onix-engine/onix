@@ -112,6 +112,7 @@ func (n Node) OnPointer(handler PointerHandler) bool {
 		state.NodeEvents[n.node] = binding
 	}
 	state.EventRevision++
+	n.markEventMutation(state)
 	return true
 }
 
@@ -137,6 +138,7 @@ func (n Node) OnClick(handler ClickHandler) bool {
 		state.NodeEvents[n.node] = binding
 	}
 	state.EventRevision++
+	n.markEventMutation(state)
 	return true
 }
 

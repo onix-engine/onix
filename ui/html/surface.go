@@ -1074,11 +1074,17 @@ func recomputeHTMLStyles(world *ecs.World, owner ecs.Entity, renderState *htmlRe
 	var styles style.Map
 	var impact style.ChangeImpact
 	var err error
+	full := renderState.Styles == nil
+	renderState.StyleChanges = renderState.StyleChanges[:0]
+	defer func() {
+		clear(renderState.StyleChanges)
+		renderState.StyleChanges = renderState.StyleChanges[:0]
+	}()
 	if previous != nil {
-		styles, impact, err = style.RecomputeInputStateWithCache(renderState.Root, renderState.Stylesheet, renderState.Viewport, previous, &renderState.Input, renderState.Styles, &renderState.StyleCache)
+		styles, impact, err = style.RecomputeInputStateWithChanges(renderState.Root, renderState.Stylesheet, renderState.Viewport, previous, &renderState.Input, renderState.Styles, &renderState.StyleChanges, &renderState.StyleCache)
 	} else if renderState.Styles != nil {
 		styles = renderState.Styles
-		impact, _, err = style.RecomputeSubtreesWithChanges(renderState.Root, renderState.Stylesheet, renderState.Viewport, &renderState.Input, styles, roots, nil, &renderState.StyleCache)
+		impact, _, err = style.RecomputeSubtreesWithChanges(renderState.Root, renderState.Stylesheet, renderState.Viewport, &renderState.Input, styles, roots, &renderState.StyleChanges, &renderState.StyleCache)
 	} else {
 		styles, err = computeHTMLStyles(renderState, renderState.Stylesheet, renderState.Viewport)
 		impact = style.ChangeRebuild
@@ -1087,7 +1093,24 @@ func recomputeHTMLStyles(world *ecs.World, owner ecs.Entity, renderState *htmlRe
 		return false
 	}
 	renderState.Styles = styles
-	syncHTMLRenderedControlStyles(world, owner, renderState, styles)
+	if full {
+		syncHTMLRenderedControlStyles(world, owner, renderState, styles)
+	} else {
+		// Hover/focus often change just one row. Touching every retained entity
+		// marks unrelated text and sprites dirty and invalidates their render caches.
+		// Live control state (for example a checkbox mark) also needs painting
+		// when it changes without affecting the computed CSS values.
+		for _, node := range roots {
+			if rendered := renderState.RenderNodes[node]; rendered != nil {
+				syncHTMLRenderedStyles(world, owner, renderState, styles, rendered.Entities)
+			}
+		}
+		for _, change := range renderState.StyleChanges {
+			if rendered := renderState.RenderNodes[change.Node]; rendered != nil {
+				syncHTMLRenderedStyles(world, owner, renderState, styles, rendered.Entities)
+			}
+		}
+	}
 	if impact == style.ChangeRebuild {
 		renderState.PendingLayout = true
 	}
@@ -1820,6 +1843,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	if state != nil && state.Rendered && sameHTMLRenderKeyExceptEvents(state.Key, key) && state.ImageProviderChanged == imageProviderChanged {
 		cleanupHTMLNodeEventTargets(world, state)
 		bindHTMLNodeEvents(world, owner, state, state.Boxes, value.PassThrough, htmlVisible(world, owner), value.StackIndex)
+		clearHTMLMutations(state)
 		state.Key = key
 		htmlOwners(world).Children[owner] = state.Children
 		syncHTMLVisibility(world, owner, state)
@@ -1972,8 +1996,9 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 
 	visible := htmlVisible(world, owner)
 	state.ControlStylesChanged = false
-	partial := mutationSync && !state.PendingVisual && state.Key.EventRevision == key.EventRevision && reconcileHTMLPartial(world, owner, state, needsLayout, fontValue, value.BoldFont, dpi, value.StackIndex, value.PassThrough, visible)
+	partial := mutationSync && !state.PendingVisual && reconcileHTMLPartial(world, owner, state, needsLayout, fontValue, value.BoldFont, dpi, value.StackIndex, value.PassThrough, visible)
 	if !partial {
+		fmt.Printf("FULL mutation=%t layout=%t visual=%t cssSame=%t events=%d/%d valid=%t mutations=%d\n", mutationSync, state.PendingLayout, state.PendingVisual, state.Key.CSS == key.CSS, state.Key.EventRevision, key.EventRevision, state.PartialValid, len(state.Mutations))
 		updateHTMLControlSnapshots(world, state, state.Children)
 		clear(state.EventTargets)
 		state.PendingLayout = false

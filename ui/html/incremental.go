@@ -17,7 +17,17 @@ const (
 	htmlMutationText
 	htmlMutationDefinitions
 	htmlMutationAttribute
+	htmlMutationEvent
 )
+
+// Event-only updates keep their existing fast path. Mixed structural updates
+// use this marker to distinguish new/removed targets from retained targets.
+func (n Node) markEventMutation(state *htmlRenderState) {
+	if state.Mutations == nil {
+		state.Mutations = make(map[*dom.Node]htmlMutation)
+	}
+	state.Mutations[n.node] |= htmlMutationEvent
+}
 
 // Counters describe work performed by the last sync, for regression tests and
 // benchmarks without timing-dependent assertions.

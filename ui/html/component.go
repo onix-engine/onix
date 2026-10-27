@@ -249,6 +249,21 @@ func DefineScoped[P, S any](template Template, cssText string, behavior Behavior
 	return definition, nil
 }
 
+// DefineScopedChild compiles content in its parent's CSS scope. The parent
+// retains the stylesheet, so replacing child templates does not republish CSS.
+func DefineScopedChild[P, S, CP, CS any](parent *Definition[P, S], template Template, behavior Behavior[CP, CS]) (*Definition[CP, CS], error) {
+	if parent == nil || !parent.ScopedCSS || parent.runtime == nil {
+		return nil, fmt.Errorf("ecs: scoped HTML child requires a scoped parent")
+	}
+	definition, err := Define(template, "", behavior)
+	if err != nil {
+		return nil, err
+	}
+	definition.ScopedCSS = true
+	definition.runtime.scopeClass = parent.runtime.scopeClass
+	return definition, nil
+}
+
 func htmlComponentScopeClass(template, cssText string) string {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(template))

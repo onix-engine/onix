@@ -2,6 +2,8 @@ package html
 
 import (
 	"cmp"
+	"fmt"
+"runtime"
 	"slices"
 
 	"github.com/diiyw/onix/ecs"
@@ -85,7 +87,7 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered := state.BoxRenderings[box.Node]
 	if rendered == nil || rendered.SharedRendering || rendered.Composite || rendered.Box != box {
-		return false
+		return tracePartialFailure()
 	}
 	if rendered.Queued {
 		return true
@@ -101,7 +103,7 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	if htmlOverflowClipsAxis(rendered.OverflowX) != htmlOverflowClipsAxis(box.Style.OverflowX) || htmlOverflowClipsAxis(rendered.OverflowY) != htmlOverflowClipsAxis(box.Style.OverflowY) {
 		for parent := box.Parent; parent != nil; parent = parent.Parent {
 			if !queueHTMLBox(state, parent) {
-				return false
+				return tracePartialFailure()
 			}
 			state.BoxRenderings[parent.Node].ExtentDirty = true
 		}
@@ -114,13 +116,16 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 // shared primitive ownership retain the full path.
 func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderState, needsLayout bool, fontValue, boldFont *onixtext.Font, dpi float64, stackIndex int, passThrough, visible bool) bool {
 	if !state.PartialValid || !state.VisibilityKnown || state.Visible != visible {
-		return false
+		return tracePartialFailure()
 	}
 	structure := false
-	for _, kind := range state.Mutations {
+	for node, kind := range state.Mutations {
 		structure = structure || kind&htmlMutationStructure != 0
-		if kind&(htmlMutationContent|htmlMutationAttribute) != 0 {
-			return false
+		// New and detached nodes are handled by structural preflight. Only
+		// changes to retained native-control/event contracts need the full path.
+		if kind&(htmlMutationContent|htmlMutationAttribute|htmlMutationEvent) != 0 && htmlNodeWithin(node, state.Root) && (state.BoxRenderings[node] != nil || state.RenderNodes[node] != nil) {
+			fmt.Printf("PARTIAL rejected retained mutation %s %d\n", node.Data, kind)
+			return tracePartialFailure()
 		}
 	}
 	// Actual topology changes require structural ownership preflight.
@@ -141,19 +146,22 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		state.RenderQueue = state.RenderQueue[:0]
 	}()
 	if structure && !prepareHTMLStructure(state, state.LayoutCache.Root) {
-		return false
+		fmt.Println("PARTIAL rejected structure")
+		return tracePartialFailure()
 	}
 	if needsLayout {
 		for _, box := range state.LayoutCache.Changed {
 			if !queueHTMLBox(state, box) {
-				return false
+				fmt.Println("PARTIAL rejected changed layout", box.Node.Data)
+				return tracePartialFailure()
 			}
 		}
 	}
 	for _, change := range state.StyleChanges {
 		if box := htmlNearestBox(state, change.Node); box != nil && !queueHTMLBox(state, box) {
+			fmt.Println("PARTIAL rejected changed style", change.Node.Data)
 			state.NodeAncestors.clear()
-			return false
+			return tracePartialFailure()
 		}
 	}
 	state.NodeAncestors.clear()
@@ -164,26 +172,26 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		rendered := state.RenderQueue[i]
 		if rendered.Visibility != rendered.Box.Style.Visibility && rendered.Parent != nil && htmlOverflowClipsStyle(rendered.Parent.Style) {
 			if !queueHTMLBox(state, rendered.Parent) {
-				return false
+				return tracePartialFailure()
 			}
 		}
 		clipChanged = clipChanged || rendered.ClipChanged
 		if rendered.Parent != rendered.Box.Parent {
 			// Refresh both former and new context owners before their users.
 			if !queueHTMLRetainedContext(state, state.BoxRenderings[rendered.Parent.Node]) || !queueHTMLBox(state, rendered.Box.Parent) {
-				return false
+				return tracePartialFailure()
 			}
 		}
 		if !structure && rendered.StackChanged && !htmlStackChangedAncestor(state, rendered.Box) && !htmlStackSubtreeIndependent(state, rendered.Box) {
-			return false
+			return tracePartialFailure()
 		}
 		if parent := rendered.ContextParent; parent != nil && !queueHTMLRetainedContext(state, parent) {
-			return false
+			return tracePartialFailure()
 		}
 		_, focusable := htmlFocusableFromNode(owner, rendered.Box.Node)
 		if rendered.OwnsContext || isHTMLControlNode(rendered.Box.Node) || focusable || rendered.ClipMoved || rendered.ClipChanged || htmlPaintWindowChanged(state, rendered) {
 			if !queueHTMLContextDescendants(state, rendered) {
-				return false
+				return tracePartialFailure()
 			}
 		}
 	}
@@ -291,7 +299,7 @@ func queueHTMLContextDescendants(state *htmlRenderState, rendered *htmlBoxRender
 	rendered.Expanded = true
 	for _, child := range rendered.Box.Children {
 		if !queueHTMLBox(state, child) || !queueHTMLContextDescendants(state, state.BoxRenderings[child.Node]) {
-			return false
+			return tracePartialFailure()
 		}
 	}
 	return true
@@ -421,7 +429,7 @@ func removeHTMLFocusTarget(state *htmlRenderState, node *dom.Node) {
 
 func htmlBoxNeedsOverflowClip(state *htmlRenderState, box *layout.Box) bool {
 	if !htmlOverflowClipsStyle(box.Style) || htmlNodeHasScrollBinding(state, box.Node) {
-		return false
+		return tracePartialFailure()
 	}
 	rect := box.PaddingBox()
 	return rect.Width > 0 && rect.Height > 0
@@ -464,3 +472,5 @@ func clearHTMLOverflowRoutes(state *htmlRenderState, node *dom.Node) {
 func queueHTMLRetainedContext(state *htmlRenderState, rendered *htmlBoxRendering) bool {
 	return rendered != nil && (rendered.Retiring || queueHTMLBox(state, rendered.Box))
 }
+
+func tracePartialFailure() bool { _, _, line, _ := runtime.Caller(1); fmt.Println("PARTIAL FAILURE", line); return false }
