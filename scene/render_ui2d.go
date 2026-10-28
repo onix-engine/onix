@@ -104,7 +104,7 @@ func appendUIImageLayer2D(c *graphics.Canvas2D, world *ecs.World, snapshots *ren
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
 
-		if image == nil || image.Alpha <= 0 || image.Tint.A <= 0 || image.Texture == nil || !image.Texture.Valid() || transform == nil || visibility == nil || !visibility.Visible {
+		if image == nil || image.Alpha <= 0 || image.Tint.A <= 0 || image.Texture == nil || !image.Texture.ValidFor(c.Device()) || transform == nil || visibility == nil || !visibility.Visible {
 			continue
 		}
 		naturalWidth := float32(image.Texture.LogicalWidth())

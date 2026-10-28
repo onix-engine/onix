@@ -26,12 +26,15 @@ type componentInfo struct {
 	onRemove  func(*World, Entity, column, int)
 	version   uint64
 	structure uint64
+	values    uint64
+	members   uint64
 }
 
 type column interface {
 	reserve(int)
 	moveTo(column, int)
 	swapRemove(int)
+	removeRow(int)
 	ticks(filterKind) []Tick
 	ranges(filterKind) []tickRange
 	markChanged(int, Tick)
@@ -149,6 +152,8 @@ func (c *typedColumn[T]) reserve(additional int) {
 
 func (c *typedColumn[T]) append(value T, tick Tick) {
 	c.appendWithTicks(value, tick, tick)
+	c.world.componentInfos[c.id].values++
+	c.world.componentInfos[c.id].members++
 }
 
 func (c *typedColumn[T]) appendWithTicks(value T, added, changed Tick) {
@@ -180,10 +185,16 @@ func (c *typedColumn[T]) replace(row int, value T, tick Tick) {
 func (c *typedColumn[T]) moveTo(target column, row int) {
 	dst := target.(*typedColumn[T])
 	dst.appendWithTicks(c.values[row], c.added[row], c.changed[row])
-	c.swapRemove(row)
+	c.removeRow(row)
 }
 
 func (c *typedColumn[T]) swapRemove(row int) {
+	c.removeRow(row)
+	c.world.componentInfos[c.id].values++
+	c.world.componentInfos[c.id].members++
+}
+
+func (c *typedColumn[T]) removeRow(row int) {
 	last := len(c.values) - 1
 	if row != last {
 		c.values[row] = c.values[last]
@@ -212,6 +223,7 @@ func (c *columnState) markChanged(row int, tick Tick) {
 	c.changed[row] = tick
 	includeTick(c.changedRanges, row, tick)
 	c.touch()
+	c.world.componentInfos[c.id].values++
 }
 
 func (c *columnState) ranges(kind filterKind) []tickRange {
@@ -247,6 +259,18 @@ func ComponentRevision[T any](world *World) (version, structure uint64) {
 	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
 		info := &world.componentInfos[id]
 		return info.version, info.structure
+	}
+	return 0, 0
+}
+
+// ComponentValueRevision reports writes and membership changes, excluding
+// migrations that only relocate unchanged values between archetypes.
+// The second result changes only when values are inserted or removed.
+func ComponentValueRevision[T any](world *World) (version, membership uint64) {
+	requireWorld(world)
+	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
+		info := &world.componentInfos[id]
+		return info.values, info.members
 	}
 	return 0, 0
 }

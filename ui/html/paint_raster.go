@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/style"
@@ -18,8 +19,8 @@ type htmlRasterGradient struct {
 	direction htmlGradientDirection
 }
 
-func htmlPaintRasterScale() float64 {
-	return max(graphics.CurrentContext().RasterScale(), 1)
+func htmlPaintRasterScale(world *ecs.World) float64 {
+	return max(graphics.CanvasFor(world).RasterScale(), 1)
 }
 
 func htmlNeedsRasterPaint(computed *style.ComputedStyle) bool {
@@ -40,7 +41,7 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 	if state == nil || node == nil || computed == nil || width <= 0 || height <= 0 {
 		return nil
 	}
-	scale := htmlPaintRasterScale()
+	scale := max(state.Key.RasterScale, 1)
 	w, h := max(1, int(math.Ceil(float64(width)*scale))), max(1, int(math.Ceil(float64(height)*scale)))
 	key := htmlTextureKey{node: node, variant: "background"}
 	raster := state.Textures.paint[key]
@@ -57,7 +58,7 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 		rasterHTMLBoxPaintPrepared(&raster.image, computed, float64(width), float64(height), scale, raster.gradients)
 		raster.style, raster.width, raster.height, raster.colors = computed, w, h, colors
 		raster.logicalWidth, raster.logicalHeight = width, height
-		if raster.texture == nil || !raster.texture.Valid() || raster.texture.Width != w || raster.texture.Height != h {
+		if raster.texture == nil || !raster.texture.ValidFor(nil) || raster.texture.Width != w || raster.texture.Height != h {
 			raster.texture = graphics.CreateTextureByImageNoMipmap(&raster.image)
 			if raster.texture == nil {
 				return nil
@@ -318,7 +319,7 @@ func htmlBoxShadowTextureFor(state *htmlRenderState, node *dom.Node, computed *s
 		rasterHTMLBoxShadow(&raster.image, computed, computed.BoxShadow[shadowIndex], float64(boxWidth), float64(boxHeight), float64(padding), &raster.filterScratch)
 		raster.style, raster.width, raster.height = computed, w, h
 		raster.logicalWidth, raster.logicalHeight = boxWidth, boxHeight
-		if raster.texture == nil || !raster.texture.Valid() || raster.texture.Width != w || raster.texture.Height != h {
+		if raster.texture == nil || !raster.texture.ValidFor(nil) || raster.texture.Width != w || raster.texture.Height != h {
 			raster.texture = graphics.CreateTextureByImageNoMipmap(&raster.image)
 			if raster.texture == nil {
 				return nil

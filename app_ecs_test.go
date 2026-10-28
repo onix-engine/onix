@@ -167,6 +167,8 @@ func TestAppFrameRunsStartupOnceAndOrderedStages(t *testing.T) {
 	defer restore()
 
 	app := NewApp()
+
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	app.SetTargetFPS(DefaultTargetTPS)
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
@@ -286,6 +288,8 @@ func TestAppFrameRunsFixedLoopBetweenPreUpdateAndUpdate(t *testing.T) {
 	defer restore()
 
 	app := NewApp()
+
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	app.SetTargetFPS(DefaultTargetTPS)
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
@@ -349,6 +353,8 @@ func TestAppFixedUpdateUsesFixedTimeAndUpdateUsesFrameTime(t *testing.T) {
 	defer restore()
 
 	app := NewApp()
+
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	app.SetTargetFPS(DefaultTargetTPS)
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
@@ -401,6 +407,8 @@ func TestAppFrameRunsFixedUpdateIndependentOfRender(t *testing.T) {
 	defer restore()
 
 	app := NewApp()
+
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	app.SetTargetFPS(30)
 	app.SetTargetTPS(60)
 	now := time.Unix(0, 0)
@@ -444,6 +452,8 @@ func TestAppFrameRunsRenderIndependentOfFixedUpdate(t *testing.T) {
 	defer restore()
 
 	app := NewApp()
+
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	app.SetTargetFPS(120)
 	app.SetTargetTPS(20)
 	now := time.Unix(0, 0)

@@ -23,7 +23,7 @@ func NeedsFrame(world *ecs.World) bool {
 				return true
 			}
 			if scene.IsActive(world, entity) && (!state.VisibilityKnown || state.Visible != htmlVisible(world, entity) ||
-				!state.Rendered || state.Key != htmlSurfaceRenderKey(world, *surface, state) ||
+				!state.Rendered || state.pending() || state.Key != htmlSurfaceRenderKey(world, *surface, state) ||
 				state.ImageProviderChanged != imageProviderChanged || htmlAnimating(state) || htmlPaintCullPending(world, state)) {
 				return true
 			}

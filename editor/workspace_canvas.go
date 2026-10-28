@@ -113,7 +113,7 @@ func (a *ModuleEditor) syncCanvas(w *ecs.World) error {
 		}
 		return nil
 	}
-	if _, err := a.viewport2D.target.ensureTarget(int(bounds.W), int(bounds.H), 1); err != nil {
+	if _, err := a.viewport2D.target.ensureTarget(graphics.DeviceFor(w), int(bounds.W), int(bounds.H), 1); err != nil {
 		return err
 	}
 	root, err := htmlui.Root(w, a.canvas)

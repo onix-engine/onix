@@ -79,6 +79,7 @@ func TestAppSceneScopesSeparateSimulationAndOverlayRendering(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 240))
 	defer restore()
 	app := NewApp()
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	defer app.Destroy()
 	plan := appModulePlan(t, `{"components":{"sprite":{"color":"#ffffff","size":[10,10]}}}`)
 	game := plan.Scenes[0]
@@ -215,6 +216,7 @@ func TestAppModulesDispatchPerFixedTickAndDestroy(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 240))
 	defer restore()
 	app := NewApp()
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	defer app.Destroy()
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
@@ -314,6 +316,7 @@ func TestAppModuleColorContentInputAndStableFrames(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 240))
 	defer restore()
 	app := NewApp()
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	defer app.Destroy()
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
@@ -472,6 +475,7 @@ func TestAppModuleFailedMountCanRetryWithNewCapabilities(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 240))
 	defer restore()
 	app := NewApp()
+	graphics.BindFrame(app.World, graphics.CurrentContext())
 	defer app.Destroy()
 	invalid := appModulePlan(t, `{}`)
 	badRegistry := module.Registry{}

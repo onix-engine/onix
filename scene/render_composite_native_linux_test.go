@@ -72,6 +72,7 @@ func TestNativeComposite2DMatchesFullRender(t *testing.T) {
 	defer restore()
 	defer context.Device.Activate()
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	scene.RegisterSpriteRenderer2D(world)
 	scene.RegisterTextRenderer2D(world)
 	scene.RegisterCameraRenderer2D(world)

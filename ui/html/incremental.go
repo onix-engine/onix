@@ -223,17 +223,11 @@ func prepareHTMLMutationRoots(state *htmlRenderState) bool {
 	return layoutDirty
 }
 
+// Each producer releases its consumed change batch after a successful sync.
 func clearHTMLMutations(state *htmlRenderState) {
-	state.LayoutTopology = false
-	clear(state.Mutations)
-	clear(state.MutationRoots)
-	state.MutationRoots = state.MutationRoots[:0]
-	clear(state.LayoutOrderNodes)
-	state.LayoutOrderNodes = state.LayoutOrderNodes[:0]
-	clear(state.LayoutNodes)
-	state.LayoutNodes = state.LayoutNodes[:0]
-	clear(state.StyleChanges)
-	state.StyleChanges = state.StyleChanges[:0]
+	state.htmlDocumentState.consumeMutations()
+	state.htmlLayoutState.consumeInvalidations()
+	state.htmlStyleState.consumeChanges()
 }
 
 func sameHTMLRenderEnvironment(left, right htmlRenderKey) bool {

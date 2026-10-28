@@ -78,8 +78,6 @@ type uiTransformNode struct {
 	entity           ecs.Entity
 	transform        UITransform
 	parent           ecs.Entity
-	firstChild       ecs.Entity
-	nextSibling      ecs.Entity
 	localClip        ClipRect2D
 	hasClip          bool
 	localRoundedClip RoundedClip2D
@@ -112,15 +110,15 @@ type uiTransformWorkspace struct {
 }
 
 func uiTransformRevisions(world *ecs.World) (versions, structures [9]uint64) {
-	versions[0], structures[0] = ecs.ComponentRevision[UITransform](world)
-	versions[1], structures[1] = ecs.ComponentRevision[Parent](world)
-	versions[2], structures[2] = ecs.ComponentRevision[ClipRect2D](world)
-	versions[3], structures[3] = ecs.ComponentRevision[RoundedClip2D](world)
-	versions[4], structures[4] = ecs.ComponentRevision[ClipExempt2D](world)
-	versions[5], structures[5] = ecs.ComponentRevision[Size2D](world)
-	versions[6], structures[6] = ecs.ComponentRevision[Sprite2D](world)
-	versions[7], structures[7] = ecs.ComponentRevision[Text2D](world)
-	versions[8], structures[8] = ecs.ComponentRevision[UIGlobalTransform](world)
+	versions[0], structures[0] = ecs.ComponentValueRevision[UITransform](world)
+	versions[1], structures[1] = ecs.ComponentValueRevision[Parent](world)
+	versions[2], structures[2] = ecs.ComponentValueRevision[ClipRect2D](world)
+	versions[3], structures[3] = ecs.ComponentValueRevision[RoundedClip2D](world)
+	versions[4], structures[4] = ecs.ComponentValueRevision[ClipExempt2D](world)
+	versions[5], structures[5] = ecs.ComponentValueRevision[Size2D](world)
+	versions[6], structures[6] = ecs.ComponentValueRevision[Sprite2D](world)
+	versions[7], structures[7] = ecs.ComponentValueRevision[Text2D](world)
+	versions[8], structures[8] = ecs.ComponentValueRevision[UIGlobalTransform](world)
 	return
 }
 
@@ -175,14 +173,11 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 			node.dirty, node.state = false, uiTransformUnvisited
 		}
 	}
-	topologyChanged := false
+	hierarchy := HierarchyFor(world)
 	if !workspace.initialized || workspace.structures != structures {
 		for _, entity := range workspace.active {
-			if !ecs.Has[UITransform](world, entity) {
-				node := workspace.node(entity)
-				for child := node.firstChild; child != 0; child = workspace.node(child).nextSibling {
-					workspace.mark(child)
-				}
+			if parent := workspace.node(workspace.node(entity).parent); parent != nil && !ecs.Has[UITransform](world, parent.entity) {
+				workspace.mark(entity)
 			}
 		}
 		for _, entity := range workspace.active {
@@ -199,10 +194,9 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 			workspace.refresh(world, entity, viewport, scaleFactor, !workspace.initialized || viewportChanged)
 			workspace.active = append(workspace.active, entity)
 		}
-		topologyChanged = true
 	} else if viewportChanged {
 		for _, entity := range workspace.active {
-			topologyChanged = workspace.refresh(world, entity, viewport, scaleFactor, true) || topologyChanged
+			workspace.refresh(world, entity, viewport, scaleFactor, true)
 		}
 	} else {
 		changes := &workspace.changes
@@ -212,7 +206,7 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 		}
 		*changes = world.ChangesSince(since)
 		refresh := func(entity ecs.Entity) {
-			topologyChanged = workspace.refresh(world, entity, viewport, scaleFactor, false) || topologyChanged
+			workspace.refresh(world, entity, viewport, scaleFactor, false)
 		}
 		if workspace.versions[0] != versions[0] {
 			collectUITransformChanges[UITransform](world, changes, refresh)
@@ -248,24 +242,12 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 			}
 		}
 	}
-	if topologyChanged {
-		for _, entity := range workspace.active {
-			node := workspace.node(entity)
-			node.firstChild, node.nextSibling = 0, 0
-		}
-		for _, entity := range workspace.active {
-			node := workspace.node(entity)
-			if parent := workspace.node(node.parent); parent != nil {
-				node.nextSibling, parent.firstChild = parent.firstChild, entity
-			}
-		}
-	}
 	for index := 0; index < len(workspace.queue); index++ {
 		node := workspace.node(workspace.queue[index])
 		if node == nil {
 			continue
 		}
-		for child := node.firstChild; child != 0; child = workspace.node(child).nextSibling {
+		for child := hierarchy.FirstChild(node.entity); child != 0; child = hierarchy.NextSibling(child) {
 			workspace.mark(child)
 		}
 	}
@@ -319,11 +301,11 @@ func (workspace *uiTransformWorkspace) mark(entity ecs.Entity) {
 	}
 }
 
-func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Entity, viewport mgl32.Vec2, scaleFactor float32, force bool) bool {
+func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Entity, viewport mgl32.Vec2, scaleFactor float32, force bool) {
 	index, _ := entity.Index()
 	node := &workspace.nodes[index]
 	if node.seen == workspace.generation && node.entity == entity {
-		return false
+		return
 	}
 	if node.entity != entity {
 		*node = uiTransformNode{}
@@ -345,7 +327,6 @@ func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Enti
 		node.local = transform.LocalMatrix(UIResolveContext{ScaleFactor: scaleFactor, BaseSize: baseSize, Viewport: viewport})
 		workspace.mark(entity)
 	}
-	return topologyChanged
 }
 
 func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (resolvedUITransform, error) {

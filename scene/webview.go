@@ -288,6 +288,16 @@ func WebViewSystem(name string) ecs.SystemConfig {
 	return ecs.SystemConfig{Name: name, System: syncWebViews}
 }
 
+// WebViewTaskCount keeps native browser callbacks serviced while a view exists.
+// Installing the feature without any browser surfaces does not prevent idle.
+func WebViewTaskCount(world *ecs.World) int {
+	count := 0
+	for range ecs.Query[WebView](world).All {
+		count++
+	}
+	return count
+}
+
 // SyncWebViews runs one WebView synchronization pass immediately.
 func SyncWebViews(world *ecs.World) error {
 	return WebViewSystem("").Run(world)

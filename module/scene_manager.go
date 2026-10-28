@@ -1,10 +1,13 @@
 package module
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/scene/render3d"
@@ -34,6 +37,7 @@ type SceneManager struct {
 	switches  []switchCommand
 	switching bool
 	nextLayer uint64
+	preload   *ScenePreloader
 }
 
 func (r *Runtime) Manager() *SceneManager { return &r.manager }
@@ -49,7 +53,7 @@ func (m *SceneManager) StartEntry() (*Scene, error) {
 	if m.runtime.closed {
 		return nil, ErrDisposed
 	}
-	if m.active != nil || m.runtime.busy || m.runtime.loading || m.switching {
+	if m.active != nil || m.runtime.busy || m.runtime.loading || m.switching || m.preload != nil {
 		return nil, ErrBusy
 	}
 	m.switching = true
@@ -75,29 +79,36 @@ func (m *SceneManager) StartEntry() (*Scene, error) {
 		}
 		return nil, err
 	}
+	if err = prepareSceneGPU(s); err != nil {
+		if created {
+			err = joinError(err, s.Dispose())
+		}
+		return nil, err
+	}
 	m.activate(s, false)
 	return s, syncSceneResources(s, true)
 }
 
-// Preload installs a scene and settles its startup messages without opening a
-// window or adding it to the running/rendering sets. Loading is synchronous;
-// callers choose when to spend the loading work. A ready instance is reused by
-// Switch, and can be released with Scene.Dispose when no longer needed.
+// Preload is the synchronous convenience form of BeginPreload and Advance.
+// Interactive loaders use BeginPreload to budget main-thread work per frame.
 func (m *SceneManager) Preload(request ScenePreloadRequest) (*Scene, error) {
-	if m.runtime.closed {
-		return nil, ErrDisposed
+	p, err := m.BeginPreload(request)
+	if err != nil {
+		return nil, err
 	}
-	if m.switching || m.runtime.busy || m.runtime.loading || m.runtime.preparation != nil {
-		return nil, ErrBusy
+	if err := p.cpu.WaitCPU(context.Background()); err != nil {
+		p.Discard()
+		return nil, err
 	}
-	for _, s := range m.runtime.scenes {
-		if s.ID() == request.Scene {
-			return nil, ErrUnavailable
+	for {
+		ready, err := p.Advance(time.Hour)
+		if err != nil {
+			return nil, err
+		}
+		if ready {
+			return p.scene, nil
 		}
 	}
-	m.switching = true
-	defer func() { m.switching = false }()
-	return m.prepare(request.Scene, SceneStartup{Value: cloneValue(request.Startup)})
 }
 
 // Activate queues the exact prepared instance. Disposal before the commit
@@ -112,7 +123,10 @@ func (m *SceneManager) Activate(target *Scene, options SceneActivationOptions) e
 	if target.state != SceneReady && target.state != SceneSuspended {
 		return ErrUnavailable
 	}
-	if m.switching || m.runtime.preparation != nil {
+	if device := graphics.DeviceFor(m.runtime.world); device.Driver() != nil && !target.GPUReadyFor(device) {
+		return ErrUnavailable
+	}
+	if m.switching || m.runtime.preparation != nil || m.preload != nil {
 		return ErrBusy
 	}
 	if err := m.enqueue(m.active, SceneSwitchRequest{Scene: target.ID(), Retain: options.Retain, Overlay: options.Overlay, Startup: options.Startup}); err != nil {
@@ -128,12 +142,15 @@ func (m *SceneManager) Switch(request SceneSwitchRequest) error {
 	if m.runtime.closed {
 		return ErrDisposed
 	}
-	if m.switching || m.runtime.preparation != nil {
+	if m.switching || m.runtime.preparation != nil || m.preload != nil {
 		return ErrBusy
 	}
 	return m.enqueue(m.active, request)
 }
 func (m *SceneManager) enqueue(source *Scene, request SceneSwitchRequest) error {
+	if m.preload != nil {
+		return ErrBusy
+	}
 	if source != m.active || source != nil && (source.state != SceneActive || !source.Alive()) {
 		return ErrUnavailable
 	}
@@ -216,6 +233,9 @@ func (m *SceneManager) apply(command switchCommand) error {
 			value = target.startup.Value
 		}
 		target, err = m.prepareScene(target, target.ID(), SceneStartup{From: from, Value: value})
+	}
+	if err == nil {
+		err = prepareSceneGPU(target)
 	}
 	if err != nil {
 		// Report a business failure on the channel; do not abort the App tick.
@@ -530,10 +550,26 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 	if err = render3d.UpdateDeformationsSystem("").Run(r.world); err != nil {
 		return target, err
 	}
-	for _, text := range ecs.Query[scene.Text2D](r.world).All {
-		scene.MeasureText2D(text.Mut())
+	target.uploads.Reset()
+	for _, entity := range target.entities {
+		if text := ecs.GetMut[scene.Text2D](r.world, entity); text != nil {
+			scene.PrepareText2D(text)
+		}
+		project.QueueEntityUploads(&target.uploads, r.world, entity)
 	}
 	target.state, target.rendered = SceneReady, false
 	m.visibility(target, false)
 	return target, nil
+}
+
+func prepareSceneGPU(s *Scene) error {
+	if graphics.DeviceFor(s.runtime.world).Driver() == nil {
+		return nil
+	}
+	for {
+		ready, err := s.AdvanceGPUFor(graphics.DeviceFor(s.runtime.world), graphics.UploadBudget{Time: time.Hour})
+		if ready || err != nil {
+			return err
+		}
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -95,6 +94,8 @@ func (app *App) Step() (bool, error) {
 	}
 	if app.Context != nil {
 		app.Context.ActivateRender()
+		vw, vh := app.Context.GetViewport()
+		graphics.BindFrame(app.World, app.Context.Canvas2D(vw, vh))
 		if app.Context.TakeFrameRequest() {
 			app.renderRequested.Store(true)
 		}
@@ -189,13 +190,13 @@ func (app *App) renderFrame() error {
 		previous := app.World.SetQueryScope(app.moduleRuntime.RenderScope())
 		defer app.World.SetQueryScope(previous)
 	}
-	render.ResetStatistics()
-	if ctx := graphics.CurrentContext(); ctx != nil {
+	graphics.DeviceFor(app.World).ResetStatistics()
+	if ctx := graphics.CanvasFor(app.World); ctx != nil {
 		ctx.ResetViewMatrix()
 		ctx.ResetProjectionMatrix()
 	}
 	renderErr := app.schedule(StageRender).Run(app.World)
-	if ctx := graphics.CurrentContext(); ctx != nil {
+	if ctx := graphics.CanvasFor(app.World); ctx != nil {
 		return errors.Join(renderErr, ctx.FinishFrame())
 	}
 	return renderErr
@@ -341,6 +342,7 @@ func (app *App) syncViewportState() {
 		app.RequestRender()
 	}
 	canvas := app.Context.Canvas2D(vw, vh)
+	graphics.BindFrame(app.World, canvas)
 	rasterScale := 1.0
 	if vw > 0 && vh > 0 {
 		rasterScale = min(float64(app.Context.Width)/float64(vw), float64(app.Context.Height)/float64(vh))

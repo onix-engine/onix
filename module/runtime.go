@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/physics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -71,6 +72,7 @@ type Runtime struct {
 	outputs                   *scene.RenderOutputPool
 	fonts                     map[[32]byte]*fontResource
 	contentResources          map[project.ModID]*privateResources
+	preparedContent           *preparedSceneContent
 	collisions2D              ecs.MessageReader[physics.CollisionMessage2D]
 	collisions3D              ecs.MessageReader[physics.CollisionMessage3D]
 	preparation               *preparation
@@ -82,13 +84,15 @@ type Runtime struct {
 	runningFrameUpdates       []*Context
 	renderEntities            []ecs.Entity
 	scopeNodes                []sceneScopeNode
-	scopeStructure            uint64
-	scopeParents              uint64
+	scopeHierarchy            uint64
+	scopeOwners               uint64
+	scopeEntities             uint64
 	scopeDirty                bool
 	renderBackground          bool
 }
 
 type Scene struct {
+	uploads           graphics.UploadQueue
 	runtime           *Runtime
 	plan              *project.ScenePlan
 	context           Context
@@ -223,7 +227,7 @@ func (r *Runtime) mount(id project.SceneID, state SceneState) (*Scene, error) {
 	if r.closed {
 		return nil, ErrDisposed
 	}
-	if r.busy || r.loading {
+	if r.busy || r.loading || r.manager.preload != nil && r.manager.preload.request.Scene == id && r.preparedContent == nil {
 		return nil, ErrBusy
 	}
 	index := slices.IndexFunc(r.plan.Scenes, func(p project.ScenePlan) bool { return p.ID == id })
@@ -725,15 +729,14 @@ func (r *Runtime) despawnPrivate(c *Context, root ecs.Entity) {
 	}
 	// Cached adjacency includes procedural descendants and visits each once.
 	r.despawnEntities = append(r.despawnEntities[:0], root)
+	hierarchy := scene.HierarchyFor(r.world)
 	for i := 0; i < len(r.despawnEntities); i++ {
-		index, _ := r.despawnEntities[i].Index()
-		for child := r.scopeNodes[index].firstChild; child != 0; {
+		for child := hierarchy.FirstChild(r.despawnEntities[i]); child != 0; child = hierarchy.NextSibling(child) {
 			childIndex, _ := child.Index()
 			node := &r.scopeNodes[childIndex]
 			if node.owner == c && r.world.IsAlive(child) {
 				r.despawnEntities = append(r.despawnEntities, child)
 			}
-			child = node.nextSibling
 		}
 	}
 	for i := len(r.despawnEntities) - 1; i >= 0; i-- {
@@ -757,23 +760,6 @@ func (r *Runtime) reparentPrivate(command structuralCommand) error {
 	if err := ecs.Insert(r.world, command.entity, scene.Parent{Entity: command.parent}); err != nil {
 		return err
 	}
-	// Preserve command order without rebuilding the world for each reparent.
-	index, _ := command.entity.Index()
-	node := &r.scopeNodes[index]
-	if oldIndex, ok := node.parent.Index(); ok {
-		link := &r.scopeNodes[oldIndex].firstChild
-		for *link != 0 {
-			if *link == command.entity {
-				*link = node.nextSibling
-				break
-			}
-			siblingIndex, _ := (*link).Index()
-			link = &r.scopeNodes[siblingIndex].nextSibling
-		}
-	}
-	parentIndex, _ := command.parent.Index()
-	node.parent, node.nextSibling = command.parent, r.scopeNodes[parentIndex].firstChild
-	r.scopeNodes[parentIndex].firstChild = command.entity
 	return nil
 }
 
@@ -912,6 +898,7 @@ func (r *Runtime) disposeScene(s *Scene) error {
 		}
 	}
 	s.entities = nil
+	s.uploads.Reset()
 	s.state = SceneDisposed
 	s.rendered = false
 	r.scopeDirty = true
@@ -932,6 +919,9 @@ func (r *Runtime) Close() error {
 		return ErrBusy
 	}
 	r.closed = true
+	if r.manager.preload != nil {
+		r.manager.preload.Discard()
+	}
 	var err error
 	for len(r.scenes) > 0 {
 		err = joinError(err, r.disposeScene(r.scenes[len(r.scenes)-1]))

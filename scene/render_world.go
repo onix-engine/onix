@@ -32,6 +32,7 @@ type ExtractedCamera struct {
 	Target       *render.RenderTarget
 	ViewMode     render.RenderViewMode
 	DepthClear   float32
+	OutputSize   mgl32.Vec2
 }
 
 // CameraRenderOptions contains the output settings shared by camera pipelines.
@@ -160,7 +161,7 @@ func renderWorld(world *ecs.World) *RenderWorld {
 
 func particleFallbackTexture2D(world *ecs.World) *graphics.Texture {
 	state := renderWorld(world)
-	if state.whiteTexture2D == nil || !state.whiteTexture2D.Valid() {
+	if state.whiteTexture2D == nil || !state.whiteTexture2D.ValidFor(graphics.DeviceFor(world)) {
 		state.whiteTexture2D = graphics.CreateTextureByColor(graphics.White)
 	}
 	return state.whiteTexture2D
@@ -179,7 +180,7 @@ func ExtractCameras(context *ecs.SystemContext) error {
 	world := context.World
 	state := renderWorld(world)
 	state.Cameras = state.Cameras[:0]
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(world)
 	if c == nil {
 		return nil
 	}
@@ -221,6 +222,7 @@ func ExtractCameras(context *ecs.SystemContext) error {
 			Target:       options.Target,
 			ViewMode:     options.ViewMode,
 			DepthClear:   options.DepthClear,
+			OutputSize:   mgl32.Vec2{canvasWidth, canvasHeight},
 		}
 		if camera.Fallback {
 			fallback = candidate
@@ -295,11 +297,10 @@ func (camera ExtractedCamera) ClipFromWorld() mgl32.Mat4 {
 		targetWidth, targetHeight := camera.Target.Size()
 		width, height = float32(targetWidth), float32(targetHeight)
 	} else {
-		c := graphics.CurrentContext()
-		if c == nil {
+		width, height = camera.OutputSize[0], camera.OutputSize[1]
+		if width <= 0 || height <= 0 {
 			return clipFromWorld
 		}
-		width, height = c.Size()
 	}
 	viewport := camera.Camera.ResolvedViewport()
 	if viewport.X == 0 && viewport.Y == 0 && viewport.Width == width && viewport.Height == height {

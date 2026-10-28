@@ -2,8 +2,6 @@ package html
 
 import (
 	"cmp"
-	"fmt"
-"runtime"
 	"slices"
 
 	"github.com/diiyw/onix/ecs"
@@ -16,6 +14,8 @@ import (
 // A box owns only the primitives it emits, excluding its child boxes. This
 // index lets local updates retire missing fragments without sweeping all groups.
 type htmlBoxRendering struct {
+	GeometryHash         uint64
+	PaintDirty           bool
 	Box                  *layout.Box
 	Parent               *layout.Box
 	Stack                int
@@ -73,6 +73,7 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 		}
 		rendered.SharedRendering = false
 	}
+	rendered.GeometryHash = box.OwnGeometryHash()
 	rendered.Visibility = box.Style.Visibility
 	rendered.OwnsContext = false
 	rendered.ContextParent = nil
@@ -87,8 +88,9 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered := state.BoxRenderings[box.Node]
 	if rendered == nil || rendered.SharedRendering || rendered.Composite || rendered.Box != box {
-		return tracePartialFailure()
+		return false
 	}
+	rendered.PaintDirty = true
 	if rendered.Queued {
 		return true
 	}
@@ -103,10 +105,24 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	if htmlOverflowClipsAxis(rendered.OverflowX) != htmlOverflowClipsAxis(box.Style.OverflowX) || htmlOverflowClipsAxis(rendered.OverflowY) != htmlOverflowClipsAxis(box.Style.OverflowY) {
 		for parent := box.Parent; parent != nil; parent = parent.Parent {
 			if !queueHTMLBox(state, parent) {
-				return tracePartialFailure()
+				return false
 			}
 			state.BoxRenderings[parent.Node].ExtentDirty = true
 		}
+	}
+	return true
+}
+
+// Reflow can visit unchanged siblings in flex layouts. Keep them in the
+// extent pass without resetting their controls or expanding their contexts.
+func queueHTMLLayoutBox(state *htmlRenderState, box *layout.Box) bool {
+	rendered := state.BoxRenderings[box.Node]
+	queued := rendered != nil && rendered.Queued
+	if !queueHTMLBox(state, box) {
+		return false
+	}
+	if !queued && !rendered.ClipChanged && !rendered.ClipMoved && !rendered.StackChanged && rendered.Parent == box.Parent && rendered.GeometryHash == box.OwnGeometryHash() {
+		rendered.PaintDirty = false
 	}
 	return true
 }
@@ -115,8 +131,11 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 // Structural changes preflight retained ownership; unsupported topology and
 // shared primitive ownership retain the full path.
 func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderState, needsLayout bool, fontValue, boldFont *onixtext.Font, dpi float64, stackIndex int, passThrough, visible bool) bool {
-	if !state.PartialValid || !state.VisibilityKnown || state.Visible != visible {
-		return tracePartialFailure()
+	if !state.PartialValid {
+		return state.fallback(FallbackRetained)
+	}
+	if !state.VisibilityKnown || state.Visible != visible {
+		return state.fallback(FallbackVisibility)
 	}
 	structure := false
 	for node, kind := range state.Mutations {
@@ -124,8 +143,7 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		// New and detached nodes are handled by structural preflight. Only
 		// changes to retained native-control/event contracts need the full path.
 		if kind&(htmlMutationContent|htmlMutationAttribute|htmlMutationEvent) != 0 && htmlNodeWithin(node, state.Root) && (state.BoxRenderings[node] != nil || state.RenderNodes[node] != nil) {
-			fmt.Printf("PARTIAL rejected retained mutation %s %d\n", node.Data, kind)
-			return tracePartialFailure()
+			return state.fallback(FallbackContract)
 		}
 	}
 	// Actual topology changes require structural ownership preflight.
@@ -138,6 +156,7 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		}
 		state.RemovedBoxes = state.RemovedBoxes[:0]
 		for _, rendered := range state.RenderQueue {
+			rendered.PaintDirty = false
 			rendered.Queued, rendered.StackChanged = false, false
 			rendered.ClipMoved, rendered.ClipChanged, rendered.Expanded = false, false, false
 			rendered.ExtentDirty = false
@@ -146,22 +165,30 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		state.RenderQueue = state.RenderQueue[:0]
 	}()
 	if structure && !prepareHTMLStructure(state, state.LayoutCache.Root) {
-		fmt.Println("PARTIAL rejected structure")
-		return tracePartialFailure()
+		return state.fallback(FallbackStructure)
 	}
 	if needsLayout {
 		for _, box := range state.LayoutCache.Changed {
-			if !queueHTMLBox(state, box) {
-				fmt.Println("PARTIAL rejected changed layout", box.Node.Data)
-				return tracePartialFailure()
+			if !queueHTMLLayoutBox(state, box) {
+				return state.fallback(FallbackBox)
 			}
+		}
+	}
+	// Authored control data can change without changing its used geometry
+	// (for example, selected options or a textarea's default text).
+	for node, kind := range state.Mutations {
+		if kind&(htmlMutationContent|htmlMutationAttribute|htmlMutationText|htmlMutationStructure) == 0 || !htmlNodeWithin(node, state.Root) {
+			continue
+		}
+		if box := htmlNearestBox(state, node); box != nil && !queueHTMLBox(state, box) {
+			state.NodeAncestors.clear()
+			return state.fallback(FallbackBox)
 		}
 	}
 	for _, change := range state.StyleChanges {
 		if box := htmlNearestBox(state, change.Node); box != nil && !queueHTMLBox(state, box) {
-			fmt.Println("PARTIAL rejected changed style", change.Node.Data)
 			state.NodeAncestors.clear()
-			return tracePartialFailure()
+			return state.fallback(FallbackBox)
 		}
 	}
 	state.NodeAncestors.clear()
@@ -170,28 +197,31 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	// A focus target unions contributions from the whole owning context.
 	for i := 0; i < len(state.RenderQueue); i++ {
 		rendered := state.RenderQueue[i]
+		if !rendered.PaintDirty {
+			continue
+		}
 		if rendered.Visibility != rendered.Box.Style.Visibility && rendered.Parent != nil && htmlOverflowClipsStyle(rendered.Parent.Style) {
 			if !queueHTMLBox(state, rendered.Parent) {
-				return tracePartialFailure()
+				return state.fallback(FallbackContext)
 			}
 		}
 		clipChanged = clipChanged || rendered.ClipChanged
 		if rendered.Parent != rendered.Box.Parent {
 			// Refresh both former and new context owners before their users.
 			if !queueHTMLRetainedContext(state, state.BoxRenderings[rendered.Parent.Node]) || !queueHTMLBox(state, rendered.Box.Parent) {
-				return tracePartialFailure()
+				return state.fallback(FallbackContext)
 			}
 		}
 		if !structure && rendered.StackChanged && !htmlStackChangedAncestor(state, rendered.Box) && !htmlStackSubtreeIndependent(state, rendered.Box) {
-			return tracePartialFailure()
+			return state.fallback(FallbackStack)
 		}
 		if parent := rendered.ContextParent; parent != nil && !queueHTMLRetainedContext(state, parent) {
-			return tracePartialFailure()
+			return state.fallback(FallbackContext)
 		}
 		_, focusable := htmlFocusableFromNode(owner, rendered.Box.Node)
 		if rendered.OwnsContext || isHTMLControlNode(rendered.Box.Node) || focusable || rendered.ClipMoved || rendered.ClipChanged || htmlPaintWindowChanged(state, rendered) {
 			if !queueHTMLContextDescendants(state, rendered) {
-				return tracePartialFailure()
+				return state.fallback(FallbackContext)
 			}
 		}
 	}
@@ -203,18 +233,27 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		for i := len(state.RenderQueue) - 1; i >= 0; i-- {
 			rendered := state.RenderQueue[i]
 			if structure || rendered.ExtentDirty || rendered.ExtentRect != rendered.Box.BorderBox() {
+				previousExtent := state.OverflowExtents[rendered.Box]
 				updateHTMLOverflowExtent(state, rendered)
+				if previousExtent != state.OverflowExtents[rendered.Box] && htmlOverflowClipsStyle(rendered.Box.Style) {
+					rendered.PaintDirty = true
+				}
 			}
 		}
 	}
 	for _, rendered := range state.RenderQueue {
-		updateHTMLControlSnapshots(world, state, rendered.Entities)
+		if rendered.PaintDirty {
+			updateHTMLControlSnapshots(world, state, rendered.Entities)
+		}
 	}
 	state.RenderGeneration++
 	state.Reconciling, state.LocalReconcile = true, true
 	children := state.Children
 	ownerMembershipChanged := false
 	for _, rendered := range state.RenderQueue {
+		if !rendered.PaintDirty {
+			continue
+		}
 		delete(state.EventTargets, rendered.Box.Node)
 		previousCount := len(rendered.Entities)
 		state.Children = rendered.Entities[:0]
@@ -238,6 +277,9 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	}
 	// Focus bounds must finish unioning before converting to clip coordinates.
 	for _, rendered := range state.RenderQueue {
+		if !rendered.PaintDirty {
+			continue
+		}
 		if structure || clipChanged || len(state.OverflowBindings) != 0 {
 			refreshHTMLBoxOverflow(world, owner, state, rendered, stackIndex, visible)
 		}
@@ -299,7 +341,7 @@ func queueHTMLContextDescendants(state *htmlRenderState, rendered *htmlBoxRender
 	rendered.Expanded = true
 	for _, child := range rendered.Box.Children {
 		if !queueHTMLBox(state, child) || !queueHTMLContextDescendants(state, state.BoxRenderings[child.Node]) {
-			return tracePartialFailure()
+			return false
 		}
 	}
 	return true
@@ -429,7 +471,7 @@ func removeHTMLFocusTarget(state *htmlRenderState, node *dom.Node) {
 
 func htmlBoxNeedsOverflowClip(state *htmlRenderState, box *layout.Box) bool {
 	if !htmlOverflowClipsStyle(box.Style) || htmlNodeHasScrollBinding(state, box.Node) {
-		return tracePartialFailure()
+		return false
 	}
 	rect := box.PaddingBox()
 	return rect.Width > 0 && rect.Height > 0
@@ -470,7 +512,22 @@ func clearHTMLOverflowRoutes(state *htmlRenderState, node *dom.Node) {
 // Former context owners may retire in the same pass as a surviving subtree
 // moves. They must be cleaned up, not emitted or expanded via their stale boxes.
 func queueHTMLRetainedContext(state *htmlRenderState, rendered *htmlBoxRendering) bool {
-	return rendered != nil && (rendered.Retiring || queueHTMLBox(state, rendered.Box))
+	if rendered == nil {
+		return false
+	}
+	if rendered.Retiring {
+		return true
+	}
+	if !queueHTMLBox(state, rendered.Box) {
+		return false
+	}
+	if rendered.Expanded {
+		return true
+	}
+	// An unchanged layout entry may already have been visited. Close its
+	// context dependencies now rather than relying on another queue visit.
+	if parent := rendered.ContextParent; parent != nil && !queueHTMLRetainedContext(state, parent) {
+		return false
+	}
+	return queueHTMLContextDescendants(state, rendered)
 }
-
-func tracePartialFailure() bool { _, _, line, _ := runtime.Caller(1); fmt.Println("PARTIAL FAILURE", line); return false }

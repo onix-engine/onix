@@ -48,6 +48,7 @@ func incrementalRenderFixture(tb testing.TB, count int, covered bool) (*ecs.Worl
 	restore := graphics.SetCurrentContextForTesting(canvas)
 	tb.Cleanup(func() { _ = canvas.FinishFrame(); device.Destroy(); previous.Activate(); restore() })
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(world)
 	RegisterCameraRenderer2D(world)
 	state := renderWorld(world)

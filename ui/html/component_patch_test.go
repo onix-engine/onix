@@ -89,3 +89,51 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 		t.Fatal("full render did not remove omitted bindings")
 	}
 }
+
+func TestHTMLComponentKeyedPatchPreservesOtherSlots(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, "<main></main>")
+	mode := 0
+	definition, err := Define[struct{}, struct{}](NewTemplate(`<div><div data-ref="a"></div><div data-ref="b"></div></div>`), "", Behavior[struct{}, struct{}]{Render: func(_ RenderContext[struct{}, struct{}], v *View) {
+		switch mode {
+		case 0:
+			v.Keyed("a", []VNode{TextVNode(1, "span", "original")})
+			v.Keyed("b", []VNode{TextVNode(2, "span", "retained")})
+		case 1:
+			v.PatchBindings()
+			v.Keyed("a", []VNode{TextVNode(1, "span", "changed")})
+		case 2:
+			v.PatchBindings()
+			v.Keyed("a", nil)
+		case 3:
+			v.Keyed("b", []VNode{TextVNode(2, "span", "full")})
+		}
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entity, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	incrementalSync(t, world)
+	instance := ecs.GetRef[htmlComponentInstance](world, entity)
+	a, b := instance.Refs["a"].Children[0], instance.Refs["b"].Children[0]
+	for _, step := range []int{1, 1, 0, 1, 2, 0, 3} {
+		mode = step
+		UpdateComponentState[struct{}, struct{}](world, entity, func(*struct{}) {})
+		incrementalSync(t, world)
+		instance = ecs.GetRef[htmlComponentInstance](world, entity)
+		if instance.Refs["b"].Children[0] != b {
+			t.Fatal("untouched slot replaced")
+		}
+		if step == 1 && (instance.Refs["a"].Children[0] != a || htmlNodeText(a) != "changed") {
+			t.Fatal("keyed identity or text lost")
+		}
+		if (step == 2 || step == 3) && len(instance.Refs["a"].Children) != 0 {
+			t.Fatal("slot not cleared")
+		}
+		if step == 0 {
+			a = instance.Refs["a"].Children[0]
+		}
+	}
+}

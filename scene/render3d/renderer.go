@@ -253,15 +253,15 @@ type preparedTextureHandles3DScratch struct{}
 
 type renderResource3D[H any] interface {
 	comparable
-	RenderHandle() H
+	RenderHandleFor(*render.Device) H
 	UploadError() error
 }
 
-func prepareRenderResource3D[A renderResource3D[H], H any](cache map[A]H, resource A) (H, error) {
+func prepareRenderResource3D[A renderResource3D[H], H any](cache map[A]H, resource A, device *render.Device) (H, error) {
 	if handle, ok := cache[resource]; ok {
 		return handle, nil
 	}
-	handle := resource.RenderHandle()
+	handle := resource.RenderHandleFor(device)
 	if err := resource.UploadError(); err != nil {
 		return handle, err
 	}
@@ -538,7 +538,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		if err := setupViewLighting3D(world, state, view, camera.Entity); err != nil {
 			return err
 		}
-		_, gpuDeformation := render.Current().(render.MeshGPUDeformationDriver)
+		_, gpuDeformation := graphics.DeviceFor(world).Driver().(render.MeshGPUDeformationDriver)
 		gpuDeformation = gpuDeformation && view.frame.Mode != render.RenderViewPicking
 		for baseIndex := range meshScratch.Values {
 			base := &meshScratch.Values[baseIndex]
@@ -651,7 +651,7 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 		clear(shaderHandles)
 		clear(textureHandles)
 	}()
-	whiteHandle, err := prepareRenderResource3D(textureHandles, state.white)
+	whiteHandle, err := prepareRenderResource3D(textureHandles, state.white, graphics.DeviceFor(context.World))
 	if err != nil {
 		return err
 	}
@@ -670,7 +670,7 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 			for index := range view.extracted {
 				item := &view.extracted[index]
 				if len(item.vertices) == 0 {
-					item.meshHandle, err = prepareRenderResource3D(meshHandles, item.mesh)
+					item.meshHandle, err = prepareRenderResource3D(meshHandles, item.mesh, graphics.DeviceFor(context.World))
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D mesh: %w", err)
 					}
@@ -683,14 +683,14 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 					item.surfaceTextures[slot] = render.TextureHandle{}
 					if texture != nil {
 						item.surfaceTextureFlags |= render.MeshSurfaceTextureFlag(slot)
-						item.surfaceTextures[slot], err = prepareRenderResource3D(textureHandles, texture)
+						item.surfaceTextures[slot], err = prepareRenderResource3D(textureHandles, texture, graphics.DeviceFor(context.World))
 						if err != nil {
 							return fmt.Errorf("ecs: prepare surface texture: %w", err)
 						}
 					}
 				}
 				if material.Shader != nil {
-					item.shaderHandle, err = prepareRenderResource3D(shaderHandles, material.Shader)
+					item.shaderHandle, err = prepareRenderResource3D(shaderHandles, material.Shader, graphics.DeviceFor(context.World))
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D material shader: %w", err)
 					}
@@ -699,21 +699,21 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 				}
 				item.textureHandle = whiteHandle
 				if material.BaseColorTexture != nil {
-					item.textureHandle, err = prepareRenderResource3D(textureHandles, material.BaseColorTexture)
+					item.textureHandle, err = prepareRenderResource3D(textureHandles, material.BaseColorTexture, graphics.DeviceFor(context.World))
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D material texture: %w", err)
 					}
 				}
 				item.normalTextureHandle = render.TextureHandle{}
 				if material.NormalTexture != nil {
-					item.normalTextureHandle, err = prepareRenderResource3D(textureHandles, material.NormalTexture)
+					item.normalTextureHandle, err = prepareRenderResource3D(textureHandles, material.NormalTexture, graphics.DeviceFor(context.World))
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D normal texture: %w", err)
 					}
 				}
 				item.metallicRoughnessTextureHandle = render.TextureHandle{}
 				if material.MetallicRoughnessTexture != nil {
-					item.metallicRoughnessTextureHandle, err = prepareRenderResource3D(textureHandles, material.MetallicRoughnessTexture)
+					item.metallicRoughnessTextureHandle, err = prepareRenderResource3D(textureHandles, material.MetallicRoughnessTexture, graphics.DeviceFor(context.World))
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D metallic roughness texture: %w", err)
 					}
@@ -793,7 +793,7 @@ func compareOpaque3D(a, b extractedMesh3D) int {
 
 func render3D(context *ecs.SystemContext) error {
 	state := renderWorld3D(context.World)
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(context.World)
 	if c == nil {
 		return nil
 	}
@@ -816,7 +816,7 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 				return err
 			}
 		}
-		texture, err := view.shadow.target.ColorTexture()
+		texture, err := view.shadow.target.ColorTextureFor(c.Device())
 		if err != nil {
 			return err
 		}
@@ -861,19 +861,19 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 	clear(view.deformationIndices)
 	picking := view.frame.Mode == render.RenderViewPicking
 	if !picking && view.environment.Atlas != nil {
-		view.lighting.EnvironmentTexture = view.environment.Atlas.RenderHandle()
+		view.lighting.EnvironmentTexture = view.environment.Atlas.RenderHandleFor(c.Device())
 		if err := view.environment.Atlas.UploadError(); err != nil {
 			return err
 		}
 	}
 	pass := view.lighting.Params[1]
 	if !picking && !view.reflectionActive && (pass == render.MeshPassLit || pass == render.MeshPassReflectionCapture || pass == render.MeshPassReflectionResolve) && view.environment.Background && (view.environment.Panorama != nil || view.environment.Atlas != nil || view.environment.Sky != nil) {
-		if err := appendSky3D(state, view); err != nil {
+		if err := appendSky3D(state, view, c.Device()); err != nil {
 			return err
 		}
 	}
 	if !picking && !view.reflectionActive && view.ground.Size > 0 {
-		if err := appendGround3D(state, view); err != nil {
+		if err := appendGround3D(state, view, c.Device()); err != nil {
 			return err
 		}
 	}

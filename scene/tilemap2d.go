@@ -1,6 +1,9 @@
 package scene
 
-import "github.com/diiyw/onix/graphics"
+import (
+	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/render"
+)
 
 type Tilemap2D struct {
 	Texture    *graphics.Texture
@@ -28,7 +31,9 @@ func (t *Tilemap2D) PixelHeight() float32 {
 	return float32(t.Height * t.TileHeight)
 }
 
-func (t *Tilemap2D) Valid() bool {
-	return t != nil && t.Texture != nil && t.Texture.Valid() && t.Width > 0 && t.Height > 0 &&
+func (t *Tilemap2D) Valid() bool { return t.ValidFor(render.ActiveDevice()) }
+
+func (t *Tilemap2D) ValidFor(device *render.Device) bool {
+	return t != nil && t.Texture != nil && t.Texture.ValidFor(device) && t.Width > 0 && t.Height > 0 &&
 		t.TileWidth > 0 && t.TileHeight > 0 && t.Columns > 0 && len(t.Tiles) >= t.Width*t.Height
 }

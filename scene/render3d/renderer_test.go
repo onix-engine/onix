@@ -32,6 +32,7 @@ func TestCamera3DViewportMapsProjectionIntoCanvasRegion(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(ctx)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := scene.NewCamera()
 	camera.Viewport = scene.CameraViewport{X: 100, Y: 50, Width: 200, Height: 100}
@@ -76,6 +77,8 @@ func TestCamera3DRenderTargetUsesTargetSurfaceAndRestoresViewport(t *testing.T) 
 	t.Cleanup(func() { _ = target.Dispose() })
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := scene.NewCamera()
 	cameraBundle := ecs.NewBundle(4)
@@ -127,6 +130,8 @@ func TestCamera3DRenderTargetClearsEmptyView(t *testing.T) {
 	t.Cleanup(func() { _ = target.Dispose() })
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	cameraBundle := ecs.NewBundle(4)
 	ecs.Put(&cameraBundle, scene.NewCamera())
@@ -163,6 +168,8 @@ func TestRender3DPhasesCullSortAndReuseGeometry(t *testing.T) {
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	cameraBundle := ecs.NewBundle(4)
 	ecs.Put(&cameraBundle, scene.NewCamera())
@@ -251,6 +258,7 @@ func TestExtractRender3DBuildsPerCameraLayerFilteredViews(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(ctx)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	spawnCamera := func(layers scene.RenderLayers) ecs.Entity {
 		bundle := ecs.NewBundle(5)
@@ -286,6 +294,7 @@ func TestExtractRender3DCollectsNodeLightComponents(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(ctx)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
 	ecs.Put(&camera, scene.NewCamera())
@@ -328,6 +337,7 @@ func TestExtractRender3DRemovesViewsForDespawnedCameras(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(ctx)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	bundle := ecs.NewBundle(4)
 	ecs.Put(&bundle, scene.NewCamera())
@@ -394,6 +404,7 @@ func TestRegisteredCustomMaterialSelectsShaderAndUploadsParameters(t *testing.T)
 		t.Fatalf("create mesh shader: %v", err)
 	}
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	RegisterMaterial[customMaterial3DTest](world)
 	camera := ecs.NewBundle(4)
@@ -452,6 +463,8 @@ func TestRender3DSubmitsDeformedMeshAsReusableDynamicGeometry(t *testing.T) {
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
 	ecs.Put(&camera, scene.NewCamera())
@@ -502,6 +515,8 @@ func TestRender3DSubmitsGPUDeformationBuffersWhenDriverSupportsThem(t *testing.T
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
 	ecs.Put(&camera, scene.NewCamera())

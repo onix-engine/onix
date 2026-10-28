@@ -67,8 +67,10 @@ func (device *Device) Statistics() FrameStatistics {
 }
 
 // CurrentRendererInfo returns metadata reported by the active render driver.
-func CurrentRendererInfo() RendererInfo {
-	driver := Current()
+func CurrentRendererInfo() RendererInfo { return ActiveDevice().RendererInfo() }
+
+func (device *Device) RendererInfo() RendererInfo {
+	driver := device.Driver()
 	if driver == nil {
 		return RendererInfo{}
 	}
@@ -76,8 +78,10 @@ func CurrentRendererInfo() RendererInfo {
 }
 
 // ResetStatistics starts a new frame statistics window.
-func ResetStatistics() {
-	if device := ActiveDevice(); device != nil {
+func ResetStatistics() { ActiveDevice().ResetStatistics() }
+
+func (device *Device) ResetStatistics() {
+	if device != nil {
 		device.statistics.beginFrameStatistics(0, 0)
 	}
 }

@@ -21,6 +21,7 @@ func memoryPreparationFixture(t testing.TB, count int) (*ecs.World, *renderView3
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(800, 600))
 	t.Cleanup(restore)
 	w := ecs.NewWorld()
+	graphics.BindFrame(w, graphics.CurrentContext())
 	Register(w)
 	state := renderWorld3D(w)
 	t.Cleanup(func() { _ = state.Dispose() })

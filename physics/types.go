@@ -154,6 +154,9 @@ func (body Body) Type() BodyType {
 
 func (body Body) SetType(value BodyType) {
 	if state := body.state(); state != nil {
+		if state.bodyType != value {
+			body.Wake()
+		}
 		state.bodyType = value
 		state.updateInverseMass()
 	}
@@ -168,6 +171,9 @@ func (body Body) Position() Vector {
 
 func (body Body) SetPosition(value Vector) {
 	if state := body.state(); state != nil {
+		if state.position != value {
+			body.Wake()
+		}
 		state.position = value
 	}
 }
@@ -181,6 +187,9 @@ func (body Body) Rotation() float64 {
 
 func (body Body) SetRotation(value float64) {
 	if state := body.state(); state != nil {
+		if state.rotation != value {
+			body.Wake()
+		}
 		state.rotation = value
 	}
 }
@@ -194,6 +203,9 @@ func (body Body) Velocity() Vector {
 
 func (body Body) SetVelocity(value Vector) {
 	if state := body.state(); state != nil {
+		if state.velocity != value {
+			body.Wake()
+		}
 		state.velocity = value
 	}
 }
@@ -208,6 +220,9 @@ func (body Body) AngularVelocity() float64 {
 func (body Body) SetAngularVelocity(value float64) {
 	if state := body.state(); state != nil {
 		if !state.fixedRotation {
+			if state.angularVelocity != value {
+				body.Wake()
+			}
 			state.angularVelocity = value
 		}
 	}
@@ -215,12 +230,18 @@ func (body Body) SetAngularVelocity(value float64) {
 
 func (body Body) ApplyForce(force Vector) {
 	if state := body.state(); state != nil && state.bodyType == BodyDynamic {
+		if force != (Vector{}) {
+			body.Wake()
+		}
 		state.force = state.force.Add(force)
 	}
 }
 
 func (body Body) ApplyTorque(torque float64) {
 	if state := body.state(); state != nil && state.bodyType == BodyDynamic {
+		if torque != 0 {
+			body.Wake()
+		}
 		state.torque += torque
 	}
 }
@@ -231,14 +252,19 @@ func (body Body) ClearForces() {
 	}
 }
 
-// IsSleeping is reserved for a future opt-in sleep policy. Onix currently
-// keeps active bodies awake so deterministic fixed-step games never stall.
-func (body Body) IsSleeping() bool { return false }
+// IsSleeping reports whether the optional contact-island sleep policy suspended this body.
+func (body Body) IsSleeping() bool {
+	state := body.state()
+	return state != nil && state.sleeping
+}
 
 func (body Body) ApplyImpulse(impulse, worldPoint Vector) {
 	state := body.state()
 	if state == nil || state.bodyType != BodyDynamic {
 		return
+	}
+	if impulse != (Vector{}) {
+		body.Wake()
 	}
 	state.velocity = state.velocity.Add(impulse.Mul(state.inverseMass))
 	if state.inverseInertia != 0 {
@@ -248,6 +274,9 @@ func (body Body) ApplyImpulse(impulse, worldPoint Vector) {
 
 func (body Body) SetGravityScale(value float64) {
 	if state := body.state(); state != nil {
+		if state.gravityScale != value {
+			body.Wake()
+		}
 		state.gravityScale = value
 	}
 }

@@ -1,6 +1,8 @@
 package editor
 
 import (
+	"testing"
+
 	"github.com/diiyw/onix/render"
 )
 
@@ -60,3 +62,31 @@ func (d *viewport3DTestDriver) BeginRenderTarget(_ render.RenderTargetHandle, cl
 	return nil
 }
 func (*viewport3DTestDriver) EndRenderTarget() error { return nil }
+
+func TestViewportTargetUsesExplicitDevice(t *testing.T) {
+	first, second := &viewport3DTestDriver{}, &viewport3DTestDriver{}
+	device, _ := render.NewDevice(first)
+	other, _ := render.NewDevice(second)
+	previous := render.ActiveDevice()
+	defer previous.Activate()
+	defer device.Destroy()
+	defer other.Destroy()
+	other.Activate()
+	var target editorRenderTarget
+	defer target.disposeTarget()
+	if ok, err := target.ensureTarget(device, 100, 80, 1); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if first.nextID != 0 || second.nextID != 0 {
+		t.Fatal("CPU target construction invoked a render driver")
+	}
+	if !target.colorTexture.RenderHandleFor(device).Valid() || first.nextID != 2 || second.nextID != 0 {
+		t.Fatal("target was not realized exclusively on its explicit device")
+	}
+	if ok, err := target.ensureTarget(device, 200, 160, 1); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if !target.colorTexture.RenderHandleFor(device).Valid() || first.nextID != 3 || second.nextID != 0 {
+		t.Fatal("target resize used the global device")
+	}
+}

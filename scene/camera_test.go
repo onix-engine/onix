@@ -103,6 +103,8 @@ func TestCameraFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterCameraRenderer2D(world)
 	bundle := ecs.NewBundle(4)
 	ecs.Put(&bundle, NewCamera())

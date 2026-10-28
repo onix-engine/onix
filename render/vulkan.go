@@ -168,7 +168,6 @@ func NewVulkanDriver(surface VulkanSurface) (Driver, error) {
 	}
 	deviceName := C.GoString(C.onix_vk_device_name(native))
 	loadVulkanPipelineCache(native)
-	logSelectedVulkanDevice(deviceName)
 	return &vulkanDriver{
 		native:      native,
 		deviceName:  deviceName,

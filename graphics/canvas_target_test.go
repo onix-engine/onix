@@ -29,6 +29,46 @@ func (d *canvasTargetTestDriver) BeginRenderTarget(render.RenderTargetHandle, re
 }
 func (d *canvasTargetTestDriver) EndRenderTarget() error { d.ends++; return nil }
 
+func TestTargetTextureValidationRefreshesBoundsWithoutGPUWork(t *testing.T) {
+	driver := &canvasTargetTestDriver{}
+	device, _ := render.NewDevice(driver)
+	defer device.Destroy()
+	device.Activate()
+	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: 8, Height: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Dispose()
+	texture, err := CreateTextureFromRenderTarget(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer texture.Dispose()
+	if driver.nextID != 0 {
+		t.Fatal("target texture construction invoked the driver")
+	}
+	created, revision := driver.nextID, texture.GeometryRevision()
+	target.Resize(16, 12)
+	if !texture.ValidFor(device) || texture.Width != 16 || texture.Height != 12 || texture.GeometryRevision() == revision {
+		t.Fatal("validation retained stale target bounds")
+	}
+	if driver.nextID != created {
+		t.Fatal("validation resized GPU storage")
+	}
+	if !texture.RenderHandleFor(device).Valid() || driver.nextID != created+2 {
+		t.Fatal("explicit handle acquisition did not realize the resize")
+	}
+	if err := target.Dispose(); err != nil {
+		t.Fatal(err)
+	}
+	if texture.ValidFor(device) {
+		t.Fatal("disposed target texture remained valid")
+	}
+	if _, err := CreateTextureFromRenderTarget(target); err == nil {
+		t.Fatal("texture construction accepted a disposed target")
+	}
+}
+
 func TestCanvasDrawToRestoresStateOnCallbackError(t *testing.T) {
 	driver := &canvasTargetTestDriver{canvasTestDriver: canvasTestDriver{viewport: render.Rect{Width: 800, Height: 600}}}
 	installCanvasTestDriver(t, driver)

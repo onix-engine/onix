@@ -50,8 +50,8 @@ func preview3DTargetSize(width, height, scale int) (int, int) {
 	return width * scale, height * scale
 }
 
-func (viewport *editorRenderTarget) ensureTarget(width, height, scale int) (bool, error) {
-	driver := render.Current()
+func (viewport *editorRenderTarget) ensureTarget(device *render.Device, width, height, scale int) (bool, error) {
+	driver := device.Driver()
 	if driver == nil {
 		return false, nil
 	}

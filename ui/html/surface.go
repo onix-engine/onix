@@ -1112,7 +1112,7 @@ func recomputeHTMLStyles(world *ecs.World, owner ecs.Entity, renderState *htmlRe
 		}
 	}
 	if impact == style.ChangeRebuild {
-		renderState.PendingLayout = true
+		renderState.requestLayout()
 	}
 	if impact >= style.ChangeVisual {
 		renderState.LayoutDirty = true
@@ -1122,7 +1122,7 @@ func recomputeHTMLStyles(world *ecs.World, owner ecs.Entity, renderState *htmlRe
 			renderState.Revision++
 		}
 		renderState.LayoutDirty = false
-		renderState.PendingVisual = true
+		renderState.requestVisual()
 	}
 	return true
 }
@@ -1603,84 +1603,14 @@ type htmlStylesheetKey struct {
 	FontSize         float64
 }
 
+// Each embedded state owns one pipeline stage. Cross-stage transitions live in state.go.
 type htmlRenderState struct {
-	BoxRenderings            map[*dom.Node]*htmlBoxRendering
-	EmittingBox              *htmlBoxRendering
-	RenderQueue              []*htmlBoxRendering
-	RemovedBoxes             []*htmlBoxRendering
-	LocalReconcile           bool
-	PartialValid             bool
-	OwnerSpansValid          bool
-	ControlStylesChanged     bool
-	LayoutCache              layout.Cache
-	LayoutNodes              []*dom.Node
-	LayoutOrderNodes         []*dom.Node
-	RestyleNodes             []*dom.Node
-	LayoutTopology           bool
-	StyleCache               style.MutationCache
-	BoxesByNode              map[*dom.Node]*layout.Box
-	PendingLayout            bool
-	PendingVisual            bool
-	Visible, VisibilityKnown bool
-	Mutations                map[*dom.Node]htmlMutation
-	MutationRoots            []*dom.Node
-	MutationRootSet          map[*dom.Node]struct{}
-	NodeFlags                htmlAncestorCache[*dom.Node, bool]
-	NodeAncestors            htmlAncestorCache[*dom.Node, *dom.Node]
-	BoxFlags                 htmlAncestorCache[*layout.Box, bool]
-	StyleChanges             []style.NodeChange
-	IndexDirty               bool
-	EntityGroups             map[htmlRenderIdentity]*htmlEntityGroup
-	RenderNodes              map[*dom.Node]*htmlNodeRendering
-	RenderGeneration         uint64
-	Reconciling              bool
-	SyncStats                htmlSyncStats
-
-	Key                     htmlRenderKey
-	Layout                  Layout
-	Rendered                bool
-	Animations              map[*dom.Node]*htmlNodeAnimation
-	AnimationTrackHeads     map[string]int
-	TransformFrame          uint64
-	TransformFrameSet       bool
-	ImageProviderChanged    ecs.Tick
-	Children                []ecs.Entity
-	Source                  string
-	EmbeddedCSS             string
-	Root                    *dom.Node
-	Boxes                   *layout.Box
-	Stylesheet              *css.Stylesheet
-	StylesheetKey           htmlStylesheetKey
-	Styles                  style.Map
-	Viewport                style.Viewport
-	Input                   css.State
-	PreviousInput           css.State
-	StateRoots              [2]*dom.Node
-	LayoutDirty             bool
-	Revision                uint64
-	EventRevision           uint64
-	SnapshotGeneration      uint32
-	ControlSnapshots        map[*dom.Node]htmlControlSnapshot
-	FocusTargets            []htmlFocusTargetBinding
-	FocusByNode             map[*dom.Node]int
-	NodeOffsets             []htmlNodeOffset
-	NodeScrolls             []htmlNodeScroll
-	NodeScrollBindings      map[*dom.Node]struct{}
-	NodeBindingLocals       map[*dom.Node]htmlBindingIndices
-	NodeBindingRoutes       htmlAncestorCache[*dom.Node, htmlBindingIndices]
-	OverflowBindings        map[*dom.Node]htmlOverflowClipBinding
-	OverflowEntities        map[ecs.Entity]htmlOverflowClipBinding
-	OverflowRoutes          map[*dom.Node]htmlOverflowClipBinding
-	OverflowExtents         map[*layout.Box]htmlOverflowExtent
-	PaintCullOffsets        map[*dom.Node]mgl32.Vec2
-	PaintCullRoots          []*htmlBoxRendering
-	PaintCullDisabled       bool
-	NodeEvents              map[*dom.Node]htmlNodeEventBinding
-	ComponentEvents         map[*dom.Node][]htmlComponentEventBinding
-	NodeByID                map[string]*dom.Node
-	EventTargets            map[*dom.Node]ecs.Entity
-	Textures                htmlTextureCache
-	ContainerMetricsScratch map[*dom.Node]style.ContainerMetrics
+	htmlDocumentState
+	htmlStyleState
+	htmlLayoutState
+	htmlPaintState
+	htmlInputState
+	htmlUpdateState
 }
 
 type htmlGradientKey struct {
@@ -1778,7 +1708,7 @@ func htmlSurfaceRenderKey(world *ecs.World, value Surface, state *htmlRenderStat
 	return htmlRenderKey{
 		Value: value.Value, CSS: value.CSS, Width: width, Height: height,
 		Font: fontValue, BoldFont: value.BoldFont, Images: value.Images, FontSize: fontSize, DPI: dpi,
-		RasterScale: htmlPaintRasterScale(),
+		RasterScale: htmlPaintRasterScale(world),
 		StackIndex:  value.StackIndex, PassThrough: value.PassThrough, Revision: state.Revision,
 		EventRevision: state.EventRevision,
 	}
@@ -1831,20 +1761,20 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	key := htmlSurfaceRenderKey(world, value, state)
 	width, height := key.Width, key.Height
 	fontValue, fontSize, dpi := key.Font, key.FontSize, key.DPI
-	state.SyncStats = htmlSyncStats{}
 	imageProviderChanged := htmlImageProviderChanged(world)
-	if state != nil && state.Rendered && state.Key == key && state.ImageProviderChanged == imageProviderChanged {
+	state.beginSync(key, imageProviderChanged)
+	if state != nil && state.Rendered && !state.pending() && state.Key == key && state.ImageProviderChanged == imageProviderChanged {
 		if !state.PaintCullDisabled && htmlPaintCullChanged(world, state) {
 			reconcileHTMLPaintCull(world, owner, state, fontValue, value.BoldFont, dpi, value.StackIndex, value.PassThrough, htmlVisible(world, owner))
 		}
 		syncHTMLVisibility(world, owner, state)
+		state.Diagnostics = SyncDiagnostics{Path: SyncCached}
 		return state.Layout, nil
 	}
-	if state != nil && state.Rendered && sameHTMLRenderKeyExceptEvents(state.Key, key) && state.ImageProviderChanged == imageProviderChanged {
+	if state != nil && state.Rendered && !state.pending() && sameHTMLRenderKeyExceptEvents(state.Key, key) && state.ImageProviderChanged == imageProviderChanged {
 		cleanupHTMLNodeEventTargets(world, state)
 		bindHTMLNodeEvents(world, owner, state, state.Boxes, value.PassThrough, htmlVisible(world, owner), value.StackIndex)
-		clearHTMLMutations(state)
-		state.Key = key
+		state.commitSync(key, imageProviderChanged, SyncEvents)
 		htmlOwners(world).Children[owner] = state.Children
 		syncHTMLVisibility(world, owner, state)
 		return state.Layout, nil
@@ -1871,7 +1801,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		impact, visited, err := style.RecomputeSubtreesWithChanges(state.Root, state.Stylesheet, state.Viewport, &state.Input, state.Styles, state.MutationRoots, &state.StyleChanges, &state.StyleCache)
 		state.SyncStats.Styled = visited
 		if err != nil {
-			state.PendingLayout = true
+			state.requestLayout()
 			return Layout{}, fmt.Errorf("ecs: recompute html style: %w", err)
 		}
 		for _, change := range state.StyleChanges {
@@ -1919,7 +1849,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 			state.Key = key
 			syncHTMLVisibility(world, owner, state)
 			htmlOwners(world).Children[owner] = state.Children
-			clearHTMLMutations(state)
+			state.commitSync(key, imageProviderChanged, SyncStyle)
 			return state.Layout, nil
 		}
 	}
@@ -1998,10 +1928,8 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	state.ControlStylesChanged = false
 	partial := mutationSync && !state.PendingVisual && reconcileHTMLPartial(world, owner, state, needsLayout, fontValue, value.BoldFont, dpi, value.StackIndex, value.PassThrough, visible)
 	if !partial {
-		fmt.Printf("FULL mutation=%t layout=%t visual=%t cssSame=%t events=%d/%d valid=%t mutations=%d\n", mutationSync, state.PendingLayout, state.PendingVisual, state.Key.CSS == key.CSS, state.Key.EventRevision, key.EventRevision, state.PartialValid, len(state.Mutations))
 		updateHTMLControlSnapshots(world, state, state.Children)
 		clear(state.EventTargets)
-		state.PendingLayout = false
 		state.Visible, state.VisibilityKnown = visible, true
 		if state.BoxesByNode == nil {
 			state.BoxesByNode = make(map[*dom.Node]*layout.Box)
@@ -2022,18 +1950,15 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		state.Children = state.Children[:0]
 		state.FocusTargets = state.FocusTargets[:0]
 		clear(state.FocusByNode)
-		state.Key, state.Rendered, state.ImageProviderChanged, state.LayoutDirty = key, true, imageProviderChanged, false
 
+		state.Key = key // Paint/event emission reads the current surface configuration.
 		clear(state.PaintCullOffsets)
 		htmlSpawnBoxes(world, owner, state, box, fontValue, value.BoldFont, dpi, value.StackIndex, value.PassThrough, visible, 0, 0, layout.Rect{})
 		applyHTMLOverflowClips(world, owner, state, box, value.StackIndex, visible)
 		finishHTMLReconcile(world, state)
 		state.PartialValid = true
 	}
-	state.PendingLayout, state.PendingVisual = false, false
-	state.Key, state.Rendered, state.ImageProviderChanged, state.LayoutDirty = key, true, imageProviderChanged, false
 	htmlOwners(world).Children[owner] = state.Children
-	clearHTMLMutations(state)
 	if !partial {
 		// Emission may retire an entity used as a scroll viewport.
 		prepareHTMLNodeBindings(world, state)
@@ -2058,6 +1983,13 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	if target := ecs.GetMut[scene.InputTarget2D](world, owner); target != nil {
 		target.Width, target.Height = float32(content.Width), float32(content.Height)
 	}
+	path := SyncFull
+	if partial {
+		path = SyncPartial
+	}
+	// Inserting Size2D can migrate the owner to another ECS archetype.
+	state = ecs.GetMut[htmlRenderState](world, owner)
+	state.commitSync(key, imageProviderChanged, path)
 	return result, nil
 }
 
@@ -2284,12 +2216,12 @@ func htmlViewport(world *ecs.World, value Surface) (float32, float32) {
 		}
 	}
 	if width <= 0 {
-		if context := graphics.CurrentContext(); context != nil {
+		if context := graphics.CanvasFor(world); context != nil {
 			width, _ = context.Size()
 		}
 	}
 	if height <= 0 {
-		if context := graphics.CurrentContext(); context != nil {
+		if context := graphics.CanvasFor(world); context != nil {
 			_, height = context.Size()
 		}
 	}
@@ -2954,7 +2886,7 @@ func updateHTMLFocusableBounds(world *ecs.World, entity ecs.Entity, rect layout.
 
 func htmlSelectIndicatorSize(height float32) float32 {
 	texture := defaultHTMLSelectIcon()
-	if texture == nil || !texture.Valid() {
+	if texture == nil || !texture.ValidFor(nil) {
 		return 0
 	}
 	naturalWidth, naturalHeight := float32(texture.LogicalWidth()), float32(texture.LogicalHeight())
@@ -4610,7 +4542,11 @@ func htmlSpawnEditableVisuals(world *ecs.World, owner ecs.Entity, state *htmlRen
 }
 
 func spawnHTMLEditableVisual(world *ecs.World, owner, editable ecs.Entity, visual EditableVisual, stackIndex int) ecs.Entity {
-	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, editable), htmlRoleEditableVisual, "", editable, 12)
+	variant := "caret"
+	if visual.Selection {
+		variant = "selection"
+	}
+	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, editable), htmlRoleEditableVisual, variant, editable, 12)
 	putHTML(&bundle, scene.NewUITransform())
 	putHTML(&bundle, scene.UIGlobalTransform{})
 	putHTML(&bundle, scene.Visibility{})
@@ -4627,7 +4563,11 @@ func spawnHTMLEditableVisual(world *ecs.World, owner, editable ecs.Entity, visua
 }
 
 func spawnHTMLControlVisual(world *ecs.World, owner, control ecs.Entity, visual ControlVisual, stackIndex int) ecs.Entity {
-	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleControlVisual, "", control, 12)
+	variant := "selection"
+	if !visual.Selection {
+		variant = [...]string{"caret", "scroll-track-horizontal", "scroll-track-vertical", "scroll-thumb-horizontal", "scroll-thumb-vertical"}[visual.Kind]
+	}
+	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleControlVisual, variant, control, 12)
 	putHTML(&bundle, scene.NewUITransform())
 	putHTML(&bundle, scene.UIGlobalTransform{})
 	putHTML(&bundle, scene.Visibility{})
@@ -4958,7 +4898,7 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 		return 0, false
 	}
 	texture, ok := provider.ResolveHTMLImage(source)
-	if !ok || texture == nil || !texture.Valid() {
+	if !ok || texture == nil || !texture.ValidFor(graphics.DeviceFor(world)) {
 		return 0, false
 	}
 	sprite := scene.NewSprite2D()

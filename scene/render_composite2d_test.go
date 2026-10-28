@@ -183,7 +183,7 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 	incrementalFrame(t, world, canvas)
 	texture.UpdateRegions([]graphics.TextureRegionUpdate{{Width: 1, Height: 1, Pixels: []byte{255, 0, 0, 255}}})
 	incrementalFrame(t, world, canvas)
-	if state.Preparation2D.Extracted != 100 || state.Composite2D.DirtyTiles != 1 {
+	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PaintUpdated != 1 || state.Composite2D.DirtyTiles != 1 {
 		t.Fatal("texture mutation missed", state.Preparation2D, state.Composite2D)
 	}
 	if err := texture.Dispose(); err != nil {

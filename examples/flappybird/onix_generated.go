@@ -3,15 +3,15 @@ package main
 
 import (
 	onix "github.com/diiyw/onix"
+	contracts "github.com/diiyw/onix/examples/flappybird/contracts"
+	mod0 "github.com/diiyw/onix/examples/flappybird/input"
+	mod1 "github.com/diiyw/onix/examples/flappybird/resources/presentation"
+	mod4 "github.com/diiyw/onix/examples/flappybird/simulation"
 	graphics "github.com/diiyw/onix/graphics"
 	ontex "github.com/diiyw/onix/graphics/codec/ontex"
 	graphicspng "github.com/diiyw/onix/graphics/codec/png"
 	module "github.com/diiyw/onix/module"
 	project "github.com/diiyw/onix/project"
-	contracts "github.com/diiyw/onix/examples/flappybird/contracts"
-	mod0 "github.com/diiyw/onix/examples/flappybird/input"
-	mod1 "github.com/diiyw/onix/examples/flappybird/resources/presentation"
-	mod4 "github.com/diiyw/onix/examples/flappybird/simulation"
 	iofs "io/fs"
 )
 

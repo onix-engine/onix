@@ -9,8 +9,10 @@ import (
 )
 
 type Runtime2D struct {
-	Simulation *World
-	frame      uint64
+	Simulation    *World
+	frame         uint64
+	syncedInputs  physicsInputs
+	managedBodies int
 }
 
 func NewRuntime2D() *Runtime2D {
@@ -55,14 +57,17 @@ func stepECS2D(context *ecs.SystemContext) error {
 	runtime.Simulation.Step(delta)
 	runtime.writeBodies(world)
 	runtime.writeEvents(world)
+	runtime.syncedInputs = physicsInputs2D(world)
 	return nil
 }
 
 func (runtime *Runtime2D) syncBodies(world *ecs.World) error {
+	runtime.managedBodies = 0
 	for entity, access := range ecs.Query2[RigidBody2D, scene.Transform](world).All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
+		runtime.managedBodies++
 		bodyAccess := access.A
 		transformAccess := access.B
 

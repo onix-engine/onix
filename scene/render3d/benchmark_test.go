@@ -22,6 +22,7 @@ func BenchmarkRender3DPreparedFrame(b *testing.B) {
 			restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(800, 600))
 			b.Cleanup(restore)
 			world := ecs.NewWorld()
+			graphics.BindFrame(world, graphics.CurrentContext())
 			Register(world)
 			state := renderWorld3D(world)
 			b.Cleanup(func() { _ = state.Dispose() })

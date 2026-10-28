@@ -4,7 +4,6 @@ import (
 	"bytes"
 
 	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
 )
 
 // Decoder plugs the ONIXTEX1 container into a graphics.ImageDecoderSet.
@@ -21,22 +20,14 @@ func (Decoder) DecodeImage(data []byte, options graphics.TextureOptions) (*graph
 	return Decode(data, options)
 }
 
-// Decode validates a container and hands its payload to the device.
-//
-// The payload normally arrives as a view into a resource package. A live
-// render device consumes it synchronously and can borrow that view; when no
-// device exists yet, take ownership of a copy for the deferred upload.
+// Decode validates a container and owns its payload until explicit GPU upload.
+// Resource package views may be released as soon as decoding returns.
 func Decode(data []byte, options graphics.TextureOptions) (*graphics.Texture, error) {
 	image, err := Unmarshal(data)
 	if err != nil {
 		return nil, err
 	}
-	pixels := image.Data
-	if render.Current() == nil {
-		// Without a device TextureFromCompressed retains the payload for a later
-		// upload, so it cannot keep borrowing the resource package view.
-		pixels = bytes.Clone(pixels)
-	}
+	pixels := bytes.Clone(image.Data)
 	return graphics.TextureFromCompressed(graphics.CompressedTextureDescriptor{
 		// The build packs one payload per image, so a sampler that wants the
 		// other colour interpretation reuses the same blocks.

@@ -1,5 +1,6 @@
 package graphics
 
+// CurrentContext is the immediate-mode canvas. ECS systems use CanvasFor(world).
 func CurrentContext() *Canvas2D {
 	return canvas2DContext
 }

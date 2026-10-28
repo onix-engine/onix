@@ -7,8 +7,10 @@ import (
 )
 
 type Runtime3D struct {
-	Simulation *World3D
-	frame      uint64
+	Simulation    *World3D
+	frame         uint64
+	syncedInputs  physicsInputs
+	managedBodies int
 }
 
 func NewRuntime3D() *Runtime3D {
@@ -56,14 +58,17 @@ func stepECS3D(context *ecs.SystemContext) error {
 	runtime.Simulation.Step(delta)
 	runtime.writeBodies(world)
 	runtime.writeEvents(world)
+	runtime.syncedInputs = physicsInputs3D(world)
 	return nil
 }
 
 func (runtime *Runtime3D) syncBodies(world *ecs.World) error {
+	runtime.managedBodies = 0
 	for entity, access := range ecs.Query2[RigidBody3D, scene.Transform](world).All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
+		runtime.managedBodies++
 		bodyAccess := access.A
 		transformAccess := access.B
 

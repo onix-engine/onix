@@ -84,10 +84,6 @@ func newShaderResource[R any](descriptor render.ShaderDescriptor, ops *shaderRes
 		return nil, err
 	}
 	shader := &shaderResource[R]{descriptor: descriptor, batchKey: shaderBatchCounter.Add(1), ops: ops}
-	shader.ensureUploaded()
-	if shader.err != nil {
-		return nil, shader.err
-	}
 	return shader, nil
 }
 

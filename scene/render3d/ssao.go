@@ -127,7 +127,7 @@ func renderViewSSAO3D(canvas *graphics.Canvas2D, state *World, view *renderView3
 	if err := render3DView(canvas, state, pass); err != nil {
 		return err
 	}
-	texture, err := pass.frame.Target.ColorTexture()
+	texture, err := pass.frame.Target.ColorTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}

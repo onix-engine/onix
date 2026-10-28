@@ -52,9 +52,9 @@ func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
 	root.AppendChild(right)
 	left.AppendChild(child)
 	detached := dom.NewElement("div", nil)
-	state := htmlRenderState{Root: root, Mutations: map[*dom.Node]htmlMutation{
+	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: root, Mutations: map[*dom.Node]htmlMutation{
 		left: htmlMutationStyle, child: htmlMutationStyle, right: htmlMutationStyle, detached: htmlMutationStyle,
-	}}
+	}}}
 	check := func(want ...*dom.Node) {
 		t.Helper()
 		if prepareHTMLMutationRoots(&state) {
@@ -91,7 +91,7 @@ func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
 
 func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entity) {
 	world := ecs.NewWorld()
-	state := htmlRenderState{Root: dom.NewDocument(), NodeByID: make(map[string]*dom.Node)}
+	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), NodeByID: make(map[string]*dom.Node)}}
 	owners := ecs.NewSpawner1[htmlRenderState](world)
 	owner := owners.Spawn(state)
 	children := ecs.NewSpawner3[htmlChild, scene.UITransform, scene.Parent](world)
@@ -164,7 +164,7 @@ func BenchmarkHTMLNodeBindingTraversal(b *testing.B) {
 func BenchmarkHTMLMutationRootTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			state := htmlRenderState{Root: dom.NewDocument(), Mutations: make(map[*dom.Node]htmlMutation)}
+			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), Mutations: make(map[*dom.Node]htmlMutation)}}
 			for range count {
 				node := dom.NewElement("div", nil)
 				state.Root.AppendChild(node)
@@ -198,7 +198,7 @@ func TestHTMLComponentAttributeIndexPreservesScopeAndNormalizedNames(t *testing.
 func BenchmarkHTMLAnimationVisibilityTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			state := htmlRenderState{Root: dom.NewDocument(), Styles: make(style.Map)}
+			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument()}, htmlStyleState: htmlStyleState{Styles: make(style.Map)}}
 			parent := state.Root
 			visible := &style.ComputedStyle{}
 			visible.Display = style.Keyword("block")

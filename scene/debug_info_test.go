@@ -73,10 +73,10 @@ func TestDebugInfoTextContainsRequestedStatistics(t *testing.T) {
 func TestDebugInfoSamplerMeasuresRenderRate(t *testing.T) {
 	var state debugInfoSystemState
 	start := time.Unix(100, 0)
-	state.sample(start)
+	state.sample(start, nil)
 	step := time.Second / 60
 	for frame := 1; frame <= 31; frame++ {
-		state.sample(start.Add(time.Duration(frame) * step))
+		state.sample(start.Add(time.Duration(frame)*step), nil)
 	}
 	if state.fps < 59 || state.fps > 61 {
 		t.Fatalf("sampled FPS = %.2f, want approximately 60", state.fps)
@@ -92,6 +92,8 @@ func TestDebugInfoFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	SpawnDebugInfo(world)
 	context := ecs.SystemContext{World: world}
 	if err := renderDebugInfo(&context); err != nil {

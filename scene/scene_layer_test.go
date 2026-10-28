@@ -13,6 +13,7 @@ func TestSceneLayersOrderWorldAndUIAndIsolateCameras(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 180))
 	t.Cleanup(restore)
 	w := ecs.NewWorld()
+	graphics.BindFrame(w, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(w)
 	roots := ecs.NewSpawner2[SceneLayer, Visibility](w)
 	back := roots.Spawn(SceneLayer{ID: 1, Order: 1}, Visibility{Visible: true})

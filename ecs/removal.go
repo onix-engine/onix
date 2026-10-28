@@ -23,16 +23,19 @@ type removalPlan struct {
 }
 
 type removalColumn struct {
-	id     componentID
-	source column
-	target column // nil for a removed component
+	id          componentID
+	overwritten bool
+	source      column
+	target      column // nil for a removed component
 }
 
 // moveColumns transfers one source row into the prepared targets, dropping the
 // storage of columns whose target is nil.
 func moveColumns(columns []removalColumn, row int) {
 	for _, entry := range columns {
-		if entry.target == nil {
+		if entry.overwritten {
+			entry.source.removeRow(row)
+		} else if entry.target == nil {
 			entry.source.swapRemove(row)
 		} else {
 			entry.source.moveTo(entry.target, row)

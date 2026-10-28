@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/project"
@@ -48,6 +49,7 @@ type App struct {
 	inputHandlers                     map[input.Phase][]func(*input.Dispatch)
 	installedSystemSets               uint32
 	windowDragRegion                  func(x, y float64) bool
+	windowDragClick                   windowDragClick
 	windowOptions                     window.Options
 	scriptRegistry                    project.ScriptRegistry
 	scriptScene                       *project.SceneInstance
@@ -138,6 +140,9 @@ func NewApp() *App {
 		windowOptions: window.DefaultOptions(),
 		inputHandlers: map[input.Phase][]func(*input.Dispatch){},
 	}
+	// Loaders may start before the first frame. Give their workers a stable
+	// wake request immediately rather than creating it during the first Step.
+	ecs.InsertResource(app.World, scene.NewRenderRequest(app.wakeLoop))
 	app.renderRequested.Store(true)
 	return app
 }
@@ -164,6 +169,8 @@ func (app *App) SetWindowSize(width, height int) {
 	if previous != nil && previous != app.Context {
 		previous.Destroy()
 	}
+	vw, vh := app.Context.GetViewport()
+	graphics.BindFrame(app.World, app.Context.Canvas2D(vw, vh))
 	app.inputBound = false
 	app.Context.SetVsyncEnabled(true)
 	app.windowInitError = nil
@@ -308,6 +315,7 @@ func (app *App) SetWindowIcon(data []byte) error {
 
 func (app *App) SetWindowDragRegion(region func(x, y float64) bool) {
 	app.windowDragRegion = region
+	app.windowDragClick = windowDragClick{}
 }
 
 // Destroy releases browser surfaces before destroying the native window.
@@ -334,6 +342,10 @@ func (app *App) Destroy() {
 	}
 	if app.Context != nil {
 		app.Context.Destroy()
+	}
+	if frame := graphics.FrameFor(app.World); frame != nil {
+		frame.Uploads.Reset()
+		frame.Canvas = nil
 	}
 }
 
@@ -412,17 +424,24 @@ func (app *App) bindInputEvents() {
 	app.OnMouseDown(func(x, y float64, button input.MouseButton) {
 		if routeMouseDown(nil, button, x, y, app.windowDragRegion) {
 			app.RequestRender()
-			app.StartWindowDrag()
+			if app.windowDragClick.press(x, y, app.currentTime()) {
+				app.ToggleMaximize()
+			} else {
+				app.StartWindowDrag()
+			}
 			return
 		}
+		app.windowDragClick = windowDragClick{}
 		app.enqueueInput(input.Event{Kind: input.EventMouseDown, Button: button, X: x, Y: y})
 	})
 
 	app.OnMouseUp(func(x, y float64, button input.MouseButton) {
+		app.windowDragClick.move(x, y)
 		app.enqueueInput(input.Event{Kind: input.EventMouseUp, Button: button, X: x, Y: y})
 	})
 
 	app.OnMouseMove(func(x, y float64) {
+		app.windowDragClick.move(x, y)
 		app.enqueueInput(input.Event{Kind: input.EventMouseMove, X: x, Y: y})
 	})
 

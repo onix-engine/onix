@@ -251,3 +251,39 @@ func TestDecodeSelectsSamplingVariantWithoutReencoding(t *testing.T) {
 		t.Fatalf("sampling variants = %s and %s, want bc1 and bc1-srgb", linear.Format().Name(), srgb.Format().Name())
 	}
 }
+
+type deferredUploadDriver struct {
+	render.Driver
+	pixels []byte
+}
+
+func (d *deferredUploadDriver) CreateTexture(_ render.TextureDescriptor, pixels []byte) (render.TextureHandle, error) {
+	d.pixels = bytes.Clone(pixels)
+	return render.NewHandle[render.TextureResource](1, 1), nil
+}
+func (*deferredUploadDriver) DestroyTexture(render.TextureHandle) error { return nil }
+func (*deferredUploadDriver) Destroy()                                  {}
+
+func TestDecodeOwnsPayloadUntilDeferredUpload(t *testing.T) {
+	payload := bytes.Repeat([]byte{0x39}, render.TextureFormatBC1.LevelSize(4, 4))
+	data, err := Marshal(Image{Format: render.TextureFormatBC1, Width: 4, Height: 4, Levels: 1, Data: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := &deferredUploadDriver{}
+	device, _ := render.NewDevice(driver)
+	defer device.Destroy()
+	device.Activate()
+	texture, err := Decode(data, graphics.TextureOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer texture.Dispose()
+	if driver.pixels != nil || !texture.Valid() {
+		t.Fatal("decode or validation invoked the driver")
+	}
+	clear(data)
+	if !texture.RenderHandleFor(device).Valid() || !bytes.Equal(driver.pixels, payload) {
+		t.Fatal("deferred upload used released container bytes")
+	}
+}

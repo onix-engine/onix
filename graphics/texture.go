@@ -48,18 +48,28 @@ type Texture struct {
 	externalDevice     *render.Device
 	renderTarget       *render.RenderTarget
 	contentRevision    uint64
+	geometryRevision   uint64
 }
 
 var textureRevision atomic.Uint64
 
-// TextureRevision invalidates retained geometry when texture content or its
-// lifetime changes outside an ECS component write.
+// TextureRevision signals that per-texture dependencies may have changed.
+// Content updates do not necessarily invalidate retained geometry.
 func TextureRevision() uint64 { return textureRevision.Load() }
 
 // ContentRevision is shared by atlas views of the same backing texture.
 func (t *Texture) ContentRevision() uint64 {
 	if base := t.baseTexture(); base != nil {
 		return max(t.contentRevision, base.contentRevision)
+	}
+	return 0
+}
+
+// GeometryRevision changes when logical bounds or resource lifetime change.
+// Pixel updates preserve this revision, including external surface refreshes.
+func (t *Texture) GeometryRevision() uint64 {
+	if base := t.baseTexture(); base != nil {
+		return max(t.geometryRevision, base.geometryRevision)
 	}
 	return 0
 }
@@ -121,10 +131,14 @@ func CreateTextureFromExternal(descriptor render.ExternalTextureDescriptor) (*Te
 }
 
 // CreateTextureFromRenderTarget exposes a target color attachment to 2D/UI
-// rendering without transferring ownership of the attachment.
+// rendering without transferring ownership of the attachment. Construction is
+// CPU-only; RenderHandleFor realizes the attachment on the supplied device.
 func CreateTextureFromRenderTarget(target *render.RenderTarget) (*Texture, error) {
 	if target == nil {
 		return nil, errors.New("graphics: nil render target")
+	}
+	if !target.Valid() {
+		return nil, errors.New("graphics: invalid render target")
 	}
 	descriptor := target.Descriptor()
 	if descriptor.ColorFormat != render.RenderTargetRGBA8 {
@@ -135,10 +149,6 @@ func CreateTextureFromRenderTarget(target *render.RenderTarget) (*Texture, error
 		SourceWidth: descriptor.Width, SourceHeight: descriptor.Height,
 		MaxU: 1, MaxV: 1, batchKey: nextTextureBatchKey(), usage: ResourceUsageGPU,
 		renderTarget: target,
-	}
-	texture.ensureUploaded()
-	if texture.err != nil {
-		return nil, texture.err
 	}
 	return texture, nil
 }
@@ -245,7 +255,6 @@ func newTextureWithFormat(width, height int, mipmap bool, usage ResourceUsage, p
 		format:       format,
 		pix:          pixels,
 	}
-	texture.ensureUploaded()
 	return texture
 }
 
@@ -262,6 +271,7 @@ func (t *Texture) Dispose() error {
 		return nil
 	}
 	t.contentRevision = textureRevision.Add(1)
+	t.geometryRevision = t.contentRevision
 	if t.source != nil {
 		t.source = nil
 		t.Width = 0
@@ -318,7 +328,8 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 		pixelCount = max(pixelCount, ((update.Y+update.Height-1)*base.Width+update.X+update.Width)*texelBytes)
 	}
 
-	_, wasResident := base.residencies.Get(render.ActiveDevice())
+	wasResident := false
+	_ = base.residencies.Each(func(_ *render.Device, _ render.TextureHandle) error { wasResident = true; return nil })
 	if !base.usage.Has(ResourceUsageCPU) && len(base.pix) == 0 && !base.zeroInitialized && !wasResident {
 		return
 	}
@@ -346,15 +357,7 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	}
 
 	base.err = nil
-	base.ensureUploaded()
-	if !base.gpuResident() {
-		return
-	}
 	base.err = base.residencies.Each(func(device *render.Device, handle render.TextureHandle) error {
-		// A newly created residency already includes the updates in its upload.
-		if !wasResident && device == base.device {
-			return nil
-		}
 		if cap(base.updates) < len(updates) {
 			base.updates = make([]render.TextureUpdate, len(updates))
 		} else {
@@ -368,7 +371,7 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	})
 	clear(base.updates)
 	base.updates = base.updates[:0]
-	if base.err == nil && !base.usage.Has(ResourceUsageCPU) {
+	if wasResident && base.err == nil && !base.usage.Has(ResourceUsageCPU) {
 		base.pix = nil
 	}
 }
@@ -379,11 +382,24 @@ func (t *Texture) Valid() bool {
 
 func (t *Texture) ValidFor(device *render.Device) bool {
 	base := t.baseTexture()
-	if base != nil {
-		base.ensureUploadedFor(device)
+	if base == nil {
+		return false
 	}
-	return base != nil && base.Width > 0 && base.Height > 0 &&
-		(base.hasPixelPayload() || base.handle.Valid() && base.device == device && device.Driver() != nil)
+	if base.renderTarget != nil {
+		if !base.renderTarget.Valid() {
+			return false
+		}
+		base.syncTargetSize()
+		return true
+	}
+	if base.Width <= 0 || base.Height <= 0 {
+		return false
+	}
+	if base.hasPixelPayload() {
+		return true
+	}
+	handle, ok := base.residencies.Get(device)
+	return ok && handle.Valid()
 }
 
 func (t *Texture) hasPixelPayload() bool {
@@ -485,6 +501,7 @@ func (t *Texture) SetSourceRect(width, height, offsetX, offsetY int) {
 		return
 	}
 	t.contentRevision = textureRevision.Add(1)
+	t.geometryRevision = t.contentRevision
 	if width <= 0 {
 		width = t.Width
 	}
@@ -506,6 +523,7 @@ func (t *Texture) SetLogicalSize(width, height int) {
 		return
 	}
 	t.contentRevision = textureRevision.Add(1)
+	t.geometryRevision = t.contentRevision
 	if width <= 0 {
 		width = t.Width
 	}
@@ -579,8 +597,14 @@ func (t *Texture) LogicalHeight() int {
 	return t.Height
 }
 
-func (t *Texture) ensureUploaded() {
-	t.ensureUploadedFor(render.ActiveDevice())
+func (t *Texture) syncTargetSize() {
+	descriptor := t.renderTarget.Descriptor()
+	if t.Width != descriptor.Width || t.Height != descriptor.Height {
+		t.Width, t.Height = descriptor.Width, descriptor.Height
+		t.SourceWidth, t.SourceHeight = descriptor.Width, descriptor.Height
+		t.contentRevision = textureRevision.Add(1)
+		t.geometryRevision = t.contentRevision
+	}
 }
 
 func (t *Texture) ensureUploadedFor(device *render.Device) {
@@ -588,9 +612,7 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		return
 	}
 	if t.renderTarget != nil {
-		descriptor := t.renderTarget.Descriptor()
-		t.Width, t.Height = descriptor.Width, descriptor.Height
-		t.SourceWidth, t.SourceHeight = descriptor.Width, descriptor.Height
+		t.syncTargetSize()
 		t.handle, t.err = t.renderTarget.ColorTextureFor(device)
 		t.device = device
 		return
@@ -662,10 +684,6 @@ func (t *Texture) baseTexture() *Texture {
 		return t
 	}
 	return t.source.baseTexture()
-}
-
-func (t *Texture) gpuResident() bool {
-	return t.handle.Valid() && t.device == render.ActiveDevice() && t.device.Driver() != nil
 }
 
 func nextTextureBatchKey() uint64 {

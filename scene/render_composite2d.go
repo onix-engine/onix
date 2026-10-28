@@ -58,7 +58,7 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 			Width, Height, X, Y int
 			ScaleX, ScaleY      float32
 		}{texture.SourceWidth, texture.SourceHeight, texture.OffsetX, texture.OffsetY, sx, sy}))
-		if !texture.Valid() {
+		if !texture.ValidFor(item.device) {
 			return paintItem2D{cacheable: true}
 		}
 	}
@@ -219,7 +219,6 @@ type compositor2D struct {
 	width, height, columns int
 	clear                  graphics.ColorRGBA
 	generation             uint64
-	textureRevision        uint64
 	device                 *render.Device
 	valid, prepared        bool
 	stats                  CompositeStatistics2D
@@ -276,7 +275,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 	for _, block := range camera.RenderLayers.blocks {
 		cameraKey = paintMix2D(cameraKey, block)
 	}
-	if !view.prepared || view.generation != generation || clearChanged || view.cameraKey != cameraKey || view.textureRevision != graphics.TextureRevision() {
+	if !view.prepared || view.generation != generation || clearChanged || view.cameraKey != cameraKey {
 		clear(view.reuse)
 		if view.valid && !clearChanged {
 			for i := range view.tiles {
@@ -285,7 +284,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				*entry = compositeReuse2D{hash: tile.previous, slot: tile.slot, used: true}
 			}
 		}
-		if view.prepared && view.spatial && view.retained == cache && view.generation+1 == generation && cache.damageValid && !clearChanged && view.cameraKey == cameraKey && view.textureRevision == graphics.TextureRevision() && len(view.coverage) == len(state.Items2D) {
+		if view.prepared && view.spatial && view.retained == cache && view.generation+1 == generation && cache.damageValid && !clearChanged && view.cameraKey == cameraKey && len(view.coverage) == len(state.Items2D) {
 			if !view.updateDamage(state, camera, defaultUICamera, cache.damage) {
 				view.stats.Direct = true
 				return false, view.dispose()
@@ -483,7 +482,6 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 		view.valid = true
 	}
 	view.commitTiles()
-	view.textureRevision = graphics.TextureRevision()
 	c.ResetProjectionMatrix()
 	c.ResetViewMatrix()
 	c.BindMaterial2D(nil)

@@ -30,12 +30,14 @@ func TestWorkspace2DModuleOpeningCentersVisibleContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
 	revision := a.Document.Revision
 	a.viewport2D.offset, a.zoom = mgl32.Vec2{120, -80}, 2
 	a.enterModuleEdit(a.Document.Active, "start")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +73,7 @@ func TestWorkspace2DModuleOpeningCentersVisibleContent(t *testing.T) {
 	a.zoom = 1.5
 	a.changed()
 	offset := a.viewport2D.offset
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +81,13 @@ func TestWorkspace2DModuleOpeningCentersVisibleContent(t *testing.T) {
 		t.Fatal("module refresh reset manual pan or zoom")
 	}
 	a.enterModuleEdit(a.Document.Active, "again")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
 	assertCentered()
 	a.action("focus")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +110,7 @@ func TestWorkspace2DFocusFitsOversizedModuleContent(t *testing.T) {
 			}
 			a.enterModuleEdit(a.Document.Active, "start")
 			context := &ecs.SystemContext{World: ecs.NewWorld()}
+			graphics.BindFrame(context.World, graphics.CurrentContext())
 			if err := a.sync(context); err != nil {
 				t.Fatal(err)
 			}
@@ -126,6 +132,7 @@ func TestWorkspace2DFocusFitsOversizedModuleContent(t *testing.T) {
 			assertFocused()
 			a.viewport2D.offset, a.viewport2D.panning, a.zoom = mgl32.Vec2{500, -300}, true, 3
 			a.handleEvent(htmlui.Event{ID: "top-frame", Kind: htmlui.EventClick})
+			graphics.BindFrame(context.World, graphics.CurrentContext())
 			if err := a.sync(context); err != nil {
 				t.Fatal(err)
 			}
@@ -238,6 +245,7 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 	}
 	a.changed()
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -313,6 +321,7 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 	oldWorld, oldSource := v.world, v.imageName
 	a.disposeCanvasResources()
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -340,6 +349,7 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 func TestWorkspace2DMiddleDragPansViewAndPreservesPicking(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -361,6 +371,7 @@ func TestWorkspace2DMiddleDragPansViewAndPreservesPicking(t *testing.T) {
 	if !a.canvasDirty || a.dirty {
 		t.Fatal("pan did not update only the canvas")
 	}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -410,12 +421,14 @@ func TestWorkspace2DMiddleDragPansViewAndPreservesPicking(t *testing.T) {
 		in.EndFrame()
 		in.MoveMouse(x+10, y+10)
 		a.updateViewport2DInput(in)
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			panic(err)
 		}
 		in.EndFrame()
 		in.MoveMouse(x, y)
 		a.updateViewport2DInput(in)
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			panic(err)
 		}
@@ -444,6 +457,7 @@ func TestWorkspace2DGridGeometryRemainsVisibleAcrossZoom(t *testing.T) {
 	t.Cleanup(graphics.SetCurrentContextForTesting(canvas))
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -485,6 +499,7 @@ func TestWorkspace2DGridGeometryRemainsVisibleAcrossZoom(t *testing.T) {
 func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -505,6 +520,7 @@ func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 		if in.Pointer().WheelY != 0 {
 			t.Fatal("canvas did not consume wheel input")
 		}
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
@@ -523,6 +539,7 @@ func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 	}
 	a.canvasDrag = workspacePlacementDrag{}
 	a.action("focus")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -538,6 +555,7 @@ func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 func TestWorkspace2DWheelZoomBoundsAndAllocations(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -602,6 +620,7 @@ func TestWorkspace2DAnimationPrivateBindingAndHiddenHierarchy(t *testing.T) {
 	}
 	a.changed()
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -622,6 +641,7 @@ func TestWorkspace2DAnimationPrivateBindingAndHiddenHierarchy(t *testing.T) {
 	root := v.rows[0].root
 	a.Selected = "start"
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -670,6 +690,7 @@ func TestWorkspace2DCameraPickingAndPlacementDrag(t *testing.T) {
 	}
 	a.changed()
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -720,6 +741,7 @@ func TestWorkspace2DStaticRenderAllocations(t *testing.T) {
 	t.Cleanup(graphics.SetCurrentContextForTesting(canvas))
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}

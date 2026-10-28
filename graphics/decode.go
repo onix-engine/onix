@@ -190,6 +190,5 @@ func finishDecodedTexture(texture *Texture, options TextureOptions) *Texture {
 	texture.premultipliedAlpha = options.PremultiplyAlpha
 	texture.usage = options.Usage
 	texture.wrapU, texture.wrapV = options.WrapU, options.WrapV
-	texture.ensureUploaded()
 	return texture
 }

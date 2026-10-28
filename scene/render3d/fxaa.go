@@ -62,7 +62,7 @@ func renderCamera3D(canvas *graphics.Canvas2D, state *World, view *renderView3D)
 		}
 		state.fxaaMesh = mesh
 	}
-	handle := state.fxaaMesh.RenderHandle()
+	handle := state.fxaaMesh.RenderHandleFor(canvas.Device())
 	if err := state.fxaaMesh.UploadError(); err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func renderCamera3D(canvas *graphics.Canvas2D, state *World, view *renderView3D)
 	if err != nil {
 		return err
 	}
-	color, err := s.target.ColorTexture()
+	color, err := s.target.ColorTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}

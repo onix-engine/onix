@@ -97,6 +97,11 @@ func (target *RenderTarget) Descriptor() RenderTargetDescriptor {
 	return target.descriptor
 }
 
+// Valid reports whether the target can be realized, without accessing a device.
+func (target *RenderTarget) Valid() bool {
+	return target != nil && !target.disposed && target.descriptor.Width > 0 && target.descriptor.Height > 0
+}
+
 func (target *RenderTarget) Size() (int, int) {
 	descriptor := target.Descriptor()
 	return descriptor.Width, descriptor.Height

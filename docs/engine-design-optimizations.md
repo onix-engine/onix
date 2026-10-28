@@ -34,14 +34,27 @@ WakeAt can be called concurrently. ECS mutations, window changes and rendering
 remain on the application loop thread. Pointer data changed outside tracked
 mutable access requires an explicit render request.
 
-Physics, animation, Spine, particle, trail and WebView capabilities conservatively
-keep the loop running, even when installed without active entities. Nested
-layout settling and active HTML transform transitions also keep updating.
+Installed capabilities no longer keep the loop running by themselves. Scoped,
+active animations, Spine playback, live particles, fading/emitting trails and
+awake non-static physics bodies keep updating. Sleeping 2D contact islands permit idle. Finished effects, paused ancestors and
+suspended scenes permit idle. Task counts reuse semantic component revisions;
+unmanaged physics bodies are also considered. WebViews keep their callbacks
+serviced while a browser component exists. Nested layout settling and active
+HTML transform transitions also keep updating. Module Update callbacks require
+ticks; FrameUpdate callbacks run once per requested frame and permit idle.
 Custom systems that depend on time must schedule their next WakeAt or leave
 idle disabled. The frame clock includes elapsed wall time when waking.
 
 Android/iOS hosts still own their callback cadence. App.Step skips idle engine
 work, but this change does not suspend the native mobile host's frame callbacks.
+
+## Resource preparation
+
+Texture and shader construction now prepares CPU data without calling the active
+render driver. Scene preloaders share background CPU preparation and an explicit
+device upload queue with time, byte and resource budgets. CPU readiness and GPU
+readiness are separate. See [Task scheduling and resource preparation](task-resource-preparation.md)
+for the APIs, ownership rules, budget limits and focused validation.
 
 ## Rendering Contract
 
@@ -109,3 +122,13 @@ their platform toolchains. Android device connection to 10.0.0.174:16384 returne
 Connection refused, so device runtime validation remains outstanding. Apple
 platform compilation and native UI behavior need verification on Apple hardware.
 No editor or screenshot tests were started.
+
+
+## Physics, HTML state and explicit frame context
+
+2D physics now retains static/dynamic indices and unchanged candidate pairs,
+with optional contact-island sleeping. HTML separates stage state and reports
+full-update fallback reasons. ECS rendering and scene preparation select their
+device through the world frame, including editor previews. See
+[Physics, HTML and rendering context](physics-html-render-context.md) for APIs,
+benchmarks, ownership rules and validation limits.

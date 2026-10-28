@@ -74,15 +74,13 @@ func (t Transform) LookingAt(target, up mgl32.Vec3) Transform {
 type transformWorkspaceTag struct{}
 
 type transformNode struct {
-	entity      ecs.Entity
-	parent      ecs.Entity
-	firstChild  ecs.Entity
-	nextSibling ecs.Entity
-	transform   Transform
-	local       mgl32.Mat4
-	matrix      mgl32.Mat4
-	dirty       bool
-	state       uint8
+	entity    ecs.Entity
+	parent    ecs.Entity
+	transform Transform
+	local     mgl32.Mat4
+	matrix    mgl32.Mat4
+	dirty     bool
+	state     uint8
 }
 
 type transformWorkspace struct {
@@ -101,9 +99,9 @@ type transformWorkspace struct {
 }
 
 func transformRevisions(world *ecs.World) (versions [3]uint64, structures [2]uint64) {
-	versions[0], structures[0] = ecs.ComponentRevision[Transform](world)
-	versions[1], _ = ecs.ComponentRevision[Parent](world)
-	versions[2], structures[1] = ecs.ComponentRevision[GlobalTransform](world)
+	versions[0], structures[0] = ecs.ComponentValueRevision[Transform](world)
+	versions[1], _ = ecs.ComponentValueRevision[Parent](world)
+	versions[2], structures[1] = ecs.ComponentValueRevision[GlobalTransform](world)
 	return
 }
 
@@ -131,6 +129,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		return nil
 	}
 	workspace.queue = workspace.queue[:0]
+	hierarchy := HierarchyFor(world)
 	if !workspace.initialized || workspace.structures != structures {
 		for _, entity := range workspace.active {
 			index, _ := entity.Index()
@@ -152,12 +151,6 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			workspace.active = append(workspace.active, entity)
 			workspace.queue = append(workspace.queue, entity)
 		}
-		for _, entity := range workspace.active {
-			node := workspace.node(entity)
-			if parent := workspace.node(node.parent); parent != nil {
-				node.nextSibling, parent.firstChild = parent.firstChild, entity
-			}
-		}
 	} else {
 		changes := &workspace.changes
 		since := workspace.lastRun
@@ -166,7 +159,6 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		}
 		*changes = world.ChangesSince(since)
 		if workspace.versions[1] != versions[1] {
-			topologyChanged := false
 			refreshParent := func(entity ecs.Entity) {
 				node := workspace.node(entity)
 				if node == nil {
@@ -176,28 +168,16 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 				if node.parent != parent.Entity {
 					node.parent = parent.Entity
 					workspace.mark(entity)
-					topologyChanged = true
 				}
 			}
-			if workspace.parentStructure != ecs.ComponentStructureVersion[Parent](world) {
+			_, parentStructure := ecs.ComponentValueRevision[Parent](world)
+			if workspace.parentStructure != parentStructure {
 				for _, entity := range workspace.active {
 					refreshParent(entity)
 				}
 			} else {
 				for entity, _ := range ecs.Query[Parent](world, ecs.Changed[Parent](changes), ecs.With[Transform]()).All {
 					refreshParent(entity)
-				}
-			}
-			if topologyChanged {
-				for _, entity := range workspace.active {
-					node := workspace.node(entity)
-					node.firstChild, node.nextSibling = 0, 0
-				}
-				for _, entity := range workspace.active {
-					node := workspace.node(entity)
-					if parent := workspace.node(node.parent); parent != nil {
-						node.nextSibling, parent.firstChild = parent.firstChild, entity
-					}
 				}
 			}
 		}
@@ -221,7 +201,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			}
 		}
 		for index := 0; index < len(workspace.queue); index++ {
-			for child := workspace.node(workspace.queue[index]).firstChild; child != 0; child = workspace.node(child).nextSibling {
+			for child := hierarchy.FirstChild(workspace.queue[index]); child != 0; child = hierarchy.NextSibling(child) {
 				workspace.mark(child)
 			}
 		}
@@ -243,7 +223,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			return err
 		}
 	}
-	workspace.parentStructure = ecs.ComponentStructureVersion[Parent](world)
+	_, workspace.parentStructure = ecs.ComponentValueRevision[Parent](world)
 	workspace.initialized = true
 	workspace.versions, workspace.structures = transformRevisions(world)
 	workspace.lastRun = world.ChangeTick()

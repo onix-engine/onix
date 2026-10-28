@@ -193,6 +193,7 @@ func TestParticleRendererBindsEachTextureAndRestoresFollowingSprite(t *testing.T
 		{x: 40, y: 10, size: 4, lifetime: 1, clr: graphics.White, texture: black},
 	}
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterParticleRenderer2D(world)
 	RegisterSpriteRenderer2D(world)
 	item := newParticleRenderItem2D(0, 1, &emitter, mgl32.Ident4(), clipRect2D{}, false, 0, white)

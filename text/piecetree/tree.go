@@ -29,6 +29,10 @@ type Tree struct {
 	root, free int
 	snapshot   string
 	cached     bool
+	// prefix is the unchanged prefix of snapshot after pending edits. The
+	// builder only appends: previously published strings are never overwritten.
+	prefix         int
+	appendSnapshot strings.Builder
 }
 
 func (t *Tree) Len() int   { return t.bytes(t.root) }
@@ -82,6 +86,8 @@ func (t *Tree) Reserve(editBytes, nodes int) {
 // Reset releases the previous document and indexes the original in one pass.
 func (t *Tree) Reset(value string) {
 	t.original, t.snapshot, t.cached = value, value, true
+	t.prefix = len(value)
+	t.appendSnapshot.Reset()
 	t.added = t.added[:0]
 	clear(t.nodes)
 	t.nodes = t.nodes[:0]
@@ -347,7 +353,8 @@ func (t *Tree) Replace(start, end int, value string) {
 	t.discard(deleted)
 	middle := t.build(true, addedStart, len(t.added))
 	t.root = t.concat(t.concat(left, middle), right)
-	t.snapshot, t.cached = "", false
+	t.prefix = min(t.prefix, start)
+	t.cached = false
 }
 
 // ByteOffset maps a clamped rune offset to bytes in O(log(pieces)+pieceBytes).
@@ -524,7 +531,27 @@ func (t *Tree) Slice(start, end int) string {
 // String materializes at most one immutable snapshot per changed version.
 func (t *Tree) String() string {
 	if !t.cached {
-		t.snapshot = t.Slice(0, t.Len())
+		size := t.Len()
+		switch {
+		case size <= t.prefix:
+			// Removing a suffix can share the old immutable backing store.
+			t.snapshot = t.snapshot[:size]
+		case t.prefix == len(t.snapshot):
+			// A bounded reserve amortizes continuous tail typing. Never rewind
+			// a builder after deletion: older readers can still own its suffix.
+			if t.appendSnapshot.Len() != len(t.snapshot) || t.appendSnapshot.String() != t.snapshot || t.appendSnapshot.Cap()-t.appendSnapshot.Len() < size-len(t.snapshot) {
+				// Reserve a bounded amount instead of doubling a large document.
+				t.appendSnapshot.Reset()
+				t.appendSnapshot.Grow(size + min(max(size/8, 256), 256<<10))
+				t.appendSnapshot.WriteString(t.snapshot)
+			}
+			t.write(&t.appendSnapshot, t.root, len(t.snapshot), size)
+			t.snapshot = t.appendSnapshot.String()
+		default:
+			t.appendSnapshot.Reset()
+			t.snapshot = t.Slice(0, size)
+		}
+		t.prefix = size
 		t.cached = true
 	}
 	return t.snapshot
@@ -549,6 +576,8 @@ func (t *Tree) ApplySnapshot(snapshot string, start, oldEnd, newEnd int) {
 	}
 	t.Replace(start, oldEnd, snapshot[start:newEnd])
 	t.snapshot, t.cached = snapshot, true
+	t.prefix = len(snapshot)
+	t.appendSnapshot.Reset()
 }
 
 // RetainedBytes includes the original buffer and discarded edit bytes.

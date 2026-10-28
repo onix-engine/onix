@@ -2,7 +2,6 @@ package physics
 
 import (
 	"math"
-	"slices"
 )
 
 const maxGridCellsPerCollider = 64
@@ -26,6 +25,7 @@ type worldSegment struct {
 }
 
 func (world *World) buildContacts() {
+	world.stats.ContactBuilds++
 	world.buildBroadphase()
 	world.contacts = world.contacts[:0]
 	for _, pair := range world.pairs {
@@ -43,81 +43,7 @@ func (world *World) buildContacts() {
 		contact.restitution = max(colliderA.restitution, colliderB.restitution)
 		world.contacts = append(world.contacts, contact)
 	}
-}
-
-func (world *World) buildBroadphase() {
-	world.ensureBuckets(len(world.colliders))
-	for index := range world.bucketHeads {
-		world.bucketHeads[index] = -1
-	}
-	if cap(world.aabbs) < len(world.colliders) {
-		world.aabbs = make([]aabb, len(world.colliders))
-	} else {
-		world.aabbs = world.aabbs[:len(world.colliders)]
-	}
-	world.cells = growCapacity(world.cells, len(world.colliders))[:len(world.colliders)]
-	world.gridEntries = world.gridEntries[:0]
-	world.large = world.large[:0]
-	world.pairs = world.pairs[:0]
-	cellSize := world.CellSize
-	if cellSize <= 1e-9 || math.IsNaN(cellSize) || math.IsInf(cellSize, 0) {
-		cellSize = 64
-	}
-	for index := range world.colliders {
-		collider := world.colliders[index]
-		if !collider.alive || int(collider.bodyIndex) >= len(world.bodies) || !world.bodies[collider.bodyIndex].alive {
-			continue
-		}
-		bounds := colliderBounds(collider, world.bodies[collider.bodyIndex])
-		world.aabbs[index] = bounds
-		minX, minY := floorCell(bounds.min.X, cellSize), floorCell(bounds.min.Y, cellSize)
-		maxX, maxY := floorCell(bounds.max.X, cellSize), floorCell(bounds.max.Y, cellSize)
-		width, height := int64(maxX)-int64(minX)+1, int64(maxY)-int64(minY)+1
-		large := width > maxGridCellsPerCollider || height > maxGridCellsPerCollider || width*height > maxGridCellsPerCollider
-		world.cells[index] = cellRange{minX: minX, minY: minY, large: large}
-		if large {
-			world.large = append(world.large, index)
-			continue
-		}
-		for dy := range height {
-			y := int32(int64(minY) + dy)
-			for dx := range width {
-				x := int32(int64(minX) + dx)
-				bucket := gridHash(x, y) & (len(world.bucketHeads) - 1)
-				world.gridEntries = append(world.gridEntries, broadphaseEntry{collider: index, next: world.bucketHeads[bucket], x: x, y: y})
-				world.bucketHeads[bucket] = len(world.gridEntries) - 1
-			}
-		}
-	}
-	for _, head := range world.bucketHeads {
-		for left := head; left >= 0; left = world.gridEntries[left].next {
-			entryA := world.gridEntries[left]
-			for right := world.gridEntries[left].next; right >= 0; right = world.gridEntries[right].next {
-				entryB := world.gridEntries[right]
-				if entryA.x != entryB.x || entryA.y != entryB.y {
-					continue
-				}
-				cellsA, cellsB := world.cells[entryA.collider], world.cells[entryB.collider]
-				// Emit only in the first shared cell, even if the shapes span many.
-				if entryA.x == max(cellsA.minX, cellsB.minX) && entryA.y == max(cellsA.minY, cellsB.minY) {
-					world.appendPair(entryA.collider, entryB.collider)
-				}
-			}
-		}
-	}
-	for _, large := range world.large {
-		for other := range world.colliders {
-			if other != large && world.colliders[other].alive && (!world.cells[other].large || large < other) {
-				world.appendPair(large, other)
-			}
-		}
-	}
-	slices.SortFunc(world.pairs, func(a, b colliderPair) int {
-		if a.a != b.a {
-			return a.a - b.a
-		}
-		return a.b - b.b
-	})
+	world.wakeContactIslands()
 }
 
 func (world *World) appendPair(a, b int) {
@@ -136,16 +62,6 @@ func (world *World) appendPair(a, b int) {
 		a, b = b, a
 	}
 	world.pairs = append(world.pairs, colliderPair{a: a, b: b})
-}
-
-func (world *World) ensureBuckets(colliderCount int) {
-	target := 64
-	for target < colliderCount*4 {
-		target <<= 1
-	}
-	if len(world.bucketHeads) < target {
-		world.bucketHeads = make([]int, target)
-	}
 }
 
 func floorCell(value, cellSize float64) int32 {

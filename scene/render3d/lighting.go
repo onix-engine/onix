@@ -170,11 +170,11 @@ func directionalShadowMatrix(center, direction mgl32.Vec3, s ShadowSettings) mgl
 	return projection.Mul4(view)
 }
 
-func appendSky3D(state *World, view *renderView3D) error {
+func appendSky3D(state *World, view *renderView3D, device *render.Device) error {
 	if state.skyMesh == nil {
 		state.skyMesh = graphics.CubeMesh(2)
 	}
-	handle := state.skyMesh.RenderHandle()
+	handle := state.skyMesh.RenderHandleFor(device)
 	if err := state.skyMesh.UploadError(); err != nil {
 		return err
 	}
@@ -195,9 +195,9 @@ func appendSky3D(state *World, view *renderView3D) error {
 		direction := view.frame.Camera.skyDirection
 		view.instances[len(view.instances)-1].Custom[3] = [4]float32{direction.X(), direction.Y(), direction.Z(), 1}
 	}
-	texture := state.white.RenderHandle()
+	texture := state.white.RenderHandleFor(device)
 	if panorama := view.environment.Panorama; panorama != nil && view.environment.Sky == nil {
-		texture = panorama.RenderHandle()
+		texture = panorama.RenderHandleFor(device)
 		if err := panorama.UploadError(); err != nil {
 			return err
 		}
@@ -207,11 +207,11 @@ func appendSky3D(state *World, view *renderView3D) error {
 	return nil
 }
 
-func appendGround3D(state *World, view *renderView3D) error {
+func appendGround3D(state *World, view *renderView3D, device *render.Device) error {
 	if state.groundMesh == nil {
 		state.groundMesh = graphics.PlaneMesh(1)
 	}
-	handle := state.groundMesh.RenderHandle()
+	handle := state.groundMesh.RenderHandleFor(device)
 	if err := state.groundMesh.UploadError(); err != nil {
 		return err
 	}
@@ -222,6 +222,6 @@ func appendGround3D(state *World, view *renderView3D) error {
 		BaseColor: [4]float32{color.R, color.G, color.B, 1}, Material: [4]float32{0.85, 1.5, 0.5, 512}, UVTransform: [4]float32{1, 1, 0, 0},
 		Custom: [4][4]float32{{1, 1, 1, 0}, {1, 1, 1, 0}},
 	})
-	view.draws = append(view.draws, render.MeshDraw3D{Mesh: handle, Texture: state.white.RenderHandle(), IndexCount: uint32(len(state.groundMesh.Indices)), FirstInstance: uint32(len(view.instances) - 1), InstanceCount: 1})
+	view.draws = append(view.draws, render.MeshDraw3D{Mesh: handle, Texture: state.white.RenderHandleFor(device), IndexCount: uint32(len(state.groundMesh.Indices)), FirstInstance: uint32(len(view.instances) - 1), InstanceCount: 1})
 	return nil
 }

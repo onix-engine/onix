@@ -932,7 +932,7 @@ func (a *ModuleEditor) sync(context *ecs.SystemContext) error {
 	w := context.World
 	a.world = w
 	width, height := float32(defaultViewportWidth), float32(defaultViewportHeight)
-	if c := graphics.CurrentContext(); c != nil {
+	if c := graphics.CanvasFor(w); c != nil {
 		width, height = c.Size()
 	}
 	if width != a.width || height != a.height {

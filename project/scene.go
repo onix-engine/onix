@@ -7,10 +7,12 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	enginephysics "github.com/diiyw/onix/physics"
+	"github.com/diiyw/onix/render"
 	sceneapi "github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/scene/render3d"
 	"github.com/diiyw/onix/spine"
@@ -89,19 +91,33 @@ func (b *Bundle) InstantiateEntryScene(world *ecs.World) (*SceneInstance, error)
 	return b.InstantiateScene(world, b.entrySceneID)
 }
 
-// PreloadScene builds one registered scene in an isolated world so
-// its decoded resources, compiled animations, and static glyphs are cached.
-func (b *Bundle) PreloadScene(id SceneID) error {
+// PreloadScene synchronously prepares CPU resources in an isolated world.
+// PreloadSceneFor optionally uploads them to an explicit device; interactive
+// loading uses BeginPreloadScene.
+func (b *Bundle) PreloadScene(id SceneID) error { return b.PreloadSceneFor(nil, id) }
+
+// PreloadSceneFor prepares CPU resources and optionally uploads to the supplied device.
+func (b *Bundle) PreloadSceneFor(device *render.Device, id SceneID) error {
 	scene, err := b.InstantiateScene(ecs.NewWorld(), id)
 	if err != nil {
 		return fmt.Errorf("preload scene %q: %w", id, err)
 	}
 	defer scene.dispose(false)
 
-	for _, access := range ecs.Query[sceneapi.Text2D](scene.World).All {
-		text := access.Mut()
-
-		sceneapi.MeasureText2D(text)
+	var uploads graphics.UploadQueue
+	for entity := range scene.World.Entities() {
+		if text := ecs.GetMut[sceneapi.Text2D](scene.World, entity); text != nil {
+			sceneapi.PrepareText2D(text)
+		}
+		QueueEntityUploads(&uploads, scene.World, entity)
+	}
+	if device.Driver() != nil {
+		for {
+			ready, err := uploads.Advance(device, graphics.UploadBudget{Time: time.Hour})
+			if ready || err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -176,12 +192,20 @@ func (b *Bundle) newSceneInstance(world *ecs.World, id SceneID) (*SceneInstance,
 }
 
 func (b *Bundle) spawnScenePlanNode(scene *SceneInstance, plan sceneSpawnPlan, entities []ecs.Entity, index int) error {
+	components, err := b.ecsComponentsForPlanNode(plan.Nodes[index])
+	if err != nil {
+		return err
+	}
+	return b.spawnPreparedScenePlanNode(scene, plan, entities, index, components)
+}
+
+func (b *Bundle) spawnPreparedScenePlanNode(scene *SceneInstance, plan sceneSpawnPlan, entities []ecs.Entity, index int, components ecs.Bundle) error {
 	node := plan.Nodes[index]
 	var parent ecs.Entity
 	if node.Parent > 0 {
 		parent = entities[node.Parent-1]
 	}
-	entity, err := b.spawnECSPlanNode(scene.World, node, parent, scene.Entities, scene.EntityIDs)
+	entity, err := spawnECSComponents(scene.World, node, parent, scene.Entities, scene.EntityIDs, components)
 	if err != nil {
 		return err
 	}
@@ -1654,12 +1678,15 @@ func resolveWidgetTarget(world *ecs.World, entity ecs.Entity, spec SceneNodeSpec
 }
 
 func (b *Bundle) spawnECSPlanNode(world *ecs.World, node sceneSpawnNode, parent ecs.Entity, index map[string]ecs.Entity, reverse map[ecs.Entity]string) (ecs.Entity, error) {
-	hasParent := node.Parent > 0
 	components, err := b.ecsComponentsForPlanNode(node)
 	if err != nil {
 		return 0, err
 	}
-	if hasParent {
+	return spawnECSComponents(world, node, parent, index, reverse, components)
+}
+
+func spawnECSComponents(world *ecs.World, node sceneSpawnNode, parent ecs.Entity, index map[string]ecs.Entity, reverse map[ecs.Entity]string, components ecs.Bundle) (ecs.Entity, error) {
+	if node.Parent > 0 {
 		ecs.Put(&components, sceneapi.Parent{Entity: parent})
 	}
 	entity := world.Spawn(components)

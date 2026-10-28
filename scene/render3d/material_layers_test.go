@@ -22,6 +22,7 @@ func TestMaterialLayersPreparePackAndReuseInstances(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 180))
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
 	ecs.Put(&camera, scene.NewCamera())

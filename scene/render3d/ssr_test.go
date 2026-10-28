@@ -42,6 +42,7 @@ func TestSSRRenderingPhasesReuseAndLifecycle(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(canvas)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	state := renderWorld3D(world)
 	t.Cleanup(func() { _ = state.Dispose() })

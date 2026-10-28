@@ -24,6 +24,7 @@ func TestRegisteredCameraPipelinePreservesPrioritySnapshotAndErrors(t *testing.T
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(200, 100))
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	var drawn ecs.Entity
 	drawError := errors.New("camera draw failed")
 	RegisterCameraRenderer[testCameraSettings](world, CameraPipeline3D, testCameraOptions,

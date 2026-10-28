@@ -122,7 +122,7 @@ func ExtractRender2DSystem(name string) ecs.SystemConfig {
 }
 
 func extractRender2D(context *ecs.SystemContext) error {
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(context.World)
 	if c == nil || context.World == nil {
 		return nil
 	}
@@ -162,7 +162,7 @@ func RenderCamerasSystem(name string) ecs.SystemConfig {
 
 func renderCameras(context *ecs.SystemContext) error {
 	world := context.World
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(context.World)
 	if world == nil || c == nil {
 		return nil
 	}

@@ -65,8 +65,8 @@ func Marshal(image Image) ([]byte, error) {
 	return data, nil
 }
 
-// Unmarshal reads a container header and returns the payload as a subslice of
-// data, so loading a texture from a resource package never copies the blocks.
+// Unmarshal reads a container header and borrows the payload from data. Decode
+// takes its own copy so the source can be released before GPU upload.
 func Unmarshal(data []byte) (Image, error) {
 	if len(data) < headerSize {
 		return Image{}, errors.New("ontex: truncated header")

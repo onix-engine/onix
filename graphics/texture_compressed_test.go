@@ -28,6 +28,12 @@ func TestTextureFromCompressedReportsChainToDriver(t *testing.T) {
 		t.Fatalf("adopt compressed texture: %v", err)
 	}
 	defer texture.Dispose()
+	if len(driver.createdTextures) != 0 {
+		t.Fatal("CPU construction called the render driver")
+	}
+	if !texture.RenderHandle().Valid() {
+		t.Fatal("explicit upload failed", texture.UploadError())
+	}
 
 	if len(driver.createdTextures) != 1 {
 		t.Fatalf("driver created %d textures, want 1", len(driver.createdTextures))

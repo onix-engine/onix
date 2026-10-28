@@ -623,6 +623,8 @@ func TestRender2DCullsQuadsAtDrawTime(t *testing.T) {
 	t.Cleanup(restore)
 
 	world := ecs.NewWorld()
+
+	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(world)
 	texture := graphics.CreateTextureByColor(graphics.White)
 	for _, x := range []float32{10, 500} {
@@ -727,6 +729,7 @@ func TestExtractRender2DCopiesSimulationComponents(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(ctx)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(world)
 	bundle := ecs.NewBundle(3)
 	ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})

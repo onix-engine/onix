@@ -121,7 +121,7 @@ func setHTMLScrollbarPaintEnd(world *ecs.World, state *htmlRenderState, rendered
 }
 
 func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *htmlBoxRendering, stackIndex int) {
-	if !rendered.Queued {
+	if !rendered.Queued || !rendered.PaintDirty {
 		next := htmlBoxStackIndex(rendered.Box, stackIndex)
 		delta := scene.UIStackIndex(next - rendered.Stack)
 		for _, entity := range rendered.Entities {

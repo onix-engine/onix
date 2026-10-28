@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -100,7 +101,7 @@ func sampleSpriteTrailForTransform[T renderGlobalTransform2D](world *ecs.World, 
 
 	width, height := sprite.Size()
 	width, height = renderSize2D(world, entity, width, height)
-	if width <= 0 || height <= 0 || (sprite.Shape.Kind == 0 && (sprite.Texture == nil || !sprite.Texture.Valid())) {
+	if width <= 0 || height <= 0 || (sprite.Shape.Kind == 0 && (sprite.Texture == nil || !sprite.Texture.ValidFor(graphics.DeviceFor(world)))) {
 		return true
 	}
 	trail.appendSample(spriteTrailSample2D{

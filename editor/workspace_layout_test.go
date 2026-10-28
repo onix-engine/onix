@@ -21,6 +21,7 @@ func TestWorkspaceLayoutMatchesRenderedPanels(t *testing.T) {
 			canvas := graphics.NewCanvas2D(render.ActiveDevice(), size[0], size[1])
 			t.Cleanup(graphics.SetCurrentContextForTesting(canvas))
 			a.changed()
+			graphics.BindFrame(world, graphics.CurrentContext())
 			if err := a.sync(&ecs.SystemContext{World: world}); err != nil {
 				t.Fatal(err)
 			}
@@ -182,6 +183,7 @@ func TestWorkspacePanelEdgeHoverAndDrag(t *testing.T) {
 func TestWorkspaceWindowDragExcludesToolsAndClosePreservesEdits(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	if err := a.sync(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}

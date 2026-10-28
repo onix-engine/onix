@@ -97,7 +97,7 @@ func TestHTMLContextNestedClipResizeAndScrollClamp(t *testing.T) {
 		target.SetAttribute("style", fmt.Sprintf("height:%dpx", height))
 		incrementalSync(t, world)
 		state, _ = ecs.Get[htmlRenderState](world, owner)
-		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 2 {
+		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 {
 			t.Fatalf("nested clip update work: %+v", state.SyncStats)
 		}
 		assertHTMLContextMatchesFresh(t, world, owner, source(height))
@@ -150,7 +150,7 @@ func TestHTMLContextSkipsUnrelatedClipBranches(t *testing.T) {
 	target.SetText("After")
 	incrementalSync(t, world)
 	state, _ := ecs.Get[htmlRenderState](world, owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 || state.SyncStats.RoutedEntities != 1 || state.SyncStats.ExtentBoxes != 0 || state.SyncStats.ReconciledBoxes != 3 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 0 || state.SyncStats.RoutedEntities != 1 || state.SyncStats.ExtentBoxes != 0 || state.SyncStats.ReconciledBoxes != 1 {
 		t.Fatalf("unrelated contexts were updated: %+v", state.SyncStats)
 	}
 }

@@ -15,7 +15,7 @@ func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	state := htmlRenderState{Styles: styles}
+	state := htmlRenderState{htmlStyleState: htmlStyleState{Styles: styles}}
 	prepareHTMLNodeAnimation(&state, node, styles[node])
 	b.ReportAllocs()
 	for b.Loop() {

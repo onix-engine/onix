@@ -14,6 +14,7 @@ func TestSceneCamerasIsolateMeshesAndLights(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(graphics.Canvas2DContext(320, 180))
 	t.Cleanup(restore)
 	w := ecs.NewWorld()
+	graphics.BindFrame(w, graphics.CurrentContext())
 	Register(w)
 	spawnCamera := func(id uint64) ecs.Entity {
 		b := ecs.NewBundle(5)

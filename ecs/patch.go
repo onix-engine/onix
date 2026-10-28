@@ -117,6 +117,10 @@ func writePatchColumn[T any](row patchRow, index int, value T) {
 		added = entry.source.ticks(filterAdded)[row.sourceRow]
 	}
 	target.appendWithTicks(value, added, row.tick)
+	target.world.componentInfos[target.id].values++
+	if entry.source == nil {
+		target.world.componentInfos[target.id].members++
+	}
 }
 
 func (p *patchPlan) finish(row patchRow) {
@@ -143,11 +147,12 @@ func (p *patchPlan) transition(source *archetype) *patchTransition {
 			ids = append(ids, p.writes[writeIndex].id)
 			writeIndex++
 		}
-		if writeIndex < len(p.writes) && p.writes[writeIndex].id == id {
+		written := writeIndex < len(p.writes) && p.writes[writeIndex].id == id
+		if written {
 			t.writes[p.writes[writeIndex].index].source = source.columns[i]
 			writeIndex++
 		}
-		entry := removalColumn{id: id, source: source.columns[i]}
+		entry := removalColumn{id: id, source: source.columns[i], overwritten: written}
 		if p.removed.has(id) {
 			t.removed = append(t.removed, i)
 		} else {

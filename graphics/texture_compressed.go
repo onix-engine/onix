@@ -67,9 +67,5 @@ func TextureFromCompressed(descriptor CompressedTextureDescriptor, pixels []byte
 		format:             descriptor.Format,
 		pix:                pixels,
 	}
-	texture.ensureUploaded()
-	if texture.err != nil {
-		return nil, texture.err
-	}
 	return texture, nil
 }

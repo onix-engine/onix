@@ -76,7 +76,7 @@ type debugInfoSystemStateTag struct{}
 
 func renderDebugInfo(context *ecs.SystemContext) error {
 	world := context.World
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(world)
 	if world == nil || c == nil {
 		return nil
 	}
@@ -98,22 +98,22 @@ func renderDebugInfo(context *ecs.SystemContext) error {
 
 	// Flush the game first so the snapshot excludes this overlay itself.
 	c.DrawFrame()
-	statistics := render.Statistics()
+	statistics := c.Device().Statistics()
 	state := ecs.Local[debugInfoSystemStateTag, debugInfoSystemState](context)
-	state.sample(time.Now())
+	state.sample(time.Now(), c.Device())
 	if state.atlas == nil {
 		state.atlas = newDebugGlyphAtlas()
 	}
-	state.text.format(statistics, state.heapBytes, state.bufferMemory, state.fps, render.CurrentRendererInfo())
+	state.text.format(statistics, state.heapBytes, state.bufferMemory, state.fps, c.Device().RendererInfo())
 	drawDebugInfo(c, component.resolved(), state.atlas, &state.text)
 	return nil
 }
 
-func (state *debugInfoSystemState) sample(now time.Time) {
+func (state *debugInfoSystemState) sample(now time.Time, device *render.Device) {
 	if state.lastFrame.IsZero() {
 		state.lastFrame = now
 		state.windowStarted = now
-		state.readMemory()
+		state.readMemory(device)
 		return
 	}
 	delta := now.Sub(state.lastFrame)
@@ -129,14 +129,14 @@ func (state *debugInfoSystemState) sample(now time.Time) {
 	state.fps = float64(state.windowFrames) / elapsed.Seconds()
 	state.windowStarted = now
 	state.windowFrames = 0
-	state.readMemory()
+	state.readMemory(device)
 }
 
-func (state *debugInfoSystemState) readMemory() {
+func (state *debugInfoSystemState) readMemory(device *render.Device) {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	state.heapBytes = memory.HeapAlloc
-	state.bufferMemory = render.CurrentBufferMemoryStatistics()
+	state.bufferMemory = device.BufferMemoryStatistics()
 }
 
 func (info DebugInfo) resolved() DebugInfo {

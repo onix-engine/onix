@@ -280,9 +280,9 @@ type View struct {
 	patch    bool
 }
 
-// PatchBindings updates only the Text, Attr and RemoveAttr bindings written by
-// this render. Other bindings, events and child lists retain their ownership.
-// This render may only write scalar bindings; structural updates require an ordinary render.
+// PatchBindings updates only the Text, Attr, RemoveAttr and Keyed bindings
+// written by this render. Omitted bindings retain their ownership. Events and
+// component lists require an ordinary render.
 func (v *View) PatchBindings() { v.patch = true }
 
 // VNodeAttribute is one attribute on a keyed VNode child.
@@ -1229,13 +1229,9 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 	}
 	if view.patch {
 		if len(instance.Next.Events) != 0 {
-			panic("html: PatchBindings render may only write scalar bindings")
+			panic("html: PatchBindings render cannot write events")
 		}
-		for _, active := range instance.Next.KeyedActive {
-			if active {
-				panic("html: PatchBindings render cannot reconcile keyed children")
-			}
-		}
+
 		for _, active := range instance.Next.ComponentChildrenActive {
 			if active {
 				panic("html: PatchBindings render cannot reconcile components")
@@ -1264,6 +1260,16 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 			}
 			delete(instance.Current.Attrs, key)
 			instance.Current.RemovedAttrs[key] = true
+		}
+		for ref, active := range instance.Next.KeyedActive {
+			if !active {
+				continue
+			}
+			if node, list := instance.Refs[ref], instance.Keyed[ref]; node != nil && list != nil {
+				reconcileHTMLComponentKeyedList(world, instance.Page, node, list, instance.Next.Keyed[ref], instance.Definition.scopeClass)
+			}
+			instance.Current.Keyed[ref], instance.Next.Keyed[ref] = instance.Next.Keyed[ref], instance.Current.Keyed[ref]
+			instance.Current.KeyedActive[ref] = true
 		}
 		instance.Next.reset()
 		return

@@ -57,6 +57,7 @@ func TestEnvironmentPanoramaSkyBindingAndZeroAllocations(t *testing.T) {
 	panorama := graphics.CreateTextureByColor(graphics.Black)
 	t.Cleanup(func() { _ = panorama.Dispose() })
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	bundle := ecs.NewBundle(1)
 	environment := Environment{Panorama: panorama, Rotation: .75, Background: true}
@@ -70,7 +71,7 @@ func TestEnvironmentPanoramaSkyBindingAndZeroAllocations(t *testing.T) {
 		if err := setupViewLighting3D(world, state, view, entity); err != nil {
 			panic(err)
 		}
-		if err := appendSky3D(state, view); err != nil {
+		if err := appendSky3D(state, view, render.ActiveDevice()); err != nil {
 			panic(err)
 		}
 	}
@@ -126,6 +127,7 @@ func TestShadowCastersOutsideCameraFrustumAndNoShadowExclusion(t *testing.T) {
 	restore := graphics.SetCurrentContextForTesting(context)
 	t.Cleanup(restore)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
 	ecs.Put(&camera, scene.NewCamera())

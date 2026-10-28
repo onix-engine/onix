@@ -31,6 +31,7 @@ func TestPrepareRenderResourcesQueuesMainViewsAndDiscardsFailure(t *testing.T) {
 	}
 	t.Cleanup(render.Uninstall)
 	world := ecs.NewWorld()
+	graphics.BindFrame(world, graphics.NewCanvas2D(render.ActiveDevice(), 320, 200))
 	Register(world)
 	state := renderWorld3D(world)
 	item := extractedMesh3D{vertices: []render.Vertex3D{{}}, material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}

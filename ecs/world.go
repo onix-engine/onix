@@ -46,6 +46,7 @@ type World struct {
 	activeQueryIterators    int
 	activeComponentCleanups int
 	structureVersion        uint64
+	entityVersion           uint64
 	mutationVersion         uint64
 }
 
@@ -58,6 +59,13 @@ func (w *World) MutationVersion() uint64 {
 func (w *World) StructureVersion() uint64 {
 	requireWorld(w)
 	return w.structureVersion
+}
+
+// EntityVersion changes only when a live entity is spawned or despawned.
+// Adding or removing components does not change entity membership.
+func (w *World) EntityVersion() uint64 {
+	requireWorld(w)
+	return w.entityVersion
 }
 
 // ChangeTick returns the current change-tracking clock without advancing it.
@@ -235,6 +243,7 @@ func (w *World) commitSpawn(index uint32, archetype *archetype, row int) {
 	meta.row = uint32(row)
 	meta.state = entityAlive
 	w.entityCount++
+	w.entityVersion++
 	w.structureVersion++
 	w.mutationVersion++
 }
@@ -250,6 +259,7 @@ func (w *World) Despawn(entity Entity) bool {
 	w.removeArchetypeRow(archetype, int(meta.row))
 	w.releaseEntity(index)
 	w.entityCount--
+	w.entityVersion++
 	w.structureVersion++
 	w.mutationVersion++
 	return true

@@ -73,9 +73,21 @@ func (r *Runtime) spawnContent(c *Context, t project.ModTransform, spec project.
 	}
 	b := transformBundle(t, ui, parent, order, c.visible, c.enabled)
 	if r.options.Content == nil {
-		content, err := c.resources.store.ModContent(spec)
-		if err != nil {
-			return 0, err
+		var content ecs.Bundle
+		prepared := false
+		if p := r.preparedContent; p != nil && p.index < len(p.items) {
+			item := &p.items[p.index]
+			p.index++
+			if item.store == c.resources {
+				content, prepared = item.bundle, true
+			}
+		}
+		if !prepared {
+			var err error
+			content, err = c.resources.store.ModContent(spec)
+			if err != nil {
+				return 0, err
+			}
 		}
 		b.Extend(content)
 	}

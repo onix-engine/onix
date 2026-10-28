@@ -223,6 +223,7 @@ func TestHTMLRoundedBorderTextureFollowsCanvasDensity(t *testing.T) {
 	canvas := graphics.NewCanvas2D(render.ActiveDevice(), 320, 200)
 	defer graphics.SetCurrentContextForTesting(canvas)()
 	world, owner := incrementalHTMLFixture(t, `<button id="button" style="box-sizing:border-box;padding:0;width:36px;height:24px;background:transparent;border:1px solid #84ccff;border-radius:5px 0 0 5px"></button>`)
+	graphics.BindFrame(world, canvas)
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "button")
 	var previous *graphics.Texture

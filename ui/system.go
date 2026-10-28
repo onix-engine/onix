@@ -1214,6 +1214,10 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	ecs.SetIfChanged(world, owner, scene.ClipRect2D{Width: control.Width, Height: control.Height})
 	fieldValue, fieldOK := ecs.Get[TextField](world, owner)
 	field := &fieldValue
+	text.Index = nil
+	if field.Buffer != nil {
+		text.Index = field.Buffer
+	}
 	defer func() {
 		if fieldOK {
 			ecs.SetIfChanged(world, owner, fieldValue)
@@ -1360,6 +1364,10 @@ func syncTextareaVisual(world *ecs.World, entity, owner ecs.Entity, textarea *Te
 	textarea.ScrollX = min(max(textarea.ScrollX, 0), maxScrollX)
 	textarea.ScrollY = min(max(textarea.ScrollY, 0), maxScrollY)
 	if field, ok := ecs.Get[TextField](world, owner); ok {
+		text.Index = nil
+		if field.Buffer != nil {
+			text.Index = field.Buffer
+		}
 		contentChanged := !textarea.scrollInitialized || textarea.FollowTail && !textarea.lastFollowTail || textarea.lastValue != field.Value ||
 			textarea.lastViewportWidth != viewportWidth || textarea.lastViewportHeight != viewportHeight || textarea.lastWrap != textarea.Wrap ||
 			textarea.lastWrapWidthPercent != textarea.WrapWidthPercent || textarea.lastWrapTokens != textarea.WrapTokens

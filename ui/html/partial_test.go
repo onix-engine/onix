@@ -52,7 +52,7 @@ func TestHTMLPartialTextTouchesOnlyAffectedBoxes(t *testing.T) {
 			target.SetText("After")
 			incrementalSync(t, world)
 			after, _ := ecs.Get[htmlRenderState](world, owner)
-			if after.SyncStats.PartialReconciles != 1 || after.SyncStats.ReconciledBoxes != 2 || after.SyncStats.Reused != 1 || !slices.Equal(children, after.Children) {
+			if after.SyncStats.PartialReconciles != 1 || after.SyncStats.ReconciledBoxes != 1 || after.SyncStats.Reused != 1 || !slices.Equal(children, after.Children) {
 				t.Fatalf("unrelated primitives reconciled: %+v", after.SyncStats)
 			}
 		})

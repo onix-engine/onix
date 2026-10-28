@@ -21,7 +21,11 @@ func (s BufferMemoryStatistics) NativeBytes() uint64 {
 
 // CurrentBufferMemoryStatistics must be called on the rendering thread.
 func CurrentBufferMemoryStatistics() BufferMemoryStatistics {
-	if driver, ok := Current().(interface{ BufferMemoryStatistics() BufferMemoryStatistics }); ok {
+	return ActiveDevice().BufferMemoryStatistics()
+}
+
+func (device *Device) BufferMemoryStatistics() BufferMemoryStatistics {
+	if driver, ok := device.Driver().(interface{ BufferMemoryStatistics() BufferMemoryStatistics }); ok {
 		return driver.BufferMemoryStatistics()
 	}
 	return BufferMemoryStatistics{}

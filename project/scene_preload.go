@@ -1,32 +1,41 @@
 package project
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/render"
+	"github.com/diiyw/onix/resource"
 	sceneapi "github.com/diiyw/onix/scene"
 )
 
 type scenePreloadPhase uint8
 
 const (
-	scenePreloadSpawn scenePreloadPhase = iota
+	scenePreloadCPU scenePreloadPhase = iota
+	scenePreloadSpawn
 	scenePreloadResolve
-	scenePreloadMeasureText
+	scenePreloadPrepare
+	scenePreloadUpload
 	scenePreloadReady
 )
 
 // ScenePreloader incrementally builds a scene in the active world. Its nodes
 // remain hidden and its cameras inactive until Activate is called.
 type ScenePreloader struct {
-	bundle   *Bundle
-	scene    *SceneInstance
-	plan     sceneSpawnPlan
-	entities []ecs.Entity
-	texts    []ecs.Entity
-	phase    scenePreloadPhase
-	index    int
+	bundle     *Bundle
+	scene      *SceneInstance
+	plan       sceneSpawnPlan
+	entities   []ecs.Entity
+	phase      scenePreloadPhase
+	index      int
+	cpu        *resource.Preparation[[]ecs.Bundle]
+	components []ecs.Bundle
+	uploads    graphics.UploadQueue
+	wake       func()
 }
 
 // BeginPreloadScene starts an incremental scene preload. Advance must be
@@ -36,40 +45,105 @@ func (b *Bundle) BeginPreloadScene(world *ecs.World, id SceneID) (*ScenePreloade
 	if err != nil {
 		return nil, err
 	}
-	return &ScenePreloader{
+	p := &ScenePreloader{
 		bundle:   b,
 		scene:    scene,
 		plan:     plan,
 		entities: make([]ecs.Entity, len(plan.Nodes)),
-		texts:    make([]ecs.Entity, 0, len(plan.Nodes)),
-	}, nil
+	}
+	request, _ := ecs.GetResource[*sceneapi.RenderRequest](world)
+	p.wake = request.Request
+	p.cpu = resource.BeginPreparation(func(ctx context.Context) ([]ecs.Bundle, error) {
+		values := make([]ecs.Bundle, len(plan.Nodes))
+		for i, node := range plan.Nodes {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			components, err := b.ecsComponentsForPlanNode(node)
+			if err != nil {
+				return nil, err
+			}
+			values[i] = components
+		}
+		return values, nil
+	}, nil, request.Request)
+	return p, nil
 }
 
 // Ready reports whether construction, resource loading, and static text
-// measurement have completed.
+// measurement have completed, and uploads are ready for the owning world's frame device.
 func (p *ScenePreloader) Ready() bool {
-	return p != nil && p.phase == scenePreloadReady && p.scene != nil
+	return p.ReadyFor(p.device())
+}
+
+// ReadyFor permits headless activation after CPU preparation. With a device,
+// every queued asset must already be resident on that exact device.
+func (p *ScenePreloader) ReadyFor(device *render.Device) bool {
+	return p != nil && p.phase == scenePreloadReady && p.scene != nil && (device.Driver() == nil || p.uploads.ReadyFor(device))
+}
+
+func (p *ScenePreloader) CPUReady() bool {
+	return p != nil && p.scene != nil && p.phase >= scenePreloadUpload
+}
+
+func (p *ScenePreloader) GPUReadyFor(device *render.Device) bool {
+	return p.CPUReady() && device.Driver() != nil && p.uploads.ReadyFor(device)
 }
 
 // Advance builds scene nodes until the supplied time budget is exhausted.
 // A non-positive budget still completes one unit of work so callers always
 // make progress in deterministic tests.
 func (p *ScenePreloader) Advance(budget time.Duration) (bool, error) {
+	return p.AdvanceFor(p.device(), graphics.UploadBudget{Time: budget})
+}
+
+// AdvanceFor commits CPU results and uploads on the caller's render thread.
+// Reading and decoding continue on the worker while this method returns.
+func (p *ScenePreloader) AdvanceFor(device *render.Device, budget graphics.UploadBudget) (ready bool, err error) {
 	if p == nil || p.scene == nil {
 		return false, fmt.Errorf("scene preloader is nil")
 	}
-	if p.Ready() {
+	if p.ReadyFor(device) {
 		return true, nil
 	}
-	deadline := time.Now().Add(budget)
+	defer func() {
+		if !ready && err == nil && p.scene != nil && p.phase > scenePreloadCPU {
+			p.wake()
+		}
+	}()
+	deadline := time.Now().Add(budget.Time)
 	for {
-		ready, err := p.advanceOne()
-		if err != nil {
+		if p.phase == scenePreloadCPU {
+			components, ready, err := p.cpu.Take()
+			if err != nil {
+				p.Discard()
+				return false, err
+			}
+			if !ready {
+				return false, nil
+			}
+			p.components, p.phase = components, scenePreloadSpawn
+		}
+		if p.phase >= scenePreloadUpload {
+			budget.Time = max(0, time.Until(deadline))
+			ready, err := p.uploads.Advance(device, budget)
+			if err != nil {
+				p.cpu.Finish(err)
+				p.Discard()
+				return false, err
+			}
+			if ready || device.Driver() == nil {
+				p.phase = scenePreloadReady
+				if ready {
+					p.cpu.Finish(nil)
+				}
+				return true, nil
+			}
+			return false, nil
+		}
+		if err := p.advanceOne(); err != nil {
 			p.Discard()
 			return false, err
-		}
-		if ready {
-			return true, nil
 		}
 		if !time.Now().Before(deadline) {
 			return false, nil
@@ -77,19 +151,20 @@ func (p *ScenePreloader) Advance(budget time.Duration) (bool, error) {
 	}
 }
 
-func (p *ScenePreloader) advanceOne() (bool, error) {
+func (p *ScenePreloader) advanceOne() error {
 	switch p.phase {
 	case scenePreloadSpawn:
 		if p.index == len(p.plan.Nodes) {
 			p.phase, p.index = scenePreloadResolve, 0
-			return false, nil
+			return nil
 		}
-		if err := p.bundle.spawnScenePlanNode(p.scene, p.plan, p.entities, p.index); err != nil {
-			return false, err
+		if err := p.bundle.spawnPreparedScenePlanNode(p.scene, p.plan, p.entities, p.index, p.components[p.index]); err != nil {
+			return err
 		}
+		p.components[p.index] = ecs.Bundle{}
 		entity := p.entities[p.index]
 		if err := ecs.Insert(p.scene.World, entity, sceneapi.Activity{Active: false}); err != nil {
-			return false, err
+			return err
 		}
 		if visibility := ecs.GetMut[sceneapi.Visibility](p.scene.World, entity); visibility != nil {
 			visibility.Visible = false
@@ -97,36 +172,36 @@ func (p *ScenePreloader) advanceOne() (bool, error) {
 		if camera := ecs.GetMut[sceneapi.Camera](p.scene.World, entity); camera != nil {
 			camera.Active = false
 		}
-		if ecs.Has[sceneapi.Text2D](p.scene.World, entity) {
-			p.texts = append(p.texts, entity)
-		}
 		p.index++
-		return false, nil
+		return nil
 	case scenePreloadResolve:
 		if p.index == len(p.plan.Nodes) {
 			if err := bindSceneAnimationTargets(p.scene.World, p.plan, p.entities); err != nil {
-				return false, err
+				return err
 			}
-			p.phase, p.index = scenePreloadMeasureText, 0
-			return false, nil
+			p.phase, p.index = scenePreloadPrepare, 0
+			return nil
 		}
 		if err := p.bundle.resolveScenePlanNode(p.scene, p.plan, p.entities, p.index); err != nil {
-			return false, err
+			return err
 		}
 		p.index++
-		return false, nil
-	case scenePreloadMeasureText:
-		if p.index == len(p.texts) {
-			p.phase = scenePreloadReady
-			return true, nil
+		return nil
+	case scenePreloadPrepare:
+		if p.index == len(p.entities) {
+			p.components = nil
+			p.phase = scenePreloadUpload
+			return nil
 		}
-		if text := ecs.GetMut[sceneapi.Text2D](p.scene.World, p.texts[p.index]); text != nil {
-			sceneapi.MeasureText2D(text)
+		entity := p.entities[p.index]
+		if text := ecs.GetMut[sceneapi.Text2D](p.scene.World, entity); text != nil {
+			sceneapi.PrepareText2D(text)
 		}
+		QueueEntityUploads(&p.uploads, p.scene.World, entity)
 		p.index++
-		return false, nil
+		return nil
 	default:
-		return true, nil
+		return nil
 	}
 }
 
@@ -163,7 +238,7 @@ func (p *ScenePreloader) Activate(current *SceneInstance) error {
 	*current = *p.scene
 	p.scene = nil
 	p.entities = nil
-	p.texts = nil
+	p.uploads.Reset()
 	return nil
 }
 
@@ -172,8 +247,20 @@ func (p *ScenePreloader) Discard() {
 	if p == nil || p.scene == nil {
 		return
 	}
+	p.cpu.Cancel()
 	p.scene.dispose(false)
 	p.scene = nil
 	p.entities = nil
-	p.texts = nil
+	p.components = nil
+	p.uploads.Reset()
+}
+
+func (p *ScenePreloader) device() *render.Device {
+	if p == nil {
+		return nil
+	}
+	if p.scene == nil {
+		return nil
+	}
+	return graphics.DeviceFor(p.scene.World)
 }

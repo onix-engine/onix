@@ -26,6 +26,7 @@ type renderHierarchy2DCache struct {
 	visiting  map[ecs.Entity]bool
 	versions  [7]uint64
 	structure uint64
+	hierarchy *Hierarchy
 }
 
 func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
@@ -35,19 +36,20 @@ func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
 func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 	cache := ecs.ScopeValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache](world)
+	cache.hierarchy = HierarchyFor(world)
 	versions := [7]uint64{
-		ecs.ComponentVersion[Parent](world), ecs.ComponentVersion[SceneLayer](world),
-		ecs.ComponentVersion[RenderLayers](world), ecs.ComponentVersion[UITargetCamera](world),
-		ecs.ComponentVersion[UIStackIndex](world), ecs.ComponentVersion[RenderOrder2D](world), ecs.ComponentVersion[PainterGroup2D](world),
+		componentValueVersion[Parent](world), componentValueVersion[SceneLayer](world),
+		componentValueVersion[RenderLayers](world), componentValueVersion[UITargetCamera](world),
+		componentValueVersion[UIStackIndex](world), componentValueVersion[RenderOrder2D](world), componentValueVersion[PainterGroup2D](world),
 	}
 	if cache.values == nil {
 		cache.values = make(map[ecs.Entity]renderHierarchy2DInfo)
 		cache.visiting = make(map[ecs.Entity]bool)
 	}
-	if cache.versions != versions || cache.structure != world.StructureVersion() {
+	if cache.versions != versions || cache.structure != world.EntityVersion() {
 		clear(cache.values)
 		clear(cache.visiting)
-		cache.versions, cache.structure = versions, world.StructureVersion()
+		cache.versions, cache.structure = versions, world.EntityVersion()
 	}
 	return cache
 }
@@ -76,8 +78,8 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	}
 	c.visiting[entity] = true
 	info := renderHierarchy2DInfo{layers: RenderLayers{}}
-	if parent, ok := ecs.Get[Parent](world, entity); ok {
-		info = c.resolve(world, parent.Entity)
+	if parent := c.hierarchy.Parent(entity); parent != 0 {
+		info = c.resolve(world, parent)
 	}
 	if layers, ok := ecs.Get[RenderLayers](world, entity); ok {
 		info.layers = layers
@@ -97,4 +99,9 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	delete(c.visiting, entity)
 	c.values[entity] = info
 	return info
+}
+
+func componentValueVersion[T any](world *ecs.World) uint64 {
+	version, _ := ecs.ComponentValueRevision[T](world)
+	return version
 }

@@ -30,6 +30,7 @@ func workspaceElementDragFixture(t *testing.T) (*ModuleEditor, *ecs.SystemContex
 	}
 	a.enterModuleEdit(a.Document.Active, "start")
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +49,7 @@ func TestWorkspaceCanvasTreeSelectionHighlightsModulesAndElements(t *testing.T) 
 	a, context := workspaceElementDragFixture(t)
 	for _, action := range []string{"select:start", "element:main.json/start/group", "element:main.json/start/child"} {
 		a.handleEvent(htmlui.Event{ID: action, Kind: htmlui.EventClick})
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
@@ -100,6 +102,7 @@ func TestWorkspaceCanvasTreeSelectionHighlightsModulesAndElements(t *testing.T) 
 func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 	a, context := workspaceElementDragFixture(t)
 	a.selectElement("start", "child")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -116,11 +119,13 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 	if a.canvasDrag.Element != "child" || !a.canvasDrag.Definition {
 		t.Fatal("tree-selected element did not start a definition drag", a.canvasDrag)
 	}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
 	move := func(dx, dy float32) {
 		a.updatePlacementDrag(input.Pointer{X: x + dx, Y: y + dy, Down: true})
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			panic(err)
 		}
@@ -148,6 +153,7 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +166,7 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 	in := input.NewState()
 	in.PressKey(input.KeyEscape)
 	a.updateOutlinerMenu(in)
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -178,6 +185,7 @@ func TestWorkspaceCanvasModuleDefinitionDragAndClick(t *testing.T) {
 	original := a.Document.Mods["button"].Plan.Transform.Position
 	a.beginPlacementDrag("start", 100, 100)
 	a.updatePlacementDrag(input.Pointer{X: 130, Y: 120, Down: true})
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -186,6 +194,7 @@ func TestWorkspaceCanvasModuleDefinitionDragAndClick(t *testing.T) {
 	if abs(position[0]-original[0]-30/a.canvasScale) > .001 || abs(position[1]-original[1]-20/a.canvasScale) > .001 || a.Document.Scene().Revision != revision || len(a.Document.undo) != history+1 {
 		t.Fatal("local module drag changed instance placement or lost preview scale", position)
 	}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -263,6 +272,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.selectInstance("model")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -286,6 +296,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 	if err := a.update(context); err != nil {
 		t.Fatal(err)
 	}
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -307,6 +318,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -318,6 +330,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 	a, context := workspace3DEditorFixture(t)
 	a.enterModuleEdit(a.Document.Active, "model")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -327,6 +340,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 		} else {
 			a.selectElement("model", element)
 		}
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
@@ -340,6 +354,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 		if a.canvasDrag.ID != "model" || a.canvasDrag.Element != element || !a.canvasDrag.ThreeD {
 			t.Fatal("3D selection did not start matching drag", a.canvasDrag)
 		}
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
@@ -347,6 +362,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 		original := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix
 		move := func(dx float32) {
 			a.updatePlacementDrag(input.Pointer{X: x + dx, Y: y + 15, Down: true})
+			graphics.BindFrame(context.World, graphics.CurrentContext())
 			if err := a.sync(context); err != nil {
 				panic(err)
 			}
@@ -367,6 +383,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 			t.Fatal(err)
 		}
 		a.changed()
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}

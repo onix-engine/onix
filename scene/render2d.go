@@ -80,7 +80,15 @@ const (
 	TextAlignRight
 )
 
+// TextIndex resolves rune offsets against a matching immutable snapshot.
+type TextIndex interface {
+	Matches(string) bool
+	ByteOffset(int) int
+}
+
 type Text2D struct {
+	// Index optionally shares a document's indexed text buffer for caret lookup.
+	Index         TextIndex
 	Value         string
 	Font          *onixtext.Font
 	FontSize      float64
@@ -315,7 +323,7 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 	// HTML controls retain that color with border:0 and still need the mask.
 	if item.clip.hasRounded && shape.Kind == render.ShapeRoundedRect && shape.Radius <= 0 && shape.BorderWidth <= 0 && shape.Fill.A > 0 {
 		texture := graphics.CreateTextureByColor(shape.Fill)
-		if texture != nil && texture.Valid() {
+		if texture != nil && texture.ValidFor(c.Device()) {
 			model, textureModel, ok := clippedQuad2D(item.quadTransform(), mgl32.Ident3(), item.width, item.height, item.clip)
 			if !ok {
 				return
@@ -541,7 +549,7 @@ func appendSpriteTrailRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 			}
 			sprite := sample.sprite
 			sprite.Alpha *= trail.alphaAt(sample.age)
-			if !spriteDrawable2D(&sprite) {
+			if !spriteDrawable2D(&sprite, graphics.DeviceFor(world)) {
 				continue
 			}
 			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material, sample.anchor, sample.transform, sample.clip, sample.width, sample.height, ui, info.sortIndex)
@@ -560,7 +568,7 @@ func appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snap
 
 		if sprite.Texture != nil {
 		}
-		if !visibility.Visible || !spriteDrawable2D(sprite) {
+		if !visibility.Visible || !spriteDrawable2D(sprite, graphics.DeviceFor(world)) {
 			continue
 		}
 		width, height := sprite.Size()
@@ -603,7 +611,7 @@ func appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 		for index := range layers.Layers {
 			layer := &layers.Layers[index]
 			width, height := layer.Sprite.Size()
-			if !layer.Visible || layer.Sprite.Alpha <= 0 || layer.Sprite.Tint.A <= 0 || layer.Sprite.Texture == nil || !layer.Sprite.Texture.Valid() || width <= 0 || height <= 0 {
+			if !layer.Visible || layer.Sprite.Alpha <= 0 || layer.Sprite.Tint.A <= 0 || layer.Sprite.Texture == nil || !layer.Sprite.Texture.ValidFor(graphics.DeviceFor(world)) || width <= 0 || height <= 0 {
 				continue
 			}
 			matrix := rootMatrix.Mul4(layers.LayerMatrix(index))
@@ -658,7 +666,7 @@ func appendTilemapRenderItems2D[T renderGlobalTransform2D](world *ecs.World, sna
 		visibility := access.C.Ref()
 
 		matrix, clip := (*transform).renderMatrix2D(), (*transform).renderClip2D()
-		if !visibility.Visible || tilemap.Alpha <= 0 || !tilemap.Valid() || clip.empty() {
+		if !visibility.Visible || tilemap.Alpha <= 0 || !tilemap.ValidFor(graphics.DeviceFor(world)) || clip.empty() {
 			continue
 		}
 		anchor := anchorForEntity2D(world, entity)
@@ -1070,6 +1078,9 @@ func textCaretByteIndex(value string, caret int) int {
 // Layout invalidation resets these two offsets. Adjacent caret moves decode
 // only the intervening runes and retain no copy or index of the document.
 func (text *Text2D) caretByteIndex(value string, caret int) int {
+	if text.Index != nil && text.Index.Matches(value) {
+		return text.Index.ByteOffset(caret)
+	}
 	if value != text.Value {
 		return textCaretByteIndex(value, caret)
 	}
@@ -1307,17 +1318,18 @@ type renderItem2D struct {
 	width      float32
 	height     float32
 	target     ecs.Entity
+	device     *render.Device
 	paint      *paintItem2D
 }
 
-func spriteDrawable2D(sprite *Sprite2D) bool {
+func spriteDrawable2D(sprite *Sprite2D, device *render.Device) bool {
 	if sprite == nil || sprite.Alpha <= 0 {
 		return false
 	}
 	if sprite.Shape.Kind != 0 {
 		return sprite.Shape.Fill.A > 0 || sprite.Shape.Border.A > 0
 	}
-	return sprite.Tint.A > 0 && sprite.Texture != nil && sprite.Texture.Valid()
+	return sprite.Tint.A > 0 && sprite.Texture != nil && sprite.Texture.ValidFor(device)
 }
 
 // Size resolves logical dimensions, using texture dimensions for omitted axes.
@@ -2428,7 +2440,7 @@ func (item renderItem2D) drawTilemap(c *graphics.Canvas2D, viewport renderViewpo
 }
 
 func textureMatrix(texture *graphics.Texture) mgl32.Mat3 {
-	if texture == nil || !texture.Valid() {
+	if texture == nil {
 		return mgl32.Ident3()
 	}
 	return mgl32.Translate2D(texture.U, texture.V).

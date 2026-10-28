@@ -273,6 +273,7 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 	if v.world == nil {
 		a.initViewport2D()
 	}
+	graphics.BindFrame(v.world, graphics.CanvasFor(a.world))
 	if v.local != a.Local {
 		v.offset, v.panning = mgl32.Vec2{}, false
 		if a.Local != "" {
@@ -602,6 +603,7 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 	if v.world == nil || v.err != nil {
 		return nil
 	}
+	graphics.BindFrame(v.world, c)
 	defer func() {
 		// Playback is paused while a modal is open, so there is nothing to animate.
 		if resultErr == nil && !a.modalVisible() && (v.animated || v.cssAnimated) && a.requestWake != nil {
@@ -610,7 +612,7 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 	}()
 	if a.Local == "" {
 		width, height := v.size[0], v.size[1]
-		if ok, err := v.sceneTarget.ensureTarget(width, height, 1); !ok || err != nil {
+		if ok, err := v.sceneTarget.ensureTarget(c.Device(), width, height, 1); !ok || err != nil {
 			return err
 		}
 		// Scene views retain the runtime viewport and authored camera background.
@@ -631,7 +633,7 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 		}
 	}
 	bounds := a.canvasBounds()
-	if ok, err := v.target.ensureTarget(int(bounds.W), int(bounds.H), 1); !ok || err != nil {
+	if ok, err := v.target.ensureTarget(c.Device(), int(bounds.W), int(bounds.H), 1); !ok || err != nil {
 		return err
 	}
 	return c.DrawTo(v.target.renderTarget, render.RenderTargetClear{Color: render.Color(editorTheme.viewportBG), ClearColor: true, ClearDepth: true}, func() error {

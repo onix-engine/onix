@@ -150,11 +150,11 @@ func renderViewSSR3D(canvas *graphics.Canvas2D, state *World, view *renderView3D
 			return err
 		}
 	}
-	color, err := s.radiance.frame.Target.ColorTexture()
+	color, err := s.radiance.frame.Target.ColorTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}
-	depth, err := s.depth.frame.Target.ColorTexture()
+	depth, err := s.depth.frame.Target.ColorTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}

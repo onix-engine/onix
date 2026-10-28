@@ -126,6 +126,10 @@ type activeCollision3D struct {
 	penetration float64
 }
 
+type broadphaseEntry3D struct {
+	collider, next int
+}
+
 type World3D struct {
 	Gravity       Vector3D
 	Iterations    int
@@ -140,7 +144,7 @@ type World3D struct {
 
 	aabbs            []aabb3D
 	bucketHeads      []int
-	gridEntries      []broadphaseEntry
+	gridEntries      []broadphaseEntry3D
 	large            []int
 	pairs            []colliderPair
 	contacts         []manifold3D

@@ -38,6 +38,7 @@ func workspace3DEditorFixture(t *testing.T) (*ModuleEditor, *ecs.SystemContext) 
 	}
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
 	a.action("toggle-dimension")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +68,7 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +80,7 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 		if err := a.syncViewport3D(); err != nil {
 			panic(err)
 		}
+		graphics.BindFrame(context.World, graphics.CurrentContext())
 		if err := a.sync(context); err != nil {
 			panic(err)
 		}
@@ -85,6 +88,7 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 		t.Fatalf("stable 3D preview allocated %g", allocs)
 	}
 	a.action("toggle-dimension")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +199,7 @@ func TestWorkspace3DNavigationDoesNotEditDocument(t *testing.T) {
 	}
 	in.ReleaseMouse(input.MouseRight, x+30, y+10)
 	a.updateViewport3DInput(in)
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -214,6 +219,7 @@ func TestWorkspace3DEmptyCanvasSkipsModuleResources(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	context := &ecs.SystemContext{World: ecs.NewWorld()}
 	a.action("toggle-dimension")
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -301,6 +307,7 @@ func TestWorkspace3DOrthographicDragAndFixedSnap(t *testing.T) {
 		t.Fatal("orthographic drag used perspective rays", a.canvasDrag.WorldDelta, original)
 	}
 	a.cancelPlacementDrag()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
@@ -335,6 +342,7 @@ func TestWorkspace3DStudioAndSceneAppearanceIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.changed()
+	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}

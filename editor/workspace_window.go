@@ -10,11 +10,11 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-func (a *ModuleEditor) renderWindowBorder(_ *ecs.SystemContext) error {
+func (a *ModuleEditor) renderWindowBorder(context *ecs.SystemContext) error {
 	if runtime.GOOS != "linux" {
 		return nil
 	}
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(context.World)
 	if c == nil {
 		return nil
 	}

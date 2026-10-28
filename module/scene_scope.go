@@ -7,30 +7,41 @@ import (
 )
 
 type sceneScopeNode struct {
-	entity                          ecs.Entity
-	scene                           *Scene
-	owner                           *Context
-	parent, firstChild, nextSibling ecs.Entity
-	resolved                        bool
-	visiting                        bool
+	entity             ecs.Entity
+	scene              *Scene
+	owner              *Context
+	resolved, visiting bool
+	running, rendered  bool
 }
 
 // SyncScopes rebuilds cached execution lists only after scene transitions,
-// hierarchy edits or structural changes. Unowned engine entities are shared.
+// hierarchy edits, ownership changes or entity lifetimes. Unowned engine
+// entities are shared; unrelated component migrations preserve scope versions.
 func (r *Runtime) SyncScopes() {
 	if r.queryDepth != 0 {
 		return
 	}
 	w := r.world
-	parents := ecs.ComponentVersion[scene.Parent](w)
-	if !r.scopeDirty && r.scopeStructure == w.StructureVersion() && r.scopeParents == parents {
+	hierarchy := scene.HierarchyFor(w)
+	owners, _ := ecs.ComponentValueRevision[entityOwner](w)
+	if !r.scopeDirty && r.scopeHierarchy == hierarchy.Version() && r.scopeOwners == owners {
 		return
 	}
 	r.scopeDirty = false
 	if len(r.scopeNodes) < w.EntitySlots() {
 		r.scopeNodes = append(r.scopeNodes, make([]sceneScopeNode, w.EntitySlots()-len(r.scopeNodes))...)
 	}
-	clear(r.scopeNodes)
+	if r.scopeEntities != w.EntityVersion() {
+		for i := range r.scopeNodes {
+			if r.scopeNodes[i].entity != 0 && !w.IsAlive(r.scopeNodes[i].entity) {
+				r.scopeNodes[i] = sceneScopeNode{}
+			}
+		}
+	}
+	for _, entity := range hierarchy.Entities() {
+		index, _ := entity.Index()
+		r.scopeNodes[index].resolved, r.scopeNodes[index].visiting = false, false
+	}
 	r.despawnEntities = slices.Grow(r.despawnEntities[:0], w.EntityCount())
 	r.renderBackground = false
 	previousUpdates, previousFrameUpdates := len(r.runningUpdates), len(r.runningFrameUpdates)
@@ -63,7 +74,8 @@ func (r *Runtime) SyncScopes() {
 		for _, root := range [2]ecs.Entity{s.uiRoot, s.worldRoot} {
 			index, ok := root.Index()
 			if ok && w.IsAlive(root) {
-				r.scopeNodes[index] = sceneScopeNode{entity: root, scene: s, resolved: true}
+				n := &r.scopeNodes[index]
+				n.entity, n.scene, n.owner, n.resolved = root, s, nil, true
 			}
 		}
 	}
@@ -75,17 +87,14 @@ func (r *Runtime) SyncScopes() {
 	}
 	r.runningEntities = r.runningEntities[:0]
 	r.renderEntities = r.renderEntities[:0]
-	for e := range w.Entities() {
-		s := r.resolveScope(e)
+	runningChanged, renderedChanged := r.scopeEntities != w.EntityVersion(), r.scopeEntities != w.EntityVersion()
+	for _, e := range hierarchy.Entities() {
 		index, _ := e.Index()
 		n := &r.scopeNodes[index]
+		known := n.entity == e
+		s := r.resolveScope(hierarchy, e)
 		if n.owner != nil {
 			n.owner.ownedEntities = append(n.owner.ownedEntities, e)
-		}
-		if parent, ok := ecs.Get[scene.Parent](w, e); ok && w.IsAlive(parent.Entity) {
-			pindex, _ := parent.Entity.Index()
-			n.parent, n.nextSibling = parent.Entity, r.scopeNodes[pindex].firstChild
-			r.scopeNodes[pindex].firstChild = e
 		}
 		running, rendered := s == nil, s == nil
 		if s != nil {
@@ -103,14 +112,21 @@ func (r *Runtime) SyncScopes() {
 		if rendered {
 			r.renderEntities = append(r.renderEntities, e)
 		}
+		runningChanged = runningChanged || !known || n.running != running
+		renderedChanged = renderedChanged || !known || n.rendered != rendered
+		n.running, n.rendered = running, rendered
 	}
-	r.runningScope.Reset(r.runningEntities)
-	r.renderScope.Reset(r.renderEntities)
-	r.scopeStructure, r.scopeParents = w.StructureVersion(), parents
+	if runningChanged {
+		r.runningScope.Reset(r.runningEntities)
+	}
+	if renderedChanged {
+		r.renderScope.Reset(r.renderEntities)
+	}
+	r.scopeHierarchy, r.scopeOwners, r.scopeEntities = hierarchy.Version(), owners, w.EntityVersion()
 	w.SetQueryScope(&r.runningScope)
 }
 
-func (r *Runtime) resolveScope(e ecs.Entity) *Scene {
+func (r *Runtime) resolveScope(hierarchy *scene.Hierarchy, e ecs.Entity) *Scene {
 	if e == 0 || !r.world.IsAlive(e) {
 		return nil
 	}
@@ -123,12 +139,13 @@ func (r *Runtime) resolveScope(e ecs.Entity) *Scene {
 		return nil
 	}
 	n.entity, n.visiting = e, true
+	n.scene, n.owner = nil, nil
 	if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
 		n.owner = owner.context
 		n.scene = owner.context.scene
-	} else if parent, ok := ecs.Get[scene.Parent](r.world, e); ok {
-		n.scene = r.resolveScope(parent.Entity)
-		if index, ok := parent.Entity.Index(); ok && r.world.IsAlive(parent.Entity) {
+	} else if parent := hierarchy.Parent(e); parent != 0 {
+		n.scene = r.resolveScope(hierarchy, parent)
+		if index, ok := parent.Index(); ok && r.world.IsAlive(parent) {
 			n.owner = r.scopeNodes[index].owner
 		}
 	}
@@ -145,18 +162,20 @@ func (r *Runtime) entityContext(e ecs.Entity) *Context {
 	if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
 		return owner.context
 	}
-	if r.scopeStructure == r.world.StructureVersion() && r.scopeParents == ecs.ComponentVersion[scene.Parent](r.world) {
+	hierarchy := scene.HierarchyFor(r.world)
+	owners, _ := ecs.ComponentValueRevision[entityOwner](r.world)
+	if r.scopeHierarchy == hierarchy.Version() && r.scopeOwners == owners {
 		index, _ := e.Index()
 		if int(index) < len(r.scopeNodes) && r.scopeNodes[index].entity == e {
 			return r.scopeNodes[index].owner
 		}
 	}
 	for remaining := r.world.EntityCount(); remaining > 0; remaining-- {
-		parent, ok := ecs.Get[scene.Parent](r.world, e)
-		if !ok || !r.world.IsAlive(parent.Entity) {
+		parent := hierarchy.Parent(e)
+		if !r.world.IsAlive(parent) {
 			return nil
 		}
-		e = parent.Entity
+		e = parent
 		if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
 			return owner.context
 		}

@@ -64,7 +64,7 @@ func TestEmptyGPUOnlyTextureStaysOnOwningDevice(t *testing.T) {
 	}
 	t.Cleanup(render.Uninstall)
 	texture := CreateEmptyTexture(8, 8, render.TextureFormatR8, ResourceUsageGPU)
-	if !texture.Valid() || len(texture.pix) != 0 || texture.zeroInitialized {
+	if !texture.Valid() || !texture.RenderHandle().Valid() || len(texture.pix) != 0 || texture.zeroInitialized {
 		t.Fatal("GPU-only empty texture retained a CPU payload")
 	}
 	if err := render.Install(&textureTestDriver{}); err != nil {
@@ -145,6 +145,9 @@ func TestDisposeReleasesTextureAndCPUShadow(t *testing.T) {
 	t.Cleanup(render.Uninstall)
 
 	texture := CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 8, 8)))
+	if !texture.RenderHandle().Valid() {
+		t.Fatal("initial texture upload failed")
+	}
 	if err := texture.Dispose(); err != nil {
 		t.Fatalf("dispose texture: %v", err)
 	}
@@ -212,8 +215,12 @@ func TestCreateTextureFromExternalSurface(t *testing.T) {
 	if driver.externalDescriptor.Handle != 17 {
 		t.Fatalf("external handle = %d", driver.externalDescriptor.Handle)
 	}
+	content, geometry := texture.ContentRevision(), texture.GeometryRevision()
 	if err := texture.RefreshExternal(); err != nil {
 		t.Fatal(err)
+	}
+	if texture.ContentRevision() == content || texture.GeometryRevision() != geometry {
+		t.Fatal("external pixel refresh did not preserve geometry revision")
 	}
 	if driver.externalRefreshes != 1 {
 		t.Fatalf("external refreshes = %d, want 1", driver.externalRefreshes)
@@ -237,6 +244,9 @@ func TestUpdateRegionsUsesOneDriverBatch(t *testing.T) {
 	}
 	t.Cleanup(render.Uninstall)
 	texture := CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 8, 8)))
+	if !texture.RenderHandle().Valid() {
+		t.Fatal("initial texture upload failed")
+	}
 
 	texture.UpdateRegions([]TextureRegionUpdate{
 		{X: 0, Y: 0, Width: 2, Height: 2, Pixels: make([]byte, 16)},
@@ -308,6 +318,10 @@ func TestDecodedTextureAddressingReachesDriverBeforeUpload(t *testing.T) {
 	t.Cleanup(render.Uninstall)
 	texture := TextureFromOwnedNRGBA(image.NewNRGBA(image.Rect(0, 0, 2, 2)), TextureOptions{Usage: ResourceUsageGPU, Mipmap: true, WrapU: render.TextureAddressRepeat, WrapV: render.TextureAddressMirror})
 	defer texture.Dispose()
+	if driver.next != 0 || !texture.Valid() {
+		t.Fatal("CPU construction or validation invoked the driver")
+	}
+	texture.RenderHandle()
 	if driver.next != 1 || driver.descriptor.WrapU != render.TextureAddressRepeat || driver.descriptor.WrapV != render.TextureAddressMirror || driver.descriptor.Filter != render.TextureFilterLinearMipmapLinear {
 		t.Fatalf("sampler upload: count=%d descriptor=%+v", driver.next, driver.descriptor)
 	}

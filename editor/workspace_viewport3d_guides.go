@@ -43,7 +43,7 @@ func (a *ModuleEditor) drawPreview3DDepthGrid(c *graphics.Canvas2D, projection *
 	if v.gridTexture == nil {
 		return nil
 	}
-	handle := v.gridTexture.RenderHandle()
+	handle := v.gridTexture.RenderHandleFor(c.Device())
 	if err := v.gridTexture.UploadError(); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (a *ModuleEditor) drawPreview3DAxesDepth(c *graphics.Canvas2D, projection *
 	if texture == nil {
 		return nil
 	}
-	textureHandle := texture.RenderHandle()
+	textureHandle := texture.RenderHandleFor(c.Device())
 	if err := texture.UploadError(); err != nil {
 		return fmt.Errorf("editor: prepare 3D axis texture: %w", err)
 	}

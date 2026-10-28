@@ -11,6 +11,7 @@ const (
 	filterChanged
 	filterWith
 	filterWithout
+	filterUnscoped
 )
 
 type rowFilter struct {
@@ -77,6 +78,13 @@ type withOption[T any] struct{}
 type withoutOption[T any] struct{}
 type addedOption[T any] struct{ context *SystemContext }
 type changedOption[T any] struct{ context *SystemContext }
+type unscopedOption struct{}
+
+func (unscopedOption) resolve(*World) rowFilter { return rowFilter{kind: filterUnscoped} }
+
+// Unscoped visits matching tables independently of the current execution scope.
+// It is intended for world-owned indexes that also include suspended scenes.
+func Unscoped() QueryOption { return unscopedOption{} }
 
 func (withOption[T]) resolve(world *World) rowFilter {
 	return rowFilter{component: registerComponent[T](world), kind: filterWith}
@@ -126,6 +134,7 @@ type queryView struct {
 	filters  queryFilters
 	entities []Entity
 	limited  bool
+	unscoped bool
 }
 
 func (v queryView) begin(callback bool) bool {
@@ -165,7 +174,7 @@ type queryCursor struct {
 }
 
 func (v queryView) cursor(callback bool) (queryCursor, bool) {
-	if !v.limited && v.world != nil && v.world.queryScope != nil {
+	if !v.limited && !v.unscoped && v.world != nil && v.world.queryScope != nil {
 		v.entities, v.limited = v.world.queryScope.entities, true
 	}
 	if !v.begin(callback) {
@@ -311,6 +320,10 @@ func buildQuery(world *World, key simpleQueryKey, options []QueryOption) queryVi
 			continue
 		}
 		filter := option.resolve(world)
+		if filter.kind == filterUnscoped {
+			view.unscoped = true
+			continue
+		}
 		if filter.kind == filterWithout {
 			spec.without = maskWith(spec.without, filter.component)
 			continue

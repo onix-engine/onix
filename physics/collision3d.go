@@ -92,7 +92,7 @@ func (world *World3D) buildBroadphase() {
 			for y := minY; y <= maxY; y++ {
 				for x := minX; x <= maxX; x++ {
 					bucket := gridHash3D(x, y, z) & (len(world.bucketHeads) - 1)
-					world.gridEntries = append(world.gridEntries, broadphaseEntry{collider: index, next: world.bucketHeads[bucket]})
+					world.gridEntries = append(world.gridEntries, broadphaseEntry3D{collider: index, next: world.bucketHeads[bucket]})
 					world.bucketHeads[bucket] = len(world.gridEntries) - 1
 				}
 			}

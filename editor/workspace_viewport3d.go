@@ -117,6 +117,7 @@ func (a *ModuleEditor) syncViewport3D() (resultErr error) {
 			return err
 		}
 	}
+	graphics.BindFrame(v.world, graphics.CanvasFor(a.world))
 	if !initialized && v.revision == a.Preview.Revision && v.structure == a.Preview.structure && v.dragVersion == a.canvasDrag.Version {
 		return v.err
 	}
@@ -438,7 +439,7 @@ func (a *ModuleEditor) pickViewport3DTarget(x, y float32) (string, string) {
 }
 
 func (a *ModuleEditor) render(context *ecs.SystemContext) error {
-	c := graphics.CurrentContext()
+	c := graphics.CanvasFor(context.World)
 	if c == nil {
 		return nil
 	}
@@ -450,10 +451,11 @@ func (a *ModuleEditor) render(context *ecs.SystemContext) error {
 	if a.Document == nil || a.dimension != previewDimension3D || v.world == nil || v.err != nil {
 		return nil
 	}
+	graphics.BindFrame(v.world, c)
 	bounds := a.canvasBounds()
 	a.syncViewport3DProjection()
 	projection := ecs.GetRef[scene.Projection](v.world, v.view.camera)
-	ok, err := v.view.ensureTarget(int(bounds.W), int(bounds.H), preview3DRenderScale(a.settings.Viewport3D.Supersample))
+	ok, err := v.view.ensureTarget(c.Device(), int(bounds.W), int(bounds.H), preview3DRenderScale(a.settings.Viewport3D.Supersample))
 	if err != nil || !ok {
 		return err
 	}

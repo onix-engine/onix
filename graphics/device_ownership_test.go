@@ -61,7 +61,7 @@ func TestResourcesKeepResidencyAndDisposeOnTheirDevices(t *testing.T) {
 	}
 }
 
-func TestTextureUpdateCreatesNewResidencyAndUpdatesExistingOne(t *testing.T) {
+func TestTextureUpdateUsesExistingResidenciesAndExplicitUpload(t *testing.T) {
 	firstDriver, secondDriver := &textureTestDriver{}, &textureTestDriver{}
 	first, err := render.NewDevice(firstDriver)
 	if err != nil {
@@ -79,6 +79,10 @@ func TestTextureUpdateCreatesNewResidencyAndUpdatesExistingOne(t *testing.T) {
 	texture.RenderHandle()
 	second.Activate()
 	texture.UpdateRegions([]TextureRegionUpdate{{X: 3, Y: 2, Width: 1, Height: 1, Pixels: []byte{173}}})
+	if secondDriver.next != 0 {
+		t.Fatal("region update implicitly uploaded to active device")
+	}
+	texture.RenderHandleFor(second)
 	if firstDriver.updateCalls != 1 || secondDriver.updateCalls != 0 || secondDriver.next != 1 {
 		t.Fatal("update lost an existing residency or redundantly patched the newly uploaded one")
 	}
@@ -132,6 +136,9 @@ func TestGPUOnlyAndExternalTexturesStayOnOwningDevice(t *testing.T) {
 	defer second.Destroy()
 	first.Activate()
 	texture := CreateTextureByImageWithUsage(image.NewRGBA(image.Rect(0, 0, 2, 2)), false, ResourceUsageGPU)
+	if !texture.RenderHandle().Valid() {
+		t.Fatal("initial texture upload failed")
+	}
 	external, err := CreateTextureFromExternal(render.ExternalTextureDescriptor{Kind: render.ExternalTextureD3D11, Handle: 1, Width: 2, Height: 2, Format: render.ExternalTextureRGBA8})
 	if err != nil {
 		t.Fatal(err)

@@ -34,6 +34,9 @@ type bodyState struct {
 	userData        uint64
 	managed         bool
 	touched         uint64
+	sleeping        bool
+	quietTime       float64
+	wakeContacts    bool
 }
 
 func (body *bodyState) updateInverseMass() {
@@ -69,17 +72,6 @@ type colliderState struct {
 	collisionType uint32
 	managed       bool
 	touched       uint64
-}
-
-type broadphaseEntry struct {
-	collider int
-	next     int
-	x, y     int32
-}
-
-type cellRange struct {
-	minX, minY int32
-	large      bool
 }
 
 type colliderPair struct {
@@ -134,6 +126,8 @@ type World struct {
 	Damping       float64
 	CollisionSlop float64
 	CellSize      float64
+	Sleep         SleepConfig
+	sleep         sleepState
 
 	bodies        []bodyState
 	freeBodies    []uint32
@@ -141,10 +135,13 @@ type World struct {
 	freeColliders []uint32
 
 	aabbs            []aabb
-	cells            []cellRange
-	bucketHeads      []int
-	gridEntries      []broadphaseEntry
+	proxies          []broadphaseProxy
+	staticGrid       spatialGrid
+	dynamicGrid      spatialGrid
+	gridCellSize     float64
+	stats            StepStatistics
 	large            []int
+	staticSensors    []int
 	pairs            []colliderPair
 	contacts         []manifold
 	velocityContacts []manifold
@@ -170,8 +167,7 @@ func (world *World) Reserve(bodyCount, colliderCount int) {
 	world.colliders = growCapacity(world.colliders, colliderCount)
 	world.freeColliders = growCapacity(world.freeColliders, colliderCount)
 	world.aabbs = growCapacity(world.aabbs, colliderCount)
-	world.cells = growCapacity(world.cells, colliderCount)
-	world.gridEntries = growCapacity(world.gridEntries, colliderCount*4)
+	world.proxies = growCapacity(world.proxies, colliderCount)
 	world.large = growCapacity(world.large, max(colliderCount/8, 8))
 	world.pairs = growCapacity(world.pairs, colliderCount*8)
 	world.contacts = growCapacity(world.contacts, colliderCount*4)
@@ -179,7 +175,8 @@ func (world *World) Reserve(bodyCount, colliderCount int) {
 	world.active = growCapacity(world.active, colliderCount*4)
 	world.nextActive = growCapacity(world.nextActive, colliderCount*4)
 	world.events = growCapacity(world.events, colliderCount*4)
-	world.ensureBuckets(colliderCount)
+	world.staticGrid.reserve(colliderCount)
+	world.dynamicGrid.reserve(colliderCount)
 }
 
 func growCapacity[T any](values []T, capacity int) []T {
@@ -295,6 +292,8 @@ func RemoveCollider[S Shape2D](world *World, collider ColliderHandle[S]) bool {
 
 func (world *World) removeColliderIndex(index uint32) {
 	state := &world.colliders[index]
+	body := &world.bodies[state.bodyIndex]
+	Body{world: world, id: makeBodyID(state.bodyIndex, body.generation)}.Wake()
 	state.alive = false
 	state.generation++
 	if state.generation == 0 {
@@ -321,9 +320,12 @@ func (world *World) Step(delta float64) {
 	if world == nil || delta <= 0 || math.IsNaN(delta) || math.IsInf(delta, 0) {
 		return
 	}
+	world.stats = StepStatistics{}
+	world.beginSleep()
 	world.integrateVelocities(delta)
 	world.buildContacts()
 	world.solveContacts(delta)
+	world.finishSleep(delta)
 	world.buildEvents()
 }
 
@@ -335,7 +337,7 @@ func (world *World) integrateVelocities(delta float64) {
 	stepDamping := math.Pow(worldDamping, delta)
 	for index := range world.bodies {
 		body := &world.bodies[index]
-		if !body.alive {
+		if !body.alive || body.sleeping {
 			continue
 		}
 		switch body.bodyType {
@@ -355,7 +357,7 @@ func (world *World) integrateVelocities(delta float64) {
 func (world *World) integratePositions(delta float64) {
 	for index := range world.bodies {
 		body := &world.bodies[index]
-		if !body.alive || body.bodyType == BodyStatic {
+		if !body.alive || body.sleeping || body.bodyType == BodyStatic {
 			continue
 		}
 		body.position = body.position.Add(body.velocity.Mul(delta))
@@ -384,7 +386,7 @@ func (world *World) solveContacts(delta float64) {
 		corrected := false
 		for index := len(world.contacts) - 1; index >= 0; index-- {
 			contact := &world.contacts[index]
-			if !contact.sensor {
+			if !contact.sensor && world.contactAwake(contact) {
 				corrected = world.solvePosition(contact) || corrected
 			}
 		}
@@ -397,7 +399,7 @@ func (world *World) solveContacts(delta float64) {
 	world.buildContacts()
 	for index := len(world.contacts) - 1; index >= 0; index-- {
 		contact := &world.contacts[index]
-		if contact.sensor {
+		if contact.sensor || !world.contactAwake(contact) {
 			continue
 		}
 		bodyA := &world.bodies[world.colliders[contact.pair.a].bodyIndex]
@@ -411,7 +413,7 @@ func (world *World) solveContacts(delta float64) {
 func (world *World) solveVelocities(delta float64, warmStart bool) {
 	for index := range world.contacts {
 		contact := &world.contacts[index]
-		if contact.sensor {
+		if contact.sensor || !world.contactAwake(contact) {
 			continue
 		}
 		bodyA := &world.bodies[world.colliders[contact.pair.a].bodyIndex]
@@ -430,7 +432,7 @@ func (world *World) solveVelocities(delta float64, warmStart bool) {
 	for range max(world.Iterations, 1) {
 		for index := range world.contacts {
 			contact := &world.contacts[index]
-			if contact.sensor {
+			if contact.sensor || !world.contactAwake(contact) {
 				continue
 			}
 			world.solveVelocity(contact)
@@ -452,7 +454,7 @@ func (world *World) restoreContactImpulses(delta float64, warmStart bool) {
 			break
 		}
 		previous := &world.velocityContacts[previousIndex]
-		if contact.sensor || previous.sensor || contact.pair != previous.pair || contact.generations != previous.generations ||
+		if contact.sensor || !world.contactAwake(contact) || previous.sensor || contact.pair != previous.pair || contact.generations != previous.generations ||
 			contact.pointCount != previous.pointCount || contact.normal.Dot(previous.normal) < .99 {
 			continue
 		}
