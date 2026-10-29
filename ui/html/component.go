@@ -1079,8 +1079,8 @@ func renderHTMLComponent(world *ecs.World, entity ecs.Entity, instance *htmlComp
 	instance.Rendering = false
 	instance.Mounted = true
 	if instance.ChildrenPending {
-		reconcileHTMLComponentChildrenVNodes(world, entity, instance)
 		instance.ChildrenPending = false
+		reconcileHTMLComponentChildrenVNodes(world, entity, instance)
 	}
 }
 
@@ -1356,29 +1356,34 @@ func reconcileHTMLComponentChildrenVNodes(world *ecs.World, parentEntity ecs.Ent
 	if world == nil || instance == nil {
 		return
 	}
+	// Mounting or unmounting children can grow or swap-remove the parent's ECS
+	// row. Keep the page and map references instead of reading that row again.
+	page, refs := instance.Page, instance.Refs
+	current, spareValues := instance.Current.ComponentChildren, instance.Next.ComponentChildren
+	active := instance.Current.ComponentChildrenActive
 	for slot, list := range instance.ComponentChildren {
 		if list == nil {
 			continue
 		}
-		slotNode := instance.Refs[slot]
-		next := instance.Current.ComponentChildren[slot]
-		if !instance.Current.ComponentChildrenActive[slot] {
+		slotNode := refs[slot]
+		next := current[slot]
+		if !active[slot] {
 			next = nil
 		}
-		reconcileHTMLComponentChildList(world, parentEntity, instance, slot, slotNode, list, next)
+		reconcileHTMLComponentChildList(world, parentEntity, page, slot, slotNode, list, next)
 		// Keep workspaces only for the currently declared child count. Collapsing
 		// a large list releases its payloads instead of retaining a high-water pool.
-		values := instance.Current.ComponentChildren[slot]
+		values := current[slot]
 		clear(values[:cap(values)][len(next):])
-		spare := instance.Next.ComponentChildren[slot]
+		spare := spareValues[slot]
 		if len(next) < cap(spare) {
 			clear(spare[:cap(spare)][len(next):])
 		}
 	}
 }
 
-func reconcileHTMLComponentChildList(world *ecs.World, parentEntity ecs.Entity, parent *htmlComponentInstance, slot string, slotNode *dom.Node, list *htmlComponentChildList, next []ComponentVNode) {
-	if parent == nil || list == nil || slotNode == nil || slotNode.Type != dom.ElementNode {
+func reconcileHTMLComponentChildList(world *ecs.World, parentEntity, page ecs.Entity, slot string, slotNode *dom.Node, list *htmlComponentChildList, next []ComponentVNode) {
+	if list == nil || slotNode == nil || slotNode.Type != dom.ElementNode {
 		return
 	}
 	if list.Seen == nil {
@@ -1440,7 +1445,7 @@ func reconcileHTMLComponentChildList(world *ecs.World, parentEntity ecs.Entity, 
 		}
 	}
 	if changed {
-		reorderHTMLComponentChildRoots(world, parent.Page, slotNode, list, items)
+		reorderHTMLComponentChildRoots(world, page, slotNode, list, items)
 	}
 	clear(old)
 	list.Items, list.Scratch = items, old[:0]
