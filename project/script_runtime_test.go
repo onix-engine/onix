@@ -51,7 +51,7 @@ func TestGenericScriptsIsolateScenesAndExecuteInRegistryOrder(t *testing.T) {
 	if !slices.Equal(calls, []string{"A:one", "A:two", "B:one", "B:two"}) {
 		t.Fatalf("execution order = %v", calls)
 	}
-	if ecs.GetRef[runtimeScriptA](world, second.MustEntity("other")).Count != 0 {
+	if world.GetRef[runtimeScriptA](second.MustEntity("other")).Count != 0 {
 		t.Fatal("another scene was updated")
 	}
 	calls = calls[:0]
@@ -71,7 +71,7 @@ func TestGenericScriptsIsolateScenesAndExecuteInRegistryOrder(t *testing.T) {
 	if err := first.UpdateScripts(context); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.GetRef[runtimeScriptA](world, first.MustEntity("two")).Count != 1 {
+	if world.GetRef[runtimeScriptA](first.MustEntity("two")).Count != 1 {
 		t.Fatal("rebind retained stale component state")
 	}
 }
@@ -125,7 +125,7 @@ func TestGenericScriptErrorsCleanUpAndStopTraversal(t *testing.T) {
 	if err := scene.SetScriptRegistry(registry); !errors.Is(err, want) {
 		t.Fatalf("install error = %v", err)
 	}
-	if ecs.Has[runtimeScriptA](world, scene.MustEntity("one")) || ecs.Has[runtimeScriptB](world, scene.MustEntity("one")) {
+	if world.Has[runtimeScriptA](scene.MustEntity("one")) || world.Has[runtimeScriptB](scene.MustEntity("one")) {
 		t.Fatal("failed bind retained components")
 	}
 	registry = NewScriptRegistry(
@@ -139,7 +139,7 @@ func TestGenericScriptErrorsCleanUpAndStopTraversal(t *testing.T) {
 	if !errors.Is(err, want) || !strings.Contains(err.Error(), `script "A"`) {
 		t.Fatalf("update error = %v", err)
 	}
-	if ecs.GetRef[runtimeScriptB](world, scene.MustEntity("one")).Count != 0 {
+	if world.GetRef[runtimeScriptB](scene.MustEntity("one")).Count != 0 {
 		t.Fatal("update continued after error")
 	}
 	// An early return must release the query's structural guard.

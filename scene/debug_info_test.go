@@ -15,7 +15,7 @@ import (
 func TestSpawnDebugInfoUsesVisibleDefaults(t *testing.T) {
 	world := ecs.NewWorld()
 	entity := SpawnDebugInfo(world)
-	component, ok := ecs.Get[DebugInfo](world, entity)
+	component, ok := world.Get[DebugInfo](entity)
 	if !ok {
 		t.Fatal("debug info component was not spawned")
 	}
@@ -111,7 +111,7 @@ func TestDebugInfoFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 	if err := ctx.FinishFrame(); err != nil {
 		t.Fatal(err)
 	}
-	state := ecs.Local[debugInfoSystemStateTag, debugInfoSystemState](&context)
+	state := context.Local[debugInfoSystemStateTag, debugInfoSystemState]()
 	if state.atlas != nil {
 		if err := state.atlas.Dispose(); err != nil {
 			t.Fatal(err)

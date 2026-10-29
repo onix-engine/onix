@@ -18,7 +18,7 @@ func BenchmarkMessageReaderInputEvents(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			world := ecs.NewWorld()
 			for i := range 100 {
-				ecs.WriteMessage(world, InputEvent{X: float32(i), Kind: InputEventMove})
+				world.WriteMessage(InputEvent{X: float32(i), Kind: InputEventMove})
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -41,14 +41,14 @@ func BenchmarkMessageReaderInputEvents(b *testing.B) {
 func BenchmarkDispatchInputSamePosition1000(b *testing.B) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	camera := SpawnCamera2D(world)
-	component := ecs.GetMut[Camera](world, camera)
+	component := world.GetMut[Camera](camera)
 	component.UpdateViewport(200, 100)
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		b.Fatal(err)
 	}
-	spawner := ecs.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility](world)
+	spawner := world.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility]()
 	for range 1000 {
 		spawner.Spawn(InputTarget2D{Width: 10, Height: 10}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 	}
@@ -60,7 +60,7 @@ func BenchmarkDispatchInputSamePosition1000(b *testing.B) {
 		if err := dispatchInputEvents2D(context); err != nil {
 			b.Fatal(err)
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	step()
 	b.ReportAllocs()
@@ -73,14 +73,14 @@ func BenchmarkDispatchInputSamePosition1000(b *testing.B) {
 func BenchmarkDispatchInputDrag1000(b *testing.B) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	camera := SpawnCamera2D(world)
-	component := ecs.GetMut[Camera](world, camera)
+	component := world.GetMut[Camera](camera)
 	component.UpdateViewport(200, 100)
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		b.Fatal(err)
 	}
-	spawner := ecs.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility](world)
+	spawner := world.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility]()
 	for range 1000 {
 		spawner.Spawn(InputTarget2D{Width: 20, Height: 20}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 	}
@@ -89,7 +89,7 @@ func BenchmarkDispatchInputDrag1000(b *testing.B) {
 	if err := dispatchInputEvents2D(context); err != nil {
 		b.Fatal(err)
 	}
-	tracker, _ := ecs.GetResource[*inputTracker2D](world)
+	tracker, _ := world.GetResource[*inputTracker2D]()
 	if !tracker.hasActive {
 		b.Fatal("pointer was not captured")
 	}
@@ -101,7 +101,7 @@ func BenchmarkDispatchInputDrag1000(b *testing.B) {
 		if err := dispatchInputEvents2D(context); err != nil {
 			b.Fatal(err)
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	step()
 	step()
@@ -116,7 +116,7 @@ func BenchmarkDispatchInputDrag1000(b *testing.B) {
 func BenchmarkMessageReaderInputEventsSystem(b *testing.B) {
 	world := ecs.NewWorld()
 	for i := range 100 {
-		ecs.WriteMessage(world, InputEvent{X: float32(i), Kind: InputEventMove})
+		world.WriteMessage(InputEvent{X: float32(i), Kind: InputEventMove})
 	}
 	b.ReportAllocs()
 	for b.Loop() {

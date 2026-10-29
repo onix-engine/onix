@@ -46,7 +46,7 @@ func TestScenePreloaderActivatesPreparedScene(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preparedVisibility, ok := ecs.Get[scene.Visibility](world, preparedCaption)
+	preparedVisibility, ok := world.Get[scene.Visibility](preparedCaption)
 	if !ok || preparedVisibility.Visible {
 		t.Fatalf("prepared caption visibility = %#v, want hidden", preparedVisibility)
 	}
@@ -67,7 +67,7 @@ func TestScenePreloaderActivatesPreparedScene(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	visibility, ok := ecs.Get[scene.Visibility](world, caption)
+	visibility, ok := world.Get[scene.Visibility](caption)
 	if !ok || !visibility.Visible {
 		t.Fatalf("prepared caption visibility = %#v, want visible", visibility)
 	}
@@ -119,7 +119,7 @@ func TestScenePreloaderSeparatesWorkerAndBudgetedDeviceUpload(t *testing.T) {
 	device.Activate()
 	w := ecs.NewWorld()
 	request := &scene.RenderRequest{}
-	ecs.InsertResource(w, request)
+	w.InsertResource(request)
 	active, err := bundle.InstantiateEntryScene(w)
 	if err != nil {
 		t.Fatal(err)

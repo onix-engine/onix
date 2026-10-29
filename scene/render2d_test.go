@@ -30,10 +30,10 @@ func TestEntityInSubtree2DResolvesAncestorsWithoutAllocating(t *testing.T) {
 	child := world.Spawn(ecs.NewBundle(0))
 	grandchild := world.Spawn(ecs.NewBundle(0))
 	other := world.Spawn(ecs.NewBundle(0))
-	if err := ecs.Insert(world, child, Parent{Entity: root}); err != nil {
+	if err := world.Insert(child, Parent{Entity: root}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ecs.Insert(world, grandchild, Parent{Entity: child}); err != nil {
+	if err := world.Insert(grandchild, Parent{Entity: child}); err != nil {
 		t.Fatal(err)
 	}
 	if entityInSubtree2D(world, root, root) != true || entityInSubtree2D(world, grandchild, root) != true || entityInSubtree2D(world, other, root) {
@@ -379,19 +379,19 @@ func TestText2DInlineObjectsParticipateInEllipsis(t *testing.T) {
 func TestSyncGlobalTransformSystemPropagatesParentMatrix(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(3)
-	ecs.Put(&parentBundle, NewTransform())
-	ecs.Put(&parentBundle, GlobalTransform{})
-	ecs.Put(&parentBundle, Visibility{Visible: true})
+	parentBundle.Put(NewTransform())
+	parentBundle.Put(GlobalTransform{})
+	parentBundle.Put(Visibility{Visible: true})
 	parent := world.Spawn(parentBundle)
 	childBundle := ecs.NewBundle(4)
 	childTransform := TransformFromXYZ(4, 6, 0)
 	childTransform.Scale = mgl32.Vec3{2, 3, 1}
-	ecs.Put(&childBundle, childTransform)
-	ecs.Put(&childBundle, Parent{Entity: parent})
-	ecs.Put(&childBundle, GlobalTransform{})
-	ecs.Put(&childBundle, Visibility{Visible: true})
+	childBundle.Put(childTransform)
+	childBundle.Put(Parent{Entity: parent})
+	childBundle.Put(GlobalTransform{})
+	childBundle.Put(Visibility{Visible: true})
 	child := world.Spawn(childBundle)
-	if transform := ecs.GetMut[Transform](world, parent); transform != nil {
+	if transform := world.GetMut[Transform](parent); transform != nil {
 		transform.Translation = mgl32.Vec3{10, 20, 0}
 	}
 
@@ -399,7 +399,7 @@ func TestSyncGlobalTransformSystemPropagatesParentMatrix(t *testing.T) {
 		t.Fatalf("sync transforms: %v", err)
 	}
 
-	global, ok := ecs.Get[GlobalTransform](world, child)
+	global, ok := world.Get[GlobalTransform](child)
 	if !ok {
 		t.Fatalf("expected child global transform")
 	}
@@ -587,21 +587,21 @@ func TestCollectRenderItems2DCullsBeforeSorting(t *testing.T) {
 	world := ecs.NewWorld()
 	registerTestRenderers2D(world)
 	cameraEntity := SpawnCamera2D(world)
-	camera := ecs.GetMut[Camera](world, cameraEntity)
+	camera := world.GetMut[Camera](cameraEntity)
 	camera.UpdateViewport(100, 80)
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	for _, x := range []float32{10, 500} {
 		bundle := ecs.NewBundle(3)
-		ecs.Put(&bundle, Sprite2D{
+		bundle.Put(Sprite2D{
 			Shape:  RoundedRectShape2D(graphics.White, 4),
 			Width:  20,
 			Height: 20,
 			Alpha:  1,
 		})
-		ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Translate3D(x, 10, 0)})
-		ecs.Put(&bundle, Visibility{Visible: true})
+		bundle.Put(GlobalTransform{Matrix: mgl32.Translate3D(x, 10, 0)})
+		bundle.Put(Visibility{Visible: true})
 		world.Spawn(bundle)
 	}
 
@@ -633,9 +633,9 @@ func TestRender2DCullsQuadsAtDrawTime(t *testing.T) {
 			{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 20, Alpha: 1},
 		} {
 			bundle := ecs.NewBundle(3)
-			ecs.Put(&bundle, sprite)
-			ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Translate3D(x, 10, 0)})
-			ecs.Put(&bundle, Visibility{Visible: true})
+			bundle.Put(sprite)
+			bundle.Put(UIGlobalTransform{Matrix: mgl32.Translate3D(x, 10, 0)})
+			bundle.Put(Visibility{Visible: true})
 			world.Spawn(bundle)
 		}
 	}
@@ -660,46 +660,46 @@ func TestCollectRenderItems2DSkipsZeroAlphaVisuals(t *testing.T) {
 	for _, bundle := range []ecs.Bundle{
 		func() ecs.Bundle {
 			value := ecs.NewBundle(3)
-			ecs.Put(&value, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 4), Width: 20, Height: 20})
-			ecs.Put(&value, GlobalTransform{Matrix: mgl32.Ident4()})
-			ecs.Put(&value, Visibility{Visible: true})
+			value.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 4), Width: 20, Height: 20})
+			value.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+			value.Put(Visibility{Visible: true})
 			return value
 		}(),
 		func() ecs.Bundle {
 			value := ecs.NewBundle(5)
-			ecs.Put(&value, Tilemap2D{
+			value.Put(Tilemap2D{
 				Texture: texture, Tiles: []int{1},
 				Width: 1, Height: 1, TileWidth: 16, TileHeight: 16, Columns: 1,
 			})
-			ecs.Put(&value, GlobalTransform{Matrix: mgl32.Ident4()})
-			ecs.Put(&value, Visibility{Visible: true})
+			value.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+			value.Put(Visibility{Visible: true})
 			return value
 		}(),
 		func() ecs.Bundle {
 			value := ecs.NewBundle(3)
-			ecs.Put(&value, Sprite2D{Texture: texture, Tint: graphics.ColorRGBA{}, Width: 20, Height: 20, Alpha: 1})
-			ecs.Put(&value, GlobalTransform{Matrix: mgl32.Ident4()})
-			ecs.Put(&value, Visibility{Visible: true})
+			value.Put(Sprite2D{Texture: texture, Tint: graphics.ColorRGBA{}, Width: 20, Height: 20, Alpha: 1})
+			value.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+			value.Put(Visibility{Visible: true})
 			return value
 		}(),
 		func() ecs.Bundle {
 			value := ecs.NewBundle(4)
-			ecs.Put(&value, Sprite2D{})
-			ecs.Put(&value, SpriteLayers2D{Layers: []SpriteLayer2D{{
+			value.Put(Sprite2D{})
+			value.Put(SpriteLayers2D{Layers: []SpriteLayer2D{{
 				Sprite: Sprite2DFromTexture(texture), Visible: true,
 			}}})
-			ecs.Put(&value, GlobalTransform{Matrix: mgl32.Ident4()})
-			ecs.Put(&value, Visibility{Visible: true})
+			value.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+			value.Put(Visibility{Visible: true})
 			return value
 		}(),
 		func() ecs.Bundle {
 			value := ecs.NewBundle(6)
-			ecs.Put(&value, UIGlobalTransform{Matrix: mgl32.Ident4()})
-			ecs.Put(&value, Visibility{Visible: true})
-			ecs.Put(&value, Size2D{Width: 20, Height: 20})
-			ecs.Put(&value, UIBackground2D{Shape: RoundedRectShape2D(graphics.White, 4)})
-			ecs.Put(&value, UIImage2D{Texture: texture, Tint: graphics.White})
-			ecs.Put(&value, UIBorder2D{Shape: OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, graphics.White, 4, 1)})
+			value.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+			value.Put(Visibility{Visible: true})
+			value.Put(Size2D{Width: 20, Height: 20})
+			value.Put(UIBackground2D{Shape: RoundedRectShape2D(graphics.White, 4)})
+			value.Put(UIImage2D{Texture: texture, Tint: graphics.White})
+			value.Put(UIBorder2D{Shape: OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, graphics.White, 4, 1)})
 			return value
 		}(),
 	} {
@@ -732,22 +732,22 @@ func TestExtractRender2DCopiesSimulationComponents(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(world)
 	bundle := ecs.NewBundle(3)
-	ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Translate3D(5, 7, 0)})
-	ecs.Put(&bundle, Visibility{Visible: true})
+	bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
+	bundle.Put(GlobalTransform{Matrix: mgl32.Translate3D(5, 7, 0)})
+	bundle.Put(Visibility{Visible: true})
 	entity := world.Spawn(bundle)
 
 	if err := ExtractRender2DSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*RenderWorld](world)
+	state, _ := world.GetResource[*RenderWorld]()
 	if len(state.Items2D) != 1 {
 		t.Fatalf("extracted items = %d, want 1", len(state.Items2D))
 	}
 	item := state.Items2D[0]
-	component := ecs.GetMut[Sprite2D](world, entity)
+	component := world.GetMut[Sprite2D](entity)
 	component.Width = 99
-	global := ecs.GetMut[GlobalTransform](world, entity)
+	global := world.GetMut[GlobalTransform](entity)
 	global.Matrix = mgl32.Translate3D(50, 70, 0)
 
 	if item.sprite == component {
@@ -765,14 +765,14 @@ func TestUIVisualLayersExtractBackgroundImageAndBorder(t *testing.T) {
 	slice := NineSlice2D{Left: 1, Right: 1, Top: 1, Bottom: 1}
 	tint := graphics.ColorFromRGBA(12, 34, 56, 255)
 	bundle := ecs.NewBundle(8)
-	ecs.Put(&bundle, NewUITransform())
-	ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, Size2D{Width: 40, Height: 20})
-	ecs.Put(&bundle, NewUIBackground2D(RoundedRectShape2D(graphics.Black, 4)))
-	ecs.Put(&bundle, UIImage2D{Texture: texture, Slice: &slice, Mode: UIImageSliced, Tint: tint, Alpha: 0.35})
-	ecs.Put(&bundle, NewUIBorder2D(OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, graphics.White, 4, 2)))
+	bundle.Put(NewUITransform())
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(Size2D{Width: 40, Height: 20})
+	bundle.Put(NewUIBackground2D(RoundedRectShape2D(graphics.Black, 4)))
+	bundle.Put(UIImage2D{Texture: texture, Slice: &slice, Mode: UIImageSliced, Tint: tint, Alpha: 0.35})
+	bundle.Put(NewUIBorder2D(OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, graphics.White, 4, 2)))
 	entity := world.Spawn(bundle)
 
 	items := collectRenderItems2D(graphics.Canvas2DContext(100, 80), world, false)
@@ -797,11 +797,11 @@ func TestUIImageAutoFitsInsideNode(t *testing.T) {
 	texture := graphics.CreateTextureByColor(graphics.White)
 	texture.SourceWidth, texture.SourceHeight = 20, 10
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, Size2D{Width: 30, Height: 30})
-	ecs.Put(&bundle, NewUIImage2D(texture))
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(Size2D{Width: 30, Height: 30})
+	bundle.Put(NewUIImage2D(texture))
 	world.Spawn(bundle)
 
 	items := collectRenderItems2D(graphics.Canvas2DContext(100, 80), world, false)
@@ -827,13 +827,13 @@ func TestRegisteredMaterial2DIsExtractedWithSprite(t *testing.T) {
 	}
 	world := ecs.NewWorld()
 	RegisterSpriteRenderer2D(world)
-	RegisterMaterial2D[customMaterial2DTest](world)
+	RenderWorldFor(world).RegisterMaterial2D[customMaterial2DTest]()
 	material := customMaterial2DTest{shader: shader, value: 0.65}
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, Sprite2DFromTexture(graphics.CreateTextureByColor(graphics.White)))
-	ecs.Put(&bundle, MeshMaterial2D[customMaterial2DTest]{Material: &material})
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
+	bundle.Put(Sprite2DFromTexture(graphics.CreateTextureByColor(graphics.White)))
+	bundle.Put(MeshMaterial2D[customMaterial2DTest]{Material: &material})
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
 	world.Spawn(bundle)
 
 	items := collectRenderItems2D(graphics.Canvas2DContext(100, 80), world, false)
@@ -852,17 +852,17 @@ func TestRender2DCoordinateSpaceComesFromTransformType(t *testing.T) {
 	for _, ui := range []bool{false, true} {
 		bundle := ecs.NewBundle(4)
 		if ui {
-			ecs.Put(&bundle, UIStackIndex(-100))
+			bundle.Put(UIStackIndex(-100))
 		} else {
-			ecs.Put(&bundle, RenderOrder2D(100))
+			bundle.Put(RenderOrder2D(100))
 		}
-		ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
+		bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
 		if ui {
-			ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
+			bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
 		} else {
-			ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
+			bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
 		}
-		ecs.Put(&bundle, Visibility{Visible: true})
+		bundle.Put(Visibility{Visible: true})
 		world.Spawn(bundle)
 	}
 	items := collectRenderItems2D(ctx, world, false)
@@ -884,7 +884,7 @@ func TestCollectRenderItemsExpandsSpriteLayers(t *testing.T) {
 		{ID: "back", Order: 1, Sprite: Sprite2DFromTexture(first), Visible: true},
 		{ID: "front", Order: 2, Sprite: Sprite2DFromTexture(second), Visible: true},
 	}}
-	spawner := ecs.NewSpawner5[Sprite2D, SpriteLayers2D, GlobalTransform, Visibility, RenderOrder2D](world)
+	spawner := world.NewSpawner5[Sprite2D, SpriteLayers2D, GlobalTransform, Visibility, RenderOrder2D]()
 	spawner.Spawn(NewSprite2D(), layers, GlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, 10)
 	items := collectRenderItems2D(graphics.Canvas2DContext(64, 64), world, false)
 	if len(items) != 2 || items[0].sortIndex != 11 || items[1].sortIndex != 12 || items[0].texture != first || items[1].texture != second {
@@ -900,7 +900,7 @@ func TestCollectRenderItemsExpandsUISpriteLayers(t *testing.T) {
 	layers := SpriteLayers2D{Layers: []SpriteLayer2D{{
 		ID: "layer", Order: 3, Sprite: Sprite2DFromTexture(texture), Visible: true,
 	}}}
-	spawner := ecs.NewSpawner5[Sprite2D, SpriteLayers2D, UIGlobalTransform, Visibility, UIStackIndex](world)
+	spawner := world.NewSpawner5[Sprite2D, SpriteLayers2D, UIGlobalTransform, Visibility, UIStackIndex]()
 	spawner.Spawn(NewSprite2D(), layers, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, 8)
 	items := collectRenderItems2D(graphics.Canvas2DContext(64, 64), world, false)
 	if len(items) != 1 || !items[0].ui || items[0].sortIndex != 11 || items[0].texture != texture {
@@ -933,12 +933,12 @@ func TestVisibleRenderItems2DRespectsLayersPipelineAndUITarget(t *testing.T) {
 func TestUIRenderConfigurationInheritsFromParent(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(3)
-	ecs.Put(&parentBundle, RenderLayer(130))
-	ecs.Put(&parentBundle, UITargetCamera{Entity: 42})
-	ecs.Put(&parentBundle, UIStackIndex(17))
+	parentBundle.Put(RenderLayer(130))
+	parentBundle.Put(UITargetCamera{Entity: 42})
+	parentBundle.Put(UIStackIndex(17))
 	parent := world.Spawn(parentBundle)
 	childBundle := ecs.NewBundle(1)
-	ecs.Put(&childBundle, Parent{Entity: parent})
+	childBundle.Put(Parent{Entity: parent})
 	child := world.Spawn(childBundle)
 	cache := frameRenderHierarchy2DCache(world)
 	info := renderEntityInfo2D(world, child, true, 0, &cache)
@@ -964,14 +964,14 @@ func BenchmarkCollectRenderItems2D10000(b *testing.B) {
 		x := float32(index % 200 * 16)
 		y := float32(index / 200 * 16)
 		bundle := ecs.NewBundle(3)
-		ecs.Put(&bundle, Sprite2D{
+		bundle.Put(Sprite2D{
 			Shape:  RoundedRectShape2D(graphics.White, 2),
 			Width:  12,
 			Height: 12,
 			Alpha:  1,
 		})
-		ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Translate3D(x, y, 0)})
-		ecs.Put(&bundle, Visibility{Visible: true})
+		bundle.Put(GlobalTransform{Matrix: mgl32.Translate3D(x, y, 0)})
+		bundle.Put(Visibility{Visible: true})
 		world.Spawn(bundle)
 	}
 	context := graphics.Canvas2DContext(1280, 720)
@@ -1028,11 +1028,11 @@ func TestCollectRenderItemsIncludesMountedTilemap(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterTilemapRenderer2D(world)
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, NewTransform())
-	ecs.Put(&bundle, GlobalTransform{})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorCenter)
-	ecs.Put(&bundle, Tilemap2D{
+	bundle.Put(NewTransform())
+	bundle.Put(GlobalTransform{})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorCenter)
+	bundle.Put(Tilemap2D{
 		Texture: graphics.CreateTextureByColor(graphics.White), Tiles: []int{1},
 		Width: 1, Height: 1, TileWidth: 16, TileHeight: 16, Columns: 1, Alpha: 1,
 	})
@@ -1254,9 +1254,9 @@ func TestDrawRenderPhase2DBatchesUsesWorldAndCameraViews(t *testing.T) {
 	ctx := graphics.Canvas2DContext(320, 180)
 	world := ecs.NewWorld()
 	cameraEntity := SpawnCamera2D(world)
-	camera := ecs.GetMut[Camera](world, cameraEntity)
+	camera := world.GetMut[Camera](cameraEntity)
 	camera.UpdateViewport(320, 180)
-	transform := ecs.GetMut[Transform](world, cameraEntity)
+	transform := world.GetMut[Transform](cameraEntity)
 	transform.Translation = mgl32.Vec3{24, 36, 0}
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1268,7 +1268,7 @@ func TestDrawRenderPhase2DBatchesUsesWorldAndCameraViews(t *testing.T) {
 	assertMat4Near(t, ctx.ViewMatrix(), view)
 
 	drawRenderPhase2D(ctx, world, items, DrawViews2D{World: view}, true, nil, func(renderBatch2D, renderViewport2D, bool) {})
-	globalTransform, _ := ecs.Get[GlobalTransform](world, cameraEntity)
+	globalTransform, _ := world.Get[GlobalTransform](cameraEntity)
 	assertMat4Near(t, ctx.ViewMatrix(), globalTransform.Matrix.Inv())
 }
 
@@ -1286,33 +1286,33 @@ func TestBounds2DUsesBevyCenterAndTopLeftAnchors(t *testing.T) {
 func TestUIGlobalTransformPropagatesIntersectsAndExemptsClip(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(3)
-	ecs.Put(&parentBundle, UITransformFromXY(10, 20))
-	ecs.Put(&parentBundle, Visibility{Visible: true})
-	ecs.Put(&parentBundle, ClipRect2D{Width: 100, Height: 80})
+	parentBundle.Put(UITransformFromXY(10, 20))
+	parentBundle.Put(Visibility{Visible: true})
+	parentBundle.Put(ClipRect2D{Width: 100, Height: 80})
 	parent := world.Spawn(parentBundle)
 	childBundle := ecs.NewBundle(4)
-	ecs.Put(&childBundle, UITransformFromXY(30, 10))
-	ecs.Put(&childBundle, Parent{Entity: parent})
-	ecs.Put(&childBundle, Visibility{Visible: true})
-	ecs.Put(&childBundle, ClipRect2D{Width: 50, Height: 90})
+	childBundle.Put(UITransformFromXY(30, 10))
+	childBundle.Put(Parent{Entity: parent})
+	childBundle.Put(Visibility{Visible: true})
+	childBundle.Put(ClipRect2D{Width: 50, Height: 90})
 	child := world.Spawn(childBundle)
 	leafBundle := ecs.NewBundle(3)
-	ecs.Put(&leafBundle, NewUITransform())
-	ecs.Put(&leafBundle, Parent{Entity: child})
-	ecs.Put(&leafBundle, Visibility{Visible: true})
+	leafBundle.Put(NewUITransform())
+	leafBundle.Put(Parent{Entity: child})
+	leafBundle.Put(Visibility{Visible: true})
 	leaf := world.Spawn(leafBundle)
 	exemptBundle := ecs.NewBundle(4)
-	ecs.Put(&exemptBundle, NewUITransform())
-	ecs.Put(&exemptBundle, Parent{Entity: parent})
-	ecs.Put(&exemptBundle, Visibility{Visible: true})
-	ecs.Put(&exemptBundle, ClipExempt2D{})
+	exemptBundle.Put(NewUITransform())
+	exemptBundle.Put(Parent{Entity: parent})
+	exemptBundle.Put(Visibility{Visible: true})
+	exemptBundle.Put(ClipExempt2D{})
 	exempt := world.Spawn(exemptBundle)
 
 	if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatalf("sync transforms: %v", err)
 	}
 
-	leafTransform, ok := ecs.Get[UIGlobalTransform](world, leaf)
+	leafTransform, ok := world.Get[UIGlobalTransform](leaf)
 	if !ok {
 		t.Fatal("expected leaf global transform")
 	}
@@ -1320,7 +1320,7 @@ func TestUIGlobalTransformPropagatesIntersectsAndExemptsClip(t *testing.T) {
 	if !clip.valid || clip.minX != 40 || clip.minY != 30 || clip.maxX != 90 || clip.maxY != 100 {
 		t.Fatalf("unexpected inherited clip: %#v", clip)
 	}
-	exemptTransform, ok := ecs.Get[UIGlobalTransform](world, exempt)
+	exemptTransform, ok := world.Get[UIGlobalTransform](exempt)
 	if !ok {
 		t.Fatal("expected exempt global transform")
 	}

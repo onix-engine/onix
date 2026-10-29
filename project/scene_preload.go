@@ -51,7 +51,7 @@ func (b *Bundle) BeginPreloadScene(world *ecs.World, id SceneID) (*ScenePreloade
 		plan:     plan,
 		entities: make([]ecs.Entity, len(plan.Nodes)),
 	}
-	request, _ := ecs.GetResource[*sceneapi.RenderRequest](world)
+	request, _ := world.GetResource[*sceneapi.RenderRequest]()
 	p.wake = request.Request
 	p.cpu = resource.BeginPreparation(func(ctx context.Context) ([]ecs.Bundle, error) {
 		values := make([]ecs.Bundle, len(plan.Nodes))
@@ -163,13 +163,13 @@ func (p *ScenePreloader) advanceOne() error {
 		}
 		p.components[p.index] = ecs.Bundle{}
 		entity := p.entities[p.index]
-		if err := ecs.Insert(p.scene.World, entity, sceneapi.Activity{Active: false}); err != nil {
+		if err := p.scene.World.Insert(entity, sceneapi.Activity{Active: false}); err != nil {
 			return err
 		}
-		if visibility := ecs.GetMut[sceneapi.Visibility](p.scene.World, entity); visibility != nil {
+		if visibility := p.scene.World.GetMut[sceneapi.Visibility](entity); visibility != nil {
 			visibility.Visible = false
 		}
-		if camera := ecs.GetMut[sceneapi.Camera](p.scene.World, entity); camera != nil {
+		if camera := p.scene.World.GetMut[sceneapi.Camera](entity); camera != nil {
 			camera.Active = false
 		}
 		p.index++
@@ -194,7 +194,7 @@ func (p *ScenePreloader) advanceOne() error {
 			return nil
 		}
 		entity := p.entities[p.index]
-		if text := ecs.GetMut[sceneapi.Text2D](p.scene.World, entity); text != nil {
+		if text := p.scene.World.GetMut[sceneapi.Text2D](entity); text != nil {
 			sceneapi.PrepareText2D(text)
 		}
 		QueueEntityUploads(&p.uploads, p.scene.World, entity)
@@ -216,12 +216,12 @@ func (p *ScenePreloader) Activate(current *SceneInstance) error {
 	}
 	registry := current.scriptRegistry
 	for index, entity := range p.entities {
-		ecs.Remove[sceneapi.Activity](p.scene.World, entity)
+		p.scene.World.Remove[sceneapi.Activity](entity)
 		node := p.plan.Nodes[index]
-		if visibility := ecs.GetMut[sceneapi.Visibility](p.scene.World, entity); visibility != nil {
+		if visibility := p.scene.World.GetMut[sceneapi.Visibility](entity); visibility != nil {
 			visibility.Visible = node.Visible
 		}
-		if camera := ecs.GetMut[sceneapi.Camera](p.scene.World, entity); camera != nil {
+		if camera := p.scene.World.GetMut[sceneapi.Camera](entity); camera != nil {
 			camera.Active = node.Camera.Active
 		}
 	}

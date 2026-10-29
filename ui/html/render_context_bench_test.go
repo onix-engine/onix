@@ -13,16 +13,16 @@ func BenchmarkHTMLRenderContext(b *testing.B) {
 	}
 	world := ecs.NewWorld()
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, New(`<main></main>`))
+	bundle.Put(New(`<main></main>`))
 	owner := world.Spawn(bundle)
-	entity, err := MountComponent(world, owner, definition, 42, 0, 1)
+	entity, err := definition.MountComponent(world, owner, 42, 0, 1)
 	if err != nil {
 		b.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		b.Fatal(err)
 	}
-	instance := ecs.GetMut[htmlComponentInstance](world, entity)
+	instance := world.GetMut[htmlComponentInstance](entity)
 	definition.runtime.render(world, entity, instance)
 	b.ReportAllocs()
 	b.ResetTimer()

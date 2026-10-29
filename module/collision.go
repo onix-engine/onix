@@ -30,17 +30,17 @@ type collisionEmitter[T any] struct {
 
 func (r *Runtime) bindCollision(c *Context, entity ecs.Entity, element, port string, threeD bool) error {
 	if threeD {
-		emit, err := BindEmitter[Collision3D](c, port)
+		emit, err := c.BindEmitter[Collision3D](port)
 		if err != nil {
 			return err
 		}
-		return ecs.Insert(r.world, entity, collisionEmitter[Collision3D]{emit, element})
+		return r.world.Insert(entity, collisionEmitter[Collision3D]{emit, element})
 	}
-	emit, err := BindEmitter[Collision2D](c, port)
+	emit, err := c.BindEmitter[Collision2D](port)
 	if err != nil {
 		return err
 	}
-	return ecs.Insert(r.world, entity, collisionEmitter[Collision2D]{emit, element})
+	return r.world.Insert(entity, collisionEmitter[Collision2D]{emit, element})
 }
 
 // PublishCollisions runs after physics. It queues the next module batch, so a
@@ -54,14 +54,14 @@ func (r *Runtime) PublishCollisions() error {
 	}
 	var result error
 	for event := range r.collisions2D.All(r.world) {
-		binding := ecs.GetRef[collisionEmitter[Collision2D]](r.world, event.Entity)
+		binding := r.world.GetRef[collisionEmitter[Collision2D]](event.Entity)
 		if binding == nil || !collisionSourceActive(binding.emit.context) {
 			continue
 		}
 		result = joinError(result, binding.emit.Emit(Collision2D{Element: binding.element, Phase: event.Phase, Type: event.CollisionType, OtherType: event.OtherType, Normal: [2]float32{float32(event.Normal.X), float32(event.Normal.Y)}, Point: [2]float32{float32(event.Point.X), float32(event.Point.Y)}, Penetration: float32(event.Penetration)}))
 	}
 	for event := range r.collisions3D.All(r.world) {
-		binding := ecs.GetRef[collisionEmitter[Collision3D]](r.world, event.Entity)
+		binding := r.world.GetRef[collisionEmitter[Collision3D]](event.Entity)
 		if binding == nil || !collisionSourceActive(binding.emit.context) {
 			continue
 		}

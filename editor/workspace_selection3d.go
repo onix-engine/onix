@@ -3,7 +3,6 @@ package editor
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/scene/render3d"
@@ -11,7 +10,7 @@ import (
 )
 
 func (v *workspaceViewport3D) measurePart(part *workspace3DPart) {
-	mesh := ecs.GetRef[render3d.Mesh](v.world, part.entity)
+	mesh := v.world.GetRef[render3d.Mesh](part.entity)
 	if mesh == nil || mesh.Mesh == nil {
 		return
 	}
@@ -30,7 +29,7 @@ func (a *ModuleEditor) viewport3DSelectionBounds(index int) (rect, bool) {
 
 func (a *ModuleEditor) viewport3DSelectionGeometry(index int) (rect, bool, bool) {
 	v, canvas := &a.viewport3D, a.canvasBounds()
-	projection, _ := ecs.Get[scene.Projection](v.world, v.view.camera)
+	projection, _ := v.world.Get[scene.Projection](v.view.camera)
 	camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
 	clipFromWorld := projection.Matrix(canvas.W, canvas.H).Mul4(camera.Inv())
 	var bounds rect
@@ -65,8 +64,8 @@ func (a *ModuleEditor) viewport3DSelectionGeometry(index int) (rect, bool, bool)
 			if !part.selected || part.entity == 0 {
 				continue
 			}
-			mesh := ecs.GetRef[render3d.Mesh](v.world, part.entity)
-			visible := ecs.GetRef[scene.Visibility](v.world, part.entity)
+			mesh := v.world.GetRef[render3d.Mesh](part.entity)
+			visible := v.world.GetRef[scene.Visibility](part.entity)
 			if visible == nil || !visible.Visible {
 				continue
 			}
@@ -84,7 +83,7 @@ func (a *ModuleEditor) viewport3DSelectionGeometry(index int) (rect, bool, bool)
 				continue
 			}
 			hasMesh = true
-			matrix := clipFromWorld.Mul4(ecs.GetRef[scene.GlobalTransform](v.world, part.entity).Matrix)
+			matrix := clipFromWorld.Mul4(v.world.GetRef[scene.GlobalTransform](part.entity).Matrix)
 			for corner := range 8 {
 				point := part.low.Vec4(1)
 				for axis := range 3 {

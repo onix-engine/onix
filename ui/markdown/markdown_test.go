@@ -19,7 +19,7 @@ func TestMarkdownConvertsAndRendersThroughHTML(t *testing.T) {
 	value := "# Heading\n\n**bold** and [docs](https://example.com).\n\n- one\n- two\n\n```go\nfmt.Println(1)\n```\n\n| Name | Value |\n| --- | ---: |\n| A | 10 |"
 	entity := SpawnMarkdown(world, MarkdownOptions{Width: 320, Value: value, PassThrough: true})
 
-	html, ok := ecs.Get[htmlui.Surface](world, entity)
+	html, ok := world.Get[htmlui.Surface](entity)
 	if !ok {
 		t.Fatal("Markdown entity has no HTML component")
 	}
@@ -70,7 +70,7 @@ func TestMarkdownCodeBlockRendersHighlightedText(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	html, ok := ecs.Get[htmlui.Surface](world, owner)
+	html, ok := world.Get[htmlui.Surface](owner)
 	if !ok {
 		t.Fatal("Markdown entity has no HTML component")
 	}
@@ -91,10 +91,10 @@ func TestMarkdownCodeBlockRendersHighlightedText(t *testing.T) {
 	}
 
 	var rendered strings.Builder
-	for entity, access := range ecs.Query[scene.Text2D](world).All {
+	for entity, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
-		parent, parentOK := ecs.Get[scene.Parent](world, entity)
+		parent, parentOK := world.Get[scene.Parent](entity)
 		if parentOK && parent.Entity == owner {
 			rendered.WriteString(text.Value)
 		}
@@ -119,7 +119,7 @@ func TestMarkdownCodeBlockKeepsIndentedLinesTogether(t *testing.T) {
 		x, y  float32
 	}
 	fragments := make([]fragment, 0, 16)
-	for _, access := range ecs.Query3[scene.Parent, scene.Text2D, scene.UITransform](world).All {
+	for _, access := range world.Query3[scene.Parent, scene.Text2D, scene.UITransform]().All {
 		parent := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
@@ -180,10 +180,10 @@ func TestMarkdownCodeBlockRendersUnhighlightedText(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rendered strings.Builder
-	for entity, access := range ecs.Query[scene.Text2D](world).All {
+	for entity, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
-		parent, parentOK := ecs.Get[scene.Parent](world, entity)
+		parent, parentOK := world.Get[scene.Parent](entity)
 		if parentOK && parent.Entity == owner {
 			rendered.WriteString(text.Value)
 		}
@@ -203,17 +203,17 @@ func TestMarkdownSyncConvertsDirectComponentChangesBeforeHTML(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	value := ecs.GetMut[Markdown](world, entity)
+	value := world.GetMut[Markdown](entity)
 	value.Value = "# After"
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	html, ok := ecs.Get[htmlui.Surface](world, entity)
+	html, ok := world.Get[htmlui.Surface](entity)
 	if !ok || !strings.Contains(html.Value, "<h1 id=\"after\">After</h1>") {
 		t.Fatalf("direct Markdown update produced %#v", html)
 	}
 	found := false
-	for _, access := range ecs.Query[scene.Text2D](world).All {
+	for _, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
 		found = found || text.Value == "After"
@@ -233,7 +233,7 @@ func TestMarkdownStyleBecomesHTMLCSS(t *testing.T) {
 	style.Heading = graphics.ColorFromRGB(12, 34, 56)
 	style.CodeBackground = graphics.ColorFromRGB(65, 43, 21)
 	entity := SpawnMarkdown(world, MarkdownOptions{Width: 200, Value: "# Styled", Style: &style})
-	html, _ := ecs.Get[htmlui.Surface](world, entity)
+	html, _ := world.Get[htmlui.Surface](entity)
 	if html.Font != style.Font || !strings.Contains(html.CSS, style.Heading.String()) || !strings.Contains(html.CSS, style.CodeBackground.String()) {
 		t.Fatalf("Markdown style was not forwarded to HTML: %#v", html)
 	}
@@ -245,7 +245,7 @@ func TestMarkdownRendersBoldAndDeletedTextStyles(t *testing.T) {
 	style.Font = notosanssc.NotoSansSCRegular
 	style.BoldFont = notosanssc.NotoSansSCBold
 	owner := SpawnMarkdown(world, MarkdownOptions{Width: 240, Value: "**bold** and ~~deleted~~", Style: &style})
-	html, _ := ecs.Get[htmlui.Surface](world, owner)
+	html, _ := world.Get[htmlui.Surface](owner)
 	if html.BoldFont != style.BoldFont || !strings.Contains(html.CSS, "text-decoration-line:line-through") {
 		t.Fatalf("Markdown emphasis styles were not forwarded to HTML: %#v", html)
 	}
@@ -255,11 +255,11 @@ func TestMarkdownRendersBoldAndDeletedTextStyles(t *testing.T) {
 
 	boldFound, lineFound := false, false
 	for _, child := range markdownHTMLChildren(world, owner) {
-		if text, ok := ecs.Get[scene.Text2D](world, child); ok && text.Value == "bold" {
+		if text, ok := world.Get[scene.Text2D](child); ok && text.Value == "bold" {
 			boldFound = text.Font == style.BoldFont
 		}
-		if sprite, ok := ecs.Get[scene.Sprite2D](world, child); ok && sprite.Shape.Fill == style.Strike {
-			size, _ := ecs.Get[scene.Size2D](world, child)
+		if sprite, ok := world.Get[scene.Sprite2D](child); ok && sprite.Shape.Fill == style.Strike {
+			size, _ := world.Get[scene.Size2D](child)
 			lineFound = size.Width > size.Height && size.Height > 0
 		}
 	}
@@ -274,7 +274,7 @@ func TestMarkdownBlockquoteStyleUsesSurfaceBackground(t *testing.T) {
 	style.Font = notosanssc.NotoSansSCRegular
 	style.QuoteBackground = graphics.ColorFromRGB(12, 34, 56)
 	entity := SpawnMarkdown(world, MarkdownOptions{Width: 240, Value: "> quote", Style: &style})
-	html, _ := ecs.Get[htmlui.Surface](world, entity)
+	html, _ := world.Get[htmlui.Surface](entity)
 	if !strings.Contains(html.CSS, "blockquote{") || !strings.Contains(html.CSS, style.QuoteBackground.String()) {
 		t.Fatalf("blockquote background was not forwarded to HTML CSS: %s", html.CSS)
 	}
@@ -332,15 +332,15 @@ $$`
 		width float32
 	}
 	placements := make([]placement, 0, 16)
-	for entity, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for entity, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		parent := access.A.Get()
 		text := access.B.Get()
 
 		if parent.Entity != owner {
 			continue
 		}
-		transform, transformOK := ecs.Get[scene.UITransform](world, entity)
-		size, sizeOK := ecs.Get[scene.Size2D](world, entity)
+		transform, transformOK := world.Get[scene.UITransform](entity)
+		size, sizeOK := world.Get[scene.Size2D](entity)
 		if transformOK && sizeOK {
 			placements = append(placements, placement{
 				value: text.Value,
@@ -381,7 +381,7 @@ $$`
 func TestMarkdownRadicandMovesInsideRootWithoutMovingRadical(t *testing.T) {
 	world := newUIWorld(t)
 	owner := SpawnMarkdown(world, MarkdownOptions{Width: 240, Value: `$\sqrt{x^2+y^2}\leq 3$`})
-	html, _ := ecs.Get[htmlui.Surface](world, owner)
+	html, _ := world.Get[htmlui.Surface](owner)
 	if !strings.Contains(html.Value, `class="math-radicand-body"`) || !strings.Contains(html.CSS, `.math-radicand-body{position:relative;left:-0.32em}`) {
 		t.Fatalf("radicand inner offset is missing: value=%s css=%s", html.Value, html.CSS)
 	}
@@ -393,15 +393,15 @@ func TestMarkdownRadicandMovesInsideRootWithoutMovingRadical(t *testing.T) {
 		x, width float32
 	}
 	positions := make(map[string]placement, 3)
-	for entity, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for entity, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		parent := access.A.Get()
 		text := access.B.Get()
 
 		if parent.Entity != owner || (text.Value != "√" && text.Value != "x" && text.Value != "≤") {
 			continue
 		}
-		transform, transformOK := ecs.Get[scene.UITransform](world, entity)
-		size, sizeOK := ecs.Get[scene.Size2D](world, entity)
+		transform, transformOK := world.Get[scene.UITransform](entity)
+		size, sizeOK := world.Get[scene.Size2D](entity)
 		if transformOK && sizeOK {
 			positions[text.Value] = placement{x: transform.Translation.X.Value, width: size.Width}
 		}
@@ -429,8 +429,8 @@ func TestMarkdownFractionRendersHorizontalBar(t *testing.T) {
 
 	shapeCount, barCount := 0, 0
 	for _, child := range markdownHTMLChildren(world, owner) {
-		sprite, spriteOK := ecs.Get[scene.Sprite2D](world, child)
-		size, sizeOK := ecs.Get[scene.Size2D](world, child)
+		sprite, spriteOK := world.Get[scene.Sprite2D](child)
+		size, sizeOK := world.Get[scene.Size2D](child)
 		if !spriteOK || !sizeOK || sprite.Shape.Kind == 0 {
 			continue
 		}
@@ -459,7 +459,7 @@ func TestMarkdownVisibilityAndOrphanCleanupUseHTMLChildren(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, child := range children {
-		visibility, ok := ecs.Get[scene.Visibility](world, child)
+		visibility, ok := world.Get[scene.Visibility](child)
 		if !ok || visibility.Visible {
 			t.Fatalf("Markdown HTML child %d remained visible", child)
 		}
@@ -494,7 +494,7 @@ func TestMarkdownSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 
 func markdownHTMLChildren(world *ecs.World, owner ecs.Entity) []ecs.Entity {
 	children := make([]ecs.Entity, 0)
-	for entity, access := range ecs.Query[scene.Parent](world).All {
+	for entity, access := range world.Query[scene.Parent]().All {
 		parent := access.Get()
 
 		if parent.Entity == owner {

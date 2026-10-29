@@ -79,7 +79,7 @@ func TestAppStepConsumesWorldRenderRequest(t *testing.T) {
 		t.Fatalf("first step: %v", err)
 	}
 	now = now.Add(app.renderPacer.interval)
-	request, _ := ecs.GetResource[*scene.RenderRequest](app.World)
+	request, _ := app.World.GetResource[*scene.RenderRequest]()
 	request.Request()
 	rendered, err := app.Step()
 	if err != nil {

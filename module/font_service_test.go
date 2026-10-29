@@ -30,14 +30,14 @@ func setupFonts(t testing.TB, options Options) *fontFixture {
 	})
 	f := &fontFixture{}
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "font", func() FontService { return FontService{} }, Lifecycle[FontService]{Install: func(c *Context, s *FontService) error {
+	must(t, registry.RegisterMod("font", func() FontService { return FontService{} }, Lifecycle[FontService]{Install: func(c *Context, s *FontService) error {
 		f.providers = append(f.providers, c)
 		if err := handleRequest(c, "ask", s.Render); err != nil {
 			return err
 		}
 		return s.Load(c, "regular")
 	}, Destroy: func(_ *Context, s *FontService) error { return s.Destroy() }}))
-	must(t, RegisterMod(&registry, "client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		label, err := c.Slot("label")
 		if err != nil {
 			return err

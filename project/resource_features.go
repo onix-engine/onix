@@ -144,7 +144,7 @@ type ResourceRegistration[T any] struct {
 
 // RegisterNamedResource installs one lazily loaded feature resource. The
 // concrete resource type remains outside the project core package.
-func RegisterNamedResource[T any](context ResourceLoadContext, kind, id string, registration ResourceRegistration[T]) error {
+func (context ResourceLoadContext) RegisterNamedResource[T any](kind, id string, registration ResourceRegistration[T]) error {
 	if context.resources == nil {
 		return fmt.Errorf("project resources are nil")
 	}
@@ -178,7 +178,7 @@ func RegisterNamedResource[T any](context ResourceLoadContext, kind, id string, 
 }
 
 // LoadNamedResource returns a lazily loaded resource registered by a feature.
-func LoadNamedResource[T any](resources *Resources, kind, id string) (T, error) {
+func (resources *Resources) LoadNamedResource[T any](kind, id string) (T, error) {
 	if resources == nil {
 		var zero T
 		return zero, fmt.Errorf("resources are nil")

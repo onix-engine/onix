@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -25,7 +24,7 @@ func TestHTMLStructuralRenderingMatchesFresh(t *testing.T) {
 			parent := incrementalHTMLNode(t, world, owner, "parent")
 			removed := incrementalHTMLNode(t, world, owner, "first")
 			other := incrementalControl(t, world, owner, "otherControl")
-			before, _ := ecs.Get[Control](world, other)
+			before, _ := world.Get[Control](other)
 			for _, step := range []struct {
 				apply  func()
 				source string
@@ -37,17 +36,17 @@ func TestHTMLStructuralRenderingMatchesFresh(t *testing.T) {
 			} {
 				step.apply()
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatalf("structure fell back: %+v", state.SyncStats)
 				}
-				after, _ := ecs.Get[Control](world, other)
+				after, _ := world.Get[Control](other)
 				if after.RenderRevision != before.RenderRevision {
 					t.Fatal("unrelated control rebuilt")
 				}
 				assertHTMLPartialMatchesFresh(t, world, owner, step.source)
 				for _, entity := range state.Children {
-					if focus, ok := ecs.Get[Focusable](world, entity); ok && focus.Order != htmlEntityNode(world, entity).Order {
+					if focus, ok := world.Get[Focusable](entity); ok && focus.Order != htmlEntityNode(world, entity).Order {
 						t.Fatal("stale focus order")
 					}
 				}
@@ -67,7 +66,7 @@ func TestHTMLStructureReordersUntouchedStackingContexts(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, prefix+suffix)
 	incrementalHTMLNode(t, world, owner, "remove").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.OrderUpdated == 0 {
 		t.Fatalf("missing order-only update: %+v", state.SyncStats)
 	}
@@ -78,7 +77,7 @@ func TestHTMLStructureFlowMovementMatchesFresh(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="parent"><div id="remove">Remove</div></div><div>Moved</div><div><input value="Value"/></div>`)
 	incrementalHTMLNode(t, world, owner, "remove").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatalf("flow structure fell back: %+v", state.SyncStats)
 	}
@@ -93,17 +92,17 @@ func TestHTMLStructureRetainsBoundControlState(t *testing.T) {
 	area := htmlBindingArea(world, -3, -7)
 	SetNodeOffset(world, owner, "other", 5, 11)
 	SetNodeScroll(world, owner, "other", area, 13, 17)
-	transform, _ := ecs.Get[scene.UITransform](world, other)
-	content, _ := ecs.Get[ScrollContent](world, other)
-	control := ecs.GetMut[Control](world, other)
+	transform, _ := world.Get[scene.UITransform](other)
+	content, _ := world.Get[ScrollContent](other)
+	control := world.GetMut[Control](other)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	before := *control
 	incrementalHTMLNode(t, world, owner, "remove").Remove()
 	incrementalSync(t, world)
-	after, _ := ecs.Get[Control](world, other)
-	next, _ := ecs.Get[scene.UITransform](world, other)
-	scroll, _ := ecs.Get[ScrollContent](world, other)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	after, _ := world.Get[Control](other)
+	next, _ := world.Get[scene.UITransform](other)
+	scroll, _ := world.Get[ScrollContent](other)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || after.Value != "Typed" || after.SelectionAnchor != 1 || after.SelectionFocus != 3 || after.RenderRevision != before.RenderRevision || next != transform || scroll != content {
 		t.Fatal("unrelated bound control changed")
 	}
@@ -145,18 +144,18 @@ func TestHTMLStructureEventRetirementAndReattach(t *testing.T) {
 	other.OnClick(func(*PointerEvent) { clicks++ })
 	parent.SetAttribute("style", "height:40px;background:red")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	retired, kept := state.EventTargets[child.node], state.EventTargets[other.node]
 	child.Remove()
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || world.IsAlive(retired) || state.EventTargets[child.node] != 0 || state.EventTargets[other.node] != kept {
 		t.Fatal("event retirement or retention failed")
 	}
 	scene.DispatchInputEvent(world, scene.InputEvent{Entity: kept, Kind: scene.InputEventTap})
 	parent.Append(child)
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	scene.DispatchInputEvent(world, scene.InputEvent{Entity: state.EventTargets[child.node], Kind: scene.InputEventTap})
 	if clicks != 2 {
 		t.Fatal("event callbacks lost after structural update")
@@ -168,7 +167,7 @@ func TestHTMLStructureClipSupportAndConservativeFallbacks(t *testing.T) {
 		world, owner := incrementalHTMLFixture(t, `<div id="scroller" style="overflow:auto;height:40px"><div id="child">Text</div></div>`)
 		incrementalHTMLNode(t, world, owner, "child").Remove()
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("stable clip structure fell back")
 		}
@@ -180,7 +179,7 @@ func TestHTMLStructureClipSupportAndConservativeFallbacks(t *testing.T) {
 		child.Remove()
 		incrementalHTMLNode(t, world, owner, "destination").Append(child)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("retained box reparent fell back")
 		}
@@ -191,7 +190,7 @@ func TestHTMLStructureClipSupportAndConservativeFallbacks(t *testing.T) {
 		world, owner := incrementalHTMLFixture(t, css+`<div id="parent"><div id="child">Text</div></div><div>After</div>`)
 		incrementalHTMLNode(t, world, owner, "child").Remove()
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 0 {
 			t.Fatal("disappearing attached box unexpectedly local")
 		}
@@ -213,7 +212,7 @@ func TestHTMLStructureInsideFocusContext(t *testing.T) {
 			assertHTMLPartialMatchesFresh(t, world, owner, prefix+suffix)
 			parent.Append(child)
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			if state.SyncStats.PartialReconciles != 1 {
 				t.Fatalf("context structure fell back: %+v", state.SyncStats)
 			}
@@ -226,7 +225,7 @@ func TestHTMLStructuralUpdateSkipsUnrelatedControls(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="parent" style="height:40px"><div id="child">Target</div></div>`+strings.Repeat(`<div><input value="Unchanged"/></div>`, 1000))
 	incrementalHTMLNode(t, world, owner, "child").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.SnapshottedControls != 0 || state.SyncStats.ReconciledBoxes > 3 || state.SyncStats.OrderUpdated == 0 {
 		t.Fatalf("unrelated controls rebuilt: %+v", state.SyncStats)
 	}

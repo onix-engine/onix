@@ -229,56 +229,56 @@ func TestExplicitControlBindingComposesAuthoredParts(t *testing.T) {
 	}
 
 	buttonEntity := scene.MustEntity("run")
-	if ecs.Has[engineui.Control](scene.World, buttonEntity) || ecs.Has[sceneapi.InputTarget2D](scene.World, buttonEntity) {
+	if scene.World.Has[engineui.Control](buttonEntity) || scene.World.Has[sceneapi.InputTarget2D](buttonEntity) {
 		t.Fatal("static scene unexpectedly installed button behavior")
 	}
-	if err := BindControl(scene, "name", engineui.TextControl[engineui.Input]{
+	if err := scene.BindControl("name", engineui.TextControl[engineui.Input]{
 		Value: "Onix", Placeholder: "Name", MaxRunes: 80,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "amount", engineui.TextControl[engineui.Input]{Value: "2.5"}); err != nil {
+	if err := scene.BindControl("amount", engineui.TextControl[engineui.Input]{Value: "2.5"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "notes", engineui.TextControl[engineui.Textarea]{Placeholder: "Notes"}); err != nil {
+	if err := scene.BindControl("notes", engineui.TextControl[engineui.Textarea]{Placeholder: "Notes"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ecs.Insert(scene.World, scene.MustEntity("amount"), engineui.NumberInput{Step: .5}); err != nil {
+	if err := scene.World.Insert(scene.MustEntity("amount"), engineui.NumberInput{Step: .5}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "run", engineui.Button{}); err != nil {
+	if err := scene.BindControl("run", engineui.Button{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "enabled", engineui.Toggle[bool]{Value: true, On: true}); err != nil {
+	if err := scene.BindControl("enabled", engineui.Toggle[bool]{Value: true, On: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "mode", engineui.Selector{Selected: 1, ItemHeight: 36, ListHeight: 72}); err != nil {
+	if err := scene.BindControl("mode", engineui.Selector{Selected: 1, ItemHeight: 36, ListHeight: 72}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "health", engineui.Progress{Min: 0, Max: 100, Value: 75}); err != nil {
+	if err := scene.BindControl("health", engineui.Progress{Min: 0, Max: 100, Value: 75}); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "list", engineui.ScrollArea{ContentWidth: 240, ContentHeight: 600, BarSize: 7}); err != nil {
+	if err := scene.BindControl("list", engineui.ScrollArea{ContentWidth: 240, ContentHeight: 600, BarSize: 7}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ecs.Insert(scene.World, scene.MustEntity("listContent"), engineui.ScrollContent{Area: scene.MustEntity("list")}); err != nil {
+	if err := scene.World.Insert(scene.MustEntity("listContent"), engineui.ScrollContent{Area: scene.MustEntity("list")}); err != nil {
 		t.Fatal(err)
 	}
-	button, ok := ecs.Get[engineui.Button](scene.World, buttonEntity)
-	buttonContent, contentOK := ecs.Get[engineui.Content[string]](scene.World, scene.MustEntity("run"))
+	button, ok := scene.World.Get[engineui.Button](buttonEntity)
+	buttonContent, contentOK := scene.World.Get[engineui.Content[string]](scene.MustEntity("run"))
 	if !ok || !contentOK || buttonContent.Value != "Run" {
 		t.Fatalf("unexpected button behavior/content: behavior=%+v content=%+v", button, buttonContent)
 	}
-	if ecs.Has[sceneapi.UIBackground2D](scene.World, buttonEntity) || ecs.Has[sceneapi.UIImage2D](scene.World, buttonEntity) || ecs.Has[sceneapi.Text2D](scene.World, buttonEntity) {
+	if scene.World.Has[sceneapi.UIBackground2D](buttonEntity) || scene.World.Has[sceneapi.UIImage2D](buttonEntity) || scene.World.Has[sceneapi.Text2D](buttonEntity) {
 		t.Fatal("declarative button root still owns implicit visuals")
 	}
 	hover := scene.MustEntity("run-hover")
-	variants, ok := ecs.Get[engineui.Variants[engineui.ControlVariant]](scene.World, buttonEntity)
+	variants, ok := scene.World.Get[engineui.Variants[engineui.ControlVariant]](buttonEntity)
 	if !ok || !hasControlVariant(variants, hover, engineui.VariantHovered) {
 		t.Fatalf("unexpected hover variants: %#v", variants)
 	}
-	labelElement, ok := ecs.Get[engineui.Relation[sceneapi.Text2D]](scene.World, scene.MustEntity("run-label"))
-	if !ok || labelElement.Owner != buttonEntity || !ecs.Has[engineui.Part[engineui.LabelPart]](scene.World, scene.MustEntity("run-label")) {
+	labelElement, ok := scene.World.Get[engineui.Relation[sceneapi.Text2D]](scene.MustEntity("run-label"))
+	if !ok || labelElement.Owner != buttonEntity || !scene.World.Has[engineui.Part[engineui.LabelPart]](scene.MustEntity("run-label")) {
 		t.Fatalf("unexpected authored label element: %#v", labelElement)
 	}
 	if !hasControlVariant(variants, scene.MustEntity("run-label"), engineui.VariantAlways) {
@@ -286,47 +286,47 @@ func TestExplicitControlBindingComposesAuthoredParts(t *testing.T) {
 	}
 	for _, id := range []string{"run", "name", "amount", "notes", "enabled", "mode", "health", "list"} {
 		root := scene.MustEntity(id)
-		if ecs.Has[sceneapi.UIBackground2D](scene.World, root) ||
-			ecs.Has[sceneapi.UIImage2D](scene.World, root) ||
-			ecs.Has[sceneapi.UIBorder2D](scene.World, root) ||
-			ecs.Has[sceneapi.Sprite2D](scene.World, root) ||
-			ecs.Has[sceneapi.Text2D](scene.World, root) {
+		if scene.World.Has[sceneapi.UIBackground2D](root) ||
+			scene.World.Has[sceneapi.UIImage2D](root) ||
+			scene.World.Has[sceneapi.UIBorder2D](root) ||
+			scene.World.Has[sceneapi.Sprite2D](root) ||
+			scene.World.Has[sceneapi.Text2D](root) {
 			t.Fatalf("declarative control %q root still owns render components", id)
 		}
 	}
-	field, ok := ecs.Get[engineui.TextField](scene.World, scene.MustEntity("name"))
+	field, ok := scene.World.Get[engineui.TextField](scene.MustEntity("name"))
 	if !ok || field.Value != "Onix" || field.Placeholder != "Name" || field.MaxRunes != 80 {
 		t.Fatalf("unexpected input: %+v ok=%v", field, ok)
 	}
-	number, ok := ecs.Get[engineui.NumberInput](scene.World, scene.MustEntity("amount"))
+	number, ok := scene.World.Get[engineui.NumberInput](scene.MustEntity("amount"))
 	if !ok || number.Step != .5 {
 		t.Fatalf("unexpected number input: %+v ok=%v", number, ok)
 	}
-	if _, ok := ecs.Get[engineui.Textarea](scene.World, scene.MustEntity("notes")); !ok {
+	if _, ok := scene.World.Get[engineui.Textarea](scene.MustEntity("notes")); !ok {
 		t.Fatal("expected textarea component")
 	}
-	checkbox, ok := ecs.Get[engineui.Toggle[bool]](scene.World, scene.MustEntity("enabled"))
-	checkboxContent, contentOK := ecs.Get[engineui.Content[string]](scene.World, scene.MustEntity("enabled"))
+	checkbox, ok := scene.World.Get[engineui.Toggle[bool]](scene.MustEntity("enabled"))
+	checkboxContent, contentOK := scene.World.Get[engineui.Content[string]](scene.MustEntity("enabled"))
 	if !ok || !checkbox.Value || !contentOK || checkboxContent.Value != "Enabled" {
 		t.Fatalf("unexpected checkbox behavior/content: behavior=%+v content=%+v", checkbox, checkboxContent)
 	}
-	selector, ok := ecs.Get[engineui.Selector](scene.World, scene.MustEntity("mode"))
+	selector, ok := scene.World.Get[engineui.Selector](scene.MustEntity("mode"))
 	if !ok || selector.Selected != 1 || selector.ListHeight != 72 {
 		t.Fatalf("unexpected selector: %+v ok=%v", selector, ok)
 	}
-	progress, ok := ecs.Get[engineui.Progress](scene.World, scene.MustEntity("health"))
+	progress, ok := scene.World.Get[engineui.Progress](scene.MustEntity("health"))
 	if !ok || progress.Min != 0 || progress.Max != 100 || progress.Value != 75 || progress.Slider {
 		t.Fatalf("unexpected program-controlled progress: %+v ok=%v", progress, ok)
 	}
-	area, ok := ecs.Get[engineui.ScrollArea](scene.World, scene.MustEntity("list"))
+	area, ok := scene.World.Get[engineui.ScrollArea](scene.MustEntity("list"))
 	if !ok || area.ContentHeight != 600 || area.BarSize != 7 {
 		t.Fatalf("unexpected scroll area: %+v ok=%v", area, ok)
 	}
-	content, ok := ecs.Get[engineui.ScrollContent](scene.World, scene.MustEntity("listContent"))
+	content, ok := scene.World.Get[engineui.ScrollContent](scene.MustEntity("listContent"))
 	if !ok || content.Area != scene.MustEntity("list") {
 		t.Fatalf("unexpected scroll content: %+v ok=%v", content, ok)
 	}
-	anchor, _ := ecs.Get[sceneapi.Anchor](scene.World, scene.MustEntity("run"))
+	anchor, _ := scene.World.Get[sceneapi.Anchor](scene.MustEntity("run"))
 	if anchor != sceneapi.AnchorTopLeft {
 		t.Fatalf("explicit control anchor = %+v, want top-left", anchor)
 	}
@@ -338,12 +338,12 @@ func TestExplicitControlBindingComposesAuthoredParts(t *testing.T) {
 	if err := scene.ApplyNode(buttonSpec); err != nil {
 		t.Fatalf("apply button spec: %v", err)
 	}
-	buttonContent, _ = ecs.Get[engineui.Content[string]](scene.World, scene.MustEntity("run"))
+	buttonContent, _ = scene.World.Get[engineui.Content[string]](scene.MustEntity("run"))
 	width, height, _ := engineui.ControlBounds(scene.World, scene.MustEntity("run"))
 	if buttonContent.Value != "Run again" || width != 120 || height != 40 {
 		t.Fatalf("button spec was not applied: content=%+v bounds=(%v,%v)", buttonContent, width, height)
 	}
-	variants, ok = ecs.Get[engineui.Variants[engineui.ControlVariant]](scene.World, buttonEntity)
+	variants, ok = scene.World.Get[engineui.Variants[engineui.ControlVariant]](buttonEntity)
 	if !ok || !hasControlVariant(variants, hover, engineui.VariantHovered) {
 		t.Fatalf("button composition was lost after ApplyNode: %#v", variants)
 	}
@@ -398,8 +398,8 @@ func TestTextureMipmapIsExplicitAndPartOfCacheKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _ := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("plain"))
-	mipmapped, _ := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("mipmapped"))
+	plain, _ := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("plain"))
+	mipmapped, _ := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("mipmapped"))
 	if plain.Texture.Mipmapped() {
 		t.Fatal("texture enabled mipmaps by default")
 	}
@@ -440,7 +440,7 @@ func TestLayerDoesNotSelectUICoordinateSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("world-overlay")
-	if !ecs.Has[sceneapi.Transform](scene.World, entity) || ecs.Has[sceneapi.UITransform](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Transform](entity) || scene.World.Has[sceneapi.UITransform](entity) {
 		t.Fatal("draw order selected UI coordinate space")
 	}
 }
@@ -516,28 +516,28 @@ func TestLoadInstantiatesSceneFromJSON(t *testing.T) {
 	}
 
 	root := scene.MustEntity("root")
-	rootTransform, ok := ecs.Get[sceneapi.UITransform](scene.World, root)
+	rootTransform, ok := scene.World.Get[sceneapi.UITransform](root)
 	if !ok || rootTransform.Translation != sceneapi.Px2(12, 18) {
 		t.Fatalf("unexpected root transform: %+v ok=%v", rootTransform, ok)
 	}
 
 	hero := scene.MustEntity("hero")
-	parent, ok := ecs.Get[sceneapi.Parent](scene.World, hero)
+	parent, ok := scene.World.Get[sceneapi.Parent](hero)
 	if !ok || parent.Entity != root {
 		t.Fatalf("expected hero parent %d, got %+v ok=%v", root, parent, ok)
 	}
 	if path := scene.Path("hero"); path != "root/hero" {
 		t.Fatalf("unexpected hero path: %q", path)
 	}
-	if _, ok := ecs.Get[sceneapi.Text2D](scene.World, hero); !ok {
+	if _, ok := scene.World.Get[sceneapi.Text2D](hero); !ok {
 		t.Fatalf("expected hero text game object")
 	}
 
 	title := scene.MustEntity("title")
-	if _, ok := ecs.Get[sceneapi.Text2D](scene.World, title); !ok {
+	if _, ok := scene.World.Get[sceneapi.Text2D](title); !ok {
 		t.Fatalf("expected title text entity")
 	}
-	stackIndex, ok := ecs.Get[sceneapi.UIStackIndex](scene.World, title)
+	stackIndex, ok := scene.World.Get[sceneapi.UIStackIndex](title)
 	if !ok || stackIndex != 0 {
 		t.Fatalf("expected title UI stack index 0, got %d", stackIndex)
 	}
@@ -545,7 +545,7 @@ func TestLoadInstantiatesSceneFromJSON(t *testing.T) {
 	if len(scene.Roots) != 2 {
 		t.Fatalf("expected 2 root entities, got %d", len(scene.Roots))
 	}
-	if _, ok := ecs.Get[sceneapi.ParticleEmitter2D](scene.World, scene.MustEntity("spark")); !ok {
+	if _, ok := scene.World.Get[sceneapi.ParticleEmitter2D](scene.MustEntity("spark")); !ok {
 		t.Fatalf("expected spark particle emitter")
 	}
 
@@ -626,7 +626,7 @@ func TestLoadIgnoresMissingResourcesManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate ecs without resources.json: %v", err)
 	}
-	if _, ok := ecs.Get[sceneapi.Text2D](scene.World, scene.MustEntity("hero")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Text2D](scene.MustEntity("hero")); !ok {
 		t.Fatalf("expected hero text to load without resources.json")
 	}
 	if _, err := project.Resources().ParseColor("missing", 1); err == nil {
@@ -690,10 +690,10 @@ func TestGameObjectAtlasLoadsFromRelativeJSONPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate atlas sprite: %v", err)
 	}
-	if sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero")); !ok || sprite.Width != 37 || sprite.Height != 19 {
+	if sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero")); !ok || sprite.Width != 37 || sprite.Height != 19 {
 		t.Fatal("expected explicit atlas sprite size")
 	}
-	if sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("native")); !ok || sprite.Width != 7 || sprite.Height != 5 || sprite.Slice != nil {
+	if sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("native")); !ok || sprite.Width != 7 || sprite.Height != 5 || sprite.Slice != nil {
 		t.Fatal("expected atlas sprite size from metadata")
 	}
 }
@@ -734,7 +734,7 @@ func TestGameObjectAtlasLoadsFromAtlasPathWithoutMetadataSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate .atlas sprite: %v", err)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero"))
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero"))
 	if !ok || sprite.Width != 1 || sprite.Height != 1 || sprite.Texture == nil || !sprite.Texture.Valid() {
 		t.Fatalf("unexpected .atlas sprite: %+v", sprite)
 	}
@@ -809,13 +809,13 @@ func TestLoadSupportsManifestFilesInsideResourcesDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate ecs from resources dir manifests: %v", err)
 	}
-	if _, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero")); !ok {
 		t.Fatalf("expected hero sprite from resources dir manifest")
 	}
-	if _, ok := ecs.Get[sceneapi.Text2D](scene.World, scene.MustEntity("title")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Text2D](scene.MustEntity("title")); !ok {
 		t.Fatalf("expected title text from resources dir manifest")
 	}
-	if _, ok := ecs.Get[sceneapi.ParticleEmitter2D](scene.World, scene.MustEntity("spark")); !ok {
+	if _, ok := scene.World.Get[sceneapi.ParticleEmitter2D](scene.MustEntity("spark")); !ok {
 		t.Fatalf("expected spark particle emitter from resources dir manifest")
 	}
 
@@ -978,12 +978,12 @@ func TestLoadSupportsInlineGameObjectAndParticleTextures(t *testing.T) {
 		t.Fatalf("unexpected clear color: %+v", clr)
 	}
 
-	hero, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero"))
+	hero, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero"))
 	if !ok || hero.Texture == nil {
 		t.Fatal("expected hero color texture")
 	}
 	colorTexture := hero.Texture
-	badge, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("badge"))
+	badge, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("badge"))
 	if !ok || badge.Texture == nil {
 		t.Fatal("expected badge texture")
 	}
@@ -997,16 +997,16 @@ func TestLoadSupportsInlineGameObjectAndParticleTextures(t *testing.T) {
 	if ownedTexture.Valid() {
 		t.Fatal("disposing project resources retained an owned image texture")
 	}
-	if _, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero")); !ok {
 		t.Fatalf("expected hero sprite")
 	}
-	if _, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("badge")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("badge")); !ok {
 		t.Fatalf("expected badge sprite")
 	}
-	if _, ok := ecs.Get[sceneapi.Text2D](scene.World, scene.MustEntity("title")); !ok {
+	if _, ok := scene.World.Get[sceneapi.Text2D](scene.MustEntity("title")); !ok {
 		t.Fatalf("expected title text")
 	}
-	if _, ok := ecs.Get[sceneapi.ParticleEmitter2D](scene.World, scene.MustEntity("spark")); !ok {
+	if _, ok := scene.World.Get[sceneapi.ParticleEmitter2D](scene.MustEntity("spark")); !ok {
 		t.Fatalf("expected spark particle emitter")
 	}
 }
@@ -1064,7 +1064,7 @@ func TestParticleTexturesSupportImageAtlasAndColor(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"image", "atlas", "color"} {
-		emitter, ok := ecs.Get[sceneapi.ParticleEmitter2D](scene.World, scene.MustEntity(id))
+		emitter, ok := scene.World.Get[sceneapi.ParticleEmitter2D](scene.MustEntity(id))
 		if !ok || emitter.Texture == nil || !emitter.Texture.Valid() {
 			t.Fatalf("particle %q did not load its texture: %+v", id, emitter)
 		}
@@ -1186,14 +1186,14 @@ func TestAudioResourcesDecodeLazily(t *testing.T) {
 	if cache.ready("broken") {
 		t.Fatal("audio resource loaded before first access")
 	}
-	_, firstErr := LoadNamedResource[string](bundle.Resources(), testAudioResourceKind, "broken")
+	_, firstErr := bundle.Resources().LoadNamedResource[string](testAudioResourceKind, "broken")
 	if firstErr == nil {
 		t.Fatal("loading broken audio succeeded")
 	}
 	if !cache.ready("broken") {
 		t.Fatal("audio decode result was not cached")
 	}
-	if _, err := LoadNamedResource[string](bundle.Resources(), testAudioResourceKind, "broken"); err == nil || err.Error() != firstErr.Error() {
+	if _, err := bundle.Resources().LoadNamedResource[string](testAudioResourceKind, "broken"); err == nil || err.Error() != firstErr.Error() {
 		t.Fatalf("cached broken audio result changed: first=%v second=%v", firstErr, err)
 	}
 }
@@ -1205,7 +1205,7 @@ type testAudioFeature struct{}
 func (testAudioFeature) ConfigureResources(context ResourceLoadContext, entries ResourceEntries) error {
 	for _, entry := range entries.Audio {
 		entry := entry
-		if err := RegisterNamedResource(context, testAudioResourceKind, entry.ID, ResourceRegistration[string]{
+		if err := context.RegisterNamedResource(testAudioResourceKind, entry.ID, ResourceRegistration[string]{
 			Load: func() (string, error) {
 				data, err := context.ReadFile(entry.Path)
 				if err != nil {
@@ -1371,11 +1371,11 @@ func TestLoadInstantiatesAnimatedSpriteFromInlineClip(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("hero")
-	animator, ok := ecs.Get[sceneapi.Animator](scene.World, entity)
+	animator, ok := scene.World.Get[sceneapi.Animator](entity)
 	if !ok || animator.Clip == nil || len(animator.Clip.TextureTracks) != 1 || !animator.Loop || !animator.Playing {
 		t.Fatalf("animator component = %+v", animator)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, entity)
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](entity)
 	if !ok || sprite.Texture != animator.CurrentTexture() {
 		t.Fatalf("sprite did not start on animation keyframe 0: %+v", sprite)
 	}
@@ -1419,13 +1419,13 @@ func TestLoadBindsAnimationTracksToRealChildNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("hero")
-	if !ecs.Has[sceneapi.Animator](scene.World, entity) || ecs.Has[sceneapi.Sprite2D](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Animator](entity) || scene.World.Has[sceneapi.Sprite2D](entity) {
 		t.Fatal("child-bound animation should attach only an animator to its owner")
 	}
 	blade := scene.MustEntity("blade")
-	transform, ok := ecs.Get[sceneapi.Transform](scene.World, blade)
-	if !ok || transform.Translation.X() != 10 || !ecs.Has[sceneapi.Sprite2D](scene.World, blade) {
-		t.Fatalf("animated child = transform:%+v sprite:%v", transform, ecs.Has[sceneapi.Sprite2D](scene.World, blade))
+	transform, ok := scene.World.Get[sceneapi.Transform](blade)
+	if !ok || transform.Translation.X() != 10 || !scene.World.Has[sceneapi.Sprite2D](blade) {
+		t.Fatalf("animated child = transform:%+v sprite:%v", transform, scene.World.Has[sceneapi.Sprite2D](blade))
 	}
 	if items := scene.RenderItems(); len(items) != 1 || items[0].Entity != blade || items[0].SortIndex != 1 {
 		t.Fatalf("child render items = %+v", items)
@@ -1607,7 +1607,7 @@ func TestNineSliceSpriteLoadsInlineImageSlice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("window"))
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("window"))
 	if !ok || sprite.Slice == nil {
 		t.Fatal("expected nine-slice sprite")
 	}
@@ -1653,7 +1653,7 @@ func TestNineSliceAtlasFrameUsesInlineSlice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("window"))
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("window"))
 	if !ok || sprite.Slice == nil || *sprite.Slice != (sceneapi.NineSlice2D{Left: 6, Right: 5, Top: 4, Bottom: 3}) {
 		t.Fatalf("unexpected atlas slice: %+v", sprite.Slice)
 	}
@@ -1696,7 +1696,7 @@ func TestNineSliceAtlasFrameValidatesAgainstLogicalSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("window"))
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("window"))
 	if !ok || sprite.Texture == nil || sprite.Texture.LogicalWidth() != 40 || sprite.Texture.LogicalHeight() != 32 {
 		t.Fatalf("unexpected trimmed nine-slice sprite: %#v", sprite)
 	}

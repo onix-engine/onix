@@ -48,12 +48,12 @@ func TestHTMLBrowserLineHeight(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(string(source))
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	actual := make(map[string]layout.Rect)
 	normalLineHeight := make(map[string]bool)
 	var visit func(*layout.Box)
@@ -123,12 +123,12 @@ func TestHTMLBrowserWorkbench(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(string(source))
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	actual := make(map[string]layout.Rect)
 	displays := make(map[string]string)
 	var visit func(*layout.Box)
@@ -217,17 +217,17 @@ func TestHTMLBrowserWorkbenchImages(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(string(source))
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 24, 24)))
 	t.Cleanup(func() { _ = texture.Dispose() })
-	ecs.InsertResource[ImageProvider](world, testHTMLImageProvider{texture: texture})
+	world.InsertResource[ImageProvider](testHTMLImageProvider{texture: texture})
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	want := strings.Count(string(source), "<img ")
 	got := 0
-	for _, access := range ecs.Query2[htmlChild, scene.Sprite2D](world).All {
+	for _, access := range world.Query2[htmlChild, scene.Sprite2D]().All {
 		child := access.A.Get()
 		sprite := access.B.Get()
 
@@ -257,20 +257,20 @@ func testHTMLBrowserFixture(t *testing.T, fixture, baseline string) {
 	bundle := ecs.NewBundle(1)
 	html := New(string(source))
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	for e, access := range ecs.Query2[htmlChild, scene.Sprite2D](world).All {
+	state, _ := world.Get[htmlRenderState](owner)
+	for e, access := range world.Query2[htmlChild, scene.Sprite2D]().All {
 		c := access.A.Get()
 		s := access.B.Get()
 
 		if c.Node != nil {
 			if id, _ := c.Node.Attr("id"); id == "opacity" {
 				alpha := s.Alpha
-				if ecs.Has[htmlOpacitySurface](world, e) {
+				if world.Has[htmlOpacitySurface](e) {
 					raster := state.Textures.rasters[c.Node]
 					alpha *= float32(raster.image.RGBAAt(raster.image.Rect.Dx()/2, raster.image.Rect.Dy()/2).A) / 255
 				}
@@ -323,7 +323,7 @@ func TestHTMLAdjacentMutationRefreshesSibling(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<style>.active + div {width:90px} div {width:30px;height:20px}</style><div id="first"></div><div id="second"></div>`)
 	incrementalHTMLNode(t, world, owner, "first").SetAttribute("class", "active")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "second")
 	if got := state.BoxesByNode[node.node].Content.Width; got != 90 {
 		t.Fatalf("sibling width = %v", got)
@@ -335,7 +335,7 @@ func TestHTMLCanvasBackgroundMutation(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "body").SetAttribute("style", "background:blue")
 	incrementalSync(t, world)
 	found := false
-	for _, access := range ecs.Query2[htmlCanvasSurface, scene.Sprite2D](world).All {
+	for _, access := range world.Query2[htmlCanvasSurface, scene.Sprite2D]().All {
 		s := access.B.Get()
 
 		found = true
@@ -350,7 +350,7 @@ func TestHTMLCanvasBackgroundMutation(t *testing.T) {
 
 func TestHTMLAutoPositionedPaintOrder(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="earlier" style="position:relative"><div style="position:relative"><div id="deep" style="position:relative;width:30px;height:30px;background:red"></div></div></div><div id="later" style="position:relative;width:30px;height:30px;background:blue"></div><div id="ordinary" style="width:30px;height:30px;background:green"></div>`)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	stack := func(id string) int {
 		node := incrementalHTMLNode(t, world, owner, id)
 		return htmlBoxStackIndex(state.BoxesByNode[node.node], 0)
@@ -365,8 +365,8 @@ func TestHTMLLeafOpacityMutation(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "width:40px;height:40px;background:red;opacity:25%")
 	incrementalSync(t, world)
 	found := false
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	for entity, access := range ecs.Query2[htmlChild, scene.Sprite2D](world).All {
+	state, _ := world.Get[htmlRenderState](owner)
+	for entity, access := range world.Query2[htmlChild, scene.Sprite2D]().All {
 		c := access.A.Get()
 		s := access.B.Get()
 
@@ -374,7 +374,7 @@ func TestHTMLLeafOpacityMutation(t *testing.T) {
 			if id, _ := c.Node.Attr("id"); id == "target" {
 				found = true
 				alpha := s.Alpha
-				if ecs.Has[htmlOpacitySurface](world, entity) {
+				if world.Has[htmlOpacitySurface](entity) {
 					alpha *= float32(state.Textures.rasters[c.Node].image.RGBAAt(10, 10).A) / 255
 				}
 				if math.Abs(float64(alpha)-0.25) > 1.0/255 {
@@ -393,7 +393,7 @@ func TestHTMLTextOpacityAndLCDMutation(t *testing.T) {
 	assertText := func(alpha float32, lcd bool) {
 		t.Helper()
 		found := false
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if !lcd {
 			var composite *htmlOpacityRaster
 			for _, id := range []string{"backdrop", "target"} {
@@ -416,7 +416,7 @@ func TestHTMLTextOpacityAndLCDMutation(t *testing.T) {
 				return
 			}
 		}
-		for _, access := range ecs.Query2[htmlChild, scene.Text2D](world).All {
+		for _, access := range world.Query2[htmlChild, scene.Text2D]().All {
 			c := access.A.Get()
 			text := access.B.Get()
 
@@ -458,7 +458,7 @@ func TestHTMLFlexConstraintMutationRedistributesSiblings(t *testing.T) {
 	} {
 		incrementalHTMLNode(t, world, owner, "limited").SetAttribute("style", limit.css)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		first := state.BoxesByNode[incrementalHTMLNode(t, world, owner, "limited").node].Content
 		second := state.BoxesByNode[incrementalHTMLNode(t, world, owner, "remaining").node].Content
 		if first.Width != limit.first || second.Width != limit.second || second.X != first.X+first.Width {

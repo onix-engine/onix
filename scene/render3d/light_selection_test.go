@@ -71,15 +71,15 @@ func TestExtractLightsRetainsAllCandidates(t *testing.T) {
 	Register(world)
 	for range 32 {
 		b := ecs.NewBundle(2)
-		ecs.Put(&b, NewPointLight())
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+		b.Put(NewPointLight())
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 		world.Spawn(b)
 	}
 	ctx := &ecs.SystemContext{World: world}
 	if err := extractRender3D(ctx); err != nil {
 		t.Fatal(err)
 	}
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	if len(state.lights) != 33 { // ambient + every point light
 		t.Fatalf("global extraction retained %d candidates", len(state.lights))
 	}

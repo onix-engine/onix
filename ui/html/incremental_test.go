@@ -22,7 +22,7 @@ func incrementalHTMLFixture(tb testing.TB, source string) (*ecs.World, ecs.Entit
 	value := New(source)
 	value.Width, value.Height, value.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, value)
+	bundle.Put(value)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		tb.Fatal(err)
@@ -49,7 +49,7 @@ func incrementalSync(tb testing.TB, world *ecs.World) {
 func TestHTMLMutationPaintIsLocalAndAllocationFree(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<style>.hot{color:#ff0000;background:#334455}#target{background:#112233}</style><div id="target">Target</div>`+strings.Repeat(`<div>Unchanged</div>`, 500))
 	node := incrementalHTMLNode(t, world, owner, "target")
-	before, _ := ecs.Get[htmlRenderState](world, owner)
+	before, _ := world.Get[htmlRenderState](owner)
 	children := slices.Clone(before.Children)
 	for range 2 {
 		node.SetAttribute("class", "hot")
@@ -67,7 +67,7 @@ func TestHTMLMutationPaintIsLocalAndAllocationFree(t *testing.T) {
 			panic(err)
 		}
 	})
-	after, _ := ecs.Get[htmlRenderState](world, owner)
+	after, _ := world.Get[htmlRenderState](owner)
 	if allocations != 0 {
 		t.Fatalf("warm class changes allocated %v objects", allocations)
 	}
@@ -79,9 +79,9 @@ func TestHTMLMutationPaintIsLocalAndAllocationFree(t *testing.T) {
 	}
 	node.SetAttribute("class", "hot")
 	incrementalSync(t, world)
-	after, _ = ecs.Get[htmlRenderState](world, owner)
+	after, _ = world.Get[htmlRenderState](owner)
 	for _, entity := range after.RenderNodes[node.node.Children[0]].Entities {
-		if text, ok := ecs.Get[scene.Text2D](world, entity); ok && text.Color != graphics.ColorFromRGB(255, 0, 0) {
+		if text, ok := world.Get[scene.Text2D](entity); ok && text.Color != graphics.ColorFromRGB(255, 0, 0) {
 			t.Fatalf("text paint = %v", text.Color)
 		}
 	}
@@ -93,7 +93,7 @@ func TestHTMLSiblingSelectorMutationRestylesOnlyLocalParent(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	trigger.SetAttribute("class", "trigger")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if got, want := state.Styles[target.node].Color, style.ColorValue(style.Color{R: 255, A: 255}); got != want {
 		t.Fatalf("sibling selector color = %#v, want %#v", got, want)
 	}
@@ -111,7 +111,7 @@ func TestHTMLMutationBatchMergesAncestorRoots(t *testing.T) {
 	child.SetAttribute("class", "cold")
 	parent.SetAttribute("class", "hot")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.Styled != 4 || state.SyncStats.Layouts != 0 {
 		t.Fatalf("batch work = %+v", state.SyncStats)
 	}
@@ -125,33 +125,33 @@ func TestHTMLMutationReusesControlsTextAndScroll(t *testing.T) {
 	label := incrementalHTMLNode(t, world, owner, "label")
 	field := incrementalHTMLNode(t, world, owner, "field")
 	scroller := incrementalHTMLNode(t, world, owner, "scroller")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	control := state.EntityGroups[htmlRenderIdentity{Node: field.node, Role: htmlRoleControl}].Bindings[0].Entity
 	text := state.RenderNodes[label.node.Children[0]].Entities[0]
 	clip := state.EntityGroups[htmlRenderIdentity{Node: scroller.node, Role: htmlRoleOverflow}].Bindings[0].Entity
 	SetControlValue(world, control, "typed")
-	live := ecs.GetMut[Control](world, control)
+	live := world.GetMut[Control](control)
 	live.SelectionAnchor, live.SelectionFocus = 1, 3
-	input := ecs.GetMut[scene.InputState2D](world, control)
+	input := world.GetMut[scene.InputState2D](control)
 	input.Pressed, input.Hovered = true, true
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -25
 	label.SetText("Other")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.Spawned != 0 || state.SyncStats.Despawned != 0 || state.SyncStats.Layouts != 1 {
 		t.Fatalf("text mutation work = %+v", state.SyncStats)
 	}
 	if !world.IsAlive(control) || !world.IsAlive(text) || !world.IsAlive(clip) {
 		t.Fatal("persistent primitives replaced")
 	}
-	live = ecs.GetMut[Control](world, control)
-	input = ecs.GetMut[scene.InputState2D](world, control)
-	scroll = ecs.GetMut[scene.UIScroll](world, clip)
+	live = world.GetMut[Control](control)
+	input = world.GetMut[scene.InputState2D](control)
+	scroll = world.GetMut[scene.UIScroll](clip)
 	if live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || !input.Pressed || !input.Hovered || scroll.Position[1] != -25 {
 		t.Fatalf("lost live state: control=%+v input=%+v scroll=%+v", live, input, scroll)
 	}
-	value, _ := ecs.Get[scene.Text2D](world, text)
+	value, _ := world.Get[scene.Text2D](text)
 	if value.Value != "Other" {
 		t.Fatalf("retained text = %q", value.Value)
 	}
@@ -162,7 +162,7 @@ func TestHTMLMutationStructurePreservesSiblingsAndIndex(t *testing.T) {
 	parent := incrementalHTMLNode(t, world, owner, "parent")
 	first := incrementalHTMLNode(t, world, owner, "first")
 	second := incrementalHTMLNode(t, world, owner, "second")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	retained := slices.Clone(state.RenderNodes[second.node].Entities)
 	removed := slices.Clone(state.RenderNodes[first.node].Entities)
 	first.Remove()
@@ -228,8 +228,8 @@ func TestHTMLMutationMatchesFreshRender(t *testing.T) {
 			test.change(node)
 			incrementalSync(t, world)
 			fresh, freshOwner := incrementalHTMLFixture(t, test.after)
-			got, _ := ecs.Get[htmlRenderState](world, owner)
-			want, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+			got, _ := world.Get[htmlRenderState](owner)
+			want, _ := fresh.Get[htmlRenderState](freshOwner)
 			compareHTMLLayout(t, got.Boxes, want.Boxes)
 			if !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, got), htmlPrimitiveSnapshot(fresh, want)) {
 				t.Fatalf("generated primitives differ from fresh render\ngot: %#v\nwant: %#v", htmlPrimitiveSnapshot(world, got), htmlPrimitiveSnapshot(fresh, want))
@@ -291,25 +291,25 @@ func htmlPrimitiveSnapshot(world *ecs.World, state htmlRenderState) map[htmlPrim
 	result := make(map[htmlPrimitiveKey]htmlPrimitiveValue)
 	for entity, key := range keys {
 		var value htmlPrimitiveValue
-		value.Transform, _ = ecs.Get[scene.UITransform](world, entity)
-		value.Size, _ = ecs.Get[scene.Size2D](world, entity)
-		value.Stack, _ = ecs.Get[scene.UIStackIndex](world, entity)
-		sprite, ok := ecs.Get[scene.Sprite2D](world, entity)
+		value.Transform, _ = world.Get[scene.UITransform](entity)
+		value.Size, _ = world.Get[scene.Size2D](entity)
+		value.Stack, _ = world.Get[scene.UIStackIndex](entity)
+		sprite, ok := world.Get[scene.Sprite2D](entity)
 		value.Shape, value.HasSprite = sprite.Shape, ok
-		text, ok := ecs.Get[scene.Text2D](world, entity)
+		text, ok := world.Get[scene.Text2D](entity)
 		value.Text, value.Color, value.HasText = text.Value, text.Color, ok
-		value.Clip, value.HasClip = ecs.Get[scene.ClipRect2D](world, entity)
-		value.Target, value.HasTarget = ecs.Get[scene.InputTarget2D](world, entity)
+		value.Clip, value.HasClip = world.Get[scene.ClipRect2D](entity)
+		value.Target, value.HasTarget = world.Get[scene.InputTarget2D](entity)
 		value.TargetReceiver = keys[value.Target.Receiver]
 		value.Target.Receiver = 0
-		value.Blocker, value.HasBlocker = ecs.Get[scene.InputBlocker2D](world, entity)
+		value.Blocker, value.HasBlocker = world.Get[scene.InputBlocker2D](entity)
 		value.BlockerReceiver = keys[value.Blocker.Receiver]
 		value.Blocker.Receiver = 0
-		focus, _ := ecs.Get[FocusOwner](world, entity)
+		focus, _ := world.Get[FocusOwner](entity)
 		value.FocusOwner = keys[focus.Entity]
-		editable, _ := ecs.Get[EditableText](world, entity)
+		editable, _ := world.Get[EditableText](entity)
 		value.EditableOwner = keys[editable.Editable]
-		parent, _ := ecs.Get[scene.Parent](world, entity)
+		parent, _ := world.Get[scene.Parent](entity)
 		value.Parent = keys[parent.Entity]
 		result[key] = value
 	}
@@ -344,16 +344,16 @@ func BenchmarkHTMLLocalClassMutation(b *testing.B) {
 func TestHTMLMutationPaintTopologySkipsLayout(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target">Target</div><input id="field"/>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
-	initial, _ := ecs.Get[htmlRenderState](world, owner)
+	initial, _ := world.Get[htmlRenderState](owner)
 	target.SetAttribute("style", "background:red")
 	incrementalSync(t, world)
-	added, _ := ecs.Get[htmlRenderState](world, owner)
+	added, _ := world.Get[htmlRenderState](owner)
 	if added.Boxes != initial.Boxes || added.SyncStats.Layouts != 0 || added.SyncStats.Spawned != 1 || added.SyncStats.Despawned != 0 {
 		t.Fatalf("background addition work = %+v", added.SyncStats)
 	}
 	target.RemoveAttribute("style")
 	incrementalSync(t, world)
-	removed, _ := ecs.Get[htmlRenderState](world, owner)
+	removed, _ := world.Get[htmlRenderState](owner)
 	if removed.Boxes != initial.Boxes || removed.SyncStats.Layouts != 0 || removed.SyncStats.Spawned != 0 || removed.SyncStats.Despawned != 1 {
 		t.Fatalf("background removal work = %+v", removed.SyncStats)
 	}
@@ -364,7 +364,7 @@ func TestHTMLMutationClearsStaleScrollRouting(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	target.SetAttribute("style", "height:30px")
 	incrementalSync(t, world)
-	for entity, access := range ecs.Query[ScrollContent](world).All {
+	for entity, access := range world.Query[ScrollContent]().All {
 		content := access.Get()
 
 		t.Errorf("stale scroll binding on %d: %+v", entity, content)
@@ -374,13 +374,13 @@ func TestHTMLMutationClearsStaleScrollRouting(t *testing.T) {
 func TestHTMLMutationSharesLayoutInvalidationWithFocus(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<style>button:focus{width:150px}.hot{color:red}</style><button id="target">Target</button>`)
 	node := incrementalHTMLNode(t, world, owner, "target")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	control := state.EntityGroups[htmlRenderIdentity{Node: node.node, Role: htmlRoleControl}].Bindings[0].Entity
 	SetControlFocus(world, control, true)
 	node.SetAttribute("class", "hot")
 	incrementalSync(t, world)
-	size, _ := ecs.Get[scene.Size2D](world, control)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	size, _ := world.Get[scene.Size2D](control)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.Styles[node.node].Width != style.LengthPx(150) || state.SyncStats.Layouts != 1 || size.Width < 150 {
 		t.Fatalf("attribute update swallowed pending focus layout: width=%v", size.Width)
 	}
@@ -419,7 +419,7 @@ func TestHTMLTextUpdateRetainsUnaffectedLayout(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target">Before</div><div id="sibling">Unchanged</div>`+strings.Repeat(`<div>Other text</div>`, 100))
 	target := incrementalHTMLNode(t, world, owner, "target")
 	sibling := incrementalHTMLNode(t, world, owner, "sibling")
-	before, _ := ecs.Get[htmlRenderState](world, owner)
+	before, _ := world.Get[htmlRenderState](owner)
 	root, siblingBox := before.Boxes, before.BoxesByNode[sibling.node]
 	glyph := &siblingBox.TextFragments[0].Glyphs[0]
 	for i := 0; i < 20; i++ {
@@ -429,7 +429,7 @@ func TestHTMLTextUpdateRetainsUnaffectedLayout(t *testing.T) {
 		}
 		target.SetText(value)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.Boxes != root || state.BoxesByNode[sibling.node] != siblingBox || &siblingBox.TextFragments[0].Glyphs[0] != glyph {
 			t.Fatal("unrelated layout/text storage replaced")
 		}

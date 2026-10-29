@@ -41,7 +41,7 @@ func TestInputEventUsesCompactLayout(t *testing.T) {
 func spawnInputCameraForTest(t *testing.T, world *ecs.World, width, height int) ecs.Entity {
 	t.Helper()
 	entity := SpawnCamera2D(world)
-	camera := ecs.GetMut[Camera](world, entity)
+	camera := world.GetMut[Camera](entity)
 	camera.UpdateViewport(width, height)
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -81,31 +81,31 @@ func TestInputEventFromPlatform(t *testing.T) {
 
 func TestDispatchInputEvents2DSystemEmitsTapForPickTarget(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	spawnInputCameraForTest(t, world, 200, 100)
 	bundle := ecs.NewBundle(7)
-	ecs.Put(&bundle, UITransformFromXY(10, 20))
-	ecs.Put(&bundle, UIGlobalTransform{})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, Sprite2D{Width: 100, Height: 40, Alpha: 1})
-	ecs.Put(&bundle, InputTarget2D{})
-	ecs.Put(&bundle, InputState2D{})
+	bundle.Put(UITransformFromXY(10, 20))
+	bundle.Put(UIGlobalTransform{})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(Sprite2D{Width: 100, Height: 40, Alpha: 1})
+	bundle.Put(InputTarget2D{})
+	bundle.Put(InputState2D{})
 	target := world.Spawn(bundle)
 
 	if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatalf("sync transform: %v", err)
 	}
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 24, 36)
 	if err := DispatchInputEvents2DSystem("").Run(world); err != nil {
 		t.Fatalf("input down: %v", err)
 	}
-	pointerState, _ := ecs.Get[InputState2D](world, target)
+	pointerState, _ := world.Get[InputState2D](target)
 	if !pointerState.Hovered || !pointerState.Pressed {
 		t.Fatalf("ordinary sprite input state after press = %+v", pointerState)
 	}
-	capture, ok := ecs.GetResource[*InputCapture2D](world)
+	capture, ok := world.GetResource[*InputCapture2D]()
 	if !ok || capture == nil || capture.Target != target || capture.Receiver != target {
 		t.Fatalf("unexpected input capture after press: %#v", capture)
 	}
@@ -129,7 +129,7 @@ func TestDispatchInputEvents2DSystemEmitsTapForPickTarget(t *testing.T) {
 	if len(events[1].Path) != 0 {
 		t.Fatalf("unexpected root input event path: %#v", events[1].Path)
 	}
-	pointerState, _ = ecs.Get[InputState2D](world, target)
+	pointerState, _ = world.Get[InputState2D](target)
 	if !pointerState.Hovered || pointerState.Pressed {
 		t.Fatalf("ordinary sprite input state after release = %+v", pointerState)
 	}
@@ -141,15 +141,15 @@ func TestDispatchInputEvents2DSystemEmitsTapForPickTarget(t *testing.T) {
 func TestDispatchInputCacheInvalidatesWhenTargetComponentIsRemoved(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	spawnInputCameraForTest(t, world, 200, 100)
 	bundle := ecs.NewBundle(6)
-	ecs.Put(&bundle, UITransformFromXY(10, 20))
-	ecs.Put(&bundle, UIGlobalTransform{})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, InputTarget2D{Width: 100, Height: 40})
-	ecs.Put(&bundle, InputState2D{})
+	bundle.Put(UITransformFromXY(10, 20))
+	bundle.Put(UIGlobalTransform{})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(InputTarget2D{Width: 100, Height: 40})
+	bundle.Put(InputState2D{})
 	target := world.Spawn(bundle)
 	if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -160,17 +160,17 @@ func TestDispatchInputCacheInvalidatesWhenTargetComponentIsRemoved(t *testing.T)
 	if err := inputSystem.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	if pointer, _ := ecs.Get[InputState2D](world, target); !pointer.Hovered {
+	if pointer, _ := world.Get[InputState2D](target); !pointer.Hovered {
 		t.Fatal("target was not hovered before removal")
 	}
 	state.EndFrame()
-	if _, ok := ecs.Remove[InputTarget2D](world, target); !ok {
+	if _, ok := world.Remove[InputTarget2D](target); !ok {
 		t.Fatal("input target was not removed")
 	}
 	if err := inputSystem.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	if pointer, _ := ecs.Get[InputState2D](world, target); pointer.Hovered {
+	if pointer, _ := world.Get[InputState2D](target); pointer.Hovered {
 		t.Fatal("removed input target retained hover state")
 	}
 	events := (&ecs.MessageReader[InputEvent]{}).Read(world)
@@ -181,24 +181,24 @@ func TestDispatchInputCacheInvalidatesWhenTargetComponentIsRemoved(t *testing.T)
 
 func TestRemapInputEntity2DPreservesReleaseAndTap(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	spawnInputCameraForTest(t, world, 200, 100)
 	spawnTarget := func() ecs.Entity {
 		bundle := ecs.NewBundle(7)
-		ecs.Put(&bundle, UITransformFromXY(10, 20))
-		ecs.Put(&bundle, UIGlobalTransform{})
-		ecs.Put(&bundle, Visibility{Visible: true})
-		ecs.Put(&bundle, AnchorTopLeft)
-		ecs.Put(&bundle, Sprite2D{Width: 100, Height: 40, Alpha: 1})
-		ecs.Put(&bundle, InputTarget2D{Width: 100, Height: 40})
-		ecs.Put(&bundle, InputState2D{})
+		bundle.Put(UITransformFromXY(10, 20))
+		bundle.Put(UIGlobalTransform{})
+		bundle.Put(Visibility{Visible: true})
+		bundle.Put(AnchorTopLeft)
+		bundle.Put(Sprite2D{Width: 100, Height: 40, Alpha: 1})
+		bundle.Put(InputTarget2D{Width: 100, Height: 40})
+		bundle.Put(InputState2D{})
 		return world.Spawn(bundle)
 	}
 	previous := spawnTarget()
 	if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	inputState, _ := ecs.GetResource[*input.State](world)
+	inputState, _ := world.GetResource[*input.State]()
 	inputState.PressMouse(input.MouseLeft, 24, 36)
 	if err := DispatchInputEvents2DSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -210,11 +210,11 @@ func TestRemapInputEntity2DPreservesReleaseAndTap(t *testing.T) {
 		t.Fatal(err)
 	}
 	RemapInputEntity2D(world, previous, current)
-	state, _ := ecs.Get[InputState2D](world, current)
+	state, _ := world.Get[InputState2D](current)
 	if !state.Hovered || !state.Pressed {
 		t.Fatalf("remapped input state = %+v", state)
 	}
-	capture, _ := ecs.GetResource[*InputCapture2D](world)
+	capture, _ := world.GetResource[*InputCapture2D]()
 	if capture.Target != current || capture.Receiver != current {
 		t.Fatalf("remapped capture = %#v", capture)
 	}
@@ -236,7 +236,7 @@ func TestRemapInputEntity2DPreservesReleaseAndTap(t *testing.T) {
 	if !released || !tapped {
 		t.Fatalf("remapped release/tap events = %#v", events)
 	}
-	state, _ = ecs.Get[InputState2D](world, current)
+	state, _ = world.Get[InputState2D](current)
 	if !state.Hovered || state.Pressed {
 		t.Fatalf("remapped state after release = %+v", state)
 	}
@@ -246,7 +246,7 @@ func TestInputEventPathFollowsParents(t *testing.T) {
 	world := ecs.NewWorld()
 	spawnParent := func(parent ecs.Entity) ecs.Entity {
 		bundle := ecs.NewBundle(1)
-		ecs.Put(&bundle, Parent{Entity: parent})
+		bundle.Put(Parent{Entity: parent})
 		return world.Spawn(bundle)
 	}
 	root := spawnParent(0)
@@ -263,16 +263,16 @@ func TestInputHandlerBubblesAndConsumes(t *testing.T) {
 	world := ecs.NewWorld()
 	visited := []ecs.Entity{}
 	rootBundle := ecs.NewBundle(2)
-	ecs.Put(&rootBundle, Parent{})
-	ecs.Put(&rootBundle, InputHandler2D{Handle: func(context *InputEventContext) {
+	rootBundle.Put(Parent{})
+	rootBundle.Put(InputHandler2D{Handle: func(context *InputEventContext) {
 		visited = append(visited, context.Current)
 		context.Consume()
 	}})
 	root := world.Spawn(rootBundle)
 	childBundle := ecs.NewBundle(3)
-	ecs.Put(&childBundle, Parent{Entity: root})
-	ecs.Put(&childBundle, InputTarget2D{InputFilter: InputFilterPass})
-	ecs.Put(&childBundle, InputHandler2D{Handle: func(context *InputEventContext) {
+	childBundle.Put(Parent{Entity: root})
+	childBundle.Put(InputTarget2D{InputFilter: InputFilterPass})
+	childBundle.Put(InputHandler2D{Handle: func(context *InputEventContext) {
 		visited = append(visited, context.Current)
 	}})
 	child := world.Spawn(childBundle)
@@ -294,18 +294,18 @@ func TestInputHandlerBubblesAndConsumes(t *testing.T) {
 func TestInputHandlerHonorsInheritedActivity(t *testing.T) {
 	w := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(1)
-	ecs.Put(&parentBundle, Activity{Active: false})
+	parentBundle.Put(Activity{Active: false})
 	parent := w.Spawn(parentBundle)
 	calls := 0
 	b := ecs.NewBundle(2)
-	ecs.Put(&b, Parent{Entity: parent})
-	ecs.Put(&b, InputHandler2D{Handle: func(*InputEventContext) { calls++ }})
+	b.Put(Parent{Entity: parent})
+	b.Put(InputHandler2D{Handle: func(*InputEventContext) { calls++ }})
 	child := w.Spawn(b)
 	DispatchInputEvent(w, InputEvent{Entity: child, Kind: InputEventTap})
 	if calls != 0 {
 		t.Fatal("inactive descendant received synchronous input")
 	}
-	ecs.GetMut[Activity](w, parent).Active = true
+	w.GetMut[Activity](parent).Active = true
 	DispatchInputEvent(w, InputEvent{Entity: child, Kind: InputEventTap})
 	if calls != 1 {
 		t.Fatal("resumed descendant lost synchronous input")
@@ -317,7 +317,7 @@ func TestInputEventArenaPreservesNestedEventContext(t *testing.T) {
 	var nested bool
 	var outerKind InputEventKind
 	rootBundle := ecs.NewBundle(2)
-	ecs.Put(&rootBundle, InputHandler2D{Handle: func(context *InputEventContext) {
+	rootBundle.Put(InputHandler2D{Handle: func(context *InputEventContext) {
 		if nested {
 			return
 		}
@@ -330,7 +330,7 @@ func TestInputEventArenaPreservesNestedEventContext(t *testing.T) {
 	}})
 	root := world.Spawn(rootBundle)
 	childBundle := ecs.NewBundle(1)
-	ecs.Put(&childBundle, Parent{Entity: root})
+	childBundle.Put(Parent{Entity: root})
 	child := world.Spawn(childBundle)
 
 	DispatchInputEvent(world, InputEvent{
@@ -350,10 +350,10 @@ func TestInputEventArenaPreservesNestedEventContext(t *testing.T) {
 func TestInputEventArenaAvoidsStableFrameAllocations(t *testing.T) {
 	world := ecs.NewWorld()
 	DispatchInputEvent(world, InputEvent{Kind: InputEventMove})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 	allocations := testing.AllocsPerRun(100, func() {
 		DispatchInputEvent(world, InputEvent{Kind: InputEventMove})
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	})
 	if allocations != 0 {
 		t.Fatalf("stable input event dispatch allocated %.0f objects, want 0", allocations)
@@ -363,28 +363,28 @@ func TestInputEventArenaAvoidsStableFrameAllocations(t *testing.T) {
 func TestInputBlockerPreventsEventsUnlessConfiguredToPassThrough(t *testing.T) {
 	for _, passThrough := range []bool{false, true} {
 		world := ecs.NewWorld()
-		ecs.InsertResource(world, input.NewState())
+		world.InsertResource(input.NewState())
 		spawnInputCameraForTest(t, world, 200, 100)
 		target := ecs.NewBundle(6)
-		ecs.Put(&target, NewUITransform())
-		ecs.Put(&target, UIGlobalTransform{})
-		ecs.Put(&target, Visibility{Visible: true})
-		ecs.Put(&target, AnchorTopLeft)
-		ecs.Put(&target, InputTarget2D{Width: 100, Height: 40})
-		ecs.Put(&target, UIStackIndex(0))
+		target.Put(NewUITransform())
+		target.Put(UIGlobalTransform{})
+		target.Put(Visibility{Visible: true})
+		target.Put(AnchorTopLeft)
+		target.Put(InputTarget2D{Width: 100, Height: 40})
+		target.Put(UIStackIndex(0))
 		world.Spawn(target)
 		blocker := ecs.NewBundle(6)
-		ecs.Put(&blocker, NewUITransform())
-		ecs.Put(&blocker, UIGlobalTransform{})
-		ecs.Put(&blocker, Visibility{Visible: true})
-		ecs.Put(&blocker, AnchorTopLeft)
-		ecs.Put(&blocker, InputBlocker2D{Width: 100, Height: 40, PassThrough: passThrough})
-		ecs.Put(&blocker, UIStackIndex(1))
+		blocker.Put(NewUITransform())
+		blocker.Put(UIGlobalTransform{})
+		blocker.Put(Visibility{Visible: true})
+		blocker.Put(AnchorTopLeft)
+		blocker.Put(InputBlocker2D{Width: 100, Height: 40, PassThrough: passThrough})
+		blocker.Put(UIStackIndex(1))
 		world.Spawn(blocker)
 		if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		state, _ := ecs.GetResource[*input.State](world)
+		state, _ := world.GetResource[*input.State]()
 		state.PressMouse(input.MouseLeft, 10, 10)
 		if err := DispatchInputEvents2DSystem("").Run(world); err != nil {
 			t.Fatal(err)
@@ -401,20 +401,20 @@ func TestInputBlockerPreventsEventsUnlessConfiguredToPassThrough(t *testing.T) {
 
 func TestInputFilterIgnoreSkipsTarget(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	spawnInputCameraForTest(t, world, 200, 100)
 	bundle := ecs.NewBundle(6)
-	ecs.Put(&bundle, UITransformFromXY(0, 0))
-	ecs.Put(&bundle, UIGlobalTransform{})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, InputTarget2D{Width: 100, Height: 40, InputFilter: InputFilterIgnore})
-	ecs.Put(&bundle, InputState2D{})
+	bundle.Put(UITransformFromXY(0, 0))
+	bundle.Put(UIGlobalTransform{})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(InputTarget2D{Width: 100, Height: 40, InputFilter: InputFilterIgnore})
+	bundle.Put(InputState2D{})
 	world.Spawn(bundle)
 	if err := SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 10, 10)
 	if err := DispatchInputEvents2DSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -427,7 +427,7 @@ func TestInputFilterIgnoreSkipsTarget(t *testing.T) {
 func TestWorldInputCoordinatesRejectOutsideCameraViewport(t *testing.T) {
 	world := ecs.NewWorld()
 	entity := SpawnCamera2D(world)
-	camera := ecs.GetMut[Camera](world, entity)
+	camera := world.GetMut[Camera](entity)
 	camera.UpdateViewport(800, 600)
 	camera.Viewport = CameraViewport{X: 100, Y: 50, Width: 400, Height: 300}
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
@@ -478,13 +478,13 @@ func TestInputTargetContainsUsesLocalQuadInsteadOfWorldAABB(t *testing.T) {
 
 func TestInputPickingUsesCameraViewportAndRenderLayers(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	spawnCamera := func(viewport CameraViewport, layer uint) ecs.Entity {
 		entity := SpawnCamera2D(world)
-		camera := ecs.GetMut[Camera](world, entity)
+		camera := world.GetMut[Camera](entity)
 		camera.UpdateViewport(200, 100)
 		camera.Viewport = viewport
-		if err := ecs.Insert(world, entity, RenderLayer(layer)); err != nil {
+		if err := world.Insert(entity, RenderLayer(layer)); err != nil {
 			t.Fatal(err)
 		}
 		return entity
@@ -496,13 +496,13 @@ func TestInputPickingUsesCameraViewportAndRenderLayers(t *testing.T) {
 	}
 
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, InputTarget2D{Width: 20, Height: 20})
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorCenter)
-	ecs.Put(&bundle, RenderLayer(1))
+	bundle.Put(InputTarget2D{Width: 20, Height: 20})
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorCenter)
+	bundle.Put(RenderLayer(1))
 	target := world.Spawn(bundle)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 150, 50)
 	if err := DispatchInputEvents2DSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -515,7 +515,7 @@ func TestInputPickingUsesCameraViewportAndRenderLayers(t *testing.T) {
 
 func BenchmarkCollectInputTargets2D10000(b *testing.B) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner3[InputTarget2D, GlobalTransform, Visibility](world)
+	spawner := world.NewSpawner3[InputTarget2D, GlobalTransform, Visibility]()
 	for range 10000 {
 		spawner.Spawn(
 			InputTarget2D{Width: 10, Height: 10},
@@ -534,18 +534,18 @@ func BenchmarkCollectInputTargets2D10000(b *testing.B) {
 func TestDispatchInputUsesPressPositionBeforeSameFrameMove(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	spawnInputCameraForTest(t, world, 200, 100)
 	var first ecs.Entity
 	for _, x := range []float32{10, 100} {
 		bundle := ecs.NewBundle(7)
-		ecs.Put(&bundle, UITransformFromXY(x, 20))
-		ecs.Put(&bundle, UIGlobalTransform{})
-		ecs.Put(&bundle, Visibility{Visible: true})
-		ecs.Put(&bundle, AnchorTopLeft)
-		ecs.Put(&bundle, Sprite2D{Width: 80, Height: 40, Alpha: 1})
-		ecs.Put(&bundle, InputTarget2D{})
-		ecs.Put(&bundle, InputState2D{})
+		bundle.Put(UITransformFromXY(x, 20))
+		bundle.Put(UIGlobalTransform{})
+		bundle.Put(Visibility{Visible: true})
+		bundle.Put(AnchorTopLeft)
+		bundle.Put(Sprite2D{Width: 80, Height: 40, Alpha: 1})
+		bundle.Put(InputTarget2D{})
+		bundle.Put(InputState2D{})
 		entity := world.Spawn(bundle)
 		if first == 0 {
 			first = entity

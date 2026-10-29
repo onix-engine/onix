@@ -195,7 +195,7 @@ func (layers RenderLayers) normalizedBlocks() []uint64 {
 
 // LayersForEntity returns authored render layers or the default layer zero.
 func LayersForEntity(world *ecs.World, entity ecs.Entity) RenderLayers {
-	if layers, ok := ecs.Get[RenderLayers](world, entity); ok {
+	if layers, ok := world.Get[RenderLayers](entity); ok {
 		return layers
 	}
 	return RenderLayers{}
@@ -206,7 +206,7 @@ func SortedCameraEntities(world *ecs.World) []ecs.Entity {
 	entities := make([]ecs.Entity, 0, 4)
 	var fallback ecs.Entity
 	has2D := false
-	for entity, access := range ecs.Query[Camera](world).All {
+	for entity, access := range world.Query[Camera]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
@@ -217,7 +217,7 @@ func SortedCameraEntities(world *ecs.World) []ecs.Entity {
 				fallback = entity
 				continue
 			}
-			has2D = has2D || ecs.Has[Camera2D](world, entity)
+			has2D = has2D || world.Has[Camera2D](entity)
 			entities = append(entities, entity)
 		}
 	}
@@ -241,8 +241,8 @@ func sortCameraEntities(world *ecs.World, entities []ecs.Entity) {
 }
 
 func compareCameraEntities(world *ecs.World, a, b ecs.Entity) int {
-	cameraA, _ := ecs.Get[Camera](world, a)
-	cameraB, _ := ecs.Get[Camera](world, b)
+	cameraA, _ := world.Get[Camera](a)
+	cameraB, _ := world.Get[Camera](b)
 	if order := cmp.Compare(cameraA.Order, cameraB.Order); order != 0 {
 		return order
 	}
@@ -254,13 +254,13 @@ func PrimaryCamera2D(world *ecs.World) (ecs.Entity, bool) {
 	var primary ecs.Entity
 	var fallback ecs.Entity
 	primaryOrder := 0
-	for entity, access := range ecs.Query[Camera](world).All {
+	for entity, access := range world.Query[Camera]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
 		camera := access.Get()
 
-		if !camera.Active || !ecs.Has[Camera2D](world, entity) {
+		if !camera.Active || !world.Has[Camera2D](entity) {
 			continue
 		}
 		if camera.Fallback {
@@ -282,9 +282,9 @@ func primaryCamera2DComponents(world *ecs.World) (Camera, Projection, GlobalTran
 	if !ok {
 		return Camera{}, Projection{}, GlobalTransform{}, false
 	}
-	camera, cameraOK := ecs.Get[Camera](world, entity)
-	projection, projectionOK := ecs.Get[Projection](world, entity)
-	transform, transformOK := ecs.Get[GlobalTransform](world, entity)
+	camera, cameraOK := world.Get[Camera](entity)
+	projection, projectionOK := world.Get[Projection](entity)
+	transform, transformOK := world.Get[GlobalTransform](entity)
 	return camera, projection, transform, cameraOK && projectionOK && transformOK
 }
 
@@ -309,6 +309,6 @@ func WorldToViewport2D(world *ecs.World, worldPosition mgl32.Vec2) (mgl32.Vec2, 
 }
 
 func SpawnCamera2D(world *ecs.World) ecs.Entity {
-	spawner := ecs.NewSpawner5[Camera, Camera2D, Projection, Transform, GlobalTransform](world)
+	spawner := world.NewSpawner5[Camera, Camera2D, Projection, Transform, GlobalTransform]()
 	return spawner.Spawn(NewCamera(), Camera2D{}, OrthographicProjection2D(), NewTransform(), GlobalTransform{})
 }

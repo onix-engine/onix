@@ -10,19 +10,19 @@ import (
 
 func TestFindPartRefreshesForOwnerChangesMigrationAndSlotReuse(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]](world)
+	spawner := world.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]]()
 	first := spawner.Spawn(Relation[scene.Text2D]{Owner: 1}, Part[ValuePart]{})
 	second := spawner.Spawn(Relation[scene.Text2D]{Owner: 1}, Part[ValuePart]{})
 	if got, _ := FindPart[ValuePart, scene.Text2D](world, 1); got != first {
 		t.Fatal("initial query order was not preserved")
 	}
-	if err := ecs.Insert(world, first, scene.Name{Value: "migrated"}); err != nil {
+	if err := world.Insert(first, scene.Name{Value: "migrated"}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := FindPart[ValuePart, scene.Text2D](world, 1); got != second {
 		t.Fatal("column migration did not refresh first match")
 	}
-	relation := ecs.GetMut[Relation[scene.Text2D]](world, second)
+	relation := world.GetMut[Relation[scene.Text2D]](second)
 	relation.Owner = 2
 	if got, _ := FindPart[ValuePart, scene.Text2D](world, 2); got != second {
 		t.Fatal("owner mutation did not refresh index")
@@ -49,10 +49,10 @@ func TestTextareaScrollMeasurementsRefreshBetweenSyncPhases(t *testing.T) {
 	}
 	textEntity, _ := FindPart[ValuePart, scene.Text2D](world, owner)
 	for _, value := range []string{"short", strings.Repeat("long text ", 40), "short"} {
-		text := ecs.GetMut[scene.Text2D](world, textEntity)
+		text := world.GetMut[scene.Text2D](textEntity)
 		text.Value = value
 		syncSurfaceElements(world, Skin{}, syncMetrics{})
-		size, _ := ecs.Get[scene.Size2D](world, track)
+		size, _ := world.Get[scene.Size2D](track)
 		if (size.Width > 0) != (len(value) > 5) {
 			t.Fatalf("stale scrollbar measurement for %q: %+v", value, size)
 		}
@@ -65,19 +65,19 @@ func TestTextControlSpawnPreservesPasswordStyleAndBodyDefaults(t *testing.T) {
 	options := TextOptions{Width: 120, Height: 60, Value: "secret", Password: true, Radius: 8, Style: &style, Disabled: true}
 	input, textarea := SpawnInput(world, options), SpawnTextarea(world, options)
 	for _, entity := range []ecs.Entity{input, textarea} {
-		field, _ := ecs.Get[TextField](world, entity)
-		if field.Password != (entity == input) || !ecs.Has[StyleOverride[TextFieldStyle]](world, entity) {
+		field, _ := world.Get[TextField](entity)
+		if field.Password != (entity == input) || !world.Has[StyleOverride[TextFieldStyle]](entity) {
 			t.Fatal("text behavior or style override changed")
 		}
-		target, _ := ecs.Get[scene.InputTarget2D](world, entity)
+		target, _ := world.Get[scene.InputTarget2D](entity)
 		body, _ := FindPart[BodyPart, SurfaceStyle](world, entity)
-		background, _ := ecs.Get[scene.UIBackground2D](world, body)
-		image, _ := ecs.Get[scene.UIImage2D](world, body)
+		background, _ := world.Get[scene.UIBackground2D](body)
+		image, _ := world.Get[scene.UIImage2D](body)
 		if !target.Disabled || background.Shape.Radius != 8 || image != scene.NewUIImage2D(nil) {
 			t.Fatal("spawned body lost radius, image defaults or disabled state")
 		}
 	}
-	if !ecs.Has[textFieldMaskCache](world, input) || ecs.Has[textFieldMaskCache](world, textarea) {
+	if !world.Has[textFieldMaskCache](input) || world.Has[textFieldMaskCache](textarea) {
 		t.Fatal("incorrect password cache components")
 	}
 }

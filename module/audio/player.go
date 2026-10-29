@@ -30,7 +30,7 @@ type Player struct {
 }
 
 func NewPlayer(c *module.Context, resource string) (*Player, error) {
-	clip, err := module.Resource[*audio.Clip](c, "audio", resource)
+	clip, err := c.Resource[*audio.Clip]("audio", resource)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func NewPlayer(c *module.Context, resource string) (*Player, error) {
 		return nil, err
 	}
 	p := &Player{context: c, player: player, suspended: !c.Active()}
-	if err := module.Own(c, p); err != nil {
+	if err := c.Own(p); err != nil {
 		_ = player.Close()
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (p *Player) Close() error {
 	}
 	err := p.player.Close()
 	p.player, p.wanted = nil, false
-	module.Disown(p.context, p)
+	p.context.Disown(p)
 	return err
 }
 func (p *Player) Activate(active bool) error {

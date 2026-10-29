@@ -37,21 +37,21 @@ func TestIdleSkipsSchedulesAndWakesForChangesInputAndDeadline(t *testing.T) {
 	if updates != 1 {
 		t.Fatalf("idle ran updates: %d", updates)
 	}
-	spawner := ecs.NewSpawner1[scene.Transform](app.World)
+	spawner := app.World.NewSpawner1[scene.Transform]()
 	entity := spawner.Spawn(scene.NewTransform())
 	step(true)
-	pose := ecs.GetMut[scene.Transform](app.World, entity)
+	pose := app.World.GetMut[scene.Transform](entity)
 	pose.Translation[0]++
 	step(true)
-	state, _ := ecs.GetResource[*input.State](app.World)
+	state, _ := app.World.GetResource[*input.State]()
 	state.Enqueue(input.Event{Kind: input.EventKeyDown, Key: input.KeyA})
 	step(true)
 	if !state.KeyHeld(input.KeyA) {
 		t.Fatal("wake lost input")
 	}
-	ecs.InsertResource(app.World, 42)
+	app.World.InsertResource(42)
 	step(true)
-	ecs.WriteMessage(app.World, "wake")
+	app.World.WriteMessage("wake")
 	step(true)
 	deadline := now.Add(time.Second)
 	app.WakeAt(deadline)
@@ -76,18 +76,18 @@ func TestIdlePreservesContinuousSimulation(t *testing.T) {
 	defer app.Destroy()
 	app.SetRenderMode(RenderOnDemand)
 	app.SetIdleEnabled(true)
-	if err := InstallSystems[Physics2D](app); err != nil {
+	if err := app.InstallSystems[Physics2D](); err != nil {
 		t.Fatal(err)
 	}
 	if !app.idleEligible() {
 		t.Fatal("empty physics feature prevented suspension")
 	}
-	s := ecs.NewSpawner2[physics.RigidBody2D, scene.Transform](app.World)
+	s := app.World.NewSpawner2[physics.RigidBody2D, scene.Transform]()
 	e := s.Spawn(physics.NewRigidBody2D(physics.BodyDynamic), scene.NewTransform())
 	if app.idleEligible() {
 		t.Fatal("active physics body allowed suspension")
 	}
-	if err := ecs.Insert(app.World, e, scene.Activity{}); err != nil {
+	if err := app.World.Insert(e, scene.Activity{}); err != nil {
 		t.Fatal(err)
 	}
 	if !app.idleEligible() {
@@ -102,9 +102,9 @@ func TestIdleWithInstalledEffectsAndCompletedAnimation(t *testing.T) {
 	app.SetIdleEnabled(true)
 	app.SetTargetFPS(0)
 	for _, install := range []func(*App) error{
-		InstallSystems[Animations2D], InstallSystems[SpriteTrails2D],
-		InstallSystems[Particles2D], InstallSystems[Spine2D],
-		InstallSystems[Physics2D], InstallSystems[Physics3D],
+		(*App).InstallSystems[Animations2D], (*App).InstallSystems[SpriteTrails2D],
+		(*App).InstallSystems[Particles2D], (*App).InstallSystems[Spine2D],
+		(*App).InstallSystems[Physics2D], (*App).InstallSystems[Physics3D],
 	} {
 		if err := install(app); err != nil {
 			t.Fatal(err)
@@ -113,13 +113,13 @@ func TestIdleWithInstalledEffectsAndCompletedAnimation(t *testing.T) {
 	if !app.idleEligible() {
 		t.Fatal("empty capabilities prevented idle")
 	}
-	spawner := ecs.NewSpawner1[scene.Animator](app.World)
+	spawner := app.World.NewSpawner1[scene.Animator]()
 	entity := spawner.Spawn(scene.NewAnimator(&scene.AnimationClip{Duration: .01}, false))
 	if app.idleEligible() {
 		t.Fatal("playing animation allowed idle")
 	}
 	app.ensureECSResources()
-	clock, _ := ecs.GetResource[*scene.Time](app.World)
+	clock, _ := app.World.GetResource[*scene.Time]()
 	clock.Delta = time.Second
 	if err := scene.UpdateWorldAnimatorSystem("").Run(app.World); err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func TestIdleWithInstalledEffectsAndCompletedAnimation(t *testing.T) {
 	}); allocations != 0 {
 		t.Fatalf("idle with installed capabilities allocated %g times", allocations)
 	}
-	ecs.GetMut[scene.Animator](app.World, entity).Play()
+	app.World.GetMut[scene.Animator](entity).Play()
 	if app.idleEligible() {
 		t.Fatal("restarted animation failed to wake simulation")
 	}
@@ -151,7 +151,7 @@ func TestIdleWakesOnlyAtCaretBlinkDeadline(t *testing.T) {
 	app.SetTargetFPS(0)
 	now := time.Unix(10, 0)
 	app.now = func() time.Time { return now }
-	if err := InstallSystems[UIWidgets](app); err != nil {
+	if err := app.InstallSystems[UIWidgets](); err != nil {
 		t.Fatal(err)
 	}
 	field := ui.SpawnInput(app.World, ui.TextOptions{Width: 160, Height: 36, Value: "stable"})
@@ -193,7 +193,7 @@ func TestIdleWakesOnlyAtCaretBlinkDeadline(t *testing.T) {
 func TestIdleRenderRequestsAreConcurrent(t *testing.T) {
 	app := NewApp()
 	app.ensureECSResources()
-	request, _ := ecs.GetResource[*scene.RenderRequest](app.World)
+	request, _ := app.World.GetResource[*scene.RenderRequest]()
 	var group sync.WaitGroup
 	for range 4 {
 		group.Go(func() {
@@ -216,7 +216,7 @@ func TestIdleWorkerStartedBeforeFirstFrameCanWakeApp(t *testing.T) {
 	app.SetRenderMode(RenderOnDemand)
 	app.SetIdleEnabled(true)
 	app.SetTargetFPS(0)
-	request, ok := ecs.GetResource[*scene.RenderRequest](app.World)
+	request, ok := app.World.GetResource[*scene.RenderRequest]()
 	if !ok || request == nil {
 		t.Fatal("loaders cannot capture a wake request before the first frame")
 	}
@@ -262,17 +262,17 @@ func TestIdleConsumesFinalPhysicsChanges(t *testing.T) {
 				app.SetTargetFPS(0)
 				now := time.Unix(10, 0)
 				app.now = func() time.Time { return now }
-				if err := InstallSystems[Physics2D](app); err != nil {
+				if err := app.InstallSystems[Physics2D](); err != nil {
 					t.Fatal(err)
 				}
-				if err := InstallSystems[Physics3D](app); err != nil {
+				if err := app.InstallSystems[Physics3D](); err != nil {
 					t.Fatal(err)
 				}
-				r2, _ := ecs.GetResource[*physics.Runtime2D](app.World)
-				r3, _ := ecs.GetResource[*physics.Runtime3D](app.World)
+				r2, _ := app.World.GetResource[*physics.Runtime2D]()
+				r3, _ := app.World.GetResource[*physics.Runtime3D]()
 				r2.Simulation.Gravity, r3.Simulation.Gravity = physics.Vector{}, physics.Vector3D{}
 				r2.Simulation.Sleep.Enabled = sleep
-				spawner := ecs.NewSpawner3[physics.RigidBody2D, physics.RigidBody3D, scene.Transform](app.World)
+				spawner := app.World.NewSpawner3[physics.RigidBody2D, physics.RigidBody3D, scene.Transform]()
 				e := spawner.Spawn(physics.NewRigidBody2D(physics.BodyDynamic), physics.NewRigidBody3D(physics.BodyDynamic), scene.NewTransform())
 				step := func(delta time.Duration) {
 					t.Helper()
@@ -283,22 +283,22 @@ func TestIdleConsumesFinalPhysicsChanges(t *testing.T) {
 				}
 				step(0)
 				step(time.Second / 60)
-				body2 := ecs.GetRef[physics.RigidBody2D](app.World, e).Handle()
-				body3 := ecs.GetRef[physics.RigidBody3D](app.World, e).Handle()
+				body2 := app.World.GetRef[physics.RigidBody2D](e).Handle()
+				body3 := app.World.GetRef[physics.RigidBody3D](e).Handle()
 				if !body2.Valid() || !body3.Valid() {
 					t.Fatal("initial physics step did not create bodies")
 				}
 				switch change {
 				case "static":
-					ecs.GetMut[physics.RigidBody2D](app.World, e).Type = physics.BodyStatic
-					ecs.GetMut[physics.RigidBody3D](app.World, e).Type = physics.BodyStatic
+					app.World.GetMut[physics.RigidBody2D](e).Type = physics.BodyStatic
+					app.World.GetMut[physics.RigidBody3D](e).Type = physics.BodyStatic
 				case "remove-body":
-					ecs.Remove[physics.RigidBody2D](app.World, e)
-					ecs.Remove[physics.RigidBody3D](app.World, e)
+					app.World.Remove[physics.RigidBody2D](e)
+					app.World.Remove[physics.RigidBody3D](e)
 				case "remove-transform":
-					ecs.Remove[scene.Transform](app.World, e)
+					app.World.Remove[scene.Transform](e)
 				case "inactive":
-					if err := ecs.Insert(app.World, e, scene.Activity{}); err != nil {
+					if err := app.World.Insert(e, scene.Activity{}); err != nil {
 						t.Fatal(err)
 					}
 				case "despawn":
@@ -336,13 +336,13 @@ func TestIdleInitializesStaticPhysicsBeforeSleeping(t *testing.T) {
 	app.SetTargetFPS(0)
 	now := time.Unix(10, 0)
 	app.now = func() time.Time { return now }
-	if err := InstallSystems[Physics2D](app); err != nil {
+	if err := app.InstallSystems[Physics2D](); err != nil {
 		t.Fatal(err)
 	}
-	if err := InstallSystems[Physics3D](app); err != nil {
+	if err := app.InstallSystems[Physics3D](); err != nil {
 		t.Fatal(err)
 	}
-	s := ecs.NewSpawner3[physics.RigidBody2D, physics.RigidBody3D, scene.Transform](app.World)
+	s := app.World.NewSpawner3[physics.RigidBody2D, physics.RigidBody3D, scene.Transform]()
 	e := s.Spawn(physics.NewRigidBody2D(physics.BodyStatic), physics.NewRigidBody3D(physics.BodyStatic), scene.NewTransform())
 	if _, err := app.Step(); err != nil {
 		t.Fatal(err)
@@ -354,7 +354,7 @@ func TestIdleInitializesStaticPhysicsBeforeSleeping(t *testing.T) {
 	if _, err := app.Step(); err != nil {
 		t.Fatal(err)
 	}
-	if !ecs.GetRef[physics.RigidBody2D](app.World, e).Handle().Valid() || !ecs.GetRef[physics.RigidBody3D](app.World, e).Handle().Valid() {
+	if !app.World.GetRef[physics.RigidBody2D](e).Handle().Valid() || !app.World.GetRef[physics.RigidBody3D](e).Handle().Valid() {
 		t.Fatal("static bodies were not created")
 	}
 	if !app.idleEligible() {

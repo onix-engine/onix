@@ -27,7 +27,7 @@ func (testResourceFeature) ConfigureResources(context ResourceLoadContext, entri
 			return err
 		}
 		entry := entry
-		if err := RegisterNamedResource(context, "test-audio", entry.ID, ResourceRegistration[string]{
+		if err := context.RegisterNamedResource("test-audio", entry.ID, ResourceRegistration[string]{
 			Load: func() (string, error) {
 				data, err := context.ReadFile(entry.Path)
 				if err != nil {

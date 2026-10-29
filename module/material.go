@@ -1,14 +1,13 @@
 package module
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene/render3d"
 )
 
 // InstallMaterial3D replaces the built-in material during this instance's
 // installation and registers its concrete renderer without exposing the World.
-func InstallMaterial3D[T graphics.Material3D](c *Context, entity Entity, material *T) error {
+func (c *Context) InstallMaterial3D[T graphics.Material3D](entity Entity, material *T) error {
 	if !c.usable() {
 		return ErrDisposed
 	}
@@ -18,7 +17,7 @@ func InstallMaterial3D[T graphics.Material3D](c *Context, entity Entity, materia
 	if !c.installing || material == nil {
 		return ErrInvalid
 	}
-	render3d.RegisterMaterial[T](c.runtime.world)
-	ecs.Remove[render3d.Material[graphics.StandardMaterial]](c.runtime.world, entity.entity)
-	return ecs.Insert(c.runtime.world, entity.entity, render3d.Material[T]{Material: material})
+	render3d.WorldFor(c.runtime.world).RegisterMaterial[T]()
+	c.runtime.world.Remove[render3d.Material[graphics.StandardMaterial]](entity.entity)
+	return c.runtime.world.Insert(entity.entity, render3d.Material[T]{Material: material})
 }

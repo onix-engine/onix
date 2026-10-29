@@ -14,9 +14,9 @@ func TestReservePreservesLiveWorld(t *testing.T) {
 	body := world.CreateBody(def)
 	colliderDef := NewColliderDef(Circle{Radius: 2})
 	colliderDef.Sensor = true
-	collider := AddCollider(world, body, colliderDef)
+	collider := world.AddCollider(body, colliderDef)
 	other := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, other, NewColliderDef(Circle{Radius: 2}))
+	world.AddCollider(other, NewColliderDef(Circle{Radius: 2}))
 	world.Step(1.0 / 60)
 	before, velocity := body.Position(), body.Velocity()
 	world.Reserve(128, 128)
@@ -43,7 +43,7 @@ func TestReservePreservesLiveWorld3D(t *testing.T) {
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position = V3(1, 2, 3)
 	body := world.CreateBody(def)
-	collider := AddCollider3D(world, body, NewColliderDef(Sphere{Radius: 2}))
+	collider := world.AddCollider(body, NewColliderDef(Sphere{Radius: 2}))
 	world.Reserve(128, 128)
 	if !body.Valid() || !collider.Valid() || body.Position() != def.Position || collider.Shape().Radius != 2 {
 		t.Fatal("shared generic capacity growth corrupted 3D state")
@@ -58,16 +58,16 @@ func TestColliderReuseEndsOldContact(t *testing.T) {
 		second := world.CreateBody(NewBodyDef(BodyStatic))
 		def := NewColliderDef(Circle{Radius: 1})
 		def.Sensor = true
-		old := AddCollider(world, first, def)
-		AddCollider(world, second, def)
+		old := world.AddCollider(first, def)
+		world.AddCollider(second, def)
 		world.Step(1.0 / 60)
 		if removeBody {
 			world.RemoveBody(first)
 			first = world.CreateBody(NewBodyDef(BodyDynamic))
 		} else {
-			RemoveCollider(world, old)
+			world.RemoveCollider(old)
 		}
-		next := AddCollider(world, first, def)
+		next := world.AddCollider(first, def)
 		world.Step(1.0 / 60)
 		events := world.Events()
 		if len(events) != 2 || events[0].Phase != CollisionEnd || events[0].ColliderA != old.ID() || events[1].Phase != CollisionBegin || events[1].ColliderA != next.ID() {
@@ -86,7 +86,7 @@ func TestFixedRotationIgnoresAngularMotion(t *testing.T) {
 		def := NewBodyDef(bodyType)
 		def.FixedRotation, def.Rotation, def.AngularVelocity = true, .4, 12
 		body := world.CreateBody(def)
-		AddCollider(world, body, NewColliderDef(NewBox(2, 2)))
+		world.AddCollider(body, NewColliderDef(NewBox(2, 2)))
 		body.SetAngularVelocity(20)
 		body.ApplyTorque(30)
 		body.ApplyImpulse(V(0, 1), V(1, 0))
@@ -103,11 +103,11 @@ func TestStaticVelocityDoesNotPushDynamicBody(t *testing.T) {
 	def := NewBodyDef(BodyStatic)
 	def.Velocity = V(10, 0)
 	def.AngularVelocity = 10
-	AddCollider(world, world.CreateBody(def), NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(world.CreateBody(def), NewColliderDef(Circle{Radius: 1}))
 	def = NewBodyDef(BodyDynamic)
 	def.Position = V(1.9, 0)
 	body := world.CreateBody(def)
-	AddCollider(world, body, NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 	world.Step(1.0 / 60)
 	if body.Velocity() != (Vector{}) || body.AngularVelocity() != 0 {
 		t.Fatalf("static body transferred velocity: %v, angular=%v", body.Velocity(), body.AngularVelocity())
@@ -117,11 +117,11 @@ func TestStaticVelocityDoesNotPushDynamicBody(t *testing.T) {
 func TestDynamicBoxSettlesWithoutArtificialTorque(t *testing.T) {
 	world := NewWorld()
 	floor := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, floor, NewColliderDef(NewBox(20, 2)))
+	world.AddCollider(floor, NewColliderDef(NewBox(20, 2)))
 	def := NewBodyDef(BodyDynamic)
 	def.Position = V(3, 4)
 	body := world.CreateBody(def)
-	AddCollider(world, body, NewColliderDef(NewBox(2, 2)))
+	world.AddCollider(body, NewColliderDef(NewBox(2, 2)))
 	for range 360 {
 		world.Step(1.0 / 60)
 	}
@@ -141,13 +141,13 @@ func TestTiltedBoxComesToRest(t *testing.T) {
 			floorDef := NewBodyDef(BodyStatic)
 			floorDef.Rotation = test.slope
 			floor := world.CreateBody(floorDef)
-			AddCollider(world, floor, NewColliderDef(NewBox(560, 28)))
+			world.AddCollider(floor, NewColliderDef(NewBox(560, 28)))
 			def := NewBodyDef(BodyDynamic)
 			def.Position, def.Rotation = V(0, 100), .3
 			body := world.CreateBody(def)
 			collider := NewColliderDef(NewBox(28, 28))
 			collider.Restitution = test.restitution
-			AddCollider(world, body, collider)
+			world.AddCollider(body, collider)
 			for range 1200 {
 				world.Step(1.0 / 60)
 			}
@@ -175,13 +175,13 @@ func TestBoxStackComesToRest(t *testing.T) {
 	world := NewWorld()
 	world.Gravity, world.Iterations = V(0, -20), 12
 	floor := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, floor, NewColliderDef(NewBox(20, 2)))
+	world.AddCollider(floor, NewColliderDef(NewBox(20, 2)))
 	var bodies [4]Body
 	for index := range bodies {
 		def := NewBodyDef(BodyDynamic)
 		def.Position = V(0, 2+2.1*float64(index))
 		bodies[index] = world.CreateBody(def)
-		AddCollider(world, bodies[index], NewColliderDef(NewBox(2, 2)))
+		world.AddCollider(bodies[index], NewColliderDef(NewBox(2, 2)))
 	}
 	for range 1200 {
 		world.Step(1.0 / 60)
@@ -209,14 +209,14 @@ func TestBoxSlidesWhenSlopeExceedsFriction(t *testing.T) {
 			floor := world.CreateBody(floorDef)
 			floorCollider := NewColliderDef(NewBox(1000, 18))
 			floorCollider.Friction = friction
-			AddCollider(world, floor, floorCollider)
+			world.AddCollider(floor, floorCollider)
 			def := NewBodyDef(BodyDynamic)
 			def.Position, def.Rotation = normal.Mul(30), angle
 			def.Mass, def.AngularDamping = 2, .2
 			body := world.CreateBody(def)
 			collider := NewColliderDef(NewBox(42, 42))
 			collider.Friction, collider.Restitution = .65, .1
-			AddCollider(world, body, collider)
+			world.AddCollider(body, collider)
 			for range 120 {
 				world.Step(1.0 / 60)
 			}
@@ -238,13 +238,13 @@ func TestFrictionlessBoxKeepsSlidingAcrossTimesteps(t *testing.T) {
 	world := NewWorld()
 	world.Gravity = V(0, -20)
 	floor := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, floor, NewColliderDef(NewBox(100, 2)))
+	world.AddCollider(floor, NewColliderDef(NewBox(100, 2)))
 	def := NewBodyDef(BodyDynamic)
 	def.Position, def.Velocity = V(0, 2), V(3, 0)
 	body := world.CreateBody(def)
 	collider := NewColliderDef(NewBox(2, 2))
 	collider.Friction = 0
-	AddCollider(world, body, collider)
+	world.AddCollider(body, collider)
 	for _, delta := range []float64{1.0 / 60, 1.0 / 30, 1.0 / 120} {
 		for range 120 {
 			world.Step(delta)
@@ -260,13 +260,13 @@ func TestBoxRestitutionSurvivesSolverIterations(t *testing.T) {
 		world := NewWorld()
 		world.Gravity, world.Iterations = Vector{}, iterations
 		floor := world.CreateBody(NewBodyDef(BodyStatic))
-		AddCollider(world, floor, NewColliderDef(NewBox(20, 2)))
+		world.AddCollider(floor, NewColliderDef(NewBox(20, 2)))
 		def := NewBodyDef(BodyDynamic)
 		def.Position, def.Velocity = V(0, 2.1), V(0, -10)
 		body := world.CreateBody(def)
 		collider := NewColliderDef(NewBox(2, 2))
 		collider.Restitution = .5
-		AddCollider(world, body, collider)
+		world.AddCollider(body, collider)
 		world.Step(1.0 / 60)
 		if body.Velocity().Sub(V(0, 5)).Length() > 1e-9 || math.Abs(body.AngularVelocity()) > 1e-9 {
 			t.Fatalf("iterations=%v: bounce velocity=%v angular=%v", iterations, body.Velocity(), body.AngularVelocity())
@@ -279,13 +279,13 @@ func TestPositionCorrectionsDiscoverNewContacts(t *testing.T) {
 	world.Gravity = Vector{}
 	def := NewBodyDef(BodyDynamic)
 	body := world.CreateBody(def)
-	AddCollider(world, body, NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 	def.Position = V(1.5, 0)
 	neighbor := world.CreateBody(def)
-	AddCollider(world, neighbor, NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(neighbor, NewColliderDef(Circle{Radius: 1}))
 	def.Type, def.Position = BodyStatic, V(-2.1, 0)
 	wall := world.CreateBody(def)
-	AddCollider(world, wall, NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(wall, NewColliderDef(Circle{Radius: 1}))
 	world.Step(1.0 / 60)
 	if body.Position().X < -.111 || neighbor.Position().X-body.Position().X < 1.98 {
 		t.Fatalf("correction missed new wall contact: body=%v neighbor=%v", body.Position(), neighbor.Position())
@@ -297,7 +297,7 @@ func TestWorld2DAllocationFreeLifecycle(t *testing.T) {
 	world.Reserve(2, 2)
 	allocations := testing.AllocsPerRun(100, func() {
 		body := world.CreateBody(NewBodyDef(BodyDynamic))
-		AddCollider(world, body, NewColliderDef(Circle{Radius: 1}))
+		world.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 		world.RemoveBody(body)
 	})
 	if allocations != 0 {

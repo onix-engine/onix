@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/style"
 )
@@ -26,11 +25,11 @@ func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
 
 func BenchmarkHTMLFullRenderStylesheetReuse(b *testing.B) {
 	world, owner := incrementalHTMLFixture(b, `<div style="width:20px;height:20px;background:red"></div>`)
-	value := ecs.GetMut[Surface](world, owner)
+	value := world.GetMut[Surface](owner)
 	value.CSS = strings.Repeat(`.unused {color:#123456}`, 800)
 	incrementalSync(b, world)
 	update := func() {
-		surface := ecs.GetMut[Surface](world, owner)
+		surface := world.GetMut[Surface](owner)
 		if surface.Width == 320 {
 			surface.Width = 321
 		} else {
@@ -51,7 +50,7 @@ func BenchmarkHTMLFullRenderStylesheetReuse(b *testing.B) {
 func BenchmarkHTMLHoverStyleReuse(b *testing.B) {
 	world, owner := incrementalHTMLFixture(b, `<style>#target {width:20px;height:20px;background:red} #target:hover {background:blue;color:green}</style><button id="target">Hover</button>`)
 	target := incrementalHTMLNode(b, world, owner, "target")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	visual := state.RenderNodes[target.node].Entities[0]
 	update := func() {
 		for _, hovered := range []bool{true, false} {

@@ -24,16 +24,16 @@ func Root(world *ecs.World, owner ecs.Entity) (Node, error) {
 	if world == nil {
 		return Node{}, fmt.Errorf("ecs: html world is nil")
 	}
-	value, ok := ecs.Get[Surface](world, owner)
+	value, ok := world.Get[Surface](owner)
 	if !ok {
 		return Node{}, fmt.Errorf("ecs: entity %d has no HTML component", owner)
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil {
-		if err := ecs.Insert(world, owner, htmlRenderState{}); err != nil {
+		if err := world.Insert(owner, htmlRenderState{}); err != nil {
 			return Node{}, err
 		}
-		state = ecs.GetMut[htmlRenderState](world, owner)
+		state = world.GetMut[htmlRenderState](owner)
 	}
 	if state.Root == nil || state.Source != value.Value {
 		root, embeddedCSS, err := parseHTMLDocument(value.Value)
@@ -66,7 +66,7 @@ func NodeByID(world *ecs.World, owner ecs.Entity, id string) (Node, bool) {
 	if err != nil {
 		return Node{}, false
 	}
-	if state := ecs.GetMut[htmlRenderState](world, owner); state != nil {
+	if state := world.GetMut[htmlRenderState](owner); state != nil {
 		if found := lookupHTMLNode(state, id); found != nil {
 			return Node{world: world, owner: owner, node: found}, true
 		}
@@ -79,7 +79,7 @@ func NodeByID(world *ecs.World, owner ecs.Entity, id string) (Node, bool) {
 func (n Node) FindByID(id string) (Node, bool) {
 	var found *dom.Node
 	if n.world != nil {
-		if state := ecs.GetMut[htmlRenderState](n.world, n.owner); state != nil && state.Root == n.node {
+		if state := n.world.GetMut[htmlRenderState](n.owner); state != nil && state.Root == n.node {
 			found = lookupHTMLNode(state, id)
 		} else {
 			found = findHTMLNodeByID(n.node, id)
@@ -97,7 +97,7 @@ func (n Node) OnPointer(handler PointerHandler) bool {
 	if !n.valid() {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](n.world, n.owner)
+	state := n.world.GetMut[htmlRenderState](n.owner)
 	if state == nil {
 		return false
 	}
@@ -123,7 +123,7 @@ func (n Node) OnClick(handler ClickHandler) bool {
 	if !n.valid() {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](n.world, n.owner)
+	state := n.world.GetMut[htmlRenderState](n.owner)
 	if state == nil {
 		return false
 	}
@@ -290,7 +290,7 @@ func (n Node) SetSelectedIndex(selected int) bool {
 	if !n.valid() || n.node.Type != dom.ElementNode || n.node.Data != "select" || selected < -1 {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](n.world, n.owner)
+	state := n.world.GetMut[htmlRenderState](n.owner)
 	if state == nil {
 		return false
 	}
@@ -298,7 +298,7 @@ func (n Node) SetSelectedIndex(selected int) bool {
 	key := htmlRenderIdentity{Node: n.node, Role: htmlRoleControl, Variant: inputType(n.node)}
 	if group := state.EntityGroups[key]; group != nil {
 		for _, binding := range group.Bindings {
-			if control := ecs.GetMut[Control](n.world, binding.Entity); control != nil && control.Owner == n.owner {
+			if control := n.world.GetMut[Control](binding.Entity); control != nil && control.Owner == n.owner {
 				syncHTMLSelectOptionStates(n.node, control)
 			}
 		}
@@ -357,7 +357,7 @@ func (n Node) Bounds() (Rect, bool) {
 	if !n.valid() {
 		return Rect{}, false
 	}
-	state, ok := ecs.Get[htmlRenderState](n.world, n.owner)
+	state, ok := n.world.Get[htmlRenderState](n.owner)
 	if !ok || !state.Rendered {
 		return Rect{}, false
 	}
@@ -370,12 +370,12 @@ func (n Node) ScrollContainer() (ecs.Entity, bool) {
 	if !n.valid() {
 		return 0, false
 	}
-	state := ecs.GetRef[htmlRenderState](n.world, n.owner)
+	state := n.world.GetRef[htmlRenderState](n.owner)
 	if state == nil {
 		return 0, false
 	}
 	entity := state.OverflowBindings[n.node].entity
-	_, ok := ecs.Get[scene.UIScroll](n.world, entity)
+	_, ok := n.world.Get[scene.UIScroll](entity)
 	return entity, ok
 }
 

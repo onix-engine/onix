@@ -109,10 +109,10 @@ func setHTMLScrollbarPaintEnd(world *ecs.World, state *htmlRenderState, rendered
 	rendered.PaintEnd = end
 	if binding, ok := state.OverflowBindings[rendered.Box.Node]; ok {
 		for _, entity := range binding.parts {
-			part, _ := ecs.Get[ScrollbarPart](world, entity)
+			part, _ := world.Get[ScrollbarPart](entity)
 			next := scene.UIStackIndex(end - 1 + int(part.Kind))
-			if current, ok := ecs.Get[scene.UIStackIndex](world, entity); ok && current != next {
-				*ecs.GetMut[scene.UIStackIndex](world, entity) = next
+			if current, ok := world.Get[scene.UIStackIndex](entity); ok && current != next {
+				*world.GetMut[scene.UIStackIndex](entity) = next
 				state.SyncStats.OrderUpdated++
 			}
 		}
@@ -126,17 +126,17 @@ func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *html
 		delta := scene.UIStackIndex(next - rendered.Stack)
 		for _, entity := range rendered.Entities {
 			if delta != 0 {
-				if stack := ecs.GetMut[scene.UIStackIndex](world, entity); stack != nil {
+				if stack := world.GetMut[scene.UIStackIndex](entity); stack != nil {
 					*stack += delta
 					state.SyncStats.OrderUpdated++
 				}
 			}
-			if focus := ecs.GetMut[Focusable](world, entity); focus != nil {
+			if focus := world.GetMut[Focusable](entity); focus != nil {
 				focus.Order = htmlEntityNode(world, entity).Order
 			}
 		}
 		if rendered.Clip != 0 && delta != 0 {
-			if stack := ecs.GetMut[scene.UIStackIndex](world, rendered.Clip); stack != nil {
+			if stack := world.GetMut[scene.UIStackIndex](rendered.Clip); stack != nil {
 				*stack += delta
 				state.SyncStats.OrderUpdated++
 			}

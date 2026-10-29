@@ -130,10 +130,10 @@ func TestTextMeasuredLayoutBuildsAndInvalidatesGlyphWindow(t *testing.T) {
 
 func TestTransformIgnoresUnrelatedParentAndDoesNotAllocate(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner3[Transform, GlobalTransform, Parent](world)
+	spawner := world.NewSpawner3[Transform, GlobalTransform, Parent]()
 	root := spawner.Spawn(NewTransform(), GlobalTransform{}, Parent{})
 	child := spawner.Spawn(TransformFromXYZ(1, 0, 0), GlobalTransform{}, Parent{root})
-	uiSpawner := ecs.NewSpawner2[UITransform, Parent](world)
+	uiSpawner := world.NewSpawner2[UITransform, Parent]()
 	ui := uiSpawner.Spawn(NewUITransform(), Parent{})
 	sync := SyncGlobalTransformSystem("")
 	run := func() {
@@ -143,18 +143,18 @@ func TestTransformIgnoresUnrelatedParentAndDoesNotAllocate(t *testing.T) {
 		}
 	}
 	run()
-	parent := ecs.GetMut[Parent](world, ui)
+	parent := world.GetMut[Parent](ui)
 	parent.Entity = child
 	run()
-	if ecs.FrameValue[transformWorkspaceTag, transformWorkspace](world).recomputed != 0 {
+	if world.FrameValue[transformWorkspaceTag, transformWorkspace]().recomputed != 0 {
 		t.Fatal("unrelated UI parent recomputed world transforms")
 	}
-	ecs.Remove[Parent](world, ui)
+	world.Remove[Parent](ui)
 	run()
-	if ecs.FrameValue[transformWorkspaceTag, transformWorkspace](world).recomputed != 0 {
+	if world.FrameValue[transformWorkspaceTag, transformWorkspace]().recomputed != 0 {
 		t.Fatal("unrelated parent removal recomputed world transforms")
 	}
-	step := func() { pose := ecs.GetMut[Transform](world, root); pose.Translation[0]++; run() }
+	step := func() { pose := world.GetMut[Transform](root); pose.Translation[0]++; run() }
 	step()
 	if allocs := testing.AllocsPerRun(100, step); allocs != 0 {
 		t.Fatalf("incremental transform allocations=%v", allocs)
@@ -163,7 +163,7 @@ func TestTransformIgnoresUnrelatedParentAndDoesNotAllocate(t *testing.T) {
 
 func TestUITransformIncrementalReparentAndRepair(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner4[UITransform, UIGlobalTransform, Parent, Size2D](world)
+	spawner := world.NewSpawner4[UITransform, UIGlobalTransform, Parent, Size2D]()
 	first := spawner.Spawn(UITransformFromXY(10, 0), UIGlobalTransform{}, Parent{}, Size2D{})
 	second := spawner.Spawn(UITransformFromXY(50, 0), UIGlobalTransform{}, Parent{}, Size2D{})
 	child := spawner.Spawn(UITransformFromXY(2, 0), UIGlobalTransform{}, Parent{first}, Size2D{})
@@ -176,56 +176,56 @@ func TestUITransformIncrementalReparentAndRepair(t *testing.T) {
 		}
 	}
 	run()
-	parent := ecs.GetMut[Parent](world, child)
+	parent := world.GetMut[Parent](child)
 	parent.Entity = second
 	run()
-	global, _ := ecs.Get[UIGlobalTransform](world, leaf)
-	if global.Matrix[12] != 55 || ecs.FrameValue[uiTransformWorkspaceScratch, uiTransformWorkspace](world).recomputed != 2 {
+	global, _ := world.Get[UIGlobalTransform](leaf)
+	if global.Matrix[12] != 55 || world.FrameValue[uiTransformWorkspaceScratch, uiTransformWorkspace]().recomputed != 2 {
 		t.Fatalf("reparented leaf=%v", global.Matrix[12])
 	}
-	changed := ecs.GetMut[UIGlobalTransform](world, child)
+	changed := world.GetMut[UIGlobalTransform](child)
 	changed.Matrix = mgl32.Ident4()
 	run()
-	global, _ = ecs.Get[UIGlobalTransform](world, child)
+	global, _ = world.Get[UIGlobalTransform](child)
 	if global.Matrix[12] != 52 {
 		t.Fatal("external global write was not corrected")
 	}
-	ecs.Remove[UIGlobalTransform](world, child)
-	if err := ecs.Insert(world, child, UIGlobalTransform{Matrix: mgl32.Ident4()}); err != nil {
+	world.Remove[UIGlobalTransform](child)
+	if err := world.Insert(child, UIGlobalTransform{Matrix: mgl32.Ident4()}); err != nil {
 		t.Fatal(err)
 	}
 	run()
-	global, _ = ecs.Get[UIGlobalTransform](world, child)
+	global, _ = world.Get[UIGlobalTransform](child)
 	if global.Matrix[12] != 52 {
 		t.Fatal("reinserted global transform was not corrected")
 	}
-	step := func() { pose := ecs.GetMut[UITransform](world, second); pose.Translation.X.Value++; run() }
+	step := func() { pose := world.GetMut[UITransform](second); pose.Translation.X.Value++; run() }
 	step()
 	if allocs := testing.AllocsPerRun(100, step); allocs != 0 {
 		t.Fatalf("incremental UI allocations=%v", allocs)
 	}
-	secondTransform, _ := ecs.Get[UITransform](world, second)
+	secondTransform, _ := world.Get[UITransform](second)
 	expectedLeafX := secondTransform.Translation.X.Value + 5
-	parent = ecs.GetMut[Parent](world, second)
+	parent = world.GetMut[Parent](second)
 	parent.Entity = leaf
 	if sync.Run(world) == nil {
 		t.Fatal("parent cycle was not detected")
 	}
-	parent = ecs.GetMut[Parent](world, second)
+	parent = world.GetMut[Parent](second)
 	parent.Entity = 0
 	run()
-	global, _ = ecs.Get[UIGlobalTransform](world, leaf)
+	global, _ = world.Get[UIGlobalTransform](leaf)
 	if global.Matrix[12] != expectedLeafX {
 		t.Fatalf("cycle repair did not restore hierarchy: leaf x=%v", global.Matrix[12])
 	}
-	parent = ecs.GetMut[Parent](world, child)
+	parent = world.GetMut[Parent](child)
 	parent.Entity = first
-	ecs.InsertResource(world, ViewportSize{Width: 400, Height: 200, ScaleFactor: 1})
+	world.InsertResource(ViewportSize{Width: 400, Height: 200, ScaleFactor: 1})
 	run()
-	firstTransform := ecs.GetMut[UITransform](world, first)
+	firstTransform := world.GetMut[UITransform](first)
 	firstTransform.Translation.X.Value++
 	run()
-	global, _ = ecs.Get[UIGlobalTransform](world, leaf)
+	global, _ = world.Get[UIGlobalTransform](leaf)
 	if global.Matrix[12] != 16 {
 		t.Fatalf("viewport/reparent left stale child links: leaf x=%v", global.Matrix[12])
 	}
@@ -241,13 +241,13 @@ func BenchmarkHotpathTransformSingleChange(b *testing.B) {
 			var entity ecs.Entity
 			var sync ecs.SystemConfig
 			if ui {
-				spawner := ecs.NewSpawner3[UITransform, UIGlobalTransform, Size2D](world)
+				spawner := world.NewSpawner3[UITransform, UIGlobalTransform, Size2D]()
 				for range 10000 {
 					entity = spawner.Spawn(NewUITransform(), UIGlobalTransform{}, Size2D{Width: 10, Height: 10})
 				}
 				sync = SyncUIGlobalTransformSystem("")
 			} else {
-				spawner := ecs.NewSpawner2[Transform, GlobalTransform](world)
+				spawner := world.NewSpawner2[Transform, GlobalTransform]()
 				for range 10000 {
 					entity = spawner.Spawn(NewTransform(), GlobalTransform{})
 				}
@@ -258,10 +258,10 @@ func BenchmarkHotpathTransformSingleChange(b *testing.B) {
 			}
 			step := func() {
 				if ui {
-					pose := ecs.GetMut[UITransform](world, entity)
+					pose := world.GetMut[UITransform](entity)
 					pose.Translation.X.Value++
 				} else {
-					pose := ecs.GetMut[Transform](world, entity)
+					pose := world.GetMut[Transform](entity)
 					pose.Translation[0]++
 				}
 				if err := sync.Run(world); err != nil {

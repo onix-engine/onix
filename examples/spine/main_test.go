@@ -39,19 +39,19 @@ func loadSpine(t *testing.T) spineFixture {
 	}
 	app := onix.NewApp()
 	t.Cleanup(app.Destroy)
-	entry, err := app.LoadModules(plan, registry, OnixModuleOptions(os.DirFS(".")))
+	entry, err := app.LoadModules[OnixContentProfile](plan, registry, OnixModuleOptions(os.DirFS(".")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := spineFixture{app: app, runtime: app.Modules(), entry: entry}
-	for entity, access := range ecs.Query[scene.Name](app.World).All {
+	for entity, access := range app.World.Query[scene.Name]().All {
 		for index, name := range exportNames {
 			if access.Get().Value == name {
 				f.items[index] = entity
 			}
 		}
 	}
-	for entity := range ecs.Query[htmlui.Surface](app.World).All {
+	for entity := range app.World.Query[htmlui.Surface]().All {
 		f.shell = entity
 	}
 	if f.shell == 0 {
@@ -80,14 +80,14 @@ func (f spineFixture) selectIndex(t *testing.T, id string, index int) {
 func (f spineFixture) assertSelected(t *testing.T, selected int) {
 	t.Helper()
 	for index, entity := range f.items {
-		visible, ok := ecs.Get[scene.Visibility](f.app.World, entity)
+		visible, ok := f.app.World.Get[scene.Visibility](entity)
 		if !ok || visible.Visible != (index == selected) {
 			t.Fatalf("export %s visibility = %v", exportNames[index], visible.Visible)
 		}
 	}
-	component, _ := ecs.Get[scene.Spine2D](f.app.World, f.items[selected])
+	component, _ := f.app.World.Get[scene.Spine2D](f.items[selected])
 	minX, minY, maxX, maxY, valid := component.Player.AnimationBounds()
-	transform, _ := ecs.Get[scene.UITransform](f.app.World, f.items[selected])
+	transform, _ := f.app.World.Get[scene.UITransform](f.items[selected])
 	x := (minX+maxX)*transform.Scale.X()/2 + transform.Translation.X.Value
 	y := -(minY+maxY)*transform.Scale.Y()/2 + transform.Translation.Y.Value
 	if !valid || math.Abs(float64(x)) > 1e-4 || math.Abs(float64(y)) > 1e-4 || (maxX-minX)*transform.Scale.X() > 900.001 || (maxY-minY)*transform.Scale.Y() > 600.001 {
@@ -100,7 +100,7 @@ func TestSpineModuleLoadsAndFitsAllExportsAndAnimations(t *testing.T) {
 	for index, name := range exportNames {
 		t.Run(name, func(t *testing.T) {
 			f.selectIndex(t, "resource", index)
-			component, ok := ecs.Get[scene.Spine2D](f.app.World, f.items[index])
+			component, ok := f.app.World.Get[scene.Spine2D](f.items[index])
 			if !ok || component.Player == nil {
 				t.Fatal("private player missing")
 			}
@@ -126,8 +126,8 @@ func TestSpineModuleLoadsAndFitsAllExportsAndAnimations(t *testing.T) {
 			if !ok {
 				t.Fatal("animation selector did not render")
 			}
-			value, _ := ecs.Get[htmlui.Control](f.app.World, control)
-			selector, ok := ecs.Get[ui.Selector](f.app.World, control)
+			value, _ := f.app.World.Get[htmlui.Control](control)
+			selector, ok := f.app.World.Get[ui.Selector](control)
 			if !ok || selector.Selected != value.Selected {
 				t.Fatal("HTML selection and UI selector diverged", selector.Selected, value.Selected)
 			}
@@ -150,7 +150,7 @@ func TestSpineSelectorEventsAreBufferedAndWarmSelectionDoesNotAllocate(t *testin
 	f := loadSpine(t)
 	for index := range exportNames {
 		f.selectIndex(t, "resource", index)
-		component, _ := ecs.Get[scene.Spine2D](f.app.World, f.items[index])
+		component, _ := f.app.World.Get[scene.Spine2D](f.items[index])
 		for animation := range component.Player.Resource.Animations() {
 			f.selectIndex(t, "animation", animation)
 		}
@@ -186,7 +186,7 @@ func TestSpineSelectorEventsAreBufferedAndWarmSelectionDoesNotAllocate(t *testin
 		t.Fatal(err)
 	}
 	control, ok := htmlui.ControlByID(f.app.World, f.shell, "resource")
-	selector, _ := ecs.Get[ui.Selector](f.app.World, control)
+	selector, _ := f.app.World.Get[ui.Selector](control)
 	if !ok || selector.Selected != 3 {
 		t.Fatal("keyboard selection did not refresh the UI selector", selector.Selected)
 	}
@@ -201,13 +201,13 @@ func TestSpineReusableInstancesKeepPlayersAndSlotsIndependent(t *testing.T) {
 	t.Cleanup(func() { _ = second.Dispose() })
 	f.dispatch(t)
 	var other ecs.Entity
-	for entity, name := range ecs.Query[scene.Name](f.app.World).All {
+	for entity, name := range f.app.World.Query[scene.Name]().All {
 		if name.Get().Value == "coin" && entity != f.items[0] {
 			other = entity
 		}
 	}
-	firstPlayer, _ := ecs.Get[scene.Spine2D](f.app.World, f.items[0])
-	otherPlayer, _ := ecs.Get[scene.Spine2D](f.app.World, other)
+	firstPlayer, _ := f.app.World.Get[scene.Spine2D](f.items[0])
+	otherPlayer, _ := f.app.World.Get[scene.Spine2D](other)
 	if other == 0 || firstPlayer.Player == otherPlayer.Player {
 		t.Fatal("reused definition shared player state")
 	}
@@ -220,7 +220,7 @@ func TestSpineReusableInstancesKeepPlayersAndSlotsIndependent(t *testing.T) {
 	}
 	f.dispatch(t)
 	f.assertSelected(t, 2)
-	visible, _ := ecs.Get[scene.Visibility](f.app.World, other)
+	visible, _ := f.app.World.Get[scene.Visibility](other)
 	if !visible.Visible {
 		t.Fatal("slot update changed another instance")
 	}

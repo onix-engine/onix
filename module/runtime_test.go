@@ -31,7 +31,12 @@ func compileFixture(t testing.TB, files map[string]string) (*project.ProjectPlan
 
 func newFixture(t testing.TB, plan *project.ProjectPlan, registry Registry, options Options) *Runtime {
 	t.Helper()
-	r, err := New(ecs.NewWorld(), plan, registry, options)
+	return newFixtureWith[FullContent](t, plan, registry, options)
+}
+
+func newFixtureWith[P ContentProfile](t testing.TB, plan *project.ProjectPlan, registry Registry, options Options) *Runtime {
+	t.Helper()
+	r, err := New[P](ecs.NewWorld(), plan, registry, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +68,7 @@ func TestIndependentStatePlacementAndOwnedEntities(t *testing.T) {
 			var contexts []*Context
 			var states []*state
 			registry := Registry{}
-			must(t, RegisterMod(&registry, "box", func() state { return state{} }, Lifecycle[state]{
+			must(t, registry.RegisterMod("box", func() state { return state{} }, Lifecycle[state]{
 				Install: func(c *Context, s *state) error {
 					contexts = append(contexts, c)
 					states = append(states, s)
@@ -85,7 +90,7 @@ func TestIndependentStatePlacementAndOwnedEntities(t *testing.T) {
 			text, _ := a.Slot("text")
 			must(t, text.Set(project.SlotValue{Type: project.StringValue, String: "changed"}))
 			other, _ := b.Slot("text")
-			got, _ := ReadSlot[string](other)
+			got, _ := other.Read[string]()
 			if got != "original" {
 				t.Fatal("slot state crossed instances")
 			}
@@ -98,23 +103,23 @@ func TestIndependentStatePlacementAndOwnedEntities(t *testing.T) {
 				t.Fatal("structured state changed another instance/definition")
 			}
 			if space == "ui" {
-				local, _ := Get[scene.UITransform](a, a.Root())
+				local, _ := a.Get[scene.UITransform](a.Root())
 				local.Translation = scene.Px2(50, 0)
-				must(t, Set(a, a.Root(), local))
+				must(t, a.Set(a.Root(), local))
 				must(t, scene.SyncUIGlobalTransformSystem("").System(&ecs.SystemContext{World: r.world}))
 				for c, want := range map[*Context]float32{a: 160, child: 132, b: 132} {
-					g, _ := Get[scene.UIGlobalTransform](c, c.Root())
+					g, _ := c.Get[scene.UIGlobalTransform](c.Root())
 					if g.Matrix[12] != want {
 						t.Fatalf("position %s: got %v want %v", c.name, g.Matrix[12], want)
 					}
 				}
 			} else {
-				local, _ := Get[scene.Transform](a, a.Root())
+				local, _ := a.Get[scene.Transform](a.Root())
 				local.Translation = mgl32.Vec3{50, 0, 0}
-				must(t, Set(a, a.Root(), local))
+				must(t, a.Set(a.Root(), local))
 				must(t, scene.SyncGlobalTransformSystem("").System(&ecs.SystemContext{World: r.world}))
 				for c, want := range map[*Context]float32{a: 160, child: 132, b: 132} {
-					g, _ := Get[scene.GlobalTransform](c, c.Root())
+					g, _ := c.Get[scene.GlobalTransform](c.Root())
 					if g.Matrix[12] != want {
 						t.Fatalf("position %s: got %v want %v", c.name, g.Matrix[12], want)
 					}
@@ -123,23 +128,23 @@ func TestIndependentStatePlacementAndOwnedEntities(t *testing.T) {
 			if a.definition.Transform.Position[0] != 2 || s.plan.Instances[0].Placement.Position[0] != 10 {
 				t.Fatal("runtime rewrote authored coordinates")
 			}
-			if _, ok := Get[scene.Visibility](a, b.Root()); ok {
+			if _, ok := a.Get[scene.Visibility](b.Root()); ok {
 				t.Fatal("foreign entity readable")
 			}
-			if err := Set(a, b.Root(), scene.Visibility{Visible: false}); !errors.Is(err, ErrOwnership) {
+			if err := a.Set(b.Root(), scene.Visibility{Visible: false}); !errors.Is(err, ErrOwnership) {
 				t.Fatal("foreign entity writable")
 			}
-			if _, ok := Get[scene.Parent](a, a.Root()); ok {
+			if _, ok := a.Get[scene.Parent](a.Root()); ok {
 				t.Fatal("placement proxy was exposed")
 			}
-			if err := Set(a, a.Root(), scene.Parent{}); !errors.Is(err, ErrOwnership) {
+			if err := a.Set(a.Root(), scene.Parent{}); !errors.Is(err, ErrOwnership) {
 				t.Fatal("raw cross-module parenting accepted")
 			}
 			private, err := a.Spawn(Entity{})
 			must(t, err)
-			must(t, Set(a, private, int64(7)))
+			must(t, a.Set(private, int64(7)))
 			count := 0
-			Each[int64](b, func(Entity, int64) bool { count++; return true })
+			b.Each[int64](func(Entity, int64) bool { count++; return true })
 			if count != 0 {
 				t.Fatal("query crossed ownership")
 			}
@@ -191,7 +196,7 @@ func setupRequests(t testing.TB, options Options, echo bool) *requestFixtureStat
 	})
 	f := &requestFixtureState{requests: make([]Request[string, int64], 0, 64), results: make([]Result[int64], 0, 64)}
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "service", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("service", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		f.server = c
 		return handleRequest(c, "ask", func(c *Context, q Request[string, int64]) error {
 			f.requests = append(f.requests, q)
@@ -201,7 +206,7 @@ func setupRequests(t testing.TB, options Options, echo bool) *requestFixtureStat
 			return nil
 		})
 	}}))
-	must(t, RegisterMod(&registry, "client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		p, err := testRequester[string, int64](c, "ask", func(_ *Context, result Result[int64]) error { f.results = append(f.results, result); return nil })
 		if err != nil {
 			return err
@@ -291,7 +296,7 @@ func TestRequestCapacityBackpressureAndIdentityReuse(t *testing.T) {
 	}
 	must(t, f.runtime.Dispatch())
 	old := f.requests[0]
-	emit, err := BindEmitter[int64](f.contexts[0], "tick")
+	emit, err := f.contexts[0].BindEmitter[int64]("tick")
 	must(t, err)
 	must(t, emit.Emit(1))
 	must(t, emit.Emit(2))
@@ -370,7 +375,7 @@ func TestDisposalAndPrivateStructuralChangesWaitForBoundary(t *testing.T) {
 	var b *Context
 	var log []string
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "test", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterMod("test", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Install: func(c *Context, _ *Signal) error {
 			if c.name == "b" {
 				b = c
@@ -386,8 +391,8 @@ func TestDisposalAndPrivateStructuralChangesWaitForBoundary(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					must(t, Set(c, private, int64(8)))
-					if _, ok := Get[int64](c, private); ok {
+					must(t, c.Set(private, int64(8)))
+					if _, ok := c.Get[int64](private); ok {
 						t.Fatal("new entity became visible before boundary")
 					}
 				}
@@ -399,7 +404,7 @@ func TestDisposalAndPrivateStructuralChangesWaitForBoundary(t *testing.T) {
 	r = newFixture(t, plan, registry, Options{})
 	s, err := r.MountEntry()
 	must(t, err)
-	emit, err := BindEmitter[Signal](&s.modules[0], "go")
+	emit, err := s.modules[0].BindEmitter[Signal]("go")
 	must(t, err)
 	must(t, emit.EmitTo("a", Signal{}))
 	must(t, emit.EmitTo("b", Signal{}))
@@ -408,7 +413,7 @@ func TestDisposalAndPrivateStructuralChangesWaitForBoundary(t *testing.T) {
 		t.Fatalf("unexpected structural boundary: %v", log)
 	}
 	count := 0
-	Each[int64](&s.modules[0], func(_ Entity, v int64) bool {
+	s.modules[0].Each[int64](func(_ Entity, v int64) bool {
 		count++
 		if v != 8 {
 			t.Fatal("private command value lost")
@@ -469,9 +474,9 @@ func TestMountFailureRollsBackOwnershipAndQueuedStartup(t *testing.T) {
 	fail := true
 	destroyed := 0
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Install: func(c *Context, _ *Signal) error {
-			e, err := BindEmitter[Signal](c, "go")
+			e, err := c.BindEmitter[Signal]("go")
 			if err != nil {
 				return err
 			}
@@ -505,7 +510,7 @@ func TestOwnedQueryDefersPrivateSubtreeDeletionAndDestroyIsIdempotent(t *testing
 	registry := Registry{}
 	var c *Context
 	destroyed := 0
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Install: func(context *Context, _ *Signal) error { c = context; return nil },
 		Destroy: func(c *Context, _ *Signal) error { destroyed++; return c.Dispose() },
 	}))
@@ -516,10 +521,10 @@ func TestOwnedQueryDefersPrivateSubtreeDeletionAndDestroyIsIdempotent(t *testing
 	must(t, err)
 	child, err := c.Spawn(parent)
 	must(t, err)
-	must(t, Set(c, parent, int64(1)))
-	must(t, Set(c, child, int64(2)))
+	must(t, c.Set(parent, int64(1)))
+	must(t, c.Set(child, int64(2)))
 	seen := 0
-	must(t, Each[int64](c, func(entity Entity, _ int64) bool {
+	must(t, c.Each[int64](func(entity Entity, _ int64) bool {
 		seen++
 		if entity == parent {
 			must(t, c.Despawn(parent))
@@ -532,7 +537,7 @@ func TestOwnedQueryDefersPrivateSubtreeDeletionAndDestroyIsIdempotent(t *testing
 	if seen != 2 || r.world.IsAlive(parent.entity) || r.world.IsAlive(child.entity) {
 		t.Fatal("private subtree cleanup did not preserve traversal")
 	}
-	if err := Set(c, parent, int64(3)); !errors.Is(err, ErrOwnership) {
+	if err := c.Set(parent, int64(3)); !errors.Is(err, ErrOwnership) {
 		t.Fatal("despawned owned handle stayed valid")
 	}
 	must(t, r.Close())
@@ -550,7 +555,7 @@ func TestPainterOrderSurvivesEntityReuseAndPrivateContent(t *testing.T) {
 			})
 			registry := Registry{}
 			var private Entity
-			must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+			must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 				if c.name == "a" {
 					var err error
 					private, err = c.Spawn(Entity{})
@@ -576,14 +581,14 @@ func TestPainterOrderSurvivesEntityReuseAndPrivateContent(t *testing.T) {
 			}
 			order := func(entity ecs.Entity) int {
 				if space == "ui" {
-					v, _ := ecs.Get[scene.UIStackIndex](r.world, entity)
+					v, _ := r.world.Get[scene.UIStackIndex](entity)
 					return int(v)
 				}
-				v, _ := ecs.Get[scene.RenderOrder2D](r.world, entity)
+				v, _ := r.world.Get[scene.RenderOrder2D](entity)
 				return int(v)
 			}
-			firstGroup, firstOK := ecs.Get[scene.PainterGroup2D](r.world, s.modules[0].root)
-			secondGroup, secondOK := ecs.Get[scene.PainterGroup2D](r.world, s.modules[1].root)
+			firstGroup, firstOK := r.world.Get[scene.PainterGroup2D](s.modules[0].root)
+			secondGroup, secondOK := r.world.Get[scene.PainterGroup2D](s.modules[1].root)
 			if !firstOK || !secondOK || firstGroup >= secondGroup || order(s.modules[0].root) >= order(private.entity) {
 				t.Fatal("private content escaped module painter order")
 			}
@@ -599,9 +604,9 @@ func TestStructuralCommandCapacityReportsOverflow(t *testing.T) {
 	registry := Registry{}
 	var emit Emitter[Signal]
 	var overflow error
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		var err error
-		emit, err = BindEmitter[Signal](c, "go")
+		emit, err = c.BindEmitter[Signal]("go")
 		if err != nil {
 			return err
 		}
@@ -610,7 +615,7 @@ func TestStructuralCommandCapacityReportsOverflow(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			overflow = Set(c, e, int64(1))
+			overflow = c.Set(e, int64(1))
 			return nil
 		})
 	}}))

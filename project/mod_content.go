@@ -35,13 +35,11 @@ func OpenModResources(source fs.FS, mod *ModPlan, feature ResourceFeature) (_ *R
 		}
 	}
 	r.baseDir = "."
-	r.modModels = newResourceCache[string, modelResource](0)
-	r.modClips = make(map[*AnimationComponentSpec]*scene.AnimationClip)
-	r.modHTMLBases = make(map[string]string)
-	r.modRigs = make(map[string]*ModelRig)
-	r.modParticles = make(map[string]*TextureSpec, len(mod.Spec.Elements))
 	for i := range mod.Spec.Elements {
 		if p := mod.Spec.Elements[i].Components.Particle; p != nil {
+			if r.modParticles == nil {
+				r.modParticles = make(map[string]*TextureSpec)
+			}
 			r.modParticles[mod.Spec.Elements[i].ID] = p
 		}
 	}
@@ -56,6 +54,9 @@ func OpenModResources(source fs.FS, mod *ModPlan, feature ResourceFeature) (_ *R
 		case "audio":
 			entries.Audio = append(entries.Audio, FileResource{ID: entry.Name, Path: p})
 		case "html":
+			if r.modHTMLBases == nil {
+				r.modHTMLBases = make(map[string]string)
+			}
 			r.modHTMLBases[entry.Name] = path.Dir(p)
 			if r.html == nil {
 				r.html = newResourceCache[string, string](0)
@@ -90,186 +91,126 @@ func OpenModResources(source fs.FS, mod *ModPlan, feature ResourceFeature) (_ *R
 // ModContent builds private component values; it has no scene/entity registry.
 func (r *Resources) ModContent(c ModComponents) (ecs.Bundle, error) {
 	b := ecs.NewBundle(16)
-	if c.Layout != nil {
-		ecs.Put(&b, *c.Layout)
-	}
-	width, height := float32(0), float32(0)
-	if len(c.Size) == 2 {
-		width, height = c.Size[0], c.Size[1]
-		ecs.Put(&b, scene.Size2D{Width: width, Height: height})
-	}
-	if s := c.Sprite; s != nil {
-		tint := graphics.White
-		color := s.Color
-		if s.Texture != nil {
-			color = s.Texture.Color
-		}
-		if color != "" {
-			var err error
-			tint, err = ParseColor(color, 1)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-		}
-		value := scene.NewSprite2D()
-		if s.Texture != nil && (s.Texture.Image != "" || s.Texture.Atlas != "") {
-			texture, err := r.texture(s.Texture)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			value = scene.Sprite2DFromTexture(texture)
-			if slice := s.Texture.Slice; slice != nil {
-				if err := slice.Validate(texture.LogicalWidth(), texture.LogicalHeight()); err != nil {
-					return ecs.Bundle{}, err
-				}
-				value.Slice = &scene.NineSlice2D{Left: float32(slice.Left), Right: float32(slice.Right), Top: float32(slice.Top), Bottom: float32(slice.Bottom)}
-			}
-		} else {
-			value.Shape = scene.RoundedRectShape2D(tint, 0)
-		}
-		if c.Shader != nil && c.Shader.HasSource() {
-			if value.Texture == nil {
-				value.Texture = graphics.CreateTextureByColor(tint)
-				value.Shape = scene.Shape2D{}
-			}
-		}
-		if len(s.Size) == 2 {
-			width, height = s.Size[0], s.Size[1]
-		}
-		if width > 0 {
-			value.Width = width
-		}
-		if height > 0 {
-			value.Height = height
-		}
-		if s.Alpha != nil {
-			value.Alpha = *s.Alpha
-		}
-		ecs.Put(&b, value)
-	}
-	if c.Trail != nil {
-		ecs.Put(&b, c.Trail.component())
-	}
-	if spec := c.Material; spec != nil {
-		material := &ModMaterial2D{Custom: spec.Custom}
-		ecs.Put(&b, scene.MeshMaterial2D[ModMaterial2D]{Material: material})
-	}
-	if err := r.modShader(&b, c.Shader, c.Model != nil); err != nil {
+	if err := r.AppendModContent(&b, c); err != nil {
 		return ecs.Bundle{}, err
 	}
-	if t := c.Text; t != nil {
-		value := scene.NewText2D(t.Value)
-		if t.Font != "" {
-			font, err := r.Font(t.Font)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			value.Font = font
-		}
-		if t.FontSize > 0 {
-			value.FontSize = t.FontSize
-		}
-		if err := configureTextLayout(&value, t, "module text"); err != nil {
-			return ecs.Bundle{}, err
-		}
-		value.OutlineWidth, value.MaxWidth = t.OutlineWidth, t.MaxWidth
-		if t.Color != "" {
-			color, err := ParseColor(t.Color, 1)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			value.Color = color
-		}
-		if t.OutlineColor != "" {
-			color, err := ParseColor(t.OutlineColor, 1)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			value.OutlineColor = color
-		}
-		if t.Shadow != nil {
-			color, err := ParseColor(t.Shadow.Color, 1)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			value.ShadowX, value.ShadowY, value.ShadowColor = t.Shadow.OffsetX, t.Shadow.OffsetY, color
-		}
-		ecs.Put(&b, value)
+	return b, nil
+}
+
+func (r *Resources) AppendModContent(b *ecs.Bundle, c ModComponents) error {
+	if err := r.AppendModContentLayout(b, c); err != nil {
+		return err
 	}
+	if err := r.AppendModContent2D(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentTrail(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentHTML(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentAnimation(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentParticles(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentTilemaps(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentSpine(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentSpatial(b, c); err != nil {
+		return err
+	}
+	if err := r.AppendModContentPhysics2D(b, c); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Resources) AppendModContentLayout(b *ecs.Bundle, c ModComponents) error {
+	if c.Layout != nil {
+		b.Put(*c.Layout)
+	}
+	return nil
+}
+
+func (r *Resources) AppendModContentTrail(b *ecs.Bundle, c ModComponents) error {
+	if c.Trail != nil {
+		b.Put(c.Trail.component())
+	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentHTML(b *ecs.Bundle, c ModComponents) error {
+	width, height := modContentSize(c)
 	if h := c.HTML; h != nil {
 		value, err := r.HTML(h.Resource)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
 		surface := html.Surface{Value: value, Width: width, Height: height, PassThrough: h.PassThrough, Images: &html.Images{Provider: modHTMLImages{store: r, base: r.modHTMLBases[h.Resource]}}}
 		if h.Font != "" {
 			surface.Font, err = r.Font(h.Font)
 			if err != nil {
-				return ecs.Bundle{}, err
+				return err
 			}
 		}
 		if h.BoldFont != "" {
 			surface.BoldFont, err = r.Font(h.BoldFont)
 			if err != nil {
-				return ecs.Bundle{}, err
+				return err
 			}
 		}
-		ecs.Put(&b, surface)
+		b.Put(surface)
 	}
-	if a := c.Animation; a != nil {
-		clip := r.modClips[a]
-		if clip == nil {
-			var err error
-			clip, err = r.compileAnimationClipSpec(a.Clip, "module animation")
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			r.modClips[a] = clip
-		}
-		animator := scene.NewAnimator(clip, a.Clip.Loop)
-		if a.Speed > 0 {
-			animator.Speed = a.Speed
-		}
-		if c.Sprite == nil && len(clip.TextureTracks) > 0 {
-			sprite := scene.Sprite2DFromTexture(animator.CurrentTexture())
-			if width > 0 {
-				sprite.Width = width
-			}
-			if height > 0 {
-				sprite.Height = height
-			}
-			ecs.Put(&b, sprite)
-		}
-		ecs.Put(&b, animator)
-	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentParticles(b *ecs.Bundle, c ModComponents) error {
 	if e := c.Emitter; e != nil {
 		emitter, err := r.modEmitter(*e)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, emitter)
+		b.Put(emitter)
 	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentTilemaps(b *ecs.Bundle, c ModComponents) error {
 	if t := c.Tilemap; t != nil {
 		value := scene.Tilemap2D{Width: t.Width, Height: t.Height, TileWidth: t.TileWidth, TileHeight: t.TileHeight, Tiles: slices.Clone(t.Tiles), Alpha: 1}
 		if t.Tileset != "" {
 			texture, err := r.texture(&TextureSpec{Image: t.Tileset})
 			if err != nil {
-				return ecs.Bundle{}, err
+				return err
 			}
 			if texture.Width%t.TileWidth != 0 || texture.Height%t.TileHeight != 0 {
-				return ecs.Bundle{}, fmt.Errorf("tilemap texture dimensions must be divisible by tile dimensions")
+				return fmt.Errorf("tilemap texture dimensions must be divisible by tile dimensions")
 			}
 			value.Texture, value.Columns = texture, texture.Width/t.TileWidth
 		}
-		ecs.Put(&b, value)
+		b.Put(value)
 	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentSpine(b *ecs.Bundle, c ModComponents) error {
 	if s := c.Spine; s != nil {
 		if r.spines == nil {
 			r.spines = newResourceCache[string, *spine.Resource](0)
 		}
 		resource, err := r.spines.(*resourceCache[string, *spine.Resource]).load(s.Source.ID, func() (*spine.Resource, error) { return r.loadSpine(s.Source) }, nil)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
 		player := spine.NewPlayer(resource)
 		if s.Speed > 0 {
@@ -277,127 +218,150 @@ func (r *Resources) ModContent(c ModComponents) (ecs.Bundle, error) {
 		}
 		if s.Skin != "" {
 			if err := player.SetSkin(s.Skin); err != nil {
-				return ecs.Bundle{}, err
+				return err
 			}
 		}
 		if s.Animation != "" {
 			if err := player.SetAnimation(s.Animation, s.Loop); err != nil {
-				return ecs.Bundle{}, err
+				return err
 			}
 		}
 		player.Update(0)
-		ecs.Put(&b, scene.Spine2D{Player: player})
+		b.Put(scene.Spine2D{Player: player})
 	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentSpatial(b *ecs.Bundle, c ModComponents) error {
 	var model modelResource
 	if m := c.Model; m != nil {
+		if r.modModels == nil {
+			r.modModels = newResourceCache[string, modelResource](0)
+		}
 		var err error
 		model, err = r.modModels.load(m.ID, func() (modelResource, error) { return r.loadModModel(*m) }, modelResource.dispose)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
 		if model.mesh != nil {
-			ecs.Put(&b, render3d.Mesh{Mesh: model.mesh})
+			b.Put(render3d.Mesh{Mesh: model.mesh})
 			materials := slices.Clone(model.materials)
-			ecs.Put(&b, render3d.Material[graphics.StandardMaterial]{Material: &materials[0], Materials: materials})
+			b.Put(render3d.Material[graphics.StandardMaterial]{Material: &materials[0], Materials: materials})
 		}
 		if len(model.asset.Nodes) > 0 {
 			rig := r.modRigs[m.ID]
 			if rig == nil {
 				rig, err = newModelRig(model.asset)
 				if err != nil {
-					return ecs.Bundle{}, err
+					return err
+				}
+				if r.modRigs == nil {
+					r.modRigs = make(map[string]*ModelRig)
 				}
 				r.modRigs[m.ID] = rig
 			}
 			pose := rig.NewPose()
-			ecs.Put(&b, rig)
-			ecs.Put(&b, pose)
-			ecs.Put(&b, pose.Deformation)
+			b.Put(rig)
+			b.Put(pose)
+			b.Put(pose.Deformation)
 		}
-	}
-	if spec := c.Camera2D; spec != nil {
-		camera := scene.NewCamera()
-		camera.Order, camera.Viewport = spec.Order, spec.Viewport
-		if spec.Clear != nil {
-			camera.Clear = *spec.Clear
-		}
-		if spec.ClearColor != "" {
-			color, err := ParseColor(spec.ClearColor, 1)
-			if err != nil {
-				return ecs.Bundle{}, err
-			}
-			camera.ClearColor = color
-		}
-		projection := scene.OrthographicProjection2D()
-		if spec.Scale > 0 {
-			projection.Orthographic.Scale = spec.Scale
-		}
-		ecs.Put(&b, camera)
-		ecs.Put(&b, scene.Camera2D{})
-		ecs.Put(&b, projection)
 	}
 	if camera := c.Camera; camera != nil {
 		color, err := ParseColor(camera.ClearColor, 1)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, scene.Camera{Viewport: scene.CameraViewport{X: camera.Viewport.X, Y: camera.Viewport.Y, Width: camera.Viewport.Width, Height: camera.Viewport.Height}, Order: camera.Order, Active: true, Clear: true, ClearColor: color})
-		ecs.Put(&b, scene.Projection{Kind: scene.ProjectionPerspective, Perspective: scene.PerspectiveProjection{Fov: camera.Fov, Near: camera.Near}})
+		b.Put(scene.Camera{Viewport: scene.CameraViewport{X: camera.Viewport.X, Y: camera.Viewport.Y, Width: camera.Viewport.Width, Height: camera.Viewport.Height}, Order: camera.Order, Active: true, Clear: true, ClearColor: color})
+		b.Put(scene.Projection{Kind: scene.ProjectionPerspective, Perspective: scene.PerspectiveProjection{Fov: camera.Fov, Near: camera.Near}})
 		settings, err := camera.renderSettings()
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, settings)
+		b.Put(settings)
 		environment, err := r.modEnvironment(camera)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, environment)
+		b.Put(environment)
 	}
 	if l := c.AmbientLight; l != nil {
 		color, err := ParseColor(l.Color, 1)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, render3d.AmbientLight{Color: color.Linear(), Brightness: l.Brightness})
+		b.Put(render3d.AmbientLight{Color: color.Linear(), Brightness: l.Brightness})
 	}
 	if l := c.DirectionalLight; l != nil {
 		color, err := ParseColor(l.Color, 1)
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
 		value := render3d.DirectionalLight{Color: color.Linear(), Illuminance: l.Illuminance}
 		if l.Shadows != nil {
 			value.Shadows = l.Shadows.Settings()
 		}
 		if err := value.Validate(); err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, value)
+		b.Put(value)
 	}
 	if l := c.PointLight; l != nil {
 		value, err := l.Light()
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, value)
+		b.Put(value)
 	}
 	if l := c.SpotLight; l != nil {
 		value, err := l.Light()
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, value)
+		b.Put(value)
 	}
 	if l := c.AreaLight; l != nil {
 		value, err := l.Light()
 		if err != nil {
-			return ecs.Bundle{}, err
+			return err
 		}
-		ecs.Put(&b, value)
+		b.Put(value)
 	}
+	if p := c.RigidBody3D; p != nil {
+		b.Put(p.component())
+	}
+	if p := c.TriangleMeshCollider3D; p != nil {
+		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeTriangleMesh {
+			return fmt.Errorf("triangle mesh collider requires this element's cooked model")
+		}
+		value := enginephysics.NewCollider3D(model.collision.TriangleMesh)
+		p.Collider3DSettingsSpec.applyColliderSettings3D(&value)
+		b.Put(value)
+	}
+	if p := c.ConvexHullCollider3D; p != nil {
+		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeSingleConvex {
+			return fmt.Errorf("convex hull collider requires this element's cooked model")
+		}
+		value := enginephysics.NewCollider3D(model.collision.ConvexHull)
+		p.Collider3DSettingsSpec.applyColliderSettings3D(&value)
+		b.Put(value)
+	}
+	if p := c.CompoundCollider3D; p != nil {
+		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeConvexDecomposition {
+			return fmt.Errorf("compound collider requires this element's cooked model")
+		}
+		value := enginephysics.NewCollider3D(model.collision.Compound)
+		p.Collider3DSettingsSpec.applyColliderSettings3D(&value)
+		b.Put(value)
+	}
+
+	return nil
+}
+
+func (r *Resources) AppendModContentPhysics2D(b *ecs.Bundle, c ModComponents) error {
+	width, height := modContentSize(c)
 	if p := c.RigidBody2D; p != nil {
-		ecs.Put(&b, p.component())
+		b.Put(p.component())
 	}
 	if p := c.CircleCollider2D; p != nil {
 		radius := p.Radius
@@ -405,8 +369,8 @@ func (r *Resources) ModContent(c ModComponents) (ecs.Bundle, error) {
 			radius = float64(min(width, height)) * .5
 		}
 		value := enginephysics.NewCollider2D(enginephysics.Circle{Center: enginephysics.V(p.Offset[0], p.Offset[1]), Radius: radius})
-		applyColliderSettings(p.Collider2DSettingsSpec, &value)
-		ecs.Put(&b, value)
+		p.Collider2DSettingsSpec.applyColliderSettings(&value)
+		b.Put(value)
 	}
 	if p := c.BoxCollider2D; p != nil {
 		w, h := p.Width, p.Height
@@ -419,40 +383,14 @@ func (r *Resources) ModContent(c ModComponents) (ecs.Bundle, error) {
 		shape := enginephysics.NewBox(w, h)
 		shape.Center, shape.Rotation = enginephysics.V(p.Offset[0], p.Offset[1]), p.Rotation
 		value := enginephysics.NewCollider2D(shape)
-		applyColliderSettings(p.Collider2DSettingsSpec, &value)
-		ecs.Put(&b, value)
+		p.Collider2DSettingsSpec.applyColliderSettings(&value)
+		b.Put(value)
 	}
 	if p := c.SegmentCollider2D; p != nil {
-		ecs.Put(&b, p.component())
+		b.Put(p.component())
 	}
-	if p := c.RigidBody3D; p != nil {
-		ecs.Put(&b, p.component())
-	}
-	if p := c.TriangleMeshCollider3D; p != nil {
-		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeTriangleMesh {
-			return ecs.Bundle{}, fmt.Errorf("triangle mesh collider requires this element's cooked model")
-		}
-		value := enginephysics.NewCollider3D(model.collision.TriangleMesh)
-		applyColliderSettings3D(p.Collider3DSettingsSpec, &value)
-		ecs.Put(&b, value)
-	}
-	if p := c.ConvexHullCollider3D; p != nil {
-		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeSingleConvex {
-			return ecs.Bundle{}, fmt.Errorf("convex hull collider requires this element's cooked model")
-		}
-		value := enginephysics.NewCollider3D(model.collision.ConvexHull)
-		applyColliderSettings3D(p.Collider3DSettingsSpec, &value)
-		ecs.Put(&b, value)
-	}
-	if p := c.CompoundCollider3D; p != nil {
-		if !model.hasCollision || model.collision.Mode != enginephysics.CollisionModeConvexDecomposition {
-			return ecs.Bundle{}, fmt.Errorf("compound collider requires this element's cooked model")
-		}
-		value := enginephysics.NewCollider3D(model.collision.Compound)
-		applyColliderSettings3D(p.Collider3DSettingsSpec, &value)
-		ecs.Put(&b, value)
-	}
-	return b, nil
+
+	return nil
 }
 
 func (r *Resources) modEmitter(e EmitterSpec) (scene.ParticleEmitter2D, error) {

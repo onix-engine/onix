@@ -8,17 +8,17 @@ import (
 // NeedsFrame includes changes made after HTML synchronization. An app must
 // flush them before suspending, even if it already consumed its render request.
 func NeedsFrame(world *ecs.World) bool {
-	for entity, access := range ecs.Query[htmlComponentInstance](world).All {
+	for entity, access := range world.Query[htmlComponentInstance]().All {
 		instance := access.Ref()
 		if instance.Dirty && instance.Definition != nil && scene.IsActive(world, entity) {
 			return true
 		}
 	}
 	imageProviderChanged := htmlImageProviderChanged(world)
-	if owners, ok := ecs.GetResource[*htmlSurfaceOwners](world); ok {
+	if owners, ok := world.GetResource[*htmlSurfaceOwners](); ok {
 		for entity := range owners.Children {
-			surface := ecs.GetRef[Surface](world, entity)
-			state := ecs.GetRef[htmlRenderState](world, entity)
+			surface := world.GetRef[Surface](entity)
+			state := world.GetRef[htmlRenderState](entity)
 			if surface == nil || state == nil {
 				return true
 			}
@@ -31,7 +31,7 @@ func NeedsFrame(world *ecs.World) bool {
 	}
 	// Rendered owners above also include removed surfaces awaiting cleanup.
 	// Only new surfaces need a separate query; existing ones are visited once.
-	for entity := range ecs.Query[Surface](world, ecs.Without[htmlRenderState]()).All {
+	for entity := range world.Query[Surface](ecs.Without[htmlRenderState]()).All {
 		if scene.IsActive(world, entity) {
 			return true
 		}
@@ -41,7 +41,7 @@ func NeedsFrame(world *ecs.World) bool {
 
 // Animating reports whether an active CSS animation needs another frame.
 func Animating(world *ecs.World) bool {
-	for entity, access := range ecs.Query[htmlRenderState](world).All {
+	for entity, access := range world.Query[htmlRenderState]().All {
 		if scene.IsActive(world, entity) && htmlAnimating(access.Ref()) {
 			return true
 		}

@@ -122,7 +122,7 @@ func TestBundlePreparationKeepsEntryAssociations(t *testing.T) {
 	}
 	world := NewWorld()
 	bundle := reverseTraversalBundle(64)
-	duplicate := registerComponent[testPosition](world)
+	duplicate := world.registerComponent[testPosition]()
 	bundle.entries = append(bundle.entries, traversalBundleEntry{id: duplicate})
 	assertRemovalPanic(t, func() { world.PrepareBundle(bundle) })
 }
@@ -193,17 +193,17 @@ func TestComponentMaskEqualIgnoresTrailingZeroWords(t *testing.T) {
 func TestPatchInterleavesWritesAndRetainedIDs(t *testing.T) {
 	world := NewWorld()
 	// Register writes below, between, at, and above source IDs.
-	name := registerComponent[testName](world)
-	position := registerComponent[testPosition](world)
-	visibility := registerComponent[testVisibility](world)
-	velocity := registerComponent[testVelocity](world)
-	registerComponent[testSize](world)
-	tag := registerComponent[testLocalTag](world)
-	anchor := registerComponent[testAnchor](world)
-	spawn := NewSpawner4[testPosition, testVelocity, testSize, testLocalTag](world)
+	name := world.registerComponent[testName]()
+	position := world.registerComponent[testPosition]()
+	visibility := world.registerComponent[testVisibility]()
+	velocity := world.registerComponent[testVelocity]()
+	world.registerComponent[testSize]()
+	tag := world.registerComponent[testLocalTag]()
+	anchor := world.registerComponent[testAnchor]()
+	spawn := world.NewSpawner4[testPosition, testVelocity, testSize, testLocalTag]()
 	entity := spawn.Spawn(testPosition{X: 10}, testVelocity{X: 20}, testSize{Width: 30}, testLocalTag{})
 	other := spawn.Spawn(testPosition{X: 11}, testVelocity{X: 21}, testSize{Width: 31}, testLocalTag{})
-	patch := NewPatch4[testAnchor, testVelocity, testName, testVisibility](world, Type[testSize](), Type[testVelocity](), Type[testName]())
+	patch := world.NewPatch4[testAnchor, testVelocity, testName, testVisibility](Type[testSize](), Type[testVelocity](), Type[testName]())
 	if err := patch.Apply(entity, testAnchor{9, 8}, testVelocity{X: 200}, testName{Value: "inserted"}, testVisibility{Visible: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -212,10 +212,10 @@ func TestPatchInterleavesWritesAndRetainedIDs(t *testing.T) {
 	if got := world.archetypes[meta.archetypeID].ids; !slices.Equal(got, want) {
 		t.Fatalf("target components = %v, want %v", got, want)
 	}
-	if GetRef[testPosition](world, entity).X != 10 || GetRef[testVelocity](world, entity).X != 200 || GetRef[testName](world, entity).Value != "inserted" || !GetRef[testVisibility](world, entity).Visible || *GetRef[testAnchor](world, entity) != (testAnchor{9, 8}) || Has[testSize](world, entity) {
+	if world.GetRef[testPosition](entity).X != 10 || world.GetRef[testVelocity](entity).X != 200 || world.GetRef[testName](entity).Value != "inserted" || !world.GetRef[testVisibility](entity).Visible || *world.GetRef[testAnchor](entity) != (testAnchor{9, 8}) || world.Has[testSize](entity) {
 		t.Fatal("patch lost a retained value or wrote values in the wrong order")
 	}
-	if GetRef[testPosition](world, other).X != 11 || GetRef[testVelocity](world, other).X != 21 || GetRef[testSize](world, other).Width != 31 {
+	if world.GetRef[testPosition](other).X != 11 || world.GetRef[testVelocity](other).X != 21 || world.GetRef[testSize](other).Width != 31 {
 		t.Fatal("patch corrupted the swapped source row")
 	}
 }

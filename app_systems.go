@@ -9,6 +9,7 @@ import (
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/scene/render3d"
 	engineui "github.com/diiyw/onix/ui"
+	"github.com/diiyw/onix/ui/html"
 	"github.com/diiyw/onix/window"
 )
 
@@ -21,7 +22,7 @@ type SystemSet interface {
 // InstallSystems installs one capability and its explicit dependencies. Calls
 // are idempotent, and unused capability implementations can be removed by the
 // Go linker.
-func InstallSystems[T SystemSet](app *App) error {
+func (app *App) InstallSystems[T SystemSet]() error {
 	if app == nil {
 		return fmt.Errorf("app is nil")
 	}
@@ -150,7 +151,7 @@ func (Render2D) install(app *App) error {
 	if app.hasSystemSet(systemSetRender2D) {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
 	if err := app.ensureRenderCore(); err != nil {
@@ -175,14 +176,19 @@ func (Render3D) install(app *App) error {
 	if app.hasSystemSet(systemSetRender3D) {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
 	if err := app.ensureRenderCore(); err != nil {
 		return err
 	}
-	if _, ok := ecs.GetResource[*render3d.AmbientLight](app.World); !ok {
-		ecs.InsertResource(app.World, render3d.NewAmbientLight())
+	if _, ok := app.World.GetResource[*render3d.AmbientLight](); !ok {
+		app.World.InsertResource(render3d.NewAmbientLight())
+	}
+	app.render3DDispose = func(world *ecs.World) {
+		if state, ok := world.GetResource[*render3d.World](); ok {
+			_ = state.Dispose()
+		}
 	}
 	render3d.Register(app.World)
 	if err := app.AddSystems(StageRender,
@@ -201,8 +207,8 @@ func (app *App) ensureRenderCore() error {
 	if app.hasSystemSet(systemSetRenderCore) {
 		return nil
 	}
-	if _, ok := ecs.GetResource[*scene.RenderWorld](app.World); !ok {
-		ecs.InsertResource(app.World, scene.NewRenderWorld())
+	if _, ok := app.World.GetResource[*scene.RenderWorld](); !ok {
+		app.World.InsertResource(scene.NewRenderWorld())
 	}
 	cameras := scene.ExtractCamerasSystem("extract_cameras")
 	cameras.After = []string{"sync_render_transform"}
@@ -235,24 +241,24 @@ func (app *App) refreshRenderTail() error {
 
 func (app *App) ensureCamera2D() {
 	var entity ecs.Entity
-	for value, _ := range ecs.Query[scene.Camera2D](app.World).All {
-		if camera, ok := ecs.Get[scene.Camera](app.World, value); ok && camera.Fallback {
+	for value, _ := range app.World.Query[scene.Camera2D]().All {
+		if camera, ok := app.World.Get[scene.Camera](value); ok && camera.Fallback {
 			entity = value
 			break
 		}
 	}
 	if entity == 0 {
 		entity = scene.SpawnCamera2D(app.World)
-		ecs.GetMut[scene.Camera](app.World, entity).Fallback = true
+		app.World.GetMut[scene.Camera](entity).Fallback = true
 	}
 	app.configureCamera2D()
 }
 
 func (app *App) configureCamera2D() {
 	overlay := app.hasSystemSet(systemSetRender3D)
-	settings, hasSettings := ecs.GetResource[scene.RenderSettings2D](app.World)
-	for entity, _ := range ecs.Query[scene.Camera2D](app.World).All {
-		camera := ecs.GetMut[scene.Camera](app.World, entity)
+	settings, hasSettings := app.World.GetResource[scene.RenderSettings2D]()
+	for entity, _ := range app.World.Query[scene.Camera2D]().All {
+		camera := app.World.GetMut[scene.Camera](entity)
 		if camera != nil && camera.Fallback {
 			if hasSettings {
 				camera.ClearColor = settings.ClearColor
@@ -270,7 +276,7 @@ func (Input2D) install(app *App) error {
 	if app.hasSystemSet(systemSetInput2D) {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
 	app.installedSystemSets |= systemSetInput2D
@@ -293,7 +299,7 @@ func (Animations2D) install(app *App) error {
 	if app.hasSystemSet(systemSetAnimations2D) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
 	// Animation components target authored scene entities and update here before
@@ -303,6 +309,7 @@ func (Animations2D) install(app *App) error {
 	if err := app.AddSystem(StagePreUpdate, worldAnimation); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(scene.AnimationTaskCount)
 	app.installedSystemSets |= systemSetAnimations2D
 	if err := app.installUIAnimatorSystem(); err != nil {
 		return err
@@ -314,7 +321,7 @@ func (SpriteTrails2D) install(app *App) error {
 	if app.hasSystemSet(systemSetSpriteTrails2D) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
 	scene.RegisterSpriteTrailRenderer2D(app.World)
@@ -323,6 +330,7 @@ func (SpriteTrails2D) install(app *App) error {
 	}); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(scene.SpriteTrailTaskCount)
 	app.installedSystemSets |= systemSetSpriteTrails2D
 	if app.hasSystemSet(systemSetInput2D) {
 		return app.refreshInput2D()
@@ -334,13 +342,14 @@ func (Particles2D) install(app *App) error {
 	if app.hasSystemSet(systemSetParticles2D) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
 	scene.RegisterParticleRenderer2D(app.World)
 	if err := app.AddSystem(StageFixedUpdate, scene.UpdateParticleEmitter2DSystem("update_particle_emitter_2d")); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(scene.ParticleTaskCount)
 	app.installedSystemSets |= systemSetParticles2D
 	return nil
 }
@@ -349,7 +358,7 @@ func (Tilemaps2D) install(app *App) error {
 	if app.hasSystemSet(systemSetTilemaps2D) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
 	scene.RegisterTilemapRenderer2D(app.World)
@@ -361,13 +370,14 @@ func (Spine2D) install(app *App) error {
 	if app.hasSystemSet(systemSetSpine2D) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
 	scene.RegisterSpineRenderer2D(app.World)
 	if err := app.AddSystem(StageUpdate, scene.UpdateSpine2DSystem("update_spine_2d")); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(scene.SpineTaskCount)
 	app.installedSystemSets |= systemSetSpine2D
 	return nil
 }
@@ -378,11 +388,11 @@ func (Physics2D) install(app *App) error {
 	if app.hasSystemSet(systemSetPhysics2D) {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
-	if _, ok := ecs.GetResource[*enginephysics.Runtime2D](app.World); !ok {
-		ecs.InsertResource(app.World, enginephysics.NewRuntime2D())
+	if _, ok := app.World.GetResource[*enginephysics.Runtime2D](); !ok {
+		app.World.InsertResource(enginephysics.NewRuntime2D())
 	}
 	if err := app.AddSystem(StageFixedUpdate, enginephysics.StepSystem2D("step_physics_2d")); err != nil {
 		return err
@@ -390,6 +400,7 @@ func (Physics2D) install(app *App) error {
 	if err := app.ensurePhysicsTransforms(); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(enginephysics.TaskCount2D)
 	app.installedSystemSets |= systemSetPhysics2D
 	return nil
 }
@@ -399,11 +410,11 @@ func (Physics3D) install(app *App) error {
 	if app.hasSystemSet(systemSetPhysics3D) {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
-	if _, ok := ecs.GetResource[*enginephysics.Runtime3D](app.World); !ok {
-		ecs.InsertResource(app.World, enginephysics.NewRuntime3D())
+	if _, ok := app.World.GetResource[*enginephysics.Runtime3D](); !ok {
+		app.World.InsertResource(enginephysics.NewRuntime3D())
 	}
 	if err := app.AddSystem(StageFixedUpdate, enginephysics.StepSystem3D("step_physics_3d")); err != nil {
 		return err
@@ -411,6 +422,7 @@ func (Physics3D) install(app *App) error {
 	if err := app.ensurePhysicsTransforms(); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(enginephysics.TaskCount3D)
 	app.installedSystemSets |= systemSetPhysics3D
 	return nil
 }
@@ -471,7 +483,7 @@ func (app *App) ensureUIRuntime() error {
 	if app.hasSystemSet(systemSetUIRuntime) {
 		return nil
 	}
-	if err := InstallSystems[Input2D](app); err != nil {
+	if err := app.InstallSystems[Input2D](); err != nil {
 		return err
 	}
 	if err := app.AddSystem(StageUpdate, engineui.UpdateSystem("update_ui")); err != nil {
@@ -522,6 +534,8 @@ func (app *App) ensureUIRuntime() error {
 	if err := app.AddSystem(StageRender, final); err != nil {
 		return err
 	}
+	app.uiLayoutPending = engineui.LayoutPending
+	app.uiCaretBlinkDelay = engineui.CaretBlinkDelay
 	app.installedSystemSets |= systemSetUIRuntime
 	return nil
 }
@@ -530,7 +544,7 @@ func (UITextInput) install(app *App) error {
 	if app.hasSystemSet(systemSetUITextInput) {
 		return nil
 	}
-	if err := InstallSystems[UIWidgets](app); err != nil {
+	if err := app.InstallSystems[UIWidgets](); err != nil {
 		return err
 	}
 	if err := app.AddSystem(StageInputGUI, engineui.FocusedInputSystem("dispatch_focused_input")); err != nil {
@@ -561,13 +575,16 @@ func (UIHTML) install(app *App) error {
 	if app.hasSystemSet(systemSetUIHTML) {
 		return nil
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
-	if err := InstallSystems[UITextInput](app); err != nil {
+	if err := app.InstallSystems[UITextInput](); err != nil {
 		return err
 	}
 	engineui.RegisterRuntimeFeature[engineui.HTMLRenderer](app.World)
+	app.htmlDispose = html.Dispose
+	app.htmlNeedsFrame = html.NeedsFrame
+	app.moduleHTMLInput = app.dispatchModuleHTMLInput
 	app.installedSystemSets |= systemSetUIHTML
 	return nil
 }
@@ -579,6 +596,7 @@ func (WebView) install(app *App) error {
 	if err := app.AddSystem(StageUpdate, scene.WebViewSystem("")); err != nil {
 		return err
 	}
+	app.addIdleTaskCounter(scene.WebViewTaskCount)
 	app.installedSystemSets |= systemSetWebView
 	app.webViewSystemInstalled = true
 	app.registerWebViewLifecycle()
@@ -598,7 +616,7 @@ func (app *App) closeWebViewRuntime() {
 	if app == nil || app.World == nil {
 		return
 	}
-	if runtime, ok := ecs.GetResource[*scene.WebViewRuntime](app.World); ok && runtime != nil {
+	if runtime, ok := app.World.GetResource[*scene.WebViewRuntime](); ok && runtime != nil {
 		_ = runtime.Close()
 	}
 }

@@ -25,18 +25,18 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 	} else {
 		value = style.BaseAnimationValue(computed)
 	}
-	if clip := ecs.GetRef[scene.RoundedClip2D](world, entity); (clip != nil) && child.role == htmlRoleOverflow {
+	if clip := world.GetRef[scene.RoundedClip2D](entity); (clip != nil) && child.role == htmlRoleOverflow {
 		background := htmlAnimationColor(value.Colors[style.AnimationBackground].Resolve(foreground))
 		if clip.MaskColor != background {
-			mutable := ecs.GetMut[scene.RoundedClip2D](world, entity)
+			mutable := world.GetMut[scene.RoundedClip2D](entity)
 			mutable.MaskColor = background
 		}
 	}
 	color := htmlAnimationColor(foreground)
-	if text := ecs.GetRef[scene.Text2D](world, entity); text != nil {
+	if text := world.GetRef[scene.Text2D](entity); text != nil {
 		placeholder := false
-		if link := ecs.GetRef[ControlText](world, entity); link != nil {
-			if control := ecs.GetRef[Control](world, link.Control); control != nil {
+		if link := world.GetRef[ControlText](entity); link != nil {
+			if control := world.GetRef[Control](link.Control); control != nil {
 				placeholder = control.Value == "" && control.Placeholder != ""
 			}
 		}
@@ -44,16 +44,16 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 			color = htmlColor(computed.PlaceholderColor)
 		}
 		if text.Color != color {
-			mutable := ecs.GetMut[scene.Text2D](world, entity)
+			mutable := world.GetMut[scene.Text2D](entity)
 			mutable.Color = color
 		}
 	}
-	if indicator := ecs.GetRef[scene.UIImage2D](world, entity); (indicator != nil) && child.role == htmlRoleIndicator && indicator.Tint != color {
-		mutable := ecs.GetMut[scene.UIImage2D](world, entity)
+	if indicator := world.GetRef[scene.UIImage2D](entity); (indicator != nil) && child.role == htmlRoleIndicator && indicator.Tint != color {
+		mutable := world.GetMut[scene.UIImage2D](entity)
 		mutable.Tint = color
 	}
-	sprite := ecs.GetRef[scene.Sprite2D](world, entity)
-	if sprite == nil || ecs.Has[htmlOpacitySurface](world, entity) {
+	sprite := world.GetRef[scene.Sprite2D](entity)
+	if sprite == nil || world.Has[htmlOpacitySurface](entity) {
 		return
 	}
 	fill, border := sprite.Shape.Fill, sprite.Shape.Border
@@ -85,7 +85,7 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 			paint.BorderColor.Bottom = style.ColorValue(value.Colors[style.AnimationBorderBottom].Resolve(foreground).Color())
 			paint.BorderColor.Left = style.ColorValue(value.Colors[style.AnimationBorderLeft].Resolve(foreground).Color())
 			if texture := htmlPaintTextureFor(state, node, paint, sprite.Width, sprite.Height); texture != nil {
-				mutable := ecs.GetMut[scene.Sprite2D](world, entity)
+				mutable := world.GetMut[scene.Sprite2D](entity)
 				mutable.Texture, mutable.Tint, mutable.Shape = texture, graphics.White, scene.Shape2D{}
 				state.Textures.bind(entity, texture)
 			}
@@ -104,7 +104,7 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 		return
 	}
 	if sprite.Shape.Fill != fill || sprite.Shape.Border != border {
-		mutable := ecs.GetMut[scene.Sprite2D](world, entity)
+		mutable := world.GetMut[scene.Sprite2D](entity)
 		mutable.Shape.Fill, mutable.Shape.Border = fill, border
 	}
 }

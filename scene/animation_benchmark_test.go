@@ -36,8 +36,8 @@ func animationBenchmarkWorld(count int, playing bool) *ecs.World {
 	world := ecs.NewWorld()
 	clock := NewTime()
 	clock.Set(time.Second/60, 0, 0)
-	ecs.InsertResource(world, clock)
-	spawner := ecs.NewSpawner4[Animator, Transform, Sprite2D, Visibility](world)
+	world.InsertResource(clock)
+	spawner := world.NewSpawner4[Animator, Transform, Sprite2D, Visibility]()
 	for range count {
 		animator := NewBoundAnimator(clip, true, ecs.Entity(0), nil, nil, nil)
 		if !playing {

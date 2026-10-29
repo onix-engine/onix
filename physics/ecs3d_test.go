@@ -13,19 +13,19 @@ func Test3DTransformWritebackPreservesSimulationPrecision(t *testing.T) {
 	world := ecs.NewWorld()
 	runtime := NewRuntime3D()
 	runtime.Simulation.Gravity = Vector3D{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	bundle := ecs.NewBundle(2)
-	ecs.Put(&bundle, scene.TransformFromXYZ(1e6, 0, 0))
+	bundle.Put(scene.TransformFromXYZ(1e6, 0, 0))
 	body := NewRigidBody3D(BodyDynamic)
 	body.Velocity = V3(.02, 0, 0)
-	ecs.Put(&bundle, body)
+	bundle.Put(body)
 	entity := world.Spawn(bundle)
 	for range 120 {
 		if err := StepSystem3D("").Run(world); err != nil {
 			t.Fatal(err)
 		}
 	}
-	body, _ = ecs.Get[RigidBody3D](world, entity)
+	body, _ = world.Get[RigidBody3D](entity)
 	if math.Abs(body.Handle().Position().X-(1e6+.04)) > 1e-7 {
 		t.Fatalf("float32 writeback discarded motion: position=%v", body.Handle().Position())
 	}
@@ -33,25 +33,25 @@ func Test3DTransformWritebackPreservesSimulationPrecision(t *testing.T) {
 
 func Test3DStepSystemSimulatesOnly3DComponentBodies(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	runtime := NewRuntime3D()
 	runtime.Simulation.Gravity = V3(0, -20, 0)
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 
 	floorBundle := ecs.NewBundle(3)
-	ecs.Put(&floorBundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&floorBundle, NewRigidBody3D(BodyStatic))
-	ecs.Put(&floorBundle, NewCollider3D(NewBox3D(20, 2, 20)))
+	floorBundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	floorBundle.Put(NewRigidBody3D(BodyStatic))
+	floorBundle.Put(NewCollider3D(NewBox3D(20, 2, 20)))
 	world.Spawn(floorBundle)
 
 	ballBundle := ecs.NewBundle(3)
-	ecs.Put(&ballBundle, scene.TransformFromXYZ(0, 8, 0))
-	ecs.Put(&ballBundle, NewRigidBody3D(BodyDynamic))
-	ecs.Put(&ballBundle, NewCollider3D(Sphere{Radius: 1}))
+	ballBundle.Put(scene.TransformFromXYZ(0, 8, 0))
+	ballBundle.Put(NewRigidBody3D(BodyDynamic))
+	ballBundle.Put(NewCollider3D(Sphere{Radius: 1}))
 	ball := world.Spawn(ballBundle)
 
 	plainBundle := ecs.NewBundle(1)
-	ecs.Put(&plainBundle, scene.TransformFromXYZ(3, 8, 4))
+	plainBundle.Put(scene.TransformFromXYZ(3, 8, 4))
 	plain := world.Spawn(plainBundle)
 
 	system := StepSystem3D("")
@@ -59,13 +59,13 @@ func Test3DStepSystemSimulatesOnly3DComponentBodies(t *testing.T) {
 		if err := system.Run(world); err != nil {
 			t.Fatal(err)
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
-	transform, _ := ecs.Get[scene.Transform](world, ball)
+	transform, _ := world.Get[scene.Transform](ball)
 	if transform.Translation.Y() < 1.9 || transform.Translation.Y() > 2.1 {
 		t.Fatalf("physics entity y = %v, want approximately 2", transform.Translation.Y())
 	}
-	plainTransform, _ := ecs.Get[scene.Transform](world, plain)
+	plainTransform, _ := world.Get[scene.Transform](plain)
 	if plainTransform.Translation != [3]float32{3, 8, 4} {
 		t.Fatalf("entity without RigidBody3D moved to %v", plainTransform.Translation)
 	}
@@ -73,25 +73,25 @@ func Test3DStepSystemSimulatesOnly3DComponentBodies(t *testing.T) {
 
 func Test3DDynamicTransformEditTeleports3DBody(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	runtime := NewRuntime3D()
 	runtime.Simulation.Gravity = Vector3D{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	bundle := ecs.NewBundle(3)
-	ecs.Put(&bundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&bundle, NewRigidBody3D(BodyDynamic))
-	ecs.Put(&bundle, NewCollider3D(Sphere{Radius: 1}))
+	bundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	bundle.Put(NewRigidBody3D(BodyDynamic))
+	bundle.Put(NewCollider3D(Sphere{Radius: 1}))
 	entity := world.Spawn(bundle)
 	system := StepSystem3D("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform := ecs.GetMut[scene.Transform](world, entity)
+	transform := world.GetMut[scene.Transform](entity)
 	transform.Translation = [3]float32{40, 30, -20}
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := ecs.Get[RigidBody3D](world, entity)
+	body, _ := world.Get[RigidBody3D](entity)
 	if got := body.Handle().Position(); got != V3(40, 30, -20) {
 		t.Fatalf("teleported body position = %+v", got)
 	}
@@ -99,18 +99,18 @@ func Test3DDynamicTransformEditTeleports3DBody(t *testing.T) {
 
 func Test3DStepSystemEmitsEntityCollisionMessages(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	runtime := NewRuntime3D()
 	runtime.Simulation.Gravity = Vector3D{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 
 	spawn := func(bodyType BodyType, collisionType uint32) ecs.Entity {
 		bundle := ecs.NewBundle(3)
-		ecs.Put(&bundle, scene.TransformFromXYZ(0, 0, 0))
-		ecs.Put(&bundle, NewRigidBody3D(bodyType))
+		bundle.Put(scene.TransformFromXYZ(0, 0, 0))
+		bundle.Put(NewRigidBody3D(bodyType))
 		collider := NewCollider3D(Sphere{Radius: 1})
 		collider.Sensor, collider.CollisionType = true, collisionType
-		ecs.Put(&bundle, collider)
+		bundle.Put(collider)
 		return world.Spawn(bundle)
 	}
 	first, second := spawn(BodyDynamic, 10), spawn(BodyStatic, 20)
@@ -132,22 +132,22 @@ func Test3DStepSystemEmitsEntityCollisionMessages(t *testing.T) {
 
 func Test3DStepSystemReclaimsRemovedComponents(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	bundle := ecs.NewBundle(3)
-	ecs.Put(&bundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&bundle, NewRigidBody3D(BodyDynamic))
-	ecs.Put(&bundle, NewCollider3D(Sphere{Radius: 1}))
+	bundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	bundle.Put(NewRigidBody3D(BodyDynamic))
+	bundle.Put(NewCollider3D(Sphere{Radius: 1}))
 	entity := world.Spawn(bundle)
 	system := StepSystem3D("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := ecs.Get[RigidBody3D](world, entity)
+	body, _ := world.Get[RigidBody3D](entity)
 	handle := body.Handle()
 	if !handle.Valid() {
 		t.Fatal("managed body was not created")
 	}
-	ecs.Remove[RigidBody3D](world, entity)
+	world.Remove[RigidBody3D](entity)
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}

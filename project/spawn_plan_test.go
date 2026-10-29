@@ -104,11 +104,11 @@ func TestInstantiateSceneUsesCompiledParentAndTargetCameraIndices(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, ok := ecs.Get[sceneapi.Parent](scene.World, scene.MustEntity("attached"))
+	parent, ok := scene.World.Get[sceneapi.Parent](scene.MustEntity("attached"))
 	if !ok || parent.Entity != scene.MustEntity("child") {
 		t.Fatalf("compiled parent was not applied: %+v", parent)
 	}
-	target, ok := ecs.Get[sceneapi.UITargetCamera](scene.World, scene.MustEntity("hud"))
+	target, ok := scene.World.Get[sceneapi.UITargetCamera](scene.MustEntity("hud"))
 	if !ok || target.Entity != scene.MustEntity("camera") {
 		t.Fatalf("compiled target camera was not applied: %+v", target)
 	}
@@ -134,11 +134,11 @@ func TestInstantiateSceneResolvesWidgetTargetByNodeID(t *testing.T) {
 		t.Fatal(err)
 	}
 	panel := scene.MustEntity("panel")
-	widget, ok := ecs.Get[engineui.Widget](scene.World, panel)
+	widget, ok := scene.World.Get[engineui.Widget](panel)
 	if !ok || widget.Target != scene.MustEntity("canvas") || widget.TargetID != "canvas" {
 		t.Fatalf("widget target = %+v, want canvas entity and id", widget)
 	}
-	transform, _ := ecs.Get[sceneapi.UITransform](scene.World, panel)
+	transform, _ := scene.World.Get[sceneapi.UITransform](panel)
 	if x := transform.Translation.Resolve(sceneapi.UIResolveContext{}).X(); x != 86 {
 		t.Fatalf("widget target position x = %v, want 86", x)
 	}

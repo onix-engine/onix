@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -21,23 +20,23 @@ func TestHTMLRetiredSourceContextsMatchFresh(t *testing.T) {
 				source := incrementalHTMLNode(t, world, owner, "source")
 				node := incrementalHTMLNode(t, world, owner, "moved")
 				dest := incrementalHTMLNode(t, world, owner, "destination")
-				before, _ := ecs.Get[htmlRenderState](world, owner)
+				before, _ := world.Get[htmlRenderState](owner)
 				oldClip := before.OverflowBindings[retired.node].entity
 				field := incrementalControl(t, world, owner, "field")
 				other := incrementalControl(t, world, owner, "other")
-				unchanged, _ := ecs.Get[Control](world, other)
+				unchanged, _ := world.Get[Control](other)
 				node.Remove()
 				retired.Remove()
 				dest.Append(node)
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 || world.IsAlive(oldClip) {
 					t.Fatalf("retired context was reused: %+v", state.SyncStats)
 				}
 				if incrementalControl(t, world, owner, "field") != field {
 					t.Fatal("surviving input replaced")
 				}
-				after, _ := ecs.Get[Control](world, other)
+				after, _ := world.Get[Control](other)
 				if after.RenderRevision != unchanged.RenderRevision {
 					t.Fatal("unrelated input rebuilt")
 				}
@@ -51,13 +50,13 @@ func TestHTMLRetiredSourceContextsMatchFresh(t *testing.T) {
 					}
 				}
 				for _, entity := range state.Children {
-					if parent, ok := ecs.Get[scene.Parent](world, entity); ok && !world.IsAlive(parent.Entity) {
+					if parent, ok := world.Get[scene.Parent](entity); ok && !world.IsAlive(parent.Entity) {
 						t.Fatal("dead parent")
 					}
-					if focus, ok := ecs.Get[FocusOwner](world, entity); ok && !world.IsAlive(focus.Entity) {
+					if focus, ok := world.Get[FocusOwner](entity); ok && !world.IsAlive(focus.Entity) {
 						t.Fatal("dead focus owner")
 					}
-					if content, ok := ecs.Get[ScrollContent](world, entity); ok && !world.IsAlive(content.Area) {
+					if content, ok := world.Get[ScrollContent](entity); ok && !world.IsAlive(content.Area) {
 						t.Fatal("dead scroll area")
 					}
 				}
@@ -69,7 +68,7 @@ func TestHTMLRetiredSourceContextsMatchFresh(t *testing.T) {
 				// A later insertion of the detached source must create fresh context state.
 				dest.Append(retired)
 				incrementalSync(t, world)
-				state, _ = ecs.Get[htmlRenderState](world, owner)
+				state, _ = world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatal("later source reattachment fell back")
 				}
@@ -87,19 +86,19 @@ func TestHTMLRetiredSourceKeepsSurvivingScrollAndInput(t *testing.T) {
 	node := incrementalHTMLNode(t, world, owner, "moved")
 	field := incrementalControl(t, world, owner, "field")
 	SetControlValue(world, field, "Typed")
-	control := ecs.GetMut[Control](world, field)
+	control := world.GetMut[Control](field)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	clip := state.OverflowBindings[node.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -15
 	node.Remove()
 	source.Remove()
 	incrementalHTMLNode(t, world, owner, "destination").Append(node)
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
-	gotScroll, _ := ecs.Get[scene.UIScroll](world, clip)
-	gotControl, _ := ecs.Get[Control](world, field)
+	state, _ = world.Get[htmlRenderState](owner)
+	gotScroll, _ := world.Get[scene.UIScroll](clip)
+	gotControl, _ := world.Get[Control](field)
 	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || gotScroll.Position[1] != -15 || gotControl.Value != "Typed" || gotControl.SelectionAnchor != 1 || gotControl.SelectionFocus != 3 {
 		t.Fatal("survivor state lost")
 	}
@@ -144,13 +143,13 @@ func TestHTMLRetiredSourceEventsAndUnrelatedControls(t *testing.T) {
 	moved.OnClick(func(*PointerEvent) { calls++ })
 	source.SetAttribute("style", "height:80px;overflow:auto;background:red")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	oldTarget := state.EventTargets[source.node]
 	moved.Remove()
 	source.Remove()
 	incrementalHTMLNode(t, world, owner, "destination").Append(moved)
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 1 {
 		t.Fatalf("retired source rebuilt unrelated contexts: %+v", state.SyncStats)
 	}

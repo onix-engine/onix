@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/bits"
 	"sync"
+	"weak"
 
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
@@ -16,37 +17,78 @@ const (
 	defaultGlyphAtlasSize = 512
 	glyphBitmapPadding    = 2
 	glyphAtlasPadding     = 2
+	glyphAtlasByteLimit   = 8 << 20
+	glyphCacheEntryLimit  = 4096
 )
 
 type Glyph struct {
 	Rune    rune
+	OffsetX float32
+	OffsetY float32
+	Advance float32
 	Atlas   int
 	X, Y    int
 	Width   int
 	Height  int
-	OffsetX float32
-	OffsetY float32
-	Advance float32
+	page    *glyphAtlas
 }
 
 func (g Glyph) Visible() bool {
 	return g.Width > 0 && g.Height > 0
 }
 
+// KeepAlive retains the atlas until pending canvas draws have been submitted.
+// Copied glyphs already retain their pages for the lifetime of their layout.
+func (g Glyph) KeepAlive(canvas *graphics.Canvas2D) {
+	if g.page != nil {
+		canvas.RetainUntilFlush(g.page)
+	}
+}
+
+// Cached records do not pin pages. Returned glyphs do, so evicting a page from
+// the LRU never invalidates geometry held by live text or render snapshots.
+type cachedGlyph struct {
+	glyph Glyph
+	page  weak.Pointer[glyphAtlas]
+	slot  uint16
+}
+
+func cacheGlyph(g Glyph) cachedGlyph {
+	page := g.page
+	g.page = nil
+	return cachedGlyph{glyph: g, page: weak.Make(page)}
+}
+
 type glyphAtlas struct {
+	texture    *graphics.Texture
+	lcd        bool
+	size       int
+	cursorX    int
+	cursorY    int
+	rowH       int
+	pending    []graphics.TextureRegionUpdate
+	index      int
+	cached     bool
+	queued     bool
+	prev, next *glyphAtlas
+}
+
+type glyphAtlasSlot struct {
+	page    weak.Pointer[glyphAtlas]
 	texture *graphics.Texture
-	lcd     bool
-	size    int
-	cursorX int
-	cursorY int
-	rowH    int
-	pending []graphics.TextureRegionUpdate
 }
 
 type glyphAtlasPool struct {
-	mu      sync.Mutex
-	atlases []*glyphAtlas
-	dirty   bool
+	mu             sync.Mutex
+	atlases        []glyphAtlasSlot
+	oldest, newest *glyphAtlas
+	cachedBytes    int
+	cachedPages    int
+	pages          int
+	byteLimit      int
+	err            error
+	dirtyPages     []int
+	sweep          int
 }
 
 func newGlyphAtlas(size int) *glyphAtlas {
@@ -145,9 +187,21 @@ type GlyphCache struct {
 	face           *font.ScaledFace
 	pool           *glyphAtlasPool
 	ownsPool       bool
-	glyphs         map[rune]Glyph
-	phasedGlyphs   map[phasedGlyphKey]Glyph
-	outlinedGlyphs map[outlinedGlyphKey]Glyph
+	glyphs         map[rune]cachedGlyph
+	phasedGlyphs   map[phasedGlyphKey]cachedGlyph
+	outlinedGlyphs map[outlinedGlyphKey]cachedGlyph
+	entries        int
+	clock          []glyphRecordKey
+	referenced     [glyphCacheEntryLimit / 64]uint64
+	hand           uint16
+	lastUse        uint64 // guarded by the owning Font's mutex
+}
+
+// The clock ring stores keys once; hits set one bit instead of moving linked records.
+type glyphRecordKey struct {
+	phase phasedGlyphKey
+	width float32
+	kind  uint8 // 0: plain, 1: phased, 2: outline
 }
 
 type phasedGlyphKey struct {
@@ -176,8 +230,8 @@ func newGlyphCache(f *Font, size, dpi float64, pool *glyphAtlasPool, ownsPool bo
 		face:           face,
 		pool:           pool,
 		ownsPool:       ownsPool,
-		glyphs:         make(map[rune]Glyph),
-		outlinedGlyphs: make(map[outlinedGlyphKey]Glyph),
+		glyphs:         make(map[rune]cachedGlyph),
+		outlinedGlyphs: make(map[outlinedGlyphKey]cachedGlyph),
 	}
 }
 
@@ -216,10 +270,14 @@ func (c *GlyphCache) Glyph(r rune) Glyph { return c.GlyphAt(r, 0, 0) }
 func (c *GlyphCache) GlyphMetrics(r rune) Glyph {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if g, ok := c.glyphs[r]; ok {
-		return g
+	if entry, ok := c.glyphs[r]; ok {
+		c.touchEntry(entry.slot)
+		return entry.glyph
 	}
 	g := Glyph{Rune: r}
+	if c.face == nil {
+		return g
+	}
 	dr, advance, ok := c.face.GlyphBounds(r)
 	g.Advance = fixedToFloat32(advance)
 	if ok && !dr.Empty() {
@@ -245,11 +303,15 @@ func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, 
 	phaseX, phaseY = phaseX&3, phaseY&3
 	key := phasedGlyphKey{character: r, x: phaseX, y: phaseY, color: color, preblend: preblend}
 	if !preblend && phaseX == 0 && phaseY == 0 {
-		if g, ok := c.glyphs[r]; ok {
+		if entry, ok := c.glyphs[r]; ok {
+			if g, live := c.resolve(entry); live {
+				return g
+			}
+		}
+	} else if entry, ok := c.phasedGlyphs[key]; ok {
+		if g, live := c.resolve(entry); live {
 			return g
 		}
-	} else if g, ok := c.phasedGlyphs[key]; ok {
-		return g
 	}
 	if c.face == nil {
 		g := Glyph{Rune: r}
@@ -275,11 +337,11 @@ func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, 
 	if preblend {
 		color.PreblendGray(bitmap)
 	}
-	atlasIndex, x, y := c.allocate(bitmap)
+	page, x, y := c.allocate(bitmap)
 
 	g := Glyph{
 		Rune:    r,
-		Atlas:   atlasIndex,
+		Atlas:   page.index,
 		X:       x,
 		Y:       y,
 		Width:   bitmap.Bounds().Dx(),
@@ -287,6 +349,7 @@ func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, 
 		OffsetX: float32(dr.Min.X - glyphBitmapPadding),
 		OffsetY: float32(dr.Min.Y - glyphBitmapPadding),
 		Advance: advancePx,
+		page:    page,
 	}
 	c.storeGlyph(key, g)
 	return g
@@ -294,13 +357,77 @@ func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, 
 
 func (c *GlyphCache) storeGlyph(key phasedGlyphKey, glyph Glyph) {
 	if !key.lcd && !key.preblend && key.x == 0 && key.y == 0 {
-		c.glyphs[key.character] = glyph
+		old, exists := c.glyphs[key.character]
+		entry := cacheGlyph(glyph)
+		entry.slot = c.entrySlot(glyphRecordKey{phase: key}, old, exists)
+		c.glyphs[key.character] = entry
 		return
 	}
 	if c.phasedGlyphs == nil {
-		c.phasedGlyphs = make(map[phasedGlyphKey]Glyph)
+		c.phasedGlyphs = make(map[phasedGlyphKey]cachedGlyph)
 	}
-	c.phasedGlyphs[key] = glyph
+	old, exists := c.phasedGlyphs[key]
+	entry := cacheGlyph(glyph)
+	entry.slot = c.entrySlot(glyphRecordKey{phase: key, kind: 1}, old, exists)
+	c.phasedGlyphs[key] = entry
+}
+
+func (c *GlyphCache) resolve(entry cachedGlyph) (Glyph, bool) {
+	c.touchEntry(entry.slot)
+	g := entry.glyph
+	if !g.Visible() {
+		return g, true
+	}
+	g.page = entry.page.Value()
+	if g.page == nil {
+		return Glyph{}, false
+	}
+	c.pool.touch(g.page)
+	return g, true
+}
+
+func (c *GlyphCache) touchEntry(slot uint16) { c.referenced[slot/64] |= uint64(1) << (slot % 64) }
+
+func (c *GlyphCache) entrySlot(key glyphRecordKey, old cachedGlyph, exists bool) uint16 {
+	if exists {
+		c.touchEntry(old.slot)
+		return old.slot
+	}
+	var slot uint16
+	if c.entries < glyphCacheEntryLimit {
+		slot = uint16(c.entries)
+		c.clock = append(c.clock, key)
+		c.entries++
+	} else {
+		for {
+			slot = c.hand
+			c.hand = (c.hand + 1) % glyphCacheEntryLimit
+			bit := uint64(1) << (slot % 64)
+			if c.referenced[slot/64]&bit == 0 {
+				break
+			}
+			c.referenced[slot/64] &^= bit
+		}
+		victim := c.clock[slot]
+		switch victim.kind {
+		case 0:
+			delete(c.glyphs, victim.phase.character)
+		case 1:
+			delete(c.phasedGlyphs, victim.phase)
+		case 2:
+			delete(c.outlinedGlyphs, outlinedGlyphKey{victim.phase.character, victim.width})
+		}
+		c.clock[slot] = key
+	}
+	c.touchEntry(slot)
+	return slot
+}
+
+func (c *GlyphCache) storeOutline(key outlinedGlyphKey, glyph Glyph) {
+	old, exists := c.outlinedGlyphs[key]
+	entry := cacheGlyph(glyph)
+	entry.slot = c.entrySlot(glyphRecordKey{phase: phasedGlyphKey{character: key.rune}, width: key.width, kind: 2}, old, exists)
+	c.outlinedGlyphs[key] = entry
 }
 
 func (c *GlyphCache) GlyphLCDAt(r rune, phaseX uint8) Glyph {
@@ -312,8 +439,10 @@ func (c *GlyphCache) GlyphLCDColorAt(r rune, phaseX uint8, color font.LCDColor) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := phasedGlyphKey{character: r, x: phaseX & 3, lcd: true, color: color}
-	if glyph, ok := c.phasedGlyphs[key]; ok {
-		return glyph
+	if entry, ok := c.phasedGlyphs[key]; ok {
+		if glyph, live := c.resolve(entry); live {
+			return glyph
+		}
 	}
 	if c.face == nil {
 		return Glyph{Rune: r}
@@ -322,8 +451,9 @@ func (c *GlyphCache) GlyphLCDColorAt(r rune, phaseX uint8, color font.LCDColor) 
 	glyph := Glyph{Rune: r, Advance: fixedToFloat32(advance)}
 	if ok && mask != nil && !rect.Empty() {
 		color.PreblendLCD(mask)
-		atlas, x, y := c.allocateFormat(mask, true)
-		glyph.Atlas, glyph.X, glyph.Y = atlas, x, y
+		page, x, y := c.allocateFormat(mask, true)
+		glyph.Atlas, glyph.X, glyph.Y = page.index, x, y
+		glyph.page = page
 		glyph.Width, glyph.Height = mask.Rect.Dx(), mask.Rect.Dy()
 		glyph.OffsetX, glyph.OffsetY = float32(rect.Min.X), float32(rect.Min.Y)
 	}
@@ -338,30 +468,32 @@ func (c *GlyphCache) OutlineGlyph(r rune, width float32) Glyph {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := outlinedGlyphKey{rune: r, width: width}
-	if g, ok := c.outlinedGlyphs[key]; ok {
-		return g
+	if entry, ok := c.outlinedGlyphs[key]; ok {
+		if g, live := c.resolve(entry); live {
+			return g
+		}
 	}
 	if c.face == nil {
 		g := Glyph{Rune: r}
-		c.outlinedGlyphs[key] = g
+		c.storeOutline(key, g)
 		return g
 	}
 
 	dr, mask, maskp, advance, ok := c.face.Glyph(font.Point26_6{}, r)
 	if !ok || dr.Empty() {
 		g := Glyph{Rune: r, Advance: fixedToFloat32(advance)}
-		c.outlinedGlyphs[key] = g
+		c.storeOutline(key, g)
 		return g
 	}
 
 	padding := glyphBitmapPadding + int(math.Ceil(float64(width)))
 	bitmap := glyphBitmapWithPadding(mask, maskp, dr, padding)
 	dilateGlyphBitmap(bitmap, width)
-	atlasIndex, x, y := c.allocate(bitmap)
+	page, x, y := c.allocate(bitmap)
 
 	g := Glyph{
 		Rune:    r,
-		Atlas:   atlasIndex,
+		Atlas:   page.index,
 		X:       x,
 		Y:       y,
 		Width:   bitmap.Bounds().Dx(),
@@ -369,8 +501,9 @@ func (c *GlyphCache) OutlineGlyph(r rune, width float32) Glyph {
 		OffsetX: float32(dr.Min.X - padding),
 		OffsetY: float32(dr.Min.Y - padding),
 		Advance: fixedToFloat32(advance),
+		page:    page,
 	}
-	c.outlinedGlyphs[key] = g
+	c.storeOutline(key, g)
 	return g
 }
 
@@ -394,20 +527,24 @@ func (c *GlyphCache) Dispose() error {
 	c.ownsPool = false
 	clear(c.glyphs)
 	clear(c.phasedGlyphs)
-	c.glyphs = make(map[rune]Glyph)
+	c.glyphs = nil
 	clear(c.outlinedGlyphs)
-	c.outlinedGlyphs = make(map[outlinedGlyphKey]Glyph)
+	c.phasedGlyphs, c.outlinedGlyphs = nil, nil
+	c.entries = 0
+	c.clock = nil
+	c.referenced = [glyphCacheEntryLimit / 64]uint64{}
+	c.hand = 0
 	if ownsPool && pool != nil {
 		return pool.dispose()
 	}
 	return nil
 }
 
-func (c *GlyphCache) allocate(bitmap image.Image) (int, int, int) {
+func (c *GlyphCache) allocate(bitmap image.Image) (*glyphAtlas, int, int) {
 	return c.allocateFormat(bitmap, false)
 }
 
-func (c *GlyphCache) allocateFormat(bitmap image.Image, lcd bool) (int, int, int) {
+func (c *GlyphCache) allocateFormat(bitmap image.Image, lcd bool) (*glyphAtlas, int, int) {
 	if c.pool == nil {
 		c.pool = new(glyphAtlasPool)
 		c.ownsPool = true
@@ -421,31 +558,117 @@ func (p *glyphAtlasPool) atlas(index int) (*graphics.Texture, bool) {
 	if index < 0 || index >= len(p.atlases) {
 		return nil, false
 	}
-	return p.atlases[index].texture, true
+	page := p.atlases[index].page.Value()
+	if page == nil {
+		return nil, false
+	}
+	p.retain(page)
+	return page.texture, true
 }
 
 func (p *glyphAtlasPool) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return len(p.atlases)
+	return p.pages
 }
 
-func (p *glyphAtlasPool) allocate(bitmap image.Image) (int, int, int) {
-	return p.allocateFormat(bitmap, false)
+func (p *glyphAtlasPool) touch(page *glyphAtlas) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.retain(page)
 }
 
-func (p *glyphAtlasPool) allocateFormat(bitmap image.Image, lcd bool) (int, int, int) {
+func (a *glyphAtlas) bytes() int {
+	channels := 1
+	if a.lcd {
+		channels = 4
+	}
+	return a.size * a.size * channels
+}
+
+func (p *glyphAtlasPool) remove(page *glyphAtlas) {
+	if page.prev != nil {
+		page.prev.next = page.next
+	} else {
+		p.oldest = page.next
+	}
+	if page.next != nil {
+		page.next.prev = page.prev
+	} else {
+		p.newest = page.prev
+	}
+	page.prev, page.next, page.cached = nil, nil, false
+	p.cachedBytes -= page.bytes()
+	p.cachedPages--
+}
+
+func (p *glyphAtlasPool) retain(page *glyphAtlas) {
+	limit := p.byteLimit
+	if limit <= 0 {
+		limit = glyphAtlasByteLimit
+	}
+	// An oversized live glyph owns its page directly. Do not evict smaller
+	// reusable pages for an entry that cannot fit the cache in the first place.
+	if page.bytes() > limit {
+		return
+	}
+	if p.newest == page {
+		return
+	}
+	if page.cached {
+		p.remove(page)
+	}
+	page.prev, page.cached = p.newest, true
+	if p.newest != nil {
+		p.newest.next = page
+	} else {
+		p.oldest = page
+	}
+	p.newest = page
+	p.cachedBytes += page.bytes()
+	p.cachedPages++
+	for p.cachedBytes > limit {
+		p.remove(p.oldest)
+	}
+}
+
+// Only the render/owning thread disposes textures. Weak page references let
+// GC identify unused pages without invoking driver methods from a finalizer.
+func (p *glyphAtlasPool) releaseSlot(slot *glyphAtlasSlot) {
+	if slot.texture == nil {
+		return
+	}
+	if err := slot.texture.Dispose(); err != nil {
+		p.err = errors.Join(p.err, err)
+		return
+	}
+	*slot = glyphAtlasSlot{}
+	p.pages--
+}
+
+func (p *glyphAtlasPool) allocateFormat(bitmap image.Image, lcd bool) (*glyphAtlas, int, int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	width, height := bitmap.Bounds().Dx(), bitmap.Bounds().Dy()
-	p.dirty = true
-	for index, atlas := range p.atlases {
+	free := -1
+	for index := range p.atlases {
+		slot := &p.atlases[index]
+		atlas := slot.page.Value()
+		if atlas == nil {
+			p.releaseSlot(slot)
+			if slot.texture == nil {
+				free = index
+			}
+			continue
+		}
 		if atlas.lcd != lcd {
 			continue
 		}
 		if x, y, ok := atlas.allocate(width, height); ok {
 			atlas.upload(x, y, bitmap)
-			return index, x, y
+			p.queueUpload(atlas)
+			p.retain(atlas)
+			return atlas, x, y
 		}
 	}
 	size := max(defaultGlyphAtlasSize, nextPowerOfTwo(max(width, height)+glyphAtlasPadding))
@@ -455,40 +678,80 @@ func (p *glyphAtlasPool) allocateFormat(bitmap image.Image, lcd bool) (int, int,
 	} else {
 		atlas = newGlyphAtlas(size)
 	}
-	p.atlases = append(p.atlases, atlas)
+	if free < 0 {
+		free = len(p.atlases)
+		p.atlases = append(p.atlases, glyphAtlasSlot{})
+	}
+	atlas.index = free
+	p.atlases[free] = glyphAtlasSlot{page: weak.Make(atlas), texture: atlas.texture}
+	p.pages++
+	p.retain(atlas)
 	x, y, _ := atlas.allocate(width, height)
 	atlas.upload(x, y, bitmap)
-	return len(p.atlases) - 1, x, y
+	p.queueUpload(atlas)
+	return atlas, x, y
+}
+
+func (p *glyphAtlasPool) queueUpload(page *glyphAtlas) {
+	if !page.queued {
+		page.queued = true
+		p.dirtyPages = append(p.dirtyPages, page.index)
+	}
 }
 
 func (p *glyphAtlasPool) flushUploads() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !p.dirty {
+	for _, index := range p.dirtyPages {
+		slot := &p.atlases[index]
+		if page := slot.page.Value(); page != nil {
+			page.flushUploads()
+			page.queued = false
+		} else {
+			p.releaseSlot(slot)
+		}
+	}
+	clear(p.dirtyPages)
+	p.dirtyPages = p.dirtyPages[:0]
+	// Reclamation is bounded independently of the number of pinned pages or text runs.
+	if p.pages == p.cachedPages {
 		return
 	}
-	p.dirty = false
-	for _, atlas := range p.atlases {
-		atlas.flushUploads()
+	for range min(8, len(p.atlases)) {
+		if p.sweep >= len(p.atlases) {
+			p.sweep = 0
+		}
+		slot := &p.atlases[p.sweep]
+		p.sweep++
+		if slot.page.Value() == nil {
+			p.releaseSlot(slot)
+		}
 	}
 }
 
 func (p *glyphAtlasPool) dispose() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	errList := make([]error, 0, len(p.atlases))
-	for _, atlas := range p.atlases {
-		if atlas == nil || atlas.texture == nil {
-			continue
+	for index := range p.atlases {
+		slot := &p.atlases[index]
+		if atlas := slot.page.Value(); atlas != nil {
+			if atlas.cached {
+				p.remove(atlas)
+			}
+			clear(atlas.pending)
+			atlas.pending = nil
 		}
-		if err := atlas.texture.Dispose(); err != nil {
-			errList = append(errList, err)
-		}
-		clear(atlas.pending)
-		atlas.pending = nil
+		p.releaseSlot(slot)
 	}
 	p.atlases = nil
-	return errors.Join(errList...)
+	p.pages, p.cachedPages, p.cachedBytes = 0, 0, 0
+	p.oldest, p.newest = nil, nil
+	clear(p.dirtyPages)
+	p.dirtyPages = nil
+	p.sweep = 0
+	err := p.err
+	p.err = nil
+	return err
 }
 
 func nextPowerOfTwo(value int) int {

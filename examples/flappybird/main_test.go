@@ -38,7 +38,7 @@ func loadFlappy(t *testing.T) flappyFixture {
 	if err := OnixInstallSystems(app); err != nil {
 		t.Fatal(err)
 	}
-	entry, err := app.LoadModules(plan, registry, OnixModuleOptions(os.DirFS(".")))
+	entry, err := app.LoadModules[OnixContentProfile](plan, registry, OnixModuleOptions(os.DirFS(".")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,10 +48,10 @@ func loadFlappy(t *testing.T) flappyFixture {
 	}
 	f := flappyFixture{result: result, app: app, entry: entry, runtime: app.Modules(), elements: make(map[string]ecs.Entity)}
 	previousScope := app.World.SetQueryScope(nil)
-	for entity, name := range ecs.Query[scene.Name](app.World).All {
+	for entity, name := range app.World.Query[scene.Name]().All {
 		f.elements[name.Get().Value] = entity
 	}
-	for entity, target := range ecs.Query[scene.InputTarget2D](app.World).All {
+	for entity, target := range app.World.Query[scene.InputTarget2D]().All {
 		if target.Get().Width == 750 {
 			if scene.LayerForEntity(app.World, entity).ID == result.Generation() {
 				f.resultTarget = entity
@@ -93,7 +93,7 @@ func (f flappyFixture) update(t *testing.T, steps int) {
 
 func (f flappyFixture) send(t *testing.T, event scene.InputEvent) {
 	t.Helper()
-	state, _ := ecs.GetResource[*input.State](f.app.World)
+	state, _ := f.app.World.GetResource[*input.State]()
 	switch event.Kind {
 	case scene.InputEventPress:
 		state.PressMouse(input.MouseLeft, 0, 0)
@@ -113,12 +113,12 @@ func (f flappyFixture) send(t *testing.T, event scene.InputEvent) {
 }
 
 func (f flappyFixture) visible(name string) bool {
-	value, _ := ecs.Get[scene.Visibility](f.app.World, f.elements[name])
+	value, _ := f.app.World.Get[scene.Visibility](f.elements[name])
 	return value.Visible && scene.IsVisible(f.app.World, f.elements[name])
 }
 
 func (f flappyFixture) position(name string) [2]float32 {
-	value, _ := ecs.Get[scene.UITransform](f.app.World, f.elements[name])
+	value, _ := f.app.World.Get[scene.UITransform](f.elements[name])
 	return [2]float32{value.Translation.X.Value, value.Translation.Y.Value}
 }
 
@@ -184,7 +184,7 @@ func TestFlappyBirdStartSlotAndRepeatedInstancesAreIndependent(t *testing.T) {
 	t.Cleanup(func() { _ = second.Dispose() })
 	f.dispatch(t)
 	var secondBird ecs.Entity
-	for entity, name := range ecs.Query[scene.Name](f.app.World).All {
+	for entity, name := range f.app.World.Query[scene.Name]().All {
 		if name.Get().Value == "bird" && entity != f.elements["bird"] {
 			secondBird = entity
 		}
@@ -202,7 +202,7 @@ func TestFlappyBirdStartSlotAndRepeatedInstancesAreIndependent(t *testing.T) {
 	if f.position("bird") != [2]float32{410, 590} {
 		t.Fatal("slot did not reset owned simulation", f.position("bird"))
 	}
-	other, _ := ecs.Get[scene.UITransform](f.app.World, secondBird)
+	other, _ := f.app.World.Get[scene.UITransform](secondBird)
 	if secondBird == 0 || other.Translation.X.Value != 375 || other.Translation.Y.Value != 470 {
 		t.Fatal("slot leaked into another scene instance")
 	}
@@ -238,17 +238,17 @@ func TestFlappyWarmSimulationAndPresentationChainDoesNotAllocate(t *testing.T) {
 
 func TestFlappyBirdAnimationAndStableHUD(t *testing.T) {
 	f := loadFlappy(t)
-	animator, ok := ecs.Get[scene.Animator](f.app.World, f.elements["bird"])
+	animator, ok := f.app.World.Get[scene.Animator](f.elements["bird"])
 	if !ok || !animator.Playing || animator.Clip == nil {
 		t.Fatal("bird animation was not installed")
 	}
-	versions := [2]uint64{ecs.ComponentVersion[scene.Text2D](f.app.World), ecs.ComponentVersion[scene.Visibility](f.app.World)}
+	versions := [2]uint64{f.app.World.ComponentVersion[scene.Text2D](), f.app.World.ComponentVersion[scene.Visibility]()}
 	f.update(t, 5)
-	if versions != [2]uint64{ecs.ComponentVersion[scene.Text2D](f.app.World), ecs.ComponentVersion[scene.Visibility](f.app.World)} {
+	if versions != [2]uint64{f.app.World.ComponentVersion[scene.Text2D](), f.app.World.ComponentVersion[scene.Visibility]()} {
 		t.Fatal("unchanged HUD marked components changed")
 	}
 	for _, name := range []string{"title", "status", "scoreLabel"} {
-		text, ok := ecs.Get[scene.Text2D](f.app.World, f.elements[name])
+		text, ok := f.app.World.Get[scene.Text2D](f.elements[name])
 		if !ok || text.Font == nil {
 			t.Fatal("private HUD font missing", name)
 		}

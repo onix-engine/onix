@@ -12,7 +12,7 @@ type Mod struct {
 }
 
 func (m *Mod) Enter(c *module.Context, _ module.SceneStartup) error {
-	if state, ok := module.ContentResource[*engineinput.State](c.Content()); ok {
+	if state, ok := c.Content().Resource[*engineinput.State](); ok {
 		m.pointer, m.key = state.Pointer().Down, state.KeyHeld(engineinput.KeySpace)
 	} else {
 		m.pointer, m.key = false, false
@@ -22,7 +22,7 @@ func (m *Mod) Enter(c *module.Context, _ module.SceneStartup) error {
 func (m *Mod) Resume(c *module.Context, v module.SceneStartup) error { return m.Enter(c, v) }
 
 func (m *Mod) Install(c *module.Context) (err error) {
-	m.action, err = module.BindEmitter[module.Signal](c, "action")
+	m.action, err = c.BindEmitter[module.Signal]("action")
 	return err
 }
 

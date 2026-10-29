@@ -20,11 +20,11 @@ func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {
 	a.Selected = "start"
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
-	shell, _ := ecs.Get[html.Surface](world, a.shell)
+	shell, _ := world.Get[html.Surface](a.shell)
 	if shell.Value != editorresources.WorkspaceHTML {
 		t.Fatal("workspace is not using its compiled template")
 	}
-	if _, ok := ecs.Get[html.Component[workspaceComponentProps, workspaceComponentState]](world, a.shellComponent); !ok {
+	if _, ok := world.Get[html.Component[workspaceComponentProps, workspaceComponentState]](a.shellComponent); !ok {
 		t.Fatal("workspace component missing")
 	}
 	fieldID := workspaceFieldID(modDocumentID("button"), "/name", "")
@@ -36,7 +36,7 @@ func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {
 	if !engineui.FocusControl(world, field) {
 		t.Fatal("could not focus module name")
 	}
-	fieldState := ecs.GetMut[engineui.TextField](world, field)
+	fieldState := world.GetMut[engineui.TextField](field)
 	if fieldState == nil {
 		t.Fatal("module name is not a text field")
 	}
@@ -47,7 +47,7 @@ func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {
 	if got, _ := html.ControlByID(world, a.shell, fieldID); got != field {
 		t.Fatal("status update replaced field")
 	}
-	text, _ := ecs.Get[engineui.TextField](world, field)
+	text, _ := world.Get[engineui.TextField](field)
 	if !text.Focused || text.Caret != 2 {
 		t.Fatalf("field lost focus or caret: %+v", text)
 	}
@@ -59,7 +59,7 @@ func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {
 	if got, _ := html.ControlByID(world, a.shell, "select:start"); got != row {
 		t.Fatal("selection replaced tree row")
 	}
-	text, _ = ecs.Get[engineui.TextField](world, field)
+	text, _ = world.Get[engineui.TextField](field)
 	if !text.Focused || text.Caret != 2 {
 		t.Fatal("instance selection reset definition editing")
 	}

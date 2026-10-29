@@ -16,7 +16,7 @@ func observeComponentChanges[T any](t *testing.T, world *ecs.World) func() int {
 		Name: "observe_" + reflect.TypeFor[T]().String(),
 		System: func(context *ecs.SystemContext) error {
 			count = 0
-			for range ecs.Query[T](world, ecs.Changed[T](context)).All {
+			for range world.Query[T](context.Changed[T]()).All {
 				count++
 			}
 			return nil
@@ -52,7 +52,7 @@ func TestButtonLabelMetricsDoNotMarkComponentsChanged(t *testing.T) {
 		t.Fatalf("label metrics allocations=%v, want 0", allocations)
 	}
 	var label ecs.Entity
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, Part[LabelPart]](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, Part[LabelPart]]().All {
 		relation := access.A.Ref()
 
 		if relation.Owner == owner {
@@ -68,17 +68,17 @@ func TestButtonLabelMetricsDoNotMarkComponentsChanged(t *testing.T) {
 
 func TestSelectorLabelMetricsRefreshSelectionAndRemoval(t *testing.T) {
 	world := ecs.NewWorld()
-	selectors := ecs.NewSpawner1[Selector](world)
+	selectors := world.NewSpawner1[Selector]()
 	owner := selectors.Spawn(Selector{Label: "fallback", Selected: 0})
-	items := ecs.NewSpawner1[SelectorItem](world)
+	items := world.NewSpawner1[SelectorItem]()
 	items.Spawn(SelectorItem{Owner: owner, Index: 0, Label: "first"})
 	selected := items.Spawn(SelectorItem{Owner: owner, Index: 1, Label: ""})
 	items.Spawn(SelectorItem{Owner: owner, Index: 1, Label: "duplicate"})
-	selector := ecs.GetRef[Selector](world, owner)
+	selector := world.GetRef[Selector](owner)
 	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "first" {
 		t.Fatalf("label=%q, want first", label)
 	}
-	mutable := ecs.GetMut[Selector](world, owner)
+	mutable := world.GetMut[Selector](owner)
 	mutable.Selected = 1
 	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "" {
 		t.Fatalf("empty first match lost to duplicate or fallback: %q", label)
@@ -87,11 +87,11 @@ func TestSelectorLabelMetricsRefreshSelectionAndRemoval(t *testing.T) {
 		t.Fatalf("selector metrics allocations=%v, want 0", allocations)
 	}
 	world.Despawn(selected)
-	selector = ecs.GetRef[Selector](world, owner)
+	selector = world.GetRef[Selector](owner)
 	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "duplicate" {
 		t.Fatalf("removed selected item was retained: %q", label)
 	}
-	mutable = ecs.GetMut[Selector](world, owner)
+	mutable = world.GetMut[Selector](owner)
 	mutable.Selected = 99
 	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "fallback" {
 		t.Fatalf("missing selection label=%q, want fallback", label)
@@ -103,15 +103,15 @@ func TestSkippedTextLayoutsDoNotMarkTransformsChanged(t *testing.T) {
 		t.Run(reason, func(t *testing.T) {
 			world := ecs.NewWorld()
 			owner := world.Spawn(ecs.NewBundle(0))
-			visuals := ecs.NewSpawner2[Relation[scene.Text2D], scene.UITransform](world)
+			visuals := world.NewSpawner2[Relation[scene.Text2D], scene.UITransform]()
 			visual := visuals.Spawn(Relation[scene.Text2D]{Owner: owner}, scene.NewUITransform())
 			switch reason {
 			case "html_text":
-				_ = ecs.Insert(world, visual, html.ControlText{Control: owner})
+				_ = world.Insert(visual, html.ControlText{Control: owner})
 			case "authored":
-				_ = ecs.Insert(world, visual, Relation[Control]{Owner: owner})
+				_ = world.Insert(visual, Relation[Control]{Owner: owner})
 			case "editable":
-				_ = ecs.Insert(world, owner, html.Editable{})
+				_ = world.Insert(owner, html.Editable{})
 			}
 			changes := observeComponentChanges[scene.UITransform](t, world)
 			layoutTextVisuals(world, nil, nil)
@@ -124,7 +124,7 @@ func TestSkippedTextLayoutsDoNotMarkTransformsChanged(t *testing.T) {
 
 func TestMenuIndicatorsOnlyMarkChangedValues(t *testing.T) {
 	world := ecs.NewWorld()
-	menus := ecs.NewSpawner2[Menu, IconContent](world)
+	menus := world.NewSpawner2[Menu, IconContent]()
 	entity := menus.Spawn(Menu{}, IconContent{})
 	skin := skinFor(world, DefaultTheme())
 	syncMenuIndicators(world, skin)
@@ -134,7 +134,7 @@ func TestMenuIndicatorsOnlyMarkChangedValues(t *testing.T) {
 	if menuChanges() != 0 || iconChanges() != 0 {
 		t.Fatal("unchanged menu indicators were marked changed")
 	}
-	icon := ecs.GetMut[IconContent](world, entity)
+	icon := world.GetMut[IconContent](entity)
 	icon.Value = TextIcon("different")
 	iconChanges()
 	syncMenuIndicators(world, skin)
@@ -151,8 +151,8 @@ func BenchmarkSelectorLabelMetrics(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			world := ecs.NewWorld()
-			selectors := ecs.NewSpawner1[Selector](world)
-			items := ecs.NewSpawner1[SelectorItem](world)
+			selectors := world.NewSpawner1[Selector]()
+			items := world.NewSpawner1[SelectorItem]()
 			for range count {
 				owner := selectors.Spawn(Selector{})
 				items.Spawn(SelectorItem{Owner: owner, Label: "selected"})

@@ -28,13 +28,13 @@ func UpdateSpine2DSystem(name string) ecs.SystemConfig {
 
 func updateSpine2D(context *ecs.SystemContext) error {
 	delta := float32(0)
-	if clock, ok := ecs.GetResource[*Time](context.World); ok && clock != nil {
+	if clock, ok := context.World.GetResource[*Time](); ok && clock != nil {
 		delta = clock.DeltaSeconds()
 	}
 	if delta <= 0 {
 		return nil
 	}
-	for entity, access := range ecs.Query[Spine2D](context.World).All {
+	for entity, access := range context.World.Query[Spine2D]().All {
 		if !IsActive(context.World, entity) {
 			continue
 		}

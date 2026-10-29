@@ -38,9 +38,9 @@ func (r *Resources) modShader(b *ecs.Bundle, spec *ShaderComponentSpec, mesh boo
 	}
 	if !spec.HasSource() {
 		if mesh {
-			ecs.Put(b, scene.Shader[graphics.MeshShader]{Custom: spec.Custom})
+			b.Put(scene.Shader[graphics.MeshShader]{Custom: spec.Custom})
 		} else {
-			ecs.Put(b, scene.Shader[graphics.Material2DShader]{Custom: spec.Custom})
+			b.Put(scene.Shader[graphics.Material2DShader]{Custom: spec.Custom})
 		}
 		return nil
 	}
@@ -64,14 +64,14 @@ func (r *Resources) modShader(b *ecs.Bundle, spec *ShaderComponentSpec, mesh boo
 			resource.mesh, err = graphics.NewMeshShader(resource.sources.descriptor)
 		}
 		if err == nil {
-			ecs.Put(b, scene.Shader[graphics.MeshShader]{Program: resource.mesh, Custom: spec.Custom})
+			b.Put(scene.Shader[graphics.MeshShader]{Program: resource.mesh, Custom: spec.Custom})
 		}
 	} else {
 		if resource.sprite == nil {
 			resource.sprite, err = graphics.NewMaterial2DShader(resource.sources.descriptor)
 		}
 		if err == nil {
-			ecs.Put(b, scene.Shader[graphics.Material2DShader]{Program: resource.sprite, Custom: spec.Custom})
+			b.Put(scene.Shader[graphics.Material2DShader]{Program: resource.sprite, Custom: spec.Custom})
 		}
 	}
 	return err

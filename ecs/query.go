@@ -2,7 +2,10 @@ package ecs
 
 //go:generate go run ../internal/ecsgen
 
-import "slices"
+import (
+	"math/bits"
+	"slices"
+)
 
 type filterKind uint8
 
@@ -87,19 +90,19 @@ func (unscopedOption) resolve(*World) rowFilter { return rowFilter{kind: filterU
 func Unscoped() QueryOption { return unscopedOption{} }
 
 func (withOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: registerComponent[T](world), kind: filterWith}
+	return rowFilter{component: world.registerComponent[T](), kind: filterWith}
 }
 
 func (withoutOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: registerComponent[T](world), kind: filterWithout}
+	return rowFilter{component: world.registerComponent[T](), kind: filterWithout}
 }
 
 func (option addedOption[T]) resolve(world *World) rowFilter {
-	return resolveChangeFilter[T](world, option.context, filterAdded)
+	return world.resolveChangeFilter[T](option.context, filterAdded)
 }
 
 func (option changedOption[T]) resolve(world *World) rowFilter {
-	return resolveChangeFilter[T](world, option.context, filterChanged)
+	return world.resolveChangeFilter[T](option.context, filterChanged)
 }
 
 func With[T any]() QueryOption {
@@ -110,22 +113,22 @@ func Without[T any]() QueryOption {
 	return withoutOption[T]{}
 }
 
-func Added[T any](context *SystemContext) QueryOption {
+func (context *SystemContext) Added[T any]() QueryOption {
 	return addedOption[T]{context: context}
 }
 
-func Changed[T any](context *SystemContext) QueryOption {
+func (context *SystemContext) Changed[T any]() QueryOption {
 	return changedOption[T]{context: context}
 }
 
-func resolveChangeFilter[T any](world *World, context *SystemContext, kind filterKind) rowFilter {
+func (world *World) resolveChangeFilter[T any](context *SystemContext, kind filterKind) rowFilter {
 	if context == nil {
 		panic("ecs: system context is nil")
 	}
 	if context.World != world {
 		panic("ecs: change filter context belongs to a different world")
 	}
-	return rowFilter{component: registerComponent[T](world), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
+	return rowFilter{component: world.registerComponent[T](), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
 }
 
 type queryView struct {
@@ -168,19 +171,23 @@ type queryCursor struct {
 	archetypeIndex int
 	row            int
 	entityIndex    int
+	scope          *QueryScope
+	scopeTable     *scopeTable
+	scopeBlock     int
 	tick           Tick
 	inline         [inlineQueryFilterCount]filterBinding
 	extra          *[]filterBinding
 }
 
 func (v queryView) cursor(callback bool) (queryCursor, bool) {
-	if !v.limited && !v.unscoped && v.world != nil && v.world.queryScope != nil {
-		v.entities, v.limited = v.world.queryScope.entities, true
-	}
 	if !v.begin(callback) {
 		return queryCursor{}, false
 	}
 	cursor := queryCursor{view: v, archetypeIndex: -1, row: -1}
+	if !v.limited && !v.unscoped && v.world.queryScope != nil {
+		cursor.scope = v.world.queryScope
+		cursor.scope.bind(v.world)
+	}
 	if count := v.filters.count; count > len(cursor.inline) {
 		cursor.extra = queryBindingPool.get(count - len(cursor.inline))
 	}
@@ -231,6 +238,16 @@ func (cursor *queryCursor) nextArchetype() bool {
 		}
 		archetype := cursor.view.world.archetypes[cursor.view.plan.archetypes[cursor.archetypeIndex]]
 		if len(archetype.entities) != 0 {
+			cursor.scopeTable = nil
+			if cursor.scope != nil {
+				table := &cursor.scope.tables[archetype.id]
+				if table.count == 0 {
+					continue
+				}
+				if table.count != len(archetype.entities) {
+					cursor.scopeTable, cursor.scopeBlock = table, 0
+				}
+			}
 			cursor.bindArchetype(archetype)
 			return true
 		}
@@ -274,14 +291,38 @@ func (cursor *queryCursor) groupMatches(group int) bool {
 // generated adapters only run row filters inside matching 64-row blocks.
 func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
 	for start < length {
-		if start%queryTickGroupSize == 0 && !cursor.groupMatches(start/queryTickGroupSize) {
-			start += queryTickGroupSize
+		if cursor.scopeTable != nil {
+			for cursor.scopeBlock < len(cursor.scopeTable.blocks) && int(cursor.scopeTable.blocks[cursor.scopeBlock]) < start/queryTickBlockSize {
+				cursor.scopeBlock++
+			}
+			if cursor.scopeBlock == len(cursor.scopeTable.blocks) {
+				return length, length
+			}
+			start = max(start, int(cursor.scopeTable.blocks[cursor.scopeBlock])*queryTickBlockSize)
+		}
+		if cursor.view.filters.count != 0 && start%queryTickGroupSize == 0 && !cursor.groupMatches(start/queryTickGroupSize) {
+			start = (start/queryTickGroupSize + 1) * queryTickGroupSize
 			continue
 		}
-		if cursor.rangeMatches(start / queryTickBlockSize) {
-			return start, min(start+queryTickBlockSize, length)
+		block := start / queryTickBlockSize
+		end := min((block+1)*queryTickBlockSize, length)
+		if cursor.view.filters.count != 0 && !cursor.rangeMatches(block) {
+			start = end
+			continue
 		}
-		start += queryTickBlockSize
+		if cursor.scopeTable != nil {
+			if block >= len(cursor.scopeTable.rows) {
+				return length, length
+			}
+			word := cursor.scopeTable.rows[block] & (^uint64(0) << uint(start%64))
+			if word == 0 {
+				start = end
+				continue
+			}
+			start = block*64 + bits.TrailingZeros64(word)
+			end = min(end, start+bits.TrailingZeros64(^(word>>uint(start%64))))
+		}
+		return start, end
 	}
 	return length, length
 }

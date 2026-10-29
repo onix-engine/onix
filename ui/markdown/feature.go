@@ -12,7 +12,7 @@ import (
 type Feature struct{}
 
 func (Feature) InstallMarkdown(app *onix.App) error {
-	if err := onix.InstallSystems[onix.UIHTML](app); err != nil {
+	if err := app.InstallSystems[onix.UIHTML](); err != nil {
 		return err
 	}
 	engineui.RegisterRuntimeExtension(app.World, engineui.RuntimeExtension{Sync: syncMarkdown})

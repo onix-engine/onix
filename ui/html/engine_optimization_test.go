@@ -101,12 +101,12 @@ func TestHTMLTexturesReleasedOnOwnerRemoval(t *testing.T) {
 	world := ecs.NewWorld()
 	value := New(`<div style="width:16px;height:16px;background:linear-gradient(red,blue)"></div>`)
 	value.Width, value.Height = 32, 32
-	spawner := ecs.NewSpawner1[Surface](world)
+	spawner := world.NewSpawner1[Surface]()
 	owner := spawner.Spawn(value)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	var texture *htmlOwnedTexture
 	for _, entry := range state.Textures.entries {
 		texture = entry
@@ -131,36 +131,36 @@ func TestHTMLRemovalAndReinsertRecreatesOwnedTextures(t *testing.T) {
 	world := ecs.NewWorld()
 	value := New(`<div style="width:16px;height:16px;background:linear-gradient(red,blue)"></div>`)
 	value.Width, value.Height = 32, 32
-	spawner := ecs.NewSpawner1[Surface](world)
+	spawner := world.NewSpawner1[Surface]()
 	owner := spawner.Spawn(value)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	var previous *htmlOwnedTexture
 	for _, texture := range state.Textures.entries {
 		previous = texture
 		break
 	}
-	ecs.Remove[Surface](world, owner)
+	world.Remove[Surface](owner)
 	if previous == nil || previous.texture.Valid() {
 		t.Fatal("HTML removal retained owned texture")
 	}
-	if err := ecs.Insert(world, owner, value); err != nil {
+	if err := world.Insert(owner, value); err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if len(state.Textures.entries) == 0 {
 		t.Fatal("reinsertion retained disposed rendering cache")
 	}
-	ecs.Remove[Surface](world, owner)
+	world.Remove[Surface](owner)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[htmlRenderState](world, owner) || world.EntityCount() != 1 {
+	if world.Has[htmlRenderState](owner) || world.EntityCount() != 1 {
 		t.Fatal("removed surface retained state or primitives")
 	}
 }

@@ -36,38 +36,38 @@ func BindControlComposition(world *ecs.World, composition ControlComposition, ow
 	if !ok {
 		return nil
 	}
-	if ecs.Has[TextField](world, owner) {
+	if world.Has[TextField](owner) {
 		return composition.bindTextField(world, owner, node, bindButton)
 	}
 	switch {
-	case ecs.Has[Button](world, owner):
+	case world.Has[Button](owner):
 		return composition.bindButton(world, owner, node)
-	case ecs.Has[Toggle[bool]](world, owner):
+	case world.Has[Toggle[bool]](owner):
 		return composition.bindCheckbox(world, owner)
-	case ecs.Has[Selector](world, owner):
+	case world.Has[Selector](owner):
 		return composition.bindSelector(world, owner, node, bindButton)
-	case ecs.Has[Progress](world, owner):
+	case world.Has[Progress](owner):
 		return composition.bindProgress(world, owner, bindButton)
-	case ecs.Has[ScrollArea](world, owner):
+	case world.Has[ScrollArea](owner):
 		return composition.bindScrollArea(world, owner)
 	default:
 		return nil
 	}
 }
 
-func bindCompositionPart[P any](world *ecs.World, composition ControlComposition, entity, owner ecs.Entity, state ControlVariant) error {
+func (composition ControlComposition) bindCompositionPart[P any](world *ecs.World, entity, owner ecs.Entity, state ControlVariant) error {
 	if err := BindRelation[Control](world, entity, owner); err != nil {
 		return err
 	}
 	if err := BindPart[P](world, entity); err != nil {
 		return err
 	}
-	if ecs.Has[scene.Text2D](world, entity) {
+	if world.Has[scene.Text2D](entity) {
 		if err := BindRelation[scene.Text2D](world, entity, owner); err != nil {
 			return err
 		}
 	}
-	if ecs.Has[scene.UIBackground2D](world, entity) || ecs.Has[scene.UIImage2D](world, entity) || ecs.Has[scene.UIBorder2D](world, entity) {
+	if world.Has[scene.UIBackground2D](entity) || world.Has[scene.UIImage2D](entity) || world.Has[scene.UIBorder2D](entity) {
 		if err := BindRelation[SurfaceStyle](world, entity, owner); err != nil {
 			return err
 		}
@@ -85,28 +85,28 @@ func UnbindControlCompositionPart(world *ecs.World, entity ecs.Entity) {
 }
 
 func unbindControlCompositionPart(world *ecs.World, entity ecs.Entity, detachVariant bool) {
-	relation, ok := ecs.Get[Relation[Control]](world, entity)
+	relation, ok := world.Get[Relation[Control]](entity)
 	if !ok {
 		return
 	}
-	if ecs.Has[Part[FillPart]](world, entity) {
-		if progress := ecs.GetMut[Progress](world, relation.Owner); progress != nil && progress.Fill == entity {
+	if world.Has[Part[FillPart]](entity) {
+		if progress := world.GetMut[Progress](relation.Owner); progress != nil && progress.Fill == entity {
 			progress.Fill = 0
 		}
 	}
-	if ecs.Has[Part[ThumbPart]](world, entity) {
-		if progress := ecs.GetMut[Progress](world, relation.Owner); progress != nil && progress.Thumb == entity {
+	if world.Has[Part[ThumbPart]](entity) {
+		if progress := world.GetMut[Progress](relation.Owner); progress != nil && progress.Thumb == entity {
 			progress.Thumb = 0
 		}
 	}
 	clipFlags := 0
-	if ecs.Has[Part[SelectorListPart]](world, entity) {
+	if world.Has[Part[SelectorListPart]](entity) {
 		clipFlags |= 1
 	}
-	if ecs.Has[Part[ScrollTrackHorizontalPart]](world, entity) ||
-		ecs.Has[Part[ScrollTrackVerticalPart]](world, entity) ||
-		ecs.Has[Part[ScrollThumbHorizontalPart]](world, entity) ||
-		ecs.Has[Part[ScrollThumbVerticalPart]](world, entity) {
+	if world.Has[Part[ScrollTrackHorizontalPart]](entity) ||
+		world.Has[Part[ScrollTrackVerticalPart]](entity) ||
+		world.Has[Part[ScrollThumbHorizontalPart]](entity) ||
+		world.Has[Part[ScrollThumbVerticalPart]](entity) {
 		clipFlags |= 2
 	}
 	if detachVariant {
@@ -123,8 +123,8 @@ func UnbindControl(world *ecs.World, entity ecs.Entity) {
 	if world == nil || entity == 0 {
 		return
 	}
-	parts := ecs.FrameScratch[controlPartsScratch, ecs.Entity](world)
-	for part, access := range ecs.Query[Relation[Control]](world).All {
+	parts := world.FrameScratch[controlPartsScratch, ecs.Entity]()
+	for part, access := range world.Query[Relation[Control]]().All {
 		relation := access.Get()
 
 		if relation.Owner == entity {
@@ -142,7 +142,7 @@ func UnbindControl(world *ecs.World, entity ecs.Entity) {
 func (composition ControlComposition) directChildren(world *ecs.World, owner ecs.Entity) []ecs.Entity {
 	children := make([]ecs.Entity, 0, 8)
 	for entity := range composition {
-		parent, ok := ecs.Get[scene.Parent](world, entity)
+		parent, ok := world.Get[scene.Parent](entity)
 		if ok && parent.Entity == owner {
 			children = append(children, entity)
 		}
@@ -159,21 +159,21 @@ func (composition ControlComposition) bindButton(world *ecs.World, owner ecs.Ent
 		case CompositionSprite:
 			if compositionBodySprite(node, childNode) {
 				bodies = append(bodies, child)
-			} else if err := bindCompositionPart[IconPart](world, composition, child, owner, VariantAlways); err != nil {
+			} else if err := composition.bindCompositionPart[IconPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
 		case CompositionText:
 			switch {
-			case ecs.Has[NumberInputStep](world, owner):
-				if err := bindCompositionPart[IconPart](world, composition, child, owner, VariantAlways); err != nil {
+			case world.Has[NumberInputStep](owner):
+				if err := composition.bindCompositionPart[IconPart](world, child, owner, VariantAlways); err != nil {
 					return err
 				}
-			case ecs.Has[SelectorItem](world, owner):
-				if err := bindCompositionPart[ItemPart](world, composition, child, owner, VariantAlways); err != nil {
+			case world.Has[SelectorItem](owner):
+				if err := composition.bindCompositionPart[ItemPart](world, child, owner, VariantAlways); err != nil {
 					return err
 				}
 			default:
-				if err := bindCompositionPart[LabelPart](world, composition, child, owner, VariantAlways); err != nil {
+				if err := composition.bindCompositionPart[LabelPart](world, child, owner, VariantAlways); err != nil {
 					return err
 				}
 			}
@@ -203,7 +203,7 @@ func (composition ControlComposition) bindBodies(world *ecs.World, owner ecs.Ent
 				state = []ControlVariant{VariantClosedNormal, VariantClosedHovered, VariantOpenEnabled}[min(index, 2)]
 			}
 		}
-		if err := bindCompositionPart[BodyPart](world, composition, body, owner, state); err != nil {
+		if err := composition.bindCompositionPart[BodyPart](world, body, owner, state); err != nil {
 			return err
 		}
 	}
@@ -232,11 +232,11 @@ func (composition ControlComposition) bindTextField(world *ecs.World, owner ecs.
 				decorations = append(decorations, child)
 			}
 		case CompositionText:
-			if err := bindCompositionPart[ValuePart](world, composition, child, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[ValuePart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
 		case CompositionGroup:
-			if ecs.Has[NumberInput](world, owner) {
+			if world.Has[NumberInput](owner) {
 				steps = append(steps, child)
 			}
 		}
@@ -245,7 +245,7 @@ func (composition ControlComposition) bindTextField(world *ecs.World, owner ecs.
 		return err
 	}
 	if len(decorations) > 0 {
-		if err := bindCompositionPart[SelectionPart](world, composition, decorations[0], owner, VariantFocused); err != nil {
+		if err := composition.bindCompositionPart[SelectionPart](world, decorations[0], owner, VariantFocused); err != nil {
 			return err
 		}
 		if err := linkCompositionSelection(world, decorations[0]); err != nil {
@@ -253,7 +253,7 @@ func (composition ControlComposition) bindTextField(world *ecs.World, owner ecs.
 		}
 	}
 	if len(decorations) > 1 {
-		if err := bindCompositionPart[CaretPart](world, composition, decorations[1], owner, VariantFocused); err != nil {
+		if err := composition.bindCompositionPart[CaretPart](world, decorations[1], owner, VariantFocused); err != nil {
 			return err
 		}
 	}
@@ -267,13 +267,13 @@ func (composition ControlComposition) bindTextField(world *ecs.World, owner ecs.
 		direction := -1
 		if index == 0 {
 			direction = 1
-			if err := bindCompositionPart[IncrementPart](world, composition, step, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[IncrementPart](world, step, owner, VariantAlways); err != nil {
 				return err
 			}
-		} else if err := bindCompositionPart[DecrementPart](world, composition, step, owner, VariantAlways); err != nil {
+		} else if err := composition.bindCompositionPart[DecrementPart](world, step, owner, VariantAlways); err != nil {
 			return err
 		}
-		if err := ecs.Insert(world, step, NumberInputStep{Input: owner, Direction: direction}); err != nil {
+		if err := world.Insert(step, NumberInputStep{Input: owner, Direction: direction}); err != nil {
 			return err
 		}
 	}
@@ -281,23 +281,23 @@ func (composition ControlComposition) bindTextField(world *ecs.World, owner ecs.
 }
 
 func linkCompositionSelection(world *ecs.World, entity ecs.Entity) error {
-	if ecs.Has[scene.SpriteLayers2D](world, entity) {
+	if world.Has[scene.SpriteLayers2D](entity) {
 		return nil
 	}
-	sprite, ok := ecs.Get[scene.Sprite2D](world, entity)
+	sprite, ok := world.Get[scene.Sprite2D](entity)
 	if !ok {
 		return nil
 	}
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	layers := make([]scene.SpriteLayer2D, 16)
 	for index := range layers {
 		layers[index] = scene.SpriteLayer2D{ID: selectionLayerIDs[index], Order: index, Sprite: sprite, Anchor: anchor}
 	}
 	value := scene.SpriteLayers2D{Layers: layers}
 	value.InvalidateMatrices()
-	cache := ecs.FrameValue[selectionPatchCache, selectionPatchCache](world)
+	cache := world.FrameValue[selectionPatchCache, selectionPatchCache]()
 	if !cache.initialized {
-		cache.patch = ecs.NewPatch2[scene.SpriteLayers2D, scene.Size2D](world, ecs.Type[scene.Sprite2D]())
+		cache.patch = world.NewPatch2[scene.SpriteLayers2D, scene.Size2D](ecs.Type[scene.Sprite2D]())
 		cache.initialized = true
 	}
 	return cache.patch.Apply(entity, value, scene.Size2D{Width: 1, Height: 1})
@@ -322,7 +322,7 @@ func (composition ControlComposition) bindCheckbox(world *ecs.World, owner ecs.E
 		case CompositionSprite:
 			sprites = append(sprites, child)
 		case CompositionText:
-			if err := bindCompositionPart[LabelPart](world, composition, child, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[LabelPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
 		}
@@ -330,12 +330,12 @@ func (composition ControlComposition) bindCheckbox(world *ecs.World, owner ecs.E
 	states := []ControlVariant{VariantInputNormal, VariantHovered, VariantPressed}
 	for index, sprite := range sprites {
 		if index >= len(states) {
-			if err := bindCompositionPart[KnobPart](world, composition, sprite, owner, VariantChecked); err != nil {
+			if err := composition.bindCompositionPart[KnobPart](world, sprite, owner, VariantChecked); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := bindCompositionPart[TrackPart](world, composition, sprite, owner, states[index]); err != nil {
+		if err := composition.bindCompositionPart[TrackPart](world, sprite, owner, states[index]); err != nil {
 			return err
 		}
 	}
@@ -351,11 +351,11 @@ func (composition ControlComposition) bindSelector(world *ecs.World, owner ecs.E
 		case CompositionSprite:
 			if compositionSelectorBodySprite(node, childNode) {
 				bodies = append(bodies, child)
-			} else if err := bindCompositionPart[IconPart](world, composition, child, owner, VariantAlways); err != nil {
+			} else if err := composition.bindCompositionPart[IconPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
 		case CompositionText:
-			if err := bindCompositionPart[LabelPart](world, composition, child, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[LabelPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
 		case CompositionGroup:
@@ -377,14 +377,14 @@ func (composition ControlComposition) bindSelector(world *ecs.World, owner ecs.E
 	listNode := composition[list]
 	listNode.Visible = true
 	composition[list] = listNode
-	if err := bindCompositionPart[SelectorListPart](world, composition, list, owner, VariantOpen); err != nil {
+	if err := composition.bindCompositionPart[SelectorListPart](world, list, owner, VariantOpen); err != nil {
 		return err
 	}
 	setVisible(world, list, false)
 	setUIStackIndex(world, list, selectorPopupStackBase)
 	width, _, _ := ControlBounds(world, owner)
-	selector, _ := ecs.Get[Selector](world, owner)
-	if err := ecs.Insert4(world, list, SelectorList{Selector: owner},
+	selector, _ := world.Get[Selector](owner)
+	if err := world.Insert4(list, SelectorList{Selector: owner},
 		scene.ClipRect2D{Width: width, Height: selector.ListHeight},
 		scene.Size2D{Width: width, Height: selector.ListHeight},
 		scene.UIScroll{ConsumeWheel: true, Vertical: true}); err != nil {
@@ -394,7 +394,7 @@ func (composition ControlComposition) bindSelector(world *ecs.World, owner ecs.E
 	for _, child := range composition.directChildren(world, list) {
 		switch composition[child].Kind {
 		case CompositionSprite:
-			if err := bindCompositionPart[PanelPart](world, composition, child, owner, VariantOpen); err != nil {
+			if err := composition.bindCompositionPart[PanelPart](world, child, owner, VariantOpen); err != nil {
 				return err
 			}
 			setVisible(world, child, false)
@@ -405,10 +405,10 @@ func (composition ControlComposition) bindSelector(world *ecs.World, owner ecs.E
 			if err := bindButton(child); err != nil {
 				return err
 			}
-			if err := bindCompositionPart[ItemPart](world, composition, child, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[ItemPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
-			if err := ecs.Insert(world, child, SelectorItem{Owner: owner, Index: itemIndex, Label: composition.itemLabel(world, child)}); err != nil {
+			if err := world.Insert(child, SelectorItem{Owner: owner, Index: itemIndex, Label: composition.itemLabel(world, child)}); err != nil {
 				return err
 			}
 			itemIndex++
@@ -440,31 +440,31 @@ func (composition ControlComposition) bindProgress(world *ecs.World, owner ecs.E
 			if err := bindButton(child); err != nil {
 				return err
 			}
-			if err := bindCompositionPart[ThumbPart](world, composition, child, owner, VariantAlways); err != nil {
+			if err := composition.bindCompositionPart[ThumbPart](world, child, owner, VariantAlways); err != nil {
 				return err
 			}
-			if progress := ecs.GetMut[Progress](world, owner); progress != nil {
+			if progress := world.GetMut[Progress](owner); progress != nil {
 				progress.Thumb = child
 			}
-			if err := ecs.Insert(world, child, ProgressThumb{Progress: owner}); err != nil {
+			if err := world.Insert(child, ProgressThumb{Progress: owner}); err != nil {
 				return err
 			}
 		}
 	}
 	if len(sprites) > 0 {
-		if err := bindCompositionPart[TrackPart](world, composition, sprites[0], owner, VariantAlways); err != nil {
+		if err := composition.bindCompositionPart[TrackPart](world, sprites[0], owner, VariantAlways); err != nil {
 			return err
 		}
 	}
 	if len(sprites) > 1 {
 		fill := sprites[1]
-		if err := bindCompositionPart[FillPart](world, composition, fill, owner, VariantAlways); err != nil {
+		if err := composition.bindCompositionPart[FillPart](world, fill, owner, VariantAlways); err != nil {
 			return err
 		}
-		if progress := ecs.GetMut[Progress](world, owner); progress != nil {
+		if progress := world.GetMut[Progress](owner); progress != nil {
 			progress.Fill = fill
 		}
-		if err := ecs.Insert(world, fill, Relation[Progress]{Owner: owner}); err != nil {
+		if err := world.Insert(fill, Relation[Progress]{Owner: owner}); err != nil {
 			return err
 		}
 	}
@@ -480,19 +480,19 @@ func (composition ControlComposition) bindScrollArea(world *ecs.World, owner ecs
 		var err error
 		switch index {
 		case 0:
-			err = bindCompositionPart[ScrollTrackHorizontalPart](world, composition, entity, owner, VariantAlways)
+			err = composition.bindCompositionPart[ScrollTrackHorizontalPart](world, entity, owner, VariantAlways)
 		case 1:
-			err = bindCompositionPart[ScrollTrackVerticalPart](world, composition, entity, owner, VariantAlways)
+			err = composition.bindCompositionPart[ScrollTrackVerticalPart](world, entity, owner, VariantAlways)
 		case 2:
-			err = bindCompositionPart[ScrollThumbHorizontalPart](world, composition, entity, owner, VariantAlways)
+			err = composition.bindCompositionPart[ScrollThumbHorizontalPart](world, entity, owner, VariantAlways)
 		case 3:
-			err = bindCompositionPart[ScrollThumbVerticalPart](world, composition, entity, owner, VariantAlways)
+			err = composition.bindCompositionPart[ScrollThumbVerticalPart](world, entity, owner, VariantAlways)
 		}
 		if err != nil {
 			return err
 		}
 		if index < 4 {
-			if err := ecs.Insert(world, entity, scene.ClipExempt2D{}); err != nil {
+			if err := world.Insert(entity, scene.ClipExempt2D{}); err != nil {
 				return err
 			}
 		}

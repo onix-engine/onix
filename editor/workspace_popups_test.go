@@ -203,7 +203,7 @@ func TestWorkspaceNineSliceDraftApplyCancelAndLimits(t *testing.T) {
 	workspaceShellTest(t, a)
 	open()
 	in := input.NewState()
-	ecs.InsertResource(world, in)
+	world.InsertResource(in)
 	in.PressKey(input.KeyEscape)
 	texture = a.nineSlice.texture
 	if err := a.update(context); err != nil {

@@ -1,7 +1,6 @@
 package html
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/style"
 	"strings"
 	"testing"
@@ -23,7 +22,7 @@ func TestHTMLNativeAttributeStylesStayLocal(t *testing.T) {
 			target := incrementalHTMLNode(t, world, owner, "target")
 			target.SetAttribute(attribute.name, attribute.value)
 			incrementalSync(t, world)
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			if state.SyncStats.Styled > 8 {
 				t.Fatalf("attribute restyled unrelated branches: %+v", state.SyncStats)
 			}
@@ -43,15 +42,15 @@ func TestHTMLMediaEnvironmentStillRestylesDocument(t *testing.T) {
 	const source = `<style>#target{width:10px}@media(min-width:100px){#target{width:20px}}</style><div id="scope"><div id="target"></div></div>`
 	world, owner := incrementalHTMLFixture(t, source)
 	node := incrementalHTMLNode(t, world, owner, "target")
-	if ecs.GetRef[htmlRenderState](world, owner).Styles[node.node].Width != style.LengthPx(20) {
+	if world.GetRef[htmlRenderState](owner).Styles[node.node].Width != style.LengthPx(20) {
 		t.Fatal("media query did not apply")
 	}
 	// A local mutation may reuse the environment, but resizing must reevaluate it.
 	node.SetAttribute("title", "warm")
 	incrementalSync(t, world)
-	ecs.GetMut[Surface](world, owner).Width = 80
+	world.GetMut[Surface](owner).Width = 80
 	incrementalSync(t, world)
-	if ecs.GetRef[htmlRenderState](world, owner).Styles[node.node].Width != style.LengthPx(10) {
+	if world.GetRef[htmlRenderState](owner).Styles[node.node].Width != style.LengthPx(10) {
 		t.Fatal("media query stayed stale after resize")
 	}
 }

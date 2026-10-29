@@ -51,26 +51,26 @@ func incrementalRenderFixture(tb testing.TB, count int, covered bool) (*ecs.Worl
 	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(world)
 	RegisterCameraRenderer2D(world)
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	tb.Cleanup(func() { _ = state.Dispose() })
 	state.Cameras = []ExtractedCamera{{Entity: 1, Camera: Camera{Clear: true, ClearColor: graphics.Black}, Pipeline: CameraPipeline2D}}
 	entities := make([]ecs.Entity, count)
 	for i := range entities {
 		bundle := ecs.NewBundle(5)
-		ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Width: 10, Height: 5, Alpha: 1})
-		ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Translate3D(float32(i%100)*12, float32(i/100%120)*6, 0)})
-		ecs.Put(&bundle, Visibility{Visible: true})
-		ecs.Put(&bundle, AnchorTopLeft)
-		ecs.Put(&bundle, UIStackIndex(i))
+		bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Width: 10, Height: 5, Alpha: 1})
+		bundle.Put(UIGlobalTransform{Matrix: mgl32.Translate3D(float32(i%100)*12, float32(i/100%120)*6, 0)})
+		bundle.Put(Visibility{Visible: true})
+		bundle.Put(AnchorTopLeft)
+		bundle.Put(UIStackIndex(i))
 		entities[i] = world.Spawn(bundle)
 	}
 	if covered {
 		bundle := ecs.NewBundle(5)
-		ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.Black, 0), Width: 1280, Height: 720, Alpha: 1})
-		ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
-		ecs.Put(&bundle, Visibility{Visible: true})
-		ecs.Put(&bundle, AnchorTopLeft)
-		ecs.Put(&bundle, UIStackIndex(count))
+		bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.Black, 0), Width: 1280, Height: 720, Alpha: 1})
+		bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+		bundle.Put(Visibility{Visible: true})
+		bundle.Put(AnchorTopLeft)
+		bundle.Put(UIStackIndex(count))
 		world.Spawn(bundle)
 	}
 	return world, canvas, driver, entities
@@ -96,16 +96,16 @@ func BenchmarkIncrementalRender2D(b *testing.B) {
 				step := func(i int) {
 					switch mode {
 					case "color", "covered":
-						ecs.GetMut[Sprite2D](world, entities[0]).Shape.Fill.R = float32(i & 1)
+						world.GetMut[Sprite2D](entities[0]).Shape.Fill.R = float32(i & 1)
 					case "move":
-						ecs.GetMut[UIGlobalTransform](world, entities[0]).Matrix[12] = float32(i&1) * 600
+						world.GetMut[UIGlobalTransform](entities[0]).Matrix[12] = float32(i&1) * 600
 					case "all":
 						for _, entity := range entities {
-							ecs.GetMut[Sprite2D](world, entity).Shape.Fill.R = float32(i & 1)
+							world.GetMut[Sprite2D](entity).Shape.Fill.R = float32(i & 1)
 						}
 					case "scroll":
 						for j, entity := range entities {
-							ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12] = float32(j%100)*12 + float32(i&1)*128
+							world.GetMut[UIGlobalTransform](entity).Matrix[12] = float32(j%100)*12 + float32(i&1)*128
 						}
 					}
 					frame()

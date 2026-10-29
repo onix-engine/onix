@@ -14,15 +14,15 @@ func newUIWorld(t *testing.T) *ecs.World {
 	t.Helper()
 	world := ecs.NewWorld()
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	camera := scene.SpawnCamera2D(world)
-	component := ecs.GetMut[scene.Camera](world, camera)
+	component := world.GetMut[scene.Camera](camera)
 	component.UpdateViewport(1920, 1080)
 	if err := scene.SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	theme := engineui.DefaultTheme()
 	theme.Font = notosanssc.NotoSansSCRegular
-	ecs.InsertResource(world, theme)
+	world.InsertResource(theme)
 	return world
 }

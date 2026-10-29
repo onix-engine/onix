@@ -7,7 +7,7 @@ import (
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
 	switch message.Topic {
 	case "action":
-		value, ok := module.Value[module.Signal](message)
+		value, ok := message.Value[module.Signal]()
 		if !ok {
 			return module.ErrType
 		}

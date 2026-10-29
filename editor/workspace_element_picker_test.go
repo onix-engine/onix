@@ -201,11 +201,11 @@ func TestWorkspaceParticleElementsDropdownUsesScrolledSelectorPosition(t *testin
 	if !ok {
 		t.Fatal("particle dropdown trigger missing")
 	}
-	content, ok := ecs.Get[htmlui.ScrollContent](a.world, trigger)
+	content, ok := a.world.Get[htmlui.ScrollContent](trigger)
 	if !ok {
 		t.Fatal("particle selector is not in the inspector scroll container")
 	}
-	scroll := ecs.GetMut[scene.UIScroll](a.world, content.Area)
+	scroll := a.world.GetMut[scene.UIScroll](content.Area)
 	if scroll == nil || scroll.ContentSize[1] <= scroll.ViewportSize[1] {
 		t.Fatal("inspector fixture does not overflow")
 	}
@@ -223,8 +223,8 @@ func TestWorkspaceParticleElementsDropdownUsesScrolledSelectorPosition(t *testin
 	if err := scene.SyncUIGlobalTransformSystem("").Run(a.world); err != nil {
 		t.Fatal(err)
 	}
-	global := ecs.GetRef[scene.UIGlobalTransform](a.world, trigger)
-	target := ecs.GetRef[scene.InputTarget2D](a.world, trigger)
+	global := a.world.GetRef[scene.UIGlobalTransform](trigger)
+	target := a.world.GetRef[scene.InputTarget2D](trigger)
 	x, y, right, bottom, ok := scene.BoundsInSpace2D(global.Matrix, scene.AnchorTopLeft, target.Width, target.Height, true)
 	if !ok {
 		t.Fatal("trigger has no visible bounds")
@@ -244,7 +244,7 @@ func TestWorkspaceParticleElementsDropdownUsesScrolledSelectorPosition(t *testin
 		t.Fatalf("clicking the visible scrolled trigger was treated as an outside click: anchor %+v, trigger (%g,%g)-(%g,%g)", a.elementPicker.Anchor, x, y, right, bottom)
 	}
 	// An open dropdown follows subsequent inspector scrolling without allocating.
-	scroll = ecs.GetMut[scene.UIScroll](a.world, content.Area)
+	scroll = a.world.GetMut[scene.UIScroll](content.Area)
 	scroll.Position[1] += 16
 	in = input.NewState()
 	a.updateWorkspaceMenus(in)
@@ -273,10 +273,10 @@ func TestWorkspaceParticleElementsWholeSelectorClick(t *testing.T) {
 			a, pointer := particlePickerFixture(t, false)
 			id := workspaceFieldID(modDocumentID("button"), pointer+"/particles", "")
 			in := input.NewState()
-			ecs.InsertResource(a.world, in)
+			a.world.InsertResource(in)
 			engineui.RegisterRuntimeFeature[engineui.HTMLRenderer](a.world)
 			camera := scene.SpawnCamera2D(a.world)
-			ecs.GetMut[scene.Camera](a.world, camera).UpdateViewport(int(a.width), int(a.height))
+			a.world.GetMut[scene.Camera](camera).UpdateViewport(int(a.width), int(a.height))
 			if err := scene.SyncGlobalTransformSystem("").Run(a.world); err != nil {
 				t.Fatal(err)
 			}

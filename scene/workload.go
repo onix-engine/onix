@@ -13,14 +13,14 @@ type taskCountCache struct {
 // the predicate; dependency changes invalidate inputs it reads outside T.
 // Unchanged inputs reuse the count without scanning entities or allocating.
 func ActiveTaskCount[Tag, T any](world *ecs.World, dependency uint64, ready func(*ecs.World, ecs.Entity, *T) bool) int {
-	cache := ecs.ScopeValue[Tag, taskCountCache](world)
+	cache := world.ScopeValue[Tag, taskCountCache]()
 	_, scope := world.QueryScopeKey()
 	versions := [5]uint64{componentValueVersion[T](world), componentValueVersion[Activity](world), componentValueVersion[Parent](world), world.EntityVersion(), dependency}
 	if cache.valid && cache.scope == scope && cache.versions == versions {
 		return cache.count
 	}
 	count := 0
-	for entity, access := range ecs.Query[T](world).All {
+	for entity, access := range world.Query[T]().All {
 		if IsActive(world, entity) && ready(world, entity, access.Ref()) {
 			count++
 		}
@@ -50,7 +50,7 @@ func SpriteTrailTaskCount(world *ecs.World) int {
 	return ActiveTaskCount[trailTasks, SpriteTrail2D](world, componentValueVersion[Sprite2D](world), func(w *ecs.World, e ecs.Entity, t *SpriteTrail2D) bool {
 		// Existing samples must finish fading. A trail with zero distance also
 		// keeps emitting while stationary; other trails wake on tracked movement.
-		return t.SampleCount() > 0 || t.MinDistance <= 0 && ecs.Has[Sprite2D](w, e)
+		return t.SampleCount() > 0 || t.MinDistance <= 0 && w.Has[Sprite2D](e)
 	})
 }
 

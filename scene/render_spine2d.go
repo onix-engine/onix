@@ -10,7 +10,7 @@ import (
 type spineRenderBatch2DScratch struct{}
 
 func drawSpineRenderBatch2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, viewport renderViewport2D) {
-	batch := ecs.FrameValue[spineRenderBatch2DScratch, render.MeshBatch3D](world)
+	batch := world.FrameValue[spineRenderBatch2DScratch, render.MeshBatch3D]()
 	*batch = render.MeshBatch3D{
 		Vertices: batch.Vertices[:0], Indices: batch.Indices[:0],
 		Instances: batch.Instances[:0], Draws: batch.Draws[:0],

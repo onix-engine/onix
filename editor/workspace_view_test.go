@@ -68,12 +68,12 @@ func TestWorkspaceEditorPreviewsPrivatePartsWithRuntimeComponents(t *testing.T) 
 	}
 	v := &a.viewport2D
 	row := &v.rows[0]
-	child, _ := ecs.Get[scene.UIGlobalTransform](v.world, row.parts[1])
+	child, _ := v.world.Get[scene.UIGlobalTransform](row.parts[1])
 	if len(row.parts) != 2 || child.Matrix[12] != 51 || child.Matrix[13] != 75 {
 		t.Fatal("private parent transform was lost", child.Matrix)
 	}
-	anchor, _ := ecs.Get[scene.Anchor](v.world, row.parts[0])
-	sprite, _ := ecs.Get[scene.Sprite2D](v.world, row.parts[0])
+	anchor, _ := v.world.Get[scene.Anchor](row.parts[0])
+	sprite, _ := v.world.Get[scene.Sprite2D](row.parts[0])
 	if anchor != center || sprite.Width != 30 || sprite.Height != 10 {
 		t.Fatal("private sprite did not use runtime anchor and size")
 	}
@@ -88,7 +88,7 @@ func TestWorkspaceEditorPreviewsPrivatePartsWithRuntimeComponents(t *testing.T) 
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
-	child, _ = ecs.Get[scene.UIGlobalTransform](v.world, row.parts[1])
+	child, _ = v.world.Get[scene.UIGlobalTransform](row.parts[1])
 	if row.root != root || row.parts[1] != childEntity || child.Matrix[12] != 55 || v.rows[2].root != other {
 		t.Fatal("placement edit replaced content or lost transforms")
 	}
@@ -314,7 +314,7 @@ func TestWorkspaceSceneInspectorCommitsOnlyPosition(t *testing.T) {
 	workspaceShellTest(t, a)
 	a.selectScene("main.json")
 	source := workspaceShellTest(t, a)
-	if len(a.fields) != 3 || !strings.Contains(source, `class="detail-section"`) {
+	if len(a.fields) != 4 || !strings.Contains(source, `class="detail-section"`) {
 		t.Fatal("scene detail did not replace module fields with the Position panel")
 	}
 	for _, text := range []string{"Scene Go behavior", "Rotation (radians)", ">Scale<", "Module definitions", "Module definition:", `id="apply-form"`, `id="clear-drafts"`} {
@@ -483,8 +483,8 @@ func TestWorkspaceEditorRetainedPreviewAndStableFrameAllocations(t *testing.T) {
 	if a.viewport2D.rows[0].root != start || a.viewport2D.rows[1].root != again || a.viewport2D.rows[2].root != other || a.viewport2D.rows[2].revision != otherRevision {
 		t.Fatal("definition transform edit rebuilt retained entities or updated unrelated instances")
 	}
-	startTransform, _ := ecs.Get[scene.UIGlobalTransform](a.viewport2D.world, start)
-	againTransform, _ := ecs.Get[scene.UIGlobalTransform](a.viewport2D.world, again)
+	startTransform, _ := a.viewport2D.world.Get[scene.UIGlobalTransform](start)
+	againTransform, _ := a.viewport2D.world.Get[scene.UIGlobalTransform](again)
 	if startTransform.Matrix[12] != 80 || againTransform.Matrix[12] != 250 {
 		t.Fatal("definition transform edit did not update every reused instance")
 	}
@@ -534,7 +534,7 @@ func TestWorkspaceEditorPointerSelectionAndPlacementDragSingleUndo(t *testing.T)
 	}
 	world := ecs.NewWorld()
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	context := &ecs.SystemContext{World: world}
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
@@ -544,7 +544,7 @@ func TestWorkspaceEditorPointerSelectionAndPlacementDragSingleUndo(t *testing.T)
 	}
 	// A real generated button event reaches the editor's retained message reader.
 	var selectEntity ecs.Entity
-	for entity, access := range ecs.Query[htmlui.Control](world).All {
+	for entity, access := range world.Query[htmlui.Control]().All {
 		if access.Ref().Owner == a.shell && access.Ref().ID == "select:start" {
 			selectEntity = entity
 			break
@@ -675,7 +675,7 @@ func TestWorkspaceEditorDiscardAndUndoRestoreLiveHTMLControlValues(t *testing.T)
 	}
 	id := workspaceFieldID("resources/scenes/main.json", "/modules/0/placement/position", "X")
 	find := func() (ecs.Entity, htmlui.Control) {
-		for entity, access := range ecs.Query[htmlui.Control](world).All {
+		for entity, access := range world.Query[htmlui.Control]().All {
 			if access.Ref().Owner == a.shell && access.Ref().ID == id {
 				return entity, access.Get()
 			}

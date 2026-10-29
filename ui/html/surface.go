@@ -90,7 +90,7 @@ func NodeScrollStyle(world *ecs.World, owner ecs.Entity, id string) (ScrollStyle
 	if world == nil || owner == 0 || id == "" {
 		return ScrollStyle{}, false
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok || state.Root == nil || state.Styles == nil {
 		return ScrollStyle{}, false
 	}
@@ -109,11 +109,11 @@ func ControlScrollStyle(world *ecs.World, control ecs.Entity) (ScrollStyle, bool
 	if world == nil || control == 0 {
 		return ScrollStyle{}, false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Owner == 0 {
 		return ScrollStyle{}, false
 	}
-	state, ok := ecs.Get[htmlRenderState](world, value.Owner)
+	state, ok := world.Get[htmlRenderState](value.Owner)
 	if !ok || state.Root == nil || state.Styles == nil {
 		return ScrollStyle{}, false
 	}
@@ -145,12 +145,12 @@ func htmlScrollStyle(computed *style.ComputedStyle) ScrollStyle {
 
 // ControlTextStyle returns the computed font and foreground for native control text.
 func ControlTextStyle(world *ecs.World, control ecs.Entity) (scene.Text2D, bool) {
-	value := ecs.GetRef[Control](world, control)
+	value := world.GetRef[Control](control)
 	if value == nil {
 		return scene.Text2D{}, false
 	}
-	state := ecs.GetRef[htmlRenderState](world, value.Owner)
-	surface := ecs.GetRef[Surface](world, value.Owner)
+	state := world.GetRef[htmlRenderState](value.Owner)
+	surface := world.GetRef[Surface](value.Owner)
 	if state == nil || state.Styles == nil || surface == nil {
 		return scene.Text2D{}, false
 	}
@@ -171,11 +171,11 @@ func ControlTextStyle(world *ecs.World, control ecs.Entity) (scene.Text2D, bool)
 
 // ControlTextColor returns the computed CSS foreground of a generated control.
 func ControlTextColor(world *ecs.World, control ecs.Entity) (graphics.ColorRGBA, bool) {
-	value := ecs.GetRef[Control](world, control)
+	value := world.GetRef[Control](control)
 	if value == nil {
 		return graphics.ColorRGBA{}, false
 	}
-	state := ecs.GetRef[htmlRenderState](world, value.Owner)
+	state := world.GetRef[htmlRenderState](value.Owner)
 	if state == nil || state.Styles == nil {
 		return graphics.ColorRGBA{}, false
 	}
@@ -192,11 +192,11 @@ func ControlTextColor(world *ecs.World, control ecs.Entity) (graphics.ColorRGBA,
 
 // ControlTextTabWidth resolves CSS tab-size against the control's current font.
 func ControlTextTabWidth(world *ecs.World, control ecs.Entity, text *scene.Text2D) (float32, bool) {
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || text == nil {
 		return 0, false
 	}
-	state := ecs.GetRef[htmlRenderState](world, value.Owner)
+	state := world.GetRef[htmlRenderState](value.Owner)
 	if state == nil || state.Styles == nil {
 		return 0, false
 	}
@@ -484,7 +484,7 @@ func DispatchAction(world *ecs.World, event Event) Event {
 	if world == nil {
 		return event
 	}
-	arena := ecs.FrameValue[htmlActionArenaTag, htmlActionArena](world)
+	arena := world.FrameValue[htmlActionArenaTag, htmlActionArena]()
 	index := len(arena.contexts)
 	arena.contexts = append(arena.contexts, ActionContext{Event: event})
 	arena.depth++
@@ -510,7 +510,7 @@ func dispatchHTMLActionHandler(world *ecs.World, context *ActionContext, entity 
 	if !world.IsAlive(entity) {
 		return
 	}
-	handler := ecs.GetRef[ActionHandler](world, entity)
+	handler := world.GetRef[ActionHandler](entity)
 	if handler == nil || handler.Handle == nil {
 		return
 	}
@@ -535,7 +535,7 @@ func New(value string) Surface {
 
 // Bounds returns the current synchronized surface size.
 func Bounds(world *ecs.World, entity ecs.Entity) (Layout, bool) {
-	size, ok := ecs.Get[scene.Size2D](world, entity)
+	size, ok := world.Get[scene.Size2D](entity)
 	return Layout{Width: size.Width, Height: size.Height}, ok
 }
 
@@ -546,11 +546,11 @@ func SetControlHover(world *ecs.World, control ecs.Entity, hovered bool) bool {
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Owner == 0 {
 		return false
 	}
-	renderState := ecs.GetMut[htmlRenderState](world, value.Owner)
+	renderState := world.GetMut[htmlRenderState](value.Owner)
 	if renderState == nil || renderState.Root == nil || renderState.Stylesheet == nil {
 		return false
 	}
@@ -588,15 +588,15 @@ func SetFocusableFocusVisible(world *ecs.World, target ecs.Entity, focused, focu
 	if world == nil || target == 0 || focused && !scene.IsInteractive(world, target) {
 		return false
 	}
-	value, ok := ecs.Get[Focusable](world, target)
+	value, ok := world.Get[Focusable](target)
 	if !ok || value.Owner == 0 {
 		return false
 	}
-	renderState := ecs.GetMut[htmlRenderState](world, value.Owner)
+	renderState := world.GetMut[htmlRenderState](value.Owner)
 	if renderState == nil || renderState.Root == nil || renderState.Stylesheet == nil {
 		return false
 	}
-	child, nodeOK := ecs.Get[htmlChild](world, target)
+	child, nodeOK := world.Get[htmlChild](target)
 	if !nodeOK || child.Node == nil {
 		return false
 	}
@@ -623,11 +623,11 @@ func SetControlActive(world *ecs.World, control ecs.Entity, active bool) bool {
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Owner == 0 || value.Disabled {
 		return false
 	}
-	renderState := ecs.GetMut[htmlRenderState](world, value.Owner)
+	renderState := world.GetMut[htmlRenderState](value.Owner)
 	if renderState == nil || renderState.Root == nil || renderState.Stylesheet == nil {
 		return false
 	}
@@ -651,7 +651,7 @@ func htmlVisualInputNode(world *ecs.World, visual ecs.Entity) (ecs.Entity, *dom.
 	if world == nil || visual == 0 {
 		return 0, nil, nil, false
 	}
-	child, ok := ecs.Get[htmlChild](world, visual)
+	child, ok := world.Get[htmlChild](visual)
 	if !ok || child.Owner == 0 || child.Node == nil {
 		return 0, nil, nil, false
 	}
@@ -659,7 +659,7 @@ func htmlVisualInputNode(world *ecs.World, visual ecs.Entity) (ecs.Entity, *dom.
 	for node != nil && node.Type != dom.ElementNode {
 		node = node.Parent
 	}
-	state := ecs.GetMut[htmlRenderState](world, child.Owner)
+	state := world.GetMut[htmlRenderState](child.Owner)
 	if state == nil || node == nil || state.Stylesheet == nil {
 		return 0, nil, nil, false
 	}
@@ -692,12 +692,12 @@ func SetControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool 
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	inputType := strings.ToLower(strings.TrimSpace(value.Type))
 	if !ok || value.Tag != "input" || inputType != "checkbox" && inputType != "radio" || value.Owner == 0 {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, value.Owner)
+	state := world.GetMut[htmlRenderState](value.Owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -706,7 +706,7 @@ func SetControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool 
 		node = lookupHTMLNode(state, value.ID)
 	}
 	if value.ID == "" {
-		if ref, refOK := ecs.Get[htmlControlNodeRef](world, control); refOK {
+		if ref, refOK := world.Get[htmlControlNodeRef](control); refOK {
 			node = ref.Node
 		}
 	}
@@ -715,7 +715,7 @@ func SetControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool 
 	}
 	rootCount := 0
 	if inputType == "radio" && checked && value.Name != "" {
-		for entity, access := range ecs.Query[Control](world).All {
+		for entity, access := range world.Query[Control]().All {
 			candidate := access.Get()
 
 			if entity == control || candidate.Owner != value.Owner || candidate.Tag != "input" ||
@@ -726,7 +726,7 @@ func SetControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool 
 				if !dom.SameRadioGroup(node, candidateNode) {
 					continue
 				}
-				if current := ecs.GetMut[Control](world, entity); current != nil {
+				if current := world.GetMut[Control](entity); current != nil {
 					current.Checked = false
 					current.DirtyChecked = true
 				}
@@ -740,7 +740,7 @@ func SetControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool 
 			}
 		}
 	}
-	if current := ecs.GetMut[Control](world, control); current != nil {
+	if current := world.GetMut[Control](control); current != nil {
 		current.Checked = checked
 		current.DirtyChecked = true
 	}
@@ -757,7 +757,7 @@ func SetControlValue(world *ecs.World, control ecs.Entity, value string) bool {
 	if world == nil || control == 0 {
 		return false
 	}
-	current := ecs.GetMut[Control](world, control)
+	current := world.GetMut[Control](control)
 	ok := current != nil
 	if !ok || current == nil || current.Owner == 0 || current.Tag != "input" && current.Tag != "textarea" {
 		return false
@@ -765,7 +765,7 @@ func SetControlValue(world *ecs.World, control ecs.Entity, value string) bool {
 	owner := current.Owner
 	current.Value = value
 	current.DirtyValue = true
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil || state.Root == nil {
 		return true
 	}
@@ -792,11 +792,11 @@ func SetControlSelected(world *ecs.World, control ecs.Entity, selected int) bool
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Tag != "select" || value.Owner == 0 || selected < -1 || selected >= len(value.Options) {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, value.Owner)
+	state := world.GetMut[htmlRenderState](value.Owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -805,7 +805,7 @@ func SetControlSelected(world *ecs.World, control ecs.Entity, selected int) bool
 		node = lookupHTMLNode(state, value.ID)
 	}
 	if value.ID == "" {
-		if ref, refOK := ecs.Get[htmlControlNodeRef](world, control); refOK {
+		if ref, refOK := world.Get[htmlControlNodeRef](control); refOK {
 			node = ref.Node
 		}
 	}
@@ -813,7 +813,7 @@ func SetControlSelected(world *ecs.World, control ecs.Entity, selected int) bool
 		return false
 	}
 	dom.SetSelectedIndex(node, selected)
-	if current := ecs.GetMut[Control](world, control); current != nil {
+	if current := world.GetMut[Control](control); current != nil {
 		syncHTMLSelectOptionStates(node, current)
 	}
 	state.StateRoots[0] = node
@@ -826,11 +826,11 @@ func SetControlOptionSelected(world *ecs.World, control ecs.Entity, option int, 
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Tag != "select" || value.Owner == 0 || option < 0 || option >= len(value.Options) {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, value.Owner)
+	state := world.GetMut[htmlRenderState](value.Owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -838,7 +838,7 @@ func SetControlOptionSelected(world *ecs.World, control ecs.Entity, option int, 
 	if !ok || !dom.SetOptionSelectedAt(node, option, selected) {
 		return false
 	}
-	if current := ecs.GetMut[Control](world, control); current != nil {
+	if current := world.GetMut[Control](control); current != nil {
 		syncHTMLSelectOptionStates(node, current)
 	}
 	state.StateRoots[0] = node
@@ -852,7 +852,7 @@ func SetControlSelectionRange(world *ecs.World, control ecs.Entity, anchor, focu
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Tag != "select" || !value.Multiple || value.Owner == 0 ||
 		anchor < 0 || anchor >= len(value.Options) || focus < 0 || focus >= len(value.Options) {
 		return false
@@ -869,12 +869,12 @@ func SetControlSelectionRange(world *ecs.World, control ecs.Entity, anchor, focu
 		}
 	}
 	if !changed {
-		if current := ecs.GetMut[Control](world, control); current != nil {
+		if current := world.GetMut[Control](control); current != nil {
 			current.SelectionAnchor, current.SelectionFocus = anchor, focus
 		}
 		return true
 	}
-	state := ecs.GetMut[htmlRenderState](world, value.Owner)
+	state := world.GetMut[htmlRenderState](value.Owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -882,7 +882,7 @@ func SetControlSelectionRange(world *ecs.World, control ecs.Entity, anchor, focu
 	if !ok || !dom.SetSelectedRange(node, anchor, focus) {
 		return false
 	}
-	if current := ecs.GetMut[Control](world, control); current != nil {
+	if current := world.GetMut[Control](control); current != nil {
 		syncHTMLSelectOptionStates(node, current)
 		current.SelectionAnchor, current.SelectionFocus = anchor, focus
 	}
@@ -896,7 +896,7 @@ func SetControlSelectionFocus(world *ecs.World, control ecs.Entity, anchor, focu
 	if world == nil || control == 0 {
 		return false
 	}
-	current := ecs.GetMut[Control](world, control)
+	current := world.GetMut[Control](control)
 	if current == nil || current.Tag != "select" || !current.Multiple ||
 		anchor < -1 || anchor >= len(current.Options) || focus < -1 || focus >= len(current.Options) {
 		return false
@@ -911,8 +911,8 @@ func SetEditableValue(world *ecs.World, editable ecs.Entity, value string) bool 
 	if world == nil || editable == 0 {
 		return false
 	}
-	current := ecs.GetMut[Editable](world, editable)
-	ref := ecs.GetMut[htmlEditableNodeRef](world, editable)
+	current := world.GetMut[Editable](editable)
+	ref := world.GetMut[htmlEditableNodeRef](editable)
 	if (current == nil) || (ref == nil) || (ref.Node == nil) || (current.Owner == 0) {
 		return false
 	}
@@ -925,7 +925,7 @@ func SetEditableValue(world *ecs.World, editable ecs.Entity, value string) bool 
 	current.Focus = max(0, min(current.Focus, length))
 	setHTMLNodeText(ref.Node, value)
 	if ref.Text != 0 {
-		if text := ecs.GetMut[scene.Text2D](world, ref.Text); text != nil {
+		if text := world.GetMut[scene.Text2D](ref.Text); text != nil {
 			text.Value = value
 		}
 	}
@@ -939,7 +939,7 @@ func SetEditableSelection(world *ecs.World, editable ecs.Entity, anchor, focus i
 	if world == nil || editable == 0 {
 		return false
 	}
-	current := ecs.GetMut[Editable](world, editable)
+	current := world.GetMut[Editable](editable)
 	if current == nil {
 		return false
 	}
@@ -957,7 +957,7 @@ func ResetForm(world *ecs.World, owner ecs.Entity, formID string) bool {
 	if world == nil || owner == 0 || formID == "" {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -970,7 +970,7 @@ func HasForm(world *ecs.World, owner ecs.Entity, formID string) bool {
 	if world == nil || owner == 0 || formID == "" {
 		return false
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok || state.Root == nil {
 		return false
 	}
@@ -984,7 +984,7 @@ func HasControlForm(world *ecs.World, control ecs.Entity) bool {
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Owner == 0 {
 		return false
 	}
@@ -998,7 +998,7 @@ func ResetControlForm(world *ecs.World, control ecs.Entity) bool {
 	if world == nil || control == 0 {
 		return false
 	}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok || value.Owner == 0 {
 		return false
 	}
@@ -1007,7 +1007,7 @@ func ResetControlForm(world *ecs.World, control ecs.Entity) bool {
 		return false
 	}
 	form := dom.FormOwner(node)
-	state := ecs.GetMut[htmlRenderState](world, value.Owner)
+	state := world.GetMut[htmlRenderState](value.Owner)
 	return (form != nil) && (state != nil) && (resetHTMLFormNode(world, value.Owner, state, form))
 }
 
@@ -1015,17 +1015,17 @@ func resetHTMLFormNode(world *ecs.World, owner ecs.Entity, state *htmlRenderStat
 	if !dom.ResetForm(form) {
 		return false
 	}
-	for entity, access := range ecs.Query[Control](world).All {
+	for entity, access := range world.Query[Control]().All {
 		control := access.Get()
 
 		if control.Owner != owner {
 			continue
 		}
-		ref, ok := ecs.Get[htmlControlNodeRef](world, entity)
+		ref, ok := world.Get[htmlControlNodeRef](entity)
 		if !ok || ref.Node == nil || dom.FormOwner(ref.Node) != form {
 			continue
 		}
-		current := ecs.GetMut[Control](world, entity)
+		current := world.GetMut[Control](entity)
 		if current == nil {
 			continue
 		}
@@ -1140,7 +1140,7 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 	}
 	visible := htmlVisible(world, owner)
 	for _, entity := range entities {
-		child, ok := ecs.Get[htmlChild](world, entity)
+		child, ok := world.Get[htmlChild](entity)
 		if !ok || child.Owner != owner {
 			continue
 		}
@@ -1148,21 +1148,21 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 		if !ok {
 			continue
 		}
-		if control := ecs.GetRef[Control](world, entity); (control != nil) && control.Tag == "textarea" && control.Wrap != htmlTextareaWrap(computed) {
-			current := ecs.GetMut[Control](world, entity)
+		if control := world.GetRef[Control](entity); (control != nil) && control.Tag == "textarea" && control.Wrap != htmlTextareaWrap(computed) {
+			current := world.GetMut[Control](entity)
 			current.Wrap = htmlTextareaWrap(computed)
 		}
 		syncHTMLPointerEvents(world, entity, computed, state.Key.PassThrough)
 		syncHTMLCSSVisibility(world, entity, computed)
 		nodeVisible := visible && htmlStyleVisible(computed)
-		sprite := ecs.GetMut[scene.Sprite2D](world, entity)
+		sprite := world.GetMut[scene.Sprite2D](entity)
 		if sprite != nil && nodeVisible {
-			if ecs.Has[htmlCanvasSurface](world, entity) {
+			if world.Has[htmlCanvasSurface](entity) {
 				sprite.Shape.Fill = htmlColor(computed.BackgroundColor)
 				if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
 					sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 				}
-			} else if ecs.Has[htmlElementSurface](world, entity) || ecs.Has[Control](world, entity) {
+			} else if world.Has[htmlElementSurface](entity) || world.Has[Control](entity) {
 				if htmlNeedsRasterPaint(computed) {
 					if texture := htmlPaintTextureFor(state, child.Node, computed, sprite.Width, sprite.Height); texture != nil {
 						sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
@@ -1175,15 +1175,15 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 						sprite.Texture = nil
 					}
 				}
-			} else if ecs.Has[htmlTextDecoration](world, entity) {
+			} else if world.Has[htmlTextDecoration](entity) {
 				sprite.Shape.Fill = htmlColor(computed.Color)
 			}
 			state.Textures.bind(entity, sprite.Texture)
 		}
-		if text := ecs.GetMut[scene.Text2D](world, entity); text != nil {
+		if text := world.GetMut[scene.Text2D](entity); text != nil {
 			color := computed.Color
-			if link, linked := ecs.Get[ControlText](world, entity); linked {
-				if control, exists := ecs.Get[Control](world, link.Control); exists && control.Value == "" && control.Placeholder != "" {
+			if link, linked := world.Get[ControlText](entity); linked {
+				if control, exists := world.Get[Control](link.Control); exists && control.Value == "" && control.Placeholder != "" {
 					color = computed.PlaceholderColor
 				}
 			}
@@ -1191,21 +1191,21 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 			text.TabWidth = htmlTextTabWidth(text, computed)
 			text.LCD, text.Alpha = htmlTextPaint(styles, child.Node)
 		}
-		if mark, exists := ecs.Get[htmlCheckboxMark](world, entity); exists {
-			if control, exists := ecs.Get[Control](world, mark.Control); exists {
+		if mark, exists := world.Get[htmlCheckboxMark](entity); exists {
+			if control, exists := world.Get[Control](mark.Control); exists {
 				if sprite != nil {
 					sprite.Shape = scene.CheckmarkShape2D(htmlColor(computed.Color))
 				}
-				if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+				if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 					visibility.Visible = nodeVisible && control.Checked && htmlUsesNativeAppearance(computed)
 				}
 			}
 		}
-		if _, exists := ecs.Get[htmlSelectIndicator](world, entity); exists {
-			if image := ecs.GetMut[scene.UIImage2D](world, entity); image != nil {
+		if _, exists := world.Get[htmlSelectIndicator](entity); exists {
+			if image := world.GetMut[scene.UIImage2D](entity); image != nil {
 				image.Tint = htmlColor(computed.Color)
 			}
-			if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+			if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 				visibility.Visible = nodeVisible && htmlUsesNativeAppearance(computed)
 			}
 		}
@@ -1217,7 +1217,7 @@ func findHTMLNodeByIDFromRoot(world *ecs.World, owner ecs.Entity, id string) (*d
 	if id == "" {
 		return nil, false
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok {
 		return nil, false
 	}
@@ -1242,14 +1242,14 @@ func htmlControlNode(world *ecs.World, owner, control ecs.Entity, value Control)
 	if value.ID != "" {
 		return findHTMLNodeByIDFromRoot(world, owner, value.ID)
 	}
-	ref, ok := ecs.Get[htmlControlNodeRef](world, control)
+	ref, ok := world.Get[htmlControlNodeRef](control)
 	return ref.Node, ok && ref.Node != nil
 }
 
 // Set updates the HTML source on an existing entity. The visual tree is
 // rebuilt by SyncSystem on the next synchronization pass.
 func Set(world *ecs.World, entity ecs.Entity, value string) bool {
-	html := ecs.GetMut[Surface](world, entity)
+	html := world.GetMut[Surface](entity)
 	if html == nil {
 		return false
 	}
@@ -1330,9 +1330,9 @@ func markHTMLChildNode(world *ecs.World, entity ecs.Entity, node *dom.Node) {
 	if world == nil || entity == 0 || node == nil {
 		return
 	}
-	if child := ecs.GetMut[htmlChild](world, entity); child != nil {
+	if child := world.GetMut[htmlChild](entity); child != nil {
 		child.Node = node
-		if state := ecs.GetMut[htmlRenderState](world, child.Owner); state != nil {
+		if state := world.GetMut[htmlRenderState](child.Owner); state != nil {
 			if computed, ok := state.Styles.Get(node); ok {
 				syncHTMLPointerEvents(world, entity, computed, state.Key.PassThrough)
 				syncHTMLCSSVisibility(world, entity, computed)
@@ -1346,10 +1346,10 @@ func markHTMLChildNode(world *ecs.World, entity ecs.Entity, node *dom.Node) {
 // use their own computed value, so an explicit auto overrides inherited none.
 func syncHTMLPointerEvents(world *ecs.World, entity ecs.Entity, computed *style.ComputedStyle, passThrough bool) {
 	passThrough = passThrough || !htmlStyleVisible(computed) || computed.PointerEvents == style.Keyword("none")
-	if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+	if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 		target.PassThrough = passThrough
 	}
-	if blocker := ecs.GetMut[scene.InputBlocker2D](world, entity); blocker != nil {
+	if blocker := world.GetMut[scene.InputBlocker2D](entity); blocker != nil {
 		blocker.PassThrough = passThrough
 	}
 }
@@ -1363,7 +1363,7 @@ func SetNodeOffset(world *ecs.World, owner ecs.Entity, id string, x, y float32) 
 	if world == nil || owner == 0 || id == "" {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -1400,7 +1400,7 @@ func SetNodeScroll(world *ecs.World, owner ecs.Entity, id string, area ecs.Entit
 	if world == nil || owner == 0 || id == "" || area == 0 || !world.IsAlive(area) {
 		return false
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil || state.Root == nil {
 		return false
 	}
@@ -1500,12 +1500,12 @@ func applyHTMLNodeBindings(world *ecs.World, state *htmlRenderState, entities []
 	changed := false
 	for _, entity := range entities {
 		state.SyncStats.BindingEntities++
-		child := ecs.GetMut[htmlChild](world, entity)
+		child := world.GetMut[htmlChild](entity)
 		ok := child != nil
 		if !ok || child.Node == nil {
 			continue
 		}
-		transform := ecs.GetMut[scene.UITransform](world, entity)
+		transform := world.GetMut[scene.UITransform](entity)
 		if transform == nil {
 			continue
 		}
@@ -1514,9 +1514,9 @@ func applyHTMLNodeBindings(world *ecs.World, state *htmlRenderState, entities []
 		if indices.offset != 0 {
 			offset = state.NodeOffsets[indices.offset-1].Offset
 		}
-		parent := ecs.GetMut[scene.Parent](world, entity)
+		parent := world.GetMut[scene.Parent](entity)
 		if parent != nil && parent.Entity != child.Owner {
-			if ancestor := ecs.GetRef[htmlChild](world, parent.Entity); ancestor != nil && ancestor.Owner == child.Owner && ancestor.Node != nil {
+			if ancestor := world.GetRef[htmlChild](parent.Entity); ancestor != nil && ancestor.Owner == child.Owner && ancestor.Node != nil {
 				// Nested visuals already inherit their parent's bound offset.
 				// Apply only the difference in this entity's local coordinates.
 				inherited := state.NodeBindingRoutes.resolve(ancestor.Node, htmlNodeParent, inherit)
@@ -1529,7 +1529,7 @@ func applyHTMLNodeBindings(world *ecs.World, state *htmlRenderState, entities []
 		if delta != (mgl32.Vec2{}) {
 			transform.Translation.X.Value += delta.X()
 			transform.Translation.Y.Value += delta.Y()
-			if content := ecs.GetMut[ScrollContent](world, entity); content != nil {
+			if content := world.GetMut[ScrollContent](entity); content != nil {
 				content.X += delta.X()
 				content.Y += delta.Y()
 			}
@@ -1543,7 +1543,7 @@ func applyHTMLNodeBindings(world *ecs.World, state *htmlRenderState, entities []
 			continue
 		}
 		binding := state.NodeScrolls[indices.scroll-1]
-		content := ecs.GetMut[ScrollContent](world, entity)
+		content := world.GetMut[ScrollContent](entity)
 		if (content != nil) && child.scrollArea == binding.Area && child.scrollOrigin == binding.Origin {
 			continue
 		}
@@ -1565,7 +1565,7 @@ func applyHTMLNodeBindings(world *ecs.World, state *htmlRenderState, entities []
 		if content != nil {
 			*content = value
 		} else {
-			_ = ecs.Insert(world, entity, value)
+			_ = world.Insert(entity, value)
 		}
 		changed = true
 	}
@@ -1653,21 +1653,21 @@ func syncHTML(context *ecs.SystemContext) error {
 
 	owners := htmlOwners(world)
 	for owner, children := range owners.Children {
-		if world.IsAlive(owner) && ecs.Has[Surface](world, owner) && ecs.Has[htmlRenderState](world, owner) {
+		if world.IsAlive(owner) && world.Has[Surface](owner) && world.Has[htmlRenderState](owner) {
 			continue
 		}
 		for _, child := range children {
 			world.Despawn(child)
 		}
 		delete(owners.Children, owner)
-		ecs.Remove[htmlRenderState](world, owner)
+		world.Remove[htmlRenderState](owner)
 	}
 
-	entries := ecs.FrameScratch[htmlSyncEntriesScratch, htmlSyncEntry](world)
+	entries := world.FrameScratch[htmlSyncEntriesScratch, htmlSyncEntry]()
 	defer entries.ReleaseUnused()
-	for entity, access := range ecs.Query[Surface](world).All {
+	for entity, access := range world.Query[Surface]().All {
 		if !scene.IsActive(world, entity) {
-			if state := ecs.GetMut[htmlRenderState](world, entity); state != nil {
+			if state := world.GetMut[htmlRenderState](entity); state != nil {
 				syncHTMLVisibility(world, entity, state)
 				state.TransformFrameSet = false
 			}
@@ -1681,7 +1681,7 @@ func syncHTML(context *ecs.SystemContext) error {
 		if _, err := renderHTML(world, entry.Entity, entry.Value); err != nil {
 			return err
 		}
-		if state := ecs.GetRef[htmlRenderState](world, entry.Entity); state != nil {
+		if state := world.GetRef[htmlRenderState](entry.Entity); state != nil {
 			state.Textures.sweep()
 		}
 	}
@@ -1692,7 +1692,7 @@ func htmlSurfaceRenderKey(world *ecs.World, value Surface, state *htmlRenderStat
 	width, height := htmlViewport(world, value)
 	fontValue := value.Font
 	if fontValue == nil {
-		fontValue, _ = ecs.GetResource[*onixtext.Font](world)
+		fontValue, _ = world.GetResource[*onixtext.Font]()
 	}
 	if fontValue == nil {
 		fontValue = onixtext.DefaultFont()
@@ -1715,12 +1715,12 @@ func htmlSurfaceRenderKey(world *ecs.World, value Surface, state *htmlRenderStat
 }
 
 func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, error) {
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil {
-		if err := ecs.Insert(world, owner, htmlRenderState{}); err != nil {
+		if err := world.Insert(owner, htmlRenderState{}); err != nil {
 			return Layout{}, err
 		}
-		state = ecs.GetMut[htmlRenderState](world, owner)
+		state = world.GetMut[htmlRenderState](owner)
 	}
 	if state.Root == nil || state.Source != value.Value {
 		root, embeddedCSS, err := parseHTMLDocument(value.Value)
@@ -1751,7 +1751,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	if state.NodeByID == nil || state.IndexDirty {
 		syncHTMLDocumentIndex(state)
 	}
-	if clock, ok := ecs.GetResource[*scene.Time](world); ok && clock != nil {
+	if clock, ok := world.GetResource[*scene.Time](); ok && clock != nil {
 		if state.TransformFrameSet && state.TransformFrame != clock.Frame && state.Rendered && state.Key.Value == value.Value {
 			advanceHTMLAnimations(world, state, clock.Delta.Seconds())
 		}
@@ -1939,7 +1939,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		state.RenderGeneration++
 		state.Reconciling = true
 		for _, entity := range state.Children {
-			if child := ecs.GetMut[htmlChild](world, entity); child != nil {
+			if child := world.GetMut[htmlChild](entity); child != nil {
 				// Full layout rebuilds reset retained transforms to their authored
 				// positions. Replay external bindings from zero for reused entities.
 				child.offset = mgl32.Vec2{}
@@ -1975,12 +1975,12 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	result := Layout{Width: float32(content.Width), Height: float32(content.Height)}
 	state.Boxes = box
 	state.Layout = result
-	if size := ecs.GetMut[scene.Size2D](world, owner); size != nil {
+	if size := world.GetMut[scene.Size2D](owner); size != nil {
 		size.Width, size.Height = float32(content.Width), float32(content.Height)
-	} else if err := ecs.Insert(world, owner, scene.Size2D{Width: float32(content.Width), Height: float32(content.Height)}); err != nil {
+	} else if err := world.Insert(owner, scene.Size2D{Width: float32(content.Width), Height: float32(content.Height)}); err != nil {
 		return Layout{}, err
 	}
-	if target := ecs.GetMut[scene.InputTarget2D](world, owner); target != nil {
+	if target := world.GetMut[scene.InputTarget2D](owner); target != nil {
 		target.Width, target.Height = float32(content.Width), float32(content.Height)
 	}
 	path := SyncFull
@@ -1988,7 +1988,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		path = SyncPartial
 	}
 	// Inserting Size2D can migrate the owner to another ECS archetype.
-	state = ecs.GetMut[htmlRenderState](world, owner)
+	state = world.GetMut[htmlRenderState](owner)
 	state.commitSync(key, imageProviderChanged, path)
 	return result, nil
 }
@@ -2098,19 +2098,19 @@ func cleanupHTMLNodeEventTargets(world *ecs.World, state *htmlRenderState) {
 	}
 	children := state.Children[:0]
 	for _, entity := range state.Children {
-		if ecs.Has[htmlNodeEventTarget](world, entity) {
-			child, ok := ecs.Get[htmlChild](world, entity)
+		if world.Has[htmlNodeEventTarget](entity) {
+			child, ok := world.Get[htmlChild](entity)
 			binding := state.NodeEvents[child.Node]
 			if !ok || binding.Pointer == nil && binding.Click == nil {
 				if ok {
 					delete(state.EventTargets, child.Node)
 				}
 				if world.IsAlive(entity) {
-					if handler, exists := ecs.Get[htmlNodeEventHandler](world, entity); exists {
-						if current := ecs.GetMut[scene.InputHandler2D](world, entity); current != nil {
+					if handler, exists := world.Get[htmlNodeEventHandler](entity); exists {
+						if current := world.GetMut[scene.InputHandler2D](entity); current != nil {
 							*current = handler.Base
 						}
-						ecs.Remove[htmlNodeEventHandler](world, entity)
+						world.Remove[htmlNodeEventHandler](entity)
 					}
 				}
 				world.Despawn(entity)
@@ -2129,8 +2129,8 @@ func updateHTMLControlSnapshots(world *ecs.World, state *htmlRenderState, entiti
 		return
 	}
 	for _, child := range entities {
-		control, ok := ecs.Get[Control](world, child)
-		ref, hasRef := ecs.Get[htmlControlNodeRef](world, child)
+		control, ok := world.Get[Control](child)
+		ref, hasRef := world.Get[htmlControlNodeRef](child)
 		if !ok || !hasRef || ref.Node == nil {
 			continue
 		}
@@ -2163,8 +2163,8 @@ func restoreHTMLControlSnapshots(world *ecs.World, state *htmlRenderState) bool 
 func restoreHTMLControlEntities(world *ecs.World, state *htmlRenderState, entities []ecs.Entity) bool {
 	changed := false
 	for _, child := range entities {
-		control := ecs.GetMut[Control](world, child)
-		ref, hasRef := ecs.Get[htmlControlNodeRef](world, child)
+		control := world.GetMut[Control](child)
+		ref, hasRef := world.Get[htmlControlNodeRef](child)
 		if control == nil || !hasRef || ref.Node == nil {
 			continue
 		}
@@ -2202,12 +2202,12 @@ func restoreHTMLControlSnapshot(control *Control, snapshot htmlControlSnapshot) 
 }
 
 func htmlImageProviderChanged(world *ecs.World) ecs.Tick {
-	return ecs.ResourceChangeTick[ImageProvider](world)
+	return world.ResourceChangeTick[ImageProvider]()
 }
 
 func htmlViewport(world *ecs.World, value Surface) (float32, float32) {
 	width, height := value.Width, value.Height
-	if viewport, ok := ecs.GetResource[scene.ViewportSize](world); ok {
+	if viewport, ok := world.GetResource[scene.ViewportSize](); ok {
 		if width <= 0 {
 			width = viewport.Width
 		}
@@ -2284,21 +2284,21 @@ func isHTMLMetadataElement(tag string) bool {
 }
 
 func htmlVisible(world *ecs.World, entity ecs.Entity) bool {
-	visible, ok := ecs.Get[scene.Visibility](world, entity)
+	visible, ok := world.Get[scene.Visibility](entity)
 	return !ok || visible.Visible
 }
 
 func setHTMLChildrenVisible(world *ecs.World, state *htmlRenderState, children []ecs.Entity, visible bool) {
 	for _, child := range children {
 		computed := state.Styles[htmlEntityNode(world, child)]
-		nodeVisible := visible && (htmlStyleVisible(computed) || ecs.Has[htmlOverflowClip](world, child) || ecs.Has[htmlOpacitySurface](world, child))
-		if visibility := ecs.GetMut[scene.Visibility](world, child); visibility != nil {
-			if mark, ok := ecs.Get[htmlCheckboxMark](world, child); ok {
-				control, _ := ecs.Get[Control](world, mark.Control)
+		nodeVisible := visible && (htmlStyleVisible(computed) || world.Has[htmlOverflowClip](child) || world.Has[htmlOpacitySurface](child))
+		if visibility := world.GetMut[scene.Visibility](child); visibility != nil {
+			if mark, ok := world.Get[htmlCheckboxMark](child); ok {
+				control, _ := world.Get[Control](mark.Control)
 				visibility.Visible = nodeVisible && control.Checked && htmlUsesNativeAppearance(computed)
-			} else if ecs.Has[htmlSelectIndicator](world, child) {
+			} else if world.Has[htmlSelectIndicator](child) {
 				visibility.Visible = nodeVisible && htmlUsesNativeAppearance(computed)
-			} else if !nodeVisible || !ecs.Has[ControlVisual](world, child) && !ecs.Has[EditableVisual](world, child) {
+			} else if !nodeVisible || !world.Has[ControlVisual](child) && !world.Has[EditableVisual](child) {
 				visibility.Visible = nodeVisible
 			}
 		}
@@ -2372,7 +2372,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		color := htmlColor(box.Style.BackgroundColor)
 		if color.A > 0 || isHTMLLinearGradient(box.Style.BackgroundImage) || box.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 {
 			entity := spawnHTMLSurface(world, owner, box.Node, htmlRoleCanvas, 0, 0, float32(state.Viewport.Width), float32(state.Viewport.Height), scene.RoundedRectShape2D(color, 0), stackIndex-1, visible)
-			_ = ecs.Insert(world, entity, htmlCanvasSurface{})
+			_ = world.Insert(entity, htmlCanvasSurface{})
 			markHTMLChildNode(world, entity, box.Node)
 			state.Children = append(state.Children, entity)
 		}
@@ -2619,7 +2619,7 @@ func htmlNodeInputEntity(world *ecs.World, state *htmlRenderState, node *dom.Nod
 	}
 	if state.EventTargets != nil {
 		if entity := state.EventTargets[node]; entity != 0 {
-			if world.IsAlive(entity) && ecs.Has[scene.InputTarget2D](world, entity) {
+			if world.IsAlive(entity) && world.Has[scene.InputTarget2D](entity) {
 				return entity
 			}
 			delete(state.EventTargets, node)
@@ -2630,8 +2630,8 @@ func htmlNodeInputEntity(world *ecs.World, state *htmlRenderState, node *dom.Nod
 		return 0
 	}
 	for _, entity := range rendered.Entities {
-		child, ok := ecs.Get[htmlChild](world, entity)
-		if !ok || child.Node != node || !ecs.Has[scene.InputTarget2D](world, entity) {
+		child, ok := world.Get[htmlChild](entity)
+		if !ok || child.Node != node || !world.Has[scene.InputTarget2D](entity) {
 			continue
 		}
 		if state.EventTargets == nil {
@@ -2646,7 +2646,7 @@ func htmlNodeInputEntity(world *ecs.World, state *htmlRenderState, node *dom.Nod
 func spawnHTMLNodeEventTarget(world *ecs.World, owner ecs.Entity, node *dom.Node, rect layout.Rect, stackIndex int, passThrough, visible bool) ecs.Entity {
 	entity := spawnHTMLNodeInputTarget(world, owner, node, rect, stackIndex, passThrough, visible, "")
 	if entity != 0 {
-		_ = ecs.Insert(world, entity, htmlNodeEventTarget{})
+		_ = world.Insert(entity, htmlNodeEventTarget{})
 	}
 	return entity
 }
@@ -2657,16 +2657,16 @@ func spawnHTMLNodeInputTarget(world *ecs.World, owner ecs.Entity, node *dom.Node
 	}
 	width, height := float32(rect.Width), float32(rect.Height)
 	bundle := beginHTMLEntity(world, owner, node, htmlRoleEvent, variant, 0, 11)
-	putHTML(&bundle, scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
-	putHTML(&bundle, scene.InputState2D{})
-	putHTML(&bundle, htmlChild{Owner: owner, Node: node})
+	(&bundle).putHTML(scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
+	(&bundle).putHTML(scene.InputState2D{})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
 	markHTMLChildNode(world, entity, node)
 	return entity
@@ -2676,32 +2676,32 @@ func installHTMLNodeEventHandler(world *ecs.World, owner ecs.Entity, node *dom.N
 	if world == nil || owner == 0 || node == nil || entity == 0 {
 		return
 	}
-	if _, wrapped := ecs.Get[htmlNodeEventHandler](world, entity); wrapped {
+	if _, wrapped := world.Get[htmlNodeEventHandler](entity); wrapped {
 		return
 	}
 	var previous scene.InputHandler2D
-	if current, ok := ecs.Get[scene.InputHandler2D](world, entity); ok {
+	if current, ok := world.Get[scene.InputHandler2D](entity); ok {
 		previous = current
 	}
-	_ = ecs.Insert(world, entity, htmlNodeEventHandler{Base: previous})
+	_ = world.Insert(entity, htmlNodeEventHandler{Base: previous})
 	handler := scene.InputHandler2D{Handle: func(context *scene.InputEventContext) {
 		if previous.Handle != nil {
 			previous.Handle(context)
 		}
 		dispatchHTMLNodePointer(world, owner, node, context)
 	}}
-	if current := ecs.GetMut[scene.InputHandler2D](world, entity); current != nil {
+	if current := world.GetMut[scene.InputHandler2D](entity); current != nil {
 		*current = handler
 		return
 	}
-	_ = ecs.Insert(world, entity, handler)
+	_ = world.Insert(entity, handler)
 }
 
 func dispatchHTMLNodePointer(world *ecs.World, owner ecs.Entity, node *dom.Node, context *scene.InputEventContext) {
 	if world == nil || owner == 0 || node == nil || context == nil || context.Event == nil {
 		return
 	}
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	ok := state != nil
 	if !ok || state == nil {
 		return
@@ -2710,7 +2710,7 @@ func dispatchHTMLNodePointer(world *ecs.World, owner ecs.Entity, node *dom.Node,
 	if !ok {
 		return
 	}
-	arena := ecs.FrameValue[htmlPointerEventArenaTag, htmlPointerEventArena](world)
+	arena := world.FrameValue[htmlPointerEventArenaTag, htmlPointerEventArena]()
 	index := len(arena.Events)
 	arena.Events = append(arena.Events, PointerEvent{
 		Target: Node{world: world, owner: owner, node: node},
@@ -2752,7 +2752,7 @@ func linkHTMLFocusOwner(world *ecs.World, entity, focusOwner ecs.Entity) {
 	if world == nil || entity == 0 || focusOwner == 0 || entity == focusOwner {
 		return
 	}
-	_ = ecs.Insert(world, entity, FocusOwner{Entity: focusOwner})
+	_ = world.Insert(entity, FocusOwner{Entity: focusOwner})
 }
 
 func spawnHTMLFocusable(world *ecs.World, owner ecs.Entity, node *dom.Node, rect layout.Rect, focusable Focusable, stackIndex int, passThrough, visible bool) ecs.Entity {
@@ -2766,23 +2766,23 @@ func spawnHTMLFocusable(world *ecs.World, owner ecs.Entity, node *dom.Node, rect
 		variant = "editable"
 	}
 	bundle := beginHTMLEntity(world, owner, node, htmlRoleFocusable, variant, 0, 13)
-	putHTML(&bundle, scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
-	putHTML(&bundle, scene.InputState2D{})
-	putHTML(&bundle, focusable)
+	(&bundle).putHTML(scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
+	(&bundle).putHTML(scene.InputState2D{})
+	(&bundle).putHTML(focusable)
 	if editingHost {
 		value := htmlNodeText(node)
 		length := utf8.RuneCountInString(value)
-		putHTML(&bundle, Editable{RenderRevision: bundle.state.RenderGeneration, Owner: owner, ID: focusable.ID, Value: value, Anchor: length, Focus: length})
-		putHTML(&bundle, htmlEditableNodeRef{Node: node})
+		(&bundle).putHTML(Editable{RenderRevision: bundle.state.RenderGeneration, Owner: owner, ID: focusable.ID, Value: value, Anchor: length, Focus: length})
+		(&bundle).putHTML(htmlEditableNodeRef{Node: node})
 	}
-	putHTML(&bundle, htmlChild{Owner: owner, Node: node})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
 	markHTMLChildNode(world, entity, node)
 	return entity
@@ -2872,14 +2872,14 @@ func unionHTMLRect(left, right layout.Rect) layout.Rect {
 }
 
 func updateHTMLFocusableBounds(world *ecs.World, entity ecs.Entity, rect layout.Rect) {
-	if transform := ecs.GetMut[scene.UITransform](world, entity); transform != nil {
+	if transform := world.GetMut[scene.UITransform](entity); transform != nil {
 		transform.Translation.X.Value = float32(rect.X)
 		transform.Translation.Y.Value = float32(rect.Y)
 	}
-	if size := ecs.GetMut[scene.Size2D](world, entity); size != nil {
+	if size := world.GetMut[scene.Size2D](entity); size != nil {
 		size.Width, size.Height = float32(rect.Width), float32(rect.Height)
 	}
-	if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+	if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 		target.Width, target.Height = float32(rect.Width), float32(rect.Height)
 	}
 }
@@ -2917,19 +2917,19 @@ func spawnHTMLSelectIndicator(world *ecs.World, owner, control ecs.Entity, rect 
 	image := scene.NewUIImage2D(defaultHTMLSelectIcon())
 	image.Tint = htmlColor(computed.Color)
 	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleIndicator, "", control, 11)
-	putHTML(&bundle, scene.UITransformFromXY(x, y))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: control})
-	putHTML(&bundle, image)
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputBlocker2D{Width: width, Height: height, Receiver: control, PassThrough: passThrough})
-	putHTML(&bundle, htmlSelectIndicator{Control: control})
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.UITransformFromXY(x, y))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: control})
+	(&bundle).putHTML(image)
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputBlocker2D{Width: width, Height: height, Receiver: control, PassThrough: passThrough})
+	(&bundle).putHTML(htmlSelectIndicator{Control: control})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	entity := bundle.finish()
-	if child, ok := ecs.Get[htmlChild](world, control); ok {
+	if child, ok := world.Get[htmlChild](control); ok {
 		markHTMLChildNode(world, entity, child.Node)
 	}
 	return entity
@@ -2948,23 +2948,23 @@ func spawnHTMLCheckboxMark(world *ecs.World, owner, control ecs.Entity, rect lay
 		return 0
 	}
 	nodeChecked := false
-	if node, ok := ecs.Get[htmlControlNodeRef](world, control); ok && node.Node != nil {
+	if node, ok := world.Get[htmlControlNodeRef](control); ok && node.Node != nil {
 		nodeChecked = dom.IsChecked(node.Node)
 	}
 	sprite := scene.NewSprite2D()
 	sprite.Shape = scene.CheckmarkShape2D(htmlColor(computed.Color))
 	sprite.Width, sprite.Height = markSize, markSize
 	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleCheckbox, "", control, 11)
-	putHTML(&bundle, scene.UITransformFromXY((width-markSize)*0.5, (height-markSize)*0.5))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible && nodeChecked})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: control})
-	putHTML(&bundle, sprite)
-	putHTML(&bundle, scene.Size2D{Width: markSize, Height: markSize})
-	putHTML(&bundle, htmlCheckboxMark{Control: control})
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.UITransformFromXY((width-markSize)*0.5, (height-markSize)*0.5))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible && nodeChecked})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: control})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(scene.Size2D{Width: markSize, Height: markSize})
+	(&bundle).putHTML(htmlCheckboxMark{Control: control})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	return bundle.finish()
 }
 
@@ -2972,14 +2972,14 @@ func attachHTMLImageToControl(world *ecs.World, image, control ecs.Entity, contr
 	if world == nil || image == 0 || control == 0 {
 		return
 	}
-	child, _ := ecs.Get[htmlChild](world, control)
-	if state := ecs.GetRef[htmlRenderState](world, child.Owner); state != nil && !htmlStyleVisible(state.Styles[child.Node]) {
+	child, _ := world.Get[htmlChild](control)
+	if state := world.GetRef[htmlRenderState](child.Owner); state != nil && !htmlStyleVisible(state.Styles[child.Node]) {
 		return
 	}
-	if parent := ecs.GetMut[scene.Parent](world, image); parent != nil {
+	if parent := world.GetMut[scene.Parent](image); parent != nil {
 		parent.Entity = control
 	}
-	if transform := ecs.GetMut[scene.UITransform](world, image); transform != nil {
+	if transform := world.GetMut[scene.UITransform](image); transform != nil {
 		transform.Translation.X.Value -= float32(controlRect.X)
 		transform.Translation.Y.Value -= float32(controlRect.Y)
 	}
@@ -2987,7 +2987,7 @@ func attachHTMLImageToControl(world *ecs.World, image, control ecs.Entity, contr
 }
 
 func routeHTMLImageInput(world *ecs.World, image, receiver ecs.Entity) {
-	if target := ecs.GetMut[scene.InputTarget2D](world, image); target != nil {
+	if target := world.GetMut[scene.InputTarget2D](image); target != nil {
 		target.Receiver = receiver
 	}
 }
@@ -3003,7 +3003,7 @@ func htmlEditableControlTextFragment(world *ecs.World, control ecs.Entity, node 
 		}
 	}
 	fragment := layout.TextFragment{Node: node, Rect: content, Style: computed}
-	value, ok := ecs.Get[Control](world, control)
+	value, ok := world.Get[Control](control)
 	if !ok {
 		return fragment
 	}
@@ -3312,12 +3312,12 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		parentEntity, origin = parent.entity, parent.rect
 	}
 	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleOverflow, "", 0, 10)
-	putHTML(&bundle, scene.UITransformFromXY(float32(rect.X-origin.X), float32(rect.Y-origin.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(htmlBoxStackIndex(box, stackIndex)-1))
-	putHTML(&bundle, scene.Parent{Entity: parentEntity})
+	(&bundle).putHTML(scene.UITransformFromXY(float32(rect.X-origin.X), float32(rect.Y-origin.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(htmlBoxStackIndex(box, stackIndex) - 1))
+	(&bundle).putHTML(scene.Parent{Entity: parentEntity})
 	showHorizontal, showVertical := false, false
 	barSize := float32(0)
 	if htmlOverflowScrollsAxis(box.Style.OverflowX) || htmlOverflowScrollsAxis(box.Style.OverflowY) {
@@ -3336,8 +3336,8 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			clipHeight += htmlOverflowVisibleExtent * 2
 		}
 	}
-	putHTML(&bundle, scene.Size2D{Width: float32(rect.Width), Height: float32(rect.Height)})
-	putHTML(&bundle, scene.ClipRect2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight})
+	(&bundle).putHTML(scene.Size2D{Width: float32(rect.Width), Height: float32(rect.Height)})
+	(&bundle).putHTML(scene.ClipRect2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight})
 	if htmlOverflowClipsAxis(box.Style.OverflowX) && htmlOverflowClipsAxis(box.Style.OverflowY) {
 		radius := htmlOverflowClipRadius(box.Style, rect.Width, rect.Height)
 		if radius > 0 {
@@ -3345,13 +3345,13 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			if htmlStyleVisible(box.Style) {
 				maskColor = htmlColor(box.Style.BackgroundColor)
 			}
-			putHTML(&bundle, scene.RoundedClip2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight, Radius: radius, MaskColor: maskColor})
+			(&bundle).putHTML(scene.RoundedClip2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight, Radius: radius, MaskColor: maskColor})
 		}
 	}
 	if htmlOverflowScrollsAxis(box.Style.OverflowX) || htmlOverflowScrollsAxis(box.Style.OverflowY) {
 		extent := state.OverflowExtents[box]
 		contentWidth, contentHeight := max(rect.Width, extent.width), max(rect.Height, extent.height)
-		putHTML(&bundle, scene.UIScroll{
+		(&bundle).putHTML(scene.UIScroll{
 			ViewportSize:          mgl32.Vec2{clipWidth, clipHeight},
 			ContentSize:           mgl32.Vec2{float32(contentWidth), float32(contentHeight)},
 			WheelStep:             48,
@@ -3365,8 +3365,8 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			DisableInput:          !htmlStyleVisible(box.Style),
 		})
 	}
-	putHTML(&bundle, htmlOverflowClip{})
-	putHTML(&bundle, htmlChild{Owner: owner, Node: box.Node})
+	(&bundle).putHTML(htmlOverflowClip{})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: box.Node})
 	entity := bundle.finish()
 	binding := htmlOverflowClipBinding{node: box.Node, entity: entity, rect: rect}
 	if showHorizontal || showVertical {
@@ -3504,20 +3504,20 @@ func emitHTMLScrollbarPart(world *ecs.World, owner ecs.Entity, node *dom.Node, a
 		sprite.Width, sprite.Height = trackLength, barSize
 	}
 	bundle := beginHTMLEntity(world, owner, node, role, htmlScrollbarVariant(axis, kind), area, 12)
-	putHTML(&bundle, scene.UITransformFromXY(x, y))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: area})
-	putHTML(&bundle, sprite)
-	putHTML(&bundle, scene.Size2D{Width: sprite.Width, Height: sprite.Height})
+	(&bundle).putHTML(scene.UITransformFromXY(x, y))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: area})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
 	// Keep scrollbar drags above the content input target. Without an input
 	// target of their own, presses on a thumb fall through to an underlying
 	// textarea and start text selection while the scroll position changes.
-	putHTML(&bundle, scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
-	putHTML(&bundle, ScrollbarPart{Area: area, Axis: axis, Kind: kind})
-	putHTML(&bundle, htmlChild{Owner: owner, Node: node})
+	(&bundle).putHTML(scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
+	(&bundle).putHTML(ScrollbarPart{Area: area, Axis: axis, Kind: kind})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
 	return entity
 }
@@ -3541,7 +3541,7 @@ func SyncScrollbars(world *ecs.World) {
 	if world == nil {
 		return
 	}
-	for entity, access := range ecs.Query4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D](world).All {
+	for entity, access := range world.Query4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D]().All {
 		if !func(_ ecs.Entity, partAccess ecs.ComponentAccess[ScrollbarPart], transformAccess ecs.ComponentAccess[scene.UITransform], sizeAccess ecs.ComponentAccess[scene.Size2D], spriteAccess ecs.ComponentAccess[scene.Sprite2D]) bool {
 			part := partAccess.Ref()
 			nextTransform, nextSize, nextSprite := transformAccess.Get(), sizeAccess.Get(), spriteAccess.Get()
@@ -3557,13 +3557,13 @@ func SyncScrollbars(world *ecs.World) {
 					*spriteAccess.Mut() = nextSprite
 				}
 			}()
-			scroll, ok := ecs.Get[scene.UIScroll](world, part.Area)
+			scroll, ok := world.Get[scene.UIScroll](part.Area)
 			if !ok {
 				return true
 			}
 			viewport := scroll.ViewportSize
 			if viewport == (mgl32.Vec2{}) {
-				if clip, exists := ecs.Get[scene.ClipRect2D](world, part.Area); exists {
+				if clip, exists := world.Get[scene.ClipRect2D](part.Area); exists {
 					viewport = mgl32.Vec2{clip.Width, clip.Height}
 				}
 			}
@@ -3646,15 +3646,15 @@ func setHTMLScrollbarPartVisible(transform *scene.UITransform, size *scene.Size2
 
 func routeHTMLOverflowEntities(world *ecs.World, owner ecs.Entity, state *htmlRenderState, children []ecs.Entity) {
 	for _, entity := range children {
-		if ecs.Has[ScrollbarPart](world, entity) {
+		if world.Has[ScrollbarPart](entity) {
 			continue
 		}
-		child, ok := ecs.Get[htmlChild](world, entity)
+		child, ok := world.Get[htmlChild](entity)
 		if !ok || child.Node == nil {
 			continue
 		}
-		parent := ecs.GetMut[scene.Parent](world, entity)
-		transform := ecs.GetMut[scene.UITransform](world, entity)
+		parent := world.GetMut[scene.Parent](entity)
+		transform := world.GetMut[scene.UITransform](entity)
 		if (parent == nil) || (transform == nil) {
 			continue
 		}
@@ -3685,8 +3685,8 @@ func routeHTMLOverflowEntities(world *ecs.World, owner ecs.Entity, state *htmlRe
 			parent.Entity = target.entity
 			state.SyncStats.RoutedEntities++
 		}
-		if scroll, exists := ecs.Get[scene.UIScroll](world, target.entity); exists && (scroll.Horizontal || scroll.Vertical) {
-			_ = ecs.Insert(world, entity, ScrollContent{
+		if scroll, exists := world.Get[scene.UIScroll](target.entity); exists && (scroll.Horizontal || scroll.Vertical) {
+			_ = world.Insert(entity, ScrollContent{
 				Area: target.entity,
 				X:    float32(absoluteX - target.rect.X),
 				Y:    float32(absoluteY - target.rect.Y),
@@ -3727,7 +3727,7 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	entity := spawnHTMLSurface(world, owner, box.Node, htmlRoleSurface, float32(rect.X), float32(rect.Y), float32(rect.Width), float32(rect.Height), shape, stackIndex, visible)
 	if rasterPaint {
 		if texture := htmlPaintTextureFor(state, box.Node, box.Style, float32(rect.Width), float32(rect.Height)); texture != nil {
-			if sprite := ecs.GetMut[scene.Sprite2D](world, entity); sprite != nil {
+			if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
 				sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 				state.Textures.bind(entity, texture)
 			}
@@ -3735,9 +3735,9 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	} else {
 		spawnHTMLBackgroundLayers(world, owner, box, entity, stackIndex, visible)
 	}
-	_ = ecs.Insert(world, entity, htmlElementSurface{})
-	_ = ecs.Insert(world, entity, scene.InputTarget2D{Width: float32(rect.Width), Height: float32(rect.Height), Receiver: receiver, PassThrough: passThrough})
-	_ = ecs.Insert(world, entity, scene.InputState2D{})
+	_ = world.Insert(entity, htmlElementSurface{})
+	_ = world.Insert(entity, scene.InputTarget2D{Width: float32(rect.Width), Height: float32(rect.Height), Receiver: receiver, PassThrough: passThrough})
+	_ = world.Insert(entity, scene.InputState2D{})
 	applyHTMLAnimatedVisual(world, state, entity, box.Node)
 	return entity, true
 }
@@ -3778,7 +3778,7 @@ func spawnHTMLBackgroundLayers(world *ecs.World, owner ecs.Entity, box *layout.B
 	if box == nil || box.Style == nil || entity == 0 || len(box.Style.BackgroundLayers) < 2 || htmlNeedsRasterPaint(box.Style) {
 		return
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	if state == nil {
 		return
 	}
@@ -3805,12 +3805,12 @@ func spawnHTMLBackgroundLayers(world *ecs.World, owner ecs.Entity, box *layout.B
 	if len(layers) == 0 {
 		return
 	}
-	if existing := ecs.GetMut[scene.SpriteLayers2D](world, entity); existing != nil {
+	if existing := world.GetMut[scene.SpriteLayers2D](entity); existing != nil {
 		existing.Layers = append(existing.Layers[:0], layers...)
 		existing.InvalidateMatrices()
 		return
 	}
-	_ = ecs.Insert(world, entity, scene.SpriteLayers2D{Layers: layers})
+	_ = world.Insert(entity, scene.SpriteLayers2D{Layers: layers})
 }
 
 func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, stackIndex int, visible bool) {
@@ -3835,7 +3835,7 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		if entity == 0 {
 			continue
 		}
-		if sprite := ecs.GetMut[scene.Sprite2D](world, entity); sprite != nil {
+		if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
 			sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 			state.Textures.bind(entity, texture)
 		}
@@ -3951,16 +3951,16 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	sprite.Width, sprite.Height = float32(bounds.Width), float32(bounds.Height)
 	sprite.Tint, sprite.Alpha = graphics.White, 1
 	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleSurface, "", 0, 10)
-	putHTML(&bundle, scene.UITransformFromXY(float32(bounds.X), float32(bounds.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
-	putHTML(&bundle, sprite)
-	putHTML(&bundle, scene.Size2D{Width: sprite.Width, Height: sprite.Height})
-	putHTML(&bundle, htmlOpacitySurface{})
-	putHTML(&bundle, htmlChild{Owner: owner, Node: box.Node})
+	(&bundle).putHTML(scene.UITransformFromXY(float32(bounds.X), float32(bounds.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
+	(&bundle).putHTML(htmlOpacitySurface{})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: box.Node})
 	return bundle.finish()
 }
 
@@ -4141,7 +4141,7 @@ func spawnHTMLSurface(world *ecs.World, owner ecs.Entity, node *dom.Node, role h
 func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, x, y, width, height float32, shape scene.Shape2D, stackIndex int, visible bool) ecs.Entity {
 	sprite := scene.NewSprite2D()
 	sprite.Shape, sprite.Width, sprite.Height = shape, width, height
-	if state := ecs.GetMut[htmlRenderState](world, owner); state != nil {
+	if state := world.GetMut[htmlRenderState](owner); state != nil {
 		if computed, ok := state.Styles.Get(node); ok {
 			sprite.Alpha = float32(computed.Opacity.Number)
 			if (role == htmlRoleSurface || role == htmlRoleInlineBackground || role == htmlRoleCanvas) && computed.BackgroundImage != "" {
@@ -4155,15 +4155,15 @@ func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node,
 		}
 	}
 	bundle := beginHTMLEntity(world, owner, node, role, variant, 0, 10)
-	putHTML(&bundle, scene.UITransformFromXY(x, y))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
-	putHTML(&bundle, sprite)
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.UITransformFromXY(x, y))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	return bundle.finish()
 }
 
@@ -4422,7 +4422,7 @@ func spawnHTMLControl(world *ecs.World, owner ecs.Entity, node *dom.Node, rect l
 		X: float32(border.Left), Y: float32(border.Top),
 		Width: float32(max(rect.Width-border.Left-border.Right, 0)), Height: float32(max(rect.Height-border.Top-border.Bottom, 0)),
 	}
-	if state := ecs.GetMut[htmlRenderState](world, owner); state != nil {
+	if state := world.GetMut[htmlRenderState](owner); state != nil {
 		state.SyncStats.UpdatedControls++
 		control.RenderRevision = state.RenderGeneration
 		if computed, exists := state.Styles.Get(node); exists && node.Data == "textarea" {
@@ -4430,29 +4430,29 @@ func spawnHTMLControl(world *ecs.World, owner ecs.Entity, node *dom.Node, rect l
 		}
 	}
 	focusable, hasFocusable := htmlFocusableFromNode(owner, node)
-	if state, ok := ecs.Get[htmlRenderState](world, owner); ok && state.ControlSnapshots != nil {
+	if state, ok := world.Get[htmlRenderState](owner); ok && state.ControlSnapshots != nil {
 		if snapshot, exists := state.ControlSnapshots[node]; exists {
 			restoreHTMLControlSnapshot(&control, snapshot)
 		}
 	}
 	bundle := beginHTMLEntity(world, owner, node, htmlRoleControl, control.Type, 0, 15)
-	putHTML(&bundle, scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
-	putHTML(&bundle, sprite)
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, scene.ClipRect2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputTarget2D{Width: width, Height: height, Disabled: control.Disabled, AllowDisabledInput: true})
-	putHTML(&bundle, scene.InputState2D{})
-	putHTML(&bundle, control)
+	(&bundle).putHTML(scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.ClipRect2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, Disabled: control.Disabled, AllowDisabledInput: true})
+	(&bundle).putHTML(scene.InputState2D{})
+	(&bundle).putHTML(control)
 	if hasFocusable {
-		putHTML(&bundle, focusable)
+		(&bundle).putHTML(focusable)
 	}
-	putHTML(&bundle, htmlControlNodeRef{Node: node})
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(htmlControlNodeRef{Node: node})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	return bundle.finish()
 }
 
@@ -4465,16 +4465,16 @@ const (
 // control can show at once, so a drag past the pool end keeps painting.
 func htmlSelectionLayers(world *ecs.World, owner ecs.Entity, computed *style.ComputedStyle) int {
 	height := float32(0)
-	if control, ok := ecs.Get[Control](world, owner); ok {
+	if control, ok := world.Get[Control](owner); ok {
 		height = control.PaddingBox.Height
 	}
 	if height <= 0 {
-		if size, ok := ecs.Get[scene.Size2D](world, owner); ok {
+		if size, ok := world.Get[scene.Size2D](owner); ok {
 			height = size.Height
 		}
 	}
 	var face *font.Face
-	if binding, ok := ecs.Get[ControlTextFont](world, owner); ok && binding.Font != nil {
+	if binding, ok := world.Get[ControlTextFont](owner); ok && binding.Font != nil {
 		face = binding.Font.Face
 	}
 	lineHeight := float32(layout.UsedLineHeight(computed, face))
@@ -4490,7 +4490,7 @@ func htmlSpawnControlVisuals(world *ecs.World, owner ecs.Entity, state *htmlRend
 	}
 	computed := state.Styles[node]
 	if htmlStyleVisible(computed) && htmlNeedsRasterPaint(computed) {
-		if sprite := ecs.GetMut[scene.Sprite2D](world, control); sprite != nil {
+		if sprite := world.GetMut[scene.Sprite2D](control); sprite != nil {
 			if texture := htmlPaintTextureFor(state, node, computed, sprite.Width, sprite.Height); texture != nil {
 				sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 				state.Textures.bind(control, texture)
@@ -4547,18 +4547,18 @@ func spawnHTMLEditableVisual(world *ecs.World, owner, editable ecs.Entity, visua
 		variant = "selection"
 	}
 	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, editable), htmlRoleEditableVisual, variant, editable, 12)
-	putHTML(&bundle, scene.NewUITransform())
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: editable})
-	putHTML(&bundle, scene.Size2D{Width: 1, Height: 1})
-	putHTML(&bundle, scene.NewUIBackground2D(scene.RoundedRectShape2D(graphics.ColorRGBA{}, 0)))
-	putHTML(&bundle, scene.NewUIImage2D(nil))
-	putHTML(&bundle, scene.NewUIBorder2D(scene.Shape2D{}))
-	putHTML(&bundle, visual)
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.NewUITransform())
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: editable})
+	(&bundle).putHTML(scene.Size2D{Width: 1, Height: 1})
+	(&bundle).putHTML(scene.NewUIBackground2D(scene.RoundedRectShape2D(graphics.ColorRGBA{}, 0)))
+	(&bundle).putHTML(scene.NewUIImage2D(nil))
+	(&bundle).putHTML(scene.NewUIBorder2D(scene.Shape2D{}))
+	(&bundle).putHTML(visual)
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	return bundle.finish()
 }
 
@@ -4568,18 +4568,18 @@ func spawnHTMLControlVisual(world *ecs.World, owner, control ecs.Entity, visual 
 		variant = [...]string{"caret", "scroll-track-horizontal", "scroll-track-vertical", "scroll-thumb-horizontal", "scroll-thumb-vertical"}[visual.Kind]
 	}
 	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleControlVisual, variant, control, 12)
-	putHTML(&bundle, scene.NewUITransform())
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: control})
-	putHTML(&bundle, scene.Size2D{Width: 1, Height: 1})
-	putHTML(&bundle, scene.NewUIBackground2D(scene.RoundedRectShape2D(graphics.ColorRGBA{}, 0)))
-	putHTML(&bundle, scene.NewUIImage2D(nil))
-	putHTML(&bundle, scene.NewUIBorder2D(scene.Shape2D{}))
-	putHTML(&bundle, visual)
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.NewUITransform())
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: control})
+	(&bundle).putHTML(scene.Size2D{Width: 1, Height: 1})
+	(&bundle).putHTML(scene.NewUIBackground2D(scene.RoundedRectShape2D(graphics.ColorRGBA{}, 0)))
+	(&bundle).putHTML(scene.NewUIImage2D(nil))
+	(&bundle).putHTML(scene.NewUIBorder2D(scene.Shape2D{}))
+	(&bundle).putHTML(visual)
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	return bundle.finish()
 }
 
@@ -4705,13 +4705,13 @@ func ControlByID(world *ecs.World, owner ecs.Entity, id string) (ecs.Entity, boo
 	if world == nil || owner == 0 || id == "" {
 		return 0, false
 	}
-	state := ecs.GetRef[htmlRenderState](world, owner)
-	source := ecs.GetRef[Surface](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
+	source := world.GetRef[Surface](owner)
 	if state == nil || source == nil || state.Root == nil || state.Source != source.Value {
 		return 0, false
 	}
 	if state.IndexDirty || state.NodeByID == nil {
-		state = ecs.GetMut[htmlRenderState](world, owner)
+		state = world.GetMut[htmlRenderState](owner)
 		syncHTMLDocumentIndex(state)
 	}
 	node := state.NodeByID[id]
@@ -4723,7 +4723,7 @@ func ControlByID(world *ecs.World, owner ecs.Entity, id string) (ecs.Entity, boo
 		return 0, false
 	}
 	for _, binding := range group.Bindings {
-		if control := ecs.GetRef[Control](world, binding.Entity); control != nil && control.Owner == owner {
+		if control := world.GetRef[Control](binding.Entity); control != nil && control.Owner == owner {
 			return binding.Entity, true
 		}
 	}
@@ -4856,8 +4856,8 @@ func spawnHTMLEditableText(world *ecs.World, owner ecs.Entity, state *htmlRender
 	if editable == 0 || box == nil {
 		return false
 	}
-	value, ok := ecs.Get[Editable](world, editable)
-	ref := ecs.GetMut[htmlEditableNodeRef](world, editable)
+	value, ok := world.Get[Editable](editable)
+	ref := world.GetMut[htmlEditableNodeRef](editable)
 	if (!ok) || (ref == nil) || (ref.Node == nil) {
 		return false
 	}
@@ -4875,7 +4875,7 @@ func spawnHTMLEditableText(world *ecs.World, owner ecs.Entity, state *htmlRender
 	fragment := layout.TextFragment{Node: ref.Node, Rect: box.Content, Style: box.Style, Text: value.Value}
 	entity := spawnHTMLText(world, owner, 0, 0, editable, layout.Rect{}, fragment, fontValue, boldFont, dpi, stackIndex, passThrough, visible)
 	if entity != 0 {
-		_ = ecs.Insert(world, entity, EditableText{Editable: editable})
+		_ = world.Insert(entity, EditableText{Editable: editable})
 		ref.Text = entity
 		state.Children = append(state.Children, entity)
 	}
@@ -4886,8 +4886,8 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 	if !htmlStyleVisible(fragment.Style) {
 		return 0, false
 	}
-	provider, ok := ecs.GetResource[ImageProvider](world)
-	if surface := ecs.GetRef[Surface](world, owner); surface != nil && surface.Images != nil {
+	provider, ok := world.GetResource[ImageProvider]()
+	if surface := world.GetRef[Surface](owner); surface != nil && surface.Images != nil {
 		provider, ok = surface.Images.Provider, surface.Images.Provider != nil
 	}
 	if !ok || provider == nil || fragment.Node == nil {
@@ -4906,12 +4906,12 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 	sprite.Width, sprite.Height = float32(fragment.Rect.Width), float32(fragment.Rect.Height)
 	width, height := sprite.Width, sprite.Height
 	bundle := beginHTMLEntity(world, owner, fragment.Node, htmlRoleImage, "", 0, 12)
-	putHTML(&bundle, scene.UITransformFromXY(float32(fragment.Rect.X), float32(fragment.Rect.Y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: owner})
+	(&bundle).putHTML(scene.UITransformFromXY(float32(fragment.Rect.X), float32(fragment.Rect.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
 	if fit := fragment.Style.ObjectFit.Keyword; fit != "" && fit != "fill" {
 		naturalWidth, naturalHeight := float32(texture.LogicalWidth()), float32(texture.LogicalHeight())
 		scale := float32(1)
@@ -4927,21 +4927,21 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 		}
 		sprite.Width, sprite.Height = naturalWidth*scale, naturalHeight*scale
 		// Fit the pixels within the content box without changing layout or hit bounds.
-		putHTML(&bundle, scene.SpriteLayers2D{Layers: []scene.SpriteLayer2D{{
+		(&bundle).putHTML(scene.SpriteLayers2D{Layers: []scene.SpriteLayer2D{{
 			Sprite: sprite, Anchor: scene.AnchorTopLeft, Visible: true,
 			Transform: scene.SpriteLayerTransform2D{
 				X: htmlObjectPosition(fragment.Style.ObjectPosX, fragment.Style.ObjectPosXOrigin, width-sprite.Width),
 				Y: htmlObjectPosition(fragment.Style.ObjectPosY, fragment.Style.ObjectPosYOrigin, height-sprite.Height),
 			},
 		}}})
-		putHTML(&bundle, scene.ClipRect2D{Width: width, Height: height})
+		(&bundle).putHTML(scene.ClipRect2D{Width: width, Height: height})
 	} else {
-		putHTML(&bundle, sprite)
+		(&bundle).putHTML(sprite)
 	}
-	putHTML(&bundle, scene.Size2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputTarget2D{Width: width, Height: height})
-	putHTML(&bundle, scene.InputState2D{})
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height})
+	(&bundle).putHTML(scene.InputState2D{})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	entity := bundle.finish()
 	markHTMLChildNode(world, entity, fragment.Node)
 	return entity, true
@@ -4976,12 +4976,12 @@ func htmlTextPaint(styles style.Map, node *dom.Node) (bool, float32) {
 
 func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.Entity, controlRect layout.Rect, fragment layout.TextFragment, fontValue, boldFont *onixtext.Font, dpi float64, stackIndex int, passThrough, visible bool) ecs.Entity {
 	fontValue = htmlFontForControl(world, control, fontValue, boldFont, fragment.Style)
-	_, editable := ecs.Get[Editable](world, focusOwner)
+	_, editable := world.Get[Editable](focusOwner)
 	if fontValue == nil || control == 0 && !editable && strings.TrimSpace(fragment.Text) == "" && !htmlPreservesWhitespace(fragment.Style) {
 		return 0
 	}
 	text := scene.NewText2D(fragment.Text)
-	if state, ok := ecs.Get[htmlRenderState](world, owner); ok {
+	if state, ok := world.Get[htmlRenderState](owner); ok {
 		text.LCD, text.Alpha = htmlTextPaint(state.Styles, fragment.Node)
 	}
 
@@ -5006,7 +5006,7 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 	}
 	var selectClip scene.ClipRect2D
 	selectLabel := false
-	if value := ecs.GetRef[Control](world, control); value != nil && value.Tag == "select" {
+	if value := world.GetRef[Control](control); value != nil && value.Tag == "select" {
 		selectLabel = true
 		right := controlRect.Width - style.ResolveLength(fragment.Style.Padding.Right, controlRect.Width) - style.ResolveLength(fragment.Style.BorderWidth.Right, controlRect.Width)
 		if htmlUsesNativeAppearance(fragment.Style) {
@@ -5015,32 +5015,32 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 		selectClip = scene.ClipRect2D{Y: -float32(y), Width: float32(max(min(fragment.Rect.Width, right-x), 0)), Height: float32(controlRect.Height)}
 	}
 	bundle := beginHTMLEntity(world, owner, fragment.Node, htmlRoleText, "", parent, capacity)
-	putHTML(&bundle, scene.UITransformFromXY(float32(x), float32(y)))
-	putHTML(&bundle, scene.UIGlobalTransform{})
-	putHTML(&bundle, scene.Visibility{Visible: visible})
-	putHTML(&bundle, scene.AnchorTopLeft)
-	putHTML(&bundle, scene.UIStackIndex(stackIndex))
-	putHTML(&bundle, scene.Parent{Entity: parent})
-	putHTML(&bundle, text)
+	(&bundle).putHTML(scene.UITransformFromXY(float32(x), float32(y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: parent})
+	(&bundle).putHTML(text)
 	if selectLabel {
-		putHTML(&bundle, selectClip)
+		(&bundle).putHTML(selectClip)
 	}
-	putHTML(&bundle, scene.Size2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height)})
+	(&bundle).putHTML(scene.Size2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height)})
 	if receiver != 0 {
-		putHTML(&bundle, scene.InputBlocker2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), Receiver: receiver, PassThrough: passThrough})
+		(&bundle).putHTML(scene.InputBlocker2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), Receiver: receiver, PassThrough: passThrough})
 	} else {
-		putHTML(&bundle, scene.InputTarget2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), PassThrough: passThrough})
-		putHTML(&bundle, scene.InputState2D{})
+		(&bundle).putHTML(scene.InputTarget2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), PassThrough: passThrough})
+		(&bundle).putHTML(scene.InputState2D{})
 	}
-	putHTML(&bundle, htmlChild{Owner: owner})
+	(&bundle).putHTML(htmlChild{Owner: owner})
 	if focusOwner != 0 {
-		putHTML(&bundle, FocusOwner{Entity: focusOwner})
+		(&bundle).putHTML(FocusOwner{Entity: focusOwner})
 	}
 	if control != 0 {
-		putHTML(&bundle, ControlText{Control: control, Content: scene.TextRangeRect2D{
+		(&bundle).putHTML(ControlText{Control: control, Content: scene.TextRangeRect2D{
 			X: float32(x), Y: float32(y), Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height),
 		}})
-		putHTML(&bundle, htmlControlTextNode{Node: fragment.Node})
+		(&bundle).putHTML(htmlControlTextNode{Node: fragment.Node})
 	}
 	entity := bundle.finish()
 	markHTMLChildNode(world, entity, fragment.Node)
@@ -5108,10 +5108,10 @@ func spawnHTMLTextDecoration(world *ecs.World, owner, control ecs.Entity, contro
 		world, owner, fragment.Node, htmlRoleDecoration, float32(x), float32(y), float32(fragment.Rect.Width), float32(thickness),
 		scene.RoundedRectShape2D(color, 0), stackIndex, visible,
 	)
-	_ = ecs.Insert(world, entity, htmlTextDecoration{})
+	_ = world.Insert(entity, htmlTextDecoration{})
 	markHTMLChildNode(world, entity, fragment.Node)
 	if parent != owner {
-		if value := ecs.GetMut[scene.Parent](world, entity); value != nil {
+		if value := world.GetMut[scene.Parent](entity); value != nil {
 			value.Entity = parent
 		}
 	}
@@ -5131,7 +5131,7 @@ func htmlPreservesWhitespace(value *style.ComputedStyle) bool {
 }
 
 func htmlFontForControl(world *ecs.World, control ecs.Entity, regular, bold *onixtext.Font, value *style.ComputedStyle) *onixtext.Font {
-	if override := ecs.GetRef[ControlTextFont](world, control); override != nil && override.Font != nil {
+	if override := world.GetRef[ControlTextFont](control); override != nil && override.Font != nil {
 		return override.Font
 	}
 	return htmlFontForStyle(regular, bold, value)

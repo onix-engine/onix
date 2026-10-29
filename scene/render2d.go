@@ -496,44 +496,44 @@ type renderGlobalTransform2D interface {
 }
 
 func collectSpriteTrails2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendSpriteTrailRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	return appendSpriteTrailRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendSpriteTrailRenderItems2D[GlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	return snapshots.appendSpriteTrailRenderItems2D[UIGlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
 }
 
 func collectSprites2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendSpriteRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	return appendSpriteRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendSpriteRenderItems2D[GlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	return snapshots.appendSpriteRenderItems2D[UIGlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
 }
 
 func collectSpriteLayers2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendSpriteLayerRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	return appendSpriteLayerRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendSpriteLayerRenderItems2D[GlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	return snapshots.appendSpriteLayerRenderItems2D[UIGlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
 }
 
 func collectParticles2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendParticleRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	return appendParticleRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendParticleRenderItems2D[GlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	return snapshots.appendParticleRenderItems2D[UIGlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
 }
 
 func collectTilemaps2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendTilemapRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	return appendTilemapRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendTilemapRenderItems2D[GlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	return snapshots.appendTilemapRenderItems2D[UIGlobalTransform](world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
 }
 
 func collectSpines2D(_ *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, _ bool) []renderItem2D {
-	items = appendSpineRenderItems2D[GlobalTransform](world, snapshots, hierarchy, items, false)
-	return appendSpineRenderItems2D[UIGlobalTransform](world, snapshots, hierarchy, items, true)
+	items = snapshots.appendSpineRenderItems2D[GlobalTransform](world, hierarchy, items, false)
+	return snapshots.appendSpineRenderItems2D[UIGlobalTransform](world, hierarchy, items, true)
 }
 
 func collectText2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendTextRenderItems2D[GlobalTransform](c, world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
-	items = appendTextRenderItems2D[UIGlobalTransform](c, world, snapshots, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
-	items = appendOutputRenderItems2D[GlobalTransform](c, world, snapshots, hierarchy, items, cull, false)
-	return appendOutputRenderItems2D[UIGlobalTransform](c, world, snapshots, hierarchy, items, cull, true)
+	items = snapshots.appendTextRenderItems2D[GlobalTransform](c, world, hierarchy, items, renderViewport2DForSpace(c, world, false), cull, false)
+	items = snapshots.appendTextRenderItems2D[UIGlobalTransform](c, world, hierarchy, items, renderViewport2DForSpace(c, world, true), cull, true)
+	items = snapshots.appendOutputRenderItems2D[GlobalTransform](c, world, hierarchy, items, cull, false)
+	return snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, hierarchy, items, cull, true)
 }
 
-func appendSpriteTrailRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
-	for entity, access := range ecs.Query3[SpriteTrail2D, T, Visibility](world).All {
+func (snapshots *renderSnapshots2D) appendSpriteTrailRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
+	for entity, access := range world.Query3[SpriteTrail2D, T, Visibility]().All {
 		trail := access.A.Ref()
 		visibility := access.C.Ref()
 
@@ -560,8 +560,8 @@ func appendSpriteTrailRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 	return items
 }
 
-func appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
-	for entity, access := range ecs.Query3[Sprite2D, T, Visibility](world).All {
+func (snapshots *renderSnapshots2D) appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
+	for entity, access := range world.Query3[Sprite2D, T, Visibility]().All {
 		sprite := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -589,8 +589,8 @@ func appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snap
 	return items
 }
 
-func appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
-	for entity, access := range ecs.Query3[SpriteLayers2D, T, Visibility](world).All {
+func (snapshots *renderSnapshots2D) appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
+	for entity, access := range world.Query3[SpriteLayers2D, T, Visibility]().All {
 		layers := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -599,7 +599,7 @@ func appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 			continue
 		}
 		rootAlpha := float32(1)
-		if root, ok := ecs.Get[Sprite2D](world, entity); ok {
+		if root, ok := world.Get[Sprite2D](entity); ok {
 			rootAlpha = root.Alpha
 		}
 		if rootAlpha <= 0 {
@@ -631,9 +631,9 @@ func appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World,
 	return items
 }
 
-func appendParticleRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, _ renderViewport2D, _ bool, ui bool) []renderItem2D {
+func (snapshots *renderSnapshots2D) appendParticleRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, _ renderViewport2D, _ bool, ui bool) []renderItem2D {
 	var fallbackTexture *graphics.Texture
-	for entity, access := range ecs.Query3[ParticleEmitter2D, T, Visibility](world).All {
+	for entity, access := range world.Query3[ParticleEmitter2D, T, Visibility]().All {
 		emitter := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -659,8 +659,8 @@ func appendParticleRenderItems2D[T renderGlobalTransform2D](world *ecs.World, sn
 	return items
 }
 
-func appendTilemapRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
-	for entity, access := range ecs.Query3[Tilemap2D, T, Visibility](world).All {
+func (snapshots *renderSnapshots2D) appendTilemapRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
+	for entity, access := range world.Query3[Tilemap2D, T, Visibility]().All {
 		tilemap := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -681,8 +681,8 @@ func appendTilemapRenderItems2D[T renderGlobalTransform2D](world *ecs.World, sna
 	return items
 }
 
-func appendSpineRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, ui bool) []renderItem2D {
-	for entity, access := range ecs.Query3[Spine2D, T, Visibility](world).All {
+func (snapshots *renderSnapshots2D) appendSpineRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, ui bool) []renderItem2D {
+	for entity, access := range world.Query3[Spine2D, T, Visibility]().All {
 		component := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -702,9 +702,9 @@ func appendSpineRenderItems2D[T renderGlobalTransform2D](world *ecs.World, snaps
 	return items
 }
 
-func appendTextRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
+func (snapshots *renderSnapshots2D) appendTextRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
 	_, canvasHeight := c.Size()
-	for entity, access := range ecs.Query3[Text2D, T, Visibility](world).All {
+	for entity, access := range world.Query3[Text2D, T, Visibility]().All {
 		textAccess := access.A
 		transformAccess := access.B
 		visibilityAccess := access.C
@@ -765,7 +765,7 @@ func DrawScreenText2D(c *graphics.Canvas2D, text *Text2D, transform mgl32.Mat4, 
 
 	width, height := text.layoutSize()
 	base := quadBaseTransform(transform, anchor, width, height, true)
-	scratch := graphics.ScratchValue[standaloneTextScratchTag, standaloneTextScratch](c)
+	scratch := c.ScratchValue[standaloneTextScratchTag, standaloneTextScratch]()
 	scratch.layers = text.appendRenderItems(scratch.layers[:0], 0, base, clipRect2D{}, true, 0)
 	drawStandaloneTextLayers(c, scratch.layers)
 	clear(scratch.layers)
@@ -2335,6 +2335,7 @@ func (t *Text2D) drawGlyph(c *graphics.Canvas2D, glyph onixtext.Glyph, base mgl3
 			custom = roundedClipMaterial2D(custom, clip.rounded)
 		}
 		c.DrawTintedMatricesCustom(model, textureM, clr, t.Alpha, custom)
+		glyph.KeepAlive(c)
 	}
 }
 
@@ -2728,7 +2729,7 @@ func cloneSprite2D(sprite Sprite2D) Sprite2D {
 }
 
 func anchorForEntity2D(world *ecs.World, entity ecs.Entity) Anchor {
-	anchor, _ := ecs.Get[Anchor](world, entity)
+	anchor, _ := world.Get[Anchor](entity)
 	return anchor
 }
 

@@ -5,7 +5,7 @@ func handleValue[T any](c *Context, topic string, handler func(*Context, T) erro
 	previous := c.message
 	c.message = func(m Message) error {
 		if m.Topic == topic && !m.IsReply() {
-			v, ok := Value[T](m)
+			v, ok := m.Value[T]()
 			if !ok {
 				return ErrType
 			}
@@ -22,7 +22,7 @@ func handleRequest[Q, R any](c *Context, topic string, handler func(*Context, Re
 	previous := c.message
 	c.message = func(m Message) error {
 		if m.Topic == topic && m.IsRequest() {
-			v, ok := RequestValue[Q, R](m)
+			v, ok := m.RequestValue[Q, R]()
 			if !ok {
 				return ErrType
 			}
@@ -40,7 +40,7 @@ func testRequester[Q, R any](c *Context, topic string, handler func(*Context, Re
 		previous := c.message
 		c.message = func(m Message) error {
 			if m.Topic == topic && m.IsReply() {
-				v, ok := ResultValue[R](m)
+				v, ok := m.ResultValue[R]()
 				if !ok {
 					return ErrType
 				}
@@ -52,5 +52,5 @@ func testRequester[Q, R any](c *Context, topic string, handler func(*Context, Re
 			return nil
 		}
 	}
-	return BindRequester[Q, R](c, topic)
+	return c.BindRequester[Q, R](topic)
 }

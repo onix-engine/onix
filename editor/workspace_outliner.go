@@ -96,11 +96,11 @@ func (a *ModuleEditor) outlinerScroll(world *ecs.World) *scene.UIScroll {
 	if !ok {
 		return nil
 	}
-	content, ok := ecs.Get[htmlui.ScrollContent](world, control)
+	content, ok := world.Get[htmlui.ScrollContent](control)
 	if !ok {
 		return nil
 	}
-	return ecs.GetMut[scene.UIScroll](world, content.Area)
+	return world.GetMut[scene.UIScroll](content.Area)
 }
 
 func (a *ModuleEditor) captureOutlinerScroll(world *ecs.World) {

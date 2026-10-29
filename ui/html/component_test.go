@@ -46,10 +46,10 @@ func TestHTMLComponentVNodeReconcilesTypedChildren(t *testing.T) {
 			Render: func(context RenderContext[struct{}, htmlComponentParentState], view *View) {
 				if context.State.Show {
 					nodes := []ComponentVNode{
-						ComponentChild(7, childDefinition, htmlComponentChildProps{Label: context.State.Label}, struct{}{}),
+						childDefinition.ComponentChild(7, htmlComponentChildProps{Label: context.State.Label}, struct{}{}),
 					}
 					if context.State.Second {
-						nodes = append(nodes, ComponentChild(8, childDefinition, htmlComponentChildProps{Label: "second"}, struct{}{}))
+						nodes = append(nodes, childDefinition.ComponentChild(8, htmlComponentChildProps{Label: "second"}, struct{}{}))
 					}
 					view.Components("slot", nodes)
 				}
@@ -63,22 +63,22 @@ func TestHTMLComponentVNodeReconcilesTypedChildren(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	parent, err := MountComponent(world, owner, parentDefinition, struct{}{}, htmlComponentParentState{Show: true, Label: "one"}, 1)
+	parent, err := parentDefinition.MountComponent(world, owner, struct{}{}, htmlComponentParentState{Show: true, Label: "one"}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	parentInstance, _ := ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, _ := world.Get[htmlComponentInstance](parent)
 	children := parentInstance.ComponentChildren["slot"].Items
 	if len(children) != 1 || !world.IsAlive(children[0].Entity) {
 		t.Fatalf("component children = %#v", children)
 	}
 	child := children[0].Entity
-	childInstance, _ := ecs.Get[htmlComponentInstance](world, child)
+	childInstance, _ := world.Get[htmlComponentInstance](child)
 	if got := htmlNodeText(childInstance.Refs["label"]); got != "one" {
 		t.Fatalf("initial child text = %q", got)
 	}
@@ -91,11 +91,11 @@ func TestHTMLComponentVNodeReconcilesTypedChildren(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	parentInstance, _ = ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, _ = world.Get[htmlComponentInstance](parent)
 	if len(parentInstance.ComponentChildren["slot"].Items) != 1 || parentInstance.ComponentChildren["slot"].Items[0].Entity != child {
 		t.Fatal("same keyed child was not reused")
 	}
-	childInstance, _ = ecs.Get[htmlComponentInstance](world, child)
+	childInstance, _ = world.Get[htmlComponentInstance](child)
 	if got := htmlNodeText(childInstance.Refs["label"]); got != "two" {
 		t.Fatalf("updated child text = %q", got)
 	}
@@ -107,12 +107,12 @@ func TestHTMLComponentVNodeReconcilesTypedChildren(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	parentInstance, _ = ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, _ = world.Get[htmlComponentInstance](parent)
 	if len(parentInstance.ComponentChildren["slot"].Items) != 2 {
 		t.Fatalf("component children after insert = %#v", parentInstance.ComponentChildren["slot"].Items)
 	}
 	second := parentInstance.ComponentChildren["slot"].Items[1].Entity
-	secondInstance, _ := ecs.Get[htmlComponentInstance](world, second)
+	secondInstance, _ := world.Get[htmlComponentInstance](second)
 	if len(parentInstance.Refs["slot"].Children) != 2 || parentInstance.Refs["slot"].Children[0] != childInstance.Roots[0] || parentInstance.Refs["slot"].Children[1] != secondInstance.Roots[0] {
 		t.Fatalf("child roots are not ordered: slot=%#v first=%p second=%p", parentInstance.Refs["slot"].Children, childInstance.Roots[0], secondInstance.Roots[0])
 	}
@@ -154,9 +154,9 @@ func TestHTMLComponentDefersUnmountRequestedByRender(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 200, 100
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,21 +191,21 @@ func TestHydrateHTMLComponentAdoptsExistingDOM(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main><section data-ref="root"><span data-ref="label">server</span></section>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
 	root, err := Root(world, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 	adopted := root.node.Children[1]
-	component, err := HydrateComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.HydrateComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	if len(instance.Roots) != 1 || instance.Roots[0] != adopted {
 		t.Fatalf("hydrated roots = %#v, want %p", instance.Roots, adopted)
 	}
@@ -244,25 +244,25 @@ func TestHydrateHTMLComponentIntoSlot(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<section data-ref="slot"><span data-ref="label">server</span></section>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	parent, err := HydrateComponent(world, owner, parentDefinition, struct{}{}, struct{}{}, 1)
+	parent, err := parentDefinition.HydrateComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	parentInstance, _ := ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, _ := world.Get[htmlComponentInstance](parent)
 	adopted := parentInstance.Refs["slot"].Children[0]
-	child, err := HydrateComponentInto(world, parent, "slot", childDefinition, struct{}{}, struct{}{}, 1)
+	child, err := childDefinition.HydrateComponentInto(world, parent, "slot", struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	childInstance, _ := ecs.Get[htmlComponentInstance](world, child)
+	childInstance, _ := world.Get[htmlComponentInstance](child)
 	if len(childInstance.Roots) != 1 || childInstance.Roots[0] != adopted {
 		t.Fatalf("hydrated slot root = %#v, want %p", childInstance.Roots, adopted)
 	}
@@ -282,9 +282,9 @@ func TestHydrateHTMLComponentRejectsMissingOrAmbiguousDOM(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main><article data-ref="root"></article><article data-ref="root"></article>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	if _, err := HydrateComponent(world, owner, definition, struct{}{}, struct{}{}, 1); err == nil {
+	if _, err := definition.HydrateComponent(world, owner, struct{}{}, struct{}{}, 1); err == nil {
 		t.Fatal("ambiguous hydration unexpectedly succeeded")
 	}
 	if world.EntityCount() != 1 {
@@ -296,7 +296,7 @@ func TestHydrateHTMLComponentRejectsMissingOrAmbiguousDOM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := HydrateComponent(world, owner, missing, struct{}{}, struct{}{}, 2); err == nil {
+	if _, err := missing.HydrateComponent(world, owner, struct{}{}, struct{}{}, 2); err == nil {
 		t.Fatal("missing hydration unexpectedly succeeded")
 	}
 }
@@ -322,17 +322,17 @@ func TestHTMLComponentReceivesFocusAndBlurEvents(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	state, _ := world.Get[htmlRenderState](owner)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	control := state.EntityGroups[htmlRenderIdentity{Node: instance.Refs["field"], Role: htmlRoleControl}].Bindings[0].Entity
 	if control == 0 {
 		t.Fatal("focusable input control is missing")
@@ -368,16 +368,16 @@ func TestHTMLComponentKeepsUpdatesRequestedDuringRender(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 200, 100
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, state{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, state{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	if rendered != 1 || htmlNodeText(instance.Refs["value"]) != "0" {
 		t.Fatalf("first render count=%d value=%q", rendered, htmlNodeText(instance.Refs["value"]))
 	}
@@ -408,9 +408,9 @@ func TestHTMLComponentCoalescesUpdatesBeforeSync(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 200, 100
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, state{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, state{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestHTMLComponentCoalescesUpdatesBeforeSync(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	if rendered != 2 || htmlNodeText(instance.Refs["value"]) != "3" {
 		t.Fatalf("coalesced render count=%d value=%q", rendered, htmlNodeText(instance.Refs["value"]))
 	}
@@ -453,9 +453,9 @@ func BenchmarkHTMLComponentStateSync(b *testing.B) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, state{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, state{}, 1)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -502,21 +502,21 @@ func TestDefineScopedHTMLScopesTemplateAndCSS(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	firstEntity, err := MountComponent(world, owner, first, struct{}{}, struct{}{}, 1)
+	firstEntity, err := first.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondEntity, err := MountComponent(world, owner, second, struct{}{}, struct{}{}, 2)
+	secondEntity, err := second.MountComponent(world, owner, struct{}{}, struct{}{}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	firstInstance, _ := ecs.Get[htmlComponentInstance](world, firstEntity)
-	secondInstance, _ := ecs.Get[htmlComponentInstance](world, secondEntity)
+	firstInstance, _ := world.Get[htmlComponentInstance](firstEntity)
+	secondInstance, _ := world.Get[htmlComponentInstance](secondEntity)
 	firstClass, _ := firstInstance.Roots[0].Attr("class")
 	secondClass, _ := secondInstance.Roots[0].Attr("class")
 	if !htmlClassContains(firstClass, first.runtime.scopeClass) || htmlClassContains(firstClass, second.runtime.scopeClass) {
@@ -542,9 +542,9 @@ func TestScopedHTMLPreservesMediaConditions(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	if _, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1); err != nil {
+	if _, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
@@ -571,9 +571,9 @@ func TestHTMLComponentAttributeLastWriteWinsAcrossRenders(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, false, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, false, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +582,7 @@ func TestHTMLComponentAttributeLastWriteWinsAcrossRenders(t *testing.T) {
 		if err := Sync(world); err != nil {
 			t.Fatal(err)
 		}
-		instance, _ := ecs.Get[htmlComponentInstance](world, component)
+		instance, _ := world.Get[htmlComponentInstance](component)
 		_, hidden := instance.Refs["dialog"].Attr("hidden")
 		_, disabled := instance.Refs["content"].Attr("disabled")
 		if hidden == open || disabled != open {
@@ -612,16 +612,16 @@ func TestScopedHTMLDynamicClassKeepsScope(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, state{Active: true}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, state{Active: true}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	class, _ := instance.Refs["target"].Attr("class")
 	if !htmlClassContains(class, "active") || !htmlClassContains(class, definition.runtime.scopeClass) {
 		t.Fatalf("dynamic class = %q", class)
@@ -654,16 +654,16 @@ func TestScopedHTMLKeyedVNodeKeepsScope(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	item := instance.Refs["list"].Children[0]
 	child := item.Children[0]
 	itemClass, _ := item.Attr("class")
@@ -684,31 +684,31 @@ func TestScopedHTMLUnmountRemovesCSSAfterLastInstance(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	first, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	first, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 2)
+	second, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageValue, _ := ecs.Get[Surface](world, owner)
+	pageValue, _ := world.Get[Surface](owner)
 	if !strings.Contains(pageValue.CSS, definition.CSS) {
 		t.Fatalf("page CSS after mount = %q", pageValue.CSS)
 	}
 	if !UnmountComponent(world, first) {
 		t.Fatal("first unmount failed")
 	}
-	pageValue, _ = ecs.Get[Surface](world, owner)
+	pageValue, _ = world.Get[Surface](owner)
 	if !strings.Contains(pageValue.CSS, definition.CSS) {
 		t.Fatalf("page CSS after first unmount = %q", pageValue.CSS)
 	}
 	if !UnmountComponent(world, second) {
 		t.Fatal("second unmount failed")
 	}
-	pageValue, _ = ecs.Get[Surface](world, owner)
+	pageValue, _ = world.Get[Surface](owner)
 	if strings.Contains(pageValue.CSS, definition.CSS) {
 		t.Fatalf("page CSS after last unmount = %q", pageValue.CSS)
 	}
@@ -752,9 +752,9 @@ func TestHTMLComponentRendersAndPatchesDynamicValues(t *testing.T) {
 	pageBundle := ecs.NewBundle(1)
 	page := New(`<main id="app"></main>`)
 	page.Width, page.Height = 320, 180
-	ecs.Put(&pageBundle, page)
+	pageBundle.Put(page)
 	owner := world.Spawn(pageBundle)
-	component, err := MountComponent(world, owner, definition, htmlComponentCounterProps{Step: 2}, htmlComponentCounterState{}, 1)
+	component, err := definition.MountComponent(world, owner, htmlComponentCounterProps{Step: 2}, htmlComponentCounterState{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +762,7 @@ func TestHTMLComponentRendersAndPatchesDynamicValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	instance, ok := ecs.Get[htmlComponentInstance](world, component)
+	instance, ok := world.Get[htmlComponentInstance](component)
 	if !ok || instance.Refs["count"] == nil {
 		t.Fatal("component refs were not mounted")
 	}
@@ -776,7 +776,7 @@ func TestHTMLComponentRendersAndPatchesDynamicValues(t *testing.T) {
 	if button == nil {
 		t.Fatal("button ref was not mounted")
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok || state.EventTargets[button] == 0 {
 		t.Fatal("component event target was not generated")
 	}
@@ -795,11 +795,11 @@ func TestHTMLComponentRendersAndPatchesDynamicValues(t *testing.T) {
 		t.Fatalf("patched title = %q, present=%v", got, ok)
 	}
 
-	updated, ok := ecs.Get[Component[htmlComponentCounterProps, htmlComponentCounterState]](world, component)
+	updated, ok := world.Get[Component[htmlComponentCounterProps, htmlComponentCounterState]](component)
 	if !ok || updated.State.Count != 2 {
 		t.Fatalf("component state = %#v, want count 2", updated.State)
 	}
-	pageValue, ok := ecs.Get[Surface](world, owner)
+	pageValue, ok := world.Get[Surface](owner)
 	if !ok || pageValue.CSS == "" {
 		t.Fatal("component CSS was not merged into the page")
 	}
@@ -818,9 +818,9 @@ func TestHTMLComponentUnmountRemovesRootsAndBindings(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 200, 100
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -867,21 +867,21 @@ func TestHTMLComponentMountsIntoParentSlot(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 200, 100
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	parent, err := MountComponent(world, owner, parentDefinition, struct{}{}, struct{}{}, 1)
+	parent, err := parentDefinition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := MountComponentInto(world, parent, "content", childDefinition, struct{}{}, struct{}{}, 1)
+	child, err := childDefinition.MountComponentInto(world, parent, "content", struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	parentInstance, _ := ecs.Get[htmlComponentInstance](world, parent)
-	childInstance, _ := ecs.Get[htmlComponentInstance](world, child)
+	parentInstance, _ := world.Get[htmlComponentInstance](parent)
+	childInstance, _ := world.Get[htmlComponentInstance](child)
 	if len(parentInstance.Children) != 1 || parentInstance.Children[0] != child {
 		t.Fatalf("parent children = %#v", parentInstance.Children)
 	}
@@ -920,9 +920,9 @@ func TestHTMLComponentKeyedNodesReuseDOMIdentity(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, htmlComponentListState{
+	component, err := definition.MountComponent(world, owner, struct{}{}, htmlComponentListState{
 		Items: []htmlComponentListEntry{{1, "one"}, {2, "two"}, {3, "three"}},
 	}, 1)
 	if err != nil {
@@ -931,7 +931,7 @@ func TestHTMLComponentKeyedNodesReuseDOMIdentity(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	container := instance.Refs["list"]
 	if container == nil || len(container.Children) != 3 {
 		t.Fatalf("initial list children = %d", len(container.Children))
@@ -983,9 +983,9 @@ func TestHTMLComponentKeyedVNodeChildrenReuseDOMIdentity(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, listState{
+	component, err := definition.MountComponent(world, owner, struct{}{}, listState{
 		Items: []htmlComponentListEntry{{1, "one"}, {2, "two"}},
 	}, 1)
 	if err != nil {
@@ -994,7 +994,7 @@ func TestHTMLComponentKeyedVNodeChildrenReuseDOMIdentity(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	container := instance.Refs["list"]
 	first := append([]*dom.Node(nil), container.Children...)
 	spans := append([]*dom.Node(nil), first[0].Children...)
@@ -1041,9 +1041,9 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, listState{
+	component, err := definition.MountComponent(world, owner, struct{}{}, listState{
 		Items: []htmlComponentListEntry{{1, strings.Repeat("old", 1024)}, {2, "keep"}},
 	}, 1)
 	if err != nil {
@@ -1052,7 +1052,7 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	list := instance.Keyed["list"]
 	parent := instance.Refs["list"]
 	if len(list.Items) != 2 {
@@ -1117,9 +1117,9 @@ func TestHTMLComponentKeyedTextUpdatesDoNotAccumulateRenderEntities(t *testing.T
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 640, 480
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, listState{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, listState{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1162,17 +1162,17 @@ func TestHTMLComponentEventsBubbleThroughDOMAncestors(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	instance, _ := world.Get[htmlComponentInstance](component)
+	state, _ := world.Get[htmlRenderState](owner)
 	target := state.EventTargets[instance.Refs["child"]]
 	if target == 0 {
 		t.Fatal("child event target is missing")
@@ -1215,9 +1215,9 @@ func TestHTMLComponentReceivesNativeEventsAndBindsMultipleKinds(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, eventState{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, eventState{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1225,19 +1225,19 @@ func TestHTMLComponentReceivesNativeEventsAndBindsMultipleKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	state, _ := world.Get[htmlRenderState](owner)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	control := state.EntityGroups[htmlRenderIdentity{Node: instance.Refs["field"], Role: htmlRoleControl}].Bindings[0].Entity
 	if control == 0 {
 		t.Fatal("native input control is missing")
 	}
-	ecs.WriteMessage(world, Event{Entity: owner, Target: control, ID: "field", Kind: EventInput, Value: "typed", Bubbles: true})
-	ecs.WriteMessage(world, Event{Entity: owner, Target: control, ID: "field", Kind: EventChange, Value: "committed", Bubbles: true})
+	world.WriteMessage(Event{Entity: owner, Target: control, ID: "field", Kind: EventInput, Value: "typed", Bubbles: true})
+	world.WriteMessage(Event{Entity: owner, Target: control, ID: "field", Kind: EventChange, Value: "committed", Bubbles: true})
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 
-	updated, _ := ecs.Get[Component[struct{}, eventState]](world, component)
+	updated, _ := world.Get[Component[struct{}, eventState]](component)
 	if updated.State.Count != 2 || updated.State.Value != "committed" {
 		t.Fatalf("native event state = %#v, want two updates", updated.State)
 	}
@@ -1268,9 +1268,9 @@ func TestHTMLComponentCancelableActionEventCanPreventDefault(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	if _, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1); err != nil {
+	if _, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
@@ -1305,9 +1305,9 @@ func TestSerializeHTMLIncludesComposedComponentDOM(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main id="app" title="a &amp; b"></main>`)
 	page.Width, page.Height = 240, 120
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	if _, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1); err != nil {
+	if _, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
@@ -1352,19 +1352,19 @@ func TestHTMLComponentStylePatchUsesIncrementalRendering(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	page := New(`<main></main>`)
 	page.Width, page.Height, page.Font = 240, 120, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, page)
+	bundle.Put(page)
 	owner := world.Spawn(bundle)
-	component, err := MountComponent(world, owner, definition, struct{}{}, styleState{Color: "red"}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, styleState{Color: "red"}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	initial, _ := ecs.Get[htmlRenderState](world, owner)
+	initial, _ := world.Get[htmlRenderState](owner)
 	initialBoxes := initial.Boxes
 	initialChildren := append([]ecs.Entity(nil), initial.Children...)
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	target := instance.Refs["target"]
 	if target == nil {
 		t.Fatal("style target is missing")
@@ -1378,7 +1378,7 @@ func TestHTMLComponentStylePatchUsesIncrementalRendering(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	updated, _ := ecs.Get[htmlRenderState](world, owner)
+	updated, _ := world.Get[htmlRenderState](owner)
 	if updated.Boxes != initialBoxes || updated.SyncStats.Layouts != 0 || updated.SyncStats.Spawned != 0 || updated.SyncStats.Despawned != 0 {
 		t.Fatalf("style patch rebuilt retained layout or entities: %+v", updated.SyncStats)
 	}
@@ -1407,13 +1407,13 @@ func TestHTMLComponentUnmountManyRootsRetainsStaticDOMAndInvalidatesFilters(t *t
 		t.Fatal(err)
 	}
 	world := ecs.NewWorld()
-	owners := ecs.NewSpawner1[Surface](world)
+	owners := world.NewSpawner1[Surface]()
 	owner := owners.Spawn(New(`<main>Keep</main>`))
-	component, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	component, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, component)
+	instance, _ := world.Get[htmlComponentInstance](component)
 	roots := append([]*dom.Node(nil), instance.Roots...)
 	root, err := Root(world, owner)
 	if err != nil {
@@ -1430,7 +1430,7 @@ func TestHTMLComponentUnmountManyRootsRetainsStaticDOMAndInvalidatesFilters(t *t
 			t.Fatal("unmounted root retained its parent")
 		}
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.Mutations[root.node]&htmlMutationDefinitions == 0 {
 		t.Fatal("removing an SVG filter did not invalidate document definitions")
 	}

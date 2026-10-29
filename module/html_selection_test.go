@@ -3,7 +3,6 @@ package module
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	htmlui "github.com/diiyw/onix/ui/html"
 )
 
@@ -26,14 +25,14 @@ func TestModuleHTMLSelectionIsPrivateAndExpiresWithDocument(t *testing.T) {
 	must(t, htmlui.Sync(r.world))
 	controlA, _ := htmlui.ControlByID(r.world, a.root, "mode")
 	controlB, _ := htmlui.ControlByID(r.world, b.root, "mode")
-	valueA, _ := ecs.Get[htmlui.Control](r.world, controlA)
-	valueB, _ := ecs.Get[htmlui.Control](r.world, controlB)
+	valueA, _ := r.world.Get[htmlui.Control](controlA)
+	valueB, _ := r.world.Get[htmlui.Control](controlB)
 	if valueA.Selected != 1 || valueB.Selected != 0 {
 		t.Fatal("selection leaked between instances", valueA.Selected, valueB.Selected)
 	}
-	surface, _ := Get[htmlui.Surface](a, a.Root())
+	surface, _ := a.Get[htmlui.Surface](a.Root())
 	surface.Value = `<select id="mode"><option>New</option></select>`
-	must(t, Set(a, a.Root(), surface))
+	must(t, a.Set(a.Root(), surface))
 	if node.SetSelectedIndex(0) {
 		t.Fatal("old document handle remained valid")
 	}

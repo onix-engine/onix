@@ -13,11 +13,11 @@ func TestTreeInputRoutesMixedTypesAndHonorsConsumption(t *testing.T) {
 	stringTree := SpawnTree(world, TreeOptions[string]{Width: 200, Nodes: []TreeNodeSpec[string]{{ID: "root", Label: "Root"}}})
 	intTree := SpawnTree(world, TreeOptions[int]{Width: 200, Nodes: []TreeNodeSpec[int]{{ID: 7, Label: "Seven", Leaf: true}}})
 	var stringNode, intNode ecs.Entity
-	for entity, _ := range ecs.Query[TreeNode[string]](world).All {
+	for entity, _ := range world.Query[TreeNode[string]]().All {
 		stringNode = entity
 		break
 	}
-	for entity, _ := range ecs.Query[TreeNode[int]](world).All {
+	for entity, _ := range world.Query[TreeNode[int]]().All {
 		intNode = entity
 		break
 	}
@@ -29,7 +29,7 @@ func TestTreeInputRoutesMixedTypesAndHonorsConsumption(t *testing.T) {
 		{Entity: intNode, Kind: scene.InputEventTap},
 		{Entity: stringNode, Kind: scene.InputEventTap},
 	} {
-		ecs.WriteMessage(world, event)
+		world.WriteMessage(event)
 	}
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -40,9 +40,9 @@ func TestTreeInputRoutesMixedTypesAndHonorsConsumption(t *testing.T) {
 	if got := ints.Read(world); len(got) != 1 || got[0].Tree != intTree || got[0].Node != intNode || got[0].ID != 7 {
 		t.Fatalf("int tree events = %+v", got)
 	}
-	branch, _ := ecs.Get[TreeNode[string]](world, stringNode)
-	leaf, _ := ecs.Get[TreeNode[int]](world, intNode)
-	selected, _ := ecs.Get[Tree[int]](world, intTree)
+	branch, _ := world.Get[TreeNode[string]](stringNode)
+	leaf, _ := world.Get[TreeNode[int]](intNode)
+	selected, _ := world.Get[Tree[int]](intTree)
 	if !branch.Expanded || leaf.Expanded || !selected.HasSelection || selected.Selected != 7 {
 		t.Fatalf("unexpected branch, leaf, selection: %+v, %+v, %+v", branch, leaf, selected)
 	}
@@ -53,15 +53,15 @@ func TestTreeInputRoutesMixedTypesAndHonorsConsumption(t *testing.T) {
 	if len(strings.Read(world)) != 0 || len(ints.Read(world)) != 0 {
 		t.Fatal("tree click delivered twice")
 	}
-	branchMut := ecs.GetMut[TreeNode[string]](world, stringNode)
+	branchMut := world.GetMut[TreeNode[string]](stringNode)
 	branchMut.Disabled = true
 	world.Despawn(intNode)
-	ecs.WriteMessage(world, scene.InputEvent{Entity: stringNode, Kind: scene.InputEventTap})
-	ecs.WriteMessage(world, scene.InputEvent{Entity: intNode, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: stringNode, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: intNode, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	branch, _ = ecs.Get[TreeNode[string]](world, stringNode)
+	branch, _ = world.Get[TreeNode[string]](stringNode)
 	if !branch.Expanded || len(strings.Read(world)) != 0 || len(ints.Read(world)) != 0 {
 		t.Fatal("disabled or despawned node accepted a click")
 	}
@@ -70,9 +70,9 @@ func TestTreeInputRoutesMixedTypesAndHonorsConsumption(t *testing.T) {
 func TestTreeInputHasNoSteadyStateAllocations(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[Widgets](world)
-	ecs.InsertResource(world, input.NewState())
-	trees := ecs.NewSpawner1[Tree[int]](world)
-	nodes := ecs.NewSpawner3[TreeNode[int], treeActivation, Control](world)
+	world.InsertResource(input.NewState())
+	trees := world.NewSpawner1[Tree[int]]()
+	nodes := world.NewSpawner3[TreeNode[int], treeActivation, Control]()
 	tree := trees.Spawn(Tree[int]{})
 	node := nodes.Spawn(
 		TreeNode[int]{Tree: tree, ID: 1}, treeActivation{activate: activateTreeNode[int]}, Control{},
@@ -80,14 +80,14 @@ func TestTreeInputHasNoSteadyStateAllocations(t *testing.T) {
 	var events ecs.MessageReader[TreeEvent[int]]
 	delivered := 0
 	frame := func() {
-		ecs.WriteMessage(world, scene.InputEvent{Entity: node, Kind: scene.InputEventTap})
+		world.WriteMessage(scene.InputEvent{Entity: node, Kind: scene.InputEventTap})
 		if err := UpdateSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
 		for range events.All(world) {
 			delivered++
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	frame()
 	frame()

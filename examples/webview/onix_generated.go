@@ -3,28 +3,28 @@ package main
 
 import (
 	onix "github.com/diiyw/onix"
+	mod0 "github.com/diiyw/onix/examples/webview/browser"
+	contracts "github.com/diiyw/onix/examples/webview/contracts"
 	graphics "github.com/diiyw/onix/graphics"
 	module "github.com/diiyw/onix/module"
 	project "github.com/diiyw/onix/project"
-	mod0 "github.com/diiyw/onix/examples/webview/browser"
-	contracts "github.com/diiyw/onix/examples/webview/contracts"
 	onixwebview "github.com/diiyw/onix/window/webview"
 	iofs "io/fs"
 )
 
 func OnixRegistry() (module.Registry, error) {
 	r := module.Registry{}
-	if err := module.RegisterValue(&r, "BrowserBounds", contracts.DecodeBrowserBounds); err != nil {
+	if err := r.RegisterValue("BrowserBounds", contracts.DecodeBrowserBounds); err != nil {
 		return r, err
 	}
-	if err := module.RegisterMod(&r, "browser", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
+	if err := r.RegisterMod("browser", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
 		Install: func(c *module.Context, m *mod0.Mod) error {
 			return m.Install(c)
 		},
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterScene(&r, "main.json", func() SceneMain { return SceneMain{} }, module.Lifecycle[SceneMain]{
+	if err := r.RegisterScene("main.json", func() SceneMain { return SceneMain{} }, module.Lifecycle[SceneMain]{
 		Install: func(c *module.Context, m *SceneMain) error {
 			return nil
 		},
@@ -37,11 +37,13 @@ func OnixRegistry() (module.Registry, error) {
 
 func OnixInstallSystems(app *onix.App) error {
 	onixwebview.Register()
-	if err := onix.InstallSystems[onix.WebView](app); err != nil {
+	if err := app.InstallSystems[onix.WebView](); err != nil {
 		return err
 	}
 	return nil
 }
+
+type OnixContentProfile = module.WithContent[module.Render2D, module.LayoutContent]
 
 type OnixImageDecoder = graphics.ImageDecoderSet[graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder]
 

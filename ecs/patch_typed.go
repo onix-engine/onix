@@ -6,10 +6,10 @@ package ecs
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch1[A any] struct{ plan *patchPlan }
 
-func NewPatch1[A any](world *World, removed ...ComponentType) Patch1[A] {
+func (world *World) NewPatch1[A any](removed ...ComponentType) Patch1[A] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [1]componentID{registerComponent[A](world)}
+	ids := [1]componentID{world.registerComponent[A]()}
 	return Patch1[A]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -23,14 +23,14 @@ func (p Patch1[A]) Apply(entity Entity, a A) error {
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
+	row.writePatchColumn(0, a)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch1[A]) Queue(commands *Commands, entity Entity, a A) {
-	queuePatch(commands, entity, p.plan, patchCommand1[A]{patch: p, a: a})
+	commands.queuePatch(entity, p.plan, patchCommand1[A]{patch: p, a: a})
 }
 
 type patchCommand1[A any] struct {
@@ -44,10 +44,10 @@ func (v patchCommand1[A]) apply(_ *World, entity Entity) error { return v.patch.
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch2[A, B any] struct{ plan *patchPlan }
 
-func NewPatch2[A, B any](world *World, removed ...ComponentType) Patch2[A, B] {
+func (world *World) NewPatch2[A, B any](removed ...ComponentType) Patch2[A, B] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [2]componentID{registerComponent[A](world), registerComponent[B](world)}
+	ids := [2]componentID{world.registerComponent[A](), world.registerComponent[B]()}
 	return Patch2[A, B]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -61,15 +61,15 @@ func (p Patch2[A, B]) Apply(entity Entity, a A, b B) error {
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch2[A, B]) Queue(commands *Commands, entity Entity, a A, b B) {
-	queuePatch(commands, entity, p.plan, patchCommand2[A, B]{patch: p, a: a, b: b})
+	commands.queuePatch(entity, p.plan, patchCommand2[A, B]{patch: p, a: a, b: b})
 }
 
 type patchCommand2[A, B any] struct {
@@ -85,10 +85,10 @@ func (v patchCommand2[A, B]) apply(_ *World, entity Entity) error {
 type patchCache2[A, B any] struct{}
 
 // Insert2 upserts values together, reusing a world-local patch plan.
-func Insert2[A, B any](world *World, entity Entity, a A, b B) error {
-	p := FrameValue[patchCache2[A, B], Patch2[A, B]](world)
+func (world *World) Insert2[A, B any](entity Entity, a A, b B) error {
+	p := world.FrameValue[patchCache2[A, B], Patch2[A, B]]()
 	if p.plan == nil {
-		*p = NewPatch2[A, B](world)
+		*p = world.NewPatch2[A, B]()
 	}
 	return p.Apply(entity, a, b)
 }
@@ -97,10 +97,10 @@ func Insert2[A, B any](world *World, entity Entity, a A, b B) error {
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch3[A, B, C any] struct{ plan *patchPlan }
 
-func NewPatch3[A, B, C any](world *World, removed ...ComponentType) Patch3[A, B, C] {
+func (world *World) NewPatch3[A, B, C any](removed ...ComponentType) Patch3[A, B, C] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [3]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world)}
+	ids := [3]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C]()}
 	return Patch3[A, B, C]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -114,16 +114,16 @@ func (p Patch3[A, B, C]) Apply(entity Entity, a A, b B, c C) error {
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch3[A, B, C]) Queue(commands *Commands, entity Entity, a A, b B, c C) {
-	queuePatch(commands, entity, p.plan, patchCommand3[A, B, C]{patch: p, a: a, b: b, c: c})
+	commands.queuePatch(entity, p.plan, patchCommand3[A, B, C]{patch: p, a: a, b: b, c: c})
 }
 
 type patchCommand3[A, B, C any] struct {
@@ -140,10 +140,10 @@ func (v patchCommand3[A, B, C]) apply(_ *World, entity Entity) error {
 type patchCache3[A, B, C any] struct{}
 
 // Insert3 upserts values together, reusing a world-local patch plan.
-func Insert3[A, B, C any](world *World, entity Entity, a A, b B, c C) error {
-	p := FrameValue[patchCache3[A, B, C], Patch3[A, B, C]](world)
+func (world *World) Insert3[A, B, C any](entity Entity, a A, b B, c C) error {
+	p := world.FrameValue[patchCache3[A, B, C], Patch3[A, B, C]]()
 	if p.plan == nil {
-		*p = NewPatch3[A, B, C](world)
+		*p = world.NewPatch3[A, B, C]()
 	}
 	return p.Apply(entity, a, b, c)
 }
@@ -152,10 +152,10 @@ func Insert3[A, B, C any](world *World, entity Entity, a A, b B, c C) error {
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch4[A, B, C, D any] struct{ plan *patchPlan }
 
-func NewPatch4[A, B, C, D any](world *World, removed ...ComponentType) Patch4[A, B, C, D] {
+func (world *World) NewPatch4[A, B, C, D any](removed ...ComponentType) Patch4[A, B, C, D] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [4]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world)}
+	ids := [4]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D]()}
 	return Patch4[A, B, C, D]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -169,17 +169,17 @@ func (p Patch4[A, B, C, D]) Apply(entity Entity, a A, b B, c C, d D) error {
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
-	writePatchColumn(row, 3, d)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
+	row.writePatchColumn(3, d)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch4[A, B, C, D]) Queue(commands *Commands, entity Entity, a A, b B, c C, d D) {
-	queuePatch(commands, entity, p.plan, patchCommand4[A, B, C, D]{patch: p, a: a, b: b, c: c, d: d})
+	commands.queuePatch(entity, p.plan, patchCommand4[A, B, C, D]{patch: p, a: a, b: b, c: c, d: d})
 }
 
 type patchCommand4[A, B, C, D any] struct {
@@ -197,10 +197,10 @@ func (v patchCommand4[A, B, C, D]) apply(_ *World, entity Entity) error {
 type patchCache4[A, B, C, D any] struct{}
 
 // Insert4 upserts values together, reusing a world-local patch plan.
-func Insert4[A, B, C, D any](world *World, entity Entity, a A, b B, c C, d D) error {
-	p := FrameValue[patchCache4[A, B, C, D], Patch4[A, B, C, D]](world)
+func (world *World) Insert4[A, B, C, D any](entity Entity, a A, b B, c C, d D) error {
+	p := world.FrameValue[patchCache4[A, B, C, D], Patch4[A, B, C, D]]()
 	if p.plan == nil {
-		*p = NewPatch4[A, B, C, D](world)
+		*p = world.NewPatch4[A, B, C, D]()
 	}
 	return p.Apply(entity, a, b, c, d)
 }
@@ -209,10 +209,10 @@ func Insert4[A, B, C, D any](world *World, entity Entity, a A, b B, c C, d D) er
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch5[A, B, C, D, E any] struct{ plan *patchPlan }
 
-func NewPatch5[A, B, C, D, E any](world *World, removed ...ComponentType) Patch5[A, B, C, D, E] {
+func (world *World) NewPatch5[A, B, C, D, E any](removed ...ComponentType) Patch5[A, B, C, D, E] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [5]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world)}
+	ids := [5]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E]()}
 	return Patch5[A, B, C, D, E]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -226,18 +226,18 @@ func (p Patch5[A, B, C, D, E]) Apply(entity Entity, a A, b B, c C, d D, e E) err
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
-	writePatchColumn(row, 3, d)
-	writePatchColumn(row, 4, e)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
+	row.writePatchColumn(3, d)
+	row.writePatchColumn(4, e)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch5[A, B, C, D, E]) Queue(commands *Commands, entity Entity, a A, b B, c C, d D, e E) {
-	queuePatch(commands, entity, p.plan, patchCommand5[A, B, C, D, E]{patch: p, a: a, b: b, c: c, d: d, e: e})
+	commands.queuePatch(entity, p.plan, patchCommand5[A, B, C, D, E]{patch: p, a: a, b: b, c: c, d: d, e: e})
 }
 
 type patchCommand5[A, B, C, D, E any] struct {
@@ -256,10 +256,10 @@ func (v patchCommand5[A, B, C, D, E]) apply(_ *World, entity Entity) error {
 type patchCache5[A, B, C, D, E any] struct{}
 
 // Insert5 upserts values together, reusing a world-local patch plan.
-func Insert5[A, B, C, D, E any](world *World, entity Entity, a A, b B, c C, d D, e E) error {
-	p := FrameValue[patchCache5[A, B, C, D, E], Patch5[A, B, C, D, E]](world)
+func (world *World) Insert5[A, B, C, D, E any](entity Entity, a A, b B, c C, d D, e E) error {
+	p := world.FrameValue[patchCache5[A, B, C, D, E], Patch5[A, B, C, D, E]]()
 	if p.plan == nil {
-		*p = NewPatch5[A, B, C, D, E](world)
+		*p = world.NewPatch5[A, B, C, D, E]()
 	}
 	return p.Apply(entity, a, b, c, d, e)
 }
@@ -268,10 +268,10 @@ func Insert5[A, B, C, D, E any](world *World, entity Entity, a A, b B, c C, d D,
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch6[A, B, C, D, E, F any] struct{ plan *patchPlan }
 
-func NewPatch6[A, B, C, D, E, F any](world *World, removed ...ComponentType) Patch6[A, B, C, D, E, F] {
+func (world *World) NewPatch6[A, B, C, D, E, F any](removed ...ComponentType) Patch6[A, B, C, D, E, F] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [6]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world), registerComponent[F](world)}
+	ids := [6]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F]()}
 	return Patch6[A, B, C, D, E, F]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -285,19 +285,19 @@ func (p Patch6[A, B, C, D, E, F]) Apply(entity Entity, a A, b B, c C, d D, e E, 
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
-	writePatchColumn(row, 3, d)
-	writePatchColumn(row, 4, e)
-	writePatchColumn(row, 5, f)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
+	row.writePatchColumn(3, d)
+	row.writePatchColumn(4, e)
+	row.writePatchColumn(5, f)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch6[A, B, C, D, E, F]) Queue(commands *Commands, entity Entity, a A, b B, c C, d D, e E, f F) {
-	queuePatch(commands, entity, p.plan, patchCommand6[A, B, C, D, E, F]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f})
+	commands.queuePatch(entity, p.plan, patchCommand6[A, B, C, D, E, F]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f})
 }
 
 type patchCommand6[A, B, C, D, E, F any] struct {
@@ -317,10 +317,10 @@ func (v patchCommand6[A, B, C, D, E, F]) apply(_ *World, entity Entity) error {
 type patchCache6[A, B, C, D, E, F any] struct{}
 
 // Insert6 upserts values together, reusing a world-local patch plan.
-func Insert6[A, B, C, D, E, F any](world *World, entity Entity, a A, b B, c C, d D, e E, f F) error {
-	p := FrameValue[patchCache6[A, B, C, D, E, F], Patch6[A, B, C, D, E, F]](world)
+func (world *World) Insert6[A, B, C, D, E, F any](entity Entity, a A, b B, c C, d D, e E, f F) error {
+	p := world.FrameValue[patchCache6[A, B, C, D, E, F], Patch6[A, B, C, D, E, F]]()
 	if p.plan == nil {
-		*p = NewPatch6[A, B, C, D, E, F](world)
+		*p = world.NewPatch6[A, B, C, D, E, F]()
 	}
 	return p.Apply(entity, a, b, c, d, e, f)
 }
@@ -329,10 +329,10 @@ func Insert6[A, B, C, D, E, F any](world *World, entity Entity, a A, b B, c C, d
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch7[A, B, C, D, E, F, G any] struct{ plan *patchPlan }
 
-func NewPatch7[A, B, C, D, E, F, G any](world *World, removed ...ComponentType) Patch7[A, B, C, D, E, F, G] {
+func (world *World) NewPatch7[A, B, C, D, E, F, G any](removed ...ComponentType) Patch7[A, B, C, D, E, F, G] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [7]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world), registerComponent[F](world), registerComponent[G](world)}
+	ids := [7]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F](), world.registerComponent[G]()}
 	return Patch7[A, B, C, D, E, F, G]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -346,20 +346,20 @@ func (p Patch7[A, B, C, D, E, F, G]) Apply(entity Entity, a A, b B, c C, d D, e 
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
-	writePatchColumn(row, 3, d)
-	writePatchColumn(row, 4, e)
-	writePatchColumn(row, 5, f)
-	writePatchColumn(row, 6, g)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
+	row.writePatchColumn(3, d)
+	row.writePatchColumn(4, e)
+	row.writePatchColumn(5, f)
+	row.writePatchColumn(6, g)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch7[A, B, C, D, E, F, G]) Queue(commands *Commands, entity Entity, a A, b B, c C, d D, e E, f F, g G) {
-	queuePatch(commands, entity, p.plan, patchCommand7[A, B, C, D, E, F, G]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f, g: g})
+	commands.queuePatch(entity, p.plan, patchCommand7[A, B, C, D, E, F, G]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f, g: g})
 }
 
 type patchCommand7[A, B, C, D, E, F, G any] struct {
@@ -380,10 +380,10 @@ func (v patchCommand7[A, B, C, D, E, F, G]) apply(_ *World, entity Entity) error
 type patchCache7[A, B, C, D, E, F, G any] struct{}
 
 // Insert7 upserts values together, reusing a world-local patch plan.
-func Insert7[A, B, C, D, E, F, G any](world *World, entity Entity, a A, b B, c C, d D, e E, f F, g G) error {
-	p := FrameValue[patchCache7[A, B, C, D, E, F, G], Patch7[A, B, C, D, E, F, G]](world)
+func (world *World) Insert7[A, B, C, D, E, F, G any](entity Entity, a A, b B, c C, d D, e E, f F, g G) error {
+	p := world.FrameValue[patchCache7[A, B, C, D, E, F, G], Patch7[A, B, C, D, E, F, G]]()
 	if p.plan == nil {
-		*p = NewPatch7[A, B, C, D, E, F, G](world)
+		*p = world.NewPatch7[A, B, C, D, E, F, G]()
 	}
 	return p.Apply(entity, a, b, c, d, e, f, g)
 }
@@ -392,10 +392,10 @@ func Insert7[A, B, C, D, E, F, G any](world *World, entity Entity, a A, b B, c C
 // Prepare once per world; copies share transitions. Inserted types take precedence over removals.
 type Patch8[A, B, C, D, E, F, G, H any] struct{ plan *patchPlan }
 
-func NewPatch8[A, B, C, D, E, F, G, H any](world *World, removed ...ComponentType) Patch8[A, B, C, D, E, F, G, H] {
+func (world *World) NewPatch8[A, B, C, D, E, F, G, H any](removed ...ComponentType) Patch8[A, B, C, D, E, F, G, H] {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	ids := [8]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world), registerComponent[F](world), registerComponent[G](world), registerComponent[H](world)}
+	ids := [8]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F](), world.registerComponent[G](), world.registerComponent[H]()}
 	return Patch8[A, B, C, D, E, F, G, H]{plan: newPatchPlan(world, ids[:], removed)}
 }
 
@@ -409,21 +409,21 @@ func (p Patch8[A, B, C, D, E, F, G, H]) Apply(entity Entity, a A, b B, c C, d D,
 	if err != nil {
 		return err
 	}
-	writePatchColumn(row, 0, a)
-	writePatchColumn(row, 1, b)
-	writePatchColumn(row, 2, c)
-	writePatchColumn(row, 3, d)
-	writePatchColumn(row, 4, e)
-	writePatchColumn(row, 5, f)
-	writePatchColumn(row, 6, g)
-	writePatchColumn(row, 7, h)
+	row.writePatchColumn(0, a)
+	row.writePatchColumn(1, b)
+	row.writePatchColumn(2, c)
+	row.writePatchColumn(3, d)
+	row.writePatchColumn(4, e)
+	row.writePatchColumn(5, f)
+	row.writePatchColumn(6, g)
+	row.writePatchColumn(7, h)
 	p.plan.finish(row)
 	return nil
 }
 
 // Queue copies typed values into reusable command storage for deferred application.
 func (p Patch8[A, B, C, D, E, F, G, H]) Queue(commands *Commands, entity Entity, a A, b B, c C, d D, e E, f F, g G, h H) {
-	queuePatch(commands, entity, p.plan, patchCommand8[A, B, C, D, E, F, G, H]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h})
+	commands.queuePatch(entity, p.plan, patchCommand8[A, B, C, D, E, F, G, H]{patch: p, a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h})
 }
 
 type patchCommand8[A, B, C, D, E, F, G, H any] struct {
@@ -445,10 +445,10 @@ func (v patchCommand8[A, B, C, D, E, F, G, H]) apply(_ *World, entity Entity) er
 type patchCache8[A, B, C, D, E, F, G, H any] struct{}
 
 // Insert8 upserts values together, reusing a world-local patch plan.
-func Insert8[A, B, C, D, E, F, G, H any](world *World, entity Entity, a A, b B, c C, d D, e E, f F, g G, h H) error {
-	p := FrameValue[patchCache8[A, B, C, D, E, F, G, H], Patch8[A, B, C, D, E, F, G, H]](world)
+func (world *World) Insert8[A, B, C, D, E, F, G, H any](entity Entity, a A, b B, c C, d D, e E, f F, g G, h H) error {
+	p := world.FrameValue[patchCache8[A, B, C, D, E, F, G, H], Patch8[A, B, C, D, E, F, G, H]]()
 	if p.plan == nil {
-		*p = NewPatch8[A, B, C, D, E, F, G, H](world)
+		*p = world.NewPatch8[A, B, C, D, E, F, G, H]()
 	}
 	return p.Apply(entity, a, b, c, d, e, f, g, h)
 }

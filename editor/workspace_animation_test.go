@@ -141,7 +141,7 @@ func TestWorkspaceAnimationTransitionPopupEditingAndIsolation(t *testing.T) {
 	in := input.NewState()
 	a.updateAnimationCurveFocus(in)
 	closeControl, _ := htmlui.ControlByID(a.world, a.shell, "animation:close-curve")
-	focus, _ := ecs.GetResource[*scene.InputFocus](a.world)
+	focus, _ := a.world.GetResource[*scene.InputFocus]()
 	if focus == nil || focus.Keyboard != closeControl {
 		t.Fatal("popup did not focus its close button")
 	}
@@ -304,8 +304,8 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 	a := animationEditorFixture(t)
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](a.world)
 	in := input.NewState()
-	ecs.InsertResource(a.world, in)
-	ecs.InsertResource(a.world, scene.ViewportSize{Width: a.width, Height: a.height})
+	a.world.InsertResource(in)
+	a.world.InsertResource(scene.ViewportSize{Width: a.width, Height: a.height})
 	animationClick(t, a, "open")
 	a.time = 1
 	animationClick(t, a, "segment:float:0:0")
@@ -335,16 +335,16 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 	}
 	syncFrame()
 	var list ecs.Entity
-	for entity, access := range ecs.Query[engineui.SelectorList](a.world).All {
+	for entity, access := range a.world.Query[engineui.SelectorList]().All {
 		if access.Ref().Selector == control {
 			list = entity
 			break
 		}
 	}
-	if list == 0 || !ecs.GetRef[engineui.Selector](a.world, control).Open {
+	if list == 0 || !a.world.GetRef[engineui.Selector](control).Open {
 		t.Fatal("curve preset dropdown did not open")
 	}
-	scroll := ecs.GetRef[scene.UIScroll](a.world, list)
+	scroll := a.world.GetRef[scene.UIScroll](list)
 	if scroll.DisableInput || scroll.ContentSize[1] <= scroll.ViewportSize[1] {
 		t.Fatal("preset dropdown has no active scroll viewport", scroll)
 	}
@@ -352,7 +352,7 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 		entity   ecs.Entity
 		position mgl32.Vec2
 	}
-	for entity, access := range ecs.Query[scene.UIScroll](a.world).All {
+	for entity, access := range a.world.Query[scene.UIScroll]().All {
 		if entity != list {
 			backgrounds = append(backgrounds, struct {
 				entity   ecs.Entity
@@ -360,11 +360,11 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 			}{entity, access.Ref().Position})
 		}
 	}
-	global := ecs.GetRef[scene.UIGlobalTransform](a.world, list)
+	global := a.world.GetRef[scene.UIGlobalTransform](list)
 	point := global.Matrix.Mul4x1(mgl32.Vec4{20, scroll.ViewportSize[1] / 2, 0, 1})
 	in.MoveMouse(float64(point.X()), float64(point.Y()))
 	for _, wheel := range []float64{-1, -1, 1} {
-		before := ecs.GetRef[scene.UIScroll](a.world, list).Position[1]
+		before := a.world.GetRef[scene.UIScroll](list).Position[1]
 		in.ScrollMouse(0, wheel)
 		if err := a.update(&ecs.SystemContext{World: a.world}); err != nil {
 			t.Fatal(err)
@@ -372,16 +372,16 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 		if err := scene.UIScrollSystem("").Run(a.world); err != nil {
 			t.Fatal(err)
 		}
-		after := ecs.GetRef[scene.UIScroll](a.world, list).Position[1]
+		after := a.world.GetRef[scene.UIScroll](list).Position[1]
 		if wheel < 0 && after >= before || wheel > 0 && after <= before || in.Pointer().WheelY != 0 {
 			t.Fatalf("preset wheel did not scroll: before=%g after=%g wheel=%g", before, after, in.Pointer().WheelY)
 		}
 		syncFrame()
-		if got := ecs.GetRef[scene.UIScroll](a.world, list).Position[1]; got != after {
+		if got := a.world.GetRef[scene.UIScroll](list).Position[1]; got != after {
 			t.Fatalf("popup reconciliation reset scroll from %g to %g", after, got)
 		}
 		for _, background := range backgrounds {
-			if got := ecs.GetRef[scene.UIScroll](a.world, background.entity).Position; got != background.position {
+			if got := a.world.GetRef[scene.UIScroll](background.entity).Position; got != background.position {
 				t.Fatal("preset wheel scrolled the popup or background panel")
 			}
 		}
@@ -435,10 +435,10 @@ func TestWorkspaceAnimationEasingPresetsAndCustomCurve(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := loaded.Mods["button"].Spec.Elements[0].Components.Animation.Clip.FloatTracks[0].Keyframes
-	value, _ := scene.SampleAnimationTrack(scene.AnimationTrack[float32]{Keyframes: []scene.AnimationKeyframe[float32]{
+	value, _ := (scene.AnimationTrack[float32]{Keyframes: []scene.AnimationKeyframe[float32]{
 		{Time: keys[0].Time, Value: keys[0].Value, Tween: keys[0].Tween, Curve: keys[0].Curve},
 		{Time: keys[1].Time, Value: keys[1].Value},
-	}}, .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	}}).Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if keys[0].Tween != scene.AnimationEaseOutBounce || abs(value-80.5625) > 1e-5 {
 		t.Fatalf("saved preset did not play correctly: tween=%s value=%g", keys[0].Tween, value)
 	}
@@ -460,11 +460,11 @@ func TestWorkspaceAnimationSolidCurveGeometry(t *testing.T) {
 			control, _ := htmlui.ControlByID(a.world, a.shell, "animation:tween")
 			var scroll scene.UIScroll
 			for entity := control; entity != 0; {
-				if value, ok := ecs.Get[scene.UIScroll](a.world, entity); ok {
+				if value, ok := a.world.Get[scene.UIScroll](entity); ok {
 					scroll = value
 					break
 				}
-				parent, _ := ecs.Get[scene.Parent](a.world, entity)
+				parent, _ := a.world.Get[scene.Parent](entity)
 				entity = parent.Entity
 			}
 			ok := scroll.ViewportSize[0] > 0
@@ -479,12 +479,12 @@ func TestWorkspaceAnimationSolidCurveGeometry(t *testing.T) {
 				t.Fatalf("curve does not fit resized popup: %+v", bounds)
 			}
 			var lines [][2]mgl32.Vec4
-			for entity, access := range ecs.Query[scene.Sprite2D](a.world).All {
+			for entity, access := range a.world.Query[scene.Sprite2D]().All {
 				sprite := access.Get()
 				if sprite.Shape.Fill != graphics.ColorFromRGB(132, 204, 255) || sprite.Height != 2 {
 					continue
 				}
-				global := ecs.GetRef[scene.UIGlobalTransform](a.world, entity)
+				global := a.world.GetRef[scene.UIGlobalTransform](entity)
 				lines = append(lines, [2]mgl32.Vec4{global.Matrix.Mul4x1(mgl32.Vec4{0, 1, 0, 1}), global.Matrix.Mul4x1(mgl32.Vec4{sprite.Width - .5, 1, 0, 1})})
 			}
 			count := 128
@@ -565,8 +565,8 @@ func TestWorkspaceAnimationSequenceCurveEditingAndPreview(t *testing.T) {
 		if err := a.viewport2D.syncVisuals(false); err != nil {
 			t.Fatal(err)
 		}
-		animator := ecs.GetRef[scene.Animator](a.viewport2D.world, entity)
-		sprite := ecs.GetRef[scene.Sprite2D](a.viewport2D.world, entity)
+		animator := a.viewport2D.world.GetRef[scene.Animator](entity)
+		sprite := a.viewport2D.world.GetRef[scene.Sprite2D](entity)
 		if sprite.Texture != animator.Clip.TextureTracks[0].Keyframes[test.frame].Value {
 			t.Fatalf("%s preview selected the wrong halfway frame", test.tween)
 		}
@@ -751,8 +751,8 @@ func TestWorkspaceAnimationPreviewSeekPlaybackAndAllocations(t *testing.T) {
 	if err := a.viewport2D.syncVisuals(false); err != nil {
 		t.Fatal(err)
 	}
-	animator := ecs.GetRef[scene.Animator](a.viewport2D.world, entity)
-	transform := ecs.GetRef[scene.UITransform](a.viewport2D.world, entity)
+	animator := a.viewport2D.world.GetRef[scene.Animator](entity)
+	transform := a.viewport2D.world.GetRef[scene.UITransform](entity)
 	if animator == nil || animator.Playing || math.Abs(float64(transform.Translation.X.Value-54)) > 1e-4 {
 		t.Fatalf("seek did not preview selected element: %+v %+v", animator, transform)
 	}
@@ -1096,10 +1096,10 @@ func TestWorkspaceAnimationHasOneHorizontalScrollContainer(t *testing.T) {
 		}
 		containers := 0
 		for entity := control; entity != 0; {
-			if scroll, ok := ecs.Get[scene.UIScroll](a.world, entity); ok && scroll.Horizontal {
+			if scroll, ok := a.world.Get[scene.UIScroll](entity); ok && scroll.Horizontal {
 				containers++
 			}
-			parent, ok := ecs.Get[scene.Parent](a.world, entity)
+			parent, ok := a.world.Get[scene.Parent](entity)
 			if !ok {
 				break
 			}

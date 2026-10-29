@@ -39,7 +39,7 @@ func TestAnimationEasingFunctionsAndSamplers(t *testing.T) {
 				track := AnimationTrack[float32]{Keyframes: []AnimationKeyframe[float32]{{Time: 0, Value: 10, Tween: tween, InverseSpan: .5}, {Time: 2, Value: 30}}}
 				interpolate := func(left, right, value float32) float32 { return left + (right-left)*value }
 				cursor := 0
-				generic, genericOK := SampleAnimationTrack(track, progress*2, interpolate)
+				generic, genericOK := track.Sample(progress*2, interpolate)
 				compiled, compiledOK := sampleAnimationFloatTrackAt(&track, progress*2, &cursor)
 				if !genericOK || !compiledOK || absEasing(generic-(10+20*want)) > 2e-5 || generic != compiled {
 					t.Fatalf("%s samplers: generic=%g compiled=%g want=%g", tween, generic, compiled, 10+20*want)
@@ -57,7 +57,7 @@ func TestAnimationEasingFunctionsAndSamplers(t *testing.T) {
 				}
 				if allocations := testing.AllocsPerRun(100, func() {
 					SampleAnimationProgress(tween, AnimationCurve{}, progress)
-					SampleAnimationTrack(track, progress*2, interpolate)
+					track.Sample(progress*2, interpolate)
 					sampleAnimationFloatTrackAt(&track, progress*2, &cursor)
 				}); allocations != 0 {
 					t.Fatalf("%s sampling allocated %g", tween, allocations)

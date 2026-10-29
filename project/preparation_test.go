@@ -47,8 +47,8 @@ func (*materialPreloadDriver) DestroyMeshShader(render.MeshShaderHandle) error {
 
 func TestQueueEntityUploadsUsesRegisteredGenericMaterialsAndSubmeshes(t *testing.T) {
 	w := ecs.NewWorld()
-	scene.RegisterMaterial2D[preparationMaterial2D](w)
-	render3d.RegisterMaterial[preparationMaterial3D](w)
+	scene.RenderWorldFor(w).RegisterMaterial2D[preparationMaterial2D]()
+	render3d.WorldFor(w).RegisterMaterial[preparationMaterial3D]()
 	shader2D, err := graphics.NewMaterial2DShader(render.ShaderDescriptor{WebGL2FragmentSource: "fragment"})
 	if err != nil {
 		t.Fatal(err)
@@ -67,9 +67,9 @@ func TestQueueEntityUploadsUsesRegisteredGenericMaterialsAndSubmeshes(t *testing
 	defer mesh.Dispose()
 	defaultMaterial := preparationMaterial3D{graphics.Material3DData{Shader: shader3D, BaseColorTexture: first}}
 	components := ecs.NewBundle(3)
-	ecs.Put(&components, scene.MeshMaterial2D[preparationMaterial2D]{Material: &preparationMaterial2D{shader2D}})
-	ecs.Put(&components, render3d.Material[preparationMaterial3D]{Material: &defaultMaterial, Materials: []preparationMaterial3D{{graphics.Material3DData{Shader: shader3D, NormalTexture: second}}}})
-	ecs.Put(&components, render3d.Mesh{Mesh: mesh})
+	components.Put(scene.MeshMaterial2D[preparationMaterial2D]{Material: &preparationMaterial2D{shader2D}})
+	components.Put(render3d.Material[preparationMaterial3D]{Material: &defaultMaterial, Materials: []preparationMaterial3D{{graphics.Material3DData{Shader: shader3D, NormalTexture: second}}}})
+	components.Put(render3d.Mesh{Mesh: mesh})
 	entity := w.Spawn(components)
 	var queue graphics.UploadQueue
 	QueueEntityUploads(&queue, w, entity)

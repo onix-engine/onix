@@ -70,24 +70,24 @@ func (c *Content) ReadFile(name string) ([]byte, error) {
 	return data, closeErr
 }
 
-func ContentGet[T any](c *Content, e ecs.Entity) (T, bool) {
+func (c *Content) Get[T any](e ecs.Entity) (T, bool) {
 	if !c.owns(e) {
 		var zero T
 		return zero, false
 	}
-	return ecs.Get[T](c.context.runtime.world, e)
+	return c.context.runtime.world.Get[T](e)
 }
-func ContentMut[T any](c *Content, e ecs.Entity) *T {
+func (c *Content) Mut[T any](e ecs.Entity) *T {
 	if !c.owns(e) || contentProtected[T]() {
 		return nil
 	}
-	return ecs.GetMut[T](c.context.runtime.world, e)
+	return c.context.runtime.world.GetMut[T](e)
 }
 func contentProtected[T any]() bool {
 	t := reflect.TypeFor[T]()
 	return t == reflect.TypeFor[scene.PainterGroup2D]() || t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.UITargetCamera]()
 }
-func ContentInsert[T any](c *Content, e ecs.Entity, value T) error {
+func (c *Content) Insert[T any](e ecs.Entity, value T) error {
 	if !c.owns(e) {
 		return ErrOwnership
 	}
@@ -100,9 +100,9 @@ func ContentInsert[T any](c *Content, e ecs.Entity, value T) error {
 	if contentProtected[T]() {
 		return ErrOwnership
 	}
-	return insertPrivate(c.context, e, value)
+	return c.context.insertPrivate(e, value)
 }
-func ContentResource[T any](c *Content) (T, bool) {
+func (c *Content) Resource[T any]() (T, bool) {
 	var zero T
 	if c == nil || !c.context.live {
 		return zero, false
@@ -114,7 +114,7 @@ func ContentResource[T any](c *Content) (T, bool) {
 	// consumption in one module cannot change another module's input state.
 	switch any(zero).(type) {
 	case *input.State:
-		state, ok := ecs.GetResource[*input.State](c.context.runtime.world)
+		state, ok := c.context.runtime.world.GetResource[*input.State]()
 		if !ok || state == nil {
 			return zero, false
 		}
@@ -124,19 +124,19 @@ func ContentResource[T any](c *Content) (T, bool) {
 		c.input.CopyFrom(state)
 		return any(c.input).(T), true
 	case *scene.Time:
-		clock, ok := ecs.GetResource[*scene.Time](c.context.runtime.world)
+		clock, ok := c.context.runtime.world.GetResource[*scene.Time]()
 		if !ok || clock == nil {
 			return zero, false
 		}
 		c.clock = *clock
 		return any(&c.clock).(T), true
 	case scene.ViewportSize:
-		v, ok := ecs.GetResource[scene.ViewportSize](c.context.runtime.world)
+		v, ok := c.context.runtime.world.GetResource[scene.ViewportSize]()
 		return any(v).(T), ok
 	}
 	return zero, false
 }
-func ContentStore[T any](c *Content, value T) {
+func (c *Content) Store[T any](value T) {
 	if c == nil || !c.context.live {
 		return
 	}
@@ -150,26 +150,26 @@ func ContentStore[T any](c *Content, value T) {
 	}
 	c.state[t] = &value
 }
-func ContentResourceMut[T any](c *Content) (*T, bool) {
+func (c *Content) ResourceMut[T any]() (*T, bool) {
 	if c == nil || !c.context.live {
 		return nil, false
 	}
 	value, ok := c.state[reflect.TypeFor[T]()].(*T)
 	return value, ok
 }
-func ContentRemoveResource[T any](c *Content) (T, bool) {
-	value, ok := ContentResource[T](c)
+func (c *Content) RemoveResource[T any]() (T, bool) {
+	value, ok := c.Resource[T]()
 	delete(c.state, reflect.TypeFor[T]())
 	return value, ok
 }
-func ContentQuery[T any](c *Content) iter.Seq2[ecs.Entity, ecs.ComponentAccess[T]] {
+func (c *Content) Query[T any]() iter.Seq2[ecs.Entity, ecs.ComponentAccess[T]] {
 	return func(yield func(ecs.Entity, ecs.ComponentAccess[T]) bool) {
 		if c == nil || !c.context.live || contentProtected[T]() || !c.queryAvailable() {
 			return
 		}
 		boundary := c.beginQuery()
 		defer c.endQuery(boundary)
-		for e, access := range ecs.Query[T](c.context.runtime.world).In(c.context.ownedEntities).All {
+		for e, access := range c.context.runtime.world.Query[T]().In(c.context.ownedEntities).All {
 			if !yield(e, access) {
 				return
 			}
@@ -178,14 +178,14 @@ func ContentQuery[T any](c *Content) iter.Seq2[ecs.Entity, ecs.ComponentAccess[T
 }
 func (c *Content) adopt(e ecs.Entity) ecs.Entity {
 	w := c.context.runtime.world
-	_ = ecs.Insert(w, e, entityOwner{context: c.context})
-	if ecs.Has[scene.UIStackIndex](w, e) || ecs.Has[scene.RenderOrder2D](w, e) {
-		_ = ecs.Insert(w, e, explicitPainterOrder{})
+	_ = w.Insert(e, entityOwner{context: c.context})
+	if w.Has[scene.UIStackIndex](e) || w.Has[scene.RenderOrder2D](e) {
+		_ = w.Insert(e, explicitPainterOrder{})
 	}
-	if p, ok := ecs.Get[scene.Parent](w, e); !ok || p.Entity == 0 {
-		_ = ecs.Insert(w, e, scene.Parent{Entity: c.context.root})
+	if p, ok := w.Get[scene.Parent](e); !ok || p.Entity == 0 {
+		_ = w.Insert(e, scene.Parent{Entity: c.context.root})
 	}
-	_ = ecs.Insert(w, e, scene.Activity{Active: c.context.enabled})
+	_ = w.Insert(e, scene.Activity{Active: c.context.enabled})
 	c.context.entities = append(c.context.entities, e)
 	c.context.dirtyDrawOrder()
 	return e
@@ -194,25 +194,25 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 	if !c.context.usable() {
 		panic(ErrDisposed)
 	}
-	if _, grouped := ecs.BundleValue[scene.PainterGroup2D](bundle); grouped {
+	if _, grouped := bundle.Value[scene.PainterGroup2D](); grouped {
 		panic(ErrOwnership)
 	}
-	_, uiOrder := ecs.BundleValue[scene.UIStackIndex](bundle)
-	_, worldOrder := ecs.BundleValue[scene.RenderOrder2D](bundle)
+	_, uiOrder := bundle.Value[scene.UIStackIndex]()
+	_, worldOrder := bundle.Value[scene.RenderOrder2D]()
 	if uiOrder || worldOrder {
-		ecs.Put(&bundle, explicitPainterOrder{})
+		bundle.Put(explicitPainterOrder{})
 	}
-	parent, hasParent := ecs.BundleValue[scene.Parent](bundle)
+	parent, hasParent := bundle.Value[scene.Parent]()
 	if parent.Entity != 0 && !c.owns(parent.Entity) {
 		panic(ErrOwnership)
 	}
 	if !hasParent {
-		ecs.Put(&bundle, scene.Parent{Entity: c.context.root})
+		bundle.Put(scene.Parent{Entity: c.context.root})
 	}
-	ecs.Put(&bundle, entityOwner{context: c.context})
-	_, hasActivity := ecs.BundleValue[scene.Activity](bundle)
+	bundle.Put(entityOwner{context: c.context})
+	_, hasActivity := bundle.Value[scene.Activity]()
 	if !hasActivity {
-		ecs.Put(&bundle, scene.Activity{Active: c.context.enabled})
+		bundle.Put(scene.Activity{Active: c.context.enabled})
 	}
 	r := c.context.runtime
 	var entity ecs.Entity
@@ -228,12 +228,12 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 			panic(ErrCommandFull)
 		}
 		r.privateCommands += count
-		entity = ecs.CommandSpawn(r.world.Commands(), bundle)
+		entity = r.world.Commands().Spawn(bundle)
 		if hasParent && parent.Entity == 0 {
-			ecs.CommandInsert(r.world.Commands(), entity, scene.Parent{Entity: c.context.root})
+			r.world.Commands().Insert(entity, scene.Parent{Entity: c.context.root})
 		}
 		if hasActivity {
-			ecs.CommandInsert(r.world.Commands(), entity, scene.Activity{Active: c.context.enabled})
+			r.world.Commands().Insert(entity, scene.Activity{Active: c.context.enabled})
 		}
 		if parent.Entity == 0 {
 			parent.Entity = c.context.root
@@ -242,10 +242,10 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 	} else {
 		entity = r.world.Spawn(bundle)
 		if hasParent && parent.Entity == 0 {
-			_ = ecs.Insert(r.world, entity, scene.Parent{Entity: c.context.root})
+			_ = r.world.Insert(entity, scene.Parent{Entity: c.context.root})
 		}
 		if hasActivity {
-			_ = ecs.Insert(r.world, entity, scene.Activity{Active: c.context.enabled})
+			_ = r.world.Insert(entity, scene.Activity{Active: c.context.enabled})
 		}
 	}
 	c.context.entities = append(c.context.entities, entity)
@@ -301,8 +301,8 @@ func (c *Content) RefreshTransforms() error {
 	}
 	return scene.SyncUIGlobalTransformSystem("").Run(w)
 }
-func ContentMustMut[T any](c *Content, e ecs.Entity) *T {
-	value := ContentMut[T](c, e)
+func (c *Content) MustMut[T any](e ecs.Entity) *T {
+	value := c.Mut[T](e)
 	if value == nil {
 		panic(fmt.Sprintf("module: private entity %d has no writable %s", e, reflect.TypeFor[T]()))
 	}

@@ -141,15 +141,16 @@ func TestGlyphAtlasUsesFixedPages(t *testing.T) {
 	cache := NewGlyphCache(nil, 0, 0)
 	bitmap := image.NewRGBA(image.Rect(0, 0, 300, 300))
 	for want := range 2 {
-		index, _, _ := cache.allocate(bitmap)
-		if index != want {
-			t.Fatalf("atlas page = %d, want %d", index, want)
+		page, _, _ := cache.allocate(bitmap)
+		if page.index != want {
+			t.Fatalf("atlas page = %d, want %d", page.index, want)
 		}
 	}
 	if got := cache.AtlasCount(); got != 2 {
 		t.Fatalf("expected two fixed atlas pages, got %d", got)
 	}
-	for _, atlas := range cache.pool.atlases {
+	for _, slot := range cache.pool.atlases {
+		atlas := slot.page.Value()
 		if got := atlas.size; got != 512 {
 			t.Fatalf("expected 512px atlas page, got %d", got)
 		}
@@ -166,10 +167,10 @@ func TestFontSizesShareAtlasPages(t *testing.T) {
 	value := NewFont(&font.Face{})
 	first := value.GlyphCache(14, 72)
 	second := value.GlyphCache(28, 72)
-	firstIndex, _, _ := first.allocate(image.NewRGBA(image.Rect(0, 0, 20, 20)))
-	secondIndex, _, _ := second.allocate(image.NewRGBA(image.Rect(0, 0, 40, 40)))
-	firstTexture, firstOK := first.Atlas(firstIndex)
-	secondTexture, secondOK := second.Atlas(secondIndex)
+	firstPage, _, _ := first.allocate(image.NewRGBA(image.Rect(0, 0, 20, 20)))
+	secondPage, _, _ := second.allocate(image.NewRGBA(image.Rect(0, 0, 40, 40)))
+	firstTexture, firstOK := first.Atlas(firstPage.index)
+	secondTexture, secondOK := second.Atlas(secondPage.index)
 	if !firstOK || !secondOK || firstTexture != secondTexture || first.pool != second.pool {
 		t.Fatalf("font-size atlas pages were not shared: first=%p second=%p", firstTexture, secondTexture)
 	}
@@ -234,7 +235,8 @@ func TestFontDisposeEvictsGlyphCachesAndDisposesAtlases(t *testing.T) {
 	value := NewFont(&font.Face{})
 	first := value.GlyphCache(14, 72)
 	second := value.GlyphCache(18, 72)
-	first.pool.atlases = append(first.pool.atlases, newGlyphAtlas(32), newGlyphAtlas(32))
+	first.allocate(image.NewAlpha(image.Rect(0, 0, 300, 300)))
+	second.allocate(image.NewAlpha(image.Rect(0, 0, 300, 300)))
 	textures := []*graphics.Texture{first.pool.atlases[0].texture, first.pool.atlases[1].texture}
 	if first.pool != second.pool {
 		t.Fatal("font glyph caches did not share their atlas pool")
@@ -265,6 +267,7 @@ type glyphUploadDriver struct {
 	createdPixels []byte
 	updateCalls   int
 	updateCount   int
+	destroyCalls  int
 }
 
 func (d *glyphUploadDriver) RendererInfo() render.RendererInfo { return render.RendererInfo{} }
@@ -287,13 +290,16 @@ func (d *glyphUploadDriver) UpdateTextures(updates []render.TextureUpdate) error
 	d.updateCount += len(updates)
 	return nil
 }
-func (d *glyphUploadDriver) DestroyTexture(render.TextureHandle) error { return nil }
-func (d *glyphUploadDriver) DrawSprites(render.SpriteBatch) error      { return nil }
-func (d *glyphUploadDriver) DrawShapes(render.ShapeBatch) error        { return nil }
-func (d *glyphUploadDriver) Present() error                            { return nil }
-func (d *glyphUploadDriver) ResizeSurface(int, int) error              { return nil }
-func (d *glyphUploadDriver) SetVSync(bool)                             {}
-func (d *glyphUploadDriver) Destroy()                                  {}
+func (d *glyphUploadDriver) DestroyTexture(render.TextureHandle) error {
+	d.destroyCalls++
+	return nil
+}
+func (d *glyphUploadDriver) DrawSprites(render.SpriteBatch) error { return nil }
+func (d *glyphUploadDriver) DrawShapes(render.ShapeBatch) error   { return nil }
+func (d *glyphUploadDriver) Present() error                       { return nil }
+func (d *glyphUploadDriver) ResizeSurface(int, int) error         { return nil }
+func (d *glyphUploadDriver) SetVSync(bool)                        {}
+func (d *glyphUploadDriver) Destroy()                             {}
 
 func TestLCDGlyphCacheSeparatesFormatsAndAllocatesNothingWarm(t *testing.T) {
 	face, err := font.LoadDefault()
@@ -311,7 +317,7 @@ func TestLCDGlyphCacheSeparatesFormatsAndAllocatesNothingWarm(t *testing.T) {
 	if gray.Advance != lcd.Advance {
 		t.Fatal("LCD changed layout advance")
 	}
-	if !cache.pool.atlases[lcd.Atlas].lcd || cache.pool.atlases[gray.Atlas].lcd {
+	if !lcd.page.lcd || gray.page.lcd {
 		t.Fatal("incorrect atlas format")
 	}
 	for phase := uint8(0); phase < 4; phase++ {

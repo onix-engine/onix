@@ -82,16 +82,16 @@ func (a *ModuleEditor) beginCanvasDrag(id, element string, x, y float32) {
 					break
 				}
 			}
-			drag.WorldSpace = !ecs.Has[scene.UITransform](a.viewport2D.world, drag.Entity)
-			ancestor := ecs.GetRef[scene.Parent](a.viewport2D.world, drag.Entity)
+			drag.WorldSpace = !a.viewport2D.world.Has[scene.UITransform](drag.Entity)
+			ancestor := a.viewport2D.world.GetRef[scene.Parent](drag.Entity)
 			if drag.WorldSpace {
-				global := ecs.GetRef[scene.GlobalTransform](a.viewport2D.world, ancestor.Entity)
+				global := a.viewport2D.world.GetRef[scene.GlobalTransform](ancestor.Entity)
 				if global == nil {
 					return
 				}
 				parent = global.Matrix
 			} else {
-				global := ecs.GetRef[scene.UIGlobalTransform](a.viewport2D.world, ancestor.Entity)
+				global := a.viewport2D.world.GetRef[scene.UIGlobalTransform](ancestor.Entity)
 				if global == nil {
 					return
 				}

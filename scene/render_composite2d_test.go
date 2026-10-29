@@ -27,9 +27,9 @@ func incrementalFrame(t testing.TB, world *ecs.World, canvas *graphics.Canvas2D)
 func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	unchanged := state.Items2D[50].sprite
-	ecs.GetMut[Sprite2D](world, entities[0]).Shape.Fill = graphics.Black
+	world.GetMut[Sprite2D](entities[0]).Shape.Fill = graphics.Black
 	incrementalFrame(t, world, canvas)
 	if state.Preparation2D.Extracted != 1 || state.Preparation2D.Reused != 99 || state.Preparation2D.Sorted || state.Items2D[50].sprite != unchanged {
 		t.Fatalf("sparse extraction rebuilt unrelated snapshots: %+v", state.Preparation2D)
@@ -41,8 +41,8 @@ func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {
 	if state.Preparation2D.Extracted != 0 || state.Composite2D.DirtyTiles != 0 {
 		t.Fatal("stable frame did work")
 	}
-	ecs.GetMut[UIStackIndex](world, entities[0]) // Even a no-op write is safe.
-	ecs.SetIfChanged(world, entities[0], UIStackIndex(150))
+	world.GetMut[UIStackIndex](entities[0]) // Even a no-op write is safe.
+	world.SetIfChanged(entities[0], UIStackIndex(150))
 	incrementalFrame(t, world, canvas)
 	if state.Items2D[len(state.Items2D)-1].entity != entities[0] {
 		t.Fatal("retained order missed stacking change")
@@ -51,7 +51,7 @@ func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {
 		incrementalFrame(t, world, canvas)
 	}
 	if allocations := testing.AllocsPerRun(20, func() {
-		sprite := ecs.GetMut[Sprite2D](world, entities[0])
+		sprite := world.GetMut[Sprite2D](entities[0])
 		sprite.Shape.Fill.R = 1 - sprite.Shape.Fill.R
 		incrementalFrame(t, world, canvas)
 	}); allocations != 0 {
@@ -62,36 +62,36 @@ func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {
 func TestRetainedRender2DVisibilityStructureAndScopes(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	ecs.GetMut[Visibility](world, entities[0]).Visible = false
+	world.GetMut[Visibility](entities[0]).Visible = false
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 99 {
+	if len(RenderWorldFor(world).Items2D) != 99 {
 		t.Fatal("hidden primitive retained")
 	}
-	ecs.GetMut[Visibility](world, entities[0]).Visible = true
+	world.GetMut[Visibility](entities[0]).Visible = true
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 100 {
+	if len(RenderWorldFor(world).Items2D) != 100 {
 		t.Fatal("visible primitive not restored")
 	}
 	var scope ecs.QueryScope
 	scope.Reset(entities[:1])
 	world.SetQueryScope(&scope)
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 1 {
+	if len(RenderWorldFor(world).Items2D) != 1 {
 		t.Fatal("scope ignored")
 	}
 	scope.Reset(entities[:2])
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 2 {
+	if len(RenderWorldFor(world).Items2D) != 2 {
 		t.Fatal("scope revision ignored")
 	}
 	world.SetQueryScope(nil)
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 100 {
+	if len(RenderWorldFor(world).Items2D) != 100 {
 		t.Fatal("scope switch lost previous cache")
 	}
 	world.Despawn(entities[0])
 	incrementalFrame(t, world, canvas)
-	if len(renderWorld(world).Items2D) != 99 {
+	if len(RenderWorldFor(world).Items2D) != 99 {
 		t.Fatal("deleted primitive retained")
 	}
 }
@@ -99,13 +99,13 @@ func TestRetainedRender2DVisibilityStructureAndScopes(t *testing.T) {
 func TestComposite2DDamageMoveRemovalAndOcclusion(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 1000, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
-	ecs.GetMut[Sprite2D](world, entities[0]).Shape.Fill = graphics.Black
+	state := RenderWorldFor(world)
+	world.GetMut[Sprite2D](entities[0]).Shape.Fill = graphics.Black
 	incrementalFrame(t, world, canvas)
 	if state.Composite2D.DirtyTiles != 1 || state.Composite2D.RasterPixels != 128*128 {
 		t.Fatalf("local damage=%+v", state.Composite2D)
 	}
-	ecs.GetMut[UIGlobalTransform](world, entities[0]).Matrix[12] = 600
+	world.GetMut[UIGlobalTransform](entities[0]).Matrix[12] = 600
 	incrementalFrame(t, world, canvas)
 	if state.Composite2D.DirtyTiles != 2 {
 		t.Fatalf("move must damage both old and new tiles: %+v", state.Composite2D)
@@ -118,9 +118,9 @@ func TestComposite2DDamageMoveRemovalAndOcclusion(t *testing.T) {
 	coveredWorld, coveredCanvas, driver, covered := incrementalRenderFixture(t, 1000, true)
 	incrementalFrame(t, coveredWorld, coveredCanvas)
 	driver.shapes, driver.sprites = 0, 0
-	ecs.GetMut[Sprite2D](coveredWorld, covered[0]).Shape.Fill = graphics.Black
+	coveredWorld.GetMut[Sprite2D](covered[0]).Shape.Fill = graphics.Black
 	incrementalFrame(t, coveredWorld, coveredCanvas)
-	if stats := renderWorld(coveredWorld).Composite2D; stats.DirtyTiles != 0 || stats.Occluded != 1000 || driver.shapes != 0 || driver.sprites != 1 {
+	if stats := RenderWorldFor(coveredWorld).Composite2D; stats.DirtyTiles != 0 || stats.Occluded != 1000 || driver.shapes != 0 || driver.sprites != 1 {
 		t.Fatalf("covered mutation repainted: %+v, shapes=%d sprites=%d", stats, driver.shapes, driver.sprites)
 	}
 }
@@ -128,10 +128,10 @@ func TestComposite2DDamageMoveRemovalAndOcclusion(t *testing.T) {
 func TestComposite2DScrollReusesPropertiesAndPixels(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 1000, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	snapshot := state.Items2D[0].sprite
 	for _, entity := range entities {
-		ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12] += 128
+		world.GetMut[UIGlobalTransform](entity).Matrix[12] += 128
 	}
 	incrementalFrame(t, world, canvas)
 	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PropertiesUpdated != 1000 || state.Items2D[0].sprite != snapshot {
@@ -142,17 +142,17 @@ func TestComposite2DScrollReusesPropertiesAndPixels(t *testing.T) {
 	}
 	for range 6 {
 		for _, entity := range entities {
-			ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12] -= 128
+			world.GetMut[UIGlobalTransform](entity).Matrix[12] -= 128
 		}
 		incrementalFrame(t, world, canvas)
 		for _, entity := range entities {
-			ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12] += 128
+			world.GetMut[UIGlobalTransform](entity).Matrix[12] += 128
 		}
 		incrementalFrame(t, world, canvas)
 	}
 	if allocations := testing.AllocsPerRun(20, func() {
 		for _, entity := range entities {
-			x := &ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12]
+			x := &world.GetMut[UIGlobalTransform](entity).Matrix[12]
 			*x += 128
 			if *x >= 1280 {
 				*x -= 1280
@@ -167,8 +167,8 @@ func TestComposite2DScrollReusesPropertiesAndPixels(t *testing.T) {
 func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
-	transform := ecs.GetMut[UIGlobalTransform](world, entities[0])
+	state := RenderWorldFor(world)
+	transform := world.GetMut[UIGlobalTransform](entities[0])
 	transform.clip = clipRect2D{valid: true, minX: 0, minY: 0, maxX: 5, maxY: 5}
 	incrementalFrame(t, world, canvas)
 	if state.Items2D[0].paint.bounds.Max.X != 5 || state.Composite2D.DirtyTiles != 1 {
@@ -176,7 +176,7 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 	}
 	texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))
 	t.Cleanup(func() { _ = texture.Dispose() })
-	sprite := ecs.GetMut[Sprite2D](world, entities[0])
+	sprite := world.GetMut[Sprite2D](entities[0])
 	sprite.Shape = Shape2D{}
 	sprite.Texture = texture
 	sprite.Tint = graphics.White
@@ -194,14 +194,14 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 		t.Fatal("disposed texture retained", state.Composite2D)
 	}
 	for _, entity := range entities {
-		ecs.GetMut[Sprite2D](world, entity).Alpha = .5
+		world.GetMut[Sprite2D](entity).Alpha = .5
 	}
 	incrementalFrame(t, world, canvas)
-	if !ecs.ScopeValue[retainedRender2D, retainedRender2D](world).direct {
+	if !world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
 		t.Fatal("dense frame retained")
 	}
 	incrementalFrame(t, world, canvas)
-	if ecs.ScopeValue[retainedRender2D, retainedRender2D](world).direct {
+	if world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
 		t.Fatal("quiet frame failed to recover")
 	}
 	incrementalFrame(t, world, canvas)
@@ -253,18 +253,18 @@ func TestComposite2DConservativeOpaqueBounds(t *testing.T) {
 func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 	world, canvas, driver, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
-	ecs.InsertResource(world, CompositeSettings2D{MaxCacheBytes: -1})
+	state := RenderWorldFor(world)
+	world.InsertResource(CompositeSettings2D{MaxCacheBytes: -1})
 	incrementalFrame(t, world, canvas)
 	if state.Composite2D.CacheBytes != 0 {
 		t.Fatal("disabled budget retained cache")
 	}
-	ecs.RemoveResource[CompositeSettings2D](world)
+	world.RemoveResource[CompositeSettings2D]()
 	for _, entity := range entities {
-		ecs.GetMut[Sprite2D](world, entity).Shape.Fill = graphics.Black
+		world.GetMut[Sprite2D](entity).Shape.Fill = graphics.Black
 	}
 	incrementalFrame(t, world, canvas)
-	if !ecs.ScopeValue[retainedRender2D, retainedRender2D](world).direct {
+	if !world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
 		t.Fatal("dense changes did not use sequential path")
 	}
 	incrementalFrame(t, world, canvas)
@@ -279,19 +279,19 @@ func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 func TestComposite2DIneligibleOutputsAndReleasedText(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.Cameras[0].Camera.ClearColor.A = .5
 	incrementalFrame(t, world, canvas)
 	if !state.Composite2D.Direct || state.Composite2D.CacheBytes != 0 {
 		t.Fatal("transparent output cached")
 	}
 	state.Cameras[0].Camera.ClearColor.A = 1
-	ecs.Insert(world, entities[0], Shader[graphics.Material2DShader]{Program: new(graphics.Material2DShader)})
+	world.Insert(entities[0], Shader[graphics.Material2DShader]{Program: new(graphics.Material2DShader)})
 	incrementalFrame(t, world, canvas)
 	if !state.Composite2D.Direct || state.Composite2D.CacheBytes != 0 {
 		t.Fatal("custom shader cached")
 	}
-	ecs.Remove[Shader[graphics.Material2DShader]](world, entities[0])
+	world.Remove[Shader[graphics.Material2DShader]](entities[0])
 	RegisterTextRenderer2D(world)
 	font := outputTestFont(t)
 	pool := NewRenderOutputPool(1)
@@ -299,7 +299,7 @@ func TestComposite2DIneligibleOutputsAndReleasedText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ecs.Insert(world, entities[0], RenderOutput2D{Handle: handle}); err != nil {
+	if err := world.Insert(entities[0], RenderOutput2D{Handle: handle}); err != nil {
 		t.Fatal(err)
 	}
 	incrementalFrame(t, world, canvas)
@@ -315,11 +315,11 @@ func TestComposite2DIneligibleOutputsAndReleasedText(t *testing.T) {
 
 func TestComposite2DOnlyFirstCameraOwnsOpaqueBackground(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	second := state.Cameras[0]
 	second.Entity = 2
 	state.Cameras = append(state.Cameras, second)
-	if err := ecs.Insert(world, entities[0], UITargetCamera{Entity: 2}); err != nil {
+	if err := world.Insert(entities[0], UITargetCamera{Entity: 2}); err != nil {
 		t.Fatal(err)
 	}
 	incrementalFrame(t, world, canvas)

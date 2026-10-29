@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 )
@@ -13,7 +12,7 @@ func TestHTMLStaticAnimationWorkspaceLifecycle(t *testing.T) {
 	world, owner, clock := htmlAnimationFixture(t, `<div id="item" style="width:20px;height:20px;background:red"></div>`)
 	node := incrementalHTMLNode(t, world, owner, "item")
 	visual := htmlAnimationVisual(t, world, owner, "item")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	initial := state.Animations[node.node]
 	if initial == nil || initial.htmlNodeMotion != nil || Animating(world) {
 		t.Fatal("static node owns a motion workspace or schedules frames")
@@ -24,7 +23,7 @@ func TestHTMLStaticAnimationWorkspaceLifecycle(t *testing.T) {
 		t.Fatal("adding transition failed to reuse the static baseline")
 	}
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
-	transform, _ := ecs.Get[scene.UITransform](world, visual)
+	transform, _ := world.Get[scene.UITransform](visual)
 	if transform.Translation.X.Value != 50 {
 		t.Fatalf("introduced transition midpoint = %v", transform.Translation.X.Value)
 	}
@@ -33,14 +32,14 @@ func TestHTMLStaticAnimationWorkspaceLifecycle(t *testing.T) {
 	if initial.htmlNodeMotion != nil || Animating(world) {
 		t.Fatal("removing transition retained its workspace")
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if transform.Translation.X.Value != 100 {
 		t.Fatalf("cancelled transition target = %v", transform.Translation.X.Value)
 	}
 	node.SetAttribute("style", "width:20px;height:20px;background:red;transition:transform 1s linear")
 	incrementalSync(t, world)
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if transform.Translation.X.Value != 50 {
 		t.Fatalf("reintroduced transition midpoint = %v", transform.Translation.X.Value)
 	}
@@ -49,7 +48,7 @@ func TestHTMLStaticAnimationWorkspaceLifecycle(t *testing.T) {
 func TestHTMLStaticAnimationWarmAllocations(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="item" style="transform:translateX(20px)"></div>`)
 	node := incrementalHTMLNode(t, world, owner, "item")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	computed := state.Styles[node.node]
 	if allocs := testing.AllocsPerRun(100, func() {
 		// Force preparation without changing the actual style or motion needs.
@@ -67,7 +66,7 @@ func TestHTMLTransitionIntroducedDuringInheritedColorAnimation(t *testing.T) {
  </style><div id="parent"><span id="child">Text</span></div>`)
 	child := incrementalHTMLNode(t, world, owner, "child")
 	htmlAnimationStep(t, world, clock, 250*time.Millisecond)
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	animation := state.Animations[child.node]
 	foreground := animation.Foreground
 	if animation.htmlNodeMotion != nil || foreground != (style.AnimationColor{R: .75, B: .25, A: 1}) {

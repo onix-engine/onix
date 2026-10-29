@@ -18,11 +18,11 @@ func TestSceneCamerasIsolateMeshesAndLights(t *testing.T) {
 	Register(w)
 	spawnCamera := func(id uint64) ecs.Entity {
 		b := ecs.NewBundle(5)
-		ecs.Put(&b, scene.NewCamera())
-		ecs.Put(&b, Camera{})
-		ecs.Put(&b, scene.PerspectiveProjection3D())
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
-		ecs.Put(&b, scene.SceneLayer{ID: id, Order: id})
+		b.Put(scene.NewCamera())
+		b.Put(Camera{})
+		b.Put(scene.PerspectiveProjection3D())
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
+		b.Put(scene.SceneLayer{ID: id, Order: id})
 		return w.Spawn(b)
 	}
 	a, b := spawnCamera(1), spawnCamera(2)
@@ -30,7 +30,7 @@ func TestSceneCamerasIsolateMeshesAndLights(t *testing.T) {
 	defer mesh.Dispose()
 	for _, camera := range []ecs.Entity{a, b} {
 		entity := spawnMesh3DForTest(w, mesh, graphics.NewStandardMaterial(graphics.White), mgl32.Vec3{0, 0, -4})
-		if err := ecs.Insert(w, entity, scene.Parent{Entity: camera}); err != nil {
+		if err := w.Insert(entity, scene.Parent{Entity: camera}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -40,7 +40,7 @@ func TestSceneCamerasIsolateMeshesAndLights(t *testing.T) {
 	if err := ExtractSystem("").Run(w); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*World](w)
+	state, _ := w.GetResource[*World]()
 	if len(state.views[a].extracted) != 1 || len(state.views[b].extracted) != 1 {
 		t.Fatal("camera extracted another scene's mesh")
 	}

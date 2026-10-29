@@ -12,11 +12,11 @@ func isContextMenuPick(world *ecs.World, entity ecs.Entity) bool {
 	if entity == 0 {
 		return false
 	}
-	return ecs.Has[ContextMenuItem](world, entity)
+	return world.Has[ContextMenuItem](entity)
 }
 
 func closeContextMenus(world *ecs.World) {
-	for _, access := range ecs.Query[ContextMenu](world).All {
+	for _, access := range world.Query[ContextMenu]().All {
 		menu := access.Mut()
 
 		menu.Open = false
@@ -25,12 +25,12 @@ func closeContextMenus(world *ecs.World) {
 
 func closeOtherSelectors(world *ecs.World, picked ecs.Entity) {
 	keep := ecs.Entity(0)
-	if ecs.Has[Selector](world, picked) {
+	if world.Has[Selector](picked) {
 		keep = picked
-	} else if item, ok := ecs.Get[SelectorItem](world, picked); ok {
+	} else if item, ok := world.Get[SelectorItem](picked); ok {
 		keep = item.Owner
 	}
-	for entity, access := range ecs.Query[Selector](world).All {
+	for entity, access := range world.Query[Selector]().All {
 		selector := access.Mut()
 
 		if entity != keep {
@@ -58,15 +58,15 @@ func selectorListHeight(selector *Selector, count int, itemHeight float32) float
 }
 
 func selectorPopupGap(world *ecs.World, entity ecs.Entity) float32 {
-	if ecs.Has[htmlSelectorRuntime](world, entity) {
+	if world.Has[htmlSelectorRuntime](entity) {
 		return htmlSelectorPopupGap
 	}
 	return 0
 }
 
 func selectorListHorizontalLayout(world *ecs.World, entity ecs.Entity, width float32) (float32, float32) {
-	viewport, ok := ecs.GetResource[scene.ViewportSize](world)
-	transform := ecs.GetRef[scene.UIGlobalTransform](world, entity)
+	viewport, ok := world.GetResource[scene.ViewportSize]()
+	transform := world.GetRef[scene.UIGlobalTransform](entity)
 	if !ok || viewport.Width <= 0 || transform == nil {
 		return width, 0
 	}
@@ -102,8 +102,8 @@ func selectorListLayout(world *ecs.World, entity ecs.Entity, selector *Selector,
 }
 
 func selectorViewportSpace(world *ecs.World, entity ecs.Entity, control *controlView) (float32, float32, bool) {
-	viewport, viewportOK := ecs.GetResource[scene.ViewportSize](world)
-	transform := ecs.GetRef[scene.UIGlobalTransform](world, entity)
+	viewport, viewportOK := world.GetResource[scene.ViewportSize]()
+	transform := world.GetRef[scene.UIGlobalTransform](entity)
 	if (!viewportOK) || (viewport.Width <= 0) || (viewport.Height <= 0) || (transform == nil) || (control == nil) {
 		return 0, 0, false
 	}
@@ -155,10 +155,10 @@ func abs32(value float32) float32 {
 
 func hierarchyVisible(world *ecs.World, entity ecs.Entity) bool {
 	for remaining := world.EntityCount() + 1; entity != 0 && remaining > 0; remaining-- {
-		if visibility := ecs.GetRef[scene.Visibility](world, entity); visibility != nil && !visibility.Visible {
+		if visibility := world.GetRef[scene.Visibility](entity); visibility != nil && !visibility.Visible {
 			return false
 		}
-		parent, ok := ecs.Get[scene.Parent](world, entity)
+		parent, ok := world.Get[scene.Parent](entity)
 		if !ok {
 			return true
 		}

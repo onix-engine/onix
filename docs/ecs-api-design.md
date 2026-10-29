@@ -4,13 +4,16 @@ This historical review led to the eight completed phases documented in the
 [implementation record](ecs-api-implementation.md). It describes design intent;
 use the implementation record for final names, measurements and migration outcomes.
 
+Go 1.27 method names and slot ownership are documented in the
+[generic-method migration](ecs-generic-methods.md).
+
 ## Access and iteration
 
 Optional pointer access returns *T and uses nil for absence: GetRef/GetMut and Slot
 variants need no redundant bool. Value Get keeps (T,bool), since zero is valid.
-MustMut/MustMutSlot express installation-verified invariants and diagnose entity/type.
+World.MustMut/EntitySlot.MustMut express installation-verified invariants and diagnose entity/type.
 Resources retain presence booleans because a stored nil pointer can be present.
-project.Component supports low-frequency named access; RequireComponent validates
+SceneInstance.Component supports low-frequency named access; RequireComponent validates
 and returns an EntitySlot for repeated access. Cache handles rather than component
 pointers; generations/World checks reject stale or foreign Slots. Rebind on scene replacement.
 

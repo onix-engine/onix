@@ -5,7 +5,44 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+	"unsafe"
 )
+
+func TestTextBufferTailCompactionPublishesDetachedSnapshot(t *testing.T) {
+	var buffer TextBuffer
+	initial := strings.Repeat("a", 1<<20)
+	value, _, _ := buffer.ApplyTextEditsInRange(initial, 1024, len(initial), 0, true, []TextEdit{{Command: TextCommandBackspace}})
+	if value != initial[:1024] || unsafe.StringData(value) == unsafe.StringData(initial) || unsafe.StringData(buffer.value) != unsafe.StringData(value) {
+		t.Fatal("input published the oversized snapshot after compaction")
+	}
+	start, end, next, _, ok := buffer.ChangedRange(initial, value)
+	if !ok || start != 1024 || end != len(initial) || next != 1024 {
+		t.Fatal("compaction lost the edit delta")
+	}
+	previous := value
+	value, _, _ = buffer.ApplyTextEditsInRange(value, len(value), len(value), 0, true, []TextEdit{{Text: "x"}})
+	if value != previous+"x" || buffer.before != previous || initial != strings.Repeat("a", 1<<20) {
+		t.Fatal("subsequent edit lost or mutated a snapshot")
+	}
+}
+
+func TestTextBufferLargePasteReleasesScratch(t *testing.T) {
+	var buffer TextBuffer
+	paste := strings.Repeat("界\r\n", 30000)
+	value, _, _ := buffer.ApplyTextEditsInRange("", 0, 0, 0, true, []TextEdit{{Text: paste}})
+	if value != strings.Repeat("界\n", 30000) || cap(buffer.scratch) > 64<<10 {
+		t.Fatal("large paste lost sanitization or retained its scratch buffer")
+	}
+	value, _, _ = buffer.ApplyTextEditsInRange(value, 0, buffer.Runes(), 0, true, []TextEdit{{Text: "small"}})
+	buffer.Reserve(4096, 128)
+	// Establish snapshot capacity after the replacement before checking typing.
+	value, _, _ = buffer.ApplyTextEditsInRange(value, buffer.Runes(), buffer.Runes(), 0, true, []TextEdit{{Text: "x"}})
+	if n := testing.AllocsPerRun(100, func() {
+		value, _, _ = buffer.ApplyTextEditsInRange(value, buffer.Runes(), buffer.Runes(), 0, true, []TextEdit{{Text: "x"}})
+	}); n != 0 {
+		t.Fatalf("warm typing after paste allocated %g times", n)
+	}
+}
 
 func TestTextBufferBatchChangedRange(t *testing.T) {
 	for _, fixture := range []struct {

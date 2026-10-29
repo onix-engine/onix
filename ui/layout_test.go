@@ -11,27 +11,27 @@ import (
 func TestSyncUILayoutHorizontalPositionsChildren(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(4)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 200, Height: 80})
-	ecs.Put(&parentBundle, NewLayout())
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 200, Height: 80})
+	parentBundle.Put(NewLayout())
+	parentBundle.Put(scene.AnchorTopLeft)
 	parent := world.Spawn(parentBundle)
 	child := func(width float32) ecs.Entity {
 		bundle := ecs.NewBundle(5)
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{Width: width, Height: 20})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Parent{Entity: parent})
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{Width: width, Height: 20})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Parent{Entity: parent})
 		return world.Spawn(bundle)
 	}
 	one, two := child(30), child(40)
-	value := ecs.GetMut[Layout](world, parent)
+	value := world.GetMut[Layout](parent)
 	value.Type, value.PaddingLeft, value.PaddingTop, value.SpacingX = LayoutHorizontal, 10, 5, 7
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	first, _ := ecs.Get[scene.UITransform](world, one)
-	second, _ := ecs.Get[scene.UITransform](world, two)
+	first, _ := world.Get[scene.UITransform](one)
+	second, _ := world.Get[scene.UITransform](two)
 	if got := first.Translation.Resolve(scene.UIResolveContext{}); got.X() != 10 || got.Y() != 5 {
 		t.Fatalf("first child position = %v, want (10, 5)", got)
 	}
@@ -43,18 +43,18 @@ func TestSyncUILayoutHorizontalPositionsChildren(t *testing.T) {
 func TestSyncUILayoutUsesAuthoredSiblingOrder(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(4)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 100, Height: 40})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
-	ecs.Put(&parentBundle, Layout{Type: LayoutHorizontal, AutoAlignment: true})
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 100, Height: 40})
+	parentBundle.Put(scene.AnchorTopLeft)
+	parentBundle.Put(Layout{Type: LayoutHorizontal, AutoAlignment: true})
 	parent := world.Spawn(parentBundle)
 	spawnChild := func(order int, width float32) ecs.Entity {
 		bundle := ecs.NewBundle(6)
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{Width: width, Height: 10})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Parent{Entity: parent})
-		ecs.Put(&bundle, scene.SiblingOrder(order))
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{Width: width, Height: 10})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Parent{Entity: parent})
+		bundle.Put(scene.SiblingOrder(order))
 		return world.Spawn(bundle)
 	}
 	second := spawnChild(1, 10)
@@ -62,8 +62,8 @@ func TestSyncUILayoutUsesAuthoredSiblingOrder(t *testing.T) {
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	firstTransform, _ := ecs.Get[scene.UITransform](world, first)
-	secondTransform, _ := ecs.Get[scene.UITransform](world, second)
+	firstTransform, _ := world.Get[scene.UITransform](first)
+	secondTransform, _ := world.Get[scene.UITransform](second)
 	if x := firstTransform.Translation.Resolve(scene.UIResolveContext{}).X(); x != 0 {
 		t.Fatalf("authored first child x = %v, want 0", x)
 	}
@@ -75,30 +75,30 @@ func TestSyncUILayoutUsesAuthoredSiblingOrder(t *testing.T) {
 func TestSyncUILayoutResizeChildrenFillsAvailableSpace(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(4)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 100, Height: 40})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
-	ecs.Put(&parentBundle, Layout{Type: LayoutHorizontal, ResizeMode: LayoutResizeChildren})
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 100, Height: 40})
+	parentBundle.Put(scene.AnchorTopLeft)
+	parentBundle.Put(Layout{Type: LayoutHorizontal, ResizeMode: LayoutResizeChildren})
 	parent := world.Spawn(parentBundle)
 	for range 2 {
 		bundle := ecs.NewBundle(5)
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{Width: 20, Height: 10})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Parent{Entity: parent})
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{Width: 20, Height: 10})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Parent{Entity: parent})
 		world.Spawn(bundle)
 	}
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	widths := make([]float32, 0, 2)
-	for child, access := range ecs.Query[scene.Parent](world).All {
+	for child, access := range world.Query[scene.Parent]().All {
 		relation := access.Get()
 
 		if relation.Entity != parent {
 			continue
 		}
-		size, _ := ecs.Get[scene.Size2D](world, child)
+		size, _ := world.Get[scene.Size2D](child)
 		widths = append(widths, size.Width)
 	}
 	if len(widths) != 2 || widths[0] != 50 || widths[1] != 50 {
@@ -109,32 +109,32 @@ func TestSyncUILayoutResizeChildrenFillsAvailableSpace(t *testing.T) {
 func TestSyncUILayoutWidgetStretchesAndResolvesPercentMargins(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(3)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 200, Height: 100})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 200, Height: 100})
+	parentBundle.Put(scene.AnchorTopLeft)
 	parent := world.Spawn(parentBundle)
 	childBundle := ecs.NewBundle(6)
-	ecs.Put(&childBundle, scene.NewUITransform())
-	ecs.Put(&childBundle, scene.Size2D{Width: 20, Height: 10})
-	ecs.Put(&childBundle, scene.AnchorTopLeft)
-	ecs.Put(&childBundle, scene.Parent{Entity: parent})
-	ecs.Put(&childBundle, scene.InputTarget2D{Width: 20, Height: 10})
-	ecs.Put(&childBundle, scene.InputBlocker2D{Width: 20, Height: 10})
-	ecs.Put(&childBundle, Widget{Enabled: true, AlignLeft: true, AlignRight: true, AlignTop: true, Left: scene.Percent(10), Right: scene.Px(20), Top: scene.Px(8)})
+	childBundle.Put(scene.NewUITransform())
+	childBundle.Put(scene.Size2D{Width: 20, Height: 10})
+	childBundle.Put(scene.AnchorTopLeft)
+	childBundle.Put(scene.Parent{Entity: parent})
+	childBundle.Put(scene.InputTarget2D{Width: 20, Height: 10})
+	childBundle.Put(scene.InputBlocker2D{Width: 20, Height: 10})
+	childBundle.Put(Widget{Enabled: true, AlignLeft: true, AlignRight: true, AlignTop: true, Left: scene.Percent(10), Right: scene.Px(20), Top: scene.Px(8)})
 	child := world.Spawn(childBundle)
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	size, _ := ecs.Get[scene.Size2D](world, child)
-	transform, _ := ecs.Get[scene.UITransform](world, child)
+	size, _ := world.Get[scene.Size2D](child)
+	transform, _ := world.Get[scene.UITransform](child)
 	if size.Width != 160 {
 		t.Fatalf("widget width = %v, want 160", size.Width)
 	}
-	target, _ := ecs.Get[scene.InputTarget2D](world, child)
+	target, _ := world.Get[scene.InputTarget2D](child)
 	if target.Width != 160 || target.Height != 10 {
 		t.Fatalf("widget input target = (%v, %v), want (160, 10)", target.Width, target.Height)
 	}
-	blocker, _ := ecs.Get[scene.InputBlocker2D](world, child)
+	blocker, _ := world.Get[scene.InputBlocker2D](child)
 	if blocker.Width != 160 || blocker.Height != 10 {
 		t.Fatalf("widget input blocker = (%v, %v), want (160, 10)", blocker.Width, blocker.Height)
 	}
@@ -147,25 +147,25 @@ func TestSyncUILayoutWidgetStretchesAndResolvesPercentMargins(t *testing.T) {
 func TestSyncUILayoutWidgetAlignOnceAndWindowResize(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(3)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 100, Height: 50})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 100, Height: 50})
+	parentBundle.Put(scene.AnchorTopLeft)
 	parent := world.Spawn(parentBundle)
 	childBundle := ecs.NewBundle(5)
-	ecs.Put(&childBundle, scene.NewUITransform())
-	ecs.Put(&childBundle, scene.Size2D{Width: 10, Height: 10})
-	ecs.Put(&childBundle, scene.AnchorTopLeft)
-	ecs.Put(&childBundle, scene.Parent{Entity: parent})
-	ecs.Put(&childBundle, Widget{Enabled: true, AlignRight: true, Right: scene.Px(4), AlignMode: WidgetAlignOnce})
+	childBundle.Put(scene.NewUITransform())
+	childBundle.Put(scene.Size2D{Width: 10, Height: 10})
+	childBundle.Put(scene.AnchorTopLeft)
+	childBundle.Put(scene.Parent{Entity: parent})
+	childBundle.Put(Widget{Enabled: true, AlignRight: true, Right: scene.Px(4), AlignMode: WidgetAlignOnce})
 	child := world.Spawn(childBundle)
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	widget, _ := ecs.Get[Widget](world, child)
+	widget, _ := world.Get[Widget](child)
 	if !widget.Enabled {
 		t.Fatal("align-once alignment changed the authored enabled state")
 	}
-	transform := ecs.GetMut[scene.UITransform](world, child)
+	transform := world.GetMut[scene.UITransform](child)
 	transform.Translation.X = scene.Px(20)
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestSyncUILayoutWidgetAlignOnceAndWindowResize(t *testing.T) {
 	if x := transform.Translation.Resolve(scene.UIResolveContext{}).X(); x != 20 {
 		t.Fatalf("align-once moved on second pass to %v", x)
 	}
-	widgetMut := ecs.GetMut[Widget](world, child)
+	widgetMut := world.GetMut[Widget](child)
 	widgetMut.Right = scene.Px(8)
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -193,25 +193,25 @@ func TestSyncUILayoutWidgetAlignOnceAndWindowResize(t *testing.T) {
 func TestSyncUILayoutGridDirections(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(4)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 100, Height: 100})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
-	ecs.Put(&parentBundle, Layout{Type: LayoutGrid, CellSize: mgl32.Vec2{20, 20}, Constraint: LayoutConstraintFixedColumn, ConstraintNum: 2})
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 100, Height: 100})
+	parentBundle.Put(scene.AnchorTopLeft)
+	parentBundle.Put(Layout{Type: LayoutGrid, CellSize: mgl32.Vec2{20, 20}, Constraint: LayoutConstraintFixedColumn, ConstraintNum: 2})
 	parent := world.Spawn(parentBundle)
 	children := make([]ecs.Entity, 0, 3)
 	for range 3 {
 		bundle := ecs.NewBundle(4)
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{Width: 10, Height: 10})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Parent{Entity: parent})
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{Width: 10, Height: 10})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Parent{Entity: parent})
 		children = append(children, world.Spawn(bundle))
 	}
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	for index, child := range children {
-		transform, _ := ecs.Get[scene.UITransform](world, child)
+		transform, _ := world.Get[scene.UITransform](child)
 		position := transform.Translation.Resolve(scene.UIResolveContext{})
 		wantX, wantY := float32(index%2*20), float32(index/2*20)
 		if position.X() != wantX || position.Y() != wantY {
@@ -223,25 +223,25 @@ func TestSyncUILayoutGridDirections(t *testing.T) {
 func TestSyncUILayoutReverseDirections(t *testing.T) {
 	world := ecs.NewWorld()
 	parentBundle := ecs.NewBundle(4)
-	ecs.Put(&parentBundle, scene.NewUITransform())
-	ecs.Put(&parentBundle, scene.Size2D{Width: 100, Height: 80})
-	ecs.Put(&parentBundle, scene.AnchorTopLeft)
-	ecs.Put(&parentBundle, Layout{Type: LayoutHorizontal, HorizontalDirection: LayoutRightToLeft, PaddingRight: 5, SpacingX: 3})
+	parentBundle.Put(scene.NewUITransform())
+	parentBundle.Put(scene.Size2D{Width: 100, Height: 80})
+	parentBundle.Put(scene.AnchorTopLeft)
+	parentBundle.Put(Layout{Type: LayoutHorizontal, HorizontalDirection: LayoutRightToLeft, PaddingRight: 5, SpacingX: 3})
 	parent := world.Spawn(parentBundle)
 	children := make([]ecs.Entity, 0, 2)
 	for _, width := range []float32{20, 10} {
 		bundle := ecs.NewBundle(4)
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{Width: width, Height: 10})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Parent{Entity: parent})
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{Width: width, Height: 10})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Parent{Entity: parent})
 		children = append(children, world.Spawn(bundle))
 	}
 	if err := SyncLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	one, _ := ecs.Get[scene.UITransform](world, children[0])
-	two, _ := ecs.Get[scene.UITransform](world, children[1])
+	one, _ := world.Get[scene.UITransform](children[0])
+	two, _ := world.Get[scene.UITransform](children[1])
 	if x := one.Translation.Resolve(scene.UIResolveContext{}).X(); x != 75 {
 		t.Fatalf("right-to-left first x = %v, want 75", x)
 	}

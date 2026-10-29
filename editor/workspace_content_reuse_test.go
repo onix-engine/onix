@@ -52,7 +52,7 @@ func TestWorkspace2DNameAndRootTransformRetainContent(t *testing.T) {
 		}
 	}
 	assertRetained()
-	if transform, _ := ecs.Get[scene.UIGlobalTransform](v.world, child); transform.Matrix[12] != 85 {
+	if transform, _ := v.world.Get[scene.UIGlobalTransform](child); transform.Matrix[12] != 85 {
 		t.Fatalf("retained child did not follow module transform: %v", transform.Matrix[12])
 	}
 	// Alternating validated transforms exercises the render update independently
@@ -84,7 +84,7 @@ func TestWorkspace2DNameAndRootTransformRetainContent(t *testing.T) {
 	}
 	sync()
 	assertRetained()
-	if transform, _ := ecs.Get[scene.UIGlobalTransform](v.world, child); transform.Matrix[12] != 45 {
+	if transform, _ := v.world.Get[scene.UIGlobalTransform](child); transform.Matrix[12] != 45 {
 		t.Fatal("undo did not restore the retained module transform")
 	}
 	a.fields["color"] = workspaceField{Target: "button/mod.json", Pointer: "/components/sprite/color", Kind: "string", Axis: -1, Value: "#3264d9"}
@@ -114,14 +114,14 @@ func TestWorkspace2DRenamePreservesAnimationState(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := &a.viewport2D
-	clock, _ := ecs.GetResource[*scene.Time](v.world)
+	clock, _ := v.world.GetResource[*scene.Time]()
 	clock.Set(500*time.Millisecond, 500*time.Millisecond, 1)
 	if err := v.syncVisuals(true); err != nil {
 		t.Fatal(err)
 	}
 	root := v.rows[0].root
-	before, _ := ecs.Get[scene.Animator](v.world, root)
-	transform, _ := ecs.Get[scene.UITransform](v.world, root)
+	before, _ := v.world.Get[scene.Animator](root)
+	transform, _ := v.world.Get[scene.UITransform](root)
 	if err := a.Document.EditMod("button", "Rename", func(mod *project.ModSpec) error { mod.Name = "Renamed"; return nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -129,8 +129,8 @@ func TestWorkspace2DRenamePreservesAnimationState(t *testing.T) {
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := ecs.Get[scene.Animator](v.world, root)
-	current, _ := ecs.Get[scene.UITransform](v.world, root)
+	after, _ := v.world.Get[scene.Animator](root)
+	current, _ := v.world.Get[scene.UITransform](root)
 	if v.rows[0].root != root || before.Clip != after.Clip || transform != current {
 		t.Fatal("renaming reset the animator or its sampled transform")
 	}
@@ -141,7 +141,7 @@ func TestWorkspace3DNameAndRootTransformRetainGeometryAndCamera(t *testing.T) {
 	v := &a.viewport3D
 	row := &v.rows[len(v.rows)-1]
 	root, child := row.parts[0].entity, row.parts[2].entity
-	mesh, _ := ecs.Get[render3d.Mesh](v.world, root)
+	mesh, _ := v.world.Get[render3d.Mesh](root)
 	resources := v.mods["model"].resources
 	if _, _, err := a.viewport3DEnvironmentSource(); err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestWorkspace3DNameAndRootTransformRetainGeometryAndCamera(t *testing.T) {
 	for _, position := range []string{"6", "8", "10"} {
 		a.drafts["name"], a.drafts["position"] = "Renamed", position
 		sync()
-		current, _ := ecs.Get[render3d.Mesh](v.world, root)
+		current, _ := v.world.Get[render3d.Mesh](root)
 		if row.parts[0].entity != root || row.parts[2].entity != child || current.Mesh != mesh.Mesh || v.mods["model"].resources != resources {
 			t.Fatal("name/root transform edit recreated model geometry")
 		}
@@ -171,7 +171,7 @@ func TestWorkspace3DNameAndRootTransformRetainGeometryAndCamera(t *testing.T) {
 			t.Fatal("equivalent camera specs accumulated in the environment cache")
 		}
 	}
-	if transform, _ := ecs.Get[scene.GlobalTransform](v.world, child); transform.Matrix[12] != 20 {
+	if transform, _ := v.world.Get[scene.GlobalTransform](child); transform.Matrix[12] != 20 {
 		t.Fatal("retained model did not follow the updated module transform")
 	}
 	documents := [2]*WorkspaceDocument{a.Document, a.previewDocument()}
@@ -200,7 +200,7 @@ func TestWorkspace3DNameAndRootTransformRetainGeometryAndCamera(t *testing.T) {
 	if row.parts[0].entity == root || v.mods["model"].resources == resources {
 		t.Fatal("geometry change reused an outdated resource store")
 	}
-	current, _ := ecs.Get[render3d.Mesh](v.world, row.parts[0].entity)
+	current, _ := v.world.Get[render3d.Mesh](row.parts[0].entity)
 	if current.Mesh == mesh.Mesh || current.Mesh.Bounds.Radius <= mesh.Mesh.Bounds.Radius {
 		t.Fatal("geometry change did not rebuild the model")
 	}

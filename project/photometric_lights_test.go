@@ -31,19 +31,19 @@ func TestPhotometricSceneLifecycle(t *testing.T) {
 	}
 	t.Cleanup(scene.Dispose)
 	areaEntity := scene.MustEntity("area")
-	area, ok := ecs.Get[render3d.AreaLight](scene.World, areaEntity)
+	area, ok := scene.World.Get[render3d.AreaLight](areaEntity)
 	if !ok || area.Shape != render3d.AreaTube || area.Nits() != 50 || area.Width != 2 {
 		t.Fatal(area)
 	}
-	point, ok := ecs.Get[render3d.PointLight](scene.World, scene.MustEntity("point"))
+	point, ok := scene.World.Get[render3d.PointLight](scene.MustEntity("point"))
 	if !ok || point.Candela() != 100 {
 		t.Fatal(point)
 	}
-	spot, ok := ecs.Get[render3d.SpotLight](scene.World, scene.MustEntity("spot"))
+	spot, ok := scene.World.Get[render3d.SpotLight](scene.MustEntity("spot"))
 	if !ok || spot.Shape != render3d.SpotPyramid || spot.PhysicalIntensity() != 0.0625 {
 		t.Fatal(spot)
 	}
-	camera, ok := ecs.Get[render3d.Camera](scene.World, scene.MustEntity("camera"))
+	camera, ok := scene.World.Get[render3d.Camera](scene.MustEntity("camera"))
 	if !ok || camera.Exposure.Mode != graphics.ExposureFixed || camera.Exposure.Value() != 0 {
 		t.Fatal(camera)
 	}
@@ -59,7 +59,7 @@ func TestPhotometricSceneLifecycle(t *testing.T) {
 	if err := scene.ApplyNode(spec); err != nil {
 		t.Fatal(err)
 	}
-	area, _ = ecs.Get[render3d.AreaLight](scene.World, areaEntity)
+	area, _ = scene.World.Get[render3d.AreaLight](areaEntity)
 	if area.Shape != render3d.AreaDisc || area.Nits() != 80 {
 		t.Fatal(area)
 	}
@@ -82,7 +82,7 @@ func TestPhotometricSceneLifecycle(t *testing.T) {
 	if err := scene.ApplyNode(spec); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[render3d.AreaLight](scene.World, areaEntity) || !ecs.Has[render3d.PointLight](scene.World, areaEntity) {
+	if scene.World.Has[render3d.AreaLight](areaEntity) || !scene.World.Has[render3d.PointLight](areaEntity) {
 		t.Fatal("replaced area light remained on entity")
 	}
 }

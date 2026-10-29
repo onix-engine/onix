@@ -1,7 +1,6 @@
 package module
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
 )
@@ -29,7 +28,7 @@ func (s Slot) SetVisual(handle RenderOutputHandle) error {
 			return err
 		}
 	}
-	if err = ecs.Insert(s.context.runtime.world, state.entity, scene.RenderOutput2D{Handle: lease}); err != nil {
+	if err = s.context.runtime.world.Insert(state.entity, scene.RenderOutput2D{Handle: lease}); err != nil {
 		_ = lease.Release()
 		return err
 	}

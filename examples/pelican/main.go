@@ -33,7 +33,7 @@ func main() {
 	if err := OnixOpenWindow(app, plan.Spec, source); err != nil {
 		panic(err)
 	}
-	if _, err := app.LoadModules(plan, registry, pelicanModuleOptions(source)); err != nil {
+	if _, err := app.LoadModules[OnixContentProfile](plan, registry, pelicanModuleOptions(source)); err != nil {
 		panic(err)
 	}
 	if err := app.Run(); err != nil {

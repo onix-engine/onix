@@ -9,7 +9,7 @@ import (
 	"github.com/diiyw/onix/project"
 )
 
-func layoutWorkspaceSettings[C ~uint8](a *ModuleEditor, dialog, title, save string, categories []settingsCategoryItem[C], category C) settingsDialogLayout[C] {
+func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save string, categories []settingsCategoryItem[C], category C) settingsDialogLayout[C] {
 	layout := newSettingsDialogLayout[C](a.layout().Root, save)
 	p := layout.panel
 	a.dialogLabel(dialog, dialog+"-title", title, 24, 22, p.W-70, 28)
@@ -30,7 +30,7 @@ func layoutWorkspaceSettings[C ~uint8](a *ModuleEditor, dialog, title, save stri
 }
 
 func (a *ModuleEditor) layoutWorkspacePreferences() {
-	layout := layoutWorkspaceSettings(a, "preferences", "Preferences", "Save Preferences", preferencesCategories[:], a.preferencesCategory)
+	layout := a.layoutWorkspaceSettings("preferences", "Preferences", "Save Preferences", preferencesCategories[:], a.preferencesCategory)
 	r := layout.fieldRect(0)
 	x, y := r.X-layout.panel.X, r.Y-layout.panel.Y
 	a.dialogLabel("preferences", "preferences-label-preferences.snapToGrid", "Snap to Grid", layout.content.X-layout.panel.X, y+5, x-(layout.content.X-layout.panel.X)-16, 24)
@@ -43,7 +43,7 @@ type workspaceSetting struct {
 }
 
 func (a *ModuleEditor) layoutWorkspaceProjectSettings() {
-	layout := layoutWorkspaceSettings(a, "project", "Project Settings", "Save Project", projectSettingsCategories[:], a.projectCategory)
+	layout := a.layoutWorkspaceSettings("project", "Project Settings", "Save Project", projectSettingsCategories[:], a.projectCategory)
 	var fields []workspaceSetting
 	switch a.projectCategory {
 	case projectSettingsWindow:

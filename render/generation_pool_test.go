@@ -11,13 +11,13 @@ func TestDestroyNativeResourceKeepsHandleUntilSuccess(t *testing.T) {
 	var pool GenerationPool[TextureResource, uint32]
 	handle := pool.Insert(23)
 	failure := errors.New("destroy failed")
-	if err := destroyNativeResource(&pool, handle, "texture", func(uint32) error { return failure }); err != failure {
+	if err := (&pool).destroyNativeResource(handle, "texture", func(uint32) error { return failure }); err != failure {
 		t.Fatal("native destruction error was lost", err)
 	}
 	if native, ok := pool.Get(handle); !ok || native != 23 {
 		t.Fatal("failed destruction removed the live resource")
 	}
-	if err := destroyNativeResource(&pool, handle, "texture", func(native uint32) error {
+	if err := (&pool).destroyNativeResource(handle, "texture", func(native uint32) error {
 		if native != 23 {
 			t.Fatal("destruction received the wrong native resource", native)
 		}
@@ -28,7 +28,7 @@ func TestDestroyNativeResourceKeepsHandleUntilSuccess(t *testing.T) {
 	if _, ok := pool.Get(handle); ok {
 		t.Fatal("successful destruction retained the handle")
 	}
-	if err := destroyNativeResource(&pool, handle, "texture", func(uint32) error {
+	if err := (&pool).destroyNativeResource(handle, "texture", func(uint32) error {
 		t.Fatal("stale handle reached the native destroy callback")
 		return nil
 	}); err == nil {

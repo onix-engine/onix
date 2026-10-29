@@ -56,7 +56,7 @@ func TestEntryEnterFailureDisposesNewInstanceBeforeRetry(t *testing.T) {
 	plan, registry, _ := managerPlan(t)
 	enters, destroys := 0, 0
 	delete(registry.scenes, "main.json")
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Enter: func(*Context, *Signal, SceneStartup) error {
 			enters++
 			if enters == 1 {
@@ -106,19 +106,19 @@ func TestScenePreloadIsHeadlessAndActivationReusesPreparedInstance(t *testing.T)
 		t.Fatal("preloading entered the game loop or changed foreground state")
 	}
 	button := p.buttons[1]
-	for e := range ecs.Query[scene.Sprite2D](r.world).All {
+	for e := range r.world.Query[scene.Sprite2D]().All {
 		if e == button.root {
 			t.Fatal("ready scene entered simulation queries")
 		}
 	}
 	previous := r.world.SetQueryScope(r.RenderScope())
-	for e := range ecs.Query[scene.Sprite2D](r.world).All {
+	for e := range r.world.Query[scene.Sprite2D]().All {
 		if e == button.root {
 			t.Fatal("ready scene entered render queries")
 		}
 	}
 	r.world.SetQueryScope(previous)
-	emit, err := BindEmitter[Signal](button, "clicked")
+	emit, err := button.BindEmitter[Signal]("clicked")
 	must(t, err)
 	if !errors.Is(emit.Emit(Signal{}), ErrUnavailable) {
 		t.Fatal("ready scene accepted a runtime event")
@@ -145,36 +145,36 @@ func TestSceneScopesExcludeHiddenProceduralDescendantsAndPausePhysics(t *testing
 	must(t, err)
 	w := r.world
 	b := ecs.NewBundle(5)
-	ecs.Put(&b, scene.Parent{Entity: p.buttons[0].root})
-	ecs.Put(&b, scopeProbe{})
-	ecs.Put(&b, scene.TransformFromXYZ(0, 0, 0))
+	b.Put(scene.Parent{Entity: p.buttons[0].root})
+	b.Put(scopeProbe{})
+	b.Put(scene.TransformFromXYZ(0, 0, 0))
 	body := physics.NewRigidBody2D(physics.BodyDynamic)
 	body.Velocity = physics.V(10, 0)
-	ecs.Put(&b, body)
+	b.Put(body)
 	child := w.Spawn(b)
-	ecs.InsertResource(w, &scene.Time{Delta: time.Second / 60})
+	w.InsertResource(&scene.Time{Delta: time.Second / 60})
 	r.SyncScopes()
 	must(t, physics.StepSystem2D("").Run(w))
-	pose, _ := ecs.Get[scene.Transform](w, child)
+	pose, _ := w.Get[scene.Transform](child)
 	must(t, r.Manager().Switch(SceneSwitchRequest{Scene: "game.json", Retain: true}))
 	must(t, r.Dispatch())
-	for range ecs.Query[scopeProbe](w).All {
+	for range w.Query[scopeProbe]().All {
 		t.Fatal("hidden descendant remained in simulation")
 	}
 	previous := w.SetQueryScope(r.RenderScope())
-	for range ecs.Query[scopeProbe](w).All {
+	for range w.Query[scopeProbe]().All {
 		t.Fatal("hidden descendant remained in rendering")
 	}
 	w.SetQueryScope(previous)
 	must(t, physics.StepSystem2D("").Run(w))
-	after, _ := ecs.Get[scene.Transform](w, child)
+	after, _ := w.Get[scene.Transform](child)
 	if after != pose || main.State() != SceneSuspended {
 		t.Fatal("hidden scene continued simulating")
 	}
 	must(t, r.Manager().Switch(SceneSwitchRequest{Scene: "main.json"}))
 	must(t, r.Dispatch())
 	must(t, physics.StepSystem2D("").Run(w))
-	after, _ = ecs.Get[scene.Transform](w, child)
+	after, _ = w.Get[scene.Transform](child)
 	if after.Translation.X() <= pose.Translation.X() {
 		t.Fatal("retained physics did not resume")
 	}
@@ -200,7 +200,7 @@ func TestSceneOverlayKeepsBackgroundRenderingAndOnlyUpdatesForeground(t *testing
 		t.Fatal("overlay updated its background or lost painter order")
 	}
 	count := 0
-	for range ecs.Query[scene.Sprite2D](r.world).All {
+	for range r.world.Query[scene.Sprite2D]().All {
 		count++
 	}
 	if count != 1 {
@@ -208,7 +208,7 @@ func TestSceneOverlayKeepsBackgroundRenderingAndOnlyUpdatesForeground(t *testing
 	}
 	previous := r.world.SetQueryScope(r.RenderScope())
 	count = 0
-	for range ecs.Query[scene.Sprite2D](r.world).All {
+	for range r.world.Query[scene.Sprite2D]().All {
 		count++
 	}
 	r.world.SetQueryScope(previous)
@@ -256,7 +256,7 @@ func TestRetainedSceneSwitchAndScopedTicksAllocateNothingWarm(t *testing.T) {
 		must(t, r.Dispatch())
 		must(t, r.Update(1.0/60))
 		r.SyncScopes()
-		for range ecs.Query[scene.Sprite2D](r.world).All {
+		for range r.world.Query[scene.Sprite2D]().All {
 		}
 	}
 	for range 8 {

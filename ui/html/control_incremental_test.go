@@ -12,7 +12,7 @@ import (
 func incrementalControl(t testing.TB, world *ecs.World, owner ecs.Entity, id string) ecs.Entity {
 	t.Helper()
 	node := incrementalHTMLNode(t, world, owner, id)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	for key, group := range state.EntityGroups {
 		if key.Node == node.node && key.Role == htmlRoleControl {
 			return group.Bindings[0].Entity
@@ -49,7 +49,7 @@ func TestHTMLControlLocalGeometryMatchesFresh(t *testing.T) {
 				}
 				target.SetAttribute("style", css)
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatalf("stable control/focus context fell back: %+v", state.SyncStats)
 				}
@@ -67,17 +67,17 @@ func TestHTMLControlLocalPreservesLiveStateAndSkipsSiblings(t *testing.T) {
 	SetControlValue(world, entity, "typed")
 	SetControlFocus(world, entity, true)
 	incrementalSync(t, world) // Establish focus before testing an ordinary DOM update.
-	live := ecs.GetMut[Control](world, entity)
+	live := world.GetMut[Control](entity)
 	live.SelectionAnchor, live.SelectionFocus = 1, 3
-	input := ecs.GetMut[scene.InputState2D](world, entity)
+	input := world.GetMut[scene.InputState2D](entity)
 	input.Pressed, input.Hovered = true, true
-	unchanged, _ := ecs.Get[Control](world, other)
+	unchanged, _ := world.Get[Control](other)
 	target.SetAttribute("class", "wide")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	live = ecs.GetMut[Control](world, entity)
-	input = ecs.GetMut[scene.InputState2D](world, entity)
-	after, _ := ecs.Get[Control](world, other)
+	state, _ := world.Get[htmlRenderState](owner)
+	live = world.GetMut[Control](entity)
+	input = world.GetMut[scene.InputState2D](entity)
+	after, _ := world.Get[Control](other)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 {
 		t.Fatalf("unrelated controls visited: %+v", state.SyncStats)
 	}
@@ -94,7 +94,7 @@ func TestHTMLFocusLocalBoundsShrinkAndInlineTargetCleanup(t *testing.T) {
 	for _, width := range []int{30, 200, 50} {
 		target.SetAttribute("style", fmt.Sprintf("width:%dpx", width))
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("focus subtree fell back")
 		}
@@ -106,7 +106,7 @@ func TestHTMLFocusLocalBoundsShrinkAndInlineTargetCleanup(t *testing.T) {
 	}
 	link.SetText(" ")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if _, exists := state.FocusByNode[link.node]; exists {
 		t.Fatal("empty inline focus target remains indexed")
 	}
@@ -154,7 +154,7 @@ func TestHTMLFocusTargetCanMoveBetweenEmittingBoxes(t *testing.T) {
 	for _, height := range []int{30, 0, 40, 0, 20} {
 		target.SetAttribute("style", fmt.Sprintf("height:%dpx", height))
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatalf("focus ownership transfer fell back: %+v", state.SyncStats)
 		}
@@ -173,19 +173,19 @@ func TestHTMLEditingHostLocalSelectionAndDescendantText(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="host" contenteditable="true"><div id="target">Before</div></div><div>After</div>`)
 	host := incrementalHTMLNode(t, world, owner, "host")
 	target := incrementalHTMLNode(t, world, owner, "target")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	entity := state.FocusTargets[state.FocusByNode[host.node]].Entity
-	editable := ecs.GetMut[Editable](world, entity)
+	editable := world.GetMut[Editable](entity)
 	editable.Anchor, editable.Focus = 1, 3
 	host.SetAttribute("style", "width:120px")
 	incrementalSync(t, world)
-	editable = ecs.GetMut[Editable](world, entity)
+	editable = world.GetMut[Editable](entity)
 	if editable.Anchor != 1 || editable.Focus != 3 {
 		t.Fatal("geometry update changed editable selection")
 	}
 	target.SetText("Changed")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("descendant text did not update editing context locally")
 	}
@@ -217,13 +217,13 @@ func TestHTMLSelectLocalResizePreservesSelectionAndOpenState(t *testing.T) {
 	entity := incrementalControl(t, world, owner, "target")
 	SetControlSelected(world, entity, 1)
 	incrementalSync(t, world)
-	control := ecs.GetMut[Control](world, entity)
+	control := world.GetMut[Control](entity)
 	control.Open = true
 	control.SelectionAnchor, control.SelectionFocus = 1, 1
 	target.SetAttribute("style", "width:180px")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	control = ecs.GetMut[Control](world, entity)
+	state, _ := world.Get[htmlRenderState](owner)
+	control = world.GetMut[Control](entity)
 	if state.SyncStats.PartialReconciles != 1 || !control.Open || control.Selected != 1 || control.SelectionAnchor != 1 || control.SelectionFocus != 1 || !control.Options[1].Selected {
 		t.Fatal("local select resize reset live state")
 	}
@@ -237,8 +237,8 @@ func TestHTMLTextareaLocalTextPreservesDirtyValue(t *testing.T) {
 	incrementalSync(t, world)
 	target.SetText("New default")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
-	control, _ := ecs.Get[Control](world, entity)
+	state, _ := world.Get[htmlRenderState](owner)
+	control, _ := world.Get[Control](entity)
 	if state.SyncStats.PartialReconciles != 1 || control.Value != "Typed" || control.DefaultValue != "New default" || !control.DirtyValue {
 		t.Fatalf("local textarea default update lost dirty value: %+v", control)
 	}

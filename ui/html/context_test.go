@@ -15,8 +15,8 @@ func assertHTMLContextMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Ent
 	t.Helper()
 	assertHTMLPartialMatchesFresh(t, world, owner, source)
 	fresh, freshOwner := incrementalHTMLFixture(t, source)
-	got, _ := ecs.Get[htmlRenderState](world, owner)
-	want, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+	got, _ := world.Get[htmlRenderState](owner)
+	want, _ := fresh.Get[htmlRenderState](freshOwner)
 	extents := make(map[*layout.Box]htmlOverflowExtent)
 	htmlOverflowContentExtents(got.Boxes, extents)
 	for box, expected := range extents {
@@ -28,14 +28,14 @@ func assertHTMLContextMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Ent
 		id, _ := node.Attr("id")
 		freshNode := incrementalHTMLNode(t, fresh, freshOwner, id)
 		expected := want.OverflowBindings[freshNode.node]
-		scroll, hasScroll := ecs.Get[scene.UIScroll](world, binding.entity)
-		other, otherHasScroll := ecs.Get[scene.UIScroll](fresh, expected.entity)
+		scroll, hasScroll := world.Get[scene.UIScroll](binding.entity)
+		other, otherHasScroll := fresh.Get[scene.UIScroll](expected.entity)
 		if hasScroll != otherHasScroll || scroll.ViewportSize != other.ViewportSize || scroll.ContentSize != other.ContentSize || scroll.Horizontal != other.Horizontal || scroll.Vertical != other.Vertical {
 			t.Fatalf("scroll geometry differs for %s: got=%+v want=%+v", id, scroll, other)
 		}
 	}
 	for _, entity := range got.Children {
-		content, ok := ecs.Get[ScrollContent](world, entity)
+		content, ok := world.Get[ScrollContent](entity)
 		if !ok {
 			continue
 		}
@@ -44,7 +44,7 @@ func assertHTMLContextMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Ent
 		if !exists || got.OverflowRoutes[node].entity != binding.entity {
 			t.Fatal("stale scroll route")
 		}
-		transform, _ := ecs.Get[scene.UITransform](world, entity)
+		transform, _ := world.Get[scene.UITransform](entity)
 		if math.Abs(float64(content.X-transform.Translation.X.Value)) > 1e-5 || math.Abs(float64(content.Y-transform.Translation.Y.Value)) > 1e-5 {
 			t.Fatal("scroll content base differs from refreshed geometry")
 		}
@@ -60,20 +60,20 @@ func TestHTMLContextLocalScrollTextAndFragmentChanges(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, source("Before", ""))
 			target := incrementalHTMLNode(t, world, owner, "target")
 			scroller := incrementalHTMLNode(t, world, owner, "scroller")
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			clip := state.OverflowBindings[scroller.node].entity
-			if scroll := ecs.GetMut[scene.UIScroll](world, clip); scroll != nil {
+			if scroll := world.GetMut[scene.UIScroll](clip); scroll != nil {
 				scroll.Position[1] = -20
 			}
 			for _, step := range []struct{ text, extra string }{{"Longer wrapping text", ""}, {"Longer wrapping text", "background:red;text-decoration:line-through"}, {" ", ""}, {"After", ""}} {
 				target.SetText(step.text)
 				target.SetAttribute("style", "width:50px;"+step.extra)
 				incrementalSync(t, world)
-				state, _ = ecs.Get[htmlRenderState](world, owner)
+				state, _ = world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[scroller.node].entity != clip {
 					t.Fatalf("stable clip fell back or was replaced: %+v", state.SyncStats)
 				}
-				if scroll, ok := ecs.Get[scene.UIScroll](world, clip); ok && scroll.Position[1] != -20 {
+				if scroll, ok := world.Get[scene.UIScroll](clip); ok && scroll.Position[1] != -20 {
 					t.Fatal("scroll position was not preserved")
 				}
 				assertHTMLContextMatchesFresh(t, world, owner, source(step.text, step.extra))
@@ -89,26 +89,26 @@ func TestHTMLContextNestedClipResizeAndScrollClamp(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, source(200))
 	target := incrementalHTMLNode(t, world, owner, "target")
 	inner := incrementalHTMLNode(t, world, owner, "inner")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	clip := state.OverflowBindings[inner.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -100
 	for _, height := range []int{140, 30, 200} {
 		target.SetAttribute("style", fmt.Sprintf("height:%dpx", height))
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
+		state, _ = world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 {
 			t.Fatalf("nested clip update work: %+v", state.SyncStats)
 		}
 		assertHTMLContextMatchesFresh(t, world, owner, source(height))
-		scroll = ecs.GetMut[scene.UIScroll](world, clip)
+		scroll = world.GetMut[scene.UIScroll](clip)
 		if height == 140 && scroll.Position[1] != -60 || height <= 80 && scroll.Position[1] != 0 {
 			t.Fatalf("scroll not clamped after content shrink: %+v", scroll)
 		}
 	}
 	inner.SetAttribute("style", "height:100px;overflow:auto")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("clip viewport resize fell back")
 	}
@@ -128,8 +128,8 @@ func TestHTMLContextNestedOverflowDoesNotExpandAncestorScroll(t *testing.T) {
 		for _, width := range []int{180, 220} {
 			guide.SetAttribute("style", fmt.Sprintf("position:absolute;left:100px;top:50px;width:%dpx;height:130px;transform:rotate(150deg)", width))
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
-			scroll, _ := ecs.Get[scene.UIScroll](world, state.OverflowBindings[outer.node].entity)
+			state, _ := world.Get[htmlRenderState](owner)
+			scroll, _ := world.Get[scene.UIScroll](state.OverflowBindings[outer.node].entity)
 			if mode != "visible" && (scroll.Horizontal || scroll.Vertical || scroll.ContentSize != scroll.ViewportSize) {
 				t.Fatalf("%s leaked clipped descendant overflow to its ancestor: %+v", mode, scroll)
 			}
@@ -149,7 +149,7 @@ func TestHTMLContextSkipsUnrelatedClipBranches(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 0 || state.SyncStats.RoutedEntities != 1 || state.SyncStats.ExtentBoxes != 0 || state.SyncStats.ReconciledBoxes != 1 {
 		t.Fatalf("unrelated contexts were updated: %+v", state.SyncStats)
 	}
@@ -164,13 +164,13 @@ func TestHTMLContextStableEventTargetsRemainLocal(t *testing.T) {
 	other.OnClick(func(*PointerEvent) { otherClicks++ })
 	target.SetText("After")
 	incrementalSync(t, world) // Establish the changed event membership once.
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	unchangedTarget := state.EventTargets[other.node]
 	for _, css := range []string{"background:red", "", "width:120px"} {
 		target.SetAttribute("style", css)
 		target.SetText("Before")
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
+		state, _ = world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.EventTargets[other.node] != unchangedTarget {
 			t.Fatal("stable event binding forced a full update")
 		}
@@ -216,7 +216,7 @@ func TestHTMLContextMovedClipRefreshesAbsoluteDescendants(t *testing.T) {
 	for _, margin := range []int{20, 40, 0} {
 		scroller.SetAttribute("style", fmt.Sprintf("margin-left:%dpx;height:50px;overflow:auto", margin))
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatalf("moved paint-only clip context fell back: %+v", state.SyncStats)
 		}
@@ -234,7 +234,7 @@ func TestHTMLContextClipTopologyRemainsLocal(t *testing.T) {
 	for _, css := range []string{"height:0px;overflow:auto", "height:40px;overflow:auto", "height:40px;overflow:hidden", "height:40px;overflow:visible", "height:40px;overflow:auto"} {
 		scroller.SetAttribute("style", css)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("clip membership/mode change used the wrong reconciliation path")
 		}
@@ -242,7 +242,7 @@ func TestHTMLContextClipTopologyRemainsLocal(t *testing.T) {
 	}
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("local updates did not resume after clip topology refresh")
 	}
@@ -271,7 +271,7 @@ func TestHTMLContextPreservesControlWhenMoved(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	field := incrementalHTMLNode(t, world, owner, "field")
 	scroller := incrementalHTMLNode(t, world, owner, "scroller")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	var control ecs.Entity
 	for key, group := range state.EntityGroups {
 		if key.Node == field.node && key.Role == htmlRoleControl {
@@ -283,20 +283,20 @@ func TestHTMLContextPreservesControlWhenMoved(t *testing.T) {
 		t.Fatal("missing control")
 	}
 	SetControlValue(world, control, "typed")
-	live := ecs.GetMut[Control](world, control)
+	live := world.GetMut[Control](control)
 	live.SelectionAnchor, live.SelectionFocus = 1, 3
 	revision := live.RenderRevision
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
-	live = ecs.GetMut[Control](world, control)
+	state, _ = world.Get[htmlRenderState](owner)
+	live = world.GetMut[Control](control)
 	if state.SyncStats.PartialReconciles != 1 || live.RenderRevision != revision || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
 		t.Fatal("local scroll text update rewrote unrelated control")
 	}
 	scroller.SetAttribute("style", "height:40px;overflow:auto;margin-left:10px")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
-	live = ecs.GetMut[Control](world, control)
+	state, _ = world.Get[htmlRenderState](owner)
+	live = world.GetMut[Control](control)
 	if state.SyncStats.PartialReconciles != 1 || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
 		t.Fatal("moving control context did not preserve live control state locally")
 	}
@@ -309,17 +309,17 @@ func TestHTMLContextEventTargetDisappearsAndReturns(t *testing.T) {
 	target.OnClick(func(*PointerEvent) { clicks++ })
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	old := state.EventTargets[target.node]
 	target.SetText("")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.EventTargets[target.node] != 0 || world.IsAlive(old) {
 		t.Fatal("empty box retained event target")
 	}
 	target.SetText("Before")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	entity := state.EventTargets[target.node]
 	if state.SyncStats.PartialReconciles != 1 || !world.IsAlive(entity) {
 		t.Fatal("event target did not return locally")

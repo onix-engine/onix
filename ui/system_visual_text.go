@@ -15,15 +15,15 @@ func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scen
 	frame := SurfaceStyle{}
 	stackIndex := 0
 	switch {
-	case ecs.Has[ButtonGroup](world, owner):
-		group, _ := ecs.Get[ButtonGroup](world, owner)
+	case world.Has[ButtonGroup](owner):
+		group, _ := world.Get[ButtonGroup](owner)
 		size.Width, size.Height = group.Width, group.Height
 		stackIndex = group.StackIndex + 3
 		frame = styleFor(world, owner, skin.ButtonGroup).Frame
-	case ecs.Has[Tab](world, owner):
-		tab, _ := ecs.Get[Tab](world, owner)
+	case world.Has[Tab](owner):
+		tab, _ := world.Get[Tab](owner)
 		size.Width, size.Height = tab.Width, max(tab.HeaderHeight, 0)
-		if stack, ok := ecs.Get[scene.UIStackIndex](world, owner); ok {
+		if stack, ok := world.Get[scene.UIStackIndex](owner); ok {
 			stackIndex = int(stack) + 3
 		}
 		frame = styleFor(world, owner, skin.Tab).Frame
@@ -38,15 +38,15 @@ func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scen
 }
 
 func syncTabItemBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
-	item := ecs.GetRef[TabItem](world, owner)
-	side := ecs.GetRef[TabItemBorder](world, entity)
+	item := world.GetRef[TabItem](owner)
+	side := world.GetRef[TabItemBorder](entity)
 	control, controlOK := controlViewFor(world, owner)
 	if (item == nil) || (side == nil) || (!controlOK) {
 		size.Width, size.Height = 0, 0
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
 		return
 	}
-	tabs := ecs.GetRef[Tab](world, item.Tabs)
+	tabs := world.GetRef[Tab](item.Tabs)
 	if tabs == nil || !tabs.ItemBorders {
 		size.Width, size.Height = 0, 0
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
@@ -90,12 +90,12 @@ func syncIconElement(world *ecs.World, entity, owner ecs.Entity, transform *scen
 	}
 	icon := IconStyle{}
 	label := ""
-	if iconContent := ecs.GetRef[IconContent](world, owner); iconContent != nil {
+	if iconContent := world.GetRef[IconContent](owner); iconContent != nil {
 		icon = iconContent.Value
-		if content := ecs.GetRef[Content[string]](world, owner); content != nil {
+		if content := world.GetRef[Content[string]](owner); content != nil {
 			label = content.Value
 		}
-	} else if item := ecs.GetRef[TabItem](world, owner); item != nil {
+	} else if item := world.GetRef[TabItem](owner); item != nil {
 		icon, label = item.Icon, item.Label
 	}
 	width, height := iconTextureSize(icon)
@@ -106,7 +106,7 @@ func syncIconElement(world *ecs.World, entity, owner ecs.Entity, transform *scen
 	x := textIconX
 	if label == "" {
 		x = (control.Width - width) * 0.5
-	} else if alignment, ok := ecs.Get[ButtonContentAlignment](world, owner); ok {
+	} else if alignment, ok := world.Get[ButtonContentAlignment](owner); ok {
 		x = buttonContentX(control.Width, width, labelWidth, alignment)
 	}
 	transform.Translation.X.Value = x
@@ -117,7 +117,7 @@ func syncIconElement(world *ecs.World, entity, owner ecs.Entity, transform *scen
 }
 
 func syncSelectorIcon(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, visualSize *scene.Size2D) {
-	selector := ecs.GetRef[Selector](world, owner)
+	selector := world.GetRef[Selector](owner)
 	control, controlOK := controlViewFor(world, owner)
 	if selector == nil || !controlOK {
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
@@ -138,12 +138,12 @@ func syncSelectorIcon(world *ecs.World, entity, owner ecs.Entity, transform *sce
 }
 
 func syncSelectorPanel(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
-	list := ecs.GetRef[SelectorList](world, owner)
+	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
 	}
-	selector := ecs.GetRef[Selector](world, list.Selector)
-	listSize := ecs.GetRef[scene.Size2D](world, owner)
+	selector := world.GetRef[Selector](list.Selector)
+	listSize := world.GetRef[scene.Size2D](owner)
 	if selector == nil || listSize == nil {
 		return
 	}
@@ -155,12 +155,12 @@ func syncSelectorPanel(world *ecs.World, entity, owner ecs.Entity, transform *sc
 }
 
 func syncSelectorPanelBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
-	list := ecs.GetRef[SelectorList](world, owner)
+	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
 	}
-	selector := ecs.GetRef[Selector](world, list.Selector)
-	listSize := ecs.GetRef[scene.Size2D](world, owner)
+	selector := world.GetRef[Selector](list.Selector)
+	listSize := world.GetRef[scene.Size2D](owner)
 	if selector == nil || listSize == nil {
 		return
 	}
@@ -181,17 +181,17 @@ const (
 )
 
 func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb bool, transform *scene.UITransform, size *scene.Size2D, skin Skin, counts map[ecs.Entity]itemMetrics) {
-	list := ecs.GetRef[SelectorList](world, owner)
+	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
 	}
-	selector := ecs.GetRef[Selector](world, list.Selector)
+	selector := world.GetRef[Selector](list.Selector)
 	control, controlOK := controlViewFor(world, list.Selector)
 	if selector == nil || !controlOK {
 		return
 	}
 	contentHeight := selectorItemHeight(selector, &control) * float32(counts[list.Selector].count)
-	listSize := ecs.GetRef[scene.Size2D](world, owner)
+	listSize := world.GetRef[scene.Size2D](owner)
 	listHeight := listSize.Height
 	visible := contentHeight > listHeight && listHeight > 0
 	style := skin.Scroll
@@ -207,7 +207,7 @@ func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb
 		thumbHeight := scrollThumbSize(listHeight, listHeight, contentHeight, selectorScrollMinThumbSize)
 		transform.Translation.X.Value = listSize.Width - (selectorScrollBarSize+selectorScrollThumbSize)*.5
 		scrollY := float32(0)
-		if scroll, exists := ecs.Get[scene.UIScroll](world, owner); exists {
+		if scroll, exists := world.Get[scene.UIScroll](owner); exists {
 			scrollY = -scroll.Position.Y()
 		}
 		transform.Translation.Y.Value = scrollThumbOffset(listHeight, thumbHeight, scrollY, maxScroll)
@@ -220,9 +220,9 @@ func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb
 
 func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
 	value, composition, caret, focused := textFieldState(world, owner)
-	field, fieldExists := ecs.Get[TextField](world, owner)
-	valueText := ecs.GetRef[scene.Text2D](world, valueEntity)
-	valueTransform, transformOK := ecs.Get[scene.UITransform](world, valueEntity)
+	field, fieldExists := world.Get[TextField](owner)
+	valueText := world.GetRef[scene.Text2D](valueEntity)
+	valueTransform, transformOK := world.Get[scene.UITransform](valueEntity)
 	if valueText == nil || !transformOK || valueText.Font == nil {
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
 		return
@@ -261,13 +261,13 @@ type selectionRect struct{ X, Y, W, H float32 }
 func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
 	value, _, _, _ := textFieldState(world, owner)
 	start, end, _ := textFieldSelection(world, owner)
-	valueText := ecs.GetRef[scene.Text2D](world, valueEntity)
-	valueTransform, transformOK := ecs.Get[scene.UITransform](world, valueEntity)
+	valueText := world.GetRef[scene.Text2D](valueEntity)
+	valueTransform, transformOK := world.Get[scene.UITransform](valueEntity)
 	if valueText == nil || !transformOK || valueText.Font == nil {
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
 		return
 	}
-	if field, ok := ecs.Get[TextField](world, owner); ok && field.Password {
+	if field, ok := world.Get[TextField](owner); ok && field.Password {
 		value = maskedTextFieldValue(world, owner, field)
 	}
 	r, ok := textSelectionRect(valueText, &valueTransform, value, start, end, index, textFieldViewportHeight(world, owner))
@@ -338,17 +338,17 @@ func textSelectionRect(text *scene.Text2D, transform *scene.UITransform, value s
 
 // textFieldViewportHeight is the scroll window a selection can paint inside.
 func textFieldViewportHeight(world *ecs.World, owner ecs.Entity) float32 {
-	if control, ok := ecs.Get[html.Control](world, owner); ok && control.PaddingBox.Height > 0 {
+	if control, ok := world.Get[html.Control](owner); ok && control.PaddingBox.Height > 0 {
 		return control.PaddingBox.Height
 	}
-	if size, ok := ecs.Get[scene.Size2D](world, owner); ok {
+	if size, ok := world.Get[scene.Size2D](owner); ok {
 		return size.Height
 	}
 	return 0
 }
 
 func textFieldSelection(world *ecs.World, owner ecs.Entity) (int, int, bool) {
-	if field, ok := ecs.Get[TextField](world, owner); ok {
+	if field, ok := world.Get[TextField](owner); ok {
 		start, end := orderedSelection(field.Anchor, field.Caret)
 		return start, end, field.Focused
 	}
@@ -356,7 +356,7 @@ func textFieldSelection(world *ecs.World, owner ecs.Entity) (int, int, bool) {
 }
 
 func textFieldState(world *ecs.World, owner ecs.Entity) (value, composition string, caret int, focused bool) {
-	if field, ok := ecs.Get[TextField](world, owner); ok {
+	if field, ok := world.Get[TextField](owner); ok {
 		return field.Value, field.Composition, field.Caret, field.Focused
 	}
 	return "", "", 0, false
@@ -380,34 +380,34 @@ type textFieldMaskMissingScratch struct{}
 type textFieldDisplayMissingScratch struct{}
 
 func ensureTextFieldCaches(world *ecs.World) {
-	masks := ecs.FrameScratch[textFieldMaskMissingScratch, ecs.Entity](world)
-	displays := ecs.FrameScratch[textFieldDisplayMissingScratch, ecs.Entity](world)
+	masks := world.FrameScratch[textFieldMaskMissingScratch, ecs.Entity]()
+	displays := world.FrameScratch[textFieldDisplayMissingScratch, ecs.Entity]()
 	defer masks.ReleaseUnused()
 	defer displays.ReleaseUnused()
-	for entity, access := range ecs.Query[TextField](world).All {
+	for entity, access := range world.Query[TextField]().All {
 		field := access.Ref()
 
 		if field.Password {
-			if !ecs.Has[textFieldMaskCache](world, entity) {
+			if !world.Has[textFieldMaskCache](entity) {
 				masks.Values = append(masks.Values, entity)
 			}
-		} else if field.Composition != "" && !ecs.Has[textFieldDisplayCache](world, entity) {
+		} else if field.Composition != "" && !world.Has[textFieldDisplayCache](entity) {
 			displays.Values = append(displays.Values, entity)
 		}
 	}
 	// Structural changes must happen after the query has closed.
 	for _, entity := range masks.Values {
-		_ = ecs.Insert(world, entity, textFieldMaskCache{})
+		_ = world.Insert(entity, textFieldMaskCache{})
 	}
 	for _, entity := range displays.Values {
-		_ = ecs.Insert(world, entity, textFieldDisplayCache{})
+		_ = world.Insert(entity, textFieldDisplayCache{})
 	}
 }
 
 func textFieldMask(world *ecs.World, owner ecs.Entity, field TextField) textFieldMaskCache {
 	valueRunes := runeCount(field.Value)
 	compositionRunes := runeCount(field.Composition)
-	cache, ok := ecs.Get[textFieldMaskCache](world, owner)
+	cache, ok := world.Get[textFieldMaskCache](owner)
 	if ok && cache.valid && cache.valueRunes == valueRunes && cache.compositionRunes == compositionRunes {
 		return cache
 	}
@@ -418,7 +418,7 @@ func textFieldMask(world *ecs.World, owner ecs.Entity, field TextField) textFiel
 	cache.valueRunes = valueRunes
 	cache.compositionRunes = compositionRunes
 	cache.valid = true
-	if current := ecs.GetMut[textFieldMaskCache](world, owner); current != nil {
+	if current := world.GetMut[textFieldMaskCache](owner); current != nil {
 		*current = cache
 	}
 	return cache
@@ -463,7 +463,7 @@ func textFieldDisplayCacheMatches(cache *textFieldDisplayCache, field TextField,
 }
 
 func textFieldDisplayCacheRef(world *ecs.World, owner ecs.Entity, field TextField, caret int) *textFieldDisplayCache {
-	cache := ecs.GetRef[textFieldDisplayCache](world, owner)
+	cache := world.GetRef[textFieldDisplayCache](owner)
 	if cache == nil || !textFieldDisplayCacheMatches(cache, field, caret) {
 		return nil
 	}
@@ -471,7 +471,7 @@ func textFieldDisplayCacheRef(world *ecs.World, owner ecs.Entity, field TextFiel
 }
 
 func textFieldDisplayCacheMut(world *ecs.World, owner ecs.Entity, field TextField, caret int) *textFieldDisplayCache {
-	cache := ecs.GetMut[textFieldDisplayCache](world, owner)
+	cache := world.GetMut[textFieldDisplayCache](owner)
 	if cache == nil {
 		return nil
 	}
@@ -528,7 +528,7 @@ func runeSlice(value string, start, end int) string {
 }
 
 func syncNumberInputStepIcon(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D) {
-	step := ecs.GetRef[NumberInputStep](world, owner)
+	step := world.GetRef[NumberInputStep](owner)
 	ok := step != nil
 	if !ok || step == nil {
 		return
@@ -555,7 +555,7 @@ func syncNumberInputStepIcon(world *ecs.World, entity, owner ecs.Entity, transfo
 }
 
 func numberInputStepIcon(world *ecs.World, step *NumberInputStep) IconStyle {
-	input, ok := ecs.Get[NumberInput](world, step.Input)
+	input, ok := world.Get[NumberInput](step.Input)
 	if !ok {
 		return IconStyle{}
 	}

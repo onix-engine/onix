@@ -3,7 +3,6 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -17,9 +16,9 @@ func TestHTMLFlexExpansionRetainsUnchangedControls(t *testing.T) {
 	output := Node{world: world, owner: owner, node: region.node.Children[1]}
 	file := incrementalControl(t, world, owner, "file")
 	editor := incrementalControl(t, world, owner, "editor")
-	beforeFile, _ := ecs.Get[Control](world, file)
-	beforeEditor, _ := ecs.Get[Control](world, editor)
-	input := ecs.GetMut[scene.InputState2D](world, file)
+	beforeFile, _ := world.Get[Control](file)
+	beforeEditor, _ := world.Get[Control](editor)
+	input := world.GetMut[scene.InputState2D](file)
 	input.Pressed, input.Hovered = true, true
 	clicks := 0
 	for range 3 {
@@ -31,13 +30,13 @@ func TestHTMLFlexExpansionRetainsUnchangedControls(t *testing.T) {
 		region.Append(output)
 		command.OnClick(func(*PointerEvent) { clicks++ })
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 {
 			t.Fatalf("expansion refreshed unrelated controls: %+v", state.SyncStats)
 		}
-		afterFile, _ := ecs.Get[Control](world, file)
-		afterEditor, _ := ecs.Get[Control](world, editor)
-		input = ecs.GetMut[scene.InputState2D](world, file)
+		afterFile, _ := world.Get[Control](file)
+		afterEditor, _ := world.Get[Control](editor)
+		input = world.GetMut[scene.InputState2D](file)
 		if afterFile.RenderRevision != beforeFile.RenderRevision || afterEditor.RenderRevision != beforeEditor.RenderRevision || !input.Pressed || !input.Hovered {
 			t.Fatal("expansion reset the explorer or editor")
 		}
@@ -70,7 +69,7 @@ func TestHTMLFlexExpansionUpdatesRetainedSiblingOrder(t *testing.T) {
 	region := incrementalHTMLNode(t, world, owner, "region")
 	details := incrementalHTMLNode(t, world, owner, "child")
 	control := incrementalControl(t, world, owner, "other")
-	before, _ := ecs.Get[Control](world, control)
+	before, _ := world.Get[Control](control)
 	for range 3 {
 		details.Remove()
 		incrementalSync(t, world)
@@ -78,7 +77,7 @@ func TestHTMLFlexExpansionUpdatesRetainedSiblingOrder(t *testing.T) {
 		region.Append(details)
 		incrementalSync(t, world)
 		assertHTMLPartialMatchesFresh(t, world, owner, prefix+child+suffix)
-		after, _ := ecs.Get[Control](world, control)
+		after, _ := world.Get[Control](control)
 		if after.RenderRevision != before.RenderRevision {
 			t.Fatal("paint order update redrew the unchanged sibling")
 		}

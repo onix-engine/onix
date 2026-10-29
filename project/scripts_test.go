@@ -36,10 +36,10 @@ func TestSceneScriptInputErrorRetainsLaterMessages(t *testing.T) {
 				scene.globalInputBindings.add(sceneapi.InputMaskKeyboard, binding)
 			}
 			event.Seq = 1
-			ecs.WriteMessage(world, event)
-			ecs.AdvanceMessages(world)
+			world.WriteMessage(event)
+			world.AdvanceMessages()
 			event.Seq = 2
-			ecs.WriteMessage(world, event)
+			world.WriteMessage(event)
 			context := &ecs.SystemContext{World: world, Commands: world.Commands()}
 			var reader ecs.MessageReader[sceneapi.InputEvent]
 			if err := scene.DispatchInputScripts(context, &reader); !errors.Is(err, failure) || calls != 1 {
@@ -93,7 +93,7 @@ func (script *testInputScript) OnInput(_ *ScriptContext, event *sceneapi.InputEv
 }
 
 func (script *testSpriteScript) Install(context *ScriptContext) error {
-	sprite := ecs.GetMut[sceneapi.Sprite2D](context.World, context.Entity)
+	sprite := context.World.GetMut[sceneapi.Sprite2D](context.Entity)
 	if sprite != nil {
 		sprite.Alpha = script.Alpha
 	}
@@ -125,7 +125,7 @@ func TestSceneScriptsBindUpdateAndDestroy(t *testing.T) {
 		scriptBindings: map[ecs.Entity][]ScriptBinding{},
 	}
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, sceneapi.Sprite2D{Alpha: 1})
+	bundle.Put(sceneapi.Sprite2D{Alpha: 1})
 	entity := scene.World.Spawn(bundle)
 	scene.Entities["sprite"] = entity
 	scene.EntityIDs[entity] = "sprite"
@@ -133,14 +133,14 @@ func TestSceneScriptsBindUpdateAndDestroy(t *testing.T) {
 	if err := scene.SetScriptRegistry(registry); err != nil {
 		t.Fatalf("bind scripts: %v", err)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, entity)
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](entity)
 	if !ok || sprite.Alpha != 0.25 {
 		t.Fatalf("script install did not update sprite: %+v, %v", sprite, ok)
 	}
 	if err := scene.UpdateScripts(&ecs.SystemContext{World: scene.World, Commands: scene.World.Commands()}); err != nil {
 		t.Fatalf("update scripts: %v", err)
 	}
-	value, ok := ecs.Get[testSpriteScript](scene.World, entity)
+	value, ok := scene.World.Get[testSpriteScript](entity)
 	if !ok || !value.Updated {
 		t.Fatalf("script update did not run: %+v, %v", value, ok)
 	}
@@ -152,7 +152,7 @@ func TestSceneScriptsBindUpdateAndDestroy(t *testing.T) {
 func TestSceneScriptsRouteInputEventsToBoundTargets(t *testing.T) {
 	world := ecs.NewWorld()
 	inputState := input.NewState()
-	ecs.InsertResource(world, inputState)
+	world.InsertResource(inputState)
 	scene := &SceneInstance{
 		World:          world,
 		nodes:          map[ecs.Entity]sceneSpawnNode{},
@@ -186,12 +186,12 @@ func TestSceneScriptsRouteInputEventsToBoundTargets(t *testing.T) {
 
 	var reader ecs.MessageReader[sceneapi.InputEvent]
 	context := &ecs.SystemContext{World: world, Commands: world.Commands()}
-	ecs.WriteMessage(world, sceneapi.InputEvent{Entity: other, Kind: sceneapi.InputEventTap})
-	ecs.WriteMessage(world, sceneapi.InputEvent{Entity: target, Kind: sceneapi.InputEventTap})
+	world.WriteMessage(sceneapi.InputEvent{Entity: other, Kind: sceneapi.InputEventTap})
+	world.WriteMessage(sceneapi.InputEvent{Entity: target, Kind: sceneapi.InputEventTap})
 	if err := scene.DispatchInputScripts(context, &reader); err != nil {
 		t.Fatal(err)
 	}
-	script, _ := ecs.Get[testInputScript](world, owner)
+	script, _ := world.Get[testInputScript](owner)
 	if script.PointerEvents != 1 || script.Current != target {
 		t.Fatalf("input script = %+v", script)
 	}
@@ -201,44 +201,44 @@ func TestSceneScriptsRouteInputEventsToBoundTargets(t *testing.T) {
 		t.Fatalf("routed input events = %+v", events)
 	}
 
-	ecs.WriteMessage(world, sceneapi.InputEvent{Entity: other, Path: []ecs.Entity{other, owner}, Kind: sceneapi.InputEventTap})
+	world.WriteMessage(sceneapi.InputEvent{Entity: other, Path: []ecs.Entity{other, owner}, Kind: sceneapi.InputEventTap})
 	if err := scene.DispatchInputScripts(context, &reader); err != nil {
 		t.Fatal(err)
 	}
-	script, _ = ecs.Get[testInputScript](world, owner)
+	script, _ = world.Get[testInputScript](owner)
 	if script.PointerEvents != 2 || script.Current != owner {
 		t.Fatalf("bubbled input script = %+v", script)
 	}
-	if err := ecs.Insert(world, other, sceneapi.InputTarget2D{}); err != nil {
+	if err := world.Insert(other, sceneapi.InputTarget2D{}); err != nil {
 		t.Fatal(err)
 	}
-	ecs.WriteMessage(world, sceneapi.InputEvent{Entity: other, Path: []ecs.Entity{other, owner}, Kind: sceneapi.InputEventTap})
+	world.WriteMessage(sceneapi.InputEvent{Entity: other, Path: []ecs.Entity{other, owner}, Kind: sceneapi.InputEventTap})
 	if err := scene.DispatchInputScripts(context, &reader); err != nil {
 		t.Fatal(err)
 	}
-	script, _ = ecs.Get[testInputScript](world, owner)
+	script, _ = world.Get[testInputScript](owner)
 	if script.PointerEvents != 2 {
 		t.Fatalf("stop-filtered pointer reached parent: %+v", script)
 	}
-	if err := ecs.Insert(world, target, sceneapi.InputTarget2D{InputFilter: sceneapi.InputFilterIgnore}); err != nil {
+	if err := world.Insert(target, sceneapi.InputTarget2D{InputFilter: sceneapi.InputFilterIgnore}); err != nil {
 		t.Fatal(err)
 	}
-	ecs.WriteMessage(world, sceneapi.InputEvent{Entity: target, Path: []ecs.Entity{target, owner}, Kind: sceneapi.InputEventTap})
+	world.WriteMessage(sceneapi.InputEvent{Entity: target, Path: []ecs.Entity{target, owner}, Kind: sceneapi.InputEventTap})
 	if err := scene.DispatchInputScripts(context, &reader); err != nil {
 		t.Fatal(err)
 	}
-	script, _ = ecs.Get[testInputScript](world, owner)
+	script, _ = world.Get[testInputScript](owner)
 	if script.PointerEvents != 3 || script.Current != owner {
 		t.Fatalf("ignore-filtered target did not bubble to parent: %+v", script)
 	}
 
-	ecs.WriteMessage(world, sceneapi.InputEvent{Seq: 1, Kind: sceneapi.InputEventKeyDown, Key: input.KeySpace})
-	ecs.WriteMessage(world, sceneapi.InputEvent{Seq: 2, Kind: sceneapi.InputEventTextInput, Text: "Onix"})
-	ecs.WriteMessage(world, sceneapi.InputEvent{Seq: 3, Kind: sceneapi.InputEventFilesDropped, File: "/tmp/onix.txt"})
+	world.WriteMessage(sceneapi.InputEvent{Seq: 1, Kind: sceneapi.InputEventKeyDown, Key: input.KeySpace})
+	world.WriteMessage(sceneapi.InputEvent{Seq: 2, Kind: sceneapi.InputEventTextInput, Text: "Onix"})
+	world.WriteMessage(sceneapi.InputEvent{Seq: 3, Kind: sceneapi.InputEventFilesDropped, File: "/tmp/onix.txt"})
 	if err := scene.DispatchInputScripts(context, &reader); err != nil {
 		t.Fatal(err)
 	}
-	script, _ = ecs.Get[testInputScript](world, owner)
+	script, _ = world.Get[testInputScript](owner)
 	if script.GlobalEvents != 3 || script.Current != owner || script.Key != input.KeySpace || script.Text != "Onix" || script.File != "/tmp/onix.txt" {
 		t.Fatalf("global input script = %+v", script)
 	}
@@ -302,7 +302,7 @@ func TestSceneScriptInputMasksFilterCategories(t *testing.T) {
 		{Kind: sceneapi.InputEventFilesDropped},
 	}
 	for _, event := range events {
-		ecs.WriteMessage(world, event)
+		world.WriteMessage(event)
 	}
 	if err := scene.DispatchInputScripts(&ecs.SystemContext{World: world, Commands: world.Commands()}, &reader); err != nil {
 		t.Fatal(err)
@@ -333,12 +333,12 @@ func TestSceneScriptInputDispatchDoesNotAllocateAfterWarmup(t *testing.T) {
 	context := &ecs.SystemContext{World: world, Commands: world.Commands()}
 	var reader ecs.MessageReader[sceneapi.InputEvent]
 	run := func() {
-		ecs.WriteMessage(world, sceneapi.InputEvent{Entity: entity, Kind: sceneapi.InputEventTap})
-		ecs.WriteMessage(world, sceneapi.InputEvent{Kind: sceneapi.InputEventKeyDown, Key: input.KeySpace})
+		world.WriteMessage(sceneapi.InputEvent{Entity: entity, Kind: sceneapi.InputEventTap})
+		world.WriteMessage(sceneapi.InputEvent{Kind: sceneapi.InputEventKeyDown, Key: input.KeySpace})
 		if err := scene.DispatchInputScripts(context, &reader); err != nil {
 			panic(err)
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	run()
 	run()
@@ -360,11 +360,11 @@ func BenchmarkSceneScriptGlobalInputMask10000(b *testing.B) {
 		context := &ecs.SystemContext{World: world, Commands: world.Commands()}
 		var reader ecs.MessageReader[sceneapi.InputEvent]
 		run := func() {
-			ecs.WriteMessage(world, sceneapi.InputEvent{Kind: sceneapi.InputEventKeyDown})
+			world.WriteMessage(sceneapi.InputEvent{Kind: sceneapi.InputEventKeyDown})
 			if err := scene.DispatchInputScripts(context, &reader); err != nil {
 				b.Fatal(err)
 			}
-			ecs.AdvanceMessages(world)
+			world.AdvanceMessages()
 		}
 		run()
 		b.ReportAllocs()

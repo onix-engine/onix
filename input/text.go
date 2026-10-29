@@ -271,12 +271,17 @@ func (b *TextBuffer) insertSanitized(text string, multiline bool, limit int) int
 }
 
 func (b *TextBuffer) string() string {
-	b.value = b.Tree.String()
-	b.valid = true
 	// Deltas in history own their bytes, so compaction can reclaim deleted text.
 	if b.RetainedBytes() > max(64<<10, b.Len()*3) {
 		b.Tree.Compact()
 		b.Tree.Reserve(256, 64)
+	}
+	b.value = b.Tree.String()
+	b.valid = true
+	// A large paste must not leave its temporary sanitization buffer attached
+	// to the document. Ordinary typing keeps its warmed capacity.
+	if cap(b.scratch) > 64<<10 {
+		b.scratch = nil
 	}
 	return b.value
 }

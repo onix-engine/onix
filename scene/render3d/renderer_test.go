@@ -37,10 +37,10 @@ func TestCamera3DViewportMapsProjectionIntoCanvasRegion(t *testing.T) {
 	camera := scene.NewCamera()
 	camera.Viewport = scene.CameraViewport{X: 100, Y: 50, Width: 200, Height: 100}
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, camera)
-	ecs.Put(&bundle, Camera{})
-	ecs.Put(&bundle, scene.PerspectiveProjection3D())
-	ecs.Put(&bundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(camera)
+	bundle.Put(Camera{})
+	bundle.Put(scene.PerspectiveProjection3D())
+	bundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	cameraEntity := world.Spawn(bundle)
 
 	if err := scene.ExtractCamerasSystem("").Run(world); err != nil {
@@ -49,7 +49,7 @@ func TestCamera3DViewportMapsProjectionIntoCanvasRegion(t *testing.T) {
 	if err := ExtractSystem("").Run(world); err != nil {
 		t.Fatalf("extract viewport camera: %v", err)
 	}
-	state, ok := ecs.GetResource[*World](world)
+	state, ok := world.GetResource[*World]()
 	view := state.views[cameraEntity]
 	if !ok || view == nil || view.frame.Camera.viewport != camera.Viewport {
 		t.Fatalf("unexpected extracted viewport: %+v", view)
@@ -82,10 +82,10 @@ func TestCamera3DRenderTargetUsesTargetSurfaceAndRestoresViewport(t *testing.T) 
 	Register(world)
 	camera := scene.NewCamera()
 	cameraBundle := ecs.NewBundle(4)
-	ecs.Put(&cameraBundle, camera)
-	ecs.Put(&cameraBundle, Camera{Target: target})
-	ecs.Put(&cameraBundle, scene.PerspectiveProjection3D())
-	ecs.Put(&cameraBundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	cameraBundle.Put(camera)
+	cameraBundle.Put(Camera{Target: target})
+	cameraBundle.Put(scene.PerspectiveProjection3D())
+	cameraBundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	cameraEntity := world.Spawn(cameraBundle)
 	spawnMesh3DForTest(world, graphics.CubeMesh(1), graphics.NewStandardMaterial(graphics.White), mgl32.Vec3{0, 0, -4})
 
@@ -96,7 +96,7 @@ func TestCamera3DRenderTargetUsesTargetSurfaceAndRestoresViewport(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	state, _ := ecs.GetResource[*World](world)
+	state, _ := world.GetResource[*World]()
 	view := state.views[cameraEntity]
 	if view == nil || view.frame.Target != target || view.frame.Camera.viewport.Width != 200 || view.frame.Camera.viewport.Height != 100 {
 		t.Fatalf("unexpected offscreen render view: %+v", view)
@@ -134,10 +134,10 @@ func TestCamera3DRenderTargetClearsEmptyView(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	cameraBundle := ecs.NewBundle(4)
-	ecs.Put(&cameraBundle, scene.NewCamera())
-	ecs.Put(&cameraBundle, Camera{Target: target})
-	ecs.Put(&cameraBundle, scene.PerspectiveProjection3D())
-	ecs.Put(&cameraBundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	cameraBundle.Put(scene.NewCamera())
+	cameraBundle.Put(Camera{Target: target})
+	cameraBundle.Put(scene.PerspectiveProjection3D())
+	cameraBundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(cameraBundle)
 
 	for _, system := range []ecs.SystemConfig{
@@ -172,10 +172,10 @@ func TestRender3DPhasesCullSortAndReuseGeometry(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	cameraBundle := ecs.NewBundle(4)
-	ecs.Put(&cameraBundle, scene.NewCamera())
-	ecs.Put(&cameraBundle, Camera{})
-	ecs.Put(&cameraBundle, scene.PerspectiveProjection3D())
-	ecs.Put(&cameraBundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	cameraBundle.Put(scene.NewCamera())
+	cameraBundle.Put(Camera{})
+	cameraBundle.Put(scene.PerspectiveProjection3D())
+	cameraBundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	cameraEntity := world.Spawn(cameraBundle)
 	mesh := graphics.CubeMesh(1)
 	opaque := graphics.NewStandardMaterial(graphics.ColorRGBA{R: 1, A: 1})
@@ -219,7 +219,7 @@ func TestRender3DPhasesCullSortAndReuseGeometry(t *testing.T) {
 	if batch.Draws[1].Mesh != secondMesh.RenderHandle() || batch.Draws[0].Mesh == batch.Draws[1].Mesh {
 		t.Fatalf("different static meshes were merged: %+v", batch.Draws[:2])
 	}
-	state, _ := ecs.GetResource[*World](world)
+	state, _ := world.GetResource[*World]()
 	view := state.views[cameraEntity]
 	if view.transparent.items[0].entity != far || view.transparent.items[1].entity != near {
 		t.Fatalf("transparent phase is not back-to-front: %+v", view.transparent.items)
@@ -262,18 +262,18 @@ func TestExtractRender3DBuildsPerCameraLayerFilteredViews(t *testing.T) {
 	Register(world)
 	spawnCamera := func(layers scene.RenderLayers) ecs.Entity {
 		bundle := ecs.NewBundle(5)
-		ecs.Put(&bundle, scene.NewCamera())
-		ecs.Put(&bundle, Camera{})
-		ecs.Put(&bundle, scene.PerspectiveProjection3D())
-		ecs.Put(&bundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
-		ecs.Put(&bundle, layers)
+		bundle.Put(scene.NewCamera())
+		bundle.Put(Camera{})
+		bundle.Put(scene.PerspectiveProjection3D())
+		bundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
+		bundle.Put(layers)
 		return world.Spawn(bundle)
 	}
 	defaultCamera := spawnCamera(scene.RenderLayer(0))
 	highLayerCamera := spawnCamera(scene.RenderLayer(130))
 	mesh := graphics.CubeMesh(1)
 	entity := spawnMesh3DForTest(world, mesh, graphics.NewStandardMaterial(graphics.White), mgl32.Vec3{0, 0, -4})
-	if err := ecs.Insert(world, entity, scene.RenderLayer(130)); err != nil {
+	if err := world.Insert(entity, scene.RenderLayer(130)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -283,7 +283,7 @@ func TestExtractRender3DBuildsPerCameraLayerFilteredViews(t *testing.T) {
 	if err := ExtractSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*World](world)
+	state, _ := world.GetResource[*World]()
 	if len(state.views[defaultCamera].extracted) != 0 || len(state.views[highLayerCamera].extracted) != 1 {
 		t.Fatalf("per-camera extracted views: default=%d high=%d", len(state.views[defaultCamera].extracted), len(state.views[highLayerCamera].extracted))
 	}
@@ -297,23 +297,23 @@ func TestExtractRender3DCollectsNodeLightComponents(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(camera)
 	for _, value := range []any{AmbientLight{Color: graphics.White, Brightness: 0.2}, DirectionalLight{Color: graphics.White, Illuminance: 10000}, PointLight{Color: graphics.White, Intensity: 500, Unit: graphics.LightLumen, Range: 8}, SpotLight{Color: graphics.White, Intensity: 700, Unit: graphics.LightLumen, Shape: SpotCone, Range: 9, InnerConeAngle: 0.2, OuterConeAngle: 0.5}} {
 		bundle := ecs.NewBundle(2)
-		ecs.Put(&bundle, scene.GlobalTransform{Matrix: mgl32.Translate3D(1, 2, 3)})
+		bundle.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(1, 2, 3)})
 		switch light := value.(type) {
 		case AmbientLight:
-			ecs.Put(&bundle, light)
+			bundle.Put(light)
 		case DirectionalLight:
-			ecs.Put(&bundle, light)
+			bundle.Put(light)
 		case PointLight:
-			ecs.Put(&bundle, light)
+			bundle.Put(light)
 		case SpotLight:
-			ecs.Put(&bundle, light)
+			bundle.Put(light)
 		}
 		world.Spawn(bundle)
 	}
@@ -323,7 +323,7 @@ func TestExtractRender3DCollectsNodeLightComponents(t *testing.T) {
 	if err := ExtractSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*World](world)
+	state, _ := world.GetResource[*World]()
 	if len(state.lights) != 4 || state.lights[1].Kind != render.Light3DDirectional || state.lights[2].Kind != render.Light3DPoint || state.lights[3].Kind != render.Light3DSpot {
 		t.Fatalf("extracted lights = %+v", state.lights)
 	}
@@ -340,10 +340,10 @@ func TestExtractRender3DRemovesViewsForDespawnedCameras(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, scene.NewCamera())
-	ecs.Put(&bundle, Camera{})
-	ecs.Put(&bundle, scene.PerspectiveProjection3D())
-	ecs.Put(&bundle, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(scene.NewCamera())
+	bundle.Put(Camera{})
+	bundle.Put(scene.PerspectiveProjection3D())
+	bundle.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	camera := world.Spawn(bundle)
 
 	if err := scene.ExtractCamerasSystem("").Run(world); err != nil {
@@ -352,7 +352,7 @@ func TestExtractRender3DRemovesViewsForDespawnedCameras(t *testing.T) {
 	if err := ExtractSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*World](world)
+	state, _ := world.GetResource[*World]()
 	if state.views[camera] == nil {
 		t.Fatal("camera view was not created")
 	}
@@ -406,18 +406,18 @@ func TestRegisteredCustomMaterialSelectsShaderAndUploadsParameters(t *testing.T)
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
-	RegisterMaterial[customMaterial3DTest](world)
+	WorldFor(world).RegisterMaterial[customMaterial3DTest]()
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(camera)
 	material := customMaterial3DTest{shader: shader, strength: 0.75}
 	mesh := ecs.NewBundle(3)
-	ecs.Put(&mesh, Mesh{Mesh: graphics.CubeMesh(1)})
-	ecs.Put(&mesh, Material[customMaterial3DTest]{Material: &material})
-	ecs.Put(&mesh, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -4)})
+	mesh.Put(Mesh{Mesh: graphics.CubeMesh(1)})
+	mesh.Put(Material[customMaterial3DTest]{Material: &material})
+	mesh.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -4)})
 	world.Spawn(mesh)
 
 	for _, system := range []ecs.SystemConfig{
@@ -445,9 +445,9 @@ func TestRegisteredCustomMaterialSelectsShaderAndUploadsParameters(t *testing.T)
 
 func spawnMesh3DForTest(world *ecs.World, mesh *graphics.Mesh, material *graphics.StandardMaterial, position mgl32.Vec3) ecs.Entity {
 	bundle := ecs.NewBundle(3)
-	ecs.Put(&bundle, Mesh{Mesh: mesh})
-	ecs.Put(&bundle, Material[graphics.StandardMaterial]{Material: material})
-	ecs.Put(&bundle, scene.GlobalTransform{Matrix: mgl32.Translate3D(position.X(), position.Y(), position.Z())})
+	bundle.Put(Mesh{Mesh: mesh})
+	bundle.Put(Material[graphics.StandardMaterial]{Material: material})
+	bundle.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(position.X(), position.Y(), position.Z())})
 	return world.Spawn(bundle)
 }
 
@@ -467,10 +467,10 @@ func TestRender3DSubmitsDeformedMeshAsReusableDynamicGeometry(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(camera)
 	mesh, err := graphics.NewMesh([]render.Vertex3D{
 		{Position: [3]float32{-1, -1, 0}, Normal: [3]float32{0, 0, 1}},
@@ -483,10 +483,10 @@ func TestRender3DSubmitsDeformedMeshAsReusableDynamicGeometry(t *testing.T) {
 	mesh.MorphTargets = []graphics.MorphTarget{{PositionDelta: [][3]float32{{0, 0, 1}, {0, 0, 1}, {0, 0, 1}}}}
 	material := graphics.NewStandardMaterial(graphics.White)
 	entity := ecs.NewBundle(4)
-	ecs.Put(&entity, Mesh{Mesh: mesh})
-	ecs.Put(&entity, Material[graphics.StandardMaterial]{Material: material})
-	ecs.Put(&entity, Deformation{MorphWeights: []float32{0.5}})
-	ecs.Put(&entity, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -4)})
+	entity.Put(Mesh{Mesh: mesh})
+	entity.Put(Material[graphics.StandardMaterial]{Material: material})
+	entity.Put(Deformation{MorphWeights: []float32{0.5}})
+	entity.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -4)})
 	world.Spawn(entity)
 
 	for _, system := range []ecs.SystemConfig{scene.ExtractCamerasSystem(""), ExtractSystem(""), PrepareSystem(""), SortSystem(""), DrawSystem("")} {
@@ -519,10 +519,10 @@ func TestRender3DSubmitsGPUDeformationBuffersWhenDriverSupportsThem(t *testing.T
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(camera)
 	mesh, err := graphics.NewMesh([]render.Vertex3D{
 		{Position: [3]float32{-1, -1, 0}, Normal: [3]float32{0, 0, 1}},
@@ -536,10 +536,10 @@ func TestRender3DSubmitsGPUDeformationBuffersWhenDriverSupportsThem(t *testing.T
 	mesh.MorphTargets = []graphics.MorphTarget{{PositionDelta: [][3]float32{{-200, 0, 1}, {-200, 0, 1}, {-200, 0, 1}}}}
 	material := graphics.NewStandardMaterial(graphics.White)
 	entity := ecs.NewBundle(4)
-	ecs.Put(&entity, Mesh{Mesh: mesh})
-	ecs.Put(&entity, Material[graphics.StandardMaterial]{Material: material})
-	ecs.Put(&entity, Deformation{MorphWeights: []float32{0.5}, JointMatrices: []mgl32.Mat4{mgl32.Ident4()}})
-	ecs.Put(&entity, scene.GlobalTransform{Matrix: mgl32.Translate3D(100, 0, -4)})
+	entity.Put(Mesh{Mesh: mesh})
+	entity.Put(Material[graphics.StandardMaterial]{Material: material})
+	entity.Put(Deformation{MorphWeights: []float32{0.5}, JointMatrices: []mgl32.Mat4{mgl32.Ident4()}})
+	entity.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(100, 0, -4)})
 	world.Spawn(entity)
 
 	for _, system := range []ecs.SystemConfig{scene.ExtractCamerasSystem(""), ExtractSystem(""), PrepareSystem(""), SortSystem(""), DrawSystem("")} {
@@ -563,16 +563,16 @@ func TestUpdateMeshDeformationResolvesJointEntities(t *testing.T) {
 	world := ecs.NewWorld()
 	Register(world)
 	joint := ecs.NewBundle(1)
-	ecs.Put(&joint, scene.GlobalTransform{Matrix: mgl32.Translate3D(7, 0, 0)})
+	joint.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(7, 0, 0)})
 	jointEntity := world.Spawn(joint)
 	deformation := ecs.NewBundle(2)
-	ecs.Put(&deformation, Deformation{JointEntities: []ecs.Entity{jointEntity}, InverseBind: []mgl32.Mat4{mgl32.Ident4()}})
-	ecs.Put(&deformation, scene.GlobalTransform{Matrix: mgl32.Translate3D(5, 0, 0)})
+	deformation.Put(Deformation{JointEntities: []ecs.Entity{jointEntity}, InverseBind: []mgl32.Mat4{mgl32.Ident4()}})
+	deformation.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(5, 0, 0)})
 	deformationEntity := world.Spawn(deformation)
 	if err := UpdateDeformationsSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	value, ok := ecs.Get[Deformation](world, deformationEntity)
+	value, ok := world.Get[Deformation](deformationEntity)
 	if !ok || len(value.JointMatrices) != 1 || value.JointMatrices[0].Col(3).Vec3() != (mgl32.Vec3{2, 0, 0}) {
 		t.Fatalf("joint matrices = %+v", value)
 	}

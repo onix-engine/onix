@@ -36,7 +36,7 @@ func TestHTMLReparentMatchesFresh(t *testing.T) {
 				left := incrementalHTMLNode(t, world, owner, "left")
 				right := incrementalHTMLNode(t, world, owner, "right")
 				other := incrementalControl(t, world, owner, "other")
-				before, _ := ecs.Get[Control](world, other)
+				before, _ := world.Get[Control](other)
 				field := incrementalControl(t, world, owner, "field")
 				for _, destination := range []bool{true, false, true, false} {
 					movedNode.Remove()
@@ -46,14 +46,14 @@ func TestHTMLReparentMatchesFresh(t *testing.T) {
 						left.Append(movedNode)
 					}
 					incrementalSync(t, world)
-					state, _ := ecs.Get[htmlRenderState](world, owner)
+					state, _ := world.Get[htmlRenderState](owner)
 					if state.SyncStats.PartialReconciles != 1 {
 						t.Fatalf("move fell back: %+v", state.SyncStats)
 					}
 					if incrementalControl(t, world, owner, "field") != field {
 						t.Fatal("moved input replaced")
 					}
-					after, _ := ecs.Get[Control](world, other)
+					after, _ := world.Get[Control](other)
 					if after.RenderRevision != before.RenderRevision {
 						t.Fatal("unrelated control rebuilt")
 					}
@@ -75,22 +75,22 @@ func TestHTMLReparentPreservesInputAndNestedScroll(t *testing.T) {
 	right := incrementalHTMLNode(t, world, owner, "right")
 	field := incrementalControl(t, world, owner, "field")
 	SetControlValue(world, field, "Typed")
-	control := ecs.GetMut[Control](world, field)
+	control := world.GetMut[Control](field)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	clip := state.OverflowBindings[moved.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -15
 	moved.Remove()
 	right.Append(moved)
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
-	scrollValue, _ := ecs.Get[scene.UIScroll](world, clip)
-	controlValue, _ := ecs.Get[Control](world, field)
+	state, _ = world.Get[htmlRenderState](owner)
+	scrollValue, _ := world.Get[scene.UIScroll](clip)
+	controlValue, _ := world.Get[Control](field)
 	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[moved.node].entity != clip || scrollValue.Position[1] != -15 || controlValue.Value != "Typed" || controlValue.SelectionAnchor != 1 || controlValue.SelectionFocus != 3 {
 		t.Fatal("move reset input or scroll state")
 	}
-	parent, _ := ecs.Get[scene.Parent](world, clip)
+	parent, _ := world.Get[scene.Parent](clip)
 	if parent.Entity != owner {
 		t.Fatal("clip retained previous parent")
 	}
@@ -145,12 +145,12 @@ func TestHTMLReparentExternalBindingsMatchFull(t *testing.T) {
 		incrementalHTMLNode(t, world, owner, id).Append(moved)
 		refMoved.Remove()
 		incrementalHTMLNode(t, reference, refOwner, id).Append(refMoved)
-		refState := ecs.GetMut[htmlRenderState](reference, refOwner)
+		refState := reference.GetMut[htmlRenderState](refOwner)
 		refState.PartialValid = false
 		incrementalSync(t, world)
 		incrementalSync(t, reference)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
-		want, _ := ecs.Get[htmlRenderState](reference, refOwner)
+		state, _ := world.Get[htmlRenderState](owner)
+		want, _ := reference.Get[htmlRenderState](refOwner)
 		if state.SyncStats.PartialReconciles != 1 || !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, state), htmlPrimitiveSnapshot(reference, want)) {
 			t.Fatal("bound move differs from full render")
 		}
@@ -164,7 +164,7 @@ func TestHTMLReparentFromRetiredParentIsLocal(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "left").Remove()
 	incrementalHTMLNode(t, world, owner, "right").Append(moved)
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("retired source context fell back")
 	}
@@ -177,7 +177,7 @@ func TestHTMLReparentSkipsUnrelatedControls(t *testing.T) {
 	moved.Remove()
 	incrementalHTMLNode(t, world, owner, "right").Append(moved)
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 2 {
 		t.Fatalf("move updated unrelated contexts: %+v", state.SyncStats)
 	}
@@ -202,7 +202,7 @@ func TestHTMLReparentReroutesUnchangedGeometry(t *testing.T) {
 		node.Remove()
 		incrementalHTMLNode(t, world, owner, destination).Append(node)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("same-geometry move fell back")
 		}

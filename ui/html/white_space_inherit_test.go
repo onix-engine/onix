@@ -15,12 +15,12 @@ func collectHTMLFragments(t *testing.T, page string) []layout.TextFragment {
 	bundle := ecs.NewBundle(1)
 	html := New(page)
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	var fragments []layout.TextFragment
 	var visit func(*layout.Box)
 	visit = func(box *layout.Box) {

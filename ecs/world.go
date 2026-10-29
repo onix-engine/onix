@@ -330,18 +330,18 @@ func (w *World) EntityBySlot(slot EntitySlot) (Entity, bool) {
 	return slot.entity, true
 }
 
-func Insert[T any](world *World, entity Entity, value T) error {
+func (world *World) Insert[T any](entity Entity, value T) error {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
 	index, meta, ok := world.entityMeta(entity)
 	if !ok {
 		return fmt.Errorf("ecs: entity %d does not exist", entity)
 	}
-	id := registerComponent[T](world)
+	id := world.registerComponent[T]()
 	oldArchetype := world.archetypes[meta.archetypeID]
 	tick := world.mutationTick()
 	if oldArchetype.has(id) {
-		componentColumn[T](oldArchetype, id).replace(int(meta.row), value, tick)
+		oldArchetype.componentColumn[T](id).replace(int(meta.row), value, tick)
 		return nil
 	}
 
@@ -381,7 +381,7 @@ func moveSharedRow(source, target *archetype, row, skip int) {
 	}
 }
 
-func Remove[T any](world *World, entity Entity) (T, bool) {
+func (world *World) Remove[T any](entity Entity) (T, bool) {
 	var zero T
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
@@ -409,7 +409,7 @@ func Remove[T any](world *World, entity Entity) (T, bool) {
 	return removed, true
 }
 
-func Has[T any](world *World, entity Entity) bool {
+func (world *World) Has[T any](entity Entity) bool {
 	requireWorld(world)
 	_, meta, ok := world.entityMeta(entity)
 	if !ok {
@@ -419,39 +419,18 @@ func Has[T any](world *World, entity Entity) bool {
 	return registered && world.archetypes[meta.archetypeID].has(id)
 }
 
-// HasSlot checks a component through a cached entity slot without a string
-// lookup. It returns false for a stale slot or a slot from another world.
-func HasSlot[T any](world *World, slot EntitySlot) bool {
-	requireWorld(world)
-	if slot.world != world {
-		return false
-	}
-	return Has[T](world, slot.entity)
-}
-
-func Get[T any](world *World, entity Entity) (value T, ok bool) {
-	column, row := componentRow[T](world, entity)
+func (world *World) Get[T any](entity Entity) (value T, ok bool) {
+	column, row := world.componentRow[T](entity)
 	if column == nil {
 		return
 	}
 	return column.values[row], true
 }
 
-// GetSlot reads a component through a cached entity slot without a string
-// lookup. It returns false for a stale slot or a slot from another world.
-func GetSlot[T any](world *World, slot EntitySlot) (T, bool) {
-	var zero T
-	requireWorld(world)
-	if slot.world != world {
-		return zero, false
-	}
-	return Get[T](world, slot.entity)
-}
-
 // GetRef returns a component reference without marking it changed.
 // Callers must not mutate it or retain it across structural mutations.
-func GetRef[T any](world *World, entity Entity) *T {
-	column, row := componentRow[T](world, entity)
+func (world *World) GetRef[T any](entity Entity) *T {
+	column, row := world.componentRow[T](entity)
 	if column == nil {
 		return nil
 	}
@@ -460,7 +439,7 @@ func GetRef[T any](world *World, entity Entity) *T {
 
 // componentRow locates one component row without marking it changed. A nil
 // column reports that the entity is stale or its table lacks the component.
-func componentRow[T any](world *World, entity Entity) (*typedColumn[T], int) {
+func (world *World) componentRow[T any](entity Entity) (*typedColumn[T], int) {
 	requireWorld(world)
 	_, meta, ok := world.entityMeta(entity)
 	if !ok {
@@ -479,19 +458,8 @@ func componentRow[T any](world *World, entity Entity) (*typedColumn[T], int) {
 	return column, int(meta.row)
 }
 
-// GetRefSlot returns a component reference through a cached entity slot
-// without marking it changed. The pointer must not outlive structural
-// mutations.
-func GetRefSlot[T any](world *World, slot EntitySlot) *T {
-	requireWorld(world)
-	if slot.world != world {
-		return nil
-	}
-	return GetRef[T](world, slot.entity)
-}
-
-func GetMut[T any](world *World, entity Entity) *T {
-	column, row := componentRow[T](world, entity)
+func (world *World) GetMut[T any](entity Entity) *T {
+	column, row := world.componentRow[T](entity)
 	if column == nil {
 		return nil
 	}
@@ -502,8 +470,8 @@ func GetMut[T any](world *World, entity Entity) *T {
 // SetIfChanged updates an existing component only when its value differs.
 // It returns false for equal values, missing components and stale entities.
 // It does not insert components and may be used during query iteration.
-func SetIfChanged[T comparable](world *World, entity Entity, value T) bool {
-	column, row := componentRow[T](world, entity)
+func (world *World) SetIfChanged[T comparable](entity Entity, value T) bool {
+	column, row := world.componentRow[T](entity)
 	if column == nil || column.values[row] == value {
 		return false
 	}
@@ -511,34 +479,13 @@ func SetIfChanged[T comparable](world *World, entity Entity, value T) bool {
 	return true
 }
 
-// GetMutSlot returns a mutable component reference through a cached entity
-// slot without a string lookup. The pointer must not outlive structural
-// mutations.
-func GetMutSlot[T any](world *World, slot EntitySlot) *T {
-	requireWorld(world)
-	if slot.world != world {
-		return nil
-	}
-	return GetMut[T](world, slot.entity)
-}
-
 // MustMut returns an existing component with write access. A missing component
 // or stale entity is a structural error. Do not retain the pointer across
 // structural mutations.
-func MustMut[T any](world *World, entity Entity) *T {
-	value := GetMut[T](world, entity)
+func (world *World) MustMut[T any](entity Entity) *T {
+	value := world.GetMut[T](entity)
 	if value == nil {
 		panic(fmt.Sprintf("ecs: entity %d has no component %s", entity, reflect.TypeFor[T]()))
-	}
-	return value
-}
-
-// MustMutSlot is the required-component form of GetMutSlot. It also rejects
-// slots bound to a different world.
-func MustMutSlot[T any](world *World, slot EntitySlot) *T {
-	value := GetMutSlot[T](world, slot)
-	if value == nil {
-		panic(fmt.Sprintf("ecs: slot %d has no component %s in this world", slot.entity, reflect.TypeFor[T]()))
 	}
 	return value
 }

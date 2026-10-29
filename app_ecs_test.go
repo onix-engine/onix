@@ -99,7 +99,7 @@ func TestRouteMouseDownKeepsWindowDragOutOfInputState(t *testing.T) {
 func TestProcessInputEventsDerivesStateAndWritesMessages(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	state.Enqueue(input.Event{Kind: input.EventKeyDown, Key: input.KeyA})
 	state.Enqueue(input.Event{Kind: input.EventTextInput, Text: "hello"})
 
@@ -124,7 +124,7 @@ func TestProcessInputEventsDerivesStateAndWritesMessages(t *testing.T) {
 func TestProcessInputEventsPublishesFileDrops(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	state.Enqueue(input.Event{Kind: input.EventFilesDropped, X: 8, Y: 12, File: "/tmp/example.txt"})
 
 	if err := processInputEvents(&ecs.SystemContext{World: world}); err != nil {
@@ -139,7 +139,7 @@ func TestProcessInputEventsPublishesFileDrops(t *testing.T) {
 func TestInputHandlerConsumesLaterPhases(t *testing.T) {
 	app := NewApp()
 	state := input.NewState()
-	ecs.InsertResource(app.World, state)
+	app.World.InsertResource(state)
 	phases := []input.Phase{}
 	app.AddInputHandler(input.PhaseGlobal, func(dispatch *input.Dispatch) {
 		phases = append(phases, dispatch.Phase)
@@ -173,12 +173,12 @@ func TestAppFrameRunsStartupOnceAndOrderedStages(t *testing.T) {
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
 	log := []string{}
-	ecs.InsertResource(app.World, &log)
+	app.World.InsertResource(&log)
 
 	appendLog := func(name string) ecs.System {
 		return func(context *ecs.SystemContext) error {
 			world := context.World
-			out, _ := ecs.GetResource[*[]string](world)
+			out, _ := world.GetResource[*[]string]()
 			*out = append(*out, name)
 			return nil
 		}
@@ -208,7 +208,7 @@ func TestAppFrameRunsStartupOnceAndOrderedStages(t *testing.T) {
 		t.Fatalf("frame 2: %v", err)
 	}
 
-	got, _ := ecs.GetResource[*[]string](app.World)
+	got, _ := app.World.GetResource[*[]string]()
 	want := []string{
 		"startup",
 		"pre", "update", "post", "render",
@@ -222,7 +222,7 @@ func TestAppFrameRunsStartupOnceAndOrderedStages(t *testing.T) {
 func TestAppFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 	app := NewApp()
 	app.SetTargetFPS(DefaultTargetTPS)
-	if err := InstallSystems[UITextInput](app); err != nil {
+	if err := app.InstallSystems[UITextInput](); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Unix(0, 0)
@@ -243,7 +243,7 @@ func TestAppFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 
 func TestUIHTMLInstallsTextInputRuntime(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[UIHTML](app); err != nil {
+	if err := app.InstallSystems[UIHTML](); err != nil {
 		t.Fatal(err)
 	}
 	if !app.hasSystemSet(systemSetUIHTML) || !app.hasSystemSet(systemSetUITextInput) {
@@ -253,7 +253,7 @@ func TestUIHTMLInstallsTextInputRuntime(t *testing.T) {
 
 func TestUIMarkdownInstallsHTMLRuntime(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[UIMarkdown[testMarkdownRuntime]](app); err != nil {
+	if err := app.InstallSystems[UIMarkdown[testMarkdownRuntime]](); err != nil {
 		t.Fatal(err)
 	}
 	if !app.hasSystemSet(systemSetUIMarkdown) || !app.hasSystemSet(systemSetUIHTML) || !app.hasSystemSet(systemSetUITextInput) {
@@ -264,21 +264,21 @@ func TestUIMarkdownInstallsHTMLRuntime(t *testing.T) {
 type testMarkdownRuntime struct{}
 
 func (testMarkdownRuntime) InstallMarkdown(app *App) error {
-	return InstallSystems[UIHTML](app)
+	return app.InstallSystems[UIHTML]()
 }
 
 func TestWebViewInstallDefersBackendUntilWindowContext(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[WebView](app); err != nil {
+	if err := app.InstallSystems[WebView](); err != nil {
 		t.Fatal(err)
 	}
 	if !app.hasSystemSet(systemSetWebView) || app.webViewBeforeResize == nil || app.webViewAfterResize == nil {
 		t.Fatal("WebView system did not register its optional lifecycle hooks")
 	}
-	if _, ok := ecs.GetResource[*scene.WebViewRuntime](app.World); ok {
+	if _, ok := app.World.GetResource[*scene.WebViewRuntime](); ok {
 		t.Fatal("WebView backend was initialized before the window context")
 	}
-	if err := InstallSystems[WebView](app); err != nil {
+	if err := app.InstallSystems[WebView](); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -294,12 +294,12 @@ func TestAppFrameRunsFixedLoopBetweenPreUpdateAndUpdate(t *testing.T) {
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
 	log := []string{}
-	ecs.InsertResource(app.World, &log)
+	app.World.InsertResource(&log)
 
 	appendLog := func(name string) ecs.System {
 		return func(context *ecs.SystemContext) error {
 			world := context.World
-			out, _ := ecs.GetResource[*[]string](world)
+			out, _ := world.GetResource[*[]string]()
 			*out = append(*out, name)
 			return nil
 		}
@@ -335,7 +335,7 @@ func TestAppFrameRunsFixedLoopBetweenPreUpdateAndUpdate(t *testing.T) {
 		t.Fatalf("frame 2: %v", err)
 	}
 
-	got, _ := ecs.GetResource[*[]string](app.World)
+	got, _ := app.World.GetResource[*[]string]()
 	want := []string{
 		"pre", "before_fixed", "after_fixed", "update", "post", "render",
 		"pre", "before_fixed",
@@ -365,7 +365,7 @@ func TestAppFixedUpdateUsesFixedTimeAndUpdateUsesFrameTime(t *testing.T) {
 		Name: "fixed",
 		System: func(context *ecs.SystemContext) error {
 			world := context.World
-			clock, _ := ecs.GetResource[*scene.Time](world)
+			clock, _ := world.GetResource[*scene.Time]()
 			fixedDeltas = append(fixedDeltas, clock.Delta)
 			return nil
 		},
@@ -376,7 +376,7 @@ func TestAppFixedUpdateUsesFixedTimeAndUpdateUsesFrameTime(t *testing.T) {
 		Name: "update",
 		System: func(context *ecs.SystemContext) error {
 			world := context.World
-			clock, _ := ecs.GetResource[*scene.Time](world)
+			clock, _ := world.GetResource[*scene.Time]()
 			updateDeltas = append(updateDeltas, clock.Delta)
 			return nil
 		},
@@ -414,12 +414,12 @@ func TestAppFrameRunsFixedUpdateIndependentOfRender(t *testing.T) {
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
 	log := []string{}
-	ecs.InsertResource(app.World, &log)
+	app.World.InsertResource(&log)
 
 	appendLog := func(name string) ecs.System {
 		return func(context *ecs.SystemContext) error {
 			world := context.World
-			out, _ := ecs.GetResource[*[]string](world)
+			out, _ := world.GetResource[*[]string]()
 			*out = append(*out, name)
 			return nil
 		}
@@ -440,7 +440,7 @@ func TestAppFrameRunsFixedUpdateIndependentOfRender(t *testing.T) {
 		t.Fatalf("frame before render interval: %v", err)
 	}
 
-	got, _ := ecs.GetResource[*[]string](app.World)
+	got, _ := app.World.GetResource[*[]string]()
 	want := []string{"render", "fixed_update"}
 	if !reflect.DeepEqual(*got, want) {
 		t.Fatalf("unexpected fixed/render order: got %v want %v", *got, want)
@@ -459,12 +459,12 @@ func TestAppFrameRunsRenderIndependentOfFixedUpdate(t *testing.T) {
 	now := time.Unix(0, 0)
 	app.now = func() time.Time { return now }
 	log := []string{}
-	ecs.InsertResource(app.World, &log)
+	app.World.InsertResource(&log)
 
 	appendLog := func(name string) ecs.System {
 		return func(context *ecs.SystemContext) error {
 			world := context.World
-			out, _ := ecs.GetResource[*[]string](world)
+			out, _ := world.GetResource[*[]string]()
 			*out = append(*out, name)
 			return nil
 		}
@@ -485,7 +485,7 @@ func TestAppFrameRunsRenderIndependentOfFixedUpdate(t *testing.T) {
 		t.Fatalf("frame before fixed interval: %v", err)
 	}
 
-	got, _ := ecs.GetResource[*[]string](app.World)
+	got, _ := app.World.GetResource[*[]string]()
 	want := []string{"render", "render"}
 	if !reflect.DeepEqual(*got, want) {
 		t.Fatalf("unexpected fixed/render order: got %v want %v", *got, want)

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/internal/entitycache"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -92,10 +93,40 @@ type uiTransformNode struct {
 	dirty            bool
 }
 
+type uiTransformBindings struct {
+	world     *ecs.World
+	transform ecs.ComponentBinding[UITransform]
+	parent    ecs.ComponentBinding[Parent]
+	clip      ecs.ComponentBinding[ClipRect2D]
+	rounded   ecs.ComponentBinding[RoundedClip2D]
+	exempt    ecs.ComponentBinding[ClipExempt2D]
+	size      ecs.ComponentBinding[Size2D]
+	sprite    ecs.ComponentBinding[Sprite2D]
+	text      ecs.ComponentBinding[Text2D]
+	global    ecs.ComponentBinding[UIGlobalTransform]
+}
+
+func (b *uiTransformBindings) bind(world *ecs.World) {
+	if b.world == world {
+		return
+	}
+	b.world = world
+	b.transform = world.BindComponent[UITransform]()
+	b.parent = world.BindComponent[Parent]()
+	b.clip = world.BindComponent[ClipRect2D]()
+	b.rounded = world.BindComponent[RoundedClip2D]()
+	b.exempt = world.BindComponent[ClipExempt2D]()
+	b.size = world.BindComponent[Size2D]()
+	b.sprite = world.BindComponent[Sprite2D]()
+	b.text = world.BindComponent[Text2D]()
+	b.global = world.BindComponent[UIGlobalTransform]()
+}
+
 type uiTransformWorkspace struct {
+	bindings     uiTransformBindings
 	scope        *ecs.QueryScope
 	scopeVersion uint64
-	nodes        []uiTransformNode
+	nodes        entitycache.Store[uiTransformNode]
 	active       []ecs.Entity
 	versions     [9]uint64
 	structures   [9]uint64
@@ -110,15 +141,15 @@ type uiTransformWorkspace struct {
 }
 
 func uiTransformRevisions(world *ecs.World) (versions, structures [9]uint64) {
-	versions[0], structures[0] = ecs.ComponentValueRevision[UITransform](world)
-	versions[1], structures[1] = ecs.ComponentValueRevision[Parent](world)
-	versions[2], structures[2] = ecs.ComponentValueRevision[ClipRect2D](world)
-	versions[3], structures[3] = ecs.ComponentValueRevision[RoundedClip2D](world)
-	versions[4], structures[4] = ecs.ComponentValueRevision[ClipExempt2D](world)
-	versions[5], structures[5] = ecs.ComponentValueRevision[Size2D](world)
-	versions[6], structures[6] = ecs.ComponentValueRevision[Sprite2D](world)
-	versions[7], structures[7] = ecs.ComponentValueRevision[Text2D](world)
-	versions[8], structures[8] = ecs.ComponentValueRevision[UIGlobalTransform](world)
+	versions[0], structures[0] = world.ComponentValueRevision[UITransform]()
+	versions[1], structures[1] = world.ComponentValueRevision[Parent]()
+	versions[2], structures[2] = world.ComponentValueRevision[ClipRect2D]()
+	versions[3], structures[3] = world.ComponentValueRevision[RoundedClip2D]()
+	versions[4], structures[4] = world.ComponentValueRevision[ClipExempt2D]()
+	versions[5], structures[5] = world.ComponentValueRevision[Size2D]()
+	versions[6], structures[6] = world.ComponentValueRevision[Sprite2D]()
+	versions[7], structures[7] = world.ComponentValueRevision[Text2D]()
+	versions[8], structures[8] = world.ComponentValueRevision[UIGlobalTransform]()
 	return
 }
 
@@ -143,10 +174,11 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 		return nil
 	}
 
-	workspace := ecs.ScopeValue[uiTransformWorkspaceScratch, uiTransformWorkspace](world)
+	workspace := world.ScopeValue[uiTransformWorkspaceScratch, uiTransformWorkspace]()
+	workspace.bindings.bind(world)
 	scope, version := world.QueryScopeKey()
 	if workspace.scope != scope || workspace.scopeVersion != version {
-		clear(workspace.nodes)
+		workspace.nodes.Reset()
 		workspace.active = workspace.active[:0]
 		workspace.initialized = false
 		workspace.scope, workspace.scopeVersion = scope, version
@@ -154,7 +186,7 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 	workspace.recomputed = 0
 	viewport := mgl32.Vec2{}
 	scaleFactor := float32(1)
-	if size, ok := ecs.GetResource[ViewportSize](world); ok {
+	if size, ok := world.GetResource[ViewportSize](); ok {
 		viewport = mgl32.Vec2{size.Width, size.Height}
 		if size.ScaleFactor > 0 {
 			scaleFactor = size.ScaleFactor
@@ -176,21 +208,17 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 	hierarchy := HierarchyFor(world)
 	if !workspace.initialized || workspace.structures != structures {
 		for _, entity := range workspace.active {
-			if parent := workspace.node(workspace.node(entity).parent); parent != nil && !ecs.Has[UITransform](world, parent.entity) {
+			if parent := workspace.node(workspace.node(entity).parent); parent != nil && !world.Has[UITransform](parent.entity) {
 				workspace.mark(entity)
 			}
 		}
 		for _, entity := range workspace.active {
-			if !ecs.Has[UITransform](world, entity) {
-				index, _ := entity.Index()
-				workspace.nodes[index] = uiTransformNode{}
+			if !world.Has[UITransform](entity) {
+				workspace.nodes.Delete(entity)
 			}
 		}
 		workspace.active = workspace.active[:0]
-		if len(workspace.nodes) < world.EntitySlots() {
-			workspace.nodes = append(workspace.nodes, make([]uiTransformNode, world.EntitySlots()-len(workspace.nodes))...)
-		}
-		for entity, _ := range ecs.Query[UITransform](world).All {
+		for entity, _ := range world.Query[UITransform]().All {
 			workspace.refresh(world, entity, viewport, scaleFactor, !workspace.initialized || viewportChanged)
 			workspace.active = append(workspace.active, entity)
 		}
@@ -233,7 +261,7 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 			collectUITransformChanges[Text2D](world, changes, refresh)
 		}
 		if workspace.versions[8] != versions[8] {
-			for entity, access := range ecs.Query[UIGlobalTransform](world, ecs.Changed[UIGlobalTransform](changes), ecs.With[UITransform]()).All {
+			for entity, access := range world.Query[UIGlobalTransform](changes.Changed[UIGlobalTransform](), ecs.With[UITransform]()).All {
 				value := access.Get()
 
 				if node := workspace.node(entity); node != nil && (node.resolved.matrix != value.Matrix || node.resolved.clip != value.clip) {
@@ -261,15 +289,14 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 			workspace.initialized = false
 			return err
 		}
-		if global := ecs.GetRef[UIGlobalTransform](world, entity); global != nil {
+		access := workspace.bindings.global.Access(world.Row(entity))
+		if global := access.Ref(); global != nil {
 			if global.Matrix != resolved.matrix || global.clip != resolved.clip {
-				updated := ecs.GetMut[UIGlobalTransform](world, entity)
-				updated.Matrix = resolved.matrix
-				updated.clip = resolved.clip
+				ecs.CommitComponent(access, UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip})
 			}
 			continue
 		}
-		if err := ecs.Insert(world, entity, UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip}); err != nil {
+		if err := world.Insert(entity, UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip}); err != nil {
 			return err
 		}
 	}
@@ -281,17 +308,13 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 }
 
 func collectUITransformChanges[T any](world *ecs.World, changes *ecs.SystemContext, refresh func(ecs.Entity)) {
-	for entity, _ := range ecs.Query[T](world, ecs.Changed[T](changes), ecs.With[UITransform]()).All {
+	for entity, _ := range world.Query[T](changes.Changed[T](), ecs.With[UITransform]()).All {
 		refresh(entity)
 	}
 }
 
 func (workspace *uiTransformWorkspace) node(entity ecs.Entity) *uiTransformNode {
-	index, ok := entity.Index()
-	if !ok || int(index) >= len(workspace.nodes) || workspace.nodes[index].entity != entity {
-		return nil
-	}
-	return &workspace.nodes[index]
+	return workspace.nodes.Get(entity)
 }
 
 func (workspace *uiTransformWorkspace) mark(entity ecs.Entity) {
@@ -302,21 +325,22 @@ func (workspace *uiTransformWorkspace) mark(entity ecs.Entity) {
 }
 
 func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Entity, viewport mgl32.Vec2, scaleFactor float32, force bool) {
-	index, _ := entity.Index()
-	node := &workspace.nodes[index]
+	node := workspace.nodes.Ensure(entity)
 	if node.seen == workspace.generation && node.entity == entity {
 		return
 	}
 	if node.entity != entity {
 		*node = uiTransformNode{}
 	}
-	transform, _ := ecs.Get[UITransform](world, entity)
-	parent, _ := ecs.Get[Parent](world, entity)
-	clip, hasClip := ecs.Get[ClipRect2D](world, entity)
-	rounded, hasRounded := ecs.Get[RoundedClip2D](world, entity)
-	exempt := ecs.Has[ClipExempt2D](world, entity)
-	baseSize := uiTransformBaseSize(world, entity)
-	global, hasGlobal := ecs.Get[UIGlobalTransform](world, entity)
+	row := world.Row(entity)
+	b := &workspace.bindings
+	transform, _ := b.transform.Get(row)
+	parent, _ := b.parent.Get(row)
+	clip, hasClip := b.clip.Get(row)
+	rounded, hasRounded := b.rounded.Get(row)
+	exempt := b.exempt.Access(row).Ref() != nil
+	baseSize := b.baseSize(row)
+	global, hasGlobal := b.global.Get(row)
 	topologyChanged := node.entity != entity || node.parent != parent.Entity
 	dirty := force || topologyChanged || !hasGlobal || global.Matrix != node.resolved.matrix || global.clip != node.resolved.clip || node.transform != transform || node.baseSize != baseSize ||
 		node.localClip != clip || node.hasClip != hasClip || node.localRoundedClip != rounded || node.hasRoundedClip != hasRounded || node.clipExempt != exempt
@@ -371,19 +395,19 @@ func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (res
 	return resolved, nil
 }
 
-func uiTransformBaseSize(world *ecs.World, entity ecs.Entity) mgl32.Vec2 {
-	if size, ok := ecs.Get[Size2D](world, entity); ok {
+func (b *uiTransformBindings) baseSize(row ecs.EntityRow) mgl32.Vec2 {
+	if size, ok := b.size.Get(row); ok {
 		return mgl32.Vec2{size.Width, size.Height}
 	}
-	if sprite := ecs.GetRef[Sprite2D](world, entity); sprite != nil {
+	if sprite := b.sprite.Access(row).Ref(); sprite != nil {
 		width, height := sprite.Size()
 		return mgl32.Vec2{width, height}
 	}
-	if text := ecs.GetRef[Text2D](world, entity); text != nil {
+	if text := b.text.Access(row).Ref(); text != nil {
 		width, height, _ := MeasureText2D(text)
 		return mgl32.Vec2{width, height}
 	}
-	if clip, ok := ecs.Get[ClipRect2D](world, entity); ok {
+	if clip, ok := b.clip.Get(row); ok {
 		return mgl32.Vec2{clip.Width, clip.Height}
 	}
 	return mgl32.Vec2{}

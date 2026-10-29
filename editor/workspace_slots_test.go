@@ -54,7 +54,7 @@ func TestWorkspaceSlotControlsSaveTypedOverrides(t *testing.T) {
 	if err := htmlui.Sync(a.world); err != nil {
 		t.Fatal(err)
 	}
-	for _, access := range ecs.Query[htmlui.Control](a.world).All {
+	for _, access := range a.world.Query[htmlui.Control]().All {
 		control := access.Ref()
 		if control.Owner != a.shell {
 			continue

@@ -15,7 +15,7 @@ func TestScopeUpdatesReleaseRemovedContexts(t *testing.T) {
 		"box/mod.json":               `{}`,
 	})
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Update:      func(*Context, *Signal, Tick) error { return nil },
 		FrameUpdate: func(*Context, *Signal, Tick) error { return nil },
 	}))
@@ -59,15 +59,15 @@ func TestPayloadTrackingPreservesQueuedTypesDuringRegistration(t *testing.T) {
 	var numbers int64
 	var labels string
 	var flags int
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		OnMessage: func(_ *Context, _ *Signal, message Message) error {
-			if value, ok := Value[int64](message); ok {
+			if value, ok := message.Value[int64](); ok {
 				numbers += value
 			}
-			if value, ok := Value[string](message); ok {
+			if value, ok := message.Value[string](); ok {
 				labels += value
 			}
-			if value, ok := Value[bool](message); ok && value {
+			if value, ok := message.Value[bool](); ok && value {
 				flags++
 			}
 			return nil
@@ -79,14 +79,14 @@ func TestPayloadTrackingPreservesQueuedTypesDuringRegistration(t *testing.T) {
 	}
 	s, err := r.MountEntry()
 	must(t, err)
-	number, err := SceneEmitter[int64](s, "number")
+	number, err := s.Emitter[int64]("number")
 	must(t, err)
 	must(t, number.Emit(12))
-	label, err := SceneEmitter[string](s, "label")
+	label, err := s.Emitter[string]("label")
 	must(t, err)
 	must(t, label.Emit("hello"))
 	// Register a third type while the queue and its tracking list are full.
-	flag, err := SceneEmitter[bool](s, "flag")
+	flag, err := s.Emitter[bool]("flag")
 	must(t, err)
 	must(t, r.Dispatch())
 	must(t, flag.Emit(true))
@@ -104,9 +104,9 @@ func TestPayloadTrackingPreservesQueuedTypesDuringRegistration(t *testing.T) {
 func TestPreparationRollbackReleasesPendingReferences(t *testing.T) {
 	plan, _ := compileFixture(t, map[string]string{"resources/scenes/main.json": `{"modules":[]}`})
 	registry := Registry{}
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Enter: func(c *Context, _ *Signal, _ SceneStartup) error {
-			request, err := BindRequester[Signal, Signal](c, "pending")
+			request, err := c.BindRequester[Signal, Signal]("pending")
 			if err != nil {
 				return err
 			}
@@ -136,7 +136,7 @@ func BenchmarkRuntimeMemory(b *testing.B) {
 			b.ReportAllocs()
 			var reserved uintptr
 			for b.Loop() {
-				r, err := New(ecs.NewWorld(), plan, Registry{}, Options{})
+				r, err := New[FullContent](ecs.NewWorld(), plan, Registry{}, Options{})
 				must(b, err)
 				if mode == "prepared" {
 					_, err = r.Manager().StartEntry()

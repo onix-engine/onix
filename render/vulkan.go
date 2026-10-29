@@ -210,7 +210,7 @@ func (d *vulkanDriver) BeginFrame(clear Color) error {
 	if C.onix_vk_begin_frame(d.native, &values[0]) == 0 {
 		return vulkanError("begin frame")
 	}
-	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
+	d.updates = (&d.updateRetention).trimScratch(d.updates, 32)
 	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
@@ -345,7 +345,7 @@ func (d *vulkanDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = resetScratch(d.updates, &d.updateRetention)
+	d.updates = (&d.updateRetention).resetScratch(d.updates)
 	var length int
 	var uploadBytes uint64
 	for _, update := range updates {
@@ -397,7 +397,7 @@ func (d *vulkanDriver) UpdateTextures(updates []TextureUpdate) error {
 }
 
 func (d *vulkanDriver) DestroyTexture(handle TextureHandle) error {
-	return destroyNativeResource(&d.textures, handle, "Vulkan texture", func(native uint32) error {
+	return (&d.textures).destroyNativeResource(handle, "Vulkan texture", func(native uint32) error {
 		if C.onix_vk_destroy_texture(d.native, C.uint32_t(native)) == 0 {
 			return vulkanError("destroy texture")
 		}
@@ -532,7 +532,7 @@ func (d *vulkanDriver) CreateMaterial2DShader(descriptor ShaderDescriptor) (Mate
 }
 
 func (d *vulkanDriver) DestroyMaterial2DShader(handle Material2DShaderHandle) error {
-	return destroyNativeResource(&d.shaders2D, handle, "Vulkan Material2D shader", func(shader uint32) error {
+	return (&d.shaders2D).destroyNativeResource(handle, "Vulkan Material2D shader", func(shader uint32) error {
 		if C.onix_vk_destroy_material2d_shader(d.native, C.uint32_t(shader)) == 0 {
 			return vulkanError("destroy Material2D shader")
 		}
@@ -654,7 +654,7 @@ func vulkanMeshPush(batch *MeshBatch3D) C.OnixVkMeshPush {
 
 func (d *vulkanDriver) DrawMeshesDeformed(batch MeshBatch3D) error {
 	var err error
-	d.deformationWords = resetScratch(d.deformationWords, &d.deformationRetention)
+	d.deformationWords = (&d.deformationRetention).resetScratch(d.deformationWords)
 	d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 	if err != nil {
 		return fmt.Errorf("render: invalid Vulkan deformation: %w", err)
@@ -704,7 +704,7 @@ func (d *vulkanDriver) CreateMeshShader(descriptor ShaderDescriptor) (MeshShader
 }
 
 func (d *vulkanDriver) DestroyMeshShader(handle MeshShaderHandle) error {
-	return destroyNativeResource(&d.shaders, handle, "Vulkan mesh shader", func(shader uint32) error {
+	return (&d.shaders).destroyNativeResource(handle, "Vulkan mesh shader", func(shader uint32) error {
 		if C.onix_vk_destroy_mesh_shader(d.native, C.uint32_t(shader)) == 0 {
 			return vulkanError("destroy mesh shader")
 		}

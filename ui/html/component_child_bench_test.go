@@ -11,7 +11,7 @@ func BenchmarkHTMLComponentChildSnapshot(b *testing.B) {
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		componentChildBenchmarkSink = ComponentChild(1, definition, htmlComponentChildProps{"file.go"}, struct{}{})
+		componentChildBenchmarkSink = definition.ComponentChild(1, htmlComponentChildProps{"file.go"}, struct{}{})
 	}
 }
 
@@ -29,7 +29,7 @@ func BenchmarkHTMLComponentChildSlot(b *testing.B) {
 	render := func() {
 		view.reset()
 		for index := uint64(0); index < 100; index++ {
-			AppendComponentChild(view, "slot", index, definition, htmlComponentChildProps{"file.go"}, struct{}{})
+			view.AppendComponentChild("slot", index, definition, htmlComponentChildProps{"file.go"}, struct{}{})
 		}
 		instance.Current, instance.Next = instance.Next, instance.Current
 		instance.Next.reset()

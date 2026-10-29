@@ -9,46 +9,47 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-func transformBundle(t project.ModTransform, ui bool, parent ecs.Entity, order int, visible, active bool) ecs.Bundle {
+func transformBundle(t project.ModTransform, ui bool, parent ecs.Entity, order int, visible, active bool, anchor *scene.Anchor) ecs.Bundle {
 	b := ecs.NewBundle(7)
 	if ui {
-		local := scene.NewUITransform()
-		local.Translation = scene.Px2(t.Position[0], t.Position[1])
-		local.Scale = mgl32.Vec2{t.Scale[0], t.Scale[1]}
-		local.Rotation = t.Rotation[2]
-		ecs.Put(&b, local)
-		ecs.Put(&b, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
-		ecs.Put(&b, scene.AnchorTopLeft)
+		b.Put(moduleUITransform(t))
+		b.Put(scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
 	} else {
-		rotation := mgl32.QuatRotate(t.Rotation[2], mgl32.Vec3{0, 0, 1}).Mul(mgl32.QuatRotate(t.Rotation[1], mgl32.Vec3{0, 1, 0})).Mul(mgl32.QuatRotate(t.Rotation[0], mgl32.Vec3{1, 0, 0}))
-		ecs.Put(&b, scene.Transform{Translation: mgl32.Vec3(t.Position), Rotation: rotation, Scale: mgl32.Vec3(t.Scale)})
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+		b.Put(moduleTransform(t))
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	}
+	if anchor != nil {
+		b.Put(*anchor)
+	} else if ui {
+		b.Put(scene.AnchorTopLeft)
 	}
 	if parent != 0 {
-		ecs.Put(&b, scene.Parent{Entity: parent})
+		b.Put(scene.Parent{Entity: parent})
 	}
-	ecs.Put(&b, scene.SiblingOrder(order))
-	ecs.Put(&b, scene.Visibility{Visible: visible})
-	ecs.Put(&b, scene.Activity{Active: active})
+	b.Put(scene.SiblingOrder(order))
+	b.Put(scene.Visibility{Visible: visible})
+	b.Put(scene.Activity{Active: active})
 	return b
 }
 
-func (r *Runtime) spawnTransform(t project.ModTransform, ui bool, parent ecs.Entity, order int, visible bool) ecs.Entity {
-	return r.world.Spawn(transformBundle(t, ui, parent, order, visible, true))
+func moduleUITransform(t project.ModTransform) scene.UITransform {
+	local := scene.NewUITransform()
+	local.Translation = scene.Px2(t.Position[0], t.Position[1])
+	local.Scale = mgl32.Vec2{t.Scale[0], t.Scale[1]}
+	local.Rotation = t.Rotation[2]
+	return local
+}
+
+func moduleTransform(t project.ModTransform) scene.Transform {
+	rotation := mgl32.QuatRotate(t.Rotation[2], mgl32.Vec3{0, 0, 1}).Mul(mgl32.QuatRotate(t.Rotation[1], mgl32.Vec3{0, 1, 0})).Mul(mgl32.QuatRotate(t.Rotation[0], mgl32.Vec3{1, 0, 0}))
+	return scene.Transform{Translation: mgl32.Vec3(t.Position), Rotation: rotation, Scale: mgl32.Vec3(t.Scale)}
 }
 
 func installAlternateTransform(w *ecs.World, e ecs.Entity, t project.ModTransform, ui bool) {
-	if ui && !ecs.Has[scene.UITransform](w, e) {
-		local := scene.NewUITransform()
-		local.Translation = scene.Px2(t.Position[0], t.Position[1])
-		local.Scale = mgl32.Vec2{t.Scale[0], t.Scale[1]}
-		local.Rotation = t.Rotation[2]
-		_ = ecs.Insert(w, e, local)
-		_ = ecs.Insert(w, e, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
-	} else if !ui && !ecs.Has[scene.Transform](w, e) {
-		rotation := mgl32.QuatRotate(t.Rotation[2], mgl32.Vec3{0, 0, 1}).Mul(mgl32.QuatRotate(t.Rotation[1], mgl32.Vec3{0, 1, 0})).Mul(mgl32.QuatRotate(t.Rotation[0], mgl32.Vec3{1, 0, 0}))
-		_ = ecs.Insert(w, e, scene.Transform{Translation: mgl32.Vec3(t.Position), Rotation: rotation, Scale: mgl32.Vec3(t.Scale)})
-		_ = ecs.Insert(w, e, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	if ui && !w.Has[scene.UITransform](e) {
+		_ = w.Insert2(e, moduleUITransform(t), scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
+	} else if !ui && !w.Has[scene.Transform](e) {
+		_ = w.Insert2(e, moduleTransform(t), scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	}
 }
 
@@ -71,39 +72,26 @@ func (r *Runtime) spawnContent(c *Context, t project.ModTransform, spec project.
 		shared.refs++
 		c.resources = shared
 	}
-	b := transformBundle(t, ui, parent, order, c.visible, c.enabled)
-	if r.options.Content == nil {
-		var content ecs.Bundle
-		prepared := false
-		if p := r.preparedContent; p != nil && p.index < len(p.items) {
-			item := &p.items[p.index]
-			p.index++
-			if item.store == c.resources {
-				content, prepared = item.bundle, true
-			}
+	b := transformBundle(t, ui, parent, order, c.visible, c.enabled, spec.Anchor)
+	prepared := false
+	if p := r.preparedContent; p != nil && p.index < len(p.items) {
+		item := &p.items[p.index]
+		p.index++
+		if item.store == c.resources {
+			b.Extend(item.bundle)
+			prepared = true
 		}
-		if !prepared {
-			var err error
-			content, err = c.resources.store.ModContent(spec)
-			if err != nil {
-				return 0, err
-			}
+	}
+	if !prepared {
+		if err := r.content.appendTo(c.resources.store, &b, spec); err != nil {
+			return 0, err
 		}
-		b.Extend(content)
 	}
-	entity := r.world.Spawn(b)
-	if spec.Anchor != nil {
-		_ = ecs.Insert(r.world, entity, *spec.Anchor)
-	}
-	return entity, nil
+
+	return r.world.Spawn(b), nil
 }
 
 func (r *Runtime) installContent(c *Context) error {
-	if r.options.Content != nil {
-		if err := r.options.Content(c, c.definition.Spec.Components); err != nil {
-			return err
-		}
-	}
 	if err := r.bindContent(c, c.root, "", c.definition.Spec.Components); err != nil {
 		return err
 	}
@@ -122,35 +110,35 @@ func (r *Runtime) bindContent(c *Context, entity ecs.Entity, name string, compon
 		}
 	}
 	if components.Material != nil {
-		scene.RegisterMaterial2D[project.ModMaterial2D](r.world)
+		scene.RenderWorldFor(r.world).RegisterMaterial2D[project.ModMaterial2D]()
 	}
 	if spec := components.Input; spec != nil && spec.Pointer {
 		width, height := float32(0), float32(0)
 		if len(components.Size) == 2 {
 			width, height = components.Size[0], components.Size[1]
 		}
-		if sprite, ok := ecs.Get[scene.Sprite2D](r.world, entity); ok {
+		if sprite, ok := r.world.Get[scene.Sprite2D](entity); ok {
 			width, height = sprite.Width, sprite.Height
 		}
-		if err := ecs.Insert(r.world, entity, scene.InputTarget2D{Width: width, Height: height, Disabled: !c.enabled}); err != nil {
+		if err := r.world.Insert(entity, scene.InputTarget2D{Width: width, Height: height, Disabled: !c.enabled}); err != nil {
 			return err
 		}
 
 	}
 	if components.Animation != nil {
-		a := ecs.GetMut[scene.Animator](r.world, entity)
+		a := r.world.GetMut[scene.Animator](entity)
 		if a == nil || a.Clip == nil {
 			return fmt.Errorf("animation component is missing")
 		}
-		floats, err := bindPrivateTracks(c, entity, a.Clip.FloatTracks)
+		floats, err := c.bindPrivateTracks(entity, a.Clip.FloatTracks)
 		if err != nil {
 			return err
 		}
-		textures, err := bindPrivateTracks(c, entity, a.Clip.TextureTracks)
+		textures, err := c.bindPrivateTracks(entity, a.Clip.TextureTracks)
 		if err != nil {
 			return err
 		}
-		bools, err := bindPrivateTracks(c, entity, a.Clip.BoolTracks)
+		bools, err := c.bindPrivateTracks(entity, a.Clip.BoolTracks)
 		if err != nil {
 			return err
 		}
@@ -159,7 +147,7 @@ func (r *Runtime) bindContent(c *Context, entity ecs.Entity, name string, compon
 	return nil
 }
 
-func bindPrivateTracks[T any](c *Context, owner ecs.Entity, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
+func (c *Context) bindPrivateTracks[T any](owner ecs.Entity, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
 	result := make([]ecs.Entity, len(tracks))
 	for i, track := range tracks {
 		e := owner
@@ -171,15 +159,15 @@ func bindPrivateTracks[T any](c *Context, owner ecs.Entity, tracks []scene.Anima
 		}
 		switch track.Binding.Target {
 		case scene.AnimationTargetSpriteTexture, scene.AnimationTargetSpriteAlpha:
-			if !ecs.Has[scene.Sprite2D](c.runtime.world, e) {
+			if !c.runtime.world.Has[scene.Sprite2D](e) {
 				return nil, fmt.Errorf("animation target %q has no sprite", track.Binding.Path)
 			}
 		case scene.AnimationTargetVisibility:
-			if !ecs.Has[scene.Visibility](c.runtime.world, e) {
+			if !c.runtime.world.Has[scene.Visibility](e) {
 				return nil, ErrType
 			}
 		default:
-			if !ecs.Has[scene.UITransform](c.runtime.world, e) && !ecs.Has[scene.Transform](c.runtime.world, e) {
+			if !c.runtime.world.Has[scene.UITransform](e) && !c.runtime.world.Has[scene.Transform](e) {
 				return nil, ErrType
 			}
 		}

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 )
@@ -36,7 +35,7 @@ func TestModuleEmitterCompilesAndInstantiatesMultipleParticles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	emitter, ok := ecs.BundleValue[scene.ParticleEmitter2D](bundle)
+	emitter, ok := bundle.Value[scene.ParticleEmitter2D]()
 	if !ok || len(emitter.Appearances) != 2 || emitter.Appearances[0].Color != graphics.ColorFromRGBA(255, 0, 0, 255) || emitter.Appearances[1].Color != graphics.ColorFromRGBA(0, 0, 255, 255) {
 		t.Fatalf("particle appearances did not instantiate: %+v", emitter.Appearances)
 	}
@@ -44,7 +43,7 @@ func TestModuleEmitterCompilesAndInstantiatesMultipleParticles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _ := ecs.BundleValue[scene.ParticleEmitter2D](otherBundle)
+	other, _ := otherBundle.Value[scene.ParticleEmitter2D]()
 	emitter.Appearances[0].Color = graphics.Black
 	if other.Appearances[0].Color == graphics.Black {
 		t.Fatal("emitter instances share mutable appearances")

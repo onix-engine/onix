@@ -21,18 +21,18 @@ func TestHTMLControlFontKeepsTabWidthAcrossSiblingHover(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<button id="row">File</button><textarea id="editor" style="width:200px;height:100px;font-size:13px;white-space:pre;tab-size:2">&#9;source</textarea><style>#row:hover{background:#445566}</style>`)
 	control := incrementalControl(t, world, owner, "editor")
 	row := incrementalControl(t, world, owner, "row")
-	if err := ecs.Insert(world, control, ControlTextFont{Font: codeFont}); err != nil {
+	if err := world.Insert(control, ControlTextFont{Font: codeFont}); err != nil {
 		t.Fatal(err)
 	}
 	// Pencode installs its selected code face before the next HTML sync.
 	var entity ecs.Entity
-	for candidate, access := range ecs.Query[ControlText](world).All {
+	for candidate, access := range world.Query[ControlText]().All {
 		if access.Ref().Control == control {
 			entity = candidate
 			break
 		}
 	}
-	text := ecs.GetMut[scene.Text2D](world, entity)
+	text := world.GetMut[scene.Text2D](entity)
 	if text == nil {
 		t.Fatal("editor text missing")
 	}
@@ -42,7 +42,7 @@ func TestHTMLControlFontKeepsTabWidthAcrossSiblingHover(t *testing.T) {
 	want := float32(advance) / 64 * 2
 	check := func() {
 		t.Helper()
-		text := ecs.GetRef[scene.Text2D](world, entity)
+		text := world.GetRef[scene.Text2D](entity)
 		if text == nil || text.Font != codeFont || text.TabWidth != want {
 			t.Fatalf("editor font or tab width changed: %+v, want width %v", text, want)
 		}
@@ -56,7 +56,7 @@ func TestHTMLControlFontKeepsTabWidthAcrossSiblingHover(t *testing.T) {
 		check()
 	}
 	// A full reconciliation (for example resizing) must honor the binding too.
-	ecs.GetMut[Surface](world, owner).Width += 20
+	world.GetMut[Surface](owner).Width += 20
 	incrementalSync(t, world)
 	check()
 	if allocs := testing.AllocsPerRun(100, func() {

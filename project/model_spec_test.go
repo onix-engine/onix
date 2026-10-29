@@ -71,21 +71,21 @@ func TestLoadModelResourcesAndInstantiate3DGameObjects(t *testing.T) {
 		t.Fatalf("instantiate model project: %v", err)
 	}
 	visible := scene.MustEntity("visible")
-	mesh, ok := ecs.Get[render3d.Mesh](scene.World, visible)
+	mesh, ok := scene.World.Get[render3d.Mesh](visible)
 	if !ok || mesh.Mesh == nil || len(mesh.Mesh.Indices) != 36 {
 		t.Fatalf("expected cube mesh component, got %+v", mesh)
 	}
-	transform, ok := ecs.Get[sceneapi.Transform](scene.World, visible)
+	transform, ok := scene.World.Get[sceneapi.Transform](visible)
 	if !ok || transform.Translation != [3]float32{1.5, 2, -3} || transform.Scale != [3]float32{2, 3, 4} {
 		t.Fatalf("unexpected 3D transform: %+v", transform)
 	}
-	material, ok := ecs.Get[render3d.Material[graphics.StandardMaterial]](scene.World, visible)
+	material, ok := scene.World.Get[render3d.Material[graphics.StandardMaterial]](visible)
 	if !ok || material.Material == nil || material.Material.Shader == nil || material.Material.BaseColor.R != 1 || material.Material.Metallic != 0.4 {
 		t.Fatalf("unexpected model material: %+v", material)
 	}
 	configured := scene.MustEntity("configured")
-	imported, ok := ecs.Get[render3d.Mesh](scene.World, configured)
-	if !ecs.Has[sceneapi.Transform](scene.World, configured) || !ok || imported.Mesh == nil || len(imported.Mesh.Indices) != 3 {
+	imported, ok := scene.World.Get[render3d.Mesh](configured)
+	if !scene.World.Has[sceneapi.Transform](configured) || !ok || imported.Mesh == nil || len(imported.Mesh.Indices) != 3 {
 		t.Fatal("expected GLB model to produce a display mesh")
 	}
 }
@@ -149,20 +149,20 @@ func TestCameraAndDirectionalLightAre3DGameObjects(t *testing.T) {
 		t.Fatalf("instantiate 3D game objects: %v", err)
 	}
 	cameraEntity := scene.MustEntity("camera")
-	camera, cameraOK := ecs.Get[sceneapi.Camera](scene.World, cameraEntity)
-	projection, projectionOK := ecs.Get[sceneapi.Projection](scene.World, cameraEntity)
-	_, markerOK := ecs.Get[render3d.Camera](scene.World, cameraEntity)
+	camera, cameraOK := scene.World.Get[sceneapi.Camera](cameraEntity)
+	projection, projectionOK := scene.World.Get[sceneapi.Projection](cameraEntity)
+	_, markerOK := scene.World.Get[render3d.Camera](cameraEntity)
 	if !cameraOK || !projectionOK || !markerOK || projection.Perspective.Fov != 1.1 || projection.Perspective.Near != 0.25 || camera.Order != 3 || camera.ClearColor.R == 0 {
 		t.Fatalf("unexpected camera components: camera=%+v projection=%+v", camera, projection)
 	}
-	if transform, ok := ecs.Get[sceneapi.Transform](scene.World, cameraEntity); !ok || transform.Translation != [3]float32{6, 4.5, 9} {
+	if transform, ok := scene.World.Get[sceneapi.Transform](cameraEntity); !ok || transform.Translation != [3]float32{6, 4.5, 9} {
 		t.Fatalf("unexpected camera transform: %+v", transform)
 	}
-	light, ok := ecs.Get[render3d.DirectionalLight](scene.World, scene.MustEntity("sun"))
+	light, ok := scene.World.Get[render3d.DirectionalLight](scene.MustEntity("sun"))
 	if !ok || light.Illuminance != 24000 || light.Color.R <= light.Color.B {
 		t.Fatalf("unexpected directional light: %+v", light)
 	}
-	target, ok := ecs.Get[sceneapi.UITargetCamera](scene.World, scene.MustEntity("hud"))
+	target, ok := scene.World.Get[sceneapi.UITargetCamera](scene.MustEntity("hud"))
 	if !ok || target.Entity != cameraEntity {
 		t.Fatalf("unexpected UI target camera: %+v ok=%v", target, ok)
 	}
@@ -173,9 +173,9 @@ func TestCameraAndDirectionalLightAre3DGameObjects(t *testing.T) {
 	if err := scene.ApplyNode(updatedSpec); err != nil {
 		t.Fatalf("update camera game object: %v", err)
 	}
-	camera, _ = ecs.Get[sceneapi.Camera](scene.World, cameraEntity)
-	projection, _ = ecs.Get[sceneapi.Projection](scene.World, cameraEntity)
-	transform, _ := ecs.Get[sceneapi.Transform](scene.World, cameraEntity)
+	camera, _ = scene.World.Get[sceneapi.Camera](cameraEntity)
+	projection, _ = scene.World.Get[sceneapi.Projection](cameraEntity)
+	transform, _ := scene.World.Get[sceneapi.Transform](cameraEntity)
 	if math.Abs(float64(projection.Perspective.Fov-0.9)) > 1e-6 || camera.Order != 7 || transform.Translation != [3]float32{2, 3, 4} {
 		t.Fatalf("camera hot update was not applied: camera=%+v projection=%+v transform=%+v", camera, projection, transform)
 	}

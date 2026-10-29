@@ -4,10 +4,10 @@ import "testing"
 
 func TestInstallRenderSystemsOrdersRenderWorldBefore2DOverlay(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		t.Fatalf("install 2D systems: %v", err)
 	}
-	if err := InstallSystems[Render3D](app); err != nil {
+	if err := app.InstallSystems[Render3D](); err != nil {
 		t.Fatalf("install 3D systems: %v", err)
 	}
 	order, err := app.Schedule(StageRender).Order()

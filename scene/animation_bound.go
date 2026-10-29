@@ -11,7 +11,7 @@ import (
 // primitives with direct animators, but never parses Binding.Path or performs
 // a name lookup during a frame.
 
-func applyBoundAnimator(world *ecs.World, animator *Animator) error {
+func applyBoundAnimator(world *ecs.World, animator *Animator, bindings *animationComponentBindings) error {
 	if animator == nil || animator.Clip == nil {
 		return nil
 	}
@@ -27,16 +27,19 @@ func applyBoundAnimator(world *ecs.World, animator *Animator) error {
 		if !ok {
 			return animationTargetError("texture", trackIndex)
 		}
-		value, sampled := sampleAnimationDiscreteTrackAt(track, time, &textureCursors[trackIndex])
+		value, sampled := track.sampleDiscreteAt(time, &textureCursors[trackIndex])
 		if !sampled {
 			continue
 		}
-		sprite := ecs.GetMut[Sprite2D](world, entity)
+		access := bindings.sprite.Access(world.Row(entity))
+		sprite := access.Ref()
 		if sprite == nil {
 			return animationEntityComponentError(entity, "Sprite2D")
 		}
-		sprite.Texture = value
-		sprite.Slice = nil
+		if sprite.Texture != value || sprite.Slice != nil {
+			sprite = access.Mut()
+			sprite.Texture, sprite.Slice = value, nil
+		}
 	}
 
 	for trackIndex := range clip.FloatTracks {
@@ -58,11 +61,11 @@ func applyBoundAnimator(world *ecs.World, animator *Animator) error {
 				}
 			}
 			if rotation.any() {
-				components, err := animationComponentsForTarget(world, entity, animationNeedsTransform)
+				components, err := animationComponentsForTarget(world, entity, animationNeedsTransform, bindings)
 				if err != nil {
 					return err
 				}
-				if err := applyRotationAnimationTarget(components, rotation); err != nil {
+				if err := applyRotationAnimationTarget(&components, rotation); err != nil {
 					return err
 				}
 			}
@@ -72,11 +75,11 @@ func applyBoundAnimator(world *ecs.World, animator *Animator) error {
 		if !sampled {
 			continue
 		}
-		components, err := animationComponentsForTarget(world, entity, animationRequirement(track.target))
+		components, err := animationComponentsForTarget(world, entity, animationRequirement(track.target), bindings)
 		if err != nil {
 			return err
 		}
-		if err := applyFloatAnimationTarget(components, track.target, value); err != nil {
+		if err := applyFloatAnimationTarget(&components, track.target, value); err != nil {
 			return err
 		}
 	}
@@ -87,15 +90,15 @@ func applyBoundAnimator(world *ecs.World, animator *Animator) error {
 		if !ok {
 			return animationTargetError("bool", trackIndex)
 		}
-		value, sampled := sampleAnimationDiscreteTrackAt(track, time, &boolCursors[trackIndex])
+		value, sampled := track.sampleDiscreteAt(time, &boolCursors[trackIndex])
 		if !sampled {
 			continue
 		}
-		visibility := ecs.GetMut[Visibility](world, entity)
-		if visibility == nil {
+		access := bindings.visibility.Access(world.Row(entity))
+		if access.Ref() == nil {
 			return animationEntityComponentError(entity, "Visibility")
 		}
-		visibility.Visible = value
+		ecs.CommitComponent(access, Visibility{Visible: value})
 	}
 	return nil
 }
@@ -171,11 +174,11 @@ func isAnimationRotationTarget(target animationTargetCode) bool {
 	return target == animationTargetRotationX || target == animationTargetRotationY || target == animationTargetRotationZ
 }
 
-func animationComponentsForTarget(world *ecs.World, entity ecs.Entity, requirements uint8) (animationTargetComponents, error) {
+func animationComponentsForTarget(world *ecs.World, entity ecs.Entity, requirements uint8, bindings *animationComponentBindings) (animationTargetComponents, error) {
 	if entity == 0 {
 		return animationTargetComponents{}, animationEntityComponentError(entity, "target")
 	}
-	return animationComponents(world, entity, requirements)
+	return animationComponents(world, entity, requirements, bindings)
 }
 
 func animationTargetError(kind string, index int) error {

@@ -26,7 +26,7 @@ func TestProjectInputAndLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	world := ecs.NewWorld()
-	runtime, err := module.New(world, plan, registry, OnixModuleOptions(source))
+	runtime, err := module.New[OnixContentProfile](world, plan, registry, OnixModuleOptions(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestProjectInputAndLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	var page ecs.Entity
-	for entity := range ecs.Query[htmlui.Surface](world).All {
+	for entity := range world.Query[htmlui.Surface]().All {
 		page = entity
 	}
 	if page == 0 {
@@ -69,7 +69,7 @@ func TestProjectInputAndLayout(t *testing.T) {
 			}
 		}
 		got := make(map[string]int)
-		for _, access := range ecs.Query[scene.Text2D](world).All {
+		for _, access := range world.Query[scene.Text2D]().All {
 			text := access.Get()
 			if text.Value != "0" && text.FontSize >= 24 && text.FontSize <= 44 {
 				if _, err := strconv.ParseUint(text.Value, 10, 32); err == nil {
@@ -117,7 +117,7 @@ func TestProjectInputAndLayout(t *testing.T) {
 	if !ok {
 		t.Fatal("missing undo button")
 	}
-	control, _ := ecs.Get[htmlui.Control](world, undo)
+	control, _ := world.Get[htmlui.Control](undo)
 	if !control.Disabled {
 		t.Fatal("undo must be disabled after restart")
 	}

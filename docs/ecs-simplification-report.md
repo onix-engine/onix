@@ -2,7 +2,7 @@
 
 Recorded 2026-10-03 against `0fdbd194`. Items 2–7 reduce production code by 204 lines (284 added/488 removed), excluding tests/docs; regressions and benchmarks add 254 lines.
 
-Get, GetRef and compare-before-write share generic componentAt lookup while keeping inline reads. GetMut retains its direct path to avoid extra location-return overhead. Public `ecs.SetIfChanged[T comparable]` and `CommitComponent` replace private UI helpers: equal values do not mark Changed or advance write ticks; actual writes preserve Added and update Changed/version. Mutable access itself still marks change.
+Get, GetRef and compare-before-write share generic componentAt lookup while keeping inline reads. GetMut retains its direct path to avoid extra location-return overhead. Public `World.SetIfChanged[T comparable]` and `CommitComponent` replace private UI helpers: equal values do not mark Changed or advance write ticks; actual writes preserve Added and update Changed/version. Mutable access itself still marks change.
 
 Controls share UI/interaction/surface/part bundle construction; Button/Panel/Input/Textarea install root components together, with generic text-input creation and precomputed capacities. FindPart[P,T] caches entities in a World index, rebuilding on Relation/Part versions including migration. Cursor/selection and same-stage scrollbar measurement reuse it. First-match semantics include missing display components; measurement caches refresh before and after layout independently.
 
@@ -18,10 +18,10 @@ Targeted ECS/UI/physics/root/project/vet/editor-build checks and regressions for
 
 ```go
 // Write existing components only when changed; missing/stale entities return false.
-ecs.SetIfChanged(world, entity, scene.Visibility{Visible: true})
+world.SetIfChanged(entity, scene.Visibility{Visible: true})
 
 // Commit changes using the query tick.
-for _, access := range ecs.Query[scene.Visibility](world).All {
+for _, access := range world.Query[scene.Visibility]().All {
 	ecs.CommitComponent(access, scene.Visibility{Visible: true})
 }
 

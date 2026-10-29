@@ -14,9 +14,9 @@ import (
 func workspace3DCanvasPoint(t *testing.T, a *ModuleEditor, entity ecs.Entity) (float32, float32) {
 	t.Helper()
 	v, bounds := &a.viewport3D, a.canvasBounds()
-	projection, _ := ecs.Get[scene.Projection](v.world, v.view.camera)
+	projection, _ := v.world.Get[scene.Projection](v.view.camera)
 	camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
-	global, _ := ecs.Get[scene.GlobalTransform](v.world, entity)
+	global, _ := v.world.Get[scene.GlobalTransform](entity)
 	point := projection.Matrix(bounds.W, bounds.H).Mul4(camera.Inv()).Mul4x1(global.Matrix.Col(3))
 	x, y := bounds.X+(point[0]/point[3]+1)*bounds.W*.5, bounds.Y+(1-point[1]/point[3])*bounds.H*.5
 	if point[3] <= 0 || !viewportContains(bounds, x, y) {

@@ -42,7 +42,7 @@ type controlRemovalCache struct {
 }
 
 func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
-	cache := ecs.FrameValue[controlRemovalCache, controlRemovalCache](world)
+	cache := world.FrameValue[controlRemovalCache, controlRemovalCache]()
 	if !cache.rootInitialized {
 		types := append([]ecs.ComponentType{
 			ecs.Type[Control](), ecs.Type[scene.InputTarget2D](), ecs.Type[scene.InputState2D](),
@@ -55,14 +55,14 @@ func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
 			ecs.Type[Relation[SurfaceStyle]](), ecs.Type[Relation[Progress]](),
 			ecs.Type[scene.ClipRect2D](), ecs.Type[scene.ClipExempt2D](),
 		}, compositionPartTypes[:]...)
-		cache.root = ecs.PrepareRemoval(world, types...)
+		cache.root = world.PrepareRemoval(types...)
 		cache.rootInitialized = true
 	}
 	return cache.root
 }
 
 func compositionRemovalFor(world *ecs.World, clipFlags int) ecs.PreparedRemoval {
-	cache := ecs.FrameValue[controlRemovalCache, controlRemovalCache](world)
+	cache := world.FrameValue[controlRemovalCache, controlRemovalCache]()
 	if !cache.partsInitialized[clipFlags] {
 		types := append([]ecs.ComponentType{
 			ecs.Type[NumberInputStep](), ecs.Type[SelectorList](), ecs.Type[SelectorItem](),
@@ -75,7 +75,7 @@ func compositionRemovalFor(world *ecs.World, clipFlags int) ecs.PreparedRemoval 
 		if clipFlags&2 != 0 {
 			types = append(types, ecs.Type[scene.ClipExempt2D]())
 		}
-		cache.parts[clipFlags] = ecs.PrepareRemoval(world, types...)
+		cache.parts[clipFlags] = world.PrepareRemoval(types...)
 		cache.partsInitialized[clipFlags] = true
 	}
 	return cache.parts[clipFlags]

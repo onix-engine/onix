@@ -7,9 +7,9 @@ type scratchSliceTestTag struct{}
 
 func TestFrameScratchMapClearsAndReusesMap(t *testing.T) {
 	world := NewWorld()
-	first := FrameScratchMap[scratchMapTestTag, int, string](world)
+	first := world.FrameScratchMap[scratchMapTestTag, int, string]()
 	first[1] = "old"
-	second := FrameScratchMap[scratchMapTestTag, int, string](world)
+	second := world.FrameScratchMap[scratchMapTestTag, int, string]()
 	if len(second) != 0 {
 		t.Fatalf("scratch map retained %d entries", len(second))
 	}
@@ -21,10 +21,10 @@ func TestFrameScratchMapClearsAndReusesMap(t *testing.T) {
 
 func TestFrameScratchSliceRetainsCapacity(t *testing.T) {
 	world := NewWorld()
-	first := FrameScratch[scratchSliceTestTag, int](world)
+	first := world.FrameScratch[scratchSliceTestTag, int]()
 	first.Values = append(first.Values, 1, 2, 3, 4)
 	capacity := cap(first.Values)
-	second := FrameScratch[scratchSliceTestTag, int](world)
+	second := world.FrameScratch[scratchSliceTestTag, int]()
 	if len(second.Values) != 0 || cap(second.Values) != capacity {
 		t.Fatalf("scratch slice len/cap = %d/%d, want 0/%d", len(second.Values), cap(second.Values), capacity)
 	}
@@ -32,10 +32,10 @@ func TestFrameScratchSliceRetainsCapacity(t *testing.T) {
 
 func TestFrameScratchSliceReleasesUnusedTail(t *testing.T) {
 	world := NewWorld()
-	first := FrameScratch[scratchSliceTestTag, *int](world)
+	first := world.FrameScratch[scratchSliceTestTag, *int]()
 	a, b := 1, 2
 	first.Values = append(first.Values, &a, &b)
-	second := FrameScratch[scratchSliceTestTag, *int](world)
+	second := world.FrameScratch[scratchSliceTestTag, *int]()
 	second.Values = append(second.Values, &a)
 	second.ReleaseUnused()
 	retained := second.Values[:2]
@@ -46,13 +46,13 @@ func TestFrameScratchSliceReleasesUnusedTail(t *testing.T) {
 
 func TestFrameScratchReleasesTailAcrossSkippedCleanup(t *testing.T) {
 	world := NewWorld()
-	scratch := FrameScratch[scratchSliceTestTag, *int](world)
+	scratch := world.FrameScratch[scratchSliceTestTag, *int]()
 	value := 42
 	scratch.Values = append(scratch.Values, &value, &value, &value)
-	scratch = FrameScratch[scratchSliceTestTag, *int](world)
+	scratch = world.FrameScratch[scratchSliceTestTag, *int]()
 	scratch.Values = append(scratch.Values, &value)
 	// A consumer may skip ReleaseUnused on a frame that exits early.
-	scratch = FrameScratch[scratchSliceTestTag, *int](world)
+	scratch = world.FrameScratch[scratchSliceTestTag, *int]()
 	scratch.Values = append(scratch.Values, &value)
 	scratch.ReleaseUnused()
 	for _, pointer := range scratch.Values[1:3] {

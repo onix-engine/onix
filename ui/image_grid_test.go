@@ -20,7 +20,7 @@ func TestImageGridLaysOutCardsAndReportsRemoval(t *testing.T) {
 	deleteIconStyle := TextureIcon(deleteIcon, 14, 14)
 	grid := SpawnImageGrid(world, ImageGridOptions{X: 10, Y: 20, Width: 112, Columns: 3, Gap: 8, Items: items, DeleteIcon: deleteIconStyle, Radius: 4})
 
-	component, ok := ecs.Get[ImageGrid](world, grid)
+	component, ok := world.Get[ImageGrid](grid)
 	if !ok || component.Width != 112 || component.Columns != 3 || component.DeleteIcon != deleteIconStyle || len(component.Items) != len(items) {
 		t.Fatalf("image grid = %#v", component)
 	}
@@ -35,14 +35,14 @@ func TestImageGridLaysOutCardsAndReportsRemoval(t *testing.T) {
 
 	cells := 0
 	var remove ecs.Entity
-	for _, access := range ecs.Query[imageGridCell](world).All {
+	for _, access := range world.Query[imageGridCell]().All {
 		cell := access.Mut()
 
 		if cell.Grid == grid {
 			cells++
 		}
 	}
-	for entity, access := range ecs.Query[imageGridRemove](world).All {
+	for entity, access := range world.Query[imageGridRemove]().All {
 		control := access.Mut()
 
 		if control.Grid == grid && control.Index == 1 {
@@ -54,7 +54,7 @@ func TestImageGridLaysOutCardsAndReportsRemoval(t *testing.T) {
 		t.Fatalf("grid cards = %d, remove control = %v", cells, remove)
 	}
 	iconFound := false
-	for _, access := range ecs.Query2[scene.Parent, scene.UIImage2D](world).All {
+	for _, access := range world.Query2[scene.Parent, scene.UIImage2D]().All {
 		parent := access.A.Mut()
 		image := access.B.Mut()
 

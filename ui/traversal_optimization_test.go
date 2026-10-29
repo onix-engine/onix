@@ -8,7 +8,7 @@ import (
 
 func BenchmarkTraversalTextFieldCaches(b *testing.B) {
 	world := ecs.NewWorld()
-	fields := ecs.NewSpawner1[TextField](world)
+	fields := world.NewSpawner1[TextField]()
 	for i := range 1000 {
 		fields.Spawn(TextField{Password: i%2 == 0, Composition: "x"})
 	}
@@ -22,10 +22,10 @@ func BenchmarkTraversalTextFieldCaches(b *testing.B) {
 
 func BenchmarkTraversalMenuMetrics(b *testing.B) {
 	world := ecs.NewWorld()
-	owners := ecs.NewSpawner2[Menu, ContextMenu](world)
+	owners := world.NewSpawner2[Menu, ContextMenu]()
 	owner := owners.Spawn(Menu{}, ContextMenu{})
-	items := ecs.NewSpawner2[Item[Menu], Item[ContextMenu]](world)
-	labels := ecs.NewSpawner3[Relation[scene.Text2D], scene.Text2D, Part[ItemPart]](world)
+	items := world.NewSpawner2[Item[Menu], Item[ContextMenu]]()
+	labels := world.NewSpawner3[Relation[scene.Text2D], scene.Text2D, Part[ItemPart]]()
 	for range 1000 {
 		item := items.Spawn(Item[Menu]{Owner: owner}, Item[ContextMenu]{Owner: owner})
 		labels.Spawn(Relation[scene.Text2D]{Owner: item}, scene.Text2D{}, Part[ItemPart]{})
@@ -40,16 +40,16 @@ func BenchmarkTraversalMenuMetrics(b *testing.B) {
 
 func BenchmarkTraversalValueSurfaces(b *testing.B) {
 	world := ecs.NewWorld()
-	owners := ecs.NewSpawner1[TextField](world)
-	values := ecs.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]](world)
+	owners := world.NewSpawner1[TextField]()
+	values := world.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]]()
 	for range 300 {
 		owner := owners.Spawn(TextField{})
 		values.Spawn(Relation[scene.Text2D]{Owner: owner}, Part[ValuePart]{})
 		bundle := ecs.NewBundle(4)
-		ecs.Put(&bundle, Relation[SurfaceStyle]{Owner: owner})
-		ecs.Put(&bundle, scene.NewUITransform())
-		ecs.Put(&bundle, scene.Size2D{})
-		ecs.Put(&bundle, Part[CaretPart]{})
+		bundle.Put(Relation[SurfaceStyle]{Owner: owner})
+		bundle.Put(scene.NewUITransform())
+		bundle.Put(scene.Size2D{})
+		bundle.Put(Part[CaretPart]{})
 		world.Spawn(bundle)
 	}
 	syncSurfaceElements(world, Skin{}, syncMetrics{})
@@ -62,16 +62,16 @@ func BenchmarkTraversalValueSurfaces(b *testing.B) {
 
 func TestTraversalValueTextIndexPreservesFirstMatchAndRefreshes(t *testing.T) {
 	world := ecs.NewWorld()
-	owners := ecs.NewSpawner1[TextField](world)
+	owners := world.NewSpawner1[TextField]()
 	owner := owners.Spawn(TextField{})
-	values := ecs.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]](world)
+	values := world.NewSpawner2[Relation[scene.Text2D], Part[ValuePart]]()
 	first := values.Spawn(Relation[scene.Text2D]{Owner: owner}, Part[ValuePart]{})
 	second := values.Spawn(Relation[scene.Text2D]{Owner: owner}, Part[ValuePart]{})
 	// Both lack Text2D: malformed first matches must not silently be skipped.
 	if got := partEntities[ValuePart, scene.Text2D](world)[owner]; got != first {
 		t.Fatalf("first match=%d, want %d", got, first)
 	}
-	ecs.Remove[Part[ValuePart]](world, first)
+	world.Remove[Part[ValuePart]](first)
 	if got := partEntities[ValuePart, scene.Text2D](world)[owner]; got != second {
 		t.Fatalf("after removal=%d, want %d", got, second)
 	}
@@ -86,25 +86,25 @@ func TestTraversalValueTextIndexPreservesFirstMatchAndRefreshes(t *testing.T) {
 
 func TestTraversalTextFieldCacheTransitions(t *testing.T) {
 	world := ecs.NewWorld()
-	fields := ecs.NewSpawner1[TextField](world)
+	fields := world.NewSpawner1[TextField]()
 	password := fields.Spawn(TextField{Password: true, Composition: "x"})
 	composed := fields.Spawn(TextField{Composition: "x"})
 	plain := fields.Spawn(TextField{})
 	ensureTextFieldCaches(world)
-	if !ecs.Has[textFieldMaskCache](world, password) || ecs.Has[textFieldDisplayCache](world, password) || !ecs.Has[textFieldDisplayCache](world, composed) || ecs.Has[textFieldMaskCache](world, plain) || ecs.Has[textFieldDisplayCache](world, plain) {
+	if !world.Has[textFieldMaskCache](password) || world.Has[textFieldDisplayCache](password) || !world.Has[textFieldDisplayCache](composed) || world.Has[textFieldMaskCache](plain) || world.Has[textFieldDisplayCache](plain) {
 		t.Fatal("incorrect cache selection")
 	}
-	field := ecs.GetMut[TextField](world, password)
+	field := world.GetMut[TextField](password)
 	field.Password = false
 	ensureTextFieldCaches(world)
-	if !ecs.Has[textFieldDisplayCache](world, password) {
+	if !world.Has[textFieldDisplayCache](password) {
 		t.Fatal("composition cache missing after password mode changed")
 	}
-	ecs.Remove[textFieldMaskCache](world, password)
-	field = ecs.GetMut[TextField](world, password)
+	world.Remove[textFieldMaskCache](password)
+	field = world.GetMut[TextField](password)
 	field.Password = true
 	ensureTextFieldCaches(world)
-	if !ecs.Has[textFieldMaskCache](world, password) {
+	if !world.Has[textFieldMaskCache](password) {
 		t.Fatal("removed mask cache not restored")
 	}
 	if allocs := testing.AllocsPerRun(100, func() { ensureTextFieldCaches(world) }); allocs != 0 {
@@ -114,13 +114,13 @@ func TestTraversalTextFieldCacheTransitions(t *testing.T) {
 
 func TestTraversalMenuMetricsSharedLabelsAndChanges(t *testing.T) {
 	world := newUIWorld(t)
-	theme, _ := ecs.GetResource[Theme](world)
-	owners := ecs.NewSpawner3[Menu, ContextMenu, Selector](world)
+	theme, _ := world.GetResource[Theme]()
+	owners := world.NewSpawner3[Menu, ContextMenu, Selector]()
 	owner := owners.Spawn(Menu{}, ContextMenu{}, Selector{})
-	items := ecs.NewSpawner3[Item[Menu], Item[ContextMenu], Item[Selector]](world)
+	items := world.NewSpawner3[Item[Menu], Item[ContextMenu], Item[Selector]]()
 	item := items.Spawn(Item[Menu]{Owner: owner}, Item[ContextMenu]{Owner: owner}, Item[Selector]{Owner: owner})
 	text := scene.Text2D{Value: "Shared menu item", Font: theme.Font, FontSize: 16}
-	labels := ecs.NewSpawner3[Relation[scene.Text2D], scene.Text2D, Part[ItemPart]](world)
+	labels := world.NewSpawner3[Relation[scene.Text2D], scene.Text2D, Part[ItemPart]]()
 	label := labels.Spawn(Relation[scene.Text2D]{Owner: item}, text, Part[ItemPart]{})
 	expected, _, ok := scene.MeasureTextValue2D(&text, text.Value)
 	if !ok || expected <= 0 {

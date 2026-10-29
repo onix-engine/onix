@@ -70,7 +70,7 @@ func (v *workspaceViewport3D) dispose() {
 		}
 	}
 	if v.world != nil {
-		if state, ok := ecs.GetResource[*render3d.World](v.world); ok {
+		if state, ok := v.world.GetResource[*render3d.World](); ok {
 			_ = state.Dispose()
 		}
 	}
@@ -87,13 +87,13 @@ func (a *ModuleEditor) initViewport3D() error {
 	bundle := ecs.NewBundle(7)
 	camera := scene.NewCamera()
 	camera.ClearColor = editorTheme.viewport3DBG
-	ecs.Put(&bundle, camera)
-	ecs.Put(&bundle, render3d.Camera{})
-	ecs.Put(&bundle, scene.PerspectiveProjection3D())
-	ecs.Put(&bundle, render3d.Environment{})
-	ecs.Put(&bundle, render3d.ViewLighting{})
-	ecs.Put(&bundle, render3d.GroundPlane{})
-	ecs.Put(&bundle, scene.GlobalTransform{Matrix: preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance).LocalMatrix()})
+	bundle.Put(camera)
+	bundle.Put(render3d.Camera{})
+	bundle.Put(scene.PerspectiveProjection3D())
+	bundle.Put(render3d.Environment{})
+	bundle.Put(render3d.ViewLighting{})
+	bundle.Put(render3d.GroundPlane{})
+	bundle.Put(scene.GlobalTransform{Matrix: preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance).LocalMatrix()})
 	v.view.camera = v.world.Spawn(bundle)
 	a.setupPreview3DGuides()
 	return nil
@@ -181,11 +181,11 @@ func (a *ModuleEditor) syncViewport3D() (resultErr error) {
 			if part.selected || drag.ID != "" && drag.ThreeD && !drag.Definition && index > drag.Index && index < drag.End {
 				matrix = mgl32.Translate3D(drag.WorldDelta[0], drag.WorldDelta[1], drag.WorldDelta[2]).Mul4(matrix)
 			}
-			if value, _ := ecs.Get[scene.GlobalTransform](v.world, part.entity); value.Matrix != matrix {
-				ecs.GetMut[scene.GlobalTransform](v.world, part.entity).Matrix = matrix
+			if value, _ := v.world.Get[scene.GlobalTransform](part.entity); value.Matrix != matrix {
+				v.world.GetMut[scene.GlobalTransform](part.entity).Matrix = matrix
 			}
-			if value, _ := ecs.Get[scene.Visibility](v.world, part.entity); value.Visible != visible {
-				ecs.GetMut[scene.Visibility](v.world, part.entity).Visible = visible
+			if value, _ := v.world.Get[scene.Visibility](part.entity); value.Visible != visible {
+				v.world.GetMut[scene.Visibility](part.entity).Visible = visible
 			}
 		}
 		if store, ok := v.mods[item.Mod]; ok {
@@ -236,8 +236,8 @@ func (a *ModuleEditor) spawnViewport3DContent(id project.ModID, revision uint64,
 			return 0, nil
 		}
 		bundle := ecs.NewBundle(2)
-		ecs.Put(&bundle, scene.GlobalTransform{})
-		ecs.Put(&bundle, scene.Visibility{Visible: true})
+		bundle.Put(scene.GlobalTransform{})
+		bundle.Put(scene.Visibility{Visible: true})
 		return a.viewport3D.world.Spawn(bundle), nil
 	}
 	resources, err := a.viewport3DResources(id, revision)
@@ -253,8 +253,8 @@ func (a *ModuleEditor) spawnViewport3DContent(id project.ModID, revision uint64,
 	if err != nil {
 		return 0, err
 	}
-	ecs.Put(&bundle, scene.GlobalTransform{})
-	ecs.Put(&bundle, scene.Visibility{Visible: true})
+	bundle.Put(scene.GlobalTransform{})
+	bundle.Put(scene.Visibility{Visible: true})
 	return a.viewport3D.world.Spawn(bundle), nil
 }
 
@@ -266,7 +266,7 @@ func (a *ModuleEditor) focusViewport3D() {
 	low, high := mgl32.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}, mgl32.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
 	found := false
 	bounds := a.canvasBounds()
-	projection := ecs.GetRef[scene.Projection](v.world, v.view.camera)
+	projection := v.world.GetRef[scene.Projection](v.view.camera)
 	camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/max(.05, a.zoom)).LocalMatrix()
 	var helpers preview3DHelperGeometry
 	for _, row := range v.rows {
@@ -283,12 +283,12 @@ func (a *ModuleEditor) focusViewport3D() {
 			if !part.selected {
 				continue
 			}
-			mesh, ok := ecs.Get[render3d.Mesh](v.world, part.entity)
-			visible, _ := ecs.Get[scene.Visibility](v.world, part.entity)
+			mesh, ok := v.world.Get[render3d.Mesh](part.entity)
+			visible, _ := v.world.Get[scene.Visibility](part.entity)
 			if !visible.Visible {
 				continue
 			}
-			global, _ := ecs.Get[scene.GlobalTransform](v.world, part.entity)
+			global, _ := v.world.Get[scene.GlobalTransform](part.entity)
 			if ok && mesh.Mesh != nil {
 				center := global.Matrix.Mul4x1(mesh.Mesh.Bounds.Center.Vec4(1)).Vec3()
 				radius := mesh.Mesh.Bounds.Radius * max(global.Matrix.Col(0).Vec3().Len(), global.Matrix.Col(1).Vec3().Len(), global.Matrix.Col(2).Vec3().Len())
@@ -355,7 +355,7 @@ func (a *ModuleEditor) updateViewport3DInput(in *input.State) {
 	if v.navigating && (pointer.DeltaX != 0 || pointer.DeltaY != 0) {
 		if in.MouseHeld(input.MouseMiddle) && (in.KeyHeld(input.KeyLeftShift) || in.KeyHeld(input.KeyRightShift)) {
 			camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
-			projection, _ := ecs.Get[scene.Projection](v.world, v.view.camera)
+			projection, _ := v.world.Get[scene.Projection](v.view.camera)
 			units := preview3DWorldPerPixel(&projection, v.view.distance/a.zoom, bounds)
 			v.view.target = v.view.target.Sub(camera.Col(0).Vec3().Mul(pointer.DeltaX * units)).Add(camera.Col(1).Vec3().Mul(pointer.DeltaY * units))
 		} else {
@@ -387,7 +387,7 @@ func (a *ModuleEditor) pickViewport3D(x, y float32) string {
 
 func (a *ModuleEditor) pickViewport3DTarget(x, y float32) (string, string) {
 	v := &a.viewport3D
-	projection, _ := ecs.Get[scene.Projection](v.world, v.view.camera)
+	projection, _ := v.world.Get[scene.Projection](v.view.camera)
 	camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
 	ray, ok := preview3DViewportRay(a.canvasBounds(), x, y, projection, camera)
 	if !ok {
@@ -402,12 +402,12 @@ func (a *ModuleEditor) pickViewport3DTarget(x, y float32) (string, string) {
 		row := &v.rows[rowIndex]
 		for i := range row.parts {
 			part := &row.parts[i]
-			mesh, meshOK := ecs.Get[render3d.Mesh](v.world, part.entity)
-			visibility, _ := ecs.Get[scene.Visibility](v.world, part.entity)
+			mesh, meshOK := v.world.Get[render3d.Mesh](part.entity)
+			visibility, _ := v.world.Get[scene.Visibility](part.entity)
 			if !visibility.Visible {
 				continue
 			}
-			global, _ := ecs.Get[scene.GlobalTransform](v.world, part.entity)
+			global, _ := v.world.Get[scene.GlobalTransform](part.entity)
 			if meshOK {
 				if distance, hit := preview3DMeshRayDistance(ray, global.Matrix, mesh.Mesh); hit && distance < best {
 					selectedRow, selectedPart, best = rowIndex, i, distance
@@ -454,16 +454,16 @@ func (a *ModuleEditor) render(context *ecs.SystemContext) error {
 	graphics.BindFrame(v.world, c)
 	bounds := a.canvasBounds()
 	a.syncViewport3DProjection()
-	projection := ecs.GetRef[scene.Projection](v.world, v.view.camera)
+	projection := v.world.GetRef[scene.Projection](v.view.camera)
 	ok, err := v.view.ensureTarget(c.Device(), int(bounds.W), int(bounds.H), preview3DRenderScale(a.settings.Viewport3D.Supersample))
 	if err != nil || !ok {
 		return err
 	}
 	width, height := v.view.renderTarget.Size()
-	camera := ecs.GetMut[scene.Camera](v.world, v.view.camera)
+	camera := v.world.GetMut[scene.Camera](v.view.camera)
 	camera.Viewport = scene.CameraViewport{Width: float32(width), Height: float32(height)}
-	ecs.GetMut[render3d.Camera](v.world, v.view.camera).Target = v.view.renderTarget
-	ecs.GetMut[scene.GlobalTransform](v.world, v.view.camera).Matrix = preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/max(.05, a.zoom)).LocalMatrix()
+	v.world.GetMut[render3d.Camera](v.view.camera).Target = v.view.renderTarget
+	v.world.GetMut[scene.GlobalTransform](v.view.camera).Matrix = preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/max(.05, a.zoom)).LocalMatrix()
 	if err := a.syncViewport3DEnvironment(); err != nil {
 		return err
 	}
@@ -472,7 +472,7 @@ func (a *ModuleEditor) render(context *ecs.SystemContext) error {
 			return err
 		}
 	}
-	cameraMatrix := ecs.GetRef[scene.GlobalTransform](v.world, v.view.camera).Matrix
+	cameraMatrix := v.world.GetRef[scene.GlobalTransform](v.view.camera).Matrix
 	if err := a.drawPreview3DDepthGrid(c, projection, cameraMatrix); err != nil {
 		return err
 	}

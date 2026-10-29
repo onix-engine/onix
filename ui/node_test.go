@@ -12,30 +12,30 @@ func TestNodeSpawnerDefaultsAndOptions(t *testing.T) {
 	world := ecs.NewWorld()
 	nodes := NewNodeSpawner[scene.Name](world)
 	plain := nodes.Spawn(NodeOptions{}, scene.Name{Value: "plain"})
-	if *ecs.GetRef[scene.UITransform](world, plain) != scene.NewUITransform() ||
-		*ecs.GetRef[scene.Anchor](world, plain) != scene.AnchorTopLeft ||
-		!ecs.GetRef[scene.Visibility](world, plain).Visible ||
-		ecs.GetRef[scene.Parent](world, plain).Entity != 0 ||
-		*ecs.GetRef[scene.UIStackIndex](world, plain) != 0 ||
-		ecs.GetRef[scene.UIGlobalTransform](world, plain) == nil {
+	if *world.GetRef[scene.UITransform](plain) != scene.NewUITransform() ||
+		*world.GetRef[scene.Anchor](plain) != scene.AnchorTopLeft ||
+		!world.GetRef[scene.Visibility](plain).Visible ||
+		world.GetRef[scene.Parent](plain).Entity != 0 ||
+		*world.GetRef[scene.UIStackIndex](plain) != 0 ||
+		world.GetRef[scene.UIGlobalTransform](plain) == nil {
 		t.Fatal("zero options did not produce a complete visible node")
 	}
 	child := nodes.Spawn(NodeOptions{Parent: plain, X: 12, Y: -30, StackIndex: 9, Hidden: true, Anchor: &scene.AnchorCenter}, scene.Name{Value: "child"})
-	transform := ecs.GetRef[scene.UITransform](world, child)
+	transform := world.GetRef[scene.UITransform](child)
 	if transform.Translation != scene.Px2(12, -30) || transform.Scale != (mgl32.Vec2{1, 1}) ||
-		ecs.GetRef[scene.Visibility](world, child).Visible ||
-		*ecs.GetRef[scene.Anchor](world, child) != scene.AnchorCenter ||
-		ecs.GetRef[scene.Parent](world, child).Entity != plain ||
-		*ecs.GetRef[scene.UIStackIndex](world, child) != 9 {
+		world.GetRef[scene.Visibility](child).Visible ||
+		*world.GetRef[scene.Anchor](child) != scene.AnchorCenter ||
+		world.GetRef[scene.Parent](child).Entity != plain ||
+		*world.GetRef[scene.UIStackIndex](child) != 9 {
 		t.Fatal("node options were not applied")
 	}
-	if err := ecs.Insert(world, child, scene.Size2D{Width: 20, Height: 10}); err != nil {
+	if err := world.Insert(child, scene.Size2D{Width: 20, Height: 10}); err != nil {
 		t.Fatal(err)
 	}
 	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	if matrix := ecs.GetRef[scene.UIGlobalTransform](world, child).Matrix; matrix[12] != 12 || matrix[13] != -30 {
+	if matrix := world.GetRef[scene.UIGlobalTransform](child).Matrix; matrix[12] != 12 || matrix[13] != -30 {
 		t.Fatalf("node transform was not resolved: %v", matrix)
 	}
 }
@@ -76,7 +76,7 @@ func TestNodeSpawnersReserveCompleteBurstsWithoutAllocations(t *testing.T) {
 			entities[i] = pairs.Spawn(NodeOptions{X: float32(i)}, scene.Size2D{Width: 10, Height: 20}, scene.Name{Value: "node"})
 		}
 		for _, entity := range entities {
-			if ecs.GetRef[scene.Name](world, entity).Value != "node" || ecs.GetRef[scene.Size2D](world, entity).Width != 10 {
+			if world.GetRef[scene.Name](entity).Value != "node" || world.GetRef[scene.Size2D](entity).Width != 10 {
 				panic("pair payload not stored")
 			}
 			world.Despawn(entity)
@@ -91,7 +91,7 @@ func TestSpawnNodeCachesStayInTheirOwnWorld(t *testing.T) {
 	first, second := ecs.NewWorld(), ecs.NewWorld()
 	entity := SpawnNode(first, NodeOptions{}, scene.Name{Value: "first"})
 	other := SpawnNode(second, NodeOptions{}, scene.Name{Value: "second"})
-	if ecs.GetRef[scene.Name](first, entity).Value != "first" || ecs.GetRef[scene.Name](second, other).Value != "second" {
+	if first.GetRef[scene.Name](entity).Value != "first" || second.GetRef[scene.Name](other).Value != "second" {
 		t.Fatal("cached node factory crossed worlds")
 	}
 	if first.MutationVersion() == 0 || second.MutationVersion() == 0 {

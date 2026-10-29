@@ -3,7 +3,6 @@ package module
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/physics"
 )
 
@@ -20,7 +19,7 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 	var value2D Collision2D
 	var value3D Collision3D
 	registry := Registry{}
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != "hit" {
 			return nil
 		}
@@ -30,7 +29,7 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 		}
 		return c.ForwardAs("log", topic, m)
 	}}))
-	must(t, RegisterMod(&registry, "log", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("log", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		if err := handleValue[Collision2D](c, "hit", func(_ *Context, v Collision2D) error { count2D++; value2D = v; return nil }); err != nil {
 			return err
 		}
@@ -41,10 +40,10 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 	must(t, err)
 	runtime := physics.NewRuntime2D()
 	runtime.Simulation.Gravity = physics.Vector{}
-	ecs.InsertResource(r.world, runtime)
+	r.world.InsertResource(runtime)
 	step := physics.StepSystem2D("")
 	must(t, step.Run(r.world))
-	ecs.WriteMessage(r.world, physics.CollisionMessage3D{Entity: s.modules[2].root, Other: s.modules[1].root, Phase: physics.CollisionBegin, CollisionType: 3, OtherType: 11, Point: physics.V3(1, 2, 3)})
+	r.world.WriteMessage(physics.CollisionMessage3D{Entity: s.modules[2].root, Other: s.modules[1].root, Phase: physics.CollisionBegin, CollisionType: 3, OtherType: 11, Point: physics.V3(1, 2, 3)})
 	must(t, r.PublishCollisions())
 	if count2D != 0 || count3D != 0 {
 		t.Fatal("physics callbacks ran inside the solver step")
@@ -58,7 +57,7 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 		t.Fatal("lost 3D collision data", count3D, value3D)
 	}
 	advance := func() {
-		ecs.AdvanceMessages(r.world)
+		r.world.AdvanceMessages()
 		if err := step.Run(r.world); err != nil {
 			panic(err)
 		}

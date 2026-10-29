@@ -10,11 +10,11 @@ func TestDynamicCircleSettlesOnStaticBox(t *testing.T) {
 	world.Gravity = V(0, -20)
 	world.Iterations = 10
 	floor := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, floor, NewColliderDef(NewBox(20, 2)))
+	world.AddCollider(floor, NewColliderDef(NewBox(20, 2)))
 	def := NewBodyDef(BodyDynamic)
 	def.Position = V(0, 8)
 	ball := world.CreateBody(def)
-	AddCollider(world, ball, NewColliderDef(Circle{Radius: 1}))
+	world.AddCollider(ball, NewColliderDef(Circle{Radius: 1}))
 
 	for range 360 {
 		world.Step(1.0 / 60)
@@ -37,8 +37,8 @@ func TestFilterAndSensorCollisionEvents(t *testing.T) {
 	first.Filter = NewFilter(0, 1, 1)
 	second := NewColliderDef(Circle{Radius: 2})
 	second.Filter = NewFilter(0, 2, 2)
-	firstCollider := AddCollider(world, a, first)
-	secondCollider := AddCollider(world, b, second)
+	firstCollider := world.AddCollider(a, first)
+	secondCollider := world.AddCollider(b, second)
 	world.Step(1.0 / 60)
 	if len(world.Events()) != 0 {
 		t.Fatal("rejected filters emitted a collision")
@@ -64,12 +64,12 @@ func TestStepReusesScratchStorage(t *testing.T) {
 	world.Reserve(64, 64)
 	world.Gravity = V(0, -10)
 	floor := world.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(world, floor, NewColliderDef(NewBox(200, 2)))
+	world.AddCollider(floor, NewColliderDef(NewBox(200, 2)))
 	for index := range 32 {
 		def := NewBodyDef(BodyDynamic)
 		def.Position = V(float64(index*3-48), 5+float64(index%4)*3)
 		body := world.CreateBody(def)
-		AddCollider(world, body, NewColliderDef(Circle{Radius: 1}))
+		world.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 	}
 	for range 120 {
 		world.Step(1.0 / 60)

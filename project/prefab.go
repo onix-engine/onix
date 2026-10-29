@@ -165,7 +165,7 @@ func (s *SceneInstance) mountPrefab(parent ecs.Entity, id PrefabID, instanceID s
 	if instanceID == "" {
 		return nil, fmt.Errorf("prefab instance id is required")
 	}
-	if plan.plan.Nodes[0].UI != ecs.Has[sceneapi.UITransform](s.World, parent) {
+	if plan.plan.Nodes[0].UI != s.World.Has[sceneapi.UITransform](parent) {
 		return nil, fmt.Errorf("prefab %q coordinate space does not match parent entity %d", id, parent)
 	}
 	if s.nodes == nil {
@@ -207,10 +207,10 @@ func (s *SceneInstance) mountPrefab(parent ecs.Entity, id PrefabID, instanceID s
 			rollback()
 			return nil, err
 		}
-		ecs.Put(&components, sceneapi.Parent{Entity: parentEntity})
+		components.Put(sceneapi.Parent{Entity: parentEntity})
 		entity := s.World.Spawn(components)
 		if node.Spec.BlockInput && (node.Spec.Components.Has2D() || node.Spec.Control != nil) {
-			_ = ecs.Insert(s.World, entity, sceneapi.InputBlocker2D{
+			_ = s.World.Insert(entity, sceneapi.InputBlocker2D{
 				Width: float32(node.Spec.Width), Height: float32(node.Spec.Height), PassThrough: node.Spec.PassThrough,
 			})
 		}
@@ -229,7 +229,7 @@ func (s *SceneInstance) mountPrefab(parent ecs.Entity, id PrefabID, instanceID s
 	}
 	for index, node := range plan.plan.Nodes {
 		if node.TargetCamera != 0 {
-			if err := ecs.Insert(s.World, entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
+			if err := s.World.Insert(entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
 				rollback()
 				return nil, fmt.Errorf("prefab %q node %q targetCamera: %w", id, node.Spec.ID, err)
 			}
@@ -279,7 +279,7 @@ func (p *PrefabInstance) SetVisible(visible bool) {
 		return
 	}
 	for _, entity := range p.entities {
-		if value := ecs.GetMut[sceneapi.Visibility](p.scene.World, entity); value != nil {
+		if value := p.scene.World.GetMut[sceneapi.Visibility](entity); value != nil {
 			value.Visible = visible
 		}
 	}
@@ -298,33 +298,33 @@ func (p *PrefabInstance) Reset() bool {
 		}
 		node := p.prefab.plan.Nodes[index]
 		if node.UI {
-			if transform := ecs.GetMut[sceneapi.UITransform](p.scene.World, entity); transform != nil {
+			if transform := p.scene.World.GetMut[sceneapi.UITransform](entity); transform != nil {
 				*transform = node.UITransform.Component()
 			}
-			if stack := ecs.GetMut[sceneapi.UIStackIndex](p.scene.World, entity); stack != nil {
+			if stack := p.scene.World.GetMut[sceneapi.UIStackIndex](entity); stack != nil {
 				*stack = sceneapi.UIStackIndex(node.Spec.Order)
 			}
 		} else {
-			if transform := ecs.GetMut[sceneapi.Transform](p.scene.World, entity); transform != nil {
+			if transform := p.scene.World.GetMut[sceneapi.Transform](entity); transform != nil {
 				*transform = node.Transform
 			}
-			if order := ecs.GetMut[sceneapi.RenderOrder2D](p.scene.World, entity); order != nil {
+			if order := p.scene.World.GetMut[sceneapi.RenderOrder2D](entity); order != nil {
 				*order = sceneapi.RenderOrder2D(node.Spec.Order)
 			}
 		}
-		if anchor := ecs.GetMut[sceneapi.Anchor](p.scene.World, entity); anchor != nil {
+		if anchor := p.scene.World.GetMut[sceneapi.Anchor](entity); anchor != nil {
 			*anchor = node.Spec.Anchor
 		}
-		if size := ecs.GetMut[sceneapi.Size2D](p.scene.World, entity); size != nil {
+		if size := p.scene.World.GetMut[sceneapi.Size2D](entity); size != nil {
 			size.Width, size.Height = float32(node.Spec.Width), float32(node.Spec.Height)
 		}
-		if visibility := ecs.GetMut[sceneapi.Visibility](p.scene.World, entity); visibility != nil {
+		if visibility := p.scene.World.GetMut[sceneapi.Visibility](entity); visibility != nil {
 			visibility.Visible = node.Visible
 		}
-		if animator := ecs.GetMut[sceneapi.Animator](p.scene.World, entity); animator != nil {
+		if animator := p.scene.World.GetMut[sceneapi.Animator](entity); animator != nil {
 			animator.Restart()
 		}
-		if trail := ecs.GetMut[sceneapi.SpriteTrail2D](p.scene.World, entity); trail != nil {
+		if trail := p.scene.World.GetMut[sceneapi.SpriteTrail2D](entity); trail != nil {
 			trail.Clear()
 		}
 	}

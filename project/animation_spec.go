@@ -21,7 +21,7 @@ type AnimationKeyframeSpec[T any] struct {
 
 // EffectiveAnimationTween returns the curve used for the segment starting at
 // key, defaulting to the track's type-specific curve.
-func EffectiveAnimationTween[T any](key AnimationKeyframeSpec[T], defaultTween scene.AnimationTween) scene.AnimationTween {
+func (key AnimationKeyframeSpec[T]) EffectiveAnimationTween(defaultTween scene.AnimationTween) scene.AnimationTween {
 	tween := key.Tween
 	if tween == "" {
 		tween = defaultTween
@@ -292,7 +292,7 @@ func (r *Resources) compileAnimationClipSpec(spec AnimationClipSpec, id string) 
 			if err != nil {
 				return nil, fmt.Errorf("load animation %q binding %q target %q keyframe %d: %w", id, track.Binding.Path, track.Binding.Target, keyIndex, err)
 			}
-			keys[keyIndex] = compileAnimationKeyframe(key, texture, scene.AnimationStep)
+			keys[keyIndex] = key.compileAnimationKeyframe(texture, scene.AnimationStep)
 		}
 		// The compiler owns this freshly allocated keyframe slice, so avoid the
 		// defensive copy performed by the public constructor.
@@ -310,7 +310,7 @@ func compileAnimationTracks[S, T any](tracks []AnimationTrackSpec[S], defaultTwe
 		keys := make([]scene.AnimationKeyframe[T], len(track.Keyframes))
 		for keyIndex, key := range track.Keyframes {
 			value := convert(key.Value)
-			keys[keyIndex] = compileAnimationKeyframe(key, value, defaultTween)
+			keys[keyIndex] = key.compileAnimationKeyframe(value, defaultTween)
 			keys[keyIndex].InTangent = convert(key.InTangent)
 			keys[keyIndex].OutTangent = convert(key.OutTangent)
 		}
@@ -321,10 +321,10 @@ func compileAnimationTracks[S, T any](tracks []AnimationTrackSpec[S], defaultTwe
 	return result
 }
 
-func compileAnimationKeyframe[S, T any](key AnimationKeyframeSpec[S], value T, defaultTween scene.AnimationTween) scene.AnimationKeyframe[T] {
+func (key AnimationKeyframeSpec[S]) compileAnimationKeyframe[T any](value T, defaultTween scene.AnimationTween) scene.AnimationKeyframe[T] {
 	return scene.AnimationKeyframe[T]{
 		Time: key.Time, Value: value,
-		Tween: EffectiveAnimationTween(key, defaultTween),
+		Tween: key.EffectiveAnimationTween(defaultTween),
 		Curve: key.Curve,
 	}
 }

@@ -33,7 +33,7 @@ func TestPrepareRenderResourcesQueuesMainViewsAndDiscardsFailure(t *testing.T) {
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.NewCanvas2D(render.ActiveDevice(), 320, 200))
 	Register(world)
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	item := extractedMesh3D{vertices: []render.Vertex3D{{}}, material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}
 	opaque, masked, blend := item, item, item
 	masked.material.AlphaMode = graphics.AlphaMask

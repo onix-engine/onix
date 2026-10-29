@@ -15,15 +15,15 @@ import (
 
 func pickerInspectorScroll(t *testing.T, a *ModuleEditor, control ecs.Entity) scene.UIScroll {
 	t.Helper()
-	content, ok := ecs.Get[htmlui.ScrollContent](a.world, control)
+	content, ok := a.world.Get[htmlui.ScrollContent](control)
 	if !ok {
 		// Short inspectors still have an overflow viewport, but controls need
 		// ScrollContent only when there is an actual offset to apply.
 		for entity := control; entity != 0; {
-			if scroll, ok := ecs.Get[scene.UIScroll](a.world, entity); ok {
+			if scroll, ok := a.world.Get[scene.UIScroll](entity); ok {
 				return scroll
 			}
-			parent, ok := ecs.Get[scene.Parent](a.world, entity)
+			parent, ok := a.world.Get[scene.Parent](entity)
 			if !ok {
 				break
 			}
@@ -31,7 +31,7 @@ func pickerInspectorScroll(t *testing.T, a *ModuleEditor, control ecs.Entity) sc
 		}
 		t.Fatal("Add Component has no inspector scroll container")
 	}
-	scroll, ok := ecs.Get[scene.UIScroll](a.world, content.Area)
+	scroll, ok := a.world.Get[scene.UIScroll](content.Area)
 	if !ok {
 		t.Fatal("inspector scroll container is missing")
 	}
@@ -115,8 +115,8 @@ func TestWorkspaceComponentPickerScrollsAboveInspector(t *testing.T) {
 	a.height = 500
 	syncWorkspaceTest(t, a, a.world)
 	trigger, _ := htmlui.ControlByID(a.world, a.shell, "content-picker")
-	inspectorContent, _ := ecs.Get[htmlui.ScrollContent](a.world, trigger)
-	inspectorBefore, _ := ecs.Get[scene.UIScroll](a.world, inspectorContent.Area)
+	inspectorContent, _ := a.world.Get[htmlui.ScrollContent](trigger)
+	inspectorBefore, _ := a.world.Get[scene.UIScroll](inspectorContent.Area)
 	a.action("content-picker")
 	syncWorkspaceTest(t, a, a.world)
 	if err := scene.SyncUIGlobalTransformSystem("").Run(a.world); err != nil {
@@ -126,22 +126,22 @@ func TestWorkspaceComponentPickerScrollsAboveInspector(t *testing.T) {
 	if !ok {
 		t.Fatal("missing Layout menu item")
 	}
-	content, _ := ecs.Get[htmlui.ScrollContent](a.world, control)
-	menuBefore, ok := ecs.Get[scene.UIScroll](a.world, content.Area)
+	content, _ := a.world.Get[htmlui.ScrollContent](control)
+	menuBefore, ok := a.world.Get[scene.UIScroll](content.Area)
 	if !ok || !menuBefore.Vertical || menuBefore.ContentSize[1] <= menuBefore.ViewportSize[1] {
 		t.Fatalf("component menu is not scrollable: %+v", menuBefore)
 	}
 	node, _ := htmlui.NodeByID(a.world, a.shell, "content-picker-list")
 	box, _ := node.Bounds()
 	in := input.NewState()
-	ecs.InsertResource(a.world, in)
+	a.world.InsertResource(in)
 	in.MoveMouse(float64(box.X+20), float64(box.Y+20))
 	in.ScrollMouse(0, -1)
 	if err := scene.UIScrollSystem("").Run(a.world); err != nil {
 		t.Fatal(err)
 	}
-	menuAfter, _ := ecs.Get[scene.UIScroll](a.world, content.Area)
-	inspectorAfter, _ := ecs.Get[scene.UIScroll](a.world, inspectorContent.Area)
+	menuAfter, _ := a.world.Get[scene.UIScroll](content.Area)
+	inspectorAfter, _ := a.world.Get[scene.UIScroll](inspectorContent.Area)
 	if menuAfter.Position[1] != -48 || inspectorAfter.Position != inspectorBefore.Position {
 		t.Fatalf("wheel scrolled the wrong container: menu %v, inspector %v", menuAfter.Position, inspectorAfter.Position)
 	}
@@ -155,8 +155,8 @@ func TestWorkspaceComponentPickerScrollsAboveInspector(t *testing.T) {
 	if err := scene.UIScrollSystem("").Run(a.world); err != nil {
 		t.Fatal(err)
 	}
-	menuDragged, _ := ecs.Get[scene.UIScroll](a.world, content.Area)
-	inspectorAfter, _ = ecs.Get[scene.UIScroll](a.world, inspectorContent.Area)
+	menuDragged, _ := a.world.Get[scene.UIScroll](content.Area)
+	inspectorAfter, _ = a.world.Get[scene.UIScroll](inspectorContent.Area)
 	if menuDragged.Position[1] >= menuAfter.Position[1] || inspectorAfter.Position != inspectorBefore.Position {
 		t.Fatalf("thumb drag scrolled the wrong container: menu %v, inspector %v", menuDragged.Position, inspectorAfter.Position)
 	}

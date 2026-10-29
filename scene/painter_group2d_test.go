@@ -9,22 +9,22 @@ import (
 
 func TestPainterGroupsKeepRenderingAndPickingInTheSameOrder(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
-	roots := ecs.NewSpawner1[PainterGroup2D](world)
+	roots := world.NewSpawner1[PainterGroup2D]()
 	front, back := roots.Spawn(PainterGroup2D(2)), roots.Spawn(PainterGroup2D(1))
 	for i, parent := range []ecs.Entity{front, back} {
 		entity := entities[i]
-		if err := ecs.Insert(world, entity, Parent{Entity: parent}); err != nil {
+		if err := world.Insert(entity, Parent{Entity: parent}); err != nil {
 			t.Fatal(err)
 		}
-		if err := ecs.Insert(world, entity, InputTarget2D{Width: 10, Height: 5}); err != nil {
+		if err := world.Insert(entity, InputTarget2D{Width: 10, Height: 5}); err != nil {
 			t.Fatal(err)
 		}
-		ecs.GetMut[UIGlobalTransform](world, entity).Matrix = mgl32.Ident4()
-		ecs.SetIfChanged(world, entity, UIStackIndex(i*2000-1000))
+		world.GetMut[UIGlobalTransform](entity).Matrix = mgl32.Ident4()
+		world.SetIfChanged(entity, UIStackIndex(i*2000-1000))
 	}
 	incrementalFrame(t, world, canvas)
-	state := renderWorld(world)
-	cache := ecs.ScopeValue[inputPickCache2D, inputPickCache2D](world)
+	state := RenderWorldFor(world)
+	cache := world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 	cache.refresh(world, 0, 0)
 	cameras := []inputCamera2D{inputPickCamera(1, 0, 0)}
 	check := func(want ecs.Entity) {
@@ -38,7 +38,7 @@ func TestPainterGroupsKeepRenderingAndPickingInTheSameOrder(t *testing.T) {
 		}
 	}
 	check(entities[0])
-	ecs.SetIfChanged(world, front, PainterGroup2D(0))
+	world.SetIfChanged(front, PainterGroup2D(0))
 	incrementalFrame(t, world, canvas)
 	if !cache.refresh(world, 0, 0) {
 		t.Fatal("group change did not invalidate picking")

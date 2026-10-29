@@ -3,7 +3,6 @@ package editor
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
 	editorresources "github.com/diiyw/onix/editor/resources"
 	"github.com/diiyw/onix/graphics"
 	graphicspng "github.com/diiyw/onix/graphics/codec/png"
@@ -65,9 +64,9 @@ func (a *ModuleEditor) viewport3DEnvironmentSource() (workspace3DCamera, string,
 		if err != nil {
 			return workspace3DCamera{}, "", err
 		}
-		value.camera, _ = ecs.BundleValue[render3d.Camera](bundle)
-		value.environment, _ = ecs.BundleValue[render3d.Environment](bundle)
-		camera, _ := ecs.BundleValue[scene.Camera](bundle)
+		value.camera, _ = bundle.Value[render3d.Camera]()
+		value.environment, _ = bundle.Value[render3d.Environment]()
+		camera, _ := bundle.Value[scene.Camera]()
 		value.clearColor = camera.ClearColor
 		if store.cameras == nil {
 			store.cameras = make(map[*project.Camera3DSpec]workspace3DCamera)
@@ -91,7 +90,7 @@ func (a *ModuleEditor) syncViewport3DProjection() {
 		return
 	}
 	distance := v.distance / max(.05, a.zoom)
-	p := ecs.GetMut[scene.Projection](a.viewport3D.world, v.camera)
+	p := a.viewport3D.world.GetMut[scene.Projection](v.camera)
 	*p = scene.PerspectiveProjection3D()
 	p.Perspective.Near = clamp(distance*.001, .00001, 1)
 	if v.orthographic {
@@ -120,7 +119,7 @@ func (a *ModuleEditor) syncViewport3DEnvironment() error {
 		environment, sourceID = source.environment, id
 		sourceCamera = source
 	}
-	if camera := ecs.GetMut[scene.Camera](world, v.camera); camera != nil {
+	if camera := world.GetMut[scene.Camera](v.camera); camera != nil {
 		camera.ClearColor = editorTheme.viewport3DBG
 		if settings.Background == 3 && sourceID != "" {
 			camera.ClearColor = sourceCamera.clearColor
@@ -141,7 +140,7 @@ func (a *ModuleEditor) syncViewport3DEnvironment() error {
 		quality, fxaa = source.Quality, source.FXAA
 		fog, toneMapping = source.Fog, source.ToneMapping
 	}
-	if target := ecs.GetMut[render3d.Camera](world, v.camera); target != nil {
+	if target := world.GetMut[render3d.Camera](v.camera); target != nil {
 		target.Exposure = exposure
 		target.SSAO = ssao
 		target.SSR = ssr
@@ -197,13 +196,13 @@ func (a *ModuleEditor) syncViewport3DEnvironment() error {
 	case 2:
 		environment.Sky, environment.Background = nil, environment.Atlas != nil
 	}
-	if target := ecs.GetMut[render3d.Environment](world, v.camera); target != nil {
+	if target := world.GetMut[render3d.Environment](v.camera); target != nil {
 		*target = environment
 	}
-	if target := ecs.GetMut[render3d.ViewLighting](world, v.camera); target != nil {
+	if target := world.GetMut[render3d.ViewLighting](v.camera); target != nil {
 		*target = lighting
 	}
-	if target := ecs.GetMut[render3d.GroundPlane](world, v.camera); target != nil {
+	if target := world.GetMut[render3d.GroundPlane](v.camera); target != nil {
 		*target = render3d.GroundPlane{}
 		if settings.Ground {
 			target.Center = mgl32.Vec3{v.target.X(), -0.002, v.target.Z()}

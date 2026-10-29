@@ -156,9 +156,9 @@ func renderWorkspaceShell(context html.RenderContext[workspaceComponentProps, wo
 		animationAvailable = a.renderAnimation(&state.Animation)
 		a.renderAnimationCurvePopup(&state.AnimationCurve)
 		props := workspaceComponentProps{Editor: a, Fields: state.Inspector.nodes()}
-		scenes := [...]html.ComponentVNode{html.ComponentChild(1, workspaceDefinitions.scenes, props, workspaceListState{})}
-		files := [...]html.ComponentVNode{html.ComponentChild(2, workspaceDefinitions.files, props, workspaceFilesState{})}
-		inspector := [...]html.ComponentVNode{html.ComponentChild(3, workspaceDefinitions.inspector, props, workspaceListState{})}
+		scenes := [...]html.ComponentVNode{workspaceDefinitions.scenes.ComponentChild(1, props, workspaceListState{})}
+		files := [...]html.ComponentVNode{workspaceDefinitions.files.ComponentChild(2, props, workspaceFilesState{})}
+		inspector := [...]html.ComponentVNode{workspaceDefinitions.inspector.ComponentChild(3, props, workspaceListState{})}
 		view.Components("scene-content", scenes[:])
 		view.Components("file-content", files[:])
 		view.Components("detail-content", inspector[:])
@@ -314,10 +314,10 @@ func (a *ModuleEditor) sceneTree(b *editorVNodeView, sceneID project.SceneID, va
 						a.elementTree(b, sceneID, instance.ID, instance.Mod, "", mod.Elements, depth+2)
 					}
 					if a.moduleTreeGroup(b, sceneID, instance.ID, instance.Mod, "resources", "Resources", depth+1) {
-						moduleDeclarationTree(a, b, workspaceTreeRow{Scene: sceneID, ID: instance.ID, Mod: instance.Mod, Depth: depth + 2}, mod.Resources, "resource", a.selectedResource, workspaceResourceTreeInfo)
+						a.moduleDeclarationTree(b, workspaceTreeRow{Scene: sceneID, ID: instance.ID, Mod: instance.Mod, Depth: depth + 2}, mod.Resources, "resource", a.selectedResource, workspaceResourceTreeInfo)
 					}
 					if a.moduleTreeGroup(b, sceneID, instance.ID, instance.Mod, "slots", "Slots", depth+1) {
-						moduleDeclarationTree(a, b, workspaceTreeRow{Scene: sceneID, ID: instance.ID, Mod: instance.Mod, Depth: depth + 2}, mod.Slots, "slot", a.selectedSlot, workspaceSlotTreeInfo)
+						a.moduleDeclarationTree(b, workspaceTreeRow{Scene: sceneID, ID: instance.ID, Mod: instance.Mod, Depth: depth + 2}, mod.Slots, "slot", a.selectedSlot, workspaceSlotTreeInfo)
 					}
 				}
 			}
@@ -343,7 +343,7 @@ func (a *ModuleEditor) moduleTreeGroup(b *editorVNodeView, sceneID project.Scene
 	return expanded
 }
 
-func moduleDeclarationTree[V any](a *ModuleEditor, b *editorVNodeView, row workspaceTreeRow, values map[string]V, kind, selected string, describe func(V) (label, icon, title string)) {
+func (a *ModuleEditor) moduleDeclarationTree[V any](b *editorVNodeView, row workspaceTreeRow, values map[string]V, kind, selected string, describe func(V) (label, icon, title string)) {
 	a.declarationNames = a.declarationNames[:0]
 	for name := range values {
 		a.declarationNames = append(a.declarationNames, name)
@@ -471,12 +471,12 @@ func (a *ModuleEditor) syncWorkspaceComponent(world *ecs.World) error {
 	props := workspaceComponentProps{Editor: a}
 	if a.shell == 0 {
 		a.shell = spawnWorkspaceSurface(world, editorresources.WorkspaceHTML, editorresources.WorkspaceCSS, a.font, rect{W: a.width, H: a.height}, 0)
-		a.shellComponent, err = html.HydrateComponent(world, a.shell, definition, props, workspaceComponentState{}, 1)
+		a.shellComponent, err = definition.HydrateComponent(world, a.shell, props, workspaceComponentState{}, 1)
 		if err != nil {
 			return err
 		}
 	} else {
-		surface := ecs.GetMut[html.Surface](world, a.shell)
+		surface := world.GetMut[html.Surface](a.shell)
 		surface.Width, surface.Height = a.width, a.height
 		html.UpdateComponentProps[workspaceComponentProps, workspaceComponentState](world, a.shellComponent, props)
 	}

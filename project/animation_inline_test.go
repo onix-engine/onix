@@ -42,13 +42,13 @@ func TestInlineAnimationBindsDescendantsAndTweens(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer scene.Dispose()
-	animator := ecs.GetMut[sceneapi.Animator](world, scene.MustEntity("actor"))
+	animator := world.GetMut[sceneapi.Animator](scene.MustEntity("actor"))
 	if animator == nil || !animator.IsBound() {
 		t.Fatal("inline animator was not bound")
 	}
@@ -57,23 +57,23 @@ func TestInlineAnimationBindsDescendantsAndTweens(t *testing.T) {
 	if err := sceneapi.UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	root, _ := ecs.Get[sceneapi.Transform](world, scene.MustEntity("actor"))
+	root, _ := world.Get[sceneapi.Transform](scene.MustEntity("actor"))
 	if root.Translation.X() != 2.5 {
 		t.Fatalf("ease-in position x = %v, want 2.5", root.Translation.X())
 	}
-	hand, _ := ecs.Get[sceneapi.Transform](world, scene.MustEntity("hand"))
+	hand, _ := world.Get[sceneapi.Transform](scene.MustEntity("hand"))
 	if hand.Translation.Z() != 7 {
 		t.Fatalf("descendant position z = %v, want 7", hand.Translation.Z())
 	}
-	arm, _ := ecs.Get[sceneapi.Transform](world, scene.MustEntity("arm"))
+	arm, _ := world.Get[sceneapi.Transform](scene.MustEntity("arm"))
 	if arm.Scale.X() != 2 {
 		t.Fatalf("descendant scale x = %v, want 2", arm.Scale.X())
 	}
-	visible, _ := ecs.Get[sceneapi.Visibility](world, scene.MustEntity("hand"))
+	visible, _ := world.Get[sceneapi.Visibility](scene.MustEntity("hand"))
 	if visible.Visible {
 		t.Fatal("descendant visibility should be false at the midpoint")
 	}
-	if ecs.Has[sceneapi.Sprite2D](world, scene.MustEntity("actor")) {
+	if world.Has[sceneapi.Sprite2D](scene.MustEntity("actor")) {
 		t.Fatal("child-only clip should not add a root Sprite2D")
 	}
 }
@@ -113,7 +113,7 @@ func TestPrefabInlineAnimationSharesClipAndIsolatesPlayback(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
@@ -129,8 +129,8 @@ func TestPrefabInlineAnimationSharesClipAndIsolatesPlayback(t *testing.T) {
 	}
 	firstEntity, _ := first.Entity("pulse")
 	secondEntity, _ := second.Entity("pulse")
-	firstAnimator := ecs.GetMut[sceneapi.Animator](world, firstEntity)
-	secondAnimator := ecs.GetMut[sceneapi.Animator](world, secondEntity)
+	firstAnimator := world.GetMut[sceneapi.Animator](firstEntity)
+	secondAnimator := world.GetMut[sceneapi.Animator](secondEntity)
 	if firstAnimator.Clip == nil || firstAnimator.Clip != secondAnimator.Clip {
 		t.Fatal("prefab instances did not share immutable clip")
 	}
@@ -141,8 +141,8 @@ func TestPrefabInlineAnimationSharesClipAndIsolatesPlayback(t *testing.T) {
 	if err := sceneapi.UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	firstTransform, _ := ecs.Get[sceneapi.Transform](world, firstEntity)
-	secondTransform, _ := ecs.Get[sceneapi.Transform](world, secondEntity)
+	firstTransform, _ := world.Get[sceneapi.Transform](firstEntity)
+	secondTransform, _ := world.Get[sceneapi.Transform](secondEntity)
 	if firstTransform.Translation.X() != 2.5 || secondTransform.Translation.X() != 7.5 {
 		t.Fatalf("prefab playback = %v/%v, want 2.5/7.5", firstTransform.Translation.X(), secondTransform.Translation.X())
 	}
@@ -281,7 +281,7 @@ func TestDynamicAnimationRejectsTargetOwnershipConflict(t *testing.T) {
 
 func TestRuntimeAnimationRejectsDuplicateTargetWithinOwner(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner1[sceneapi.Transform](world)
+	spawner := world.NewSpawner1[sceneapi.Transform]()
 	entity := spawner.Spawn(sceneapi.NewTransform())
 	scene := &SceneInstance{World: world, EntityIDs: map[ecs.Entity]string{entity: "target"}}
 	claims := make(map[runtimeAnimationClaim]ecs.Entity)
@@ -396,7 +396,7 @@ func TestApplyNodePreservesExistingNodeOnAnimationBindingFailure(t *testing.T) {
 	if err := scene.ApplyNode(bad); err == nil || !strings.Contains(err.Error(), "does not name a descendant") {
 		t.Fatalf("failed animation update error = %v", err)
 	}
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, entity) || ecs.Has[sceneapi.Animator](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Sprite2D](entity) || scene.World.Has[sceneapi.Animator](entity) {
 		t.Fatal("failed animation update changed the existing node composition")
 	}
 	if got := scene.ID(entity); got != "actor" {
@@ -424,7 +424,7 @@ func TestApplyNodePreservesControlWhenAnimationUpdateFails(t *testing.T) {
 	if err := scene.ApplyNode(button); err != nil {
 		t.Fatal(err)
 	}
-	if err := BindControl(scene, "button", engineui.Button{}); err != nil {
+	if err := scene.BindControl("button", engineui.Button{}); err != nil {
 		t.Fatal(err)
 	}
 	bad := SceneNodeSpec{ID: "button", CoordinateSpace: CoordinateSpaceUI, Components: SceneComponents{Animation: &AnimationComponentSpec{Clip: AnimationClipSpec{
@@ -437,7 +437,7 @@ func TestApplyNodePreservesControlWhenAnimationUpdateFails(t *testing.T) {
 	if err := scene.ApplyNode(bad); err == nil || !strings.Contains(err.Error(), "does not name a descendant") {
 		t.Fatalf("failed control animation update error = %v", err)
 	}
-	if !ecs.Has[engineui.Control](scene.World, scene.MustEntity("button")) {
+	if !scene.World.Has[engineui.Control](scene.MustEntity("button")) {
 		t.Fatal("failed animation update removed the existing control")
 	}
 }
@@ -475,7 +475,7 @@ func TestApplyNodeRevalidatesAncestorAnimationTargets(t *testing.T) {
 
 func TestRuntimeAnimationTargetValidationEnumeratesFloatTargets(t *testing.T) {
 	world := ecs.NewWorld()
-	transformSpawner := ecs.NewSpawner1[sceneapi.Transform](world)
+	transformSpawner := world.NewSpawner1[sceneapi.Transform]()
 	transformEntity := transformSpawner.Spawn(sceneapi.NewTransform())
 	if err := validateRuntimeAnimationTarget(world, transformEntity, sceneapi.AnimationTargetTransformScaleX, animationTrackFloatTarget); err != nil {
 		t.Fatalf("scale X on Transform was rejected: %v", err)
@@ -483,7 +483,7 @@ func TestRuntimeAnimationTargetValidationEnumeratesFloatTargets(t *testing.T) {
 	if err := validateRuntimeAnimationTarget(world, transformEntity, sceneapi.AnimationTargetVisibility, animationTrackFloatTarget); err == nil {
 		t.Fatal("visibility target was accepted as a float track")
 	}
-	uiSpawner := ecs.NewSpawner1[sceneapi.UITransform](world)
+	uiSpawner := world.NewSpawner1[sceneapi.UITransform]()
 	uiEntity := uiSpawner.Spawn(sceneapi.NewUITransform())
 	if err := validateRuntimeAnimationTarget(world, uiEntity, sceneapi.AnimationTargetTransformScaleY, animationTrackFloatTarget); err != nil {
 		t.Fatalf("scale Y on UITransform was rejected: %v", err)
@@ -506,7 +506,7 @@ func TestEmptyAnimationComponentCompilesForSceneAndDynamicNode(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
@@ -514,7 +514,7 @@ func TestEmptyAnimationComponentCompilesForSceneAndDynamicNode(t *testing.T) {
 	defer scene.Dispose()
 	assertEmptyAnimation := func(entity ecs.Entity, wantX float32) {
 		t.Helper()
-		animator := ecs.GetMut[sceneapi.Animator](world, entity)
+		animator := world.GetMut[sceneapi.Animator](entity)
 		ok := animator != nil
 		if !ok || animator == nil || !animator.IsBound() || animator.Clip == nil || animator.Clip.Duration != 1 || len(animator.Clip.FloatTracks) != 1 {
 			t.Fatalf("empty animation = ok:%v animator:%+v", ok, animator)
@@ -522,7 +522,7 @@ func TestEmptyAnimationComponentCompilesForSceneAndDynamicNode(t *testing.T) {
 		if animator.Clip.FloatTracks[0].Binding.Target != sceneapi.AnimationTargetTransformPositionX {
 			t.Fatalf("default target = %+v", animator.Clip.FloatTracks[0].Binding)
 		}
-		transform, ok := ecs.Get[sceneapi.Transform](world, entity)
+		transform, ok := world.Get[sceneapi.Transform](entity)
 		if !ok || transform.Translation.X() != wantX {
 			t.Fatalf("authored transform = %+v, want x=%v", transform, wantX)
 		}
@@ -549,7 +549,7 @@ func TestEmptyAnimationComponentCompilesForMountedPrefab(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
@@ -565,12 +565,12 @@ func TestEmptyAnimationComponentCompilesForMountedPrefab(t *testing.T) {
 	}
 	firstEntity, _ := first.Entity("pulse")
 	secondEntity, _ := second.Entity("pulse")
-	firstAnimator := ecs.GetMut[sceneapi.Animator](world, firstEntity)
+	firstAnimator := world.GetMut[sceneapi.Animator](firstEntity)
 	ok := firstAnimator != nil
 	if !ok || firstAnimator == nil || !firstAnimator.IsBound() || firstAnimator.Clip == nil {
 		t.Fatal("mounted prefab did not initialize a bound empty animation")
 	}
-	secondAnimator := ecs.GetMut[sceneapi.Animator](world, secondEntity)
+	secondAnimator := world.GetMut[sceneapi.Animator](secondEntity)
 	ok = secondAnimator != nil
 	if !ok || secondAnimator == nil || firstAnimator.Clip != secondAnimator.Clip {
 		t.Fatal("mounted prefab instances did not share the compiled default clip")
@@ -590,7 +590,7 @@ func TestReplaceNodesBindsInlineAnimationWithoutBundleCacheKey(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
@@ -610,7 +610,7 @@ func TestReplaceNodesBindsInlineAnimationWithoutBundleCacheKey(t *testing.T) {
 	if err := scene.ReplaceNodes([]SceneNodeSpec{root}); err != nil {
 		t.Fatal(err)
 	}
-	animator := ecs.GetMut[sceneapi.Animator](world, scene.MustEntity("actor"))
+	animator := world.GetMut[sceneapi.Animator](scene.MustEntity("actor"))
 	if animator == nil || !animator.IsBound() {
 		t.Fatal("ReplaceNodes did not bind inline animator")
 	}
@@ -619,7 +619,7 @@ func TestReplaceNodesBindsInlineAnimationWithoutBundleCacheKey(t *testing.T) {
 	if err := sceneapi.UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	child, _ := ecs.Get[sceneapi.Transform](world, scene.MustEntity("child"))
+	child, _ := world.Get[sceneapi.Transform](scene.MustEntity("child"))
 	if child.Translation.X() != 4 {
 		t.Fatalf("replaced child position = %v, want 4", child.Translation.X())
 	}
@@ -643,13 +643,13 @@ func TestInlineRootTextureTrackCanMaterializeSpriteHost(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer scene.Dispose()
-	if !ecs.Has[sceneapi.Sprite2D](world, scene.MustEntity("actor")) {
+	if !world.Has[sceneapi.Sprite2D](scene.MustEntity("actor")) {
 		t.Fatal("root texture animation did not materialize Sprite2D")
 	}
 }
@@ -667,7 +667,7 @@ func TestClonedInlineAnimationResolvesLocalChildPath(t *testing.T) {
 	defer bundle.Dispose()
 	world := ecs.NewWorld()
 	clock := sceneapi.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	scene, err := bundle.InstantiateEntryScene(world)
 	if err != nil {
 		t.Fatal(err)
@@ -678,7 +678,7 @@ func TestClonedInlineAnimationResolvesLocalChildPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	cloneRoot := clones["copy-template"]
-	animator := ecs.GetMut[sceneapi.Animator](world, cloneRoot)
+	animator := world.GetMut[sceneapi.Animator](cloneRoot)
 	if animator == nil || !animator.IsBound() {
 		t.Fatal("cloned inline animator was not bound")
 	}
@@ -687,7 +687,7 @@ func TestClonedInlineAnimationResolvesLocalChildPath(t *testing.T) {
 	if err := sceneapi.UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	child, _ := ecs.Get[sceneapi.Transform](world, clones["copy-hand"])
+	child, _ := world.Get[sceneapi.Transform](clones["copy-hand"])
 	if child.Translation.X() != 3 {
 		t.Fatalf("cloned child position = %v, want 3", child.Translation.X())
 	}

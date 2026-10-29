@@ -10,10 +10,10 @@ import (
 
 func TestInactiveDeformationDoesNotInvalidateComponents(t *testing.T) {
 	world := ecs.NewWorld()
-	deformations := ecs.NewSpawner1[Deformation](world)
+	deformations := world.NewSpawner1[Deformation]()
 	deformations.Spawn(Deformation{MorphWeights: []float32{.5}})
 	context := ecs.SystemContext{World: world}
-	version := ecs.ComponentVersion[Deformation](world)
+	version := world.ComponentVersion[Deformation]()
 	update := func() {
 		if err := updateMeshDeformations3D(&context); err != nil {
 			panic(err)
@@ -22,7 +22,7 @@ func TestInactiveDeformationDoesNotInvalidateComponents(t *testing.T) {
 	if allocations := testing.AllocsPerRun(100, update); allocations != 0 {
 		t.Fatalf("inactive update allocated %v times", allocations)
 	}
-	if ecs.ComponentVersion[Deformation](world) != version {
+	if world.ComponentVersion[Deformation]() != version {
 		t.Fatal("inactive deformation marked the column changed")
 	}
 }
@@ -39,14 +39,14 @@ func TestInvalidDeformationDoesNotMutateBuffersAndReleasesQuery(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()
-			deformations := ecs.NewSpawner2[Deformation, scene.GlobalTransform](world)
+			deformations := world.NewSpawner2[Deformation, scene.GlobalTransform]()
 			entity := deformations.Spawn(test.deformation, scene.GlobalTransform{Matrix: test.transform})
-			version := ecs.ComponentVersion[Deformation](world)
+			version := world.ComponentVersion[Deformation]()
 			if err := updateMeshDeformations3D(&ecs.SystemContext{World: world}); err == nil {
 				t.Fatal("invalid deformation was accepted")
 			}
-			value := ecs.GetRef[Deformation](world, entity)
-			if ecs.ComponentVersion[Deformation](world) != version || len(value.JointMatrices) != 0 || len(value.NodeMatrices) != 0 || len(value.gpuJoints) != 0 {
+			value := world.GetRef[Deformation](entity)
+			if world.ComponentVersion[Deformation]() != version || len(value.JointMatrices) != 0 || len(value.NodeMatrices) != 0 || len(value.gpuJoints) != 0 {
 				t.Fatal("validation error mutated deformation buffers")
 			}
 			if !world.Despawn(entity) {

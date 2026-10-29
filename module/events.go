@@ -66,7 +66,7 @@ func (m Message) valid() bool {
 func (m Message) IsRequest() bool { return m.kind == requestEvent }
 func (m Message) IsReply() bool   { return m.kind == replyEvent }
 
-func Value[T any](m Message) (T, bool) {
+func (m Message) Value[T any]() (T, bool) {
 	s, ok := m.envelope.store.(*store[T])
 	if !ok || !m.valid() || m.Err != nil {
 		var zero T
@@ -75,11 +75,11 @@ func Value[T any](m Message) (T, bool) {
 	return s.values[m.envelope.buffer][m.envelope.value], true
 }
 
-func RequestValue[Q, R any](m Message) (Request[Q, R], bool) {
+func (m Message) RequestValue[Q, R any]() (Request[Q, R], bool) {
 	if !m.IsRequest() {
 		return Request[Q, R]{}, false
 	}
-	value, ok := Value[Q](m)
+	value, ok := m.Value[Q]()
 	e := m.envelope
 	if !ok || e.target == nil {
 		return Request[Q, R]{}, false
@@ -96,7 +96,7 @@ func RequestValue[Q, R any](m Message) (Request[Q, R], bool) {
 	return Request[Q, R]{ID: m.ID, Value: value, runtime: r, pending: e.pending, response: response}, true
 }
 
-func ResultValue[T any](m Message) (Result[T], bool) {
+func (m Message) ResultValue[T any]() (Result[T], bool) {
 	if !m.IsReply() || !m.valid() {
 		return Result[T]{}, false
 	}
@@ -106,7 +106,7 @@ func ResultValue[T any](m Message) (Result[T], bool) {
 	if m.Err != nil {
 		return Result[T]{ID: m.ID, Err: m.Err}, true
 	}
-	value, ok := Value[T](m)
+	value, ok := m.Value[T]()
 	return Result[T]{ID: m.ID, Value: value}, ok
 }
 
@@ -163,7 +163,7 @@ func (s *store[T]) forward(r *Runtime, e envelope) error {
 			return err
 		}
 	}
-	return enqueue(r, typedStore[T](r), value, e)
+	return r.enqueue(r.typedStore[T](), value, e)
 }
 
 // BindEmitter reserves typed buffers during Install. Emit sends to the scene;
@@ -174,7 +174,7 @@ type Emitter[T any] struct {
 	store   *store[T]
 }
 
-func typedStore[T any](r *Runtime) *store[T] {
+func (r *Runtime) typedStore[T any]() *store[T] {
 	key := reflect.TypeFor[T]()
 	if s, ok := r.typedStores[key]; ok {
 		return s.(*store[T])
@@ -197,14 +197,14 @@ func typedStore[T any](r *Runtime) *store[T] {
 	reserveUsedBuffers(&r.usedStores, min(len(r.typedStores), r.options.EventCapacity))
 	return s
 }
-func BindEmitter[T any](c *Context, topic string) (Emitter[T], error) {
+func (c *Context) BindEmitter[T any](topic string) (Emitter[T], error) {
 	if !c.usable() {
 		return Emitter[T]{}, ErrDisposed
 	}
 	if topic == "" {
 		return Emitter[T]{}, ErrInvalid
 	}
-	return Emitter[T]{context: c, topic: topic, store: typedStore[T](c.runtime)}, nil
+	return Emitter[T]{context: c, topic: topic, store: c.runtime.typedStore[T]()}, nil
 }
 func (e Emitter[T]) Emit(value T) error { return e.EmitTo(SceneTarget, value) }
 func (e Emitter[T]) EmitTo(target string, value T) error {
@@ -215,13 +215,13 @@ func (e Emitter[T]) EmitTo(target string, value T) error {
 	if err != nil {
 		return err
 	}
-	return enqueue(e.context.runtime, e.store, value, envelope{kind: notificationEvent, source: e.context, target: receiver, topic: e.topic})
+	return e.context.runtime.enqueue(e.store, value, envelope{kind: notificationEvent, source: e.context, target: receiver, topic: e.topic})
 }
 
 // Send is convenient for occasional messages. BindEmitter avoids even the type
 // lookup on frequently used send paths.
-func Send[T any](c *Context, target, topic string, value T) error {
-	e, err := BindEmitter[T](c, topic)
+func (c *Context) Send[T any](target, topic string, value T) error {
+	e, err := c.BindEmitter[T](topic)
 	if err != nil {
 		return err
 	}
@@ -302,14 +302,14 @@ type Requester[Q, R any] struct {
 	response *store[R]
 }
 
-func BindRequester[Q, R any](c *Context, topic string) (Requester[Q, R], error) {
+func (c *Context) BindRequester[Q, R any](topic string) (Requester[Q, R], error) {
 	if !c.usable() {
 		return Requester[Q, R]{}, ErrDisposed
 	}
 	if topic == "" {
 		return Requester[Q, R]{}, ErrInvalid
 	}
-	return Requester[Q, R]{context: c, topic: topic, request: typedStore[Q](c.runtime), response: typedStore[R](c.runtime)}, nil
+	return Requester[Q, R]{context: c, topic: topic, request: c.runtime.typedStore[Q](), response: c.runtime.typedStore[R]()}, nil
 }
 func (p Requester[Q, R]) Send(value Q, options RequestOptions) (RequestID, error) {
 	return p.SendTo(SceneTarget, value, options)
@@ -360,7 +360,7 @@ func (p Requester[Q, R]) SendTo(target string, value Q, options RequestOptions) 
 		r.pendingFirst = index
 	}
 	r.pendingLast = index
-	err = enqueue(r, p.request, value, envelope{kind: requestEvent, source: c, target: receiver, topic: p.topic, id: node.id, pending: index})
+	err = r.enqueue(p.request, value, envelope{kind: requestEvent, source: c, target: receiver, topic: p.topic, id: node.id, pending: index})
 	if err != nil {
 		r.releasePending(index)
 		return 0, err
@@ -410,7 +410,7 @@ func (q Request[Q, R]) Reply(c *Context, value R) error {
 	if q.runtime.tick >= p.deadline {
 		return ErrTimeout
 	}
-	if err := enqueue(q.runtime, q.response, value, envelope{kind: replyEvent, source: c, target: p.source, topic: p.topic, id: q.ID, pending: q.pending}); err != nil {
+	if err := q.runtime.enqueue(q.response, value, envelope{kind: replyEvent, source: c, target: p.source, topic: p.topic, id: q.ID, pending: q.pending}); err != nil {
 		return err
 	}
 	p.replied = true
@@ -444,7 +444,7 @@ func (q Request[Q, R]) Fail(c *Context, err error) error {
 	return nil
 }
 
-func enqueue[T any](r *Runtime, s *store[T], value T, e envelope) error {
+func (r *Runtime) enqueue[T any](s *store[T], value T, e envelope) error {
 	if !r.hasQueueSpace() {
 		return ErrQueueFull
 	}

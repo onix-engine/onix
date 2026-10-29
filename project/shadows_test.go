@@ -30,9 +30,9 @@ func TestShadowSceneLoadingCloningAndBinaryPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(scene.Dispose)
-	sun, _ := ecs.Get[render3d.DirectionalLight](scene.World, scene.MustEntity("sun"))
-	point, _ := ecs.Get[render3d.PointLight](scene.World, scene.MustEntity("point"))
-	spot, _ := ecs.Get[render3d.SpotLight](scene.World, scene.MustEntity("spot"))
+	sun, _ := scene.World.Get[render3d.DirectionalLight](scene.MustEntity("sun"))
+	point, _ := scene.World.Get[render3d.PointLight](scene.MustEntity("point"))
+	spot, _ := scene.World.Get[render3d.SpotLight](scene.MustEntity("spot"))
 	if !sun.Shadows.Enabled || sun.Shadows.Cascades != 4 || sun.Shadows.Distance != 80 || sun.Shadows.SplitLambda != .7 || sun.Shadows.CascadeBlend != .15 || !point.Shadows.Enabled || point.Shadows.Near != .1 || !spot.Shadows.Enabled || spot.Shadows.Near != .05 {
 		t.Fatalf("shadow settings were lost: sun=%+v point=%+v spot=%+v", sun.Shadows, point.Shadows, spot.Shadows)
 	}

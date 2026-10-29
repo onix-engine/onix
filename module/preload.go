@@ -85,7 +85,7 @@ func (m *SceneManager) BeginPreload(request ScenePreloadRequest) (*ScenePreloade
 					return content, err
 				}
 				item := preparedContent{}
-				if !existing[mod.ID] && r.options.Content == nil {
+				if !existing[mod.ID] {
 					store := content.stores[mod.ID]
 					if store == nil {
 						resources, err := project.OpenModResources(r.options.Source, mod, r.options.Resources)
@@ -99,7 +99,7 @@ func (m *SceneManager) BeginPreload(request ScenePreloadRequest) (*ScenePreloade
 					if index >= 0 {
 						spec = mod.Elements[index].Spec.Components
 					}
-					bundle, err := store.store.ModContent(spec)
+					bundle, err := r.content.build(store.store, spec)
 					if err != nil {
 						return content, err
 					}

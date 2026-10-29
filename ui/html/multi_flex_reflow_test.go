@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/diiyw/onix/ecs"
 )
 
 func multiFlexOrderSource(order string, count int) string {
@@ -20,7 +18,7 @@ func TestHTMLMultipleLocalFlexReflows(t *testing.T) {
 		a.SetAttribute("style", "order:"+order)
 		b.SetAttribute("style", "order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		// Reused measurements may retain native controls instead of emitting
 		// them again. Geometry/state must still match the fresh tree below.
 		if state.SyncStats.LayoutWork.LocalFlexReflows != 2 || state.SyncStats.LayoutWork.Visited > 20 || state.SyncStats.UpdatedControls > 4 {
@@ -55,7 +53,7 @@ func TestHTMLNestedFlexReflowCoalescesRoots(t *testing.T) {
 		inner.SetAttribute("style", "order:"+order)
 		outer.SetAttribute("style", "display:flex;order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.LayoutWork.LocalFlexReflows != 1 || state.SyncStats.LayoutWork.OrderContainers != 2 {
 			t.Fatalf("nested roots not coalesced: %+v", state.SyncStats)
 		}
@@ -82,7 +80,7 @@ func TestHTMLMultipleFlexReflowGeometryFallback(t *testing.T) {
 				stable.SetAttribute("style", "order:"+order)
 				changing.SetAttribute("style", "width:40px;height:100px;order:"+order)
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.LayoutWork.LocalFlexReflows != 0 {
 					t.Fatal("partial success cleared ancestor invalidation")
 				}

@@ -18,7 +18,7 @@ type componentValue[T any] struct {
 }
 
 func (v componentValue[T]) componentID(world *World) componentID {
-	return registerComponent[T](world)
+	return world.registerComponent[T]()
 }
 
 func (v componentValue[T]) appendTo(target column, tick Tick) {
@@ -30,7 +30,7 @@ type entityComponentValue[T any] struct {
 }
 
 func (v entityComponentValue[T]) componentID(world *World) componentID {
-	return registerComponent[T](world)
+	return world.registerComponent[T]()
 }
 
 func (v entityComponentValue[T]) materialize(entity Entity) bundleValue {
@@ -62,18 +62,18 @@ func NewBundle(capacity int) Bundle {
 }
 
 // Extend appends a separately authored component group before spawning. Groups
-// must have disjoint component types, as with individual Put calls.
+// must have disjoint component types, as with individual Bundle.Put calls.
 func (b *Bundle) Extend(group Bundle) { b.entries = append(b.entries, group.entries...) }
 
-func Put[T any](bundle *Bundle, value T) {
+func (bundle *Bundle) Put[T any](value T) {
 	if bundle == nil {
 		panic("ecs: bundle is nil")
 	}
 	bundle.entries = append(bundle.entries, componentValue[T]{value: value})
 }
 
-// BundleValue inspects a statically supplied component before spawning.
-func BundleValue[T any](bundle Bundle) (T, bool) {
+// Value inspects a statically supplied component before spawning.
+func (bundle Bundle) Value[T any]() (T, bool) {
 	for _, entry := range bundle.entries {
 		if value, ok := entry.(componentValue[T]); ok {
 			return value.value, true
@@ -83,7 +83,7 @@ func BundleValue[T any](bundle Bundle) (T, bool) {
 	return zero, false
 }
 
-func PutEntity[T any](bundle *Bundle, build func(Entity) T) {
+func (bundle *Bundle) PutEntity[T any](build func(Entity) T) {
 	if bundle == nil {
 		panic("ecs: bundle is nil")
 	}

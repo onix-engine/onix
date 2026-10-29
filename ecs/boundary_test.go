@@ -15,21 +15,21 @@ type messageArenaB struct{}
 func TestComponentRevisionSeparatesWritesFromStructuralChanges(t *testing.T) {
 	world := ecs.NewWorld()
 	tick := world.ChangeTick()
-	if version, structure := ecs.ComponentRevision[boundaryPosition](world); version != 0 || structure != 0 || world.ChangeTick() != tick {
+	if version, structure := world.ComponentRevision[boundaryPosition](); version != 0 || structure != 0 || world.ChangeTick() != tick {
 		t.Fatal("reading an unregistered component revision mutated the world")
 	}
-	spawn := ecs.NewSpawner1[boundaryPosition](world)
+	spawn := world.NewSpawner1[boundaryPosition]()
 	entity := spawn.Spawn(boundaryPosition{})
-	version, structure := ecs.ComponentRevision[boundaryPosition](world)
-	ecs.MustMut[boundaryPosition](world, entity).X = 1
-	written, unchanged := ecs.ComponentRevision[boundaryPosition](world)
+	version, structure := world.ComponentRevision[boundaryPosition]()
+	world.MustMut[boundaryPosition](entity).X = 1
+	written, unchanged := world.ComponentRevision[boundaryPosition]()
 	if written <= version || unchanged != structure {
 		t.Fatal("component write must change its content version only")
 	}
-	if err := ecs.Insert(world, entity, 7); err != nil {
+	if err := world.Insert(entity, 7); err != nil {
 		t.Fatal(err)
 	}
-	moved, shifted := ecs.ComponentRevision[boundaryPosition](world)
+	moved, shifted := world.ComponentRevision[boundaryPosition]()
 	if moved <= written || shifted <= structure {
 		t.Fatal("row migration must invalidate content and structural caches")
 	}
@@ -37,7 +37,7 @@ func TestComponentRevisionSeparatesWritesFromStructuralChanges(t *testing.T) {
 
 func TestEntityIndexAndStructureVersionSupportExternalCaches(t *testing.T) {
 	world := ecs.NewWorld()
-	spawn := ecs.NewSpawner1[boundaryPosition](world)
+	spawn := world.NewSpawner1[boundaryPosition]()
 	version := world.StructureVersion()
 	entity := spawn.Spawn(boundaryPosition{})
 	index, ok := entity.Index()
@@ -45,11 +45,11 @@ func TestEntityIndexAndStructureVersionSupportExternalCaches(t *testing.T) {
 		t.Fatal("spawn did not expose a metadata slot and structural change")
 	}
 	version = world.StructureVersion()
-	ecs.MustMut[boundaryPosition](world, entity).X = 1
+	world.MustMut[boundaryPosition](entity).X = 1
 	if world.StructureVersion() != version {
 		t.Fatal("component write invalidated structural caches")
 	}
-	if err := ecs.Insert(world, entity, 7); err != nil {
+	if err := world.Insert(entity, 7); err != nil {
 		t.Fatal(err)
 	}
 	if world.StructureVersion() <= version {
@@ -72,19 +72,19 @@ func TestEntityIndexAndStructureVersionSupportExternalCaches(t *testing.T) {
 
 func TestMessageScratchRetainsBorrowedDataUntilMessageExpires(t *testing.T) {
 	world := ecs.NewWorld()
-	first := ecs.MessageScratch[messageArenaA, *int](world)
-	other := ecs.MessageScratch[messageArenaB, *int](world)
-	if first != ecs.MessageScratch[messageArenaA, *int](world) || first == other ||
-		first == ecs.MessageScratch[messageArenaA, *int](ecs.NewWorld()) {
+	first := world.MessageScratch[messageArenaA, *int]()
+	other := world.MessageScratch[messageArenaB, *int]()
+	if first != world.MessageScratch[messageArenaA, *int]() || first == other ||
+		first == ecs.NewWorld().MessageScratch[messageArenaA, *int]() {
 		t.Fatal("message arenas must be stable and isolated by tag and world")
 	}
 	oldValue, newValue := 10, 20
 	first.Values = append(first.Values, &oldValue)
 	borrowed := first.Values[:]
-	ecs.WriteMessage(world, borrowedMessage{Values: borrowed})
-	ecs.AdvanceMessages(world)
+	world.WriteMessage(borrowedMessage{Values: borrowed})
+	world.AdvanceMessages()
 	first.Values = append(first.Values, &newValue)
-	ecs.WriteMessage(world, borrowedMessage{Values: first.Values[:]})
+	world.WriteMessage(borrowedMessage{Values: first.Values[:]})
 	var reader ecs.MessageReader[borrowedMessage]
 	var got []int
 	for message := range reader.All(world) {
@@ -93,7 +93,7 @@ func TestMessageScratchRetainsBorrowedDataUntilMessageExpires(t *testing.T) {
 	if !slices.Equal(got, []int{10, 20}) {
 		t.Fatalf("borrowed message values = %v, want [10 20]", got)
 	}
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 	if borrowed[0] != nil {
 		t.Fatal("expired message arena retained a reference")
 	}
@@ -115,15 +115,15 @@ func TestMessageScratchDoesNotAllocateAfterWarmup(t *testing.T) {
 	value := 42
 	var reader ecs.MessageReader[borrowedMessage]
 	frame := func() {
-		arena := ecs.MessageScratch[messageArenaA, *int](world)
+		arena := world.MessageScratch[messageArenaA, *int]()
 		arena.Values = append(arena.Values, &value)
-		ecs.WriteMessage(world, borrowedMessage{Values: arena.Values[:]})
+		world.WriteMessage(borrowedMessage{Values: arena.Values[:]})
 		for message := range reader.All(world) {
 			if len(message.Values) != 1 || message.Values[0] != &value {
 				t.Fatal("message data was overwritten before consumption")
 			}
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	frame()
 	frame()
@@ -134,12 +134,12 @@ func TestMessageScratchDoesNotAllocateAfterWarmup(t *testing.T) {
 
 func TestChangesSinceSnapshotsComponentAndResourceWindows(t *testing.T) {
 	world := ecs.NewWorld()
-	spawn := ecs.NewSpawner1[boundaryPosition](world)
+	spawn := world.NewSpawner1[boundaryPosition]()
 	existing := spawn.Spawn(boundaryPosition{})
 	baseline := world.ChangeTick()
-	ecs.MustMut[boundaryPosition](world, existing).X = 1
+	world.MustMut[boundaryPosition](existing).X = 1
 	added := spawn.Spawn(boundaryPosition{X: 2})
-	ecs.InsertResource(world, 7)
+	world.InsertResource(7)
 	tick, version := world.ChangeTick(), world.MutationVersion()
 	window := world.ChangesSince(baseline)
 	if window.LastRun() != baseline || window.ThisRun() != tick ||
@@ -148,50 +148,105 @@ func TestChangesSinceSnapshotsComponentAndResourceWindows(t *testing.T) {
 	}
 	spawn.Spawn(boundaryPosition{X: 3})
 	var changed []ecs.Entity
-	for entity := range ecs.Query[boundaryPosition](world, ecs.Changed[boundaryPosition](&window)).All {
+	for entity := range world.Query[boundaryPosition](window.Changed[boundaryPosition]()).All {
 		changed = append(changed, entity)
 	}
 	if !slices.Equal(changed, []ecs.Entity{existing, added}) {
 		t.Fatalf("snapshot changed entities = %v, want [%v %v]", changed, existing, added)
 	}
 	var created []ecs.Entity
-	for entity := range ecs.Query[boundaryPosition](world, ecs.Added[boundaryPosition](&window)).All {
+	for entity := range world.Query[boundaryPosition](window.Added[boundaryPosition]()).All {
 		created = append(created, entity)
 	}
-	if !slices.Equal(created, []ecs.Entity{added}) || !ecs.ResourceChanged[int](&window) {
+	if !slices.Equal(created, []ecs.Entity{added}) || !window.ResourceChanged[int]() {
 		t.Fatal("snapshot lost component or resource changes")
 	}
-	ecs.InsertResource(world, 8)
-	if ecs.ResourceChanged[int](&window) {
+	world.InsertResource(8)
+	if window.ResourceChanged[int]() {
 		t.Fatal("snapshot included a resource write after its end tick")
 	}
 }
 
 func TestResourceChangeTickIsReadOnly(t *testing.T) {
 	world := ecs.NewWorld()
-	if ecs.ResourceChangeTick[int](world) != 0 {
+	if world.ResourceChangeTick[int]() != 0 {
 		t.Fatal("missing resource has a change tick")
 	}
-	ecs.InsertResource(world, 1)
+	world.InsertResource(1)
 	inserted, version := world.ChangeTick(), world.MutationVersion()
-	if ecs.ResourceChangeTick[int](world) != inserted {
+	if world.ResourceChangeTick[int]() != inserted {
 		t.Fatal("inserted resource has the wrong change tick")
 	}
-	ecs.GetResource[int](world)
-	if ecs.ResourceChangeTick[int](world) != inserted || world.ChangeTick() != inserted || world.MutationVersion() != version {
+	world.GetResource[int]()
+	if world.ResourceChangeTick[int]() != inserted || world.ChangeTick() != inserted || world.MutationVersion() != version {
 		t.Fatal("read-only resource access marked a write")
 	}
-	ecs.InsertResource(world, 2)
-	replaced := ecs.ResourceChangeTick[int](world)
+	world.InsertResource(2)
+	replaced := world.ResourceChangeTick[int]()
 	if replaced <= inserted {
 		t.Fatal("replacement did not advance the resource change tick")
 	}
-	ecs.GetResourceMut[int](world)
-	if ecs.ResourceChangeTick[int](world) <= replaced {
+	world.GetResourceMut[int]()
+	if world.ResourceChangeTick[int]() <= replaced {
 		t.Fatal("mutable access did not advance the resource change tick")
 	}
-	ecs.RemoveResource[int](world)
-	if ecs.ResourceChangeTick[int](world) != 0 {
+	world.RemoveResource[int]()
+	if world.ResourceChangeTick[int]() != 0 {
 		t.Fatal("removed resource has a change tick")
+	}
+}
+
+func TestResourceConditionMethodExpressionsPreserveChangeWindows(t *testing.T) {
+	var added ecs.Condition = (*ecs.SystemContext).ResourceAdded[int]
+	var changed ecs.Condition = (*ecs.SystemContext).ResourceChanged[int]
+	world := ecs.NewWorld()
+	world.InsertResource(1)
+	initial := world.ChangesSince(0)
+	if !added(&initial) || !changed(&initial) {
+		t.Fatal("resource insertion was not visible to method expression conditions")
+	}
+	world.InsertResource(2)
+	written := world.ChangesSince(initial.ThisRun())
+	if !added(&initial) || changed(&initial) || added(&written) || !changed(&written) {
+		t.Fatal("resource conditions escaped their Added/Changed windows")
+	}
+	missing := ecs.NewWorld().ChangesSince(0)
+	for _, context := range []*ecs.SystemContext{nil, {}, &missing} {
+		if added(context) || changed(context) {
+			t.Fatal("missing context or resource passed a resource condition")
+		}
+	}
+}
+
+func TestChangeFilterMethodsRejectNilAndForeignContexts(t *testing.T) {
+	world := ecs.NewWorld()
+	foreign := ecs.NewWorld().ChangesSince(0)
+	for _, filter := range []struct {
+		name  string
+		build func(*ecs.SystemContext) ecs.QueryOption
+	}{
+		{"added", (*ecs.SystemContext).Added[boundaryPosition]},
+		{"changed", (*ecs.SystemContext).Changed[boundaryPosition]},
+	} {
+		for _, check := range []struct {
+			name    string
+			context *ecs.SystemContext
+			message string
+		}{
+			{"nil", nil, "ecs: system context is nil"},
+			{"empty", &ecs.SystemContext{}, "ecs: change filter context belongs to a different world"},
+			{"foreign", &foreign, "ecs: change filter context belongs to a different world"},
+		} {
+			t.Run(filter.name+"/"+check.name, func(t *testing.T) {
+				// Options retain the context and validate it when building the query.
+				option := filter.build(check.context)
+				defer func() {
+					if got := recover(); got != check.message {
+						t.Fatalf("filter panic = %v, want %q", got, check.message)
+					}
+				}()
+				world.Query[boundaryPosition](option)
+			})
+		}
 	}
 }

@@ -82,7 +82,7 @@ func TestModuleSystemGeneratedMainCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module := "module example.com/onix-scaffold\n\ngo 1.26.0\n\nrequire github.com/diiyw/onix v0.0.0\n\nreplace github.com/diiyw/onix => " + strconv.Quote(filepath.ToSlash(engineRoot)) + "\n"
+	module := "module example.com/onix-scaffold\n\ngo 1.27.0\n\nrequire github.com/diiyw/onix v0.0.0\n\nreplace github.com/diiyw/onix => " + strconv.Quote(filepath.ToSlash(engineRoot)) + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte(module), 0o644); err != nil {
 		t.Fatal(err)
 	}

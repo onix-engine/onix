@@ -233,7 +233,7 @@ func (c *columnState) ranges(kind filterKind) []tickRange {
 	return c.changedRanges
 }
 
-func registerComponent[T any](world *World) componentID {
+func (world *World) registerComponent[T any]() componentID {
 	if world == nil {
 		panic("ecs: world is nil")
 	}
@@ -254,7 +254,7 @@ func registerComponent[T any](world *World) componentID {
 
 // ComponentRevision reads the content and structural versions in one lookup.
 // Missing types return zero without registering storage or advancing ticks.
-func ComponentRevision[T any](world *World) (version, structure uint64) {
+func (world *World) ComponentRevision[T any]() (version, structure uint64) {
 	requireWorld(world)
 	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
 		info := &world.componentInfos[id]
@@ -266,7 +266,7 @@ func ComponentRevision[T any](world *World) (version, structure uint64) {
 // ComponentValueRevision reports writes and membership changes, excluding
 // migrations that only relocate unchanged values between archetypes.
 // The second result changes only when values are inserted or removed.
-func ComponentValueRevision[T any](world *World) (version, membership uint64) {
+func (world *World) ComponentValueRevision[T any]() (version, membership uint64) {
 	requireWorld(world)
 	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
 		info := &world.componentInfos[id]
@@ -276,25 +276,25 @@ func ComponentValueRevision[T any](world *World) (version, membership uint64) {
 }
 
 // ComponentVersion changes for writes, insertion, removal and row migration.
-func ComponentVersion[T any](world *World) uint64 {
-	version, _ := ComponentRevision[T](world)
+func (world *World) ComponentVersion[T any]() uint64 {
+	version, _ := world.ComponentRevision[T]()
 	return version
 }
 
 // ComponentStructureVersion changes when rows are inserted or removed.
-func ComponentStructureVersion[T any](world *World) uint64 {
-	_, structure := ComponentRevision[T](world)
+func (world *World) ComponentStructureVersion[T any]() uint64 {
+	_, structure := world.ComponentRevision[T]()
 	return structure
 }
 
-func componentColumn[T any](archetype *archetype, id componentID) *typedColumn[T] {
+func (archetype *archetype) componentColumn[T any](id componentID) *typedColumn[T] {
 	return archetype.column(id).(*typedColumn[T])
 }
 
 // OnComponentRemove installs a cleanup hook for removal and despawn. Hooks
 // must not change entity structure; archetype migration does not invoke them.
-func OnComponentRemove[T any](world *World, cleanup func(*World, Entity, *T)) {
-	id := registerComponent[T](world)
+func (world *World) OnComponentRemove[T any](cleanup func(*World, Entity, *T)) {
+	id := world.registerComponent[T]()
 	if cleanup == nil {
 		world.componentInfos[id].onRemove = nil
 		return

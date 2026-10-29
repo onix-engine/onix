@@ -16,13 +16,13 @@ func TestHTMLUsesSharedSystemFontWithoutExplicitFont(t *testing.T) {
 	world := ecs.NewWorld()
 	page := New(`<div>System font</div>`)
 	page.Width, page.Height = 200, 80
-	spawn := ecs.NewSpawner1[Surface](world)
+	spawn := world.NewSpawner1[Surface]()
 	spawn.Spawn(page)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query[scene.Text2D](world).All {
+	for _, access := range world.Query[scene.Text2D]().All {
 		value := access.Ref()
 		if value.Font != font {
 			t.Fatal("HTML did not use the shared system font")

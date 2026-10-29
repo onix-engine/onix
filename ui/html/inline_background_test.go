@@ -3,7 +3,6 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 )
@@ -12,9 +11,9 @@ func TestHTMLInlineBackgroundPaintsExactTextInsideControl(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<button id="row" style="display:flex;flex-direction:column;width:280px"><span>file.go:1</span><span style="display:block;white-space:pre;color:white">before <span id="match" style="background:#ff800080">tar<span style="color:lime">get</span></span> after</span></button>`)
 	match := incrementalHTMLNode(t, world, owner, "match")
 	control, _ := ControlByID(world, owner, "row")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	count := 0
-	for _, access := range ecs.Query2[htmlChild, scene.Sprite2D](world).All {
+	for _, access := range world.Query2[htmlChild, scene.Sprite2D]().All {
 		child, sprite := access.A.Ref(), access.B.Ref()
 		if child.Node != match.node || child.role != htmlRoleInlineBackground {
 			continue
@@ -28,13 +27,13 @@ func TestHTMLInlineBackgroundPaintsExactTextInsideControl(t *testing.T) {
 		t.Fatalf("nested syntax fragments need one background, got %d", count)
 	}
 	background := htmlAnimationRole(t, world, owner, "match", htmlRoleInlineBackground)
-	if parent, _ := ecs.Get[scene.Parent](world, background); parent.Entity != control {
+	if parent, _ := world.Get[scene.Parent](background); parent.Entity != control {
 		t.Fatal("inline paint lost its button/scroll transform")
 	}
 	for _, entity := range state.RenderNodes[match.node.Children[0]].Entities {
-		if _, ok := ecs.Get[scene.Text2D](world, entity); ok {
-			textStack, _ := ecs.Get[scene.UIStackIndex](world, entity)
-			paintStack, _ := ecs.Get[scene.UIStackIndex](world, background)
+		if _, ok := world.Get[scene.Text2D](entity); ok {
+			textStack, _ := world.Get[scene.UIStackIndex](entity)
+			paintStack, _ := world.Get[scene.UIStackIndex](background)
 			if textStack <= paintStack {
 				t.Fatal("highlight paints over the glyphs")
 			}
@@ -42,9 +41,9 @@ func TestHTMLInlineBackgroundPaintsExactTextInsideControl(t *testing.T) {
 	}
 	match.SetAttribute("style", "background:#00ff0080")
 	incrementalSync(t, world)
-	if sprite, _ := ecs.Get[scene.Sprite2D](world, background); sprite.Shape.Fill != graphics.ColorFromRGBA(0, 255, 0, 128) {
+	if sprite, _ := world.Get[scene.Sprite2D](background); sprite.Shape.Fill != graphics.ColorFromRGBA(0, 255, 0, 128) {
 		after := htmlAnimationRole(t, world, owner, "match", htmlRoleInlineBackground)
-		next, _ := ecs.Get[scene.Sprite2D](world, after)
+		next, _ := world.Get[scene.Sprite2D](after)
 		t.Fatalf("inline background did not follow a paint-only update: old=%v new=%v paint=%+v next=%+v", background, after, sprite.Shape.Fill, next.Shape.Fill)
 	}
 	if allocations := testing.AllocsPerRun(100, func() { incrementalSync(t, world) }); allocations != 0 {
@@ -54,7 +53,7 @@ func TestHTMLInlineBackgroundPaintsExactTextInsideControl(t *testing.T) {
 
 func TestHTMLInlineBackgroundWrapsAndRetainsPaint(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="text" style="width:90px;line-height:22px"><span id="match" style="background:#ffaa0080">one <b>two three</b> four five six</span> outside</div>`)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	text := incrementalHTMLNode(t, world, owner, "text")
 	box := state.BoxesByNode[text.node]
 	if len(box.InlineBackgrounds) < 2 {
@@ -80,7 +79,7 @@ func TestHTMLInlineBackgroundSurvivesOpacityComposite(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="group" style="width:160px;opacity:.5"><span id="match" style="background:#ff0000;color:#000000">target</span></div>`)
 	defer Dispose(world)
 	group := incrementalHTMLNode(t, world, owner, "group")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	raster := state.Textures.rasters[group.node]
 	if raster == nil {
 		t.Fatal("missing opacity raster")

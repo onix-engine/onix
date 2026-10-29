@@ -14,13 +14,13 @@ func TestHTMLPointerEventsUpdateWithoutRebuildingControls(t *testing.T) {
 	html := New(`<div id="panel"><button id="inherited">Inherited</button><button id="enabled" style="pointer-events:auto">Enabled</button><select id="select"><option>One</option></select><span id="callback" tabindex="0">Callback</span></div><style>#panel{pointer-events:none}#panel:hover{pointer-events:auto}</style>`)
 	html.Width, html.Height, html.Font = 600, 160, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	var enabled ecs.Entity
-	for e, access := range ecs.Query[Control](world).All {
+	for e, access := range world.Query[Control]().All {
 		c := access.Get()
 
 		if c.Owner == owner && c.ID == "enabled" {
@@ -30,7 +30,7 @@ func TestHTMLPointerEventsUpdateWithoutRebuildingControls(t *testing.T) {
 	if enabled == 0 {
 		t.Fatal("missing enabled button")
 	}
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	children := append([]ecs.Entity(nil), state.Children...)
 	for _, hovered := range []bool{false, true, false} {
 		if !SetControlHover(world, enabled, hovered) {
@@ -44,7 +44,7 @@ func TestHTMLPointerEventsUpdateWithoutRebuildingControls(t *testing.T) {
 			if !world.IsAlive(e) {
 				t.Fatal("pointer-events change rebuilt the document")
 			}
-			child, ok := ecs.Get[htmlChild](world, e)
+			child, ok := world.Get[htmlChild](e)
 			if !ok || child.Node == nil {
 				continue
 			}
@@ -54,13 +54,13 @@ func TestHTMLPointerEventsUpdateWithoutRebuildingControls(t *testing.T) {
 			}
 			id, _ := node.Attr("id")
 			wantPassThrough := !hovered && id != "enabled"
-			if target, ok := ecs.Get[scene.InputTarget2D](world, e); ok {
+			if target, ok := world.Get[scene.InputTarget2D](e); ok {
 				targets++
 				if target.PassThrough != wantPassThrough {
 					t.Errorf("hover=%v %s target pass-through=%v, want %v", hovered, id, target.PassThrough, wantPassThrough)
 				}
 			}
-			if blocker, ok := ecs.Get[scene.InputBlocker2D](world, e); ok {
+			if blocker, ok := world.Get[scene.InputBlocker2D](e); ok {
 				blockers++
 				if blocker.PassThrough != wantPassThrough {
 					t.Errorf("hover=%v %s blocker pass-through=%v, want %v", hovered, id, blocker.PassThrough, wantPassThrough)

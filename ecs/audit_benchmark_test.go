@@ -30,14 +30,14 @@ func BenchmarkAuditSingleActiveCommand(b *testing.B) {
 	for _, count := range []int{0, 64, 1024} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
-			spawn := NewSpawner1[testPosition](world)
+			spawn := world.NewSpawner1[testPosition]()
 			entity := spawn.Spawn(testPosition{})
 			commands := world.Commands()
 			for range count {
 				commands.streamList = append(commands.streamList, &typedInsertCommandStream[int]{})
 			}
 			run := func() {
-				CommandInsert(commands, entity, testPosition{X: 1})
+				commands.Insert(entity, testPosition{X: 1})
 				if err := world.FlushCommands(); err != nil {
 					b.Fatal(err)
 				}
@@ -104,7 +104,7 @@ func BenchmarkAuditQueryHistoricalArchetypes(b *testing.B) {
 	for _, count := range []int{1, 256, 4096} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
-			spawner := NewSpawner1[testPosition](world)
+			spawner := world.NewSpawner1[testPosition]()
 			spawner.Spawn(testPosition{X: 1})
 			extra := auditRegisterColumns(world, 12)
 			for shape := 1; shape < count; shape++ {
@@ -116,7 +116,7 @@ func BenchmarkAuditQueryHistoricalArchetypes(b *testing.B) {
 				}
 				world.archetypeForOwned(ids)
 			}
-			view := Query[testPosition](world)
+			view := world.Query[testPosition]()
 			view.All(func(Entity, ComponentAccess[testPosition]) bool { return true })
 			b.ReportAllocs()
 			for b.Loop() {

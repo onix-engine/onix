@@ -86,10 +86,10 @@ func updateParticleEmitters2D(context *ecs.SystemContext) error {
 		return nil
 	}
 	dt := float32(1.0 / 60.0)
-	if clock, ok := ecs.GetResource[*Time](world); ok && clock != nil && clock.Delta > 0 {
+	if clock, ok := world.GetResource[*Time](); ok && clock != nil && clock.Delta > 0 {
 		dt = clock.DeltaSeconds()
 	}
-	for entity, access := range ecs.Query[ParticleEmitter2D](world).All {
+	for entity, access := range world.Query[ParticleEmitter2D]().All {
 		if !IsActive(world, entity) {
 			continue
 		}

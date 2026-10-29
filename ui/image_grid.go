@@ -97,7 +97,7 @@ func SpawnImageGrid(world *ecs.World, opts ImageGridOptions) ecs.Entity {
 	padding := imageGridPadding(opts.Padding)
 	labelHeight := imageGridLabelHeight(opts.LabelHeight)
 	grid := spawnAnchor(world, opts.X, opts.Y)
-	_ = ecs.Insert(world, grid, ImageGrid{
+	_ = world.Insert(grid, ImageGrid{
 		Width: opts.Width, Columns: columns, Gap: gap, Padding: padding, LabelHeight: labelHeight, DeleteIcon: opts.DeleteIcon,
 		Items: slices.Clone(opts.Items),
 	})
@@ -108,21 +108,21 @@ func SpawnImageGrid(world *ecs.World, opts ImageGridOptions) ecs.Entity {
 		column, row := index%columns, index/columns
 		cell := spawnBox(world, float32(column)*(cellSize+gap), float32(row)*(cellSize+gap), cellSize, cellSize, theme.StackIndex, theme.Surface)
 		setCornerRadius(world, cell, opts.Radius)
-		_ = ecs.Insert(world, cell, scene.Parent{Entity: grid})
-		_ = ecs.Insert(world, cell, imageGridCell{Grid: grid, Index: index})
+		_ = world.Insert(cell, scene.Parent{Entity: grid})
+		_ = world.Insert(cell, imageGridCell{Grid: grid, Index: index})
 
 		imageBounds := imageGridTextureBounds(cellSize, padding, labelHeight, item.Texture)
 		if item.Texture != nil && imageBounds.W > 0 && imageBounds.H > 0 {
 			image := spawnBox(world, imageBounds.X, imageBounds.Y, imageBounds.W, imageBounds.H, theme.StackIndex+2, graphics.ColorRGBA{})
-			_ = ecs.Insert(world, image, scene.Parent{Entity: cell})
-			if visual := ecs.GetMut[scene.UIImage2D](world, image); visual != nil {
+			_ = world.Insert(image, scene.Parent{Entity: cell})
+			if visual := world.GetMut[scene.UIImage2D](image); visual != nil {
 				*visual = scene.NewUIImage2D(item.Texture)
 			}
 		}
 		if item.Label != "" {
 			label := spawnText[LabelPart](world, cell, padding, cellSize-labelHeight+2, item.Label, theme)
-			_ = ecs.Insert(world, label, Label{Value: item.Label, Color: theme.Muted, FontSize: min(theme.FontSize, 12), DPI: theme.DPI})
-			if text := ecs.GetMut[scene.Text2D](world, label); text != nil {
+			_ = world.Insert(label, Label{Value: item.Label, Color: theme.Muted, FontSize: min(theme.FontSize, 12), DPI: theme.DPI})
+			if text := world.GetMut[scene.Text2D](label); text != nil {
 				text.FontSize = min(theme.FontSize, 12)
 				text.Color = theme.Muted
 				text.MaxWidth = max(cellSize-padding*2, 0)
@@ -132,25 +132,25 @@ func SpawnImageGrid(world *ecs.World, opts ImageGridOptions) ecs.Entity {
 			removeSize := min(max(cellSize*.23, 18), 24)
 			remove := spawnInteractiveBox(world, cellSize-removeSize-padding*.5, padding*.5, removeSize, removeSize, theme.StackIndex+3, graphics.ColorRGBA{}, false, opts.PassThrough)
 			setCornerRadius(world, remove, Circle)
-			_ = ecs.Insert(world, remove, scene.Parent{Entity: cell})
-			_ = ecs.Insert(world, remove, imageGridRemove{Grid: grid, Index: index})
+			_ = world.Insert(remove, scene.Parent{Entity: cell})
+			_ = world.Insert(remove, imageGridRemove{Grid: grid, Index: index})
 			if deleteIcon.Texture != nil {
 				iconWidth, iconHeight := fitIconSize(deleteIcon, min(removeSize*.62, 14), min(removeSize*.62, 14))
 				icon := spawnBox(world, (removeSize-iconWidth)*.5, (removeSize-iconHeight)*.5, iconWidth, iconHeight, theme.StackIndex+5, graphics.ColorRGBA{})
-				_ = ecs.Insert(world, icon, scene.Parent{Entity: remove})
-				if visual := ecs.GetMut[scene.UIImage2D](world, icon); visual != nil {
+				_ = world.Insert(icon, scene.Parent{Entity: remove})
+				if visual := world.GetMut[scene.UIImage2D](icon); visual != nil {
 					*visual = scene.NewUIImage2D(deleteIcon.Texture)
 				}
 			} else {
 				close := spawnText[LabelPart](world, remove, 0, 0, iconFallback(deleteIcon), theme)
-				_ = ecs.Insert(world, close, Label{Value: iconFallback(deleteIcon), Color: theme.Muted, FontSize: min(theme.FontSize, 13), DPI: theme.DPI})
-				if text := ecs.GetMut[scene.Text2D](world, close); text != nil {
+				_ = world.Insert(close, Label{Value: iconFallback(deleteIcon), Color: theme.Muted, FontSize: min(theme.FontSize, 13), DPI: theme.DPI})
+				if text := world.GetMut[scene.Text2D](close); text != nil {
 					text.FontSize = min(theme.FontSize, 13)
 					text.Color = theme.Muted
 				}
 				centerTextVertically(world, close, removeSize)
-				if transform := ecs.GetMut[scene.UITransform](world, close); transform != nil {
-					if text, ok := ecs.Get[scene.Text2D](world, close); ok {
+				if transform := world.GetMut[scene.UITransform](close); transform != nil {
+					if text, ok := world.Get[scene.Text2D](close); ok {
 						width, _, measured := scene.MeasureTextValue2D(&text, text.Value)
 						if measured {
 							transform.Translation.X.Value = (removeSize - width) * .5

@@ -3,7 +3,6 @@ package onix
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/ui/html"
@@ -12,15 +11,15 @@ import (
 func TestAppNewHTMLDescendantsApplyScrollInSameFrame(t *testing.T) {
 	app := NewApp()
 	defer app.Destroy()
-	if err := InstallSystems[UIHTML](app); err != nil {
+	if err := app.InstallSystems[UIHTML](); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(appModulePlan(t, `{}`), module.Registry{}, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](appModulePlan(t, `{}`), module.Registry{}, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	surface := html.New(`<div id="scroll" style="height:80px;overflow:auto"><div style="height:120px"></div><button id="child" hidden style="height:30px;overflow:hidden">child</button><div style="height:300px"></div></div>`)
 	surface.Width, surface.Height = 200, 100
-	spawner := ecs.NewSpawner1[html.Surface](app.World)
+	spawner := app.World.NewSpawner1[html.Surface]()
 	owner := spawner.Spawn(surface)
 	sync := func() {
 		t.Helper()
@@ -34,7 +33,7 @@ func TestAppNewHTMLDescendantsApplyScrollInSameFrame(t *testing.T) {
 	if !ok {
 		t.Fatal("missing scroll container")
 	}
-	ecs.GetMut[scene.UIScroll](app.World, area).Position[1] = -100
+	app.World.GetMut[scene.UIScroll](area).Position[1] = -100
 	sync()
 	child, _ := html.NodeByID(app.World, owner, "child")
 	child.SetHidden(false)
@@ -44,13 +43,13 @@ func TestAppNewHTMLDescendantsApplyScrollInSameFrame(t *testing.T) {
 		t.Fatal("new child has no layout")
 	}
 	found := false
-	for entity, access := range ecs.Query[scene.Text2D](app.World).All {
+	for entity, access := range app.World.Query[scene.Text2D]().All {
 		if access.Ref().Value != "child" {
 			continue
 		}
 		found = true
-		transform := ecs.GetRef[scene.UIGlobalTransform](app.World, entity)
-		y := bounds.Y + ecs.GetRef[scene.UIScroll](app.World, area).Position.Y()
+		transform := app.World.GetRef[scene.UIGlobalTransform](entity)
+		y := bounds.Y + app.World.GetRef[scene.UIScroll](area).Position.Y()
 		if transform == nil || transform.Matrix[13] < y || transform.Matrix[13] >= y+bounds.Height {
 			t.Fatalf("new child did not inherit scroll in the layout frame: bounds=%+v scrollY=%v transform=%+v", bounds, y-bounds.Y, transform)
 		}

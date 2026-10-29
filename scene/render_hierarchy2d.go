@@ -35,7 +35,7 @@ func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
 
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
 func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
-	cache := ecs.ScopeValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache](world)
+	cache := world.ScopeValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache]()
 	cache.hierarchy = HierarchyFor(world)
 	versions := [7]uint64{
 		componentValueVersion[Parent](world), componentValueVersion[SceneLayer](world),
@@ -57,8 +57,8 @@ func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 func renderEntityInfo2D(world *ecs.World, entity ecs.Entity, ui bool, fallback int, cache *renderHierarchy2DCache) renderEntity2DInfo {
 	resolved := cache.resolve(world, entity)
 	if !ui {
-		layers, _ := ecs.Get[RenderLayers](world, entity)
-		if order, ok := ecs.Get[RenderOrder2D](world, entity); ok {
+		layers, _ := world.Get[RenderLayers](entity)
+		if order, ok := world.Get[RenderOrder2D](entity); ok {
 			fallback = int(order)
 		}
 		return renderEntity2DInfo{scene: resolved.scene, group: resolved.group, layers: layers, sortIndex: fallback}
@@ -81,19 +81,19 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	if parent := c.hierarchy.Parent(entity); parent != 0 {
 		info = c.resolve(world, parent)
 	}
-	if layers, ok := ecs.Get[RenderLayers](world, entity); ok {
+	if layers, ok := world.Get[RenderLayers](entity); ok {
 		info.layers = layers
 	}
-	if layer, ok := ecs.Get[SceneLayer](world, entity); ok {
+	if layer, ok := world.Get[SceneLayer](entity); ok {
 		info.scene = layer
 	}
-	if group, ok := ecs.Get[PainterGroup2D](world, entity); ok {
+	if group, ok := world.Get[PainterGroup2D](entity); ok {
 		info.group = uint64(group)
 	}
-	if target, ok := ecs.Get[UITargetCamera](world, entity); ok {
+	if target, ok := world.Get[UITargetCamera](entity); ok {
 		info.target = target.Entity
 	}
-	if stack, ok := ecs.Get[UIStackIndex](world, entity); ok {
+	if stack, ok := world.Get[UIStackIndex](entity); ok {
 		info.stack, info.hasStack = int(stack), true
 	}
 	delete(c.visiting, entity)
@@ -102,6 +102,6 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 }
 
 func componentValueVersion[T any](world *ecs.World) uint64 {
-	version, _ := ecs.ComponentValueRevision[T](world)
+	version, _ := world.ComponentValueRevision[T]()
 	return version
 }

@@ -1,0 +1,57 @@
+
+=== final-tests.txt ===
+ok  	github.com/diiyw/onix/ecs	0.040s
+ok  	github.com/diiyw/onix/internal/entitycache	0.004s
+ok  	github.com/diiyw/onix/scene	(cached)
+ok  	github.com/diiyw/onix/module	(cached)
+ok  	github.com/diiyw/onix/project	26.262s
+ok  	github.com/diiyw/onix/text	(cached)
+ok  	github.com/diiyw/onix	0.039s
+ok  	github.com/diiyw/onix/scene/render3d	0.025s
+ok  	github.com/diiyw/onix/ui/html	2.964s
+ok  	github.com/diiyw/onix/ui/markdown	0.071s
+ok  	github.com/diiyw/onix/examples/2048	0.073s
+?   	github.com/diiyw/onix/examples/animations	[no test files]
+ok  	github.com/diiyw/onix/examples/flappybird	1.580s
+ok  	github.com/diiyw/onix/examples/pelican	1.955s
+ok  	github.com/diiyw/onix/examples/spine	0.669s
+
+=== editor-tests.txt ===
+warning: both GOPATH and GOROOT are the same directory (/home/zhuoh/go); see https://go.dev/wiki/InstallTroubleshooting
+ok  	github.com/diiyw/onix/editor	55.527s
+
+=== final-race-tests.txt ===
+ok  	github.com/diiyw/onix/ecs	1.222s
+ok  	github.com/diiyw/onix/internal/entitycache	1.011s
+ok  	github.com/diiyw/onix/module	2.828s
+ok  	github.com/diiyw/onix/text	(cached)
+ok  	github.com/diiyw/onix/scene	1.509s
+
+=== final-animation-race.txt ===
+ok  	github.com/diiyw/onix/scene	1.104s
+
+=== android-scene.txt ===
+=== RUN   TestEqualAnimationSamplesPreserveComponentChanges
+--- PASS: TestEqualAnimationSamplesPreserveComponentChanges (0.00s)
+=== RUN   TestAnimatorComposesXYZRotationTracksOnTransform
+--- PASS: TestAnimatorComposesXYZRotationTracksOnTransform (0.00s)
+=== RUN   TestBoundAnimatorUpdateDoesNotAllocateAfterWarmup
+--- PASS: TestBoundAnimatorUpdateDoesNotAllocateAfterWarmup (0.00s)
+=== RUN   TestTransformCachesStoreOnlyParticipatingEntities
+--- PASS: TestTransformCachesStoreOnlyParticipatingEntities (0.02s)
+PASS
+
+=== android-text.txt ===
+=== RUN   TestGlyphRecordBudgetIncludesPhasesAndOutlines
+--- PASS: TestGlyphRecordBudgetIncludesPhasesAndOutlines (0.01s)
+=== RUN   TestGlyphClockEvictsColdRecordsWithoutClearingHotEntries
+--- PASS: TestGlyphClockEvictsColdRecordsWithoutClearingHotEntries (0.00s)
+=== RUN   TestGlyphAtlasReclamationBudget
+--- PASS: TestGlyphAtlasReclamationBudget (0.00s)
+=== RUN   TestGlyphAtlasBudgetCountsLCDChannelsAndOversizedPages
+--- PASS: TestGlyphAtlasBudgetCountsLCDChannelsAndOversizedPages (0.00s)
+PASS
+
+Android full ECS: 120 top-level tests passed.
+Targeted go vet: passed.
+Generated outputs: deterministic.

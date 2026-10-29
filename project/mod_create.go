@@ -93,7 +93,7 @@ func CreateProjectDirectory(directory string, options CreateProjectOptions) (*Pr
 		if strings.ContainsAny(version, " \t\r\n\"") {
 			return nil, fmt.Errorf("invalid engine version %q", version)
 		}
-		text := fmt.Sprintf("module %s\n\ngo 1.26.0\n\nrequire github.com/diiyw/onix %s\n", name, version)
+		text := fmt.Sprintf("module %s\n\ngo 1.27.0\n\nrequire github.com/diiyw/onix %s\n", name, version)
 		if options.EngineDirectory != "" {
 			engine, err := filepath.Abs(options.EngineDirectory)
 			if err != nil {
@@ -182,7 +182,7 @@ func main() {
 	if err != nil { panic(err) }
 	if err := OnixInstallSystems(app); err != nil { panic(err) }
 	if err := OnixOpenWindow(app, plan.Spec, source); err != nil { panic(err) }
-	if _, err := app.LoadModules(plan, registry, OnixModuleOptions(source)); err != nil {
+	if _, err := app.LoadModules[OnixContentProfile](plan, registry, OnixModuleOptions(source)); err != nil {
 		panic(err)
 	}
 	if err := app.Run(); err != nil {
@@ -200,6 +200,8 @@ import (
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/project"
 )
+
+type OnixContentProfile = module.Render2D
 
 func OnixRegistry() (module.Registry, error) { return module.Registry{}, nil }
 func OnixInstallSystems(*onix.App) error { return nil }

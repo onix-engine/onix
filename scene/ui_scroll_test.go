@@ -13,14 +13,14 @@ func TestUIScrollOverlayThumbDragUsesPaintedTrack(t *testing.T) {
 	for axis := range 2 {
 		world := ecs.NewWorld()
 		state := input.NewState()
-		ecs.InsertResource(world, state)
+		world.InsertResource(state)
 		bundle := ecs.NewBundle(6)
-		ecs.Put(&bundle, NewUITransform())
-		ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
-		ecs.Put(&bundle, Visibility{Visible: true})
-		ecs.Put(&bundle, AnchorTopLeft)
-		ecs.Put(&bundle, Size2D{Width: 100, Height: 100})
-		ecs.Put(&bundle, UIScroll{
+		bundle.Put(NewUITransform())
+		bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+		bundle.Put(Visibility{Visible: true})
+		bundle.Put(AnchorTopLeft)
+		bundle.Put(Size2D{Width: 100, Height: 100})
+		bundle.Put(UIScroll{
 			ViewportSize: mgl32.Vec2{100, 100}, ContentSize: mgl32.Vec2{300, 300},
 			ScrollbarSize: 10, ScrollbarMinThumbSize: 20, ScrollbarOverlay: true,
 			Horizontal: true, Vertical: true,
@@ -43,7 +43,7 @@ func TestUIScrollOverlayThumbDragUsesPaintedTrack(t *testing.T) {
 		if err := UIScrollSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		scroll, _ := ecs.Get[UIScroll](world, area)
+		scroll, _ := world.Get[UIScroll](area)
 		if math.Abs(float64(scroll.Position[axis]+100)) > 0.001 || scroll.Position[1-axis] != 0 {
 			t.Fatalf("axis %d overlay drag = %v, want -100 on the dragged axis", axis, scroll.Position)
 		}
@@ -56,18 +56,18 @@ func TestUIScrollOverlayThumbDragUsesPaintedTrack(t *testing.T) {
 func TestUIScrollScrollbarDragFollowsPointerDirection(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	request := &RenderRequest{}
-	ecs.InsertResource(world, request)
-	ecs.InsertResource(world, ViewportSize{Width: 320, Height: 240, ScaleFactor: 1})
+	world.InsertResource(request)
+	world.InsertResource(ViewportSize{Width: 320, Height: 240, ScaleFactor: 1})
 
 	bundle := ecs.NewBundle(7)
-	ecs.Put(&bundle, UITransformFromXY(10, 20))
-	ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Translate3D(10, 20, 0)})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, AnchorTopLeft)
-	ecs.Put(&bundle, Size2D{Width: 100, Height: 100})
-	ecs.Put(&bundle, UIScroll{
+	bundle.Put(UITransformFromXY(10, 20))
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Translate3D(10, 20, 0)})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(Size2D{Width: 100, Height: 100})
+	bundle.Put(UIScroll{
 		Position:              mgl32.Vec2{0, -40},
 		ViewportSize:          mgl32.Vec2{100, 100},
 		ContentSize:           mgl32.Vec2{100, 300},
@@ -93,7 +93,7 @@ func TestUIScrollScrollbarDragFollowsPointerDirection(t *testing.T) {
 		t.Fatal("scrollbar drag did not request a render")
 	}
 
-	scroll, _ := ecs.Get[UIScroll](world, area)
+	scroll, _ := world.Get[UIScroll](area)
 	if offset := -scroll.Position.Y(); offset <= 40 {
 		t.Fatalf("downward scrollbar drag offset = %.1f, want greater than 40", offset)
 	}
@@ -106,14 +106,14 @@ func TestUIScrollRequestsRenderOnlyWhenPositionChanges(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
 	state.MoveMouse(50, 50)
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	request := &RenderRequest{}
-	ecs.InsertResource(world, request)
+	world.InsertResource(request)
 	bundle := ecs.NewBundle(2)
-	ecs.Put(&bundle, UITransformFromXY(0, 0))
-	ecs.Put(&bundle, Size2D{Width: 100, Height: 100})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, UIScroll{
+	bundle.Put(UITransformFromXY(0, 0))
+	bundle.Put(Size2D{Width: 100, Height: 100})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(UIScroll{
 		ViewportSize: mgl32.Vec2{100, 100},
 		ContentSize:  mgl32.Vec2{100, 300},
 		Vertical:     true,
@@ -136,7 +136,7 @@ func TestUIScrollRequestsRenderOnlyWhenPositionChanges(t *testing.T) {
 		{name: "content shrunk", position: -250, want: -200},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			scroll := ecs.GetMut[UIScroll](world, area)
+			scroll := world.GetMut[UIScroll](area)
 			scroll.Position[1], scroll.Momentum[1] = test.position, test.momentum
 			state.ScrollMouse(0, test.wheel)
 			if err := system.Run(world); err != nil {
@@ -152,7 +152,7 @@ func TestUIScrollRequestsRenderOnlyWhenPositionChanges(t *testing.T) {
 		})
 	}
 	if allocations := testing.AllocsPerRun(50, func() {
-		scroll := ecs.GetMut[UIScroll](world, area)
+		scroll := world.GetMut[UIScroll](area)
 		scroll.Position[1], scroll.Momentum[1] = -40, -5
 		if err := system.Run(world); err != nil {
 			t.Fatal(err)
@@ -168,14 +168,14 @@ func TestUIScrollRequestsRenderOnlyWhenPositionChanges(t *testing.T) {
 func TestUIScrollMiddleDragPansContent(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
-	ecs.InsertResource(world, state)
-	ecs.InsertResource(world, &RenderRequest{})
+	world.InsertResource(state)
+	world.InsertResource(&RenderRequest{})
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, UITransformFromXY(0, 0))
-	ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Translate3D(0, 0, 0)})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, Size2D{Width: 100, Height: 100})
-	ecs.Put(&bundle, UIScroll{
+	bundle.Put(UITransformFromXY(0, 0))
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Translate3D(0, 0, 0)})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(Size2D{Width: 100, Height: 100})
+	bundle.Put(UIScroll{
 		ViewportSize: mgl32.Vec2{100, 100},
 		ContentSize:  mgl32.Vec2{100, 300},
 		Vertical:     true,
@@ -197,7 +197,7 @@ func TestUIScrollMiddleDragPansContent(t *testing.T) {
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	scroll, _ := ecs.Get[UIScroll](world, area)
+	scroll, _ := world.Get[UIScroll](area)
 	if scroll.Position.Y() != -30 {
 		t.Fatalf("middle drag position = %v, want -30", scroll.Position)
 	}
@@ -209,7 +209,7 @@ func TestUIScrollMiddleDragPansContent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	scroll, _ = ecs.Get[UIScroll](world, area)
+	scroll, _ = world.Get[UIScroll](area)
 	if scroll.Position.Y() != -30 {
 		t.Fatalf("position after release = %v, want it held at -30 with no momentum", scroll.Position)
 	}
@@ -219,11 +219,11 @@ func TestUIScrollConsumesWheelWhenHoveredWithoutOverflow(t *testing.T) {
 	world := ecs.NewWorld()
 	state := input.NewState()
 	state.MoveMouse(20, 20)
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, UITransformFromXY(0, 0))
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, UIScroll{
+	bundle.Put(UITransformFromXY(0, 0))
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(UIScroll{
 		ViewportSize: mgl32.Vec2{100, 100},
 		ContentSize:  mgl32.Vec2{100, 100},
 		Vertical:     true,

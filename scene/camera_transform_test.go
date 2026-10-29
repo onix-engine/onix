@@ -23,17 +23,17 @@ func TestPerspectiveProjectionUsesInfiniteReverseZ(t *testing.T) {
 func TestSyncGlobalTransformPropagatesHierarchy(t *testing.T) {
 	world := ecs.NewWorld()
 	parent := ecs.NewBundle(1)
-	ecs.Put(&parent, TransformFromTranslation(mgl32.Vec3{4, 5, 6}))
+	parent.Put(TransformFromTranslation(mgl32.Vec3{4, 5, 6}))
 	parentEntity := world.Spawn(parent)
 	child := ecs.NewBundle(2)
-	ecs.Put(&child, TransformFromTranslation(mgl32.Vec3{1, 2, 3}))
-	ecs.Put(&child, Parent{Entity: parentEntity})
+	child.Put(TransformFromTranslation(mgl32.Vec3{1, 2, 3}))
+	child.Put(Parent{Entity: parentEntity})
 	childEntity := world.Spawn(child)
 
 	if err := SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatalf("sync 3D transforms: %v", err)
 	}
-	global, ok := ecs.Get[GlobalTransform](world, childEntity)
+	global, ok := world.Get[GlobalTransform](childEntity)
 	if !ok {
 		t.Fatal("expected a global transform")
 	}

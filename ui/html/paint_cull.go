@@ -85,7 +85,7 @@ func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layou
 	rect := box.PaddingBox()
 	offset := mgl32.Vec2{}
 	if binding, ok := state.OverflowBindings[box.Node]; ok && htmlOverflowBindingIs(world, box.Node, binding.entity) {
-		if scroll, exists := ecs.Get[scene.UIScroll](world, binding.entity); exists {
+		if scroll, exists := world.Get[scene.UIScroll](binding.entity); exists {
 			offset = scroll.Position
 		}
 	}
@@ -116,7 +116,7 @@ func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layou
 }
 
 func htmlOverflowBindingIs(world *ecs.World, node *dom.Node, entity ecs.Entity) bool {
-	child, ok := ecs.Get[htmlChild](world, entity)
+	child, ok := world.Get[htmlChild](entity)
 	return ok && child.Node == node
 }
 

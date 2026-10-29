@@ -3,7 +3,6 @@ package editor
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -128,7 +127,7 @@ func (a *ModuleEditor) viewport3DHelperGeometry(part *workspace3DPart, projectio
 		return
 	}
 	world := a.viewport3D.world
-	matrix := ecs.GetRef[scene.GlobalTransform](world, part.entity).Matrix
+	matrix := world.GetRef[scene.GlobalTransform](part.entity).Matrix
 	if part.cameraSpec != nil {
 		g.camera(matrix, part.cameraSpec, a.viewport3DCameraAspect(part.cameraSpec))
 	}
@@ -137,13 +136,13 @@ func (a *ModuleEditor) viewport3DHelperGeometry(part *workspace3DPart, projectio
 	depth := origin.Sub(camera.Col(3).Vec3()).Dot(camera.Col(2).Vec3().Mul(-1))
 	units := preview3DWorldPerPixel(projection, depth, viewport)
 	iconRight, iconUp := camera.Col(0).Vec3().Mul(units), camera.Col(1).Vec3().Mul(units)
-	ambient := ecs.Has[render3d.AmbientLight](world, part.entity)
-	sun := ecs.Has[render3d.DirectionalLight](world, part.entity)
+	ambient := world.Has[render3d.AmbientLight](part.entity)
+	sun := world.Has[render3d.DirectionalLight](part.entity)
 	hasLight := ambient || sun
 	if sun {
 		g.direction(origin, forward, right, 1)
 	}
-	if light := ecs.GetRef[render3d.PointLight](world, part.entity); light != nil {
+	if light := world.GetRef[render3d.PointLight](part.entity); light != nil {
 		hasLight = true
 		if light.Radius > 0 {
 			x, y, z := right.Mul(light.Radius), up.Mul(light.Radius), forward.Mul(light.Radius)
@@ -152,7 +151,7 @@ func (a *ModuleEditor) viewport3DHelperGeometry(part *workspace3DPart, projectio
 			g.circle(origin, y, z)
 		}
 	}
-	if light := ecs.GetRef[render3d.SpotLight](world, part.entity); light != nil {
+	if light := world.GetRef[render3d.SpotLight](part.entity); light != nil {
 		hasLight = true
 		end := origin.Add(forward.Mul(light.Range))
 		switch light.Shape {
@@ -180,7 +179,7 @@ func (a *ModuleEditor) viewport3DHelperGeometry(part *workspace3DPart, projectio
 		}
 		g.direction(origin, forward, right, min(light.Range, .6))
 	}
-	if light := ecs.GetRef[render3d.AreaLight](world, part.entity); light != nil {
+	if light := world.GetRef[render3d.AreaLight](part.entity); light != nil {
 		hasLight = true
 		switch light.Shape {
 		case render3d.AreaDisc:
@@ -282,7 +281,7 @@ func (a *ModuleEditor) drawViewport3DHelpers(c *graphics.Canvas2D, projection *s
 			if i > 0 && mod.Plan.Elements[i-1].Parent >= 0 {
 				part.selected = part.selected || row.parts[mod.Plan.Elements[i-1].Parent+1].selected
 			}
-			if !part.helper || part.entity == 0 || !ecs.GetRef[scene.Visibility](v.world, part.entity).Visible {
+			if !part.helper || part.entity == 0 || !v.world.GetRef[scene.Visibility](part.entity).Visible {
 				continue
 			}
 			a.viewport3DHelperGeometry(part, projection, camera, viewport, &geometry)

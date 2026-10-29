@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/examples/webview/contracts"
+	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -39,7 +39,7 @@ func (m *Mod) Install(c *module.Context) error {
 		}{"hello from Go", json.RawMessage(payload)})
 		return string(result), err
 	})
-	if err := module.Set(c, c.Root(), page); err != nil {
+	if err := c.Set(c.Root(), page); err != nil {
 		return err
 	}
 	if m.bounds, err = c.Slot("bounds"); err != nil {
@@ -52,17 +52,17 @@ func (m *Mod) Install(c *module.Context) error {
 }
 
 func (m *Mod) resize(c *module.Context) error {
-	value, err := module.ReadSlot[contracts.BrowserBounds](m.bounds)
+	value, err := m.bounds.Read[contracts.BrowserBounds]()
 	if err != nil {
 		return err
 	}
 	if value.Width <= 0 || value.Height <= 0 {
 		return module.ErrInvalid
 	}
-	page, ok := module.Get[scene.WebView](c, c.Root())
+	page, ok := c.Get[scene.WebView](c.Root())
 	if !ok {
 		return module.ErrType
 	}
 	page.Bounds = scene.WebViewBounds{X: float32(value.X), Y: float32(value.Y), Width: float32(value.Width), Height: float32(value.Height)}
-	return module.Set(c, c.Root(), page)
+	return c.Set(c.Root(), page)
 }

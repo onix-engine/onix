@@ -30,7 +30,7 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 	}
 	check := func(t *testing.T) {
 		t.Helper()
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		box := state.BoxesByNode[node.node]
 		r := box.BorderBox()
 		want := [...]layout.Rect{
@@ -43,8 +43,8 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 			if htmlAnimationRole(t, world, owner, "box", htmlRoleBorderTop+htmlRenderRole(i)) != entity {
 				t.Fatal("color transition replaced a border edge")
 			}
-			transform := ecs.GetRef[scene.UITransform](world, entity)
-			sprite := ecs.GetRef[scene.Sprite2D](world, entity)
+			transform := world.GetRef[scene.UITransform](entity)
+			sprite := world.GetRef[scene.Sprite2D](entity)
 			got := layout.Rect{X: float64(transform.Translation.X.Value), Y: float64(transform.Translation.Y.Value), Width: float64(sprite.Width), Height: float64(sprite.Height)}
 			if got != want[i] {
 				t.Errorf("border edge %d = %+v, want %+v", i, got, want[i])
@@ -76,7 +76,7 @@ func TestHTMLTransparentRoundedElbowsCreatePaintSurface(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, fmt.Sprintf(`<div style="color:#84ccff;position:relative;width:48px;height:32px"><span id="elbow" style="position:absolute;left:11px;top:16px;box-sizing:border-box;width:12px;height:9px;background:transparent;border:0 solid currentColor;border-width:%s;border-radius:%s"></span></div>`, test.widths, test.radii))
 			defer Dispose(world)
 			node := incrementalHTMLNode(t, world, owner, "elbow")
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			paint := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
 			if paint == nil || htmlCullRole(world, owner, node, htmlRoleSurface) == 0 {
 				t.Fatal("transparent rounded border was culled before its arc could be painted")
@@ -102,7 +102,7 @@ func TestHTMLRasterRoundedBorderKeepsCornerArcs(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, `<button id="button" style="width:36px;height:24px;background:transparent;border:1px solid #84ccff;border-radius:`+test.radius+`"></button>`)
 			defer Dispose(world)
 			node := incrementalHTMLNode(t, world, owner, "button")
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			computed := state.Styles[node.node]
 			var raster image.RGBA
 			rasterHTMLBoxPaintPrepared(&raster, computed, 36, 24, 1, nil)
@@ -144,7 +144,7 @@ func TestHTMLRasterRoundedBorderUsesAdjoiningWidthsAndColors(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="box" style="width:36px;height:24px;background:transparent;border-style:solid;border-width:3px 2px;border-color:red blue;border-radius:8px 0 0 8px"></div>`)
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "box")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	var raster image.RGBA
 	rasterHTMLBoxPaintPrepared(&raster, state.Styles[node.node], 36, 24, 1, nil)
 	if pixel := raster.RGBAAt(3, 4); pixel.R != 255 || pixel.B != 0 || pixel.A == 0 {
@@ -171,7 +171,7 @@ func TestHTMLRasterRoundedBorderPreservesFractionalWidthAndOpacity(t *testing.T)
 			world, owner := incrementalHTMLFixture(t, `<button id="button" style="width:36px;height:24px;background:transparent;border:`+test.border+`;border-radius:5px 0 0 5px"></button>`)
 			defer Dispose(world)
 			node := incrementalHTMLNode(t, world, owner, "button")
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			var raster image.RGBA
 			rasterHTMLBoxPaintPrepared(&raster, state.Styles[node.node], 36, 24, 1, nil)
 			for _, point := range []image.Point{{0, 12}, {18, 0}, {35, 12}, {18, 23}} {
@@ -190,7 +190,7 @@ func TestHTMLToolbarRoundedBorderUpdatesRetainedPaint(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<style>button{width:36px;height:24px;background:transparent;border:1px solid transparent;border-radius:5px 0 0 5px}button.active{border-color:#84ccff;background:#3b5266}</style><button id="button" class="active"></button>`)
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "button")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
 	if raster == nil {
 		t.Fatal("toolbar button has no retained paint")
@@ -212,8 +212,8 @@ func TestHTMLToolbarRoundedBorderUpdatesRetainedPaint(t *testing.T) {
 	if raster.image.RGBAAt(18, 12) != (color.RGBA{R: 59, G: 82, B: 102, A: 255}) {
 		t.Fatal("border changed the toolbar background")
 	}
-	entity := htmlNodeInputEntity(world, ecs.GetRef[htmlRenderState](world, owner), node.node)
-	sprite := ecs.GetRef[scene.Sprite2D](world, entity)
+	entity := htmlNodeInputEntity(world, world.GetRef[htmlRenderState](owner), node.node)
+	sprite := world.GetRef[scene.Sprite2D](entity)
 	if sprite == nil || sprite.Texture != texture {
 		t.Fatal("toolbar button did not retain the corrected paint texture")
 	}
@@ -230,7 +230,7 @@ func TestHTMLRoundedBorderTextureFollowsCanvasDensity(t *testing.T) {
 	for _, scale := range []float64{1, 1.25, 2, 3, 2, 1} {
 		canvas.SetRasterScale(scale)
 		incrementalSync(t, world)
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
 		texture := raster.texture
 		if texture.Width != int(math.Ceil(36*scale)) || texture.Height != int(math.Ceil(24*scale)) {
@@ -240,7 +240,7 @@ func TestHTMLRoundedBorderTextureFollowsCanvasDensity(t *testing.T) {
 			t.Fatal("pixel density changed the texture's logical size")
 		}
 		entity := htmlNodeInputEntity(world, state, node.node)
-		sprite := ecs.GetRef[scene.Sprite2D](world, entity)
+		sprite := world.GetRef[scene.Sprite2D](entity)
 		if sprite.Width != 36 || sprite.Height != 24 || sprite.Texture != texture {
 			t.Fatal("pixel density changed the button layout or left a stale texture")
 		}
@@ -264,7 +264,7 @@ func TestHTMLRoundedBorderFilteringPreservesColor(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<button id="button" style="width:36px;height:24px;background:transparent;border:1px solid #84ccff;border-radius:5px 0 0 5px"></button>`)
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "button")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	var raster image.RGBA
 	rasterHTMLBoxPaintPrepared(&raster, state.Styles[node.node], 36, 24, 2, nil)
 	// Linear filtering must only change coverage; transparent neighbors must

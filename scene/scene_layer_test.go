@@ -15,22 +15,22 @@ func TestSceneLayersOrderWorldAndUIAndIsolateCameras(t *testing.T) {
 	w := ecs.NewWorld()
 	graphics.BindFrame(w, graphics.CurrentContext())
 	RegisterSpriteRenderer2D(w)
-	roots := ecs.NewSpawner2[SceneLayer, Visibility](w)
+	roots := w.NewSpawner2[SceneLayer, Visibility]()
 	back := roots.Spawn(SceneLayer{ID: 1, Order: 1}, Visibility{Visible: true})
 	front := roots.Spawn(SceneLayer{ID: 2, Order: 2, Overlay: true}, Visibility{Visible: true})
 	fallback := SpawnCamera2D(w)
-	ecs.GetMut[Camera](w, fallback).Fallback = true
+	w.GetMut[Camera](fallback).Fallback = true
 	frontCamera := SpawnCamera2D(w)
-	if err := ecs.Insert(w, frontCamera, Parent{Entity: front}); err != nil {
+	if err := w.Insert(frontCamera, Parent{Entity: front}); err != nil {
 		t.Fatal(err)
 	}
 	// Local UI order must not put an old scene above the foreground's world.
 	sprite := NewSprite2D()
 	sprite.Width, sprite.Height = 20, 20
 	sprite.Shape = RoundedRectShape2D(graphics.White, 0)
-	ui := ecs.NewSpawner5[Sprite2D, UIGlobalTransform, Visibility, Parent, UIStackIndex](w)
+	ui := w.NewSpawner5[Sprite2D, UIGlobalTransform, Visibility, Parent, UIStackIndex]()
 	uiEntity := ui.Spawn(sprite, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, Parent{Entity: back}, 1000)
-	world := ecs.NewSpawner4[Sprite2D, GlobalTransform, Visibility, Parent](w)
+	world := w.NewSpawner4[Sprite2D, GlobalTransform, Visibility, Parent]()
 	worldEntity := world.Spawn(sprite, GlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, Parent{Entity: front})
 	if err := ExtractCamerasSystem("").Run(w); err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestSceneLayersOrderWorldAndUIAndIsolateCameras(t *testing.T) {
 	if err := ExtractRender2DSystem("").Run(w); err != nil {
 		t.Fatal(err)
 	}
-	state := renderWorld(w)
+	state := RenderWorldFor(w)
 	if len(state.Cameras) != 2 || state.Cameras[0].Scene.ID != 1 || state.Cameras[1].Scene.ID != 2 || state.Cameras[1].Camera.Clear {
 		t.Fatalf("overlay/fallback cameras: %+v", state.Cameras)
 	}

@@ -12,11 +12,11 @@ func TestInputCaptureLookupTracksFrameSnapshot(t *testing.T) {
 	world := ecs.NewWorld()
 	camera := spawnInputCameraForTest(t, world, 200, 100)
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, UIGlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
-	ecs.Put(&bundle, InputTarget2D{Width: 20, Height: 20})
-	ecs.Put(&bundle, InputBlocker2D{Width: 40, Height: 40})
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(InputTarget2D{Width: 20, Height: 20})
+	bundle.Put(InputBlocker2D{Width: 40, Height: 40})
 	entity := world.Spawn(bundle)
 	check := func(want bool, width float32, ui bool) {
 		t.Helper()
@@ -34,16 +34,16 @@ func TestInputCaptureLookupTracksFrameSnapshot(t *testing.T) {
 	}
 	// World and UI records, plus a blocker, all share the same entity.
 	check(true, 20, false)
-	ecs.Remove[GlobalTransform](world, entity)
+	world.Remove[GlobalTransform](entity)
 	check(true, 20, true)
-	target := ecs.GetMut[InputTarget2D](world, entity)
+	target := world.GetMut[InputTarget2D](entity)
 	target.Disabled = true
 	check(true, 40, true)
-	visibility := ecs.GetMut[Visibility](world, entity)
+	visibility := world.GetMut[Visibility](entity)
 	visibility.Visible = false
 	check(false, 0, false)
 	visibility.Visible = true
-	component := ecs.GetMut[Camera](world, camera)
+	component := world.GetMut[Camera](camera)
 	component.Active = false
 	check(false, 0, false)
 	component.Active = true

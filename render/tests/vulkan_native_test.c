@@ -1754,6 +1754,14 @@ static void test_host_heap_retention(void) {
 #endif
 
 static void test_deformation_descriptor_pools(OnixVkDriver *driver) {
+	// Mesh resources are lazy; this isolated allocator test owns its layout.
+	require(driver->deformation_layout == VK_NULL_HANDLE, "deformation layout starts lazy");
+	VkDescriptorSetLayoutBinding bindings[] = {
+		{.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_VERTEX_BIT},
+		{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
+	};
+	VkDescriptorSetLayoutCreateInfo layout = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .bindingCount = 2, .pBindings = bindings};
+	require(vkCreateDescriptorSetLayout(driver->device, &layout, NULL, &driver->deformation_layout) == VK_SUCCESS, "create test deformation layout");
 	OnixVkFrame frame = {0};
 	size_t live = live_descriptor_pools;
 	fail_next_descriptor_pool = 1;
@@ -1801,6 +1809,8 @@ static void test_deformation_descriptor_pools(OnixVkDriver *driver) {
 		if (frame.deformation_pools[index]) vkDestroyDescriptorPool(driver->device, frame.deformation_pools[index], NULL);
 	}
 	require(live_descriptor_pools == live, "deformation descriptor pools release exactly once");
+	vkDestroyDescriptorSetLayout(driver->device, driver->deformation_layout, NULL);
+	driver->deformation_layout = VK_NULL_HANDLE;
 	puts("Deformation descriptor pools: 256 -> 16 reserved sets, failures, capacity, retained handles, regrowth and zero warm allocations passed");
 }
 

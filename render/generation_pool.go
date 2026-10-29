@@ -100,7 +100,7 @@ func (p *GenerationPool[R, V]) Range(yield func(V) bool) {
 	}
 }
 
-func destroyNativeResource[R any](pool *GenerationPool[R, uint32], handle Handle[R], label string, destroy func(uint32) error) error {
+func (pool *GenerationPool[R, V]) destroyNativeResource(handle Handle[R], label string, destroy func(V) error) error {
 	native, ok := pool.Get(handle)
 	if !ok {
 		return fmt.Errorf("render: invalid %s handle %s", label, handle)

@@ -10,11 +10,11 @@ func BenchmarkMessageIteration(b *testing.B) {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
 			for value := range count / 2 {
-				WriteMessage(world, value)
+				world.WriteMessage(value)
 			}
-			AdvanceMessages(world)
+			world.AdvanceMessages()
 			for value := count / 2; value < count; value++ {
-				WriteMessage(world, value)
+				world.WriteMessage(value)
 			}
 			var reader MessageReader[int]
 			b.ReportAllocs()
@@ -33,7 +33,7 @@ func BenchmarkMessageDiscard(b *testing.B) {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
 			for value := range count {
-				WriteMessage(world, value)
+				world.WriteMessage(value)
 			}
 			var reader MessageReader[int]
 			b.ReportAllocs()
@@ -52,11 +52,11 @@ func BenchmarkMessageIterationSystem(b *testing.B) {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
 			for value := range count / 2 {
-				WriteMessage(world, value)
+				world.WriteMessage(value)
 			}
-			AdvanceMessages(world)
+			world.AdvanceMessages()
 			for value := count / 2; value < count; value++ {
-				WriteMessage(world, value)
+				world.WriteMessage(value)
 			}
 			var reader MessageReader[int]
 			b.ReportAllocs()

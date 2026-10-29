@@ -20,14 +20,14 @@ func TestSortedCameraEntitiesPanicsForNilWorld(t *testing.T) {
 func TestCameraFallbackTracksAuthoredCameraActivity(t *testing.T) {
 	world := ecs.NewWorld()
 	fallback := SpawnCamera2D(world)
-	ecs.GetMut[Camera](world, fallback).Fallback = true
+	world.GetMut[Camera](fallback).Fallback = true
 	parentBundle := ecs.NewBundle(1)
-	ecs.Put(&parentBundle, Activity{Active: true})
+	parentBundle.Put(Activity{Active: true})
 	parent := world.Spawn(parentBundle)
 	authored := SpawnCamera2D(world)
-	_ = ecs.Insert(world, authored, Parent{Entity: parent})
+	_ = world.Insert(authored, Parent{Entity: parent})
 	for _, active := range []bool{true, false, true} {
-		*ecs.GetMut[Activity](world, parent) = Activity{Active: active}
+		*world.GetMut[Activity](parent) = Activity{Active: active}
 		want := fallback
 		if active {
 			want = authored
@@ -78,7 +78,7 @@ func TestSortedCameraEntitiesUsesOrderThenEntity(t *testing.T) {
 		camera := NewCamera()
 		camera.Order = order
 		camera.Active = active
-		ecs.Put(&bundle, camera)
+		bundle.Put(camera)
 		return world.Spawn(bundle)
 	}
 	first := spawn(5, true)
@@ -107,10 +107,10 @@ func TestCameraFrameDoesNotAllocateAfterWarmup(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	RegisterCameraRenderer2D(world)
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, NewCamera())
-	ecs.Put(&bundle, Camera2D{})
-	ecs.Put(&bundle, OrthographicProjection2D())
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(NewCamera())
+	bundle.Put(Camera2D{})
+	bundle.Put(OrthographicProjection2D())
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(bundle)
 	context := ecs.SystemContext{World: world}
 	if err := ExtractCameras(&context); err != nil {

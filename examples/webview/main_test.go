@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/ecs"
+
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -53,11 +53,11 @@ func TestWebViewModuleOwnsPageBoundsBridgeAndLifecycle(t *testing.T) {
 	app := onix.NewApp()
 	t.Cleanup(app.Destroy)
 	backend := &browserBackend{}
-	ecs.InsertResource(app.World, scene.NewWebViewRuntime(backend))
+	app.World.InsertResource(scene.NewWebViewRuntime(backend))
 	if err := OnixInstallSystems(app); err != nil {
 		t.Fatal(err)
 	}
-	entry, err := app.LoadModules(plan, registry, OnixModuleOptions(os.DirFS(".")))
+	entry, err := app.LoadModules[OnixContentProfile](plan, registry, OnixModuleOptions(os.DirFS(".")))
 	if err != nil {
 		t.Fatal(err)
 	}

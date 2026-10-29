@@ -30,7 +30,7 @@ type NodeSpawner[T any] struct {
 }
 
 func NewNodeSpawner[T any](world *ecs.World) NodeSpawner[T] {
-	return NodeSpawner[T]{spawner: ecs.NewSpawner7[scene.UITransform, scene.UIGlobalTransform, scene.Parent, scene.Anchor, scene.Visibility, scene.UIStackIndex, T](world)}
+	return NodeSpawner[T]{spawner: world.NewSpawner7[scene.UITransform, scene.UIGlobalTransform, scene.Parent, scene.Anchor, scene.Visibility, scene.UIStackIndex, T]()}
 }
 
 func (s *NodeSpawner[T]) Reserve(capacity int) { s.spawner.Reserve(capacity) }
@@ -48,7 +48,7 @@ type NodeSpawner2[A, B any] struct {
 }
 
 func NewNodeSpawner2[A, B any](world *ecs.World) NodeSpawner2[A, B] {
-	return NodeSpawner2[A, B]{spawner: ecs.NewSpawner8[scene.UITransform, scene.UIGlobalTransform, scene.Parent, scene.Anchor, scene.Visibility, scene.UIStackIndex, A, B](world)}
+	return NodeSpawner2[A, B]{spawner: world.NewSpawner8[scene.UITransform, scene.UIGlobalTransform, scene.Parent, scene.Anchor, scene.Visibility, scene.UIStackIndex, A, B]()}
 }
 
 func (s *NodeSpawner2[A, B]) Reserve(capacity int) { s.spawner.Reserve(capacity) }
@@ -65,7 +65,7 @@ type nodeFactory[T any] struct {
 }
 
 func nodeSpawnerFor[T any](world *ecs.World) *NodeSpawner[T] {
-	factory := ecs.FrameValue[nodeFactory[T], nodeFactory[T]](world)
+	factory := world.FrameValue[nodeFactory[T], nodeFactory[T]]()
 	if !factory.initialized {
 		factory.nodes = NewNodeSpawner[T](world)
 		factory.initialized = true
@@ -85,7 +85,7 @@ type nodeFactory2[A, B any] struct {
 }
 
 func nodeSpawner2For[A, B any](world *ecs.World) *NodeSpawner2[A, B] {
-	factory := ecs.FrameValue[nodeFactory2[A, B], nodeFactory2[A, B]](world)
+	factory := world.FrameValue[nodeFactory2[A, B], nodeFactory2[A, B]]()
 	if !factory.initialized {
 		factory.nodes = NewNodeSpawner2[A, B](world)
 		factory.initialized = true

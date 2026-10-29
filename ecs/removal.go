@@ -7,7 +7,7 @@ type ComponentType struct {
 }
 
 func Type[T any]() ComponentType {
-	return ComponentType{register: registerComponent[T]}
+	return ComponentType{register: (*World).registerComponent[T]}
 }
 
 // PreparedRemoval removes a component set in one archetype migration.
@@ -52,7 +52,7 @@ type removalTransition struct {
 
 // PrepareRemoval registers the supplied types and binds a reusable removal set.
 // Duplicate descriptors are harmless; an empty set never changes an entity.
-func PrepareRemoval(world *World, types ...ComponentType) PreparedRemoval {
+func (world *World) PrepareRemoval(types ...ComponentType) PreparedRemoval {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
 	return PreparedRemoval{plan: &removalPlan{

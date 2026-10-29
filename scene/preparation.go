@@ -8,9 +8,9 @@ import (
 // QueueMaterial2DUploads uses the same registered generic material readers as
 // rendering, including the entity's shader override.
 func QueueMaterial2DUploads(queue *graphics.UploadQueue, world *ecs.World, entity ecs.Entity) {
-	if state, ok := ecs.GetResource[*RenderWorld](world); ok && state != nil {
+	if state, ok := world.GetResource[*RenderWorld](); ok && state != nil {
 		queue.AddMaterial2DShader(material2DForEntity(world, entity).Shader)
-	} else if shader := ecs.GetRef[Shader[graphics.Material2DShader]](world, entity); shader != nil {
+	} else if shader := world.GetRef[Shader[graphics.Material2DShader]](entity); shader != nil {
 		queue.AddMaterial2DShader(shader.Program)
 	}
 }

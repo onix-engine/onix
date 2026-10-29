@@ -75,12 +75,12 @@ func (c *Context) Element(name string) (Entity, error) {
 }
 
 // Resource returns a typed, privately declared resource installed by a feature.
-func Resource[T any](c *Context, kind, name string) (T, error) {
+func (c *Context) Resource[T any](kind, name string) (T, error) {
 	if !c.usable() || c.resources == nil {
 		var zero T
 		return zero, ErrDisposed
 	}
-	return project.LoadNamedResource[T](c.resources.store, kind, name)
+	return c.resources.store.LoadNamedResource[T](kind, name)
 }
 func (c *Context) usable() bool { return c != nil && c.live && !c.disposing && !c.runtime.closed }
 func (c *Context) running() bool {
@@ -95,45 +95,45 @@ func protectedComponent[T any]() bool {
 	return t == reflect.TypeFor[scene.PainterGroup2D]() || t == reflect.TypeFor[scene.UITargetCamera]() || t == reflect.TypeFor[scene.InputHandler2D]() || t == reflect.TypeFor[scene.Activity]() || t == reflect.TypeFor[scene.Parent]() || t == reflect.TypeFor[entityOwner]() || t == reflect.TypeFor[scene.SiblingOrder]() || t == reflect.TypeFor[scene.UIStackIndex]() || t == reflect.TypeFor[scene.RenderOrder2D]() || t == reflect.TypeFor[scene.RenderOutput2D]()
 }
 
-func Get[T any](c *Context, e Entity) (T, bool) {
+func (c *Context) Get[T any](e Entity) (T, bool) {
 	if !c.owns(e) || protectedComponent[T]() {
 		var zero T
 		return zero, false
 	}
-	return ecs.Get[T](c.runtime.world, e.entity)
+	return c.runtime.world.Get[T](e.entity)
 }
 
 // Set replaces existing components immediately; archetype changes are commands
 // applied after the batch/update traversal. Transform writes affect local content.
-func Set[T any](c *Context, e Entity, value T) error {
+func (c *Context) Set[T any](e Entity, value T) error {
 	if c != nil && c.disposing {
 		return ErrDisposed
 	}
 	if !c.owns(e) || protectedComponent[T]() {
 		return ErrOwnership
 	}
-	return insertPrivate(c, e.entity, value)
+	return c.insertPrivate(e.entity, value)
 }
 
-func insertPrivate[T any](c *Context, entity ecs.Entity, value T) error {
+func (c *Context) insertPrivate[T any](entity ecs.Entity, value T) error {
 	if !c.usable() {
 		return ErrDisposed
 	}
 	if c.runtime.busy {
-		if current := ecs.GetMut[T](c.runtime.world, entity); current != nil {
+		if current := c.runtime.world.GetMut[T](entity); current != nil {
 			*current = value
 			return nil
 		}
 		if err := c.runtime.claimPrivateCommand(); err != nil {
 			return err
 		}
-		ecs.CommandInsert(c.runtime.world.Commands(), entity, value)
+		c.runtime.world.Commands().Insert(entity, value)
 		return nil
 	}
-	return ecs.Insert(c.runtime.world, entity, value)
+	return c.runtime.world.Insert(entity, value)
 }
 
-func Remove[T any](c *Context, e Entity) error {
+func (c *Context) Remove[T any](e Entity) error {
 	if c != nil && c.disposing {
 		return ErrDisposed
 	}
@@ -144,9 +144,9 @@ func Remove[T any](c *Context, e Entity) error {
 		if err := c.runtime.claimPrivateCommand(); err != nil {
 			return err
 		}
-		ecs.CommandRemove[T](c.runtime.world.Commands(), e.entity)
+		c.runtime.world.Commands().Remove[T](e.entity)
 	} else {
-		ecs.Remove[T](c.runtime.world, e.entity)
+		c.runtime.world.Remove[T](e.entity)
 	}
 	return nil
 }
@@ -154,7 +154,7 @@ func Remove[T any](c *Context, e Entity) error {
 // Each visits this module's private entity list only. Values are read copies;
 // returning false stops iteration. Entities spawned during traversal wait until
 // the boundary before becoming visible to queries.
-func Each[T any](c *Context, visit func(Entity, T) bool) (err error) {
+func (c *Context) Each[T any](visit func(Entity, T) bool) (err error) {
 	if c == nil || !c.live || visit == nil || protectedComponent[T]() {
 		return ErrInvalid
 	}
@@ -175,7 +175,7 @@ func Each[T any](c *Context, visit func(Entity, T) bool) (err error) {
 	length := len(c.entities)
 	for i := 0; i < length; i++ {
 		entity := c.entities[i]
-		if value, ok := ecs.Get[T](c.runtime.world, entity); ok && !visit(Entity{c, entity}, value) {
+		if value, ok := c.runtime.world.Get[T](entity); ok && !visit(Entity{c, entity}, value) {
 			return
 		}
 	}
@@ -192,17 +192,17 @@ func (c *Context) Spawn(parent Entity) (Entity, error) {
 	if !c.owns(parent) {
 		return Entity{}, ErrOwnership
 	}
-	b := transformBundle(project.ModTransform{Scale: [3]float32{1, 1, 1}}, c.ui, parent.entity, len(c.entities), c.visible, c.enabled)
-	ecs.Put(&b, entityOwner{context: c})
 	var entity ecs.Entity
 	if c.runtime.busy {
 		if err := c.runtime.claimPrivateCommand(); err != nil {
 			return Entity{}, err
 		}
-		entity = ecs.CommandSpawn(c.runtime.world.Commands(), b)
+		b := transformBundle(project.ModTransform{Scale: [3]float32{1, 1, 1}}, c.ui, parent.entity, len(c.entities), c.visible, c.enabled, nil)
+		b.Put(entityOwner{context: c})
+		entity = c.runtime.world.Commands().Spawn(b)
 		c.runtime.privateSpawns[entity] = privateSpawn{owner: c, parent: parent.entity}
 	} else {
-		entity = c.runtime.world.Spawn(b)
+		entity = c.runtime.spawnOwnedTransform(c, parent.entity, len(c.entities))
 	}
 	c.entities = append(c.entities, entity)
 	c.dirtyDrawOrder()
@@ -330,14 +330,14 @@ func (r *Runtime) HandleInput(event scene.InputEvent) error {
 		r.busy = false
 		return joinError(err, r.flushStructural())
 	}
-	owner, ok := ecs.Get[entityOwner](r.world, event.Entity)
+	owner, ok := r.world.Get[entityOwner](event.Entity)
 	for entity, remaining := event.Entity, r.world.EntityCount(); !ok && remaining > 0; remaining-- {
-		parent, found := ecs.Get[scene.Parent](r.world, entity)
+		parent, found := r.world.Get[scene.Parent](entity)
 		if !found || parent.Entity == 0 {
 			break
 		}
 		entity = parent.Entity
-		owner, ok = ecs.Get[entityOwner](r.world, entity)
+		owner, ok = r.world.Get[entityOwner](entity)
 	}
 	if !ok || !scene.IsInteractive(r.world, event.Entity) || !owner.context.usable() || !owner.context.enabled || owner.context.scene.state != SceneActive {
 		return nil
@@ -345,13 +345,13 @@ func (r *Runtime) HandleInput(event scene.InputEvent) error {
 	c := owner.context
 	target := Entity{c, event.Entity}
 	htmlID := ""
-	if control, ok := ecs.Get[htmlui.Control](r.world, event.Entity); ok {
-		htmlID = control.ID
+	if r.content.controlID != nil {
+		htmlID = r.content.controlID(r.world, event.Entity)
 	}
 	event.Entity = 0
 	event.Path = nil
 	element := ""
-	if name, ok := ecs.Get[scene.Name](r.world, target.entity); ok {
+	if name, ok := r.world.Get[scene.Name](target.entity); ok {
 		element = name.Value
 	}
 	return r.deliverInput(c, Input{Event: event, Target: target, Element: element, HTMLID: htmlID})

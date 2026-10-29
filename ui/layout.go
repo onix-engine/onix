@@ -171,14 +171,14 @@ type uiLayoutRuntimeState struct {
 }
 
 func uiLayoutVersions(world *ecs.World) [10]uint64 {
-	return [10]uint64{ecs.ComponentVersion[Layout](world), ecs.ComponentVersion[Widget](world), ecs.ComponentVersion[scene.Parent](world), ecs.ComponentVersion[scene.SiblingOrder](world),
-		ecs.ComponentVersion[scene.Size2D](world), ecs.ComponentVersion[scene.UITransform](world), ecs.ComponentVersion[scene.Anchor](world), ecs.ComponentVersion[scene.Sprite2D](world), ecs.ComponentVersion[scene.Text2D](world), ecs.ComponentVersion[scene.ClipRect2D](world)}
+	return [10]uint64{world.ComponentVersion[Layout](), world.ComponentVersion[Widget](), world.ComponentVersion[scene.Parent](), world.ComponentVersion[scene.SiblingOrder](),
+		world.ComponentVersion[scene.Size2D](), world.ComponentVersion[scene.UITransform](), world.ComponentVersion[scene.Anchor](), world.ComponentVersion[scene.Sprite2D](), world.ComponentVersion[scene.Text2D](), world.ComponentVersion[scene.ClipRect2D]()}
 }
 
 func uiLayoutInput(world *ecs.World, entity ecs.Entity, scaled bool) uiLayoutSizeInput {
 	width, height, valid := uiNodeSize(world, entity, scaled)
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
-	transform, _ := ecs.Get[scene.UITransform](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
+	transform, _ := world.Get[scene.UITransform](entity)
 	return uiLayoutSizeInput{entity, width, height, valid, anchor, transform}
 }
 
@@ -232,7 +232,7 @@ func syncUILayouts(context *ecs.SystemContext) error {
 		return nil
 	}
 	world := context.World
-	scratch := ecs.ScopeValue[uiLayoutScratchTag, uiLayoutScratch](world)
+	scratch := world.ScopeValue[uiLayoutScratchTag, uiLayoutScratch]()
 	scope, version := world.QueryScopeKey()
 	if scratch.scope != scope || scratch.scopeVersion != version {
 		scratch.initialized, scratch.runtimeInitialized = false, false
@@ -240,7 +240,7 @@ func syncUILayouts(context *ecs.SystemContext) error {
 	}
 	scratch.recomputed = 0
 	versions := uiLayoutVersions(world)
-	viewport, _ := ecs.GetResource[scene.ViewportSize](world)
+	viewport, _ := world.GetResource[scene.ViewportSize]()
 	if scratch.runtimeInitialized && scratch.structure == world.StructureVersion() && scratch.versions == versions && scratch.viewport == viewport && !scratch.pending {
 		return nil
 	}
@@ -249,7 +249,7 @@ func syncUILayouts(context *ecs.SystemContext) error {
 		scratch.runtime = make(map[ecs.Entity]*uiLayoutRuntimeState)
 	}
 	for entity := range scratch.runtime {
-		if !world.IsAlive(entity) || !ecs.Has[Layout](world, entity) || !ecs.Has[scene.UITransform](world, entity) {
+		if !world.IsAlive(entity) || !world.Has[Layout](entity) || !world.Has[scene.UITransform](entity) {
 			delete(scratch.runtime, entity)
 		}
 	}
@@ -259,7 +259,7 @@ func syncUILayouts(context *ecs.SystemContext) error {
 	// children after their new layout positions and sizes are known.
 	syncUIWidgets(world)
 	for _, node := range scratch.nodes {
-		layout, ok := ecs.Get[Layout](world, node.entity)
+		layout, ok := world.Get[Layout](node.entity)
 		if !ok || layout.Type == LayoutNone {
 			continue
 		}
@@ -289,19 +289,19 @@ func syncUILayouts(context *ecs.SystemContext) error {
 }
 
 func refreshUILayoutHierarchy(world *ecs.World, scratch *uiLayoutScratch) bool {
-	versions := [4]uint64{ecs.ComponentVersion[scene.Parent](world), ecs.ComponentVersion[scene.SiblingOrder](world), ecs.ComponentStructureVersion[Layout](world), ecs.ComponentStructureVersion[scene.UITransform](world)}
+	versions := [4]uint64{world.ComponentVersion[scene.Parent](), world.ComponentVersion[scene.SiblingOrder](), world.ComponentStructureVersion[Layout](), world.ComponentStructureVersion[scene.UITransform]()}
 	if scratch.initialized && scratch.hierarchyStructure == world.StructureVersion() && scratch.hierarchyVersions == versions {
 		return false
 	}
 	scratch.hierarchyStructure, scratch.hierarchyVersions = world.StructureVersion(), versions
 	dirty := !scratch.initialized
 	childCount := 0
-	for child, access := range ecs.Query[scene.Parent](world).All {
+	for child, access := range world.Query[scene.Parent]().All {
 		parent := access.Get()
 
 		if parent.Entity != 0 && world.IsAlive(parent.Entity) {
 			order := int(child)
-			if authoredOrder, ok := ecs.Get[scene.SiblingOrder](world, child); ok {
+			if authoredOrder, ok := world.Get[scene.SiblingOrder](child); ok {
 				order = int(authoredOrder)
 			}
 			input := uiLayoutChild{parent: parent.Entity, child: child, order: order}
@@ -312,7 +312,7 @@ func refreshUILayoutHierarchy(world *ecs.World, scratch *uiLayoutScratch) bool {
 	dirty = childCount != len(scratch.childInputs) || dirty
 	scratch.childInputs = scratch.childInputs[:childCount]
 	nodeCount := 0
-	for entity, _ := range ecs.Query2[Layout, scene.UITransform](world).All {
+	for entity, _ := range world.Query2[Layout, scene.UITransform]().All {
 		dirty = reuse.UpdateAt(&scratch.nodeInputs, nodeCount, entity) || dirty
 		nodeCount++
 	}
@@ -374,7 +374,7 @@ func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity
 		}
 		visiting[current] = true
 		*path = append(*path, current)
-		parent, ok := ecs.Get[scene.Parent](world, current)
+		parent, ok := world.Get[scene.Parent](current)
 		if !ok || parent.Entity == 0 || !world.IsAlive(parent.Entity) {
 			break
 		}
@@ -428,14 +428,14 @@ func applyUILayout(world *ecs.World, entity ecs.Entity, layout Layout, children 
 	}
 	if layout.ResizeMode == LayoutResizeContainer {
 		width, height := uiLayoutContainerSize(world, layout, children, padding, parentWidth, parentHeight, cellSize)
-		if size := ecs.GetRef[scene.Size2D](world, entity); size != nil {
+		if size := world.GetRef[scene.Size2D](entity); size != nil {
 			if size.Width != width || size.Height != height {
-				value := ecs.GetMut[scene.Size2D](world, entity)
+				value := world.GetMut[scene.Size2D](entity)
 				value.Width, value.Height = width, height
 			}
 			parentWidth, parentHeight = width, height
 		} else {
-			_ = ecs.Insert(world, entity, scene.Size2D{Width: width, Height: height})
+			_ = world.Insert(entity, scene.Size2D{Width: width, Height: height})
 			parentWidth, parentHeight = width, height
 		}
 		padding = layoutPadding(world, entity, layout, parentWidth, parentHeight)
@@ -458,7 +458,7 @@ func applyUILayout(world *ecs.World, entity ecs.Entity, layout Layout, children 
 func layoutPadding(world *ecs.World, entity ecs.Entity, layout Layout, width, height float32) scene.ResolvedUIRect {
 	viewport := mgl32.Vec2{width, height}
 	scaleFactor := float32(1)
-	if value, ok := ecs.GetResource[scene.ViewportSize](world); ok {
+	if value, ok := world.GetResource[scene.ViewportSize](); ok {
 		viewport = mgl32.Vec2{value.Width, value.Height}
 		scaleFactor = value.ScaleFactor
 	}
@@ -695,19 +695,19 @@ func applyUIGridLayout(world *ecs.World, layout Layout, children []ecs.Entity, w
 
 func uiNodeSize(world *ecs.World, entity ecs.Entity, affectedByScale bool) (float32, float32, bool) {
 	var width, height float32
-	if size, ok := ecs.Get[scene.Size2D](world, entity); ok {
+	if size, ok := world.Get[scene.Size2D](entity); ok {
 		width, height = size.Width, size.Height
-	} else if sprite := ecs.GetRef[scene.Sprite2D](world, entity); sprite != nil {
+	} else if sprite := world.GetRef[scene.Sprite2D](entity); sprite != nil {
 		width, height = sprite.Size()
-	} else if text := ecs.GetRef[scene.Text2D](world, entity); text != nil {
+	} else if text := world.GetRef[scene.Text2D](entity); text != nil {
 		width, height, _ = scene.MeasureText2D(text)
-	} else if clip, ok := ecs.Get[scene.ClipRect2D](world, entity); ok {
+	} else if clip, ok := world.Get[scene.ClipRect2D](entity); ok {
 		width, height = clip.Width, clip.Height
 	} else {
 		return 0, 0, false
 	}
 	if affectedByScale {
-		if transform, ok := ecs.Get[scene.UITransform](world, entity); ok {
+		if transform, ok := world.Get[scene.UITransform](entity); ok {
 			scaleX, scaleY := float32(math.Abs(float64(transform.Scale.X()))), float32(math.Abs(float64(transform.Scale.Y())))
 			if scaleX > 0 {
 				width *= scaleX
@@ -721,47 +721,47 @@ func uiNodeSize(world *ecs.World, entity ecs.Entity, affectedByScale bool) (floa
 }
 
 func uiCurrentLeft(world *ecs.World, entity ecs.Entity, width, height float32) float32 {
-	transform, ok := ecs.Get[scene.UITransform](world, entity)
+	transform, ok := world.Get[scene.UITransform](entity)
 	if !ok {
 		return 0
 	}
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	offsetX, _ := anchor.TopLeft(width, height, true)
 	return transform.Translation.Resolve(scene.UIResolveContext{}).X() + offsetX
 }
 
 func uiCurrentTop(world *ecs.World, entity ecs.Entity, width, height float32) float32 {
-	transform, ok := ecs.Get[scene.UITransform](world, entity)
+	transform, ok := world.Get[scene.UITransform](entity)
 	if !ok {
 		return 0
 	}
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	_, offsetY := anchor.TopLeft(width, height, true)
 	return transform.Translation.Resolve(scene.UIResolveContext{}).Y() + offsetY
 }
 
 func setUILayoutPosition(world *ecs.World, entity ecs.Entity, left, top, width, height float32) {
-	transform := ecs.GetRef[scene.UITransform](world, entity)
+	transform := world.GetRef[scene.UITransform](entity)
 	if transform == nil {
 		return
 	}
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	offsetX, offsetY := anchor.TopLeft(width, height, true)
 	translation := scene.Px2(left-offsetX, top-offsetY)
 	if transform.Translation == translation {
 		return
 	}
-	updated := ecs.GetMut[scene.UITransform](world, entity)
+	updated := world.GetMut[scene.UITransform](entity)
 	updated.Translation = translation
 }
 
 func uiNodeOrigin(world *ecs.World, entity ecs.Entity, width, height float32) (float32, float32) {
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	return anchor.TopLeft(width, height, true)
 }
 
 func syncUIWidgets(world *ecs.World) {
-	runtime := ecs.FrameValue[uiWidgetRuntimeStateTag, uiWidgetRuntimeStates](world)
+	runtime := world.FrameValue[uiWidgetRuntimeStateTag, uiWidgetRuntimeStates]()
 	if runtime.values == nil {
 		runtime.values = make(map[ecs.Entity]uiWidgetRuntimeState)
 	} else {
@@ -769,18 +769,18 @@ func syncUIWidgets(world *ecs.World) {
 		// alignment state so the runtime map does not grow for the lifetime of a
 		// world.
 		for entity := range runtime.values {
-			if !world.IsAlive(entity) || !ecs.Has[Widget](world, entity) {
+			if !world.IsAlive(entity) || !world.Has[Widget](entity) {
 				delete(runtime.values, entity)
 			}
 		}
 	}
 	viewport := mgl32.Vec2{}
 	scaleFactor := float32(1)
-	if value, ok := ecs.GetResource[scene.ViewportSize](world); ok {
+	if value, ok := world.GetResource[scene.ViewportSize](); ok {
 		viewport = mgl32.Vec2{value.Width, value.Height}
 		scaleFactor = value.ScaleFactor
 	}
-	for entity, access := range ecs.Query[Widget](world).All {
+	for entity, access := range world.Query[Widget]().All {
 		widget := access.Ref()
 		state := runtime.values[entity]
 		if state.config != *widget {
@@ -788,7 +788,7 @@ func syncUIWidgets(world *ecs.World) {
 		}
 		parent := widget.Target
 		if parent == 0 {
-			relation, exists := ecs.Get[scene.Parent](world, entity)
+			relation, exists := world.Get[scene.Parent](entity)
 			if !exists {
 				continue
 			}
@@ -851,33 +851,33 @@ func widgetMargins(widget Widget, width, height, scaleFactor float32, viewport m
 }
 
 func setUILayoutSize(world *ecs.World, entity ecs.Entity, width, height float32) {
-	if size := ecs.GetRef[scene.Size2D](world, entity); size != nil {
+	if size := world.GetRef[scene.Size2D](entity); size != nil {
 		if size.Width != width || size.Height != height {
-			value := ecs.GetMut[scene.Size2D](world, entity)
+			value := world.GetMut[scene.Size2D](entity)
 			value.Width, value.Height = width, height
 		}
-	} else if sprite := ecs.GetRef[scene.Sprite2D](world, entity); sprite != nil {
+	} else if sprite := world.GetRef[scene.Sprite2D](entity); sprite != nil {
 		if sprite.Width != width || sprite.Height != height {
-			value := ecs.GetMut[scene.Sprite2D](world, entity)
+			value := world.GetMut[scene.Sprite2D](entity)
 			value.Width, value.Height = width, height
 		}
-	} else if clip := ecs.GetRef[scene.ClipRect2D](world, entity); clip != nil {
+	} else if clip := world.GetRef[scene.ClipRect2D](entity); clip != nil {
 		if clip.Width != width || clip.Height != height {
-			value := ecs.GetMut[scene.ClipRect2D](world, entity)
+			value := world.GetMut[scene.ClipRect2D](entity)
 			value.Width, value.Height = width, height
 		}
 	} else {
 		return
 	}
-	if target := ecs.GetRef[scene.InputTarget2D](world, entity); target != nil {
+	if target := world.GetRef[scene.InputTarget2D](entity); target != nil {
 		if target.Width != width || target.Height != height {
-			value := ecs.GetMut[scene.InputTarget2D](world, entity)
+			value := world.GetMut[scene.InputTarget2D](entity)
 			value.Width, value.Height = width, height
 		}
 	}
-	if blocker := ecs.GetRef[scene.InputBlocker2D](world, entity); blocker != nil {
+	if blocker := world.GetRef[scene.InputBlocker2D](entity); blocker != nil {
 		if blocker.Width != width || blocker.Height != height {
-			value := ecs.GetMut[scene.InputBlocker2D](world, entity)
+			value := world.GetMut[scene.InputBlocker2D](entity)
 			value.Width, value.Height = width, height
 		}
 	}

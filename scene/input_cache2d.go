@@ -3,15 +3,15 @@ package scene
 import "github.com/diiyw/onix/ecs"
 
 var inputPickInputs2D = [...]func(*ecs.World) uint64{
-	ecs.ComponentVersion[Camera], ecs.ComponentVersion[Projection], ecs.ComponentVersion[Camera2D],
-	ecs.ComponentVersion[GlobalTransform], ecs.ComponentVersion[UIGlobalTransform],
-	ecs.ComponentVersion[InputTarget2D], ecs.ComponentVersion[InputBlocker2D],
-	ecs.ComponentVersion[Visibility], ecs.ComponentVersion[Activity], ecs.ComponentVersion[Parent],
-	ecs.ComponentVersion[RenderLayers], ecs.ComponentVersion[UITargetCamera],
-	ecs.ComponentVersion[PainterGroup2D], ecs.ComponentVersion[UIStackIndex], ecs.ComponentVersion[RenderOrder2D], ecs.ComponentVersion[SiblingOrder],
-	ecs.ComponentVersion[UITransform], ecs.ComponentVersion[Size2D], ecs.ComponentVersion[Anchor],
-	ecs.ComponentVersion[ClipRect2D], ecs.ComponentVersion[RoundedClip2D], ecs.ComponentVersion[ClipExempt2D],
-	ecs.ComponentVersion[Sprite2D], ecs.ComponentVersion[SpriteLayers2D], ecs.ComponentVersion[Text2D],
+	(*ecs.World).ComponentVersion[Camera], (*ecs.World).ComponentVersion[Projection], (*ecs.World).ComponentVersion[Camera2D],
+	(*ecs.World).ComponentVersion[GlobalTransform], (*ecs.World).ComponentVersion[UIGlobalTransform],
+	(*ecs.World).ComponentVersion[InputTarget2D], (*ecs.World).ComponentVersion[InputBlocker2D],
+	(*ecs.World).ComponentVersion[Visibility], (*ecs.World).ComponentVersion[Activity], (*ecs.World).ComponentVersion[Parent],
+	(*ecs.World).ComponentVersion[RenderLayers], (*ecs.World).ComponentVersion[UITargetCamera],
+	(*ecs.World).ComponentVersion[PainterGroup2D], (*ecs.World).ComponentVersion[UIStackIndex], (*ecs.World).ComponentVersion[RenderOrder2D], (*ecs.World).ComponentVersion[SiblingOrder],
+	(*ecs.World).ComponentVersion[UITransform], (*ecs.World).ComponentVersion[Size2D], (*ecs.World).ComponentVersion[Anchor],
+	(*ecs.World).ComponentVersion[ClipRect2D], (*ecs.World).ComponentVersion[RoundedClip2D], (*ecs.World).ComponentVersion[ClipExempt2D],
+	(*ecs.World).ComponentVersion[Sprite2D], (*ecs.World).ComponentVersion[SpriteLayers2D], (*ecs.World).ComponentVersion[Text2D],
 }
 
 // Each execution scope owns its pick snapshot. Pointer motion only reads it;
@@ -36,7 +36,7 @@ func (cache *inputPickCache2D) refresh(world *ecs.World, entity, camera ecs.Enti
 		versions[i] = revision(world)
 	}
 	_, scopeVersion := world.QueryScopeKey()
-	state, _ := ecs.GetResource[*RenderWorld](world)
+	state, _ := world.GetResource[*RenderWorld]()
 	registryRevision, pipelineRevision := uint64(0), uint64(0)
 	if state != nil {
 		registryRevision = state.registry2D

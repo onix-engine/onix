@@ -6,7 +6,6 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 )
@@ -84,7 +83,7 @@ func TestHTMLCompositeEffectsIncludeTextAndRefreshDescendantPaint(t *testing.T) 
 	world, owner := incrementalHTMLFixture(t, `<div id="group" style="width:80px;height:40px;opacity:.5;filter:invert(1)"><span id="text" style="color:red">Alpha</span><div id="child" style="width:20px;height:10px;background:red"></div></div>`)
 	defer Dispose(world)
 	group := incrementalHTMLNode(t, world, owner, "group")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	raster := state.Textures.rasters[group.node]
 	if raster == nil {
 		t.Fatal("missing effect group raster")
@@ -119,7 +118,7 @@ func TestHTMLCompositeEffectsIncludeTextAndRefreshDescendantPaint(t *testing.T) 
 func TestHTMLCompositeOpacityAppliesAfterOverlappingChildren(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="group" style="position:relative;width:20px;height:20px;opacity:.5"><div style="position:absolute;inset:0;background:red"></div><div style="position:absolute;inset:0;background:blue;opacity:.5"></div></div>`)
 	defer Dispose(world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "group")
 	pixel := state.Textures.rasters[node.node].image.RGBAAt(10, 10)
 	if pixel.A != 128 || math.Abs(float64(pixel.R)-127) > 1 || math.Abs(float64(pixel.B)-128) > 1 {
@@ -132,7 +131,7 @@ func TestHTMLNestedTextOpacityMutationRefreshesComposite(t *testing.T) {
 	defer Dispose(world)
 	incrementalHTMLNode(t, world, owner, "text").SetAttribute("style", "opacity:.25")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	group := state.Textures.rasters[incrementalHTMLNode(t, world, owner, "group").node]
 	child := state.Textures.rasters[incrementalHTMLNode(t, world, owner, "text").node]
 	if child == nil || child.opacity != style.Number(.25) {
@@ -152,21 +151,21 @@ func TestHTMLNestedTextOpacityMutationRefreshesComposite(t *testing.T) {
 func TestHTMLCompositedTextRetainsFocusAndInputBounds(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="group" style="width:80px;height:30px;filter:blur(2px)"><a id="link" href="#test">Link</a></div>`)
 	defer Dispose(world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	group := incrementalHTMLNode(t, world, owner, "group")
 	link := incrementalHTMLNode(t, world, owner, "link")
 	if state.Textures.rasters[group.node] == nil {
 		t.Fatal("missing blurred text raster")
 	}
 	foundFocus, foundBounds := false, false
-	for entity, access := range ecs.Query2[htmlChild, scene.InputTarget2D](world).All {
+	for entity, access := range world.Query2[htmlChild, scene.InputTarget2D]().All {
 		child := access.A.Get()
 		target := access.B.Get()
 
 		if child.Owner != owner {
 			continue
 		}
-		if child.Node == link.node && ecs.Has[Focusable](world, entity) {
+		if child.Node == link.node && world.Has[Focusable](entity) {
 			foundFocus = true
 		}
 		if child.Node == group.node {
@@ -183,7 +182,7 @@ func TestHTMLCompositedTextRetainsFocusAndInputBounds(t *testing.T) {
 	incrementalSync(t, world)
 	group.OnClick(nil)
 	incrementalSync(t, world)
-	if entity := htmlNodeInputEntity(world, &state, group.node); entity == 0 || !ecs.Has[scene.InputTarget2D](world, entity) {
+	if entity := htmlNodeInputEntity(world, &state, group.node); entity == 0 || !world.Has[scene.InputTarget2D](entity) {
 		t.Fatal("event-only updates removed the compositor's input target")
 	}
 }

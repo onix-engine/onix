@@ -104,7 +104,7 @@ func (p *patchPlan) begin(entity Entity) (patchRow, error) {
 	return patchRow{transition: t, index: index, sourceRow: row, targetRow: targetRow, tick: w.mutationTick()}, nil
 }
 
-func writePatchColumn[T any](row patchRow, index int, value T) {
+func (row patchRow) writePatchColumn[T any](index int, value T) {
 	t := row.transition
 	entry := t.writes[index]
 	target := entry.target.(*typedColumn[T])
@@ -184,7 +184,7 @@ func (p *patchPlan) transition(source *archetype) *patchTransition {
 	return t
 }
 
-func queuePatch[T commandValue](commands *Commands, entity Entity, plan *patchPlan, value T) {
+func (commands *Commands) queuePatch[T commandValue](entity Entity, plan *patchPlan, value T) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
@@ -192,5 +192,5 @@ func queuePatch[T commandValue](commands *Commands, entity Entity, plan *patchPl
 	if commands.world != plan.world {
 		panic("ecs: patch belongs to a different world")
 	}
-	queueCommandValue(commands, entity, value)
+	commands.queueCommandValue(entity, value)
 }

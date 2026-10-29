@@ -69,7 +69,8 @@ func (a *ModuleEditor) tilemapResolveStep() int {
 		t.inactive()
 		return 2
 	}
-	spec := a.viewMod(mod)
+	// Drafts are rejected above, so resolve the committed spec directly.
+	spec := a.Document.Mods[mod].Spec
 	var found *project.TilemapSpec
 	if a.selectedElement == "" {
 		found = spec.Components.Tilemap
@@ -110,7 +111,7 @@ func (a *ModuleEditor) tilemapResolveStep() int {
 		t.inactive()
 		return 4
 	}
-	tc := ecs.GetRef[scene.Tilemap2D](v.world, entity)
+	tc := v.world.GetRef[scene.Tilemap2D](entity)
 	if tc == nil {
 		t.inactive()
 		return 5
@@ -120,7 +121,7 @@ func (a *ModuleEditor) tilemapResolveStep() int {
 		return 5
 	}
 	matrix, ui := viewportContentMatrix(v.world, entity)
-	anchor, _ := ecs.Get[scene.Anchor](v.world, entity)
+	anchor, _ := v.world.Get[scene.Anchor](entity)
 	same := t.mod == mod && t.element == a.selectedElement
 	t.mod, t.element, t.entity = mod, a.selectedElement, entity
 	t.tilemap, t.texture, t.matrix, t.anchor, t.ui = tc, tc.Texture, matrix, anchor, ui
@@ -212,8 +213,8 @@ func (a *ModuleEditor) tilemapCellAt(entity ecs.Entity, windowX, windowY float32
 		return 0, false
 	}
 	matrix, ui := viewportContentMatrix(v.world, entity)
-	anchor, _ := ecs.Get[scene.Anchor](v.world, entity)
-	tilemap := ecs.GetRef[scene.Tilemap2D](v.world, entity)
+	anchor, _ := v.world.Get[scene.Anchor](entity)
+	tilemap := v.world.GetRef[scene.Tilemap2D](entity)
 	if tilemap == nil || !tilemap.Valid() {
 		return 0, false
 	}
@@ -441,7 +442,7 @@ func (a *ModuleEditor) drawTilemapHover(c *graphics.Canvas2D, t *workspaceTilema
 }
 
 func (a *ModuleEditor) worldPointer() [2]float32 {
-	if in, ok := ecs.GetResource[*input.State](a.world); ok && in != nil {
+	if in, ok := a.world.GetResource[*input.State](); ok && in != nil {
 		pointer := in.Pointer()
 		return [2]float32{pointer.X, pointer.Y}
 	}

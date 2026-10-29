@@ -68,7 +68,7 @@ func (a *ModuleEditor) syncCanvas(w *ecs.World) error {
 	bounds := a.canvasBounds()
 	if a.canvas == 0 {
 		a.canvas = spawnWorkspaceSurface(w, workspaceCanvasHTML, "", a.font, bounds, 10)
-		ecs.InsertResource[htmlui.ImageProvider](w, a)
+		w.InsertResource[htmlui.ImageProvider](a)
 		root, err := htmlui.Root(w, a.canvas)
 		if err != nil {
 			return err
@@ -86,12 +86,12 @@ func (a *ModuleEditor) syncCanvas(w *ecs.World) error {
 			event.Consume()
 		})
 	}
-	transform := ecs.GetMut[scene.UITransform](w, a.canvas)
+	transform := w.GetMut[scene.UITransform](a.canvas)
 	transform.Translation = scene.Px2(bounds.X, bounds.Y)
-	surface := ecs.GetMut[htmlui.Surface](w, a.canvas)
+	surface := w.GetMut[htmlui.Surface](a.canvas)
 	surface.Width, surface.Height = bounds.W, bounds.H
 	// Dialogs block input with their own InputBlocker2D, so the canvas stays visible behind the overlay.
-	ecs.GetMut[scene.Visibility](w, a.canvas).Visible = a.Document != nil && a.dimension != previewDimension3D
+	w.GetMut[scene.Visibility](a.canvas).Visible = a.Document != nil && a.dimension != previewDimension3D
 	if a.Document == nil {
 		return nil
 	}
@@ -153,7 +153,7 @@ func (a *ModuleEditor) disposeCanvasResources() {
 	a.viewport2D.dispose()
 	a.canvasImageVersion++
 	if a.world != nil {
-		ecs.InsertResource[htmlui.ImageProvider](a.world, a)
+		a.world.InsertResource[htmlui.ImageProvider](a)
 	}
 }
 

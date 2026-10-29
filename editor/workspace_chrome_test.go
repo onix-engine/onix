@@ -54,7 +54,7 @@ func syncWorkspaceTest(t *testing.T, a *ModuleEditor, world *ecs.World) {
 func workspaceDialogTestEvent(t *testing.T, a *ModuleEditor, world *ecs.World, id, value string, kind htmlui.EventKind) {
 	t.Helper()
 	name := a.activeWorkspaceDialog()
-	ecs.WriteMessage(world, htmlui.Event{Entity: a.dialogUI.htmlDialogs[name], ID: id, Value: value, Checked: value == "true", Kind: kind})
+	world.WriteMessage(htmlui.Event{Entity: a.dialogUI.htmlDialogs[name], ID: id, Value: value, Checked: value == "true", Kind: kind})
 	if err := a.update(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	a := workspaceEditorFixture(t)
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
-	surface, _ := ecs.Get[htmlui.Surface](world, a.titlebar.entity)
+	surface, _ := world.Get[htmlui.Surface](a.titlebar.entity)
 	if surface.Value != editorresources.TitlebarHTML {
 		t.Fatal("titlebar did not reuse the original template")
 	}
@@ -125,7 +125,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	if tag := titlebarButtonTag(t, world, a.titlebar.entity, "top-dimension"); strings.Contains(tag, "disabled") || !strings.Contains(tag, ">2D</button>") || !strings.Contains(tag, "Switch to 3D view") {
 		t.Fatalf("dimension toggle did not render the 2D state: %s", tag)
 	}
-	ecs.WriteMessage(world, htmlui.Event{Entity: a.titlebar.entity, ID: "top-dimension", Kind: htmlui.EventClick})
+	world.WriteMessage(htmlui.Event{Entity: a.titlebar.entity, ID: "top-dimension", Kind: htmlui.EventClick})
 	if err := a.update(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	if tag := titlebarButtonTag(t, world, a.titlebar.entity, "top-dimension"); strings.Contains(tag, "disabled") || !strings.Contains(tag, ">3D</button>") || !strings.Contains(tag, "Switch to 2D view") {
 		t.Fatalf("dimension toggle did not render the 3D state: %s", tag)
 	}
-	ecs.WriteMessage(world, htmlui.Event{Entity: a.titlebar.entity, ID: "top-dimension", Kind: htmlui.EventClick})
+	world.WriteMessage(htmlui.Event{Entity: a.titlebar.entity, ID: "top-dimension", Kind: htmlui.EventClick})
 	if err := a.update(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	if a.dimension != previewDimension2D {
 		t.Fatal("dimension toggle did not switch the canvas back to 2D")
 	}
-	ecs.WriteMessage(world, htmlui.Event{Entity: a.titlebar.entity, ID: "about.show", Kind: htmlui.EventClick})
+	world.WriteMessage(htmlui.Event{Entity: a.titlebar.entity, ID: "about.show", Kind: htmlui.EventClick})
 	if err := a.update(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	if a.dialog != "about" {
 		t.Fatal("titlebar events were ignored")
 	}
-	dialog, _ := ecs.Get[htmlui.Surface](world, a.dialogUI.htmlDialogs["about"])
+	dialog, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs["about"])
 	if dialog.Value != editorresources.DialogHTML("about") {
 		t.Fatal("about did not use dialog resources")
 	}
@@ -168,7 +168,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 			t.Fatalf("about still contains %q", obsolete)
 		}
 	}
-	if visible, _ := ecs.Get[scene.Visibility](world, a.titlebar.entity); visible.Visible {
+	if visible, _ := world.Get[scene.Visibility](a.titlebar.entity); visible.Visible {
 		t.Fatal("modal left titlebar interactive")
 	}
 	workspaceDialogTestEvent(t, a, world, "about-close", "", htmlui.EventClick)
@@ -261,7 +261,7 @@ func TestWorkspaceMenuReloadAndCloseUseResourceConfirmationWithoutLosingEdits(t 
 	a.action("file.reload")
 	syncWorkspaceTest(t, a, world)
 	owner := a.dialogUI.htmlDialogs["close-confirm"]
-	surface, _ := ecs.Get[htmlui.Surface](world, owner)
+	surface, _ := world.Get[htmlui.Surface](owner)
 	if surface.Value != editorresources.DialogHTML("close-confirm") {
 		t.Fatal("confirmation template not used")
 	}
@@ -334,7 +334,7 @@ func TestWorkspaceBuildOptionsAndResultDialogsUseResources(t *testing.T) {
 		a.buildError, a.runOutput = "failure", "stderr output"
 		a.showWorkspaceDialog(name)
 		syncWorkspaceTest(t, a, world)
-		surface, _ := ecs.Get[htmlui.Surface](world, a.dialogUI.htmlDialogs[name])
+		surface, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs[name])
 		if surface.Value != editorresources.DialogHTML(name) {
 			t.Fatal("template not used", name)
 		}
@@ -408,7 +408,7 @@ func TestWorkspaceWelcomeOpenUsesNativeDirectorySelection(t *testing.T) {
 	a.showWorkspaceDialog("welcome")
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
-	surface, _ := ecs.Get[htmlui.Surface](world, a.dialogUI.htmlDialogs["welcome"])
+	surface, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs["welcome"])
 	if surface.Value != editorresources.DialogHTML("welcome") {
 		t.Fatal("welcome template not used")
 	}

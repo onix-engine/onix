@@ -12,7 +12,7 @@ func TestHTMLNodeSelectionRefreshesSelectorAndLabel(t *testing.T) {
 	world := ecs.NewWorld()
 	surface := htmlui.New(`<select id="mode"><option>A</option><option>B</option></select>`)
 	surface.Width, surface.Height = 200, 100
-	spawner := ecs.NewSpawner1[htmlui.Surface](world)
+	spawner := world.NewSpawner1[htmlui.Surface]()
 	owner := spawner.Spawn(surface)
 	if err := SyncHTML(world); err != nil {
 		t.Fatal(err)
@@ -36,8 +36,8 @@ func TestHTMLNodeSelectionRefreshesSelectorAndLabel(t *testing.T) {
 		if err := SyncWith[Widgets](world); err != nil {
 			t.Fatal(err)
 		}
-		value, _ := ecs.Get[htmlui.Control](world, control)
-		selector, _ := ecs.Get[Selector](world, control)
+		value, _ := world.Get[htmlui.Control](control)
+		selector, _ := world.Get[Selector](control)
 		if value.Selected != index || selector.Selected != index {
 			t.Fatal("selection was overwritten by UI bridge", value.Selected, selector.Selected)
 		}
@@ -48,7 +48,7 @@ func TestHTMLNodeSelectionRefreshesSelectorAndLabel(t *testing.T) {
 		if index == 1 {
 			want = "B"
 		}
-		for _, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+		for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 			if access.A.Get().Control == control && access.B.Get().Value != want {
 				t.Fatal("control label retained previous selection", access.B.Get().Value)
 			}

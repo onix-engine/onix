@@ -28,10 +28,13 @@ func (p *ProjectPlan) RuntimeFeatures() []RuntimeFeatureID {
 		if c.Trail != nil {
 			features[FeatureSpriteTrails2D] = true
 		}
+		if c.Layout != nil {
+			features[FeatureUIControls] = true
+		}
 		if c.HTML != nil {
 			features[FeatureUIHTML] = true
 		}
-		if c.Emitter != nil {
+		if c.Emitter != nil || c.Particle != nil {
 			features[FeatureParticles2D] = true
 		}
 		if c.Tilemap != nil {
@@ -40,14 +43,14 @@ func (p *ProjectPlan) RuntimeFeatures() []RuntimeFeatureID {
 		if c.Model != nil || c.Camera != nil || c.AmbientLight != nil || c.DirectionalLight != nil || c.PointLight != nil || c.SpotLight != nil || c.AreaLight != nil {
 			features[FeatureRender3D] = true
 		}
-		if c.RigidBody2D != nil {
+		if c.RigidBody2D != nil || c.CircleCollider2D != nil || c.BoxCollider2D != nil || c.SegmentCollider2D != nil || c.Collision != nil && c.RigidBody3D == nil {
 			features[FeaturePhysics2D] = true
 		}
 		if c.Spine != nil {
 			features[FeatureSpine2D] = true
 			features[FeatureRender2D] = true
 		}
-		if c.RigidBody3D != nil {
+		if c.RigidBody3D != nil || c.TriangleMeshCollider3D != nil || c.ConvexHullCollider3D != nil || c.CompoundCollider3D != nil {
 			features[FeaturePhysics3D] = true
 		}
 	}

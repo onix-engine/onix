@@ -155,15 +155,17 @@ func DefaultMarkdownStyle(theme ui.Theme) MarkdownStyle {
 func SpawnMarkdown(world *ecs.World, opts MarkdownOptions) ecs.Entity {
 	component := markdownFromOptions(world, opts)
 	html := Convert(component)
-	spawner := ecs.NewSpawner7[
-		scene.UITransform,
-		scene.UIGlobalTransform,
-		scene.Visibility,
-		scene.Anchor,
-		scene.UIStackIndex,
-		Markdown,
-		htmlui.Surface,
-	](world)
+	spawner :=
+
+		world.NewSpawner7[
+			scene.UITransform,
+			scene.UIGlobalTransform,
+			scene.Visibility,
+			scene.Anchor,
+			scene.UIStackIndex,
+			Markdown,
+			htmlui.Surface,
+		]()
 	entity := spawner.Spawn(
 		scene.UITransformFromXY(opts.X, opts.Y),
 		scene.UIGlobalTransform{},
@@ -173,17 +175,17 @@ func SpawnMarkdown(world *ecs.World, opts MarkdownOptions) ecs.Entity {
 		component,
 		html,
 	)
-	_ = ecs.Insert(world, entity, scene.Size2D{Width: opts.Width})
-	_ = ecs.Insert(world, entity, markdownRenderState{Key: component})
+	_ = world.Insert(entity, scene.Size2D{Width: opts.Width})
+	_ = world.Insert(entity, markdownRenderState{Key: component})
 	return entity
 }
 
 func UpdateMarkdown(world *ecs.World, entity ecs.Entity, opts MarkdownOptions) MarkdownLayout {
 	component := markdownFromOptions(world, opts)
-	if current := ecs.GetMut[Markdown](world, entity); current != nil {
+	if current := world.GetMut[Markdown](entity); current != nil {
 		*current = component
 	} else {
-		_ = ecs.Insert(world, entity, component)
+		_ = world.Insert(entity, component)
 	}
 	renderMarkdown(world, entity, component)
 	layout, _ := htmlui.Bounds(world, entity)
@@ -191,7 +193,7 @@ func UpdateMarkdown(world *ecs.World, entity ecs.Entity, opts MarkdownOptions) M
 }
 
 func SetMarkdownVisible(world *ecs.World, entity ecs.Entity, visible bool) {
-	if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+	if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 		visibility.Visible = visible
 	}
 }
@@ -261,9 +263,9 @@ func colorOr(value, fallback graphics.ColorRGBA) graphics.ColorRGBA {
 }
 
 func syncMarkdownComponents(world *ecs.World) {
-	entries := ecs.FrameScratch[markdownEntriesScratch, markdownSyncEntry](world)
+	entries := world.FrameScratch[markdownEntriesScratch, markdownSyncEntry]()
 	defer entries.ReleaseUnused()
-	for entity, access := range ecs.Query[Markdown](world).All {
+	for entity, access := range world.Query[Markdown]().All {
 		value := access.Get()
 
 		entries.Values = append(entries.Values, markdownSyncEntry{Entity: entity, Value: value})
@@ -274,18 +276,18 @@ func syncMarkdownComponents(world *ecs.World) {
 }
 
 func renderMarkdown(world *ecs.World, entity ecs.Entity, value Markdown) {
-	state := ecs.GetMut[markdownRenderState](world, entity)
+	state := world.GetMut[markdownRenderState](entity)
 	if state != nil && state.Key == value {
 		return
 	}
 	html := Convert(value)
-	if current := ecs.GetMut[htmlui.Surface](world, entity); current != nil {
+	if current := world.GetMut[htmlui.Surface](entity); current != nil {
 		*current = html
 	} else {
-		_ = ecs.Insert(world, entity, html)
+		_ = world.Insert(entity, html)
 	}
 	if state == nil {
-		_ = ecs.Insert(world, entity, markdownRenderState{Key: value})
+		_ = world.Insert(entity, markdownRenderState{Key: value})
 		return
 	}
 	state.Key = value

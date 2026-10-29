@@ -37,7 +37,7 @@ func TestBroadphaseIncrementalMutationsMatchBruteForce(t *testing.T) {
 		d := NewBodyDef(BodyType(i % 3))
 		d.Position = V(r.Float64()*20, r.Float64()*20)
 		bodies[i] = w.CreateBody(d)
-		colliders[i] = AddCollider(w, bodies[i], NewColliderDef(NewBox(3, 3)))
+		colliders[i] = w.AddCollider(bodies[i], NewColliderDef(NewBox(3, 3)))
 	}
 	assertBroadphase(t, w)
 	for i := range 160 {
@@ -54,8 +54,8 @@ func TestBroadphaseIncrementalMutationsMatchBruteForce(t *testing.T) {
 		case 4:
 			colliders[j].SetShape(NewBox(float64(i+1), 2))
 		case 5:
-			RemoveCollider(w, colliders[j])
-			colliders[j] = AddCollider(w, bodies[j], NewColliderDef(NewBox(2, 2)))
+			w.RemoveCollider(colliders[j])
+			colliders[j] = w.AddCollider(bodies[j], NewColliderDef(NewBox(2, 2)))
 		case 6:
 			w.CellSize = float64(i%8 + 1)
 		}
@@ -68,12 +68,12 @@ func TestBroadphaseOnlyUpdatesMovedProxy(t *testing.T) {
 	for i := range 4096 {
 		d := NewBodyDef(BodyStatic)
 		d.Position = V(float64(i)*4, 0)
-		AddCollider(w, w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
+		w.AddCollider(w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
 	}
 	d := NewBodyDef(BodyDynamic)
 	d.Position = V(0, 3)
 	b := w.CreateBody(d)
-	AddCollider(w, b, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(b, NewColliderDef(Circle{Radius: 1}))
 	w.buildBroadphase()
 	w.stats = StepStatistics{}
 	b.SetPosition(V(4, 3))
@@ -91,10 +91,10 @@ func TestSleepingTaskCountConsumesExternalECSInput(t *testing.T) {
 	r := NewRuntime2D()
 	r.Simulation.Sleep.Enabled = true
 	r.Simulation.Gravity = Vector{}
-	ecs.InsertResource(w, r)
+	w.InsertResource(r)
 	bundle := ecs.NewBundle(2)
-	ecs.Put(&bundle, NewRigidBody2D(BodyDynamic))
-	ecs.Put(&bundle, scene.NewTransform())
+	bundle.Put(NewRigidBody2D(BodyDynamic))
+	bundle.Put(scene.NewTransform())
 	e := w.Spawn(bundle)
 	step := StepSystem2D("")
 	for range 60 {
@@ -105,14 +105,14 @@ func TestSleepingTaskCountConsumesExternalECSInput(t *testing.T) {
 	if TaskCount2D(w) != 0 {
 		t.Fatal("sleeping ECS body keeps idle loop ticking")
 	}
-	ecs.GetMut[RigidBody2D](w, e).Force = V(1, 0)
+	w.GetMut[RigidBody2D](e).Force = V(1, 0)
 	if TaskCount2D(w) != 1 {
 		t.Fatal("queued force did not request physics tick")
 	}
 	if err := step.Run(w); err != nil {
 		t.Fatal(err)
 	}
-	if b := ecs.GetRef[RigidBody2D](w, e); b.Handle().IsSleeping() || b.Velocity.X <= 0 {
+	if b := w.GetRef[RigidBody2D](e); b.Handle().IsSleeping() || b.Velocity.X <= 0 {
 		t.Fatal("queued force was not consumed")
 	}
 }
@@ -122,10 +122,10 @@ func BenchmarkWorld2DStaticIndex(b *testing.B) {
 	for i := range 4096 {
 		d := NewBodyDef(BodyStatic)
 		d.Position = V(float64(i%64)*4, float64(i/64)*4)
-		AddCollider(w, w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
+		w.AddCollider(w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
 	}
 	body := w.CreateBody(NewBodyDef(BodyDynamic))
-	AddCollider(w, body, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 	w.buildBroadphase()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -139,12 +139,12 @@ func BenchmarkWorld2DSleepingStack(b *testing.B) {
 	w.Sleep.Enabled = true
 	d := NewBodyDef(BodyStatic)
 	d.Position = V(0, -1)
-	AddCollider(w, w.CreateBody(d), NewColliderDef(NewBox(100, 2)))
+	w.AddCollider(w.CreateBody(d), NewColliderDef(NewBox(100, 2)))
 	for i := range 64 {
 		d := NewBodyDef(BodyDynamic)
 		d.FixedRotation = true
 		d.Position = V(float64(i%8)*2, float64(i/8)*2+1)
-		AddCollider(w, w.CreateBody(d), NewColliderDef(NewBox(2, 2)))
+		w.AddCollider(w.CreateBody(d), NewColliderDef(NewBox(2, 2)))
 	}
 	for range 1200 {
 		w.Step(1.0 / 60)

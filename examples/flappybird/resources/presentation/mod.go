@@ -3,8 +3,8 @@ package presentation
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/examples/flappybird/contracts"
+	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -56,20 +56,20 @@ func (m *Mod) OnFrame(c *module.Context, value contracts.FlappyFrame) error {
 	}
 	for index, position := range positions {
 		entity := m.positions[index]
-		transform, ok := module.Get[scene.UITransform](c, entity)
+		transform, ok := c.Get[scene.UITransform](entity)
 		if !ok {
 			return module.ErrType
 		}
 		if transform.Translation.X.Value != position[0] || transform.Translation.Y.Value != position[1] {
 			transform.Translation = scene.Px2(position[0], position[1])
-			if err := module.Set(c, entity, transform); err != nil {
+			if err := c.Set(entity, transform); err != nil {
 				return err
 			}
 		}
 	}
 	if !m.applied || m.last.Phase != value.Phase {
 		for index, visible := range [...]bool{value.Phase == 0, value.Phase == 0} {
-			if err := module.Set(c, m.visibility[index], scene.Visibility{Visible: visible}); err != nil {
+			if err := c.Set(m.visibility[index], scene.Visibility{Visible: visible}); err != nil {
 				return err
 			}
 		}
@@ -77,24 +77,24 @@ func (m *Mod) OnFrame(c *module.Context, value contracts.FlappyFrame) error {
 		if value.Phase == 2 {
 			status = "Game over - tap to restart"
 		}
-		text, ok := module.Get[scene.Text2D](c, m.status)
+		text, ok := c.Get[scene.Text2D](m.status)
 		if !ok {
 			return module.ErrType
 		}
 		if text.Value != status {
 			text.Value = status
-			if err := module.Set(c, m.status, text); err != nil {
+			if err := c.Set(m.status, text); err != nil {
 				return err
 			}
 		}
 	}
 	if !m.applied || m.last.Score != value.Score {
-		text, ok := module.Get[scene.Text2D](c, m.score)
+		text, ok := c.Get[scene.Text2D](m.score)
 		if !ok {
 			return module.ErrType
 		}
 		text.Value = fmt.Sprintf("Score: %d", value.Score)
-		if err := module.Set(c, m.score, text); err != nil {
+		if err := c.Set(m.score, text); err != nil {
 			return err
 		}
 	}

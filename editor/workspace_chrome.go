@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/project"
 	engineui "github.com/diiyw/onix/ui"
@@ -47,7 +46,7 @@ func (a *ModuleEditor) workspaceControlFocused() bool {
 	if a.world == nil {
 		return false
 	}
-	for _, access := range ecs.Query[engineui.TextField](a.world).All {
+	for _, access := range a.world.Query[engineui.TextField]().All {
 		if access.Get().Focused {
 			return true
 		}
@@ -420,7 +419,7 @@ func (a *ModuleEditor) isSelected(id string) bool { return id == a.Selected || a
 
 func (a *ModuleEditor) selectWorkspaceInstance(id string) {
 	if a.world != nil {
-		if in, ok := ecs.GetResource[*input.State](a.world); ok && in != nil && (in.KeyHeld(input.KeyLeftControl) || in.KeyHeld(input.KeyRightControl)) {
+		if in, ok := a.world.GetResource[*input.State](); ok && in != nil && (in.KeyHeld(input.KeyLeftControl) || in.KeyHeld(input.KeyRightControl)) {
 			if a.selection == nil {
 				a.selection = make(map[string]bool)
 			}

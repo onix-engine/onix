@@ -43,29 +43,29 @@ func Script[T any](name string, hooks Hooks[T]) ScriptBinding {
 		Name: name,
 		Bind: func(ctx *ScriptContext, spec ScriptComponentSpec) error {
 			var value T
-			if err := DecodeScriptValues(spec, &value); err != nil {
+			if err := spec.DecodeScriptValues(&value); err != nil {
 				return err
 			}
-			if err := ecs.Insert(ctx.World, ctx.Entity, value); err != nil {
+			if err := ctx.World.Insert(ctx.Entity, value); err != nil {
 				return err
 			}
 			if hooks.Install != nil {
-				if err := hooks.Install(ecs.MustMut[T](ctx.World, ctx.Entity), ctx); err != nil {
-					ecs.Remove[T](ctx.World, ctx.Entity)
+				if err := hooks.Install(ctx.World.MustMut[T](ctx.Entity), ctx); err != nil {
+					ctx.World.Remove[T](ctx.Entity)
 					return err
 				}
 			}
 			return nil
 		},
 		Remove: func(ctx *ScriptContext) error {
-			ecs.Remove[T](ctx.World, ctx.Entity)
+			ctx.World.Remove[T](ctx.Entity)
 			return nil
 		},
 		InputMask: hooks.InputMask,
 	}
 	if hooks.Update != nil {
 		binding.Update = func(ctx *ScriptContext) error {
-			for entity, access := range ecs.Query[T](ctx.World).In(ctx.entities).All {
+			for entity, access := range ctx.World.Query[T]().In(ctx.entities).All {
 				ctx.Entity = entity
 				if err := hooks.Update(access.Mut(), ctx); err != nil {
 					return err
@@ -76,7 +76,7 @@ func Script[T any](name string, hooks Hooks[T]) ScriptBinding {
 	}
 	if hooks.Input != nil {
 		binding.Input = func(ctx *ScriptContext, event *scene.InputEventContext) error {
-			if value := ecs.GetMut[T](ctx.World, ctx.Entity); value != nil {
+			if value := ctx.World.GetMut[T](ctx.Entity); value != nil {
 				return hooks.Input(value, ctx, event)
 			}
 			return nil
@@ -84,7 +84,7 @@ func Script[T any](name string, hooks Hooks[T]) ScriptBinding {
 	}
 	if hooks.Destroy != nil {
 		binding.Destroy = func(ctx *ScriptContext) error {
-			if value := ecs.GetMut[T](ctx.World, ctx.Entity); value != nil {
+			if value := ctx.World.GetMut[T](ctx.Entity); value != nil {
 				return hooks.Destroy(value, ctx)
 			}
 			return nil
@@ -250,7 +250,7 @@ func (r ScriptRegistry) binding(name string) (ScriptBinding, bool) {
 // DecodeScriptValues applies editor-authored values to a typed script value.
 // This is only used while a scene is instantiated; generated update paths do
 // not use JSON or reflection.
-func DecodeScriptValues[T any](spec ScriptComponentSpec, target *T) error {
+func (spec ScriptComponentSpec) DecodeScriptValues[T any](target *T) error {
 	if target == nil {
 		return fmt.Errorf("script %q target is nil", spec.Name)
 	}
@@ -480,7 +480,7 @@ func (s *SceneInstance) DispatchInputScripts(context *ecs.SystemContext, reader 
 		if event.Entity == 0 {
 			_, err := s.dispatchGlobalInput(context, event)
 			if event.Handled && event.Seq != 0 {
-				if state, ok := ecs.GetResource[*input.State](context.World); ok && state != nil {
+				if state, ok := context.World.GetResource[*input.State](); ok && state != nil {
 					state.ConsumeEvent(event.Seq)
 				}
 			}
@@ -530,7 +530,7 @@ func (s *SceneInstance) dispatchGlobalInput(context *ecs.SystemContext, event *s
 
 func (s *SceneInstance) dispatchInputAt(context *ecs.SystemContext, event *scene.InputEvent, target ecs.Entity) (bool, error) {
 	filter := scene.InputFilterPass
-	if pointerTarget, ok := ecs.Get[scene.InputTarget2D](context.World, target); ok {
+	if pointerTarget, ok := context.World.Get[scene.InputTarget2D](target); ok {
 		filter = pointerTarget.InputFilter
 	}
 	if filter == scene.InputFilterIgnore {

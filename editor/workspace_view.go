@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -720,7 +719,7 @@ func (a *ModuleEditor) updateTreeDrag(pointer input.Pointer) {
 	if !moved || a.hasDrafts() || a.Local != "" {
 		return
 	}
-	for entity, access := range ecs.Query2[htmlui.Control, scene.UIGlobalTransform](a.world).All {
+	for entity, access := range a.world.Query2[htmlui.Control, scene.UIGlobalTransform]().All {
 		control, global := access.A.Ref(), access.B.Ref()
 		if control.Owner != a.shell {
 			continue
@@ -729,7 +728,7 @@ func (a *ModuleEditor) updateTreeDrag(pointer input.Pointer) {
 		if !ok {
 			continue
 		}
-		target, ok := ecs.Get[scene.InputTarget2D](a.world, entity)
+		target, ok := a.world.Get[scene.InputTarget2D](entity)
 		if !ok {
 			continue
 		}

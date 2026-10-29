@@ -8,7 +8,7 @@ import (
 
 func BenchmarkContentRenderBridge(b *testing.B) {
 	content := &Content{}
-	definition, err := ContentDefine[int, int](content, html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], _ *html.View) { *c.State = *c.Props }})
+	definition, err := content.Define[int, int](html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], _ *html.View) { *c.State = *c.Props }})
 	if err != nil {
 		b.Fatal(err)
 	}

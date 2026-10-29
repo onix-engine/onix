@@ -9,7 +9,7 @@ import (
 
 func TestTaskCountsTrackBodyMembershipAndUnmanagedSimulation(t *testing.T) {
 	w := ecs.NewWorld()
-	spawner := ecs.NewSpawner2[RigidBody2D, RigidBody3D](w)
+	spawner := w.NewSpawner2[RigidBody2D, RigidBody3D]()
 	e := spawner.Spawn(NewRigidBody2D(BodyDynamic), NewRigidBody3D(BodyDynamic))
 	check := func(want int) {
 		t.Helper()
@@ -18,7 +18,7 @@ func TestTaskCountsTrackBodyMembershipAndUnmanagedSimulation(t *testing.T) {
 		}
 	}
 	check(0)
-	if err := ecs.Insert(w, e, scene.NewTransform()); err != nil {
+	if err := w.Insert(e, scene.NewTransform()); err != nil {
 		t.Fatal(err)
 	}
 	check(1)
@@ -27,11 +27,11 @@ func TestTaskCountsTrackBodyMembershipAndUnmanagedSimulation(t *testing.T) {
 	w.SetQueryScope(&scope)
 	check(0)
 	w.SetQueryScope(nil)
-	ecs.Remove[scene.Transform](w, e)
+	w.Remove[scene.Transform](e)
 	check(0)
 	r2, r3 := NewRuntime2D(), NewRuntime3D()
-	ecs.InsertResource(w, r2)
-	ecs.InsertResource(w, r3)
+	w.InsertResource(r2)
+	w.InsertResource(r3)
 	r2.Simulation.CreateBody(NewBodyDef(BodyStatic))
 	r3.Simulation.CreateBody(NewBodyDef3D(BodyStatic))
 	check(0)

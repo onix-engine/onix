@@ -31,7 +31,7 @@ func TestSystemFallbackGlyphCachesStayConsistentAndAllocationFree(t *testing.T) 
 	gray := cache.Glyph('中')
 	lcd := cache.GlyphLCDAt('中', 0)
 	outline := cache.OutlineGlyph('中', 1)
-	if !gray.Visible() || !lcd.Visible() || !outline.Visible() || gray != metrics || gray.Advance != lcd.Advance || gray.Advance != outline.Advance {
+	if !gray.Visible() || !lcd.Visible() || !outline.Visible() || gray.Width != metrics.Width || gray.Height != metrics.Height || gray.OffsetX != metrics.OffsetX || gray.OffsetY != metrics.OffsetY || gray.Advance != metrics.Advance || gray.Advance != lcd.Advance || gray.Advance != outline.Advance {
 		t.Fatal("fallback measurement, gray, LCD, and outline glyphs disagree")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {

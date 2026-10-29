@@ -29,7 +29,7 @@ func TestEmptyNodeIsNeutralAtRuntime(t *testing.T) {
 	if items := scene.RenderItems(); len(items) != 0 {
 		t.Fatalf("empty node produced render items: %+v", items)
 	}
-	if ecs.Has[sceneapi.InputTarget2D](scene.World, entity) || ecs.Has[sceneapi.InputBlocker2D](scene.World, entity) {
+	if scene.World.Has[sceneapi.InputTarget2D](entity) || scene.World.Has[sceneapi.InputBlocker2D](entity) {
 		t.Fatal("empty node should not participate in pointer input")
 	}
 	entityBounds := scene.MustEntity("root")
@@ -54,7 +54,7 @@ func TestNodeComponentsComposeWithoutKind(t *testing.T) {
 	}
 	defer scene.Dispose()
 	entity := scene.MustEntity("mixed")
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, entity) || !ecs.Has[sceneapi.Text2D](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Sprite2D](entity) || !scene.World.Has[sceneapi.Text2D](entity) {
 		t.Fatal("all authored visual components must be attached to one node")
 	}
 }
@@ -79,30 +79,30 @@ func TestAnimationIsAnIndependentNodeComponent(t *testing.T) {
 	}
 	defer scene.Dispose()
 	bound := scene.MustEntity("bound")
-	if ecs.Has[sceneapi.Sprite2D](scene.World, bound) || !ecs.Has[sceneapi.Animator](scene.World, bound) {
+	if scene.World.Has[sceneapi.Sprite2D](bound) || !scene.World.Has[sceneapi.Animator](bound) {
 		t.Fatal("child-bound animation should be independent of a root Sprite2D")
 	}
 	part := scene.MustEntity("part")
-	if transform, ok := ecs.Get[sceneapi.Transform](scene.World, part); !ok || transform.Translation.X() != 4 {
+	if transform, ok := scene.World.Get[sceneapi.Transform](part); !ok || transform.Translation.X() != 4 {
 		t.Fatalf("bound child transform = %+v", transform)
 	}
 	if _, _, _, _, ok := scene.Bounds(part); !ok {
 		t.Fatal("animated child bounds were not reported")
 	}
 	root := scene.MustEntity("root")
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, root) || !ecs.Has[sceneapi.Animator](scene.World, root) {
+	if !scene.World.Has[sceneapi.Sprite2D](root) || !scene.World.Has[sceneapi.Animator](root) {
 		t.Fatal("root texture animation should materialize a Sprite2D")
 	}
 	mixed := scene.MustEntity("mixed")
-	animator, _ := ecs.Get[sceneapi.Animator](scene.World, mixed)
-	sprite, _ := ecs.Get[sceneapi.Sprite2D](scene.World, mixed)
+	animator, _ := scene.World.Get[sceneapi.Animator](mixed)
+	sprite, _ := scene.World.Get[sceneapi.Sprite2D](mixed)
 	if animator.CurrentTexture() == nil || sprite.Texture != animator.CurrentTexture() {
 		t.Fatal("root animation did not initialize a composed Sprite2D on its first frame")
 	}
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "bound"}); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[sceneapi.Animator](scene.World, bound) || ecs.Has[sceneapi.Sprite2D](scene.World, bound) {
+	if scene.World.Has[sceneapi.Animator](bound) || scene.World.Has[sceneapi.Sprite2D](bound) {
 		t.Fatal("removing animation did not restore an empty node")
 	}
 }
@@ -154,7 +154,7 @@ func TestNodeComponentsComposeAcrossDimensions(t *testing.T) {
 	}
 	defer scene.Dispose()
 	entity := scene.MustEntity("mixed")
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, entity) || !ecs.Has[sceneapi.Camera](scene.World, entity) || !ecs.Has[render3d.Camera](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Sprite2D](entity) || !scene.World.Has[sceneapi.Camera](entity) || !scene.World.Has[render3d.Camera](entity) {
 		t.Fatal("2D and 3D components must coexist on one world node")
 	}
 }
@@ -195,15 +195,15 @@ func TestNodeComponentsComposeResourceAndCameraParts(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("composed")
-	if !ecs.Has[sceneapi.ParticleEmitter2D](scene.World, entity) || !ecs.Has[sceneapi.Tilemap2D](scene.World, entity) ||
-		!ecs.Has[render3d.Mesh](scene.World, entity) || !ecs.Has[sceneapi.Camera](scene.World, entity) || !ecs.Has[render3d.Camera](scene.World, entity) {
+	if !scene.World.Has[sceneapi.ParticleEmitter2D](entity) || !scene.World.Has[sceneapi.Tilemap2D](entity) ||
+		!scene.World.Has[render3d.Mesh](entity) || !scene.World.Has[sceneapi.Camera](entity) || !scene.World.Has[render3d.Camera](entity) {
 		t.Fatal("resource and camera components were not composed on one entity")
 	}
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "composed"}); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[sceneapi.ParticleEmitter2D](scene.World, entity) || ecs.Has[sceneapi.Tilemap2D](scene.World, entity) ||
-		ecs.Has[render3d.Mesh](scene.World, entity) || ecs.Has[sceneapi.Camera](scene.World, entity) || ecs.Has[render3d.Camera](scene.World, entity) {
+	if scene.World.Has[sceneapi.ParticleEmitter2D](entity) || scene.World.Has[sceneapi.Tilemap2D](entity) ||
+		scene.World.Has[render3d.Mesh](entity) || scene.World.Has[sceneapi.Camera](entity) || scene.World.Has[render3d.Camera](entity) {
 		t.Fatal("empty composition retained resource or camera components")
 	}
 }
@@ -229,7 +229,7 @@ func TestApplyNodePreservesCompiledCameraVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("node")
-	camera, ok := ecs.Get[sceneapi.Camera](scene.World, entity)
+	camera, ok := scene.World.Get[sceneapi.Camera](entity)
 	if !ok || camera.Active {
 		t.Fatalf("hidden camera was activated during composition: %+v ok=%v", camera, ok)
 	}
@@ -254,13 +254,13 @@ func TestApplyNodeCanReturnToNeutralEmptyComposition(t *testing.T) {
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "node", Components: Components(SceneComponentSprite)}); err != nil {
 		t.Fatal(err)
 	}
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Sprite2D](entity) {
 		t.Fatal("sprite component was not attached")
 	}
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "node", Width: 20, Height: 10, BlockInput: true}); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[sceneapi.Sprite2D](scene.World, entity) || ecs.Has[sceneapi.InputBlocker2D](scene.World, entity) || len(scene.RenderItems()) != 0 {
+	if scene.World.Has[sceneapi.Sprite2D](entity) || scene.World.Has[sceneapi.InputBlocker2D](entity) || len(scene.RenderItems()) != 0 {
 		t.Fatal("empty composition retained render or input state")
 	}
 }
@@ -286,11 +286,11 @@ func TestApplyNodeFillsDirectConstructionDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	entity := scene.MustEntity("node")
-	transform, ok := ecs.Get[sceneapi.Transform](scene.World, entity)
+	transform, ok := scene.World.Get[sceneapi.Transform](entity)
 	if !ok || transform.Scale.X() != 1 || transform.Scale.Y() != 1 {
 		t.Fatalf("direct node defaults produced transform %+v ok=%v", transform, ok)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, entity)
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](entity)
 	if !ok || sprite.Alpha != 1 || len(scene.RenderItems()) != 1 {
 		t.Fatalf("direct node defaults produced sprite=%+v renderItems=%d ok=%v", sprite, len(scene.RenderItems()), ok)
 	}
@@ -312,16 +312,16 @@ func TestApplyNodeUnbindsControlWhenCompositionBecomesEmpty(t *testing.T) {
 	}
 	defer scene.Dispose()
 	entity := scene.MustEntity("button")
-	if err := BindControl(scene, "button", engineui.Button{}); err != nil {
+	if err := scene.BindControl("button", engineui.Button{}); err != nil {
 		t.Fatal(err)
 	}
-	if !ecs.Has[engineui.Control](scene.World, entity) || !ecs.Has[sceneapi.InputTarget2D](scene.World, entity) {
+	if !scene.World.Has[engineui.Control](entity) || !scene.World.Has[sceneapi.InputTarget2D](entity) {
 		t.Fatal("control binding did not install input state")
 	}
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "button", CoordinateSpace: CoordinateSpaceUI, Width: 80, Height: 24}); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[engineui.Control](scene.World, entity) || ecs.Has[sceneapi.InputTarget2D](scene.World, entity) || ecs.Has[sceneapi.InputState2D](scene.World, entity) {
+	if scene.World.Has[engineui.Control](entity) || scene.World.Has[sceneapi.InputTarget2D](entity) || scene.World.Has[sceneapi.InputState2D](entity) {
 		t.Fatal("empty node retained control input state")
 	}
 }
@@ -348,15 +348,15 @@ func TestControlCompositionOnlyIncludesItsAuthoredDescendants(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer scene.Dispose()
-	if err := BindControl(scene, "first", engineui.Button{}); err != nil {
+	if err := scene.BindControl("first", engineui.Button{}); err != nil {
 		t.Fatal(err)
 	}
 	firstLabel := scene.MustEntity("first-label")
 	secondLabel := scene.MustEntity("second-label")
-	if relation, ok := ecs.Get[engineui.Relation[engineui.Control]](scene.World, firstLabel); !ok || relation.Owner != scene.MustEntity("first") {
+	if relation, ok := scene.World.Get[engineui.Relation[engineui.Control]](firstLabel); !ok || relation.Owner != scene.MustEntity("first") {
 		t.Fatalf("first control composition relation = %+v ok=%v", relation, ok)
 	}
-	if ecs.Has[engineui.Relation[engineui.Control]](scene.World, secondLabel) {
+	if scene.World.Has[engineui.Relation[engineui.Control]](secondLabel) {
 		t.Fatal("second control received a relation while first control was bound")
 	}
 }

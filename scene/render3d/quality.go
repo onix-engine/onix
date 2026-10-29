@@ -51,7 +51,7 @@ func (q Quality) budget() qualityBudget3D {
 func effectiveQuality3D(world *ecs.World, camera Camera) (qualityBudget3D, error) {
 	q := camera.Quality
 	if q == QualityCustom {
-		if global, ok := ecs.GetResource[Quality](world); ok {
+		if global, ok := world.GetResource[Quality](); ok {
 			q = global
 		}
 	}

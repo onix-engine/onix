@@ -114,32 +114,32 @@ func viewportUITransform(t project.ModTransform) scene.UITransform {
 // authored ancestors exactly. Only content nodes participate in drawing.
 func (v *workspaceViewport2D) spawnPlacement(t project.ModTransform, parent ecs.Entity, order int) ecs.Entity {
 	b := ecs.NewBundle(7)
-	ecs.Put(&b, viewportWorldTransform(t))
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&b, viewportUITransform(t))
-	ecs.Put(&b, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(viewportWorldTransform(t))
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(viewportUITransform(t))
+	b.Put(scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
 	if parent != 0 {
-		ecs.Put(&b, scene.Parent{Entity: parent})
+		b.Put(scene.Parent{Entity: parent})
 	}
-	ecs.Put(&b, scene.SiblingOrder(order))
-	ecs.Put(&b, scene.Visibility{Visible: true})
+	b.Put(scene.SiblingOrder(order))
+	b.Put(scene.Visibility{Visible: true})
 	return v.world.Spawn(b)
 }
 
 func (v *workspaceViewport2D) setPlacement(entity ecs.Entity, t project.ModTransform) {
-	if value := viewportWorldTransform(t); *ecs.GetRef[scene.Transform](v.world, entity) != value {
-		*ecs.GetMut[scene.Transform](v.world, entity) = value
+	if value := viewportWorldTransform(t); *v.world.GetRef[scene.Transform](entity) != value {
+		*v.world.GetMut[scene.Transform](entity) = value
 	}
-	if value := viewportUITransform(t); *ecs.GetRef[scene.UITransform](v.world, entity) != value {
-		*ecs.GetMut[scene.UITransform](v.world, entity) = value
+	if value := viewportUITransform(t); *v.world.GetRef[scene.UITransform](entity) != value {
+		*v.world.GetMut[scene.UITransform](entity) = value
 	}
 }
 
 func (v *workspaceViewport2D) setContentTransform(entity ecs.Entity, t project.ModTransform) {
-	if value := ecs.GetMut[scene.UITransform](v.world, entity); value != nil {
+	if value := v.world.GetMut[scene.UITransform](entity); value != nil {
 		*value = viewportUITransform(t)
 	}
-	if value := ecs.GetMut[scene.Transform](v.world, entity); value != nil {
+	if value := v.world.GetMut[scene.Transform](entity); value != nil {
 		*value = viewportWorldTransform(t)
 	}
 }
@@ -155,13 +155,13 @@ func (a *ModuleEditor) initViewport2D() {
 	scene.RegisterParticleRenderer2D(v.world)
 	scene.RegisterTilemapRenderer2D(v.world)
 	scene.RegisterSpineRenderer2D(v.world)
-	scene.RegisterMaterial2D[project.ModMaterial2D](v.world)
+	scene.RenderWorldFor(v.world).RegisterMaterial2D[project.ModMaterial2D]()
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](v.world)
-	ecs.InsertResource(v.world, editorUITheme(a.font))
-	ecs.InsertResource(v.world, scene.NewTime())
-	ecs.InsertResource(v.world, scene.NewRenderRequest(a.requestRender))
+	v.world.InsertResource(editorUITheme(a.font))
+	v.world.InsertResource(scene.NewTime())
+	v.world.InsertResource(scene.NewRenderRequest(a.requestRender))
 	cameraEntity := scene.SpawnCamera2D(v.world)
-	camera := ecs.GetMut[scene.Camera](v.world, cameraEntity)
+	camera := v.world.GetMut[scene.Camera](cameraEntity)
 	camera.Clear, camera.Fallback = false, true
 	v.sceneRoot = v.spawnPlacement(project.ModTransform{Scale: [3]float32{1, 1, 1}}, 0, 0)
 	for i, label := range [...]string{"X", "Y", "0,0"} {
@@ -202,35 +202,35 @@ func (v *workspaceViewport2D) spawnContent(resources *project.Resources, t proje
 		return 0, err
 	}
 	if ui {
-		ecs.Put(&b, viewportUITransform(t))
-		ecs.Put(&b, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
+		b.Put(viewportUITransform(t))
+		b.Put(scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
 		if content.Anchor == nil {
-			ecs.Put(&b, scene.AnchorTopLeft)
+			b.Put(scene.AnchorTopLeft)
 		}
 	} else {
-		ecs.Put(&b, viewportWorldTransform(t))
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+		b.Put(viewportWorldTransform(t))
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	}
 	if content.Anchor != nil {
-		ecs.Put(&b, *content.Anchor)
+		b.Put(*content.Anchor)
 	}
-	ecs.Put(&b, scene.Parent{Entity: parent})
-	ecs.Put(&b, scene.SiblingOrder(order))
-	ecs.Put(&b, scene.Visibility{Visible: visible})
-	ecs.Put(&b, scene.Activity{Active: enabled})
+	b.Put(scene.Parent{Entity: parent})
+	b.Put(scene.SiblingOrder(order))
+	b.Put(scene.Visibility{Visible: visible})
+	b.Put(scene.Activity{Active: enabled})
 	entity := v.world.Spawn(b)
-	if text := ecs.GetMut[scene.Text2D](v.world, entity); text != nil && text.Font == nil {
-		theme, _ := ecs.GetResource[engineui.Theme](v.world)
+	if text := v.world.GetMut[scene.Text2D](entity); text != nil && text.Font == nil {
+		theme, _ := v.world.GetResource[engineui.Theme]()
 		text.Font = theme.Font
 	}
-	if surface := ecs.GetMut[htmlui.Surface](v.world, entity); surface != nil && surface.Font == nil {
-		theme, _ := ecs.GetResource[engineui.Theme](v.world)
+	if surface := v.world.GetMut[htmlui.Surface](entity); surface != nil && surface.Font == nil {
+		theme, _ := v.world.GetResource[engineui.Theme]()
 		surface.Font = theme.Font
 	}
 	return entity, nil
 }
 
-func bindViewportTracks[T any](owner ecs.Entity, row *workspace2DRow, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
+func (row *workspace2DRow) bindViewportTracks[T any](owner ecs.Entity, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
 	result := make([]ecs.Entity, len(tracks))
 	for i, track := range tracks {
 		result[i] = owner
@@ -247,19 +247,19 @@ func bindViewportTracks[T any](owner ecs.Entity, row *workspace2DRow, tracks []s
 }
 
 func (v *workspaceViewport2D) bindAnimator(entity ecs.Entity, row *workspace2DRow) error {
-	animator := ecs.GetMut[scene.Animator](v.world, entity)
+	animator := v.world.GetMut[scene.Animator](entity)
 	if animator == nil || animator.Clip == nil {
 		return nil
 	}
-	floats, err := bindViewportTracks(entity, row, animator.Clip.FloatTracks)
+	floats, err := row.bindViewportTracks(entity, animator.Clip.FloatTracks)
 	if err != nil {
 		return err
 	}
-	textures, err := bindViewportTracks(entity, row, animator.Clip.TextureTracks)
+	textures, err := row.bindViewportTracks(entity, animator.Clip.TextureTracks)
 	if err != nil {
 		return err
 	}
-	bools, err := bindViewportTracks(entity, row, animator.Clip.BoolTracks)
+	bools, err := row.bindViewportTracks(entity, animator.Clip.BoolTracks)
 	if err != nil {
 		return err
 	}
@@ -296,7 +296,7 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 	a.layoutViewport2D()
 	if v.size != [2]int{width, height} {
 		v.size = [2]int{width, height}
-		ecs.InsertResource(v.world, scene.ViewportSize{Width: float32(width), Height: float32(height), ScaleFactor: 1})
+		v.world.InsertResource(scene.ViewportSize{Width: float32(width), Height: float32(height), ScaleFactor: 1})
 	}
 	if v.structure != a.Preview.structure || len(v.rows) != len(a.Preview.Items) {
 		for i := range v.rows {
@@ -333,8 +333,8 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 			row.placement = v.spawnPlacement(placement, parent, i+1)
 		} else {
 			v.setPlacement(row.placement, placement)
-			if value := ecs.GetRef[scene.Parent](v.world, row.placement); value.Entity != parent {
-				ecs.GetMut[scene.Parent](v.world, row.placement).Entity = parent
+			if value := v.world.GetRef[scene.Parent](row.placement); value.Entity != parent {
+				v.world.GetMut[scene.Parent](row.placement).Entity = parent
 			}
 		}
 		if row.id != item.ID || row.mod != item.Mod || row.contentRevision != item.ContentRevision {
@@ -386,13 +386,13 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 					partUI = element.Spec.Space == project.CoordinateSpaceUI
 				}
 				if partUI != ui {
-					if partUI && !ecs.Has[scene.UITransform](v.world, row.root) {
-						_ = ecs.Insert(v.world, row.root, viewportUITransform(mod.Plan.Transform))
-						_ = ecs.Insert(v.world, row.root, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
+					if partUI && !v.world.Has[scene.UITransform](row.root) {
+						_ = v.world.Insert(row.root, viewportUITransform(mod.Plan.Transform))
+						_ = v.world.Insert(row.root, scene.UIGlobalTransform{Matrix: mgl32.Ident4()})
 					}
-					if !partUI && !ecs.Has[scene.Transform](v.world, row.root) {
-						_ = ecs.Insert(v.world, row.root, viewportWorldTransform(mod.Plan.Transform))
-						_ = ecs.Insert(v.world, row.root, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+					if !partUI && !v.world.Has[scene.Transform](row.root) {
+						_ = v.world.Insert(row.root, viewportWorldTransform(mod.Plan.Transform))
+						_ = v.world.Insert(row.root, scene.GlobalTransform{Matrix: mgl32.Ident4()})
 					}
 				}
 				partParent := row.root
@@ -423,17 +423,17 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 		}
 		changed := row.revision != item.Revision
 		if changed {
-			ecs.GetMut[scene.Visibility](v.world, row.placement).Visible = item.Visible
-			ecs.GetMut[scene.Visibility](v.world, row.root).Visible = item.Visible
-			ecs.GetMut[scene.Activity](v.world, row.root).Active = item.Enabled
+			v.world.GetMut[scene.Visibility](row.placement).Visible = item.Visible
+			v.world.GetMut[scene.Visibility](row.root).Visible = item.Visible
+			v.world.GetMut[scene.Activity](row.root).Active = item.Enabled
 		}
 		v.animated = v.animated || row.animated
 		drawOrder++
 		setViewport2DOrder(v.world, row.root, drawOrder)
 		for _, entity := range row.slots {
 			if changed {
-				ecs.GetMut[scene.Activity](v.world, entity).Active = item.Enabled
-				ecs.GetMut[scene.Visibility](v.world, entity).Visible = item.Visible
+				v.world.GetMut[scene.Activity](entity).Active = item.Enabled
+				v.world.GetMut[scene.Visibility](entity).Visible = item.Visible
 			}
 			drawOrder++
 			setViewport2DOrder(v.world, entity, drawOrder)
@@ -441,8 +441,8 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 		for j, entity := range row.parts {
 			if changed {
 				element := mod.Plan.Elements[j]
-				ecs.GetMut[scene.Visibility](v.world, entity).Visible = item.Visible && (element.Spec.Visible == nil || *element.Spec.Visible)
-				ecs.GetMut[scene.Activity](v.world, entity).Active = item.Enabled
+				v.world.GetMut[scene.Visibility](entity).Visible = item.Visible && (element.Spec.Visible == nil || *element.Spec.Visible)
+				v.world.GetMut[scene.Activity](entity).Active = item.Enabled
 			}
 			drawOrder++
 			setViewport2DOrder(v.world, entity, drawOrder)
@@ -463,7 +463,7 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 	}
 	clear(v.retired)
 	v.retired = v.retired[:0]
-	clock, _ := ecs.GetResource[*scene.Time](v.world)
+	clock, _ := v.world.GetResource[*scene.Time]()
 	clock.Delta = 0
 	if drag := &a.canvasDrag; drag.ID != "" && drag.Entity != 0 {
 		transform := drag.Transform
@@ -520,12 +520,12 @@ func viewport2DAnimated(content project.ModComponents) bool {
 }
 
 func setViewport2DOrder(world *ecs.World, entity ecs.Entity, order int) {
-	if ecs.Has[scene.UITransform](world, entity) {
-		if value, ok := ecs.Get[scene.UIStackIndex](world, entity); !ok || int(value) != order {
-			_ = ecs.Insert(world, entity, scene.UIStackIndex(order))
+	if world.Has[scene.UITransform](entity) {
+		if value, ok := world.Get[scene.UIStackIndex](entity); !ok || int(value) != order {
+			_ = world.Insert(entity, scene.UIStackIndex(order))
 		}
-	} else if value, ok := ecs.Get[scene.RenderOrder2D](world, entity); !ok || int(value) != order {
-		_ = ecs.Insert(world, entity, scene.RenderOrder2D(order))
+	} else if value, ok := world.Get[scene.RenderOrder2D](entity); !ok || int(value) != order {
+		_ = world.Insert(entity, scene.RenderOrder2D(order))
 	}
 }
 
@@ -540,9 +540,9 @@ func (v *workspaceViewport2D) syncVisuals(animate bool) error {
 		if err := scene.UpdateParticleEmitter2DSystem("").Run(v.world); err != nil {
 			return err
 		}
-		clock, _ := ecs.GetResource[*scene.Time](v.world)
+		clock, _ := v.world.GetResource[*scene.Time]()
 		if delta := clock.DeltaSeconds(); delta > 0 {
-			for entity, access := range ecs.Query[scene.Spine2D](v.world).All {
+			for entity, access := range v.world.Query[scene.Spine2D]().All {
 				if player := access.Ref().Player; player != nil && scene.IsActive(v.world, entity) && viewportContentVisible(v.world, entity) {
 					access.Mut().Player.Update(delta)
 				}
@@ -577,7 +577,7 @@ func (a *ModuleEditor) updateViewport2D() error {
 	if v.world == nil || v.err != nil || !v.animated && !v.cssAnimated || a.dimension == previewDimension3D || a.Document == nil || a.modalVisible() {
 		return nil
 	}
-	clock, _ := ecs.GetResource[*scene.Time](v.world)
+	clock, _ := v.world.GetResource[*scene.Time]()
 	clock.Advance(time.Now())
 	delta := min(clock.Delta, 100*time.Millisecond)
 	clock.Elapsed -= clock.Delta - delta
@@ -587,7 +587,7 @@ func (a *ModuleEditor) updateViewport2D() error {
 		return err
 	}
 	a.updateAnimationPlaybackUI()
-	ecs.AdvanceMessages(v.world)
+	v.world.AdvanceMessages()
 	if a.requestRender != nil {
 		a.requestRender()
 	}
@@ -620,7 +620,7 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 			if err := scene.ExtractCamerasSystem("").Run(v.world); err != nil {
 				return err
 			}
-			state, _ := ecs.GetResource[*scene.RenderWorld](v.world)
+			state, _ := v.world.GetResource[*scene.RenderWorld]()
 			if len(state.Cameras) > 0 && state.Cameras[0].Camera.Clear {
 				viewportRect(c, rect{W: float32(width), H: float32(height)}, state.Cameras[0].Camera.ClearColor)
 			}
@@ -773,7 +773,7 @@ func (a *ModuleEditor) pickViewport2DTarget(x, y float32) (string, string) {
 						element = a.previewDocument().Mods[row.mod].Plan.Elements[j-1].Spec.ID
 					}
 				}
-				if ecs.Has[scene.UITransform](v.world, entity) {
+				if v.world.Has[scene.UITransform](entity) {
 					return id, element
 				}
 				if worldPick == "" {
@@ -791,7 +791,7 @@ func (v *workspaceViewport2D) hitContent(entity ecs.Entity, x, y float32) bool {
 	}
 	matrix, ui := viewportContentMatrix(v.world, entity)
 	if ui {
-		if clip, ok := ecs.GetRef[scene.UIGlobalTransform](v.world, entity).ClipRect(); ok && !viewportContains(rect{X: clip.X, Y: clip.Y, W: clip.Width, H: clip.Height}, x, y) {
+		if clip, ok := v.world.GetRef[scene.UIGlobalTransform](entity).ClipRect(); ok && !viewportContains(rect{X: clip.X, Y: clip.Y, W: clip.Width, H: clip.Height}, x, y) {
 			return false
 		}
 	}

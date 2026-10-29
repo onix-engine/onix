@@ -4,41 +4,41 @@ import "testing"
 
 func TestFilteredQueriesDoNotAllocateAfterWarmup(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner2[testPosition, testVelocity](world)
+	spawner := world.NewSpawner2[testPosition, testVelocity]()
 	spawner.Spawn(testPosition{}, testVelocity{})
 	context := &SystemContext{World: world, thisRun: world.changeTick}
 	visit := func(Entity, *testPosition) bool { return true }
 	for name, query := range map[string]func(){
 		"with": func() {
-			for entity, access := range Query[testPosition](world, With[testVelocity]()).All {
+			for entity, access := range world.Query[testPosition](With[testVelocity]()).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
 			}
 		},
 		"without": func() {
-			for entity, access := range Query[testPosition](world, Without[testAccessC]()).All {
+			for entity, access := range world.Query[testPosition](Without[testAccessC]()).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
 			}
 		},
 		"added": func() {
-			for entity, access := range Query[testPosition](world, Added[testPosition](context)).All {
+			for entity, access := range world.Query[testPosition](context.Added[testPosition]()).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
 			}
 		},
 		"changed": func() {
-			for entity, access := range Query[testPosition](world, Changed[testPosition](context)).All {
+			for entity, access := range world.Query[testPosition](context.Changed[testPosition]()).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
 			}
 		},
 		"combined": func() {
-			for entity, access := range Query[testPosition](world, With[testVelocity](), Without[testAccessC](), Added[testPosition](context), Changed[testVelocity](context)).All {
+			for entity, access := range world.Query[testPosition](With[testVelocity](), Without[testAccessC](), context.Added[testPosition](), context.Changed[testVelocity]()).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
@@ -56,19 +56,19 @@ func TestFilteredQueriesDoNotAllocateAfterWarmup(t *testing.T) {
 
 func TestFilteredQueryKeepsSnapshotDuringNestedQueries(t *testing.T) {
 	world := NewWorld()
-	positions := NewSpawner1[testPosition](world)
+	positions := world.NewSpawner1[testPosition]()
 	positions.Spawn(testPosition{})
-	moving := NewSpawner2[testPosition, testVelocity](world)
+	moving := world.NewSpawner2[testPosition, testVelocity]()
 	moving.Spawn(testPosition{}, testVelocity{})
 	context := &SystemContext{World: world, thisRun: world.changeTick}
-	view := Query[testPosition](world, Changed[testPosition](context))
+	view := world.Query[testPosition](context.Changed[testPosition]())
 	context.lastRun = context.thisRun
 	context.thisRun = world.nextChangeTick()
 	for range 2 {
 		count := 0
 		for range view.All {
 			count++
-			for range Query[testPosition](world, Changed[testPosition](context), Without[testVelocity]()).All {
+			for range world.Query[testPosition](context.Changed[testPosition](), Without[testVelocity]()).All {
 				t.Fatal("nested query matched an unchanged component")
 				break
 			}
@@ -81,10 +81,10 @@ func TestFilteredQueryKeepsSnapshotDuringNestedQueries(t *testing.T) {
 
 func TestFilteredQueryBindsColumnsAfterStructuralChanges(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	entity := spawner.Spawn(testPosition{})
 	context := &SystemContext{World: world, thisRun: world.nextChangeTick()}
-	view := Query[testPosition](world, Added[testPosition](context))
+	view := world.Query[testPosition](context.Added[testPosition]())
 	count := 0
 	visit := func(Entity, *testPosition) bool { count++; return true }
 	for entity, access := range view.All {
@@ -92,7 +92,7 @@ func TestFilteredQueryBindsColumnsAfterStructuralChanges(t *testing.T) {
 			break
 		}
 	}
-	if err := Insert(world, entity, testVelocity{}); err != nil {
+	if err := world.Insert(entity, testVelocity{}); err != nil {
 		t.Fatal(err)
 	}
 	for range 128 {
@@ -100,7 +100,7 @@ func TestFilteredQueryBindsColumnsAfterStructuralChanges(t *testing.T) {
 	}
 	context.thisRun = world.nextChangeTick()
 	count = 0
-	for entity, access := range Query[testPosition](world, Added[testPosition](context)).All {
+	for entity, access := range world.Query[testPosition](context.Added[testPosition]()).All {
 		if !visit(entity, access.Ref()) {
 			break
 		}
@@ -112,14 +112,14 @@ func TestFilteredQueryBindsColumnsAfterStructuralChanges(t *testing.T) {
 
 func TestFilteredQuerySupportsMoreThanInlineFilters(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	spawner.Spawn(testPosition{})
 	context := &SystemContext{World: world, thisRun: world.changeTick}
 	options := make([]QueryOption, 12)
 	for index := range options {
-		options[index] = Changed[testPosition](context)
+		options[index] = context.Changed[testPosition]()
 	}
-	view := Query[testPosition](world, options...)
+	view := world.Query[testPosition](options...)
 	for range 2 {
 		count := 0
 		for range view.All {
@@ -131,8 +131,8 @@ func TestFilteredQuerySupportsMoreThanInlineFilters(t *testing.T) {
 	}
 	unmatched := *context
 	unmatched.lastRun = unmatched.thisRun
-	options[len(options)-1] = Changed[testPosition](&unmatched)
-	for range Query[testPosition](world, options...).All {
+	options[len(options)-1] = unmatched.Changed[testPosition]()
+	for range world.Query[testPosition](options...).All {
 		t.Fatal("last filter was ignored")
 		break
 	}
@@ -154,7 +154,7 @@ func TestQueryPlanCanonicalizesMasksAndOwnsStorage(t *testing.T) {
 
 func BenchmarkFilteredQueryTenThousand(b *testing.B) {
 	world := NewWorld()
-	spawner := NewSpawner2[benchmarkPosition, benchmarkVelocity](world)
+	spawner := world.NewSpawner2[benchmarkPosition, benchmarkVelocity]()
 	spawner.Reserve(10_000)
 	for range 10_000 {
 		spawner.Spawn(benchmarkPosition{}, benchmarkVelocity{})
@@ -168,11 +168,11 @@ func BenchmarkFilteredQueryTenThousand(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			option := With[benchmarkVelocity]()
 			if changed {
-				option = Changed[benchmarkPosition](context)
+				option = context.Changed[benchmarkPosition]()
 			}
 			var total float32
 			visit := func(_ Entity, position *benchmarkPosition) bool { total += position.X; return true }
-			for entity, access := range Query[benchmarkPosition](world, option).All {
+			for entity, access := range world.Query[benchmarkPosition](option).All {
 				if !visit(entity, access.Ref()) {
 					break
 				}
@@ -180,7 +180,7 @@ func BenchmarkFilteredQueryTenThousand(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				for entity, access := range Query[benchmarkPosition](world, option).All {
+				for entity, access := range world.Query[benchmarkPosition](option).All {
 					if !visit(entity, access.Ref()) {
 						break
 					}

@@ -19,13 +19,13 @@ func TestIdleFlushesHTMLChangesAfterLayoutBeforeTimer(t *testing.T) {
 			app.SetTargetFPS(0)
 			now := time.Unix(10, 0)
 			app.now = func() time.Time { return now }
-			if err := InstallSystems[UIHTML](app); err != nil {
+			if err := app.InstallSystems[UIHTML](); err != nil {
 				t.Fatal(err)
 			}
 			page := html.New(`<div id="label">before</div>`)
 			page.Width, page.Height = 200, 100
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, page)
+			bundle.Put(page)
 			owner := app.World.Spawn(bundle)
 			var root ecs.Entity
 			if name == "component" {
@@ -35,7 +35,7 @@ func TestIdleFlushesHTMLChangesAfterLayoutBeforeTimer(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				root, err = html.MountComponent(app.World, owner, definition, struct{}{}, "before", 1)
+				root, err = definition.MountComponent(app.World, owner, struct{}{}, "before", 1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -50,7 +50,7 @@ func TestIdleFlushesHTMLChangesAfterLayoutBeforeTimer(t *testing.T) {
 						case "component":
 							html.UpdateComponentState[struct{}, string](app.World, root, func(value *string) { *value = "after" })
 						case "surface":
-							ecs.GetMut[html.Surface](app.World, owner).Value = `<div id="label">after</div>`
+							app.World.GetMut[html.Surface](owner).Value = `<div id="label">after</div>`
 						default:
 							node, _ := html.NodeByID(app.World, owner, "label")
 							node.SetText("after")
@@ -87,7 +87,7 @@ func TestIdleFlushesHTMLChangesAfterLayoutBeforeTimer(t *testing.T) {
 				t.Fatal("HTML update slept until the unrelated five-second refresh")
 			}
 			painted := false
-			for _, access := range ecs.Query[scene.Text2D](app.World).All {
+			for _, access := range app.World.Query[scene.Text2D]().All {
 				painted = painted || access.Get().Value == "after"
 			}
 			if !painted {
@@ -113,16 +113,16 @@ func TestIdlePublishesFirstFrameSurfaceLifecycle(t *testing.T) {
 			app.SetTargetFPS(0)
 			now := time.Unix(10, 0)
 			app.now = func() time.Time { return now }
-			if err := InstallSystems[UIHTML](app); err != nil {
+			if err := app.InstallSystems[UIHTML](); err != nil {
 				t.Fatal(err)
 			}
 			page := html.New(`<div>firstframe</div>`)
 			page.Width, page.Height = 200, 100
 			bundle := ecs.NewBundle(2)
 			if change != "create" {
-				ecs.Put(&bundle, page)
+				bundle.Put(page)
 			}
-			ecs.Put(&bundle, scene.Visibility{Visible: change != "show"})
+			bundle.Put(scene.Visibility{Visible: change != "show"})
 			owner := app.World.Spawn(bundle)
 			changed := false
 			if err := app.AddSystem(StagePostUpdate, ecs.SystemConfig{
@@ -134,11 +134,11 @@ func TestIdlePublishesFirstFrameSurfaceLifecycle(t *testing.T) {
 					changed = true
 					switch change {
 					case "create":
-						return ecs.Insert(app.World, owner, page)
+						return app.World.Insert(owner, page)
 					case "show":
-						ecs.GetMut[scene.Visibility](app.World, owner).Visible = true
+						app.World.GetMut[scene.Visibility](owner).Visible = true
 					case "remove":
-						ecs.Remove[html.Surface](app.World, owner)
+						app.World.Remove[html.Surface](owner)
 					case "despawn":
 						app.World.Despawn(owner)
 					}
@@ -159,7 +159,7 @@ func TestIdlePublishesFirstFrameSurfaceLifecycle(t *testing.T) {
 				t.Fatalf("follow-up frame: rendered=%v err=%v", rendered, err)
 			}
 			texts := 0
-			for entity, access := range ecs.Query[scene.Text2D](app.World).All {
+			for entity, access := range app.World.Query[scene.Text2D]().All {
 				if access.Get().Value == "firstframe" {
 					texts++
 					if !scene.IsVisible(app.World, entity) {
@@ -192,13 +192,13 @@ func TestIdleFlushesScrollPaintAfterLayout(t *testing.T) {
 			app.SetTargetFPS(fps)
 			now := time.Unix(10, 0)
 			app.now = func() time.Time { return now }
-			if err := InstallSystems[UIHTML](app); err != nil {
+			if err := app.InstallSystems[UIHTML](); err != nil {
 				t.Fatal(err)
 			}
 			page := html.New(`<div id="scroll" style="width:180px;height:80px;overflow:auto"><div style="height:1000px"></div><div style="height:20px">tail</div></div>`)
 			page.Width, page.Height = 200, 100
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, page)
+			bundle.Put(page)
 			owner := app.World.Spawn(bundle)
 			step := func() bool {
 				t.Helper()
@@ -220,7 +220,7 @@ func TestIdleFlushesScrollPaintAfterLayout(t *testing.T) {
 				System: func(*ecs.SystemContext) error {
 					if late {
 						late = false
-						ecs.GetMut[scene.UIScroll](app.World, area).Position[1] = -940
+						app.World.GetMut[scene.UIScroll](area).Position[1] = -940
 						app.RequestRender()
 					}
 					return nil
@@ -249,7 +249,7 @@ func TestIdleFlushesScrollPaintAfterLayout(t *testing.T) {
 				t.Fatal("scroll paint waited for another input event")
 			}
 			painted := false
-			for _, text := range ecs.Query[scene.Text2D](app.World).All {
+			for _, text := range app.World.Query[scene.Text2D]().All {
 				painted = painted || text.Ref().Value == "tail"
 			}
 			if !painted {

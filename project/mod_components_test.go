@@ -7,7 +7,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 )
@@ -32,11 +31,11 @@ func TestModuleIndependentTrailAndMaterialCompileAndInstantiate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trail, ok := ecs.BundleValue[scene.SpriteTrail2D](first)
+	trail, ok := first.Value[scene.SpriteTrail2D]()
 	if !ok || trail.Lifetime != .8 || trail.MaxSamples != 12 {
 		t.Fatal("Trail did not instantiate independently of Sprite")
 	}
-	material, ok := ecs.BundleValue[scene.MeshMaterial2D[ModMaterial2D]](first)
+	material, ok := first.Value[scene.MeshMaterial2D[ModMaterial2D]]()
 	if !ok || material.Material == nil || material.Material.Custom[0][0] != .5 {
 		t.Fatal("default Material did not instantiate independently of Sprite")
 	}
@@ -44,7 +43,7 @@ func TestModuleIndependentTrailAndMaterialCompileAndInstantiate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _ := ecs.BundleValue[scene.MeshMaterial2D[ModMaterial2D]](second)
+	other, _ := second.Value[scene.MeshMaterial2D[ModMaterial2D]]()
 	material.Material.Custom[0][0] = .75
 	if other.Material == material.Material || other.Material.Custom[0][0] != .5 {
 		t.Fatal("material uniforms are shared between instances")
@@ -64,15 +63,15 @@ func TestModuleShaderComponentAppliesToSprite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sprite, ok := ecs.BundleValue[scene.Sprite2D](bundle)
+	sprite, ok := bundle.Value[scene.Sprite2D]()
 	if !ok || sprite.Texture == nil || sprite.Width != 80 || sprite.Height != 40 {
 		t.Fatal("shader component did not prepare the solid sprite for shader rendering")
 	}
-	shader, _ := ecs.BundleValue[scene.Shader[graphics.Material2DShader]](bundle)
+	shader, _ := bundle.Value[scene.Shader[graphics.Material2DShader]]()
 	if shader.Program == nil || shader.Custom[0][0] != .5 {
 		t.Fatal("shader program or uniforms were lost")
 	}
-	if _, ok := ecs.BundleValue[scene.SpriteTrail2D](bundle); !ok {
+	if _, ok := bundle.Value[scene.SpriteTrail2D](); !ok {
 		t.Fatal("Trail was lost when Shader was present")
 	}
 }

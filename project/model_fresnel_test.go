@@ -50,7 +50,7 @@ func TestModelFresnelImportOverridesAndPreprocessing(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			material, ok := ecs.Get[render3d.Material[graphics.StandardMaterial]](scene.World, scene.MustEntity("mesh"))
+			material, ok := scene.World.Get[render3d.Material[graphics.StandardMaterial]](scene.MustEntity("mesh"))
 			if !ok || material.Material == nil {
 				t.Fatal("missing material")
 			}

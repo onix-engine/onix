@@ -15,7 +15,7 @@ func TestContentRenderContextValueReentry(t *testing.T) {
 	var definition *html.Definition[int, int]
 	var saved []ContentRenderContext[int, int]
 	var err error
-	definition, err = ContentDefine[int, int](content, html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], v *html.View) {
+	definition, err = content.Define[int, int](html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], v *html.View) {
 		saved = append(saved, c)
 		if c.Component == 1 {
 			definition.Behavior.Render(second, v)
@@ -32,7 +32,7 @@ func TestContentRenderContextValueReentry(t *testing.T) {
 }
 
 func TestContentRenderBridgeWarmAllocations(t *testing.T) {
-	definition, err := ContentDefine[int, int](&Content{}, html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], _ *html.View) { *c.State = *c.Props }})
+	definition, err := (&Content{}).Define[int, int](html.NewTemplate(`<span></span>`), "", ContentBehavior[int, int]{Render: func(c ContentRenderContext[int, int], _ *html.View) { *c.State = *c.Props }})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,8 +10,6 @@ import (
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	"github.com/diiyw/onix/ui"
 )
 
 type SceneState uint8
@@ -313,8 +311,8 @@ func (m *SceneManager) activate(s *Scene, overlay bool) {
 	m.nextLayer++
 	s.layer.Order = m.nextLayer
 	s.layer.Overlay = overlay
-	_ = ecs.Insert(m.runtime.world, s.uiRoot, s.layer)
-	_ = ecs.Insert(m.runtime.world, s.worldRoot, s.layer)
+	_ = m.runtime.world.Insert(s.uiRoot, s.layer)
+	_ = m.runtime.world.Insert(s.worldRoot, s.layer)
 	m.visibility(s, true)
 	s.state, s.rendered = SceneActive, true
 	s.foreground = true
@@ -347,8 +345,8 @@ func (m *SceneManager) leave(s *Scene, retain bool) error {
 }
 
 func (m *SceneManager) activity(s *Scene, active bool) {
-	_ = ecs.Insert(m.runtime.world, s.uiRoot, scene.Activity{Active: active})
-	_ = ecs.Insert(m.runtime.world, s.worldRoot, scene.Activity{Active: active})
+	_ = m.runtime.world.Insert(s.uiRoot, scene.Activity{Active: active})
+	_ = m.runtime.world.Insert(s.worldRoot, scene.Activity{Active: active})
 }
 
 func (m *SceneManager) visibility(s *Scene, active bool) {
@@ -361,12 +359,12 @@ func (m *SceneManager) visibility(s *Scene, active bool) {
 		for _, e := range c.entities {
 			if active {
 				if v, ok := c.pausedVisibility[e]; ok {
-					_ = ecs.Insert(m.runtime.world, e, v)
+					_ = m.runtime.world.Insert(e, v)
 					delete(c.pausedVisibility, e)
 				}
 			} else if _, saved := c.pausedVisibility[e]; !saved {
-				c.pausedVisibility[e], _ = ecs.Get[scene.Visibility](m.runtime.world, e)
-				_ = ecs.Insert(m.runtime.world, e, scene.Visibility{})
+				c.pausedVisibility[e], _ = m.runtime.world.Get[scene.Visibility](e)
+				_ = m.runtime.world.Insert(e, scene.Visibility{})
 			}
 		}
 		if active {
@@ -375,14 +373,14 @@ func (m *SceneManager) visibility(s *Scene, active bool) {
 	}
 }
 
-func engineSend[T any](r *Runtime, s *Scene, topic string, value T) error {
-	return enqueue(r, typedStore[T](r), value, envelope{kind: engineEvent, source: &s.context, target: &s.context, topic: topic})
+func (r *Runtime) engineSend[T any](s *Scene, topic string, value T) error {
+	return r.enqueue(r.typedStore[T](), value, envelope{kind: engineEvent, source: &s.context, target: &s.context, topic: topic})
 }
 func (m *SceneManager) startup(s *Scene, value SceneStartup) error {
-	return engineSend(m.runtime, s, "scene.startup", value)
+	return m.runtime.engineSend(s, "scene.startup", value)
 }
 func (m *SceneManager) result(s *Scene, value SceneSwitchResult) error {
-	return engineSend(m.runtime, s, "scene.switch.result", value)
+	return m.runtime.engineSend(s, "scene.switch.result", value)
 }
 
 // Preparation parks the active queues and pending table. Separate payload banks
@@ -534,12 +532,16 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 	}
 	// Complete CPU-side transforms, authored UI and static text while scoped to
 	// this scene. Activation only changes lifetime and execution membership.
-	if err = ui.SyncHTML(r.world); err != nil {
-		return target, err
+	if r.content.syncHTML != nil {
+		if err = r.content.syncHTML(r.world); err != nil {
+			return target, err
+		}
 	}
 	r.SyncScopes()
-	if err = ui.UpdateLayout(r.world); err != nil {
-		return target, err
+	if r.content.layout != nil {
+		if err = r.content.layout(r.world); err != nil {
+			return target, err
+		}
 	}
 	if err = scene.SyncGlobalTransformSystem("").Run(r.world); err != nil {
 		return target, err
@@ -547,15 +549,17 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 	if err = scene.SyncUIGlobalTransformSystem("").Run(r.world); err != nil {
 		return target, err
 	}
-	if err = render3d.UpdateDeformationsSystem("").Run(r.world); err != nil {
-		return target, err
+	if r.content.deform != nil {
+		if err = r.content.deform(r.world); err != nil {
+			return target, err
+		}
 	}
 	target.uploads.Reset()
 	for _, entity := range target.entities {
-		if text := ecs.GetMut[scene.Text2D](r.world, entity); text != nil {
+		if text := r.world.GetMut[scene.Text2D](entity); text != nil {
 			scene.PrepareText2D(text)
 		}
-		project.QueueEntityUploads(&target.uploads, r.world, entity)
+		r.content.queueUploads(&target.uploads, r.world, entity)
 	}
 	target.state, target.rendered = SceneReady, false
 	m.visibility(target, false)

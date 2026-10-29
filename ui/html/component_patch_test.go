@@ -1,7 +1,6 @@
 package html
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"testing"
 )
 
@@ -28,7 +27,7 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 			v.Attr("button", "title", "dynamic")
 			v.Attr("button", "class", "retained")
 			v.Event("button", EventClick)
-			AppendComponentChild(v, "slot", 1, child, htmlComponentChildProps{Label: "child"}, struct{}{})
+			v.AppendComponentChild("slot", 1, child, htmlComponentChildProps{Label: "child"}, struct{}{})
 			v.Keyed("keyed", []VNode{TextVNode(2, "span", "keyed")})
 		}, HandleEvent: func(c *ComponentEventContext[struct{}, struct{}]) {
 			if c.Ref == "button" {
@@ -39,18 +38,18 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entity, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	entity, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	incrementalSync(t, world)
-	instance := ecs.GetRef[htmlComponentInstance](world, entity)
+	instance := world.GetRef[htmlComponentInstance](entity)
 	originalChild := instance.ComponentChildren["slot"].Items[0].Entity
 	originalKeyed := instance.Refs["keyed"].Children[0]
 	mode = 1
 	UpdateComponentState[struct{}, struct{}](world, entity, func(*struct{}) {})
 	incrementalSync(t, world)
-	instance = ecs.GetRef[htmlComponentInstance](world, entity)
+	instance = world.GetRef[htmlComponentInstance](entity)
 	if got := htmlNodeText(instance.Refs["status"]); got != "patched" {
 		t.Fatal(got)
 	}
@@ -74,7 +73,7 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 	mode = 0
 	UpdateComponentState[struct{}, struct{}](world, entity, func(*struct{}) {})
 	incrementalSync(t, world)
-	instance = ecs.GetRef[htmlComponentInstance](world, entity)
+	instance = world.GetRef[htmlComponentInstance](entity)
 	if title, _ := instance.Refs["button"].Attr("title"); title != "dynamic" {
 		t.Fatal("full render did not restore patched attribute")
 	}
@@ -84,7 +83,7 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 	mode = 2
 	UpdateComponentState[struct{}, struct{}](world, entity, func(*struct{}) {})
 	incrementalSync(t, world)
-	instance = ecs.GetRef[htmlComponentInstance](world, entity)
+	instance = world.GetRef[htmlComponentInstance](entity)
 	if world.IsAlive(originalChild) || len(instance.Current.Events) != 0 || htmlNodeText(instance.Refs["status"]) != "" || len(instance.Refs["keyed"].Children) != 0 {
 		t.Fatal("full render did not remove omitted bindings")
 	}
@@ -111,18 +110,18 @@ func TestHTMLComponentKeyedPatchPreservesOtherSlots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entity, err := MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1)
+	entity, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	incrementalSync(t, world)
-	instance := ecs.GetRef[htmlComponentInstance](world, entity)
+	instance := world.GetRef[htmlComponentInstance](entity)
 	a, b := instance.Refs["a"].Children[0], instance.Refs["b"].Children[0]
 	for _, step := range []int{1, 1, 0, 1, 2, 0, 3} {
 		mode = step
 		UpdateComponentState[struct{}, struct{}](world, entity, func(*struct{}) {})
 		incrementalSync(t, world)
-		instance = ecs.GetRef[htmlComponentInstance](world, entity)
+		instance = world.GetRef[htmlComponentInstance](entity)
 		if instance.Refs["b"].Children[0] != b {
 			t.Fatal("untouched slot replaced")
 		}

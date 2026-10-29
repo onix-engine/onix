@@ -23,7 +23,7 @@ func memoryPreparationFixture(t testing.TB, count int) (*ecs.World, *renderView3
 	w := ecs.NewWorld()
 	graphics.BindFrame(w, graphics.CurrentContext())
 	Register(w)
-	state := renderWorld3D(w)
+	state := WorldFor(w)
 	t.Cleanup(func() { _ = state.Dispose() })
 	view := state.viewFor(1)
 	state.viewOrder = []ecs.Entity{1}
@@ -68,13 +68,13 @@ func TestPreparedPhasesShareSnapshots(t *testing.T) {
 
 func TestExtractionReleasesRemovedMeshReferences(t *testing.T) {
 	w, _ := memoryPreparationFixture(t, 0)
-	cameras := ecs.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform](w)
+	cameras := w.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform]()
 	camera := scene.NewCamera()
 	camera.Viewport = scene.CameraViewport{Width: 800, Height: 600}
 	entity := cameras.Spawn(camera, Camera{}, scene.PerspectiveProjection3D(), scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	mesh := graphics.CubeMesh(1)
 	t.Cleanup(func() { _ = mesh.Dispose() })
-	meshes := ecs.NewSpawner2[Mesh, scene.GlobalTransform](w)
+	meshes := w.NewSpawner2[Mesh, scene.GlobalTransform]()
 	first := meshes.Spawn(Mesh{Mesh: mesh}, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -5)})
 	second := meshes.Spawn(Mesh{Mesh: mesh}, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -6)})
 	frame := func() {
@@ -85,7 +85,7 @@ func TestExtractionReleasesRemovedMeshReferences(t *testing.T) {
 		}
 	}
 	frame()
-	view := renderWorld3D(w).views[entity]
+	view := WorldFor(w).views[entity]
 	if len(view.extracted) != 2 {
 		t.Fatal("meshes were not extracted")
 	}
@@ -134,8 +134,8 @@ func TestPreparationReleasesTemporaryResourceReferences(t *testing.T) {
 	mesh := graphics.CubeMesh(1)
 	t.Cleanup(func() { _ = mesh.Dispose() })
 	view.extracted[0].mesh, view.extracted[0].vertices = mesh, nil
-	meshes := ecs.FrameScratchMap[preparedMeshHandles3DScratch, *graphics.Mesh, render.MeshHandle](w)
-	textures := ecs.FrameScratchMap[preparedTextureHandles3DScratch, *graphics.Texture, render.TextureHandle](w)
+	meshes := w.FrameScratchMap[preparedMeshHandles3DScratch, *graphics.Mesh, render.MeshHandle]()
+	textures := w.FrameScratchMap[preparedTextureHandles3DScratch, *graphics.Texture, render.TextureHandle]()
 	if err := PrepareSystem("").Run(w); err != nil {
 		t.Fatal(err)
 	}
@@ -146,17 +146,17 @@ func TestPreparationReleasesTemporaryResourceReferences(t *testing.T) {
 
 func TestExtractionCleansUpPartiallyInitializedShadows(t *testing.T) {
 	w, _ := memoryPreparationFixture(t, 0)
-	cameras := ecs.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform](w)
+	cameras := w.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform]()
 	cameras.Spawn(scene.NewCamera(), Camera{}, scene.PerspectiveProjection3D(), scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	if err := scene.ExtractCamerasSystem("").Run(w); err != nil {
 		t.Fatal(err)
 	}
-	renderState, _ := ecs.GetResource[*scene.RenderWorld](w)
+	renderState, _ := w.GetResource[*scene.RenderWorld]()
 	renderState.Cameras[0].Transform.Matrix = mgl32.Mat4{}
 	sun := NewDirectionalLight()
 	sun.Shadows = NewShadowSettings()
 	sun.Shadows.Cascades = 2
-	lights := ecs.NewSpawner2[DirectionalLight, scene.GlobalTransform](w)
+	lights := w.NewSpawner2[DirectionalLight, scene.GlobalTransform]()
 	lights.Spawn(sun, scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	if err := ExtractSystem("").Run(w); err == nil {
 		t.Fatal("singular shadow camera was accepted")
@@ -167,7 +167,7 @@ func TestRenderViewReleasesUnusedDeformationData(t *testing.T) {
 	w, view := memoryPreparationFixture(t, 0)
 	view.frame.Camera.viewport = scene.CameraViewport{Width: 800, Height: 600}
 	view.deformations = []render.MeshDeformationData{{JointMatrices: make([][16]float32, 64), MorphWeights: []float32{1}}}
-	if err := render3DView(graphics.CurrentContext(), renderWorld3D(w), view); err != nil {
+	if err := render3DView(graphics.CurrentContext(), WorldFor(w), view); err != nil {
 		t.Fatal(err)
 	}
 	for _, deformation := range view.deformations[:cap(view.deformations)] {

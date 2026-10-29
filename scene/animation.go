@@ -141,13 +141,13 @@ func NewAnimationTrack[T any](binding AnimationBinding, keyframes []AnimationKey
 	return AnimationTrack[T]{Binding: binding, Keyframes: slices.Clone(keyframes)}
 }
 
-func SampleAnimationTrack[T any](track AnimationTrack[T], time float32, interpolate func(T, T, float32) T) (T, bool) {
+func (track AnimationTrack[T]) Sample(time float32, interpolate func(T, T, float32) T) (T, bool) {
 	var zero T
 	keys := track.Keyframes
 	if len(keys) == 0 || !isFiniteAnimationValue(time) {
 		return zero, false
 	}
-	time = animationTrackTime(&track, time)
+	time = track.sampleTime(time)
 	if time <= keys[0].Time || len(keys) == 1 {
 		return keys[0].Value, true
 	}
@@ -167,10 +167,10 @@ func SampleAnimationTrack[T any](track AnimationTrack[T], time float32, interpol
 	}
 	progress := min(max((time-previous.Time)/span, float32(0)), float32(1))
 	if tween == AnimationCubicSpline {
-		if value, ok := sampleAnimationQuaternionSpline(previous, keys[next], span, progress); ok {
+		if value, ok := previous.sampleQuaternionSpline(keys[next], span, progress); ok {
 			return value, true
 		}
-		if value, ok := sampleAnimationCubicValue(previous, keys[next], span, progress); ok {
+		if value, ok := previous.sampleCubicValue(keys[next], span, progress); ok {
 			return value, true
 		}
 	}
@@ -195,7 +195,7 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 	if track == nil || len(track.Keyframes) == 0 {
 		return 0, false
 	}
-	time = animationTrackTime(track, time)
+	time = track.sampleTime(time)
 	keys := track.Keyframes
 	if time <= keys[0].Time || len(keys) == 1 {
 		*cursor = 0
@@ -229,7 +229,7 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 	progress := min(max((time-previous.Time)*inverseSpan, float32(0)), float32(1))
 	if previous.Tween == AnimationCubicSpline {
 		span := float32(1) / inverseSpan
-		if value, ok := sampleAnimationQuaternionSpline(previous, keys[index+1], span, progress); ok {
+		if value, ok := previous.sampleQuaternionSpline(keys[index+1], span, progress); ok {
 			return any(value).(float32), true
 		}
 		return cubicHermiteFloat32(previous.Value, keys[index+1].Value, previous.OutTangent*span, keys[index+1].InTangent*span, progress), true
@@ -240,7 +240,7 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 	return previous.Value + (keys[index+1].Value-previous.Value)*progress, true
 }
 
-func sampleAnimationQuaternionSpline[T any](left, right AnimationKeyframe[T], span, progress float32) (T, bool) {
+func (left AnimationKeyframe[T]) sampleQuaternionSpline(right AnimationKeyframe[T], span, progress float32) (T, bool) {
 	component := left.QuaternionSpline.Component
 	if component == 0 || component > 3 || right.QuaternionSpline.Component != component {
 		var zero T
@@ -295,7 +295,7 @@ func unwrapAnimationAngle(reference, value float32) float32 {
 	return value
 }
 
-func sampleAnimationCubicValue[T any](left, right AnimationKeyframe[T], span, progress float32) (T, bool) {
+func (left AnimationKeyframe[T]) sampleCubicValue(right AnimationKeyframe[T], span, progress float32) (T, bool) {
 	if value, ok := any(left.Value).(float32); ok {
 		result := cubicHermiteFloat32(value, any(right.Value).(float32), any(left.OutTangent).(float32)*span, any(right.InTangent).(float32)*span, progress)
 		return any(result).(T), true
@@ -310,12 +310,12 @@ func cubicHermiteFloat32(left, right, outTangent, inTangent, progress float32) f
 	return (2*t3-3*t2+1)*left + (t3-2*t2+progress)*outTangent + (-2*t3+3*t2)*right + (t3-t2)*inTangent
 }
 
-func sampleAnimationDiscreteTrackAt[T any](track *AnimationTrack[T], time float32, cursor *int) (T, bool) {
+func (track *AnimationTrack[T]) sampleDiscreteAt(time float32, cursor *int) (T, bool) {
 	var zero T
 	if track == nil || len(track.Keyframes) == 0 {
 		return zero, false
 	}
-	time = animationTrackTime(track, time)
+	time = track.sampleTime(time)
 	keys := track.Keyframes
 	if time <= keys[0].Time || len(keys) == 1 {
 		*cursor = 0
@@ -463,7 +463,7 @@ func prepareAnimationTracks[T any](tracks []AnimationTrack[T], allowed func(anim
 	var requirements uint8
 	for index := range tracks {
 		track := &tracks[index]
-		if err := prepareAnimationTrack(track, allowed); err != nil {
+		if err := track.prepare(allowed); err != nil {
 			return nil, 0, err
 		}
 		if track.root {
@@ -491,7 +491,7 @@ func boolAnimationTargetCode(target animationTargetCode) bool {
 	return target == animationTargetVisible
 }
 
-func prepareAnimationTrack[T any](track *AnimationTrack[T], allowed func(animationTargetCode) bool) error {
+func (track *AnimationTrack[T]) prepare(allowed func(animationTargetCode) bool) error {
 	target := compileAnimationTarget(track.Binding.Target)
 	if !allowed(target) {
 		return fmt.Errorf("ecs: unsupported animation target %q", track.Binding.Target)
@@ -812,7 +812,7 @@ func (a *Animator) CurrentTexture() *graphics.Texture {
 	}
 	for _, trackIndex := range a.Clip.rootTextureTracks {
 		track := a.Clip.TextureTracks[trackIndex]
-		texture, _ := SampleAnimationTrack(track, a.Time(), nil)
+		texture, _ := track.Sample(a.Time(), nil)
 		return texture
 	}
 	return nil
@@ -853,20 +853,22 @@ func updateAnimatorsFiltered(context *ecs.SystemContext, space uint8) error {
 		return nil
 	}
 	delta := float32(0)
-	if clock, ok := ecs.GetResource[*Time](world); ok && clock != nil {
+	if clock, ok := world.GetResource[*Time](); ok && clock != nil {
 		delta = clock.DeltaSeconds()
 	}
 	validDelta := delta > 0 && isFiniteAnimationValue(delta)
 	var applyErr error
-	for entity, access := range ecs.Query[Animator](world).All {
+	var bindings *animationComponentBindings
+	for entity, access := range world.Query[Animator]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
-		animator := access.Mut()
+		animator := access.Ref()
 
 		if animatorSpace(world, entity, animator) != space {
 			continue
 		}
+		animator = access.Mut()
 		if validDelta {
 			animator.advanceValid(delta)
 		} else {
@@ -877,7 +879,11 @@ func updateAnimatorsFiltered(context *ecs.SystemContext, space uint8) error {
 			break
 		}
 		if animator.dirty {
-			if err := applyAnimator(world, entity, animator); err != nil {
+			if bindings == nil {
+				bindings = world.FrameValue[animationComponentBindingsTag, animationComponentBindings]()
+				bindings.bind(world)
+			}
+			if err := applyAnimator(world, entity, animator, bindings); err != nil {
 				applyErr = err
 				break
 			}
@@ -894,21 +900,21 @@ func animatorSpace(world *ecs.World, entity ecs.Entity, animator *Animator) uint
 	}
 	if animator != nil && animator.IsBound() {
 		if animator.owner != 0 {
-			if ecs.Has[UITransform](world, animator.owner) {
+			if world.Has[UITransform](animator.owner) {
 				return 2
 			}
-			if ecs.Has[Transform](world, animator.owner) {
+			if world.Has[Transform](animator.owner) {
 				return 1
 			}
 		}
 	}
-	if ecs.Has[UITransform](world, entity) {
+	if world.Has[UITransform](entity) {
 		return 2
 	}
 	return 1
 }
 
-func applyAnimator(world *ecs.World, entity ecs.Entity, animator *Animator) error {
+func applyAnimator(world *ecs.World, entity ecs.Entity, animator *Animator, bindings *animationComponentBindings) error {
 	if animator == nil || animator.Clip == nil {
 		return nil
 	}
@@ -919,23 +925,24 @@ func applyAnimator(world *ecs.World, entity ecs.Entity, animator *Animator) erro
 		return nil
 	}
 	if animator.IsBound() {
-		return applyBoundAnimator(world, animator)
+		return applyBoundAnimator(world, animator, bindings)
 	}
 	floatCursors, textureCursors, boolCursors := animator.cursorSlices()
-	targets, err := animationComponents(world, entity, animator.Clip.rootRequirements)
+	targets, err := animationComponents(world, entity, animator.Clip.rootRequirements, bindings)
 	if err != nil {
 		return err
 	}
 	for _, trackIndex := range animator.Clip.rootTextureTracks {
 		track := &animator.Clip.TextureTracks[trackIndex]
-		value, ok := sampleAnimationDiscreteTrackAt(track, time, &textureCursors[trackIndex])
+		value, ok := track.sampleDiscreteAt(time, &textureCursors[trackIndex])
 		if !ok {
 			continue
 		}
-		targets.sprite.Texture = value
-		// A frame animation owns the sampled texture. A NineSlice authored for
-		// the previous static sprite texture is no longer valid for the frame.
-		targets.sprite.Slice = nil
+		// Frame animation replaces any NineSlice belonging to the static texture.
+		if sprite := targets.sprite.Ref(); sprite.Texture != value || sprite.Slice != nil {
+			sprite = targets.sprite.Mut()
+			sprite.Texture, sprite.Slice = value, nil
+		}
 	}
 	rotation := animationRotationValues{}
 	if animator.Clip.hasRootRotationTracks {
@@ -951,53 +958,74 @@ func applyAnimator(world *ecs.World, entity ecs.Entity, animator *Animator) erro
 		if rotation.set(track.target, value) {
 			continue
 		}
-		if err := applyFloatAnimationTarget(targets, track.target, value); err != nil {
+		if err := applyFloatAnimationTarget(&targets, track.target, value); err != nil {
 			return err
 		}
 	}
 	if rotation.any() {
-		if err := applyRotationAnimationTarget(targets, rotation); err != nil {
+		if err := applyRotationAnimationTarget(&targets, rotation); err != nil {
 			return err
 		}
 	}
 	for _, trackIndex := range animator.Clip.rootBoolTracks {
 		track := &animator.Clip.BoolTracks[trackIndex]
-		value, ok := sampleAnimationDiscreteTrackAt(track, time, &boolCursors[trackIndex])
+		value, ok := track.sampleDiscreteAt(time, &boolCursors[trackIndex])
 		if !ok {
 			continue
 		}
-		targets.visibility.Visible = value
+		ecs.CommitComponent(targets.visibility, Visibility{Visible: value})
 	}
 	return nil
 }
 
 type animationTargetComponents struct {
-	sprite     *Sprite2D
-	transform  *Transform
-	ui         *UITransform
-	visibility *Visibility
+	sprite     ecs.ComponentAccess[Sprite2D]
+	transform  ecs.ComponentAccess[Transform]
+	ui         ecs.ComponentAccess[UITransform]
+	visibility ecs.ComponentAccess[Visibility]
 }
 
-func animationComponents(world *ecs.World, entity ecs.Entity, requirements uint8) (animationTargetComponents, error) {
+type animationComponentBindingsTag struct{}
+type animationComponentBindings struct {
+	sprite     ecs.ComponentBinding[Sprite2D]
+	transform  ecs.ComponentBinding[Transform]
+	ui         ecs.ComponentBinding[UITransform]
+	visibility ecs.ComponentBinding[Visibility]
+	ready      bool
+}
+
+func (bindings *animationComponentBindings) bind(world *ecs.World) {
+	if bindings.ready {
+		return
+	}
+	bindings.sprite = world.BindComponent[Sprite2D]()
+	bindings.transform = world.BindComponent[Transform]()
+	bindings.ui = world.BindComponent[UITransform]()
+	bindings.visibility = world.BindComponent[Visibility]()
+	bindings.ready = true
+}
+
+func animationComponents(world *ecs.World, entity ecs.Entity, requirements uint8, bindings *animationComponentBindings) (animationTargetComponents, error) {
+	row := world.Row(entity)
 	result := animationTargetComponents{}
 	if requirements&animationNeedsSprite != 0 {
-		result.sprite = ecs.GetMut[Sprite2D](world, entity)
-		if result.sprite == nil {
+		result.sprite = bindings.sprite.Access(row)
+		if result.sprite.Ref() == nil {
 			return result, fmt.Errorf("ecs: animation requires Sprite2D")
 		}
 	}
 	if requirements&animationNeedsTransform != 0 {
-		result.transform = ecs.GetMut[Transform](world, entity)
-		if result.transform == nil {
-			result.ui = ecs.GetMut[UITransform](world, entity)
+		result.transform = bindings.transform.Access(row)
+		if result.transform.Ref() == nil {
+			result.ui = bindings.ui.Access(row)
 		}
-		if result.transform == nil && result.ui == nil {
+		if result.transform.Ref() == nil && result.ui.Ref() == nil {
 			return result, fmt.Errorf("ecs: animation requires Transform or UITransform")
 		}
 	}
 	if requirements&animationNeedsVisibility != 0 {
-		result.visibility = ecs.GetMut[Visibility](world, entity)
-		if result.visibility == nil {
+		result.visibility = bindings.visibility.Access(row)
+		if result.visibility.Ref() == nil {
 			return result, fmt.Errorf("ecs: animation requires Visibility")
 		}
 	}
@@ -1013,10 +1041,10 @@ func animationRotationValuesForEntity(world *ecs.World, entity ecs.Entity) anima
 	if world == nil || entity == 0 {
 		return animationRotationValues{}
 	}
-	if transform, ok := ecs.Get[Transform](world, entity); ok {
+	if transform, ok := world.Get[Transform](entity); ok {
 		return animationRotationValuesFromQuat(transform.Rotation)
 	}
-	if transform, ok := ecs.Get[UITransform](world, entity); ok {
+	if transform, ok := world.Get[UITransform](entity); ok {
 		return animationRotationValues{z: transform.Rotation}
 	}
 	return animationRotationValues{}
@@ -1062,21 +1090,26 @@ func (r *animationRotationValues) set(target animationTargetCode, value float32)
 
 func (r animationRotationValues) any() bool { return r.hasX || r.hasY || r.hasZ }
 
-func applyRotationAnimationTarget(targets animationTargetComponents, rotation animationRotationValues) error {
-	if targets.transform != nil {
+func applyRotationAnimationTarget(targets *animationTargetComponents, rotation animationRotationValues) error {
+	if targets.transform.Ref() != nil {
 		rx := mgl32.QuatRotate(rotation.x, mgl32.Vec3{1, 0, 0})
 		ry := mgl32.QuatRotate(rotation.y, mgl32.Vec3{0, 1, 0})
 		rz := mgl32.QuatRotate(rotation.z, mgl32.Vec3{0, 0, 1})
-		targets.transform.Rotation = rz.Mul(ry).Mul(rx).Normalize()
+		rotation := rz.Mul(ry).Mul(rx).Normalize()
+		if targets.transform.Ref().Rotation != rotation {
+			targets.transform.Mut().Rotation = rotation
+		}
 		return nil
 	}
-	if targets.ui == nil {
+	if targets.ui.Ref() == nil {
 		return fmt.Errorf("ecs: animation rotation requires Transform or UITransform")
 	}
 	if rotation.hasX || rotation.hasY {
 		return fmt.Errorf("ecs: X/Y rotation animation is not available on UITransform")
 	}
-	targets.ui.Rotation = rotation.z
+	if targets.ui.Ref().Rotation != rotation.z {
+		targets.ui.Mut().Rotation = rotation.z
+	}
 	return nil
 }
 
@@ -1085,7 +1118,7 @@ func emitAnimatorEvents(world *ecs.World, entity ecs.Entity, animator *Animator)
 		return
 	}
 	emit := func(event AnimationEvent) {
-		ecs.WriteMessage(world, AnimationEventMessage{Entity: entity, Name: event.Name, Value: event.Value})
+		world.WriteMessage(AnimationEventMessage{Entity: entity, Name: event.Name, Value: event.Value})
 	}
 	previous, current := float32(animator.previousTime), animator.Time()
 	if animator.emitStart {
@@ -1121,44 +1154,56 @@ func emitAnimatorEvents(world *ecs.World, entity ecs.Entity, animator *Animator)
 	animator.emitStart = false
 }
 
-func applyFloatAnimationTarget(targets animationTargetComponents, target animationTargetCode, value float32) error {
+func applyFloatAnimationTarget(targets *animationTargetComponents, target animationTargetCode, value float32) error {
 	if target == animationTargetSpriteAlpha {
-		targets.sprite.Alpha = value
+		setAnimationFloat(targets.sprite, &targets.sprite.Ref().Alpha, value)
 		return nil
 	}
-	if targets.transform != nil {
+	var field *float32
+	if transform := targets.transform.Ref(); transform != nil {
 		switch target {
 		case animationTargetPositionX:
-			targets.transform.Translation[0] = value
+			field = &transform.Translation[0]
 		case animationTargetPositionY:
-			targets.transform.Translation[1] = value
+			field = &transform.Translation[1]
 		case animationTargetPositionZ:
-			targets.transform.Translation[2] = value
+			field = &transform.Translation[2]
 		case animationTargetScaleX:
-			targets.transform.Scale[0] = value
+			field = &transform.Scale[0]
 		case animationTargetScaleY:
-			targets.transform.Scale[1] = value
+			field = &transform.Scale[1]
 		case animationTargetScaleZ:
-			targets.transform.Scale[2] = value
+			field = &transform.Scale[2]
 		default:
 			return fmt.Errorf("ecs: unsupported float animation target %d", target)
 		}
+		setAnimationFloat(targets.transform, field, value)
 		return nil
 	}
-	if targets.ui == nil {
+	transform := targets.ui.Ref()
+	if transform == nil {
 		return fmt.Errorf("ecs: animation target %d requires Transform or UITransform", target)
 	}
 	switch target {
 	case animationTargetPositionX:
-		targets.ui.Translation.X.Value = value
+		field = &transform.Translation.X.Value
 	case animationTargetPositionY:
-		targets.ui.Translation.Y.Value = value
+		field = &transform.Translation.Y.Value
 	case animationTargetScaleX:
-		targets.ui.Scale[0] = value
+		field = &transform.Scale[0]
 	case animationTargetScaleY:
-		targets.ui.Scale[1] = value
+		field = &transform.Scale[1]
 	default:
 		return fmt.Errorf("ecs: animation target %d is not available on UITransform", target)
 	}
+	setAnimationFloat(targets.ui, field, value)
 	return nil
+}
+
+// field belongs to access; mark the component only when its sampled field changes.
+func setAnimationFloat[T any](access ecs.ComponentAccess[T], field *float32, value float32) {
+	if *field != value {
+		access.Mut()
+		*field = value
+	}
 }

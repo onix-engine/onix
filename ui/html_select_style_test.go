@@ -16,25 +16,25 @@ func TestHTMLSelectInteractionPaletteUpdatesRetainedOptions(t *testing.T) {
 	surface := htmlui.New(`<select id="mode" style="width:160px;color:#123456;background:#eeeeee"><option>First</option><option>Second</option></select>`)
 	surface.Width, surface.Height, surface.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, surface)
+	bundle.Put(surface)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	control := htmlControlByID(t, world, owner, "mode")
-	item := ecs.GetRef[htmlSelectorRuntime](world, control).Items[1]
+	item := world.GetRef[htmlSelectorRuntime](control).Items[1]
 	body := findSurfacePart[BodyPart](world, item)
 	for _, active := range []graphics.ColorRGBA{graphics.ColorFromRGB(60, 80, 100), graphics.ColorFromRGB(180, 200, 220)} {
 		foreground := graphics.ColorFromRGB(30, 40, 50)
-		_ = ecs.Insert(world, owner, HTMLSelectStyle{
+		_ = world.Insert(owner, HTMLSelectStyle{
 			Item: NewStateStyle(SurfaceStyle{}).WithSelected(ColorSurface(active)).WithHovered(ColorSurface(active)).WithPressed(ColorSurface(active)),
 			Text: NewStateStyle(graphics.ColorRGBA{}).WithSelected(foreground).WithHovered(foreground).WithPressed(foreground),
 		})
 		for _, state := range []ControlState{{}, {Selected: true}, {Hovered: true}, {Pressed: true}, {Selected: true, Disabled: true}} {
 			SetControlSelected(world, item, state.Selected)
 			SetControlDisabled(world, item, state.Disabled)
-			_ = ecs.Insert(world, item, scene.InputState2D{Hovered: state.Hovered, Pressed: state.Pressed})
+			_ = world.Insert(item, scene.InputState2D{Hovered: state.Hovered, Pressed: state.Pressed})
 			// Sync visuals directly to preserve the interaction state under test.
 			syncTextContent(world, DefaultTheme())
 			view, _ := controlViewFor(world, item)
@@ -44,11 +44,11 @@ func TestHTMLSelectInteractionPaletteUpdatesRetainedOptions(t *testing.T) {
 			if !state.Disabled && (state.Selected || state.Hovered || state.Pressed) {
 				wantBackground, wantText = active, foreground
 			}
-			if got := ecs.GetRef[scene.UIBackground2D](world, body).Shape.Fill; got != wantBackground {
+			if got := world.GetRef[scene.UIBackground2D](body).Shape.Fill; got != wantBackground {
 				t.Fatalf("state %+v: background = %v, want %v", state, got, wantBackground)
 			}
 			labels := 0
-			for _, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+			for _, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 				if access.A.Ref().Owner == item {
 					if got := access.B.Ref().Color; got != wantText {
 						t.Fatalf("state %+v: text = %v, want %v", state, got, wantText)

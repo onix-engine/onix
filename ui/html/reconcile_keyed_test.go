@@ -9,7 +9,7 @@ import (
 
 func TestHTMLKeyedSlotPreservesStaticChildrenAndReleasesReplacedNodes(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner1[Surface](world)
+	spawner := world.NewSpawner1[Surface]()
 	page := spawner.Spawn(New(""))
 	parent := dom.NewElement("ul", nil)
 	before, after := dom.NewElement("header", nil), dom.NewElement("footer", nil)
@@ -48,7 +48,7 @@ func BenchmarkRefactorHTMLKeyedList(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			world := ecs.NewWorld()
-			owner := ecs.NewSpawner1[Surface](world)
+			owner := world.NewSpawner1[Surface]()
 			page := owner.Spawn(New(""))
 			parent := dom.NewElement("ul", nil)
 			keyed := &htmlComponentKeyedList{}
@@ -79,7 +79,7 @@ func BenchmarkRefactorHTMLKeyedList(b *testing.B) {
 
 func TestHTMLKeyedBatchRemovalPreservesStaticChildren(t *testing.T) {
 	world := ecs.NewWorld()
-	owners := ecs.NewSpawner1[Surface](world)
+	owners := world.NewSpawner1[Surface]()
 	owner := owners.Spawn(New(""))
 	parent := dom.NewElement("ul", nil)
 	before, after := dom.NewElement("header", nil), dom.NewElement("footer", nil)

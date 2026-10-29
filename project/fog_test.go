@@ -28,7 +28,7 @@ func TestFogAndToneMappingSceneBinaryAndLiveEdits(t *testing.T) {
 	}
 	t.Cleanup(scene.Dispose)
 	entity := scene.MustEntity("camera")
-	camera, _ := ecs.Get[render3d.Camera](scene.World, entity)
+	camera, _ := scene.World.Get[render3d.Camera](entity)
 	if camera.ToneMapping != graphics.ToneMappingACES || !camera.Fog.Enabled || camera.Fog.Mode != render3d.FogExp2 || camera.Fog.Density != .04 || camera.Fog.Brightness != 800 || camera.Fog.Start != 20 {
 		t.Fatal("fog/curve defaults lost", camera)
 	}
@@ -60,7 +60,7 @@ func TestFogAndToneMappingSceneBinaryAndLiveEdits(t *testing.T) {
 	if err := scene.ApplyNode(spec); err != nil {
 		t.Fatal(err)
 	}
-	camera, _ = ecs.Get[render3d.Camera](scene.World, entity)
+	camera, _ = scene.World.Get[render3d.Camera](entity)
 	if camera.Fog.Mode != render3d.FogLinear || camera.Fog.Start != 10 {
 		t.Fatal("live fog edit lost")
 	}
@@ -69,7 +69,7 @@ func TestFogAndToneMappingSceneBinaryAndLiveEdits(t *testing.T) {
 	if err := scene.ApplyNode(spec); err != nil {
 		t.Fatal(err)
 	}
-	camera, _ = ecs.Get[render3d.Camera](scene.World, entity)
+	camera, _ = scene.World.Get[render3d.Camera](entity)
 	if camera.Fog.Enabled || camera.ToneMapping != "" {
 		t.Fatal("live fog/curve removal lost")
 	}

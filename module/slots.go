@@ -102,7 +102,7 @@ func (c *Context) Slot(name string) (Slot, error) {
 }
 
 // Value is a borrowed read-only view until the next write. Fields storage belongs
-// to the instance; use ReadSlot for a concrete scalar/contract value.
+// to the instance; use Read[T] for a concrete scalar/contract value.
 func (s Slot) Value() (project.SlotValue, bool) {
 	if !s.context.usable() {
 		return project.SlotValue{}, false
@@ -110,7 +110,7 @@ func (s Slot) Value() (project.SlotValue, bool) {
 	return s.context.slots[s.index].value, true
 }
 
-func ReadSlot[T any](s Slot) (T, error) {
+func (s Slot) Read[T any]() (T, error) {
 	value, ok := s.Value()
 	if !ok {
 		var zero T
@@ -195,7 +195,7 @@ func initVisualSlot(world *ecs.World, state *slotState) error {
 	if state.value.Type != project.VisualValue {
 		return nil
 	}
-	return ecs.Insert(world, state.entity, scene.RenderOutput2D{})
+	return world.Insert(state.entity, scene.RenderOutput2D{})
 }
 
 // SlotWriter is resolved by the application/scene orchestrator. Modules obtain

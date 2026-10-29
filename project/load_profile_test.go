@@ -30,10 +30,10 @@ func TestConfiguredProjectInstantiatesStaticScene(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate static scene: %v", err)
 	}
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, scene.MustEntity("background")) {
+	if !scene.World.Has[sceneapi.Sprite2D](scene.MustEntity("background")) {
 		t.Fatal("static sprite was not instantiated")
 	}
-	if !ecs.Has[sceneapi.Text2D](scene.World, scene.MustEntity("label")) {
+	if !scene.World.Has[sceneapi.Text2D](scene.MustEntity("label")) {
 		t.Fatal("static text was not instantiated")
 	}
 }

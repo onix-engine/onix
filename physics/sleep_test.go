@@ -13,8 +13,8 @@ func sleepPair() (*World, Body, Body) {
 	d := NewBodyDef(BodyDynamic)
 	d.Position = V(1.99, 0)
 	b := w.CreateBody(d)
-	AddCollider(w, a, NewColliderDef(Circle{Radius: 1}))
-	AddCollider(w, b, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(a, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(b, NewColliderDef(Circle{Radius: 1}))
 	for range 120 {
 		w.Step(1.0 / 60)
 	}
@@ -43,22 +43,22 @@ func TestSleepSupportRemovalAndConfig(t *testing.T) {
 	w := NewWorld()
 	w.Sleep.Enabled = true
 	floor := w.CreateBody(NewBodyDef(BodyStatic))
-	shape := AddCollider(w, floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(10, 1)}))
+	shape := w.AddCollider(floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(10, 1)}))
 	d := NewBodyDef(BodyDynamic)
 	d.Position = V(0, 1)
 	body := w.CreateBody(d)
-	AddCollider(w, body, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(body, NewColliderDef(Circle{Radius: 1}))
 	for range 240 {
 		w.Step(1.0 / 60)
 	}
 	if !body.IsSleeping() {
 		t.Fatalf("resting body did not sleep: %+v", *body.state())
 	}
-	RemoveCollider(w, shape)
+	w.RemoveCollider(shape)
 	// Reusing the support collider slot must preserve the former island wake.
 	replacement := NewBodyDef(BodyStatic)
 	replacement.Position = V(100, 0)
-	AddCollider(w, w.CreateBody(replacement), NewColliderDef(NewBox(2, 2)))
+	w.AddCollider(w.CreateBody(replacement), NewColliderDef(NewBox(2, 2)))
 	w.Step(1.0 / 60)
 	if body.IsSleeping() || body.Velocity().Y >= 0 {
 		t.Fatal("removed support did not wake body")
@@ -86,14 +86,14 @@ func TestDenseStackIslandSleepsAndWakes(t *testing.T) {
 	w.Iterations = 16
 	w.CellSize = 2
 	floor := w.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(w, floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(5, 1)}))
+	w.AddCollider(floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(5, 1)}))
 	bodies := make([]Body, 8)
 	for i := range bodies {
 		d := NewBodyDef(BodyDynamic)
 		d.Position = V(0, float64(i)*1.99+1)
 		d.FixedRotation = true
 		bodies[i] = w.CreateBody(d)
-		AddCollider(w, bodies[i], NewColliderDef(NewBox(2, 2)))
+		w.AddCollider(bodies[i], NewColliderDef(NewBox(2, 2)))
 	}
 	for range 1200 {
 		w.Step(1.0 / 60)
@@ -116,7 +116,7 @@ func TestNewStaticContactWakesSleepingBody(t *testing.T) {
 	w.Gravity = Vector{}
 	w.Sleep.Enabled = true
 	b := w.CreateBody(NewBodyDef(BodyDynamic))
-	AddCollider(w, b, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(b, NewColliderDef(Circle{Radius: 1}))
 	for range 60 {
 		w.Step(1.0 / 60)
 	}
@@ -125,7 +125,7 @@ func TestNewStaticContactWakesSleepingBody(t *testing.T) {
 	}
 	d := NewBodyDef(BodyStatic)
 	d.Position = V(1.5, 0)
-	AddCollider(w, w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(w.CreateBody(d), NewColliderDef(Circle{Radius: 1}))
 	w.Step(1.0 / 60)
 	if b.IsSleeping() || b.Position().X >= 0 {
 		t.Fatal("new static contact did not wake/correct sleeping body")
@@ -135,14 +135,14 @@ func TestCommonStaticSupportDoesNotJoinIndependentIslands(t *testing.T) {
 	w := NewWorld()
 	w.Sleep.Enabled = true
 	floor := w.CreateBody(NewBodyDef(BodyStatic))
-	AddCollider(w, floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(20, 1)}))
+	w.AddCollider(floor, NewColliderDef(Box{Center: V(0, -1), HalfExtents: V(20, 1)}))
 	d := NewBodyDef(BodyDynamic)
 	d.Position = V(-5, 1)
 	a := w.CreateBody(d)
 	d.Position = V(5, 1)
 	b := w.CreateBody(d)
-	AddCollider(w, a, NewColliderDef(Circle{Radius: 1}))
-	AddCollider(w, b, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(a, NewColliderDef(Circle{Radius: 1}))
+	w.AddCollider(b, NewColliderDef(Circle{Radius: 1}))
 	for range 240 {
 		w.Step(1.0 / 60)
 	}

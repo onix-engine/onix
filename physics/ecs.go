@@ -31,10 +31,10 @@ func stepECS2D(context *ecs.SystemContext) error {
 		return nil
 	}
 	world := context.World
-	runtime, ok := ecs.GetResource[*Runtime2D](world)
+	runtime, ok := world.GetResource[*Runtime2D]()
 	if !ok || runtime == nil {
 		runtime = NewRuntime2D()
-		ecs.InsertResource(world, runtime)
+		world.InsertResource(runtime)
 	}
 	if runtime.Simulation == nil {
 		runtime.Simulation = NewWorld()
@@ -46,12 +46,12 @@ func stepECS2D(context *ecs.SystemContext) error {
 	if err := runtime.syncBodies(world); err != nil {
 		return err
 	}
-	syncECSColliders[Circle](runtime, world)
-	syncECSColliders[Box](runtime, world)
-	syncECSColliders[Segment](runtime, world)
+	runtime.syncECSColliders[Circle](world)
+	runtime.syncECSColliders[Box](world)
+	runtime.syncECSColliders[Segment](world)
 	runtime.sweepManaged()
 	delta := 1.0 / 60
-	if time, ok := ecs.GetResource[*scene.Time](world); ok && time != nil && time.Delta > 0 {
+	if time, ok := world.GetResource[*scene.Time](); ok && time != nil && time.Delta > 0 {
 		delta = time.Delta.Seconds()
 	}
 	runtime.Simulation.Step(delta)
@@ -63,7 +63,7 @@ func stepECS2D(context *ecs.SystemContext) error {
 
 func (runtime *Runtime2D) syncBodies(world *ecs.World) error {
 	runtime.managedBodies = 0
-	for entity, access := range ecs.Query2[RigidBody2D, scene.Transform](world).All {
+	for entity, access := range world.Query2[RigidBody2D, scene.Transform]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -121,8 +121,8 @@ func (runtime *Runtime2D) syncBodies(world *ecs.World) error {
 	return nil
 }
 
-func syncECSColliders[S Shape2D](runtime *Runtime2D, world *ecs.World) {
-	for entity, access := range ecs.Query2[RigidBody2D, Collider2D[S]](world).All {
+func (runtime *Runtime2D) syncECSColliders[S Shape2D](world *ecs.World) {
+	for entity, access := range world.Query2[RigidBody2D, Collider2D[S]]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -141,11 +141,11 @@ func syncECSColliders[S Shape2D](runtime *Runtime2D, world *ecs.World) {
 				Filter: collider.Filter.normalized(), CollisionType: collider.CollisionType,
 			}
 			collider = colliderAccess.Mut()
-			collider.handle = AddCollider(runtime.Simulation, body.body, definition)
+			collider.handle = runtime.Simulation.AddCollider(body.body, definition)
 			runtime.Simulation.colliderState(collider.handle.id).managed = true
 		} else {
 			state := runtime.Simulation.colliderState(collider.handle.id)
-			setColliderShape(state, collider.Shape)
+			state.setColliderShape(collider.Shape)
 			state.friction, state.restitution = max(collider.Friction, 0), clamp(collider.Restitution, 0, 1)
 			state.sensor, state.filter, state.collisionType = collider.Sensor, collider.Filter.normalized(), collider.CollisionType
 		}
@@ -170,7 +170,7 @@ func (runtime *Runtime2D) sweepManaged() {
 }
 
 func (runtime *Runtime2D) writeBodies(world *ecs.World) {
-	for entity, access := range ecs.Query2[RigidBody2D, scene.Transform](world).All {
+	for entity, access := range world.Query2[RigidBody2D, scene.Transform]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -205,7 +205,7 @@ func (runtime *Runtime2D) writeEvents(world *ecs.World) {
 	for _, event := range runtime.Simulation.Events() {
 		entityA, entityB := ecs.Entity(event.UserDataA), ecs.Entity(event.UserDataB)
 		if entityA != 0 {
-			ecs.WriteMessage(world, CollisionMessage2D{
+			world.WriteMessage(CollisionMessage2D{
 				Phase: event.Phase, Entity: entityA, Other: entityB,
 				Collider: event.ColliderA, OtherCollider: event.ColliderB,
 				CollisionType: event.CollisionTypeA, OtherType: event.CollisionTypeB,
@@ -213,7 +213,7 @@ func (runtime *Runtime2D) writeEvents(world *ecs.World) {
 			})
 		}
 		if entityB != 0 {
-			ecs.WriteMessage(world, CollisionMessage2D{
+			world.WriteMessage(CollisionMessage2D{
 				Phase: event.Phase, Entity: entityB, Other: entityA,
 				Collider: event.ColliderB, OtherCollider: event.ColliderA,
 				CollisionType: event.CollisionTypeB, OtherType: event.CollisionTypeA,

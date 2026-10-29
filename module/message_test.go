@@ -20,15 +20,15 @@ func TestMessagesAddressAnySceneInstanceWithoutDeclarations(t *testing.T) {
 	}
 	registry := Registry{}
 	var got []string
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != "packet" {
 			return nil
 		}
-		value, ok := Value[packet](m)
+		value, ok := m.Value[packet]()
 		if !ok {
 			return ErrType
 		}
-		if _, ok := Value[int64](m); ok {
+		if _, ok := m.Value[int64](); ok {
 			t.Fatal("wrong payload type matched")
 		}
 		got = append(got, c.Name()+":"+m.From+":"+value.Label)
@@ -39,10 +39,10 @@ func TestMessagesAddressAnySceneInstanceWithoutDeclarations(t *testing.T) {
 	must(t, err)
 	second, err := r.MountEntry()
 	must(t, err)
-	must(t, Send(&first.modules[0], "receiver", "packet", packet{Count: 7, Label: "one"}))
-	must(t, Send(&first.modules[0], "passive", "unknown", packet{}))
-	must(t, Send(&second.modules[0], "receiver", "packet", packet{Label: "two"}))
-	if err := Send(&first.modules[0], "missing", "packet", packet{}); !errors.Is(err, ErrUnavailable) {
+	must(t, first.modules[0].Send("receiver", "packet", packet{Count: 7, Label: "one"}))
+	must(t, first.modules[0].Send("passive", "unknown", packet{}))
+	must(t, second.modules[0].Send("receiver", "packet", packet{Label: "two"}))
+	if err := first.modules[0].Send("missing", "packet", packet{}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
 	if len(got) != 0 {
@@ -63,7 +63,7 @@ func TestSceneForwardsMessagesInOrderAndBorrowExpires(t *testing.T) {
 	var borrowed Message
 	var sceneContext *Context
 	var got []string
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != "ping" {
 			return nil
 		}
@@ -74,8 +74,8 @@ func TestSceneForwardsMessagesInOrderAndBorrowExpires(t *testing.T) {
 		}
 		return c.ForwardAs("left", "renamed", m)
 	}}))
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
-		v, ok := Value[int64](m)
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+		v, ok := m.Value[int64]()
 		if !ok {
 			return ErrType
 		}
@@ -88,12 +88,12 @@ func TestSceneForwardsMessagesInOrderAndBorrowExpires(t *testing.T) {
 	r := newFixture(t, plan, registry, Options{})
 	s, err := r.MountEntry()
 	must(t, err)
-	must(t, Send(&s.modules[0], SceneTarget, "ping", int64(42)))
+	must(t, s.modules[0].Send(SceneTarget, "ping", int64(42)))
 	must(t, r.Dispatch())
 	if len(got) != 2 {
 		t.Fatal("scene did not relay during delivery", got)
 	}
-	if _, ok := Value[int64](borrowed); ok {
+	if _, ok := borrowed.Value[int64](); ok {
 		t.Fatal("expired payload readable")
 	}
 	if err := sceneContext.Forward("left", borrowed); !errors.Is(err, ErrInvalid) {
@@ -113,12 +113,12 @@ func TestSceneChoosesInputReceivers(t *testing.T) {
 	})
 	registry := Registry{}
 	sceneCalls, buttonCalls, logicCalls := 0, 0, 0
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != InputTopic {
 			return nil
 		}
 		sceneCalls++
-		event, ok := Value[Input](m)
+		event, ok := m.Value[Input]()
 		if !ok || event.Element != "hit" || m.From != "button" || event.Event.Entity != 0 || event.Event.Path != nil {
 			t.Fatal(m, event)
 		}
@@ -127,14 +127,14 @@ func TestSceneChoosesInputReceivers(t *testing.T) {
 		}
 		return nil
 	}}))
-	must(t, RegisterMod(&registry, "button", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(*Context, *Signal, Message) error { buttonCalls++; return nil }}))
-	must(t, RegisterMod(&registry, "empty", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterMod("button", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(*Context, *Signal, Message) error { buttonCalls++; return nil }}))
+	must(t, registry.RegisterMod("empty", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		logicCalls++
-		v, ok := Value[Input](m)
+		v, ok := m.Value[Input]()
 		if !ok || m.Topic != "activate" {
 			t.Fatal(m)
 		}
-		if _, ok := Get[scene.Sprite2D](c, v.Target); ok {
+		if _, ok := c.Get[scene.Sprite2D](v.Target); ok {
 			t.Fatal("forward exposed foreign ownership")
 		}
 		return nil
@@ -164,7 +164,7 @@ func TestSceneForwardsRequestsAndReplyUsesOriginalTopic(t *testing.T) {
 	var requester Requester[string, int64]
 	var result Result[int64]
 	var duplicate error
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if !m.IsRequest() {
 			return nil
 		}
@@ -174,26 +174,26 @@ func TestSceneForwardsRequestsAndReplyUsesOriginalTopic(t *testing.T) {
 		duplicate = c.Forward("client", m)
 		return nil
 	}}))
-	must(t, RegisterMod(&registry, "client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		var err error
-		requester, err = BindRequester[string, int64](c, "ask")
+		requester, err = c.BindRequester[string, int64]("ask")
 		return err
 	}, OnMessage: func(_ *Context, _ *Signal, m Message) error {
 		if m.Topic != "ask" {
 			t.Fatal(m.Topic)
 		}
 		var ok bool
-		result, ok = ResultValue[int64](m)
+		result, ok = m.ResultValue[int64]()
 		if !ok {
 			return ErrType
 		}
 		return nil
 	}}))
-	must(t, RegisterMod(&registry, "server", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterMod("server", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != "length" || m.From != "client" {
 			t.Fatal(m)
 		}
-		q, ok := RequestValue[string, int64](m)
+		q, ok := m.RequestValue[string, int64]()
 		if !ok {
 			return ErrType
 		}
@@ -229,19 +229,19 @@ func TestSceneAndModuleForwardingAllocateNothingWarm(t *testing.T) {
 	registry := Registry{}
 	var emitter Emitter[packet]
 	var received int64
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		return c.Forward("relay", m)
 	}}))
-	must(t, RegisterMod(&registry, "relay", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error { return c.Forward("sink", m) }}))
-	must(t, RegisterMod(&registry, "empty", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("relay", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error { return c.Forward("sink", m) }}))
+	must(t, registry.RegisterMod("empty", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		if c.Name() != "source" {
 			return nil
 		}
 		var err error
-		emitter, err = BindEmitter[packet](c, "packet")
+		emitter, err = c.BindEmitter[packet]("packet")
 		return err
 	}, OnMessage: func(_ *Context, _ *Signal, m Message) error {
-		value, ok := Value[packet](m)
+		value, ok := m.Value[packet]()
 		if !ok {
 			return ErrType
 		}
@@ -278,14 +278,14 @@ func TestSceneInputForwardingAllocatesNothing(t *testing.T) {
 	})
 	registry := Registry{}
 	calls := 0
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic == InputTopic {
 			return c.Forward("button", m)
 		}
 		return nil
 	}}))
-	must(t, RegisterMod(&registry, "button", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(_ *Context, _ *Signal, m Message) error {
-		if _, ok := Value[Input](m); !ok {
+	must(t, registry.RegisterMod("button", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(_ *Context, _ *Signal, m Message) error {
+		if _, ok := m.Value[Input](); !ok {
 			return ErrType
 		}
 		calls++
@@ -314,14 +314,14 @@ func TestMessageTypeSharingKeepsSlotDecodersIndependent(t *testing.T) {
 		"box/mod.json":               `{"slots":{"plain":{"type":"string","default":"plain"},"label":{"type":"Label","default":{"text":"structured"}}}}`,
 	})
 	registry := Registry{}
-	must(t, RegisterValue[string](&registry, "Label", func(v project.SlotValue) (string, error) { return v.Fields[0].Value.String, nil }))
+	must(t, registry.RegisterValue[string]("Label", func(v project.SlotValue) (string, error) { return v.Fields[0].Value.String, nil }))
 	r := newFixture(t, plan, registry, Options{})
 	s, err := r.MountEntry()
 	must(t, err)
 	for _, test := range []struct{ name, want string }{{"plain", "plain"}, {"label", "structured"}} {
 		slot, err := s.modules[0].Slot(test.name)
 		must(t, err)
-		value, err := ReadSlot[string](slot)
+		value, err := slot.Read[string]()
 		must(t, err)
 		if value != test.want {
 			t.Fatal(test.name, value)

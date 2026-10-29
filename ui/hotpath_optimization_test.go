@@ -10,17 +10,17 @@ import (
 
 func TestStableControlSyncPreservesVersionsAndUpdatesBounds(t *testing.T) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner3[Control, scene.InputTarget2D, scene.Size2D](world)
+	spawner := world.NewSpawner3[Control, scene.InputTarget2D, scene.Size2D]()
 	entity := spawner.Spawn(Control{}, scene.InputTarget2D{Width: 20, Height: 10}, scene.Size2D{Width: 20, Height: 10})
 	syncControls(world, Skin{})
-	targetVersion, sizeVersion := ecs.ComponentVersion[scene.InputTarget2D](world), ecs.ComponentVersion[scene.Size2D](world)
+	targetVersion, sizeVersion := world.ComponentVersion[scene.InputTarget2D](), world.ComponentVersion[scene.Size2D]()
 	syncControls(world, Skin{})
-	if targetVersion != ecs.ComponentVersion[scene.InputTarget2D](world) || sizeVersion != ecs.ComponentVersion[scene.Size2D](world) {
+	if targetVersion != world.ComponentVersion[scene.InputTarget2D]() || sizeVersion != world.ComponentVersion[scene.Size2D]() {
 		t.Fatal("unchanged control marked components changed")
 	}
 	SetControlBounds(world, entity, 30, 15)
 	syncControls(world, Skin{})
-	size, _ := ecs.Get[scene.Size2D](world, entity)
+	size, _ := world.Get[scene.Size2D](entity)
 	if size != (scene.Size2D{Width: 30, Height: 15}) {
 		t.Fatalf("updated bounds=%v", size)
 	}
@@ -29,15 +29,15 @@ func TestStableControlSyncPreservesVersionsAndUpdatesBounds(t *testing.T) {
 func TestStableSurfaceAndScrollSyncPreservesVersions(t *testing.T) {
 	world := ecs.NewWorld()
 	bundle := ecs.NewBundle(8)
-	ecs.Put(&bundle, scene.Size2D{Width: 40, Height: 20})
-	ecs.Put(&bundle, scene.UIBackground2D{})
-	ecs.Put(&bundle, scene.UIImage2D{})
-	ecs.Put(&bundle, scene.UIBorder2D{})
-	ecs.Put(&bundle, scene.ClipRect2D{})
-	ecs.Put(&bundle, scene.UIScroll{})
-	ecs.Put(&bundle, ScrollArea{Width: 40, Height: 20, ContentWidth: 100, ContentHeight: 80})
+	bundle.Put(scene.Size2D{Width: 40, Height: 20})
+	bundle.Put(scene.UIBackground2D{})
+	bundle.Put(scene.UIImage2D{})
+	bundle.Put(scene.UIBorder2D{})
+	bundle.Put(scene.ClipRect2D{})
+	bundle.Put(scene.UIScroll{})
+	bundle.Put(ScrollArea{Width: 40, Height: 20, ContentWidth: 100, ContentHeight: 80})
 	area := world.Spawn(bundle)
-	contentSpawner := ecs.NewSpawner2[ScrollContent, scene.UITransform](world)
+	contentSpawner := world.NewSpawner2[ScrollContent, scene.UITransform]()
 	content := contentSpawner.Spawn(ScrollContent{Area: area, X: 3, Y: 4}, scene.NewUITransform())
 	step := func() {
 		applySurface(world, area, 40, 20, SurfaceStyle{})
@@ -57,7 +57,7 @@ func TestStableSurfaceAndScrollSyncPreservesVersions(t *testing.T) {
 		t.Fatal("scroll update failed")
 	}
 	finalizeScrollAreas(world)
-	transform, _ := ecs.Get[scene.UITransform](world, content)
+	transform, _ := world.Get[scene.UITransform](content)
 	if transform.Translation.X.Value != -7 || transform.Translation.Y.Value != -11 {
 		t.Fatalf("scroll content=%v", transform.Translation)
 	}
@@ -80,13 +80,13 @@ func TestStableWidgetSyncDoesNotInvalidateDerivedCaches(t *testing.T) {
 				SpawnNumberInput(world, NumberInputOptions{Width: 100, Height: 30, Value: "5"})
 			case "menu", "menu-open":
 				entity := SpawnMenu(world, MenuOptions{Width: 100, Height: 30, Label: "Menu", Items: []string{"A", "B"}})
-				menu := ecs.GetMut[Menu](world, entity)
+				menu := world.GetMut[Menu](entity)
 				menu.Open = kind == "menu-open"
 			case "context-menu":
 				SpawnContextMenu(world, ContextMenuOptions{Width: 100, ItemHeight: 30, Open: true, Items: []string{"A", "B"}})
 			case "selector", "selector-open":
 				entity := SpawnSelector(world, SelectorOptions{Width: 100, Height: 30, Options: []string{"A", "B"}, ListHeight: 30})
-				selector := ecs.GetMut[Selector](world, entity)
+				selector := world.GetMut[Selector](entity)
 				selector.Open = kind == "selector-open"
 			case "tabs":
 				SpawnTab(world, TabOptions{Width: 100, Height: 80, HeaderHeight: 30, Items: []TabItemSpec{{Label: "A"}, {Label: "B"}}})
@@ -105,7 +105,12 @@ func TestStableWidgetSyncDoesNotInvalidateDerivedCaches(t *testing.T) {
 			}
 			version := world.MutationVersion()
 			componentVersions := func() [8]uint64 {
-				return [8]uint64{ecs.ComponentVersion[scene.UITransform](world), ecs.ComponentVersion[scene.Size2D](world), ecs.ComponentVersion[scene.Text2D](world), ecs.ComponentVersion[scene.Visibility](world), ecs.ComponentVersion[scene.UIStackIndex](world), ecs.ComponentVersion[scene.UIBackground2D](world), ecs.ComponentVersion[scene.UIImage2D](world), ecs.ComponentVersion[scene.UIBorder2D](world)}
+				return [8]uint64{
+					world.ComponentVersion[scene.UITransform](), world.ComponentVersion[scene.Size2D](),
+					world.ComponentVersion[scene.Text2D](), world.ComponentVersion[scene.Visibility](),
+					world.ComponentVersion[scene.UIStackIndex](), world.ComponentVersion[scene.UIBackground2D](),
+					world.ComponentVersion[scene.UIImage2D](), world.ComponentVersion[scene.UIBorder2D](),
+				}
 			}
 			before := componentVersions()
 			if err := Sync(world); err != nil {
@@ -123,28 +128,28 @@ func TestStableWidgetSyncDoesNotInvalidateDerivedCaches(t *testing.T) {
 
 func TestInputBlockerSyncPreservesSourcePrecedenceAndRemoval(t *testing.T) {
 	world := newUIWorld(t)
-	spawner := ecs.NewSpawner4[scene.InputBlocker2D, scene.Size2D, scene.Text2D, ScrollArea](world)
+	spawner := world.NewSpawner4[scene.InputBlocker2D, scene.Size2D, scene.Text2D, ScrollArea]()
 	text := scene.NewText2D("Bounds wrap to multiple lines\n中文")
 	text.WrapMode, text.WrapWidth = scene.TextWrapCharacters, 40
-	theme, _ := ecs.GetResource[Theme](world)
+	theme, _ := world.GetResource[Theme]()
 	text.Font = theme.Font
 	entity := spawner.Spawn(scene.InputBlocker2D{}, scene.Size2D{Width: 40, Height: 20}, text, ScrollArea{Width: 100, Height: 80})
 	syncInputBlockers(world)
-	blocker, _ := ecs.Get[scene.InputBlocker2D](world, entity)
+	blocker, _ := world.Get[scene.InputBlocker2D](entity)
 	if blocker.Width != 100 || blocker.Height != 80 {
 		t.Fatalf("scroll source bounds=%v", blocker)
 	}
-	ecs.Remove[ScrollArea](world, entity)
+	world.Remove[ScrollArea](entity)
 	syncInputBlockers(world)
-	currentText := ecs.GetRef[scene.Text2D](world, entity)
+	currentText := world.GetRef[scene.Text2D](entity)
 	width, height, _ := scene.MeasureText2D(currentText)
-	blocker, _ = ecs.Get[scene.InputBlocker2D](world, entity)
+	blocker, _ = world.Get[scene.InputBlocker2D](entity)
 	if blocker.Width != width || blocker.Height != height {
 		t.Fatalf("text source bounds=%v", blocker)
 	}
-	ecs.Remove[scene.Text2D](world, entity)
+	world.Remove[scene.Text2D](entity)
 	syncInputBlockers(world)
-	blocker, _ = ecs.Get[scene.InputBlocker2D](world, entity)
+	blocker, _ = world.Get[scene.InputBlocker2D](entity)
 	if blocker.Width != 40 || blocker.Height != 20 {
 		t.Fatalf("size source bounds=%v", blocker)
 	}
@@ -157,20 +162,20 @@ func TestInputBlockerSyncPreservesSourcePrecedenceAndRemoval(t *testing.T) {
 
 func TestTabHierarchyCacheTracksDynamicChildren(t *testing.T) {
 	world := ecs.NewWorld()
-	parents := ecs.NewSpawner1[scene.Parent](world)
+	parents := world.NewSpawner1[scene.Parent]()
 	root := parents.Spawn(scene.Parent{})
 	for range 100 {
 		parents.Spawn(scene.Parent{Entity: root})
 	}
 	syncTabs(world, Skin{})
-	cache := ecs.FrameValue[tabHierarchyScratch, tabHierarchy](world)
+	cache := world.FrameValue[tabHierarchyScratch, tabHierarchy]()
 	if cache.initialized {
 		t.Fatal("absent Tab collected parent hierarchy")
 	}
-	tabs := ecs.NewSpawner2[Tab, scene.Size2D](world)
+	tabs := world.NewSpawner2[Tab, scene.Size2D]()
 	tab := tabs.Spawn(Tab{Width: 100, Height: 80, HeaderHeight: 20}, scene.Size2D{})
 	other := tabs.Spawn(Tab{Width: 200, Height: 80, HeaderHeight: 20}, scene.Size2D{})
-	items := ecs.NewSpawner4[TabItem, scene.Parent, scene.UITransform, scene.Size2D](world)
+	items := world.NewSpawner4[TabItem, scene.Parent, scene.UITransform, scene.Size2D]()
 	item := items.Spawn(TabItem{Tabs: tab, Width: 30}, scene.Parent{Entity: tab}, scene.NewUITransform(), scene.Size2D{})
 	syncTabs(world, Skin{})
 	if len(tabChildren(cache.children, cache.ranges, tab)) != 1 {
@@ -181,13 +186,13 @@ func TestTabHierarchyCacheTracksDynamicChildren(t *testing.T) {
 	if cache.versions != versions {
 		t.Fatal("stable parent input changed cache")
 	}
-	parent := ecs.GetMut[scene.Parent](world, item)
+	parent := world.GetMut[scene.Parent](item)
 	parent.Entity = other
 	syncTabs(world, Skin{})
 	if len(tabChildren(cache.children, cache.ranges, tab)) != 0 || len(tabChildren(cache.children, cache.ranges, other)) != 1 {
 		t.Fatal("reparent not reflected")
 	}
-	ecs.Remove[scene.Parent](world, item)
+	world.Remove[scene.Parent](item)
 	syncTabs(world, Skin{})
 	if len(tabChildren(cache.children, cache.ranges, other)) != 0 {
 		t.Fatal("removed parent retained")
@@ -202,7 +207,7 @@ func TestTabHierarchyCacheTracksDynamicChildren(t *testing.T) {
 
 func TestCombinedTextWidthsPreserveLabelsAndReadOnlyMeasurement(t *testing.T) {
 	world := newUIWorld(t)
-	theme, _ := ecs.GetResource[Theme](world)
+	theme, _ := world.GetResource[Theme]()
 	owner := SpawnButton(world, ButtonOptions{Width: 100, Height: 30, Label: "Button", Icon: TextIcon("+")})
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
@@ -219,7 +224,7 @@ func TestCombinedTextWidthsPreserveLabelsAndReadOnlyMeasurement(t *testing.T) {
 
 func BenchmarkHotpathTabsAbsent(b *testing.B) {
 	world := ecs.NewWorld()
-	parents := ecs.NewSpawner1[scene.Parent](world)
+	parents := world.NewSpawner1[scene.Parent]()
 	root := parents.Spawn(scene.Parent{})
 	for range 10000 {
 		parents.Spawn(scene.Parent{Entity: root})
@@ -234,7 +239,7 @@ func BenchmarkHotpathTabsAbsent(b *testing.B) {
 
 func BenchmarkHotpathStaticControls(b *testing.B) {
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner3[Control, scene.InputTarget2D, scene.Size2D](world)
+	spawner := world.NewSpawner3[Control, scene.InputTarget2D, scene.Size2D]()
 	for range 10000 {
 		spawner.Spawn(Control{}, scene.InputTarget2D{Width: 20, Height: 10}, scene.Size2D{Width: 20, Height: 10})
 	}

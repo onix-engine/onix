@@ -1,7 +1,6 @@
 package module
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 	htmlui "github.com/diiyw/onix/ui/html"
 )
@@ -15,7 +14,7 @@ func (r *Runtime) HandleHTMLEvent(event htmlui.Event) error {
 	if r.busy {
 		return ErrBusy
 	}
-	owner, ok := ecs.Get[entityOwner](r.world, event.Entity)
+	owner, ok := r.world.Get[entityOwner](event.Entity)
 	if !ok || !owner.context.running() || !owner.context.enabled || owner.context.scene.state != SceneActive || !scene.IsInteractive(r.world, event.Entity) {
 		return nil
 	}
@@ -41,7 +40,7 @@ func HTML(c *Context, surface Entity) (HTMLNode, error) {
 		return HTMLNode{}, ErrOwnership
 	}
 	node, err := htmlui.Root(c.runtime.world, surface.entity)
-	value, _ := Get[htmlui.Surface](c, surface)
+	value, _ := c.Get[htmlui.Surface](surface)
 	return HTMLNode{context: c, surface: surface, node: node, document: node, source: value.Value}, err
 }
 
@@ -49,7 +48,7 @@ func (n HTMLNode) valid() bool {
 	if !n.context.usable() {
 		return false
 	}
-	value, ok := Get[htmlui.Surface](n.context, n.surface)
+	value, ok := n.context.Get[htmlui.Surface](n.surface)
 	if !ok || value.Value != n.source {
 		return false
 	}

@@ -437,25 +437,25 @@ func checkboxSurface(fill, border graphics.ColorRGBA) SurfaceStyle {
 }
 
 func skinFor(world *ecs.World, theme Theme) Skin {
-	if skin, ok := ecs.GetResource[Skin](world); ok {
+	if skin, ok := world.GetResource[Skin](); ok {
 		return skin
 	}
 	theme = themeWithDefaults(theme)
-	if cache, ok := ecs.GetResource[*defaultSkinCache](world); ok && cache != nil && cache.Theme == theme {
+	if cache, ok := world.GetResource[*defaultSkinCache](); ok && cache != nil && cache.Theme == theme {
 		return cache.Skin
 	}
 	skin := DefaultSkin(theme)
-	if cache, ok := ecs.GetResource[*defaultSkinCache](world); ok && cache != nil {
+	if cache, ok := world.GetResource[*defaultSkinCache](); ok && cache != nil {
 		cache.Theme = theme
 		cache.Skin = skin
 	} else {
-		ecs.InsertResource(world, &defaultSkinCache{Theme: theme, Skin: skin})
+		world.InsertResource(&defaultSkinCache{Theme: theme, Skin: skin})
 	}
 	return skin
 }
 
 func styleFor[T any](world *ecs.World, entity ecs.Entity, fallback T) T {
-	if override, ok := ecs.Get[StyleOverride[T]](world, entity); ok {
+	if override, ok := world.Get[StyleOverride[T]](entity); ok {
 		return override.Value
 	}
 	return fallback
@@ -463,7 +463,7 @@ func styleFor[T any](world *ecs.World, entity ecs.Entity, fallback T) T {
 
 func putStyleOverride[T any](world *ecs.World, entity ecs.Entity, style *T) {
 	if style != nil {
-		_ = ecs.Insert(world, entity, StyleOverride[T]{Value: *style})
+		_ = world.Insert(entity, StyleOverride[T]{Value: *style})
 	}
 }
 
@@ -489,23 +489,23 @@ func buttonStyleFor(skin Skin, variant ButtonVariant, danger bool) ButtonStyle {
 }
 
 func textFieldStyleFor(world *ecs.World, entity ecs.Entity, skin Skin) TextFieldStyle {
-	if _, ok := ecs.Get[NumberInput](world, entity); ok {
+	if _, ok := world.Get[NumberInput](entity); ok {
 		return styleFor(world, entity, skin.NumberInput).Field
 	}
 	return styleFor(world, entity, skin.TextField)
 }
 
 func applySurface(world *ecs.World, entity ecs.Entity, width, height float32, surface SurfaceStyle) {
-	ecs.SetIfChanged(world, entity, scene.Size2D{Width: width, Height: height})
+	world.SetIfChanged(entity, scene.Size2D{Width: width, Height: height})
 	radius := cornerRadiusPixels(world, entity, width, height)
-	if background, ok := ecs.Get[scene.UIBackground2D](world, entity); ok {
+	if background, ok := world.Get[scene.UIBackground2D](entity); ok {
 		background.Shape, background.Alpha = withSurfaceRadius(surface.Background, radius), 1
-		ecs.SetIfChanged(world, entity, background)
+		world.SetIfChanged(entity, background)
 	}
-	ecs.SetIfChanged(world, entity, surface.Image)
-	if border, ok := ecs.Get[scene.UIBorder2D](world, entity); ok {
+	world.SetIfChanged(entity, surface.Image)
+	if border, ok := world.Get[scene.UIBorder2D](entity); ok {
 		border.Shape, border.Alpha = withSurfaceRadius(surface.Border, radius), 1
-		ecs.SetIfChanged(world, entity, border)
+		world.SetIfChanged(entity, border)
 	}
 }
 

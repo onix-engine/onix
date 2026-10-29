@@ -46,7 +46,7 @@ func TestHTMLTransformOriginSurvivesContainerPaintUpdates(t *testing.T) {
 					if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 						t.Fatal(err)
 					}
-					global, _ := ecs.Get[scene.UIGlobalTransform](world, visual)
+					global, _ := world.Get[scene.UIGlobalTransform](visual)
 					center := global.Matrix.Mul4x1(mgl32.Vec4{8, 8, 0, 1})
 					if center.Sub(want).Len() > .001 {
 						t.Fatalf("color=%s: center=%v, want %v", color, center, want)
@@ -60,14 +60,14 @@ func TestHTMLTransformOriginSurvivesContainerPaintUpdates(t *testing.T) {
 func TestHTMLTransformRotatesAroundCenterWithTransition(t *testing.T) {
 	world := ecs.NewWorld()
 	clock := scene.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	html := New(`<div id="arrow"></div><style>
 #arrow { display: block; width: 20px; height: 20px; background: #fff; transform: rotate(0deg); transition: transform 100ms linear; }
 #arrow:hover { transform: rotate(90deg); }
 </style>`)
 	html.Width, html.Height = 100, 60
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
@@ -77,12 +77,12 @@ func TestHTMLTransformRotatesAroundCenterWithTransition(t *testing.T) {
 	if !ok {
 		t.Fatal("arrow element was not rendered")
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok || state.RenderNodes[arrow.node] == nil || len(state.RenderNodes[arrow.node].Entities) == 0 {
 		t.Fatal("arrow has no retained visual")
 	}
 	visual := state.RenderNodes[arrow.node].Entities[0]
-	transform, ok := ecs.Get[scene.UITransform](world, visual)
+	transform, ok := world.Get[scene.UITransform](visual)
 	if !ok || math.Abs(float64(transform.Rotation)) > 1e-6 {
 		t.Fatalf("initial arrow rotation = %+v, want 0", transform)
 	}
@@ -90,7 +90,7 @@ func TestHTMLTransformRotatesAroundCenterWithTransition(t *testing.T) {
 	if !SetVisualHover(world, visual, true) {
 		t.Fatal("hover state was not applied")
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if math.Abs(float64(transform.Pivot.X()-10)) > 1e-5 || math.Abs(float64(transform.Pivot.Y()-10)) > 1e-5 {
 		t.Fatalf("arrow transform pivot = %v, want center (10, 10)", transform.Pivot)
 	}
@@ -98,14 +98,14 @@ func TestHTMLTransformRotatesAroundCenterWithTransition(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if math.Abs(float64(transform.Rotation)-math.Pi/4) > 1e-5 {
 		t.Fatalf("halfway arrow rotation = %v, want %v radians", transform.Rotation, math.Pi/4)
 	}
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if math.Abs(float64(transform.Rotation)-math.Pi/4) > 1e-5 {
 		t.Fatalf("repeated same-frame sync advanced rotation to %v, want %v radians", transform.Rotation, math.Pi/4)
 	}
@@ -114,7 +114,7 @@ func TestHTMLTransformRotatesAroundCenterWithTransition(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, visual)
+	transform, _ = world.Get[scene.UITransform](visual)
 	if math.Abs(float64(transform.Rotation)-math.Pi/2) > 1e-5 {
 		t.Fatalf("final arrow rotation = %v, want %v radians", transform.Rotation, math.Pi/2)
 	}
@@ -128,7 +128,7 @@ func TestHTMLActiveTranslateYUpdatesAndRestoresControl(t *testing.T) {
 </style>`)
 	html.Width, html.Height = 180, 60
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
@@ -138,13 +138,13 @@ func TestHTMLActiveTranslateYUpdatesAndRestoresControl(t *testing.T) {
 	if !ok {
 		t.Fatal("button was not rendered")
 	}
-	state, ok := ecs.Get[htmlRenderState](world, owner)
+	state, ok := world.Get[htmlRenderState](owner)
 	if !ok {
 		t.Fatal("missing HTML render state")
 	}
 	var control ecs.Entity
 	for _, entity := range state.RenderNodes[button.node].Entities {
-		if ecs.Has[Control](world, entity) {
+		if world.Has[Control](entity) {
 			control = entity
 			break
 		}
@@ -152,19 +152,19 @@ func TestHTMLActiveTranslateYUpdatesAndRestoresControl(t *testing.T) {
 	if control == 0 {
 		t.Fatal("button control was not retained")
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, control)
+	transform, _ := world.Get[scene.UITransform](control)
 	initialY := transform.Translation.Y.Value
 	if !SetControlActive(world, control, true) {
 		t.Fatal("active state was not applied")
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, control)
+	transform, _ = world.Get[scene.UITransform](control)
 	if got := transform.Translation.Y.Value; got != initialY+1 {
 		t.Fatalf("active translation y = %v, want %v", got, initialY+1)
 	}
 	if !SetControlActive(world, control, false) {
 		t.Fatal("active state was not cleared")
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, control)
+	transform, _ = world.Get[scene.UITransform](control)
 	if got := transform.Translation.Y.Value; got != initialY {
 		t.Fatalf("released translation y = %v, want %v", got, initialY)
 	}

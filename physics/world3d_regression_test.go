@@ -12,13 +12,13 @@ func Test3DTiltedBoxComesToRest(t *testing.T) {
 			t.Run(fmt.Sprint(axis, restitution), func(t *testing.T) {
 				world := NewWorld3D()
 				world.Gravity, world.Iterations = V3(0, -20, 0), 12
-				AddCollider3D(world, world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(40, 2, 40)))
+				world.AddCollider(world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(40, 2, 40)))
 				def := NewBodyDef3D(BodyDynamic)
 				def.Position, def.Rotation = V3(3, 6, 2), QuaternionFromAxisAngle(axis, .3)
 				body := world.CreateBody(def)
 				collider := NewColliderDef(NewBox3D(2, 2, 2))
 				collider.Restitution = restitution
-				AddCollider3D(world, body, collider)
+				world.AddCollider(body, collider)
 				for range 1200 {
 					world.Step(1.0 / 60)
 				}
@@ -53,13 +53,13 @@ func Test3DBoxSlopeFriction(t *testing.T) {
 			floorDef.Rotation = rotation
 			floorCollider := NewColliderDef(NewBox3D(40, 2, 40))
 			floorCollider.Friction = friction
-			AddCollider3D(world, world.CreateBody(floorDef), floorCollider)
+			world.AddCollider(world.CreateBody(floorDef), floorCollider)
 			def := NewBodyDef3D(BodyDynamic)
 			def.Position, def.Rotation = normal.Mul(2), rotation
 			body := world.CreateBody(def)
 			collider := NewColliderDef(NewBox3D(2, 2, 2))
 			collider.Friction = .65
-			AddCollider3D(world, body, collider)
+			world.AddCollider(body, collider)
 			for range 120 {
 				world.Step(1.0 / 60)
 			}
@@ -95,11 +95,11 @@ func assert3DEmbeddedShapeExits[F, S Shape3D](t *testing.T, floor F, shape S) {
 			world.Gravity, world.CollisionSlop = Vector3D{}, 0
 			def := NewBodyDef3D(BodyStatic)
 			def.Rotation = rotation
-			AddCollider3D(world, world.CreateBody(def), NewColliderDef(floor))
+			world.AddCollider(world.CreateBody(def), NewColliderDef(floor))
 			def = NewBodyDef3D(BodyDynamic)
 			def.Position = rotation.Rotate(position)
 			body := world.CreateBody(def)
-			AddCollider3D(world, body, NewColliderDef(shape))
+			world.AddCollider(body, NewColliderDef(shape))
 			world.Step(1.0 / 60)
 			want := rotation.Rotate(position.Normalize().Mul(1.25))
 			if body.Position().Sub(want).Length() > 1e-5 {
@@ -126,11 +126,11 @@ func Test3DFixedRotationAndStaticContactVelocity(t *testing.T) {
 	world.Gravity = Vector3D{}
 	def := NewBodyDef3D(BodyStatic)
 	def.Velocity = V3(10, 0, 0)
-	AddCollider3D(world, world.CreateBody(def), NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(world.CreateBody(def), NewColliderDef(Sphere{Radius: 1}))
 	def = NewBodyDef3D(BodyDynamic)
 	def.Position = V3(1.9, 0, 0)
 	body := world.CreateBody(def)
-	AddCollider3D(world, body, NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(body, NewColliderDef(Sphere{Radius: 1}))
 	world.Step(1.0 / 60)
 	if body.Velocity() != (Vector3D{}) {
 		t.Fatalf("static body transferred velocity=%v", body.Velocity())
@@ -176,11 +176,11 @@ func assert3DSupportedShapeRests[F, S Shape3D](t *testing.T, floor F, shape S, r
 	t.Helper()
 	world := NewWorld3D()
 	world.Gravity, world.Iterations = V3(0, -20, 0), 12
-	AddCollider3D(world, world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(floor))
+	world.AddCollider(world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(floor))
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position, def.Rotation = V3(3, 6, 2), rotation
 	body := world.CreateBody(def)
-	AddCollider3D(world, body, NewColliderDef(shape))
+	world.AddCollider(body, NewColliderDef(shape))
 	for range 1200 {
 		world.Step(1.0 / 60)
 	}
@@ -199,13 +199,13 @@ func assert3DSupportedShapeRests[F, S Shape3D](t *testing.T, floor F, shape S, r
 func Test3DBoxStackComesToRest(t *testing.T) {
 	world := NewWorld3D()
 	world.Gravity, world.Iterations = V3(0, -20, 0), 12
-	AddCollider3D(world, world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(20, 2, 20)))
+	world.AddCollider(world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(20, 2, 20)))
 	var bodies [4]Body3D
 	for index := range bodies {
 		def := NewBodyDef3D(BodyDynamic)
 		def.Position = V3(0, 2+2.1*float64(index), 0)
 		bodies[index] = world.CreateBody(def)
-		AddCollider3D(world, bodies[index], NewColliderDef(NewBox3D(2, 2, 2)))
+		world.AddCollider(bodies[index], NewColliderDef(NewBox3D(2, 2, 2)))
 	}
 	for range 1200 {
 		world.Step(1.0 / 60)
@@ -228,11 +228,11 @@ func Test3DSphereRollsDownSlope(t *testing.T) {
 	tangent := world.Gravity.Sub(normal.Mul(world.Gravity.Dot(normal))).Normalize()
 	def := NewBodyDef3D(BodyStatic)
 	def.Rotation = rotation
-	AddCollider3D(world, world.CreateBody(def), NewColliderDef(NewBox3D(40, 2, 40)))
+	world.AddCollider(world.CreateBody(def), NewColliderDef(NewBox3D(40, 2, 40)))
 	def = NewBodyDef3D(BodyDynamic)
 	def.Position = normal.Mul(2)
 	body := world.CreateBody(def)
-	AddCollider3D(world, body, NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(body, NewColliderDef(Sphere{Radius: 1}))
 	for range 120 {
 		world.Step(1.0 / 120)
 	}
@@ -246,13 +246,13 @@ func Test3DSphereRollsDownSlope(t *testing.T) {
 func Test3DBouncySphereComesToRest(t *testing.T) {
 	world := NewWorld3D()
 	world.Gravity = V3(0, -20, 0)
-	AddCollider3D(world, world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(20, 2, 20)))
+	world.AddCollider(world.CreateBody(NewBodyDef3D(BodyStatic)), NewColliderDef(NewBox3D(20, 2, 20)))
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position = V3(0, 6, 0)
 	body := world.CreateBody(def)
 	collider := NewColliderDef(Sphere{Radius: 1})
 	collider.Restitution = .75
-	AddCollider3D(world, body, collider)
+	world.AddCollider(body, collider)
 	bounced := false
 	for range 1200 {
 		world.Step(1.0 / 60)
@@ -276,11 +276,11 @@ func Test3DColliderReuseEndsOldContact(t *testing.T) {
 	other := world.CreateBody(NewBodyDef3D(BodyStatic))
 	def := NewColliderDef(Sphere{Radius: 1})
 	def.Sensor = true
-	old := AddCollider3D(world, body, def)
-	AddCollider3D(world, other, def)
+	old := world.AddCollider(body, def)
+	world.AddCollider(other, def)
 	world.Step(1.0 / 60)
-	RemoveCollider3D(world, old)
-	replacement := AddCollider3D(world, body, def)
+	world.RemoveCollider(old)
+	replacement := world.AddCollider(body, def)
 	world.Step(1.0 / 60)
 	events := world.Events()
 	if len(events) != 2 || events[0].Phase != CollisionEnd || events[0].ColliderA != old.ID() || events[1].Phase != CollisionBegin || events[1].ColliderA != replacement.ID() {
@@ -294,9 +294,9 @@ func Test3DBoxHullRejectsSeparatedRotatedFaces(t *testing.T) {
 	rotation := QuaternionFromAxisAngle(V3(0, 0, 1), math.Pi/4)
 	def := NewBodyDef3D(BodyStatic)
 	def.Rotation = rotation
-	AddCollider3D(world, world.CreateBody(def), NewColliderDef(NewBox3D(4, .2, .2)))
+	world.AddCollider(world.CreateBody(def), NewColliderDef(NewBox3D(4, .2, .2)))
 	def.Type, def.Position = BodyDynamic, rotation.Rotate(V3(0, .3, 0))
-	AddCollider3D(world, world.CreateBody(def), NewColliderDef(testBoxHull3D(t, V3(2, .1, .1))))
+	world.AddCollider(world.CreateBody(def), NewColliderDef(testBoxHull3D(t, V3(2, .1, .1))))
 	world.buildBroadphase()
 	if len(world.pairs) == 0 {
 		t.Fatal("fixture must have overlapping broadphase bounds")

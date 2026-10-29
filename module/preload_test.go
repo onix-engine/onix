@@ -69,7 +69,7 @@ func asyncPreloadFixture(t *testing.T, loadErr error) (*Runtime, *Scene, *SceneP
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { close(feature.release) }) }
 	t.Cleanup(release)
-	r := newFixture(t, plan, Registry{}, Options{Source: source, Resources: feature})
+	r := newFixtureWith[Render2D](t, plan, Registry{}, Options{Source: source, Resources: feature})
 	graphics.BindFrame(r.world, graphics.NewCanvas2D(device, 320, 200))
 	main, err := r.Manager().StartEntry()
 	must(t, err)

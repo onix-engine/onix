@@ -1,0 +1,147 @@
+
+=== scoped-permanent-before.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkScopedQuery/Matches=1000/Changed=false         	    9634	     36297 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=false         	   10000	     38197 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=false         	   10000	     38160 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true          	   10000	     33675 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true          	   10000	     33449 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true          	   10000	     33329 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false        	    5728	     66245 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false        	    4614	     68108 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false        	    4610	     68052 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true         	    7897	     47894 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true         	    8241	     49242 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true         	    6980	     48079 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	4.329s
+
+=== ecs-final-bench.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBoundRowComponents/WorldLookups         	 3623916	        93.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/WorldLookups         	 4181553	        91.72 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/WorldLookups         	 4102237	        86.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	13909633	        26.31 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	12441319	        27.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	14816910	        26.84 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=false  	   87232	      4102 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=false  	   84160	      4021 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=false  	   92277	      3916 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true   	  810916	       404.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true   	  792669	       426.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=1000/Changed=true   	  976611	       434.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false 	   10000	     36945 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false 	    9258	     36596 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=false 	    9852	     38312 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true  	  548760	       719.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true  	  510896	       731.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedQuery/Matches=10000/Changed=true  	  506164	       725.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSparseScope                             	 2615886	       135.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSparseScope                             	 2676231	       134.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSparseScope                             	 2696434	       137.4 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	9.292s
+
+=== binding-after.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ecs
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkBoundRowComponents/WorldLookups         	 2614572	        90.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/WorldLookups         	 3090495	        90.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/WorldLookups         	 2927192	        86.25 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	 9256512	        24.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	 9543273	        24.55 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBoundRowComponents/BoundRow             	 8527795	        28.21 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ecs	1.810s
+
+=== spawn-before.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/module
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkModuleTransformSpawning/World         	     283	    743853 ns/op	  766254 B/op	    3270 allocs/op
+BenchmarkModuleTransformSpawning/World         	     343	    679962 ns/op	  766249 B/op	    3270 allocs/op
+BenchmarkModuleTransformSpawning/World         	     340	    716452 ns/op	  766249 B/op	    3270 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     290	    785016 ns/op	 1418599 B/op	    4317 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     271	    841140 ns/op	 1418594 B/op	    4317 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     332	    740562 ns/op	 1418593 B/op	    4317 allocs/op
+PASS
+ok  	github.com/diiyw/onix/module	1.398s
+
+=== spawn-after.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/module
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkModuleTransformSpawning/World         	     579	    364792 ns/op	  542689 B/op	     272 allocs/op
+BenchmarkModuleTransformSpawning/World         	     626	    389286 ns/op	  542689 B/op	     272 allocs/op
+BenchmarkModuleTransformSpawning/World         	     529	    412264 ns/op	  542689 B/op	     272 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     480	    452580 ns/op	 1059032 B/op	     319 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     511	    422017 ns/op	 1059032 B/op	     319 allocs/op
+BenchmarkModuleTransformSpawning/UI            	     573	    358838 ns/op	 1059032 B/op	     319 allocs/op
+PASS
+ok  	github.com/diiyw/onix/module	1.323s
+
+=== transform-before.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHotpathTransformSingleChange/UI=false         	  165938	      1208 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false         	  234985	      1049 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false         	  258591	      1089 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  152314	      2236 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  115944	      1925 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  115544	      1757 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	2.126s
+
+=== transform-after.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHotpathTransformSingleChange/UI=false         	  187536	      1075 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false         	  200295	      1003 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=false         	  258234	       991.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  136662	      1526 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  162208	      1712 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHotpathTransformSingleChange/UI=true          	  166924	      1564 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	1.740s
+
+=== animation-before.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkUpdateWorldAnimatorSystem/playing         	    4166	     59609 ns/op	       232.8 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/playing         	    4582	     52476 ns/op	       205.0 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/playing         	    4846	     50387 ns/op	       196.8 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	    9840	     27925 ns/op	       109.1 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	   10000	     27751 ns/op	       108.4 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	    8731	     26923 ns/op	       105.2 ns/animator	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	1.570s
+
+=== animation-after.txt ===
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkUpdateWorldAnimatorSystem/playing         	    8008	     51339 ns/op	       200.5 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/playing         	    8154	     48003 ns/op	       187.5 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/playing         	    7563	     50312 ns/op	       196.5 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	   13822	     24726 ns/op	        96.59 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	   14212	     25368 ns/op	        99.09 ns/animator	       0 B/op	       0 allocs/op
+BenchmarkUpdateWorldAnimatorSystem/paused          	   13824	     25098 ns/op	        98.04 ns/animator	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	3.050s

@@ -1,7 +1,6 @@
 package editor
 
 import (
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/scene"
@@ -245,7 +244,7 @@ func (a *ModuleEditor) viewport3DSnapStep() float32 {
 		return step
 	}
 	v := &a.viewport3D.view
-	projection := ecs.GetRef[scene.Projection](a.viewport3D.world, v.camera)
+	projection := a.viewport3D.world.GetRef[scene.Projection](v.camera)
 	step, _ := preview3DGridLOD(preview3DWorldPerPixel(projection, v.distance/max(.05, a.zoom), a.canvasBounds()))
 	return step
 }

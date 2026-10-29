@@ -27,7 +27,7 @@ func TestCameraQualityAndFXAASceneBinaryAndLiveEdits(t *testing.T) {
 	}
 	t.Cleanup(scene.Dispose)
 	entity := scene.MustEntity("camera")
-	camera, ok := ecs.Get[render3d.Camera](scene.World, entity)
+	camera, ok := scene.World.Get[render3d.Camera](entity)
 	if !ok || camera.Quality != render3d.QualityMedium || !camera.FXAA {
 		t.Fatal("camera quality/FXAA lost during spawn", camera)
 	}
@@ -58,7 +58,7 @@ func TestCameraQualityAndFXAASceneBinaryAndLiveEdits(t *testing.T) {
 	if err := scene.ApplyNode(spec); err != nil {
 		t.Fatal(err)
 	}
-	camera, _ = ecs.Get[render3d.Camera](scene.World, entity)
+	camera, _ = scene.World.Get[render3d.Camera](entity)
 	if camera.Quality != render3d.QualityLow || camera.FXAA {
 		t.Fatal("live edits lost camera settings")
 	}

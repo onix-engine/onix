@@ -15,17 +15,17 @@ func FocusControl(world *ecs.World, entity ecs.Entity) bool {
 		if !world.IsAlive(entity) || focusTarget(world, entity) != entity {
 			return false
 		}
-		if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok && target.Disabled {
+		if target, ok := world.Get[scene.InputTarget2D](entity); ok && target.Disabled {
 			return false
 		}
 		if !scene.IsInteractive(world, entity) {
 			return false
 		}
 	}
-	state, ok := ecs.GetResource[*uiEventState](world)
+	state, ok := world.GetResource[*uiEventState]()
 	if !ok || state == nil {
 		state = &uiEventState{}
-		ecs.InsertResource(world, state)
+		world.InsertResource(state)
 	}
 	focusWithVisibility(world, state, entity, true)
 	return true

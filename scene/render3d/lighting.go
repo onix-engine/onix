@@ -43,7 +43,7 @@ func setupViewLighting3D(world *ecs.World, state *World, view *renderView3D, ent
 	view.fxaaActive = false
 	var ssao SSAOSettings
 	var ssr SSRSettings
-	camera, cameraOK := ecs.Get[Camera](world, entity)
+	camera, cameraOK := world.Get[Camera](entity)
 	budget, err := effectiveQuality3D(world, camera)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func setupViewLighting3D(world *ecs.World, state *World, view *renderView3D, ent
 		}
 	}
 	disableShadows, shadowResolution := false, 0
-	if config, ok := ecs.Get[ViewLighting](world, entity); ok {
+	if config, ok := world.Get[ViewLighting](entity); ok {
 		if config.Override {
 			a, sun := config.Ambient, config.Sun
 			view.ambient = [4]float32{a.Color.R * a.Brightness, a.Color.G * a.Brightness, a.Color.B * a.Brightness, 1}
@@ -92,10 +92,10 @@ func setupViewLighting3D(world *ecs.World, state *World, view *renderView3D, ent
 		}
 	}
 	if view.frame.Mode == render.RenderViewLit {
-		if e, ok := ecs.Get[Environment](world, entity); ok {
+		if e, ok := world.Get[Environment](entity); ok {
 			view.environment = e
 		}
-		view.ground, _ = ecs.Get[GroundPlane](world, entity)
+		view.ground, _ = world.Get[GroundPlane](entity)
 	}
 	e := view.environment
 	view.lighting.Params[0] = e.Exposure

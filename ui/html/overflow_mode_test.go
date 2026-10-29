@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
@@ -27,25 +26,25 @@ func TestHTMLOverflowModesMatchFresh(t *testing.T) {
 				world, owner := incrementalHTMLFixture(t, source(initial))
 				target := incrementalHTMLNode(t, world, owner, "target")
 				other := incrementalControl(t, world, owner, "other")
-				before, _ := ecs.Get[Control](world, other)
+				before, _ := world.Get[Control](other)
 				for _, mode := range modes {
 					target.SetAttribute("style", "position:relative;width:120px;height:40px;overflow:"+mode)
 					incrementalSync(t, world)
-					state, _ := ecs.Get[htmlRenderState](world, owner)
+					state, _ := world.Get[htmlRenderState](owner)
 					// Equal computed modes can be an intentional no-op.
 					if state.SyncStats.PartialReconciles == 0 && state.SyncStats.ReconciledBoxes != 0 {
 						t.Fatalf("%s fell back: %+v", mode, state.SyncStats)
 					}
-					after, _ := ecs.Get[Control](world, other)
+					after, _ := world.Get[Control](other)
 					if after.RenderRevision != before.RenderRevision {
 						t.Fatal("unrelated control rebuilt")
 					}
 					assertHTMLContextMatchesFresh(t, world, owner, source(mode))
 					for _, entity := range state.Children {
-						if parent, ok := ecs.Get[scene.Parent](world, entity); ok && !world.IsAlive(parent.Entity) {
+						if parent, ok := world.Get[scene.Parent](entity); ok && !world.IsAlive(parent.Entity) {
 							t.Fatal("retired parent")
 						}
-						if content, ok := ecs.Get[ScrollContent](world, entity); ok && !ecs.Has[scene.UIScroll](world, content.Area) {
+						if content, ok := world.Get[ScrollContent](entity); ok && !world.Has[scene.UIScroll](content.Area) {
 							t.Fatal("stale scroll binding")
 						}
 					}
@@ -57,7 +56,7 @@ func TestHTMLOverflowModesMatchFresh(t *testing.T) {
 
 func TestHTMLScrollbarWidthNoneKeepsScrollWithoutZeroChildren(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target" style="width:40px;height:20px;overflow:auto;scrollbar-width:none"><div style="height:100px">Scrollable</div></div>`)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	target := incrementalHTMLNode(t, world, owner, "target")
 	binding, ok := state.OverflowBindings[target.node]
 	if !ok {
@@ -74,7 +73,7 @@ func TestHTMLScrollbarWidthNoneKeepsScrollWithoutZeroChildren(t *testing.T) {
 			t.Fatalf("children[%d] is the zero entity", index)
 		}
 	}
-	scroll, ok := ecs.Get[scene.UIScroll](world, binding.entity)
+	scroll, ok := world.Get[scene.UIScroll](binding.entity)
 	if !ok || !scroll.Vertical || scroll.ScrollbarSize != 0 {
 		t.Fatalf("hidden scrollbar scroll state = %#v, ok=%v", scroll, ok)
 	}
@@ -82,7 +81,7 @@ func TestHTMLScrollbarWidthNoneKeepsScrollWithoutZeroChildren(t *testing.T) {
 
 func TestHTMLOverflowScrollbarsOmitArrowParts(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target" style="width:40px;height:20px;overflow:scroll"><div style="width:100px;height:100px">Scrollable</div></div>`)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	target := incrementalHTMLNode(t, world, owner, "target")
 	binding, ok := state.OverflowBindings[target.node]
 	if !ok {
@@ -93,7 +92,7 @@ func TestHTMLOverflowScrollbarsOmitArrowParts(t *testing.T) {
 	}
 	seen := [2][2]bool{}
 	for _, entity := range binding.parts {
-		part, ok := ecs.Get[ScrollbarPart](world, entity)
+		part, ok := world.Get[ScrollbarPart](entity)
 		if !ok {
 			t.Fatalf("scrollbar visual %v is missing its part metadata", entity)
 		}
@@ -127,16 +126,16 @@ func TestHTMLScrollbarTransparentColors(t *testing.T) {
 			target.SetAttribute("style", baseStyle+"scrollbar-color:"+test.colors)
 			incrementalSync(t, world)
 			SyncScrollbars(world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			binding := state.OverflowBindings[target.node]
-			scroll, ok := ecs.Get[scene.UIScroll](world, binding.entity)
+			scroll, ok := world.Get[scene.UIScroll](binding.entity)
 			if !ok || !scroll.Horizontal || !scroll.Vertical || scroll.ScrollbarSize != 10 {
 				t.Fatalf("transparent colors changed scroll geometry: %+v", scroll)
 			}
 			seen := [2][2]bool{}
 			for _, entity := range binding.parts {
-				part, _ := ecs.Get[ScrollbarPart](world, entity)
-				sprite, _ := ecs.Get[scene.Sprite2D](world, entity)
+				part, _ := world.Get[ScrollbarPart](entity)
+				sprite, _ := world.Get[scene.Sprite2D](entity)
 				want := test.track
 				if part.Kind == ScrollbarThumb {
 					want = test.thumb
@@ -175,10 +174,10 @@ func TestHTMLOverlayScrollbarKeepsContentAndPaintsAboveDescendants(t *testing.T)
 		if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		binding := state.OverflowBindings[area.node]
-		scroll, _ := ecs.Get[scene.UIScroll](world, binding.entity)
-		clip, _ := ecs.Get[scene.ClipRect2D](world, binding.entity)
+		scroll, _ := world.Get[scene.UIScroll](binding.entity)
+		clip, _ := world.Get[scene.ClipRect2D](binding.entity)
 		if !scroll.ScrollbarOverlay || scroll.ViewportSize != (mgl32.Vec2{120, 100}) || clip.Width != 120 || clip.Height != 100 {
 			t.Fatalf("overlay scrollbar reserved content space: scroll=%+v clip=%+v", scroll, clip)
 		}
@@ -192,28 +191,28 @@ func TestHTMLOverlayScrollbarKeepsContentAndPaintsAboveDescendants(t *testing.T)
 			t.Fatalf("transparent overlay emitted %d parts, want one thumb", len(binding.parts))
 		}
 		thumb := binding.parts[0]
-		sprite, _ := ecs.Get[scene.Sprite2D](world, thumb)
+		sprite, _ := world.Get[scene.Sprite2D](thumb)
 		if sprite.Shape.Fill != graphics.ColorFromRGBA(101, 112, 130, 128) {
 			t.Fatalf("overlay thumb lost transparency: %v", sprite.Shape.Fill)
 		}
-		position, _ := ecs.Get[scene.UITransform](world, thumb)
-		size, _ := ecs.Get[scene.Size2D](world, thumb)
+		position, _ := world.Get[scene.UITransform](thumb)
+		size, _ := world.Get[scene.Size2D](thumb)
 		if position.Translation.X.Value != 112 || size.Width != 6 {
 			t.Fatalf("overlay thumb does not lie inside the viewport: position=%+v size=%+v", position, size)
 		}
-		thumbStack, _ := ecs.Get[scene.UIStackIndex](world, thumb)
-		menuStack, _ := ecs.Get[scene.UIStackIndex](world, menu)
+		thumbStack, _ := world.Get[scene.UIStackIndex](thumb)
+		menuStack, _ := world.Get[scene.UIStackIndex](menu)
 		if thumbStack <= menuStack+4 {
 			t.Fatalf("descendants cover the overlay thumb: thumb=%d menu=%d", thumbStack, menuStack)
 		}
-		global, _ := ecs.Get[scene.UIGlobalTransform](world, thumb)
+		global, _ := world.Get[scene.UIGlobalTransform](thumb)
 		inheritedClip, ok := global.ClipRect()
 		if !ok || inheritedClip.Width != 100 || inheritedClip.Height != 80 {
 			t.Fatalf("overlay scrollbar escaped its ancestor clip: %+v, ok=%v", inheritedClip, ok)
 		}
 		fresh, freshOwner := incrementalHTMLFixture(t, source(css))
 		SyncScrollbars(fresh)
-		freshState, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+		freshState, _ := fresh.Get[htmlRenderState](freshOwner)
 		if !reflect.DeepEqual(htmlPrimitiveSnapshot(world, *state), htmlPrimitiveSnapshot(fresh, freshState)) {
 			t.Fatalf("overlay scrollbar update differs from fresh render for %s", css)
 		}
@@ -230,7 +229,7 @@ func TestHTMLOverflowModeFlexLayoutMatchesFresh(t *testing.T) {
 	for _, mode := range []string{"auto", "visible", "hidden", "clip", "scroll"} {
 		target.SetAttribute("style", "overflow:"+mode)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("flex mode change fell back")
 		}
@@ -244,7 +243,7 @@ func TestHTMLOverflowModeSkipsUnrelatedControls(t *testing.T) {
 	for _, mode := range []string{"hidden", "visible", "auto", "scroll"} {
 		target.SetAttribute("style", "height:40px;overflow:"+mode)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips > 1 {
 			t.Fatalf("nonlocal mode transition: %+v", state.SyncStats)
 		}

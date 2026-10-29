@@ -52,7 +52,7 @@ func TestLargeSpawnScratchSupportsReentryAndPanic(t *testing.T) {
 			outer.entries = outer.entries[:15]
 			fail := true
 			var nested Entity
-			PutEntity(&outer, func(entity Entity) memoryComponent[[15]byte] {
+			outer.PutEntity(func(entity Entity) memoryComponent[[15]byte] {
 				nested = world.Spawn(inner)
 				if fail {
 					panic("builder failed")
@@ -80,9 +80,9 @@ func TestLargeSpawnScratchSupportsReentryAndPanic(t *testing.T) {
 			world.Despawn(nested)
 			fail = false
 			entity := spawn()
-			first := GetRef[memoryComponent[[0]byte]](world, entity)
-			last := GetRef[memoryComponent[[15]byte]](world, entity)
-			nestedLast := GetRef[memoryComponent[[15]byte]](world, nested)
+			first := world.GetRef[memoryComponent[[0]byte]](entity)
+			last := world.GetRef[memoryComponent[[15]byte]](entity)
+			nestedLast := world.GetRef[memoryComponent[[15]byte]](nested)
 			if first.Owner != entity || first.Value != 42 || last.Owner != entity || last.Value != 99 ||
 				nestedLast.Owner != nested || nestedLast.Value != 42 || world.EntityCount() != 2 {
 				t.Fatal("reentrant spawn overwrote borrowed entries or materialized values")
@@ -93,14 +93,14 @@ func TestLargeSpawnScratchSupportsReentryAndPanic(t *testing.T) {
 
 func TestOverflowQueryScratchKeepsNestedSnapshotsAndReleasesGuard(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	spawner.Spawn(testPosition{X: 1})
 	since := world.ChangeTick()
 	spawner.Spawn(testPosition{X: 2})
 	outerWindow := world.ChangesSince(0)
 	innerWindow := world.ChangesSince(since)
-	outer := Query[testPosition](world, memoryQueryOptions(&outerWindow, 9)...)
-	inner := Query[testPosition](world, memoryQueryOptions(&innerWindow, 32)...)
+	outer := world.Query[testPosition](memoryQueryOptions(&outerWindow, 9)...)
+	inner := world.Query[testPosition](memoryQueryOptions(&innerWindow, 32)...)
 	for range 2 {
 		count := 0
 		for range outer.All {
@@ -146,18 +146,18 @@ func TestOverflowQueryScratchKeepsNestedSnapshotsAndReleasesGuard(t *testing.T) 
 func TestCommandSpawnPanicClearsAbandonedEntries(t *testing.T) {
 	world := NewWorld()
 	valid := NewBundle(1)
-	Put(&valid, testPosition{X: 7})
-	entity := CommandSpawn(world.Commands(), valid)
+	valid.Put(testPosition{X: 7})
+	entity := world.Commands().Spawn(valid)
 	invalid := NewBundle(2)
-	Put(&invalid, testName{Value: "retained on panic"})
-	Put(&invalid, testName{Value: "duplicate"})
+	invalid.Put(testName{Value: "retained on panic"})
+	invalid.Put(testName{Value: "duplicate"})
 	func() {
 		defer func() {
 			if recover() == nil {
 				t.Fatal("duplicate bundle did not panic")
 			}
 		}()
-		CommandSpawn(world.Commands(), invalid)
+		world.Commands().Spawn(invalid)
 	}()
 	entries := world.commands.spawnEntries
 	for _, entry := range entries[len(entries):cap(entries)] {
@@ -165,7 +165,7 @@ func TestCommandSpawnPanicClearsAbandonedEntries(t *testing.T) {
 			t.Fatal("failed command retained an abandoned bundle reference")
 		}
 	}
-	if err := world.FlushCommands(); err != nil || GetRef[testPosition](world, entity).X != 7 {
+	if err := world.FlushCommands(); err != nil || world.GetRef[testPosition](entity).X != 7 {
 		t.Fatalf("failed command disturbed the preceding command: %v", err)
 	}
 }
@@ -231,15 +231,15 @@ func TestPooledScratchSupportsConcurrentWorlds(t *testing.T) {
 			window := world.ChangesSince(0)
 			options := make([]QueryOption, 9)
 			for index := range options {
-				options[index] = Changed[memoryComponent[[0]byte]](&window)
+				options[index] = window.Changed[memoryComponent[[0]byte]]()
 			}
 			for range 100 {
 				entity := world.Spawn(bundle)
-				if value := GetRef[memoryComponent[[15]byte]](world, entity); value.Owner != entity || value.Value != 42 {
+				if value := world.GetRef[memoryComponent[[15]byte]](entity); value.Owner != entity || value.Value != 42 {
 					t.Fatal("pooled storage mixed independent worlds")
 				}
 				window = world.ChangesSince(0)
-				for range Query[memoryComponent[[0]byte]](world, options...).All {
+				for range world.Query[memoryComponent[[0]byte]](options...).All {
 				}
 				schedule.dirty = true
 				order, err := schedule.Order()

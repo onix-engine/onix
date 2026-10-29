@@ -4,7 +4,6 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -46,8 +45,8 @@ func TestRetainedDynamicNodesReleasedAfterRemoval(t *testing.T) {
 			RegisterTilemapRenderer2D(world)
 			texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))
 			t.Cleanup(func() { _ = texture.Dispose() })
-			spawner := ecs.NewSpawner3[Tilemap2D, UIGlobalTransform, Visibility](world)
-			cache := ecs.ScopeValue[retainedRender2D, retainedRender2D](world)
+			spawner := world.NewSpawner3[Tilemap2D, UIGlobalTransform, Visibility]()
+			cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
 			for range 32 {
 				entity := spawner.Spawn(Tilemap2D{Texture: texture, Tiles: []int{0}, Width: 1, Height: 1, TileWidth: 2, TileHeight: 2, Columns: 1, Alpha: 1}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 				incrementalFrame(t, world, canvas)
@@ -59,9 +58,9 @@ func TestRetainedDynamicNodesReleasedAfterRemoval(t *testing.T) {
 				case "despawn":
 					world.Despawn(entity)
 				case "component":
-					ecs.Remove[Tilemap2D](world, entity)
+					world.Remove[Tilemap2D](entity)
 				case "visibility":
-					ecs.Remove[Visibility](world, entity)
+					world.Remove[Visibility](entity)
 				}
 				incrementalFrame(t, world, canvas)
 				if cache.nodes[entity] != nil || len(cache.nodes) != 100 || node.snapshots != nil {

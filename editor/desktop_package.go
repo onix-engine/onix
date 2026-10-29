@@ -48,7 +48,7 @@ func buildLinuxPackage(root string, options BuildOptions) (string, error) {
 		if err := copyProjectThirdPartyNotices(layout.ProjectDir, bundleDir); err != nil {
 			return "", err
 		}
-		return withResourceOverlay(layout, func() (string, error) {
+		return layout.withResourceOverlay(func() (string, error) {
 			if err := writeLinuxIconAssets(bundleDir, name, icon); err != nil {
 				return "", err
 			}
@@ -102,7 +102,7 @@ func buildWindowsPackage(root string, options BuildOptions) (string, error) {
 		if err := copyProjectThirdPartyNotices(layout.ProjectDir, bundleDir); err != nil {
 			return "", err
 		}
-		return withResourceOverlay(layout, func() (string, error) {
+		return layout.withResourceOverlay(func() (string, error) {
 			resourceFile, err := writeWindowsIconAssets(root, layout, bundleDir, name, icon, env)
 			if err != nil {
 				return "", err
@@ -203,7 +203,7 @@ func buildMacOSPackage(root string, options BuildOptions) (string, error) {
 	if err := writeMacOSInfoPlist(filepath.Join(appBundle, "Contents", "Info.plist"), name); err != nil {
 		return "", errors.Join(err, cleanupResourceOverlay(layout), removeTemporaryArtifact(appBundle))
 	}
-	appArtifact, err := withResourceOverlay(layout, func() (string, error) {
+	appArtifact, err := layout.withResourceOverlay(func() (string, error) {
 		if err := buildMacOSExecutable(root, layout, options, executable); err != nil {
 			return "", err
 		}

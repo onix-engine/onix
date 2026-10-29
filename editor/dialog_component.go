@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/diiyw/onix/ecs"
 	editorresources "github.com/diiyw/onix/editor/resources"
 	engineui "github.com/diiyw/onix/ui"
 	"github.com/diiyw/onix/ui/html"
@@ -264,11 +263,11 @@ func updateEditorDialogComponent(context *html.ComponentContext[editorDialogComp
 	if frame == nil {
 		return
 	}
-	component, ok := ecs.Get[html.Component[editorDialogComponentProps, editorDialogComponentState]](context.World, context.Component)
+	component, ok := context.World.Get[html.Component[editorDialogComponentProps, editorDialogComponentState]](context.Component)
 	if !ok {
 		return
 	}
-	for entity, access := range ecs.Query[html.Control](context.World).All {
+	for entity, access := range context.World.Query[html.Control]().All {
 		control := access.Get()
 
 		if control.Owner != component.Page {
@@ -281,7 +280,7 @@ func updateEditorDialogComponent(context *html.ComponentContext[editorDialogComp
 		value, set := element.Value, element.ValueSet
 		if control.Tag == "textarea" {
 			value, set = element.Text, element.TextSet
-			if textarea := ecs.GetMut[engineui.Textarea](context.World, entity); textarea != nil {
+			if textarea := context.World.GetMut[engineui.Textarea](entity); textarea != nil {
 				textarea.FollowTail = element.FollowTail
 			}
 		}

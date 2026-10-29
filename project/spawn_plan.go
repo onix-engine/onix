@@ -218,13 +218,13 @@ func compileSceneAnimationBindings(plan *sceneSpawnPlan) error {
 		if len(clip.BoolTracks) > 0 {
 			boolTargets = targetStorage[textureEnd:]
 		}
-		if err := resolveSceneAnimationTrackTargets(plan, children, ownerIndex, node.Spec.ID, "float", clip.FloatTracks, floatTargets, seen, claimed); err != nil {
+		if err := plan.resolveSceneAnimationTrackTargets(children, ownerIndex, node.Spec.ID, "float", clip.FloatTracks, floatTargets, seen, claimed); err != nil {
 			return err
 		}
-		if err := resolveSceneAnimationTrackTargets(plan, children, ownerIndex, node.Spec.ID, "texture", clip.TextureTracks, textureTargets, seen, claimed); err != nil {
+		if err := plan.resolveSceneAnimationTrackTargets(children, ownerIndex, node.Spec.ID, "texture", clip.TextureTracks, textureTargets, seen, claimed); err != nil {
 			return err
 		}
-		if err := resolveSceneAnimationTrackTargets(plan, children, ownerIndex, node.Spec.ID, "bool", clip.BoolTracks, boolTargets, seen, claimed); err != nil {
+		if err := plan.resolveSceneAnimationTrackTargets(children, ownerIndex, node.Spec.ID, "bool", clip.BoolTracks, boolTargets, seen, claimed); err != nil {
 			return err
 		}
 		node.AnimationFloatTargets = floatTargets
@@ -260,7 +260,7 @@ func sceneAnimationChildIndex(plan *sceneSpawnPlan) map[sceneAnimationChildKey]i
 	return children
 }
 
-func resolveSceneAnimationTrackTargets[T any](plan *sceneSpawnPlan, children map[sceneAnimationChildKey]int, ownerIndex int, ownerID, kind string, tracks []AnimationTrackSpec[T], targets []uint32, seen map[animationResolvedBinding]struct{}, claimed map[animationResolvedBinding]uint32) error {
+func (plan *sceneSpawnPlan) resolveSceneAnimationTrackTargets[T any](children map[sceneAnimationChildKey]int, ownerIndex int, ownerID, kind string, tracks []AnimationTrackSpec[T], targets []uint32, seen map[animationResolvedBinding]struct{}, claimed map[animationResolvedBinding]uint32) error {
 	if len(targets) != len(tracks) {
 		return fmt.Errorf("animation %s target storage length %d does not match track count %d", kind, len(targets), len(tracks))
 	}

@@ -27,7 +27,7 @@ func (area ScrollArea) bindControl(world *ecs.World, entity ecs.Entity, opts Con
 		area.Height = opts.Height
 	}
 	area.StackIndex = opts.StackIndex
-	if err := ecs.Insert(world, entity, area); err != nil {
+	if err := world.Insert(entity, area); err != nil {
 		return err
 	}
 	return installScrollAreaGeometry(world, entity, &area)
@@ -35,10 +35,10 @@ func (area ScrollArea) bindControl(world *ecs.World, entity ecs.Entity, opts Con
 
 func installScrollAreaGeometry(world *ecs.World, entity ecs.Entity, area *ScrollArea) error {
 	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
-	if err := ecs.Insert(world, entity, scene.Size2D{Width: area.Width, Height: area.Height}); err != nil {
+	if err := world.Insert(entity, scene.Size2D{Width: area.Width, Height: area.Height}); err != nil {
 		return err
 	}
-	if err := ecs.Insert(world, entity, scene.UIScroll{
+	if err := world.Insert(entity, scene.UIScroll{
 		Position:              mgl32.Vec2{},
 		ViewportSize:          mgl32.Vec2{metrics.ViewportWidth, metrics.ViewportHeight},
 		ContentSize:           mgl32.Vec2{area.ContentWidth, area.ContentHeight},
@@ -52,15 +52,15 @@ func installScrollAreaGeometry(world *ecs.World, entity ecs.Entity, area *Scroll
 	}); err != nil {
 		return err
 	}
-	if !ecs.Has[scene.ClipRect2D](world, entity) {
-		return ecs.Insert(world, entity, scene.ClipRect2D{})
+	if !world.Has[scene.ClipRect2D](entity) {
+		return world.Insert(entity, scene.ClipRect2D{})
 	}
 	return nil
 }
 
 // GetScrollAreaMetrics derives viewport and range data from the current area configuration.
 func GetScrollAreaMetrics(world *ecs.World, entity ecs.Entity) (ScrollMetrics, bool) {
-	area, ok := ecs.Get[ScrollArea](world, entity)
+	area, ok := world.Get[ScrollArea](entity)
 	if !ok {
 		return ScrollMetrics{}, false
 	}
@@ -83,7 +83,7 @@ func SetScrollAreaOffset(world *ecs.World, entity ecs.Entity, offset mgl32.Vec2)
 	}
 	offset[0] = min(max(offset.X(), 0), metrics.MaxScrollX)
 	offset[1] = min(max(offset.Y(), 0), metrics.MaxScrollY)
-	scroll := ecs.GetMut[scene.UIScroll](world, entity)
+	scroll := world.GetMut[scene.UIScroll](entity)
 	if scroll == nil {
 		return false
 	}
@@ -96,7 +96,7 @@ func SetScrollAreaOffset(world *ecs.World, entity ecs.Entity, offset mgl32.Vec2)
 // state using a positive content offset.
 func SetSelectorScrollOffset(world *ecs.World, selector ecs.Entity, offset float32) bool {
 	updated := false
-	for _, access := range ecs.Query2[SelectorList, scene.UIScroll](world).All {
+	for _, access := range world.Query2[SelectorList, scene.UIScroll]().All {
 		list := access.A.Mut()
 		scroll := access.B.Mut()
 

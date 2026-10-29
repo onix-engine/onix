@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -20,24 +19,24 @@ func TestHTMLStackChangesMatchFresh(t *testing.T) {
 			inner := incrementalHTMLNode(t, world, owner, "inner")
 			clip := incrementalHTMLNode(t, world, owner, "clip")
 			control := incrementalControl(t, world, owner, "field")
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			clipEntity := state.OverflowBindings[clip.node].entity
-			scroll := ecs.GetMut[scene.UIScroll](world, clipEntity)
+			scroll := world.GetMut[scene.UIScroll](clipEntity)
 			scroll.Position[1] = -10
-			before, _ := ecs.Get[Control](world, control)
+			before, _ := world.Get[Control](control)
 			for _, step := range []struct{ z, inner string }{{"4", "-1"}, {"-2", "-1"}, {"auto", "-1"}, {"2", "999999"}, {"-999999", "-999999"}, {"auto", "auto"}} {
 				target.SetAttribute("style", "position:relative;z-index:"+step.z+";background:red")
 				inner.SetAttribute("style", "position:relative;z-index:"+step.inner)
 				incrementalSync(t, world)
-				state, _ = ecs.Get[htmlRenderState](world, owner)
+				state, _ = world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 || state.SyncStats.Spawned != 0 || state.SyncStats.Despawned != 0 || state.SyncStats.UpdatedControls != 0 {
 					t.Fatalf("nonlocal stack update: %+v", state.SyncStats)
 				}
-				after, _ := ecs.Get[Control](world, control)
+				after, _ := world.Get[Control](control)
 				if after.RenderRevision != before.RenderRevision {
 					t.Fatal("descendant control rebuilt")
 				}
-				scroll, _ := ecs.Get[scene.UIScroll](world, clipEntity)
+				scroll, _ := world.Get[scene.UIScroll](clipEntity)
 				if state.OverflowBindings[clip.node].entity != clipEntity || scroll.Position[1] != -10 {
 					t.Fatal("clip state reset")
 				}
@@ -55,7 +54,7 @@ func TestHTMLStackChangeWithStructureMatchesFresh(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "removed").Remove()
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "position:relative;z-index:-1")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("combined stack and structure change fell back")
 	}
@@ -96,7 +95,7 @@ func TestHTMLStaticAndFlexItemStackChangesMatchFresh(t *testing.T) {
 			for _, z := range []string{"-1", "4", "auto"} {
 				target.SetAttribute("style", "z-index:"+z+";background:red")
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 0 {
 					t.Fatalf("unexpected reconciliation: %+v", state.SyncStats)
 				}

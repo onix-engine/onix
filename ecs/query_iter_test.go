@@ -9,26 +9,26 @@ import (
 
 func TestQueryIterationMarksOnlyExplicitWrites(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner2[testPosition, testVelocity](world)
+	spawner := world.NewSpawner2[testPosition, testVelocity]()
 	entity := spawner.Spawn(testPosition{X: 1}, testVelocity{})
-	positionVersion, velocityVersion := ComponentVersion[testPosition](world), ComponentVersion[testVelocity](world)
-	for _, row := range Query2[testPosition, testVelocity](world).All {
+	positionVersion, velocityVersion := world.ComponentVersion[testPosition](), world.ComponentVersion[testVelocity]()
+	for _, row := range world.Query2[testPosition, testVelocity]().All {
 		_ = row.A.Get()
 		_ = row.B.Ref()
 	}
-	if ComponentVersion[testPosition](world) != positionVersion || ComponentVersion[testVelocity](world) != velocityVersion {
+	if world.ComponentVersion[testPosition]() != positionVersion || world.ComponentVersion[testVelocity]() != velocityVersion {
 		t.Fatal("reading query components marked them changed")
 	}
-	for _, row := range Query2[testPosition, testVelocity](world).All {
+	for _, row := range world.Query2[testPosition, testVelocity]().All {
 		row.B.Mut().X = 2
 		if CommitComponent(row.A, row.A.Get()) {
 			t.Fatal("equal commit marked a change")
 		}
 	}
-	if ComponentVersion[testPosition](world) != positionVersion || ComponentVersion[testVelocity](world) == velocityVersion {
+	if world.ComponentVersion[testPosition]() != positionVersion || world.ComponentVersion[testVelocity]() == velocityVersion {
 		t.Fatal("write marked the wrong component columns")
 	}
-	if GetRef[testPosition](world, entity).X != 1 {
+	if world.GetRef[testPosition](entity).X != 1 {
 		t.Fatal("read component was modified")
 	}
 }
@@ -37,7 +37,7 @@ func TestQueryIterationReleasesStructuralGuard(t *testing.T) {
 	for _, exit := range []string{"break", "return", "panic"} {
 		t.Run(exit, func(t *testing.T) {
 			world := NewWorld()
-			spawner := NewSpawner1[testPosition](world)
+			spawner := world.NewSpawner1[testPosition]()
 			entity := spawner.Spawn(testPosition{})
 			func() {
 				defer func() {
@@ -49,7 +49,7 @@ func TestQueryIterationReleasesStructuralGuard(t *testing.T) {
 						t.Fatalf("unexpected panic: %v", recovered)
 					}
 				}()
-				for range Query[testPosition](world).All {
+				for range world.Query[testPosition]().All {
 					switch exit {
 					case "break":
 						break
@@ -64,7 +64,7 @@ func TestQueryIterationReleasesStructuralGuard(t *testing.T) {
 			if world.activeQueryIterators != 0 {
 				t.Fatal("iterator guard was not released")
 			}
-			if err := Insert(world, entity, testVelocity{}); err != nil {
+			if err := world.Insert(entity, testVelocity{}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -78,17 +78,17 @@ func TestQueryIterationReleasesStructuralGuard(t *testing.T) {
 
 func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner2[testPosition, testVelocity](world)
+	spawner := world.NewSpawner2[testPosition, testVelocity]()
 	first := spawner.Spawn(testPosition{X: 1}, testVelocity{})
 	second := spawner.Spawn(testPosition{X: 2}, testVelocity{})
 	stale := spawner.Spawn(testPosition{}, testVelocity{})
 	world.Despawn(stale)
 	replacement := spawner.Spawn(testPosition{X: 3}, testVelocity{})
-	velocities := NewSpawner1[testVelocity](world)
+	velocities := world.NewSpawner1[testVelocity]()
 	missing := velocities.Spawn(testVelocity{})
 	context := &SystemContext{World: world, thisRun: world.changeTick}
 	entities := []Entity{second, stale, 0, missing, first}
-	view := Query2[testPosition, testVelocity](world, Added[testPosition](context), Without[testAccessC]()).In(entities)
+	view := world.Query2[testPosition, testVelocity](context.Added[testPosition](), Without[testAccessC]()).In(entities)
 	for range 2 {
 		var got []Entity
 		for entity := range view.All {
@@ -98,10 +98,10 @@ func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 			t.Fatalf("visited %v", got)
 		}
 	}
-	if err := Insert(world, first, testAccessC{}); err != nil {
+	if err := world.Insert(first, testAccessC{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Insert(world, second, testVisibility{}); err != nil {
+	if err := world.Insert(second, testVisibility{}); err != nil {
 		t.Fatal(err)
 	}
 	for entity := range view.All {
@@ -109,12 +109,12 @@ func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 			t.Fatalf("filtered/migrated entity %d, want %d", entity, second)
 		}
 	}
-	for range Query[testPosition](world).In(nil).All {
+	for range world.Query[testPosition]().In(nil).All {
 		t.Fatal("nil list visited entities")
 	}
 	// Saving a restricted view must not alter the unrestricted view or visit replacements.
 	count := 0
-	for range Query[testPosition](world).All {
+	for range world.Query[testPosition]().All {
 		count++
 	}
 	if count != 3 || replacement == stale {
@@ -131,26 +131,31 @@ func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 	}
 }
 
-func TestMustMutRejectsStaleAndForeignSlots(t *testing.T) {
+func TestMustMutRejectsStaleEmptyAndMissingComponents(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	entity := spawner.Spawn(testPosition{})
 	slot := world.Slot(entity)
-	MustMutSlot[testPosition](world, slot).X = 5
+	slot.MustMut[testPosition]().X = 5
 	world.Despawn(entity)
-	for _, access := range []func(){
-		func() { MustMut[testPosition](world, entity) },
-		func() { MustMutSlot[testPosition](world, slot) },
-		func() { MustMutSlot[testPosition](NewWorld(), slot) },
+	missing := world.Slot(world.Spawn(NewBundle(0)))
+	for _, check := range []struct {
+		entity Entity
+		access func()
+	}{
+		{entity, func() { world.MustMut[testPosition](entity) }},
+		{entity, func() { slot.MustMut[testPosition]() }},
+		{0, func() { EntitySlot{}.MustMut[testPosition]() }},
+		{missing.Entity(), func() { missing.MustMut[testPosition]() }},
 	} {
 		func() {
 			defer func() {
 				message := fmt.Sprint(recover())
-				if !strings.Contains(message, "testPosition") || !strings.Contains(message, fmt.Sprint(entity)) {
+				if !strings.Contains(message, "testPosition") || !strings.Contains(message, fmt.Sprint(check.entity)) {
 					t.Fatalf("missing entity/component diagnostic: %s", message)
 				}
 			}()
-			access()
+			check.access()
 			t.Fatal("required access succeeded")
 		}()
 	}

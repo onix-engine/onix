@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/layout"
 )
 
@@ -58,7 +57,7 @@ func TestHTMLOwnerReorderOnlyWritesAffectedSpan(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="before" style="height:30px;overflow:auto"><input value="Before"/></div><div id="flex" style="height:80px;display:flex;overflow:auto"><div id="target" style="height:40px;overflow:auto;order:0"><input value="Value"/></div><div style="height:40px;overflow:hidden"><input value="Second"/></div></div>`+strings.Repeat(`<div style="height:40px;overflow:auto"><input value="Unchanged"/></div>`, 1000))
 	node := incrementalHTMLNode(t, world, owner, "target")
 	flex := incrementalHTMLNode(t, world, owner, "flex")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	assertHTMLOwnerSpans(t, state)
 	rendered := state.BoxRenderings[flex.node]
 	start, end := rendered.OwnerStart, rendered.OwnerEnd
@@ -67,7 +66,7 @@ func TestHTMLOwnerReorderOnlyWritesAffectedSpan(t *testing.T) {
 	for _, order := range []string{"1", "0", "1", "0"} {
 		node.SetAttribute("style", "height:40px;overflow:auto;order:"+order)
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
+		state, _ = world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.OwnerListBoxes != expectedWork {
 			t.Fatalf("nonlocal owner update: %+v", state.SyncStats)
 		}
@@ -93,7 +92,7 @@ func TestHTMLOwnerNestedAndDisjointOrderSpans(t *testing.T) {
 		inner.SetAttribute("style", "order:"+order)
 		other.SetAttribute("style", "order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		expectedWork := htmlOwnerSubtreeBoxes(state.BoxRenderings[outer.node].Box) + htmlOwnerSubtreeBoxes(state.BoxRenderings[separate.node].Box)
 		if state.SyncStats.OwnerListBoxes != expectedWork {
 			t.Fatalf("nested spans rewritten twice: %+v", state.SyncStats)
@@ -112,18 +111,18 @@ func TestHTMLOwnerSpansRecoverAfterMembershipChanges(t *testing.T) {
 	for _, step := range []struct{ order, css string }{{"1", "overflow:auto;background:red"}, {"0", "overflow:auto;background:red"}, {"1", ""}, {"0", ""}} {
 		node.SetAttribute("style", "height:40px;order:"+step.order+";"+step.css)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		assertHTMLOwnerSpans(t, state)
 		assertHTMLContextMatchesFresh(t, world, owner, source(step.order, step.css))
 	}
 	// Tree changes rebuild offsets before a later local reorder.
 	incrementalHTMLNode(t, world, owner, "flex").SetAttribute("style", "display:flex;height:80px;position:relative")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	assertHTMLOwnerSpans(t, state)
 	node.SetAttribute("style", "height:40px;order:1")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	assertHTMLOwnerSpans(t, state)
 }
 
@@ -131,13 +130,13 @@ func TestHTMLOwnerSpansAfterStructuralShift(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="before">Before</div><div id="flex" style="display:flex;height:80px"><div id="target">Target</div><div>Sibling</div></div><div>After</div>`)
 	incrementalHTMLNode(t, world, owner, "before").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	assertHTMLOwnerSpans(t, state)
 	target := incrementalHTMLNode(t, world, owner, "target")
 	flex := incrementalHTMLNode(t, world, owner, "flex")
 	target.SetAttribute("style", "order:1")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.OwnerListBoxes != htmlOwnerSubtreeBoxes(state.BoxRenderings[flex.node].Box) {
 		t.Fatal("structural shift prevented local span update")
 	}
@@ -157,13 +156,13 @@ func TestHTMLClippedOwnerReorderReusesListStorage(t *testing.T) {
 	for range 4 {
 		cycle()
 	}
-	before, _ := ecs.Get[htmlRenderState](world, owner)
+	before, _ := world.Get[htmlRenderState](owner)
 	storage := &before.Children[0]
 	capacity := cap(before.Children)
 	for range 100 {
 		cycle()
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if &state.Children[0] != storage || cap(state.Children) != capacity {
 		t.Fatal("owner list storage replaced")
 	}

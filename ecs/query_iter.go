@@ -4,9 +4,9 @@ package ecs
 
 // Query iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query[A any](world *World, options ...QueryOption) QueryView1[A] {
+func (world *World) Query[A any](options ...QueryOption) QueryView1[A] {
 	requireWorld(world)
-	ids := [1]componentID{registerComponent[A](world)}
+	ids := [1]componentID{world.registerComponent[A]()}
 	key := simpleQueryKey{count: 1}
 	copy(key.ids[:], ids[:])
 	return QueryView1[A]{view: buildQuery(world, key, options), ids: ids}
@@ -39,7 +39,7 @@ func (v QueryView1[A]) All(yield func(Entity, ComponentAccess[A]) bool) {
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
+				a = current.componentColumn[A](v.ids[0])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -51,9 +51,9 @@ func (v QueryView1[A]) All(yield func(Entity, ComponentAccess[A]) bool) {
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
@@ -85,9 +85,9 @@ type Components2[A, B any] struct {
 
 // Query2 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query2[A, B any](world *World, options ...QueryOption) QueryView2[A, B] {
+func (world *World) Query2[A, B any](options ...QueryOption) QueryView2[A, B] {
 	requireWorld(world)
-	ids := [2]componentID{registerComponent[A](world), registerComponent[B](world)}
+	ids := [2]componentID{world.registerComponent[A](), world.registerComponent[B]()}
 	key := simpleQueryKey{count: 2}
 	copy(key.ids[:], ids[:])
 	return QueryView2[A, B]{view: buildQuery(world, key, options), ids: ids}
@@ -121,8 +121,8 @@ func (v QueryView2[A, B]) All(yield func(Entity, Components2[A, B]) bool) {
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -137,11 +137,11 @@ func (v QueryView2[A, B]) All(yield func(Entity, Components2[A, B]) bool) {
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components2[A, B]{
@@ -180,9 +180,9 @@ type Components3[A, B, C any] struct {
 
 // Query3 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query3[A, B, C any](world *World, options ...QueryOption) QueryView3[A, B, C] {
+func (world *World) Query3[A, B, C any](options ...QueryOption) QueryView3[A, B, C] {
 	requireWorld(world)
-	ids := [3]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world)}
+	ids := [3]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C]()}
 	key := simpleQueryKey{count: 3}
 	copy(key.ids[:], ids[:])
 	return QueryView3[A, B, C]{view: buildQuery(world, key, options), ids: ids}
@@ -217,9 +217,9 @@ func (v QueryView3[A, B, C]) All(yield func(Entity, Components3[A, B, C]) bool) 
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
-				c = componentColumn[C](current, v.ids[2])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
+				c = current.componentColumn[C](v.ids[2])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -235,13 +235,13 @@ func (v QueryView3[A, B, C]) All(yield func(Entity, Components3[A, B, C]) bool) 
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := componentColumn[C](cursor.archetype, v.ids[2])
+		c := cursor.archetype.componentColumn[C](v.ids[2])
 		cValues := c.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components3[A, B, C]{
@@ -283,9 +283,9 @@ type Components4[A, B, C, D any] struct {
 
 // Query4 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query4[A, B, C, D any](world *World, options ...QueryOption) QueryView4[A, B, C, D] {
+func (world *World) Query4[A, B, C, D any](options ...QueryOption) QueryView4[A, B, C, D] {
 	requireWorld(world)
-	ids := [4]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world)}
+	ids := [4]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D]()}
 	key := simpleQueryKey{count: 4}
 	copy(key.ids[:], ids[:])
 	return QueryView4[A, B, C, D]{view: buildQuery(world, key, options), ids: ids}
@@ -321,10 +321,10 @@ func (v QueryView4[A, B, C, D]) All(yield func(Entity, Components4[A, B, C, D]) 
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
-				c = componentColumn[C](current, v.ids[2])
-				d = componentColumn[D](current, v.ids[3])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
+				c = current.componentColumn[C](v.ids[2])
+				d = current.componentColumn[D](v.ids[3])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -341,15 +341,15 @@ func (v QueryView4[A, B, C, D]) All(yield func(Entity, Components4[A, B, C, D]) 
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := componentColumn[C](cursor.archetype, v.ids[2])
+		c := cursor.archetype.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := componentColumn[D](cursor.archetype, v.ids[3])
+		d := cursor.archetype.componentColumn[D](v.ids[3])
 		dValues := d.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components4[A, B, C, D]{
@@ -394,9 +394,9 @@ type Components5[A, B, C, D, E any] struct {
 
 // Query5 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query5[A, B, C, D, E any](world *World, options ...QueryOption) QueryView5[A, B, C, D, E] {
+func (world *World) Query5[A, B, C, D, E any](options ...QueryOption) QueryView5[A, B, C, D, E] {
 	requireWorld(world)
-	ids := [5]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world)}
+	ids := [5]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E]()}
 	key := simpleQueryKey{count: 5}
 	copy(key.ids[:], ids[:])
 	return QueryView5[A, B, C, D, E]{view: buildQuery(world, key, options), ids: ids}
@@ -433,11 +433,11 @@ func (v QueryView5[A, B, C, D, E]) All(yield func(Entity, Components5[A, B, C, D
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
-				c = componentColumn[C](current, v.ids[2])
-				d = componentColumn[D](current, v.ids[3])
-				e = componentColumn[E](current, v.ids[4])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
+				c = current.componentColumn[C](v.ids[2])
+				d = current.componentColumn[D](v.ids[3])
+				e = current.componentColumn[E](v.ids[4])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -455,17 +455,17 @@ func (v QueryView5[A, B, C, D, E]) All(yield func(Entity, Components5[A, B, C, D
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := componentColumn[C](cursor.archetype, v.ids[2])
+		c := cursor.archetype.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := componentColumn[D](cursor.archetype, v.ids[3])
+		d := cursor.archetype.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := componentColumn[E](cursor.archetype, v.ids[4])
+		e := cursor.archetype.componentColumn[E](v.ids[4])
 		eValues := e.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components5[A, B, C, D, E]{
@@ -513,9 +513,9 @@ type Components6[A, B, C, D, E, F any] struct {
 
 // Query6 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query6[A, B, C, D, E, F any](world *World, options ...QueryOption) QueryView6[A, B, C, D, E, F] {
+func (world *World) Query6[A, B, C, D, E, F any](options ...QueryOption) QueryView6[A, B, C, D, E, F] {
 	requireWorld(world)
-	ids := [6]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world), registerComponent[F](world)}
+	ids := [6]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F]()}
 	key := simpleQueryKey{count: 6}
 	copy(key.ids[:], ids[:])
 	return QueryView6[A, B, C, D, E, F]{view: buildQuery(world, key, options), ids: ids}
@@ -553,12 +553,12 @@ func (v QueryView6[A, B, C, D, E, F]) All(yield func(Entity, Components6[A, B, C
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
-				c = componentColumn[C](current, v.ids[2])
-				d = componentColumn[D](current, v.ids[3])
-				e = componentColumn[E](current, v.ids[4])
-				f = componentColumn[F](current, v.ids[5])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
+				c = current.componentColumn[C](v.ids[2])
+				d = current.componentColumn[D](v.ids[3])
+				e = current.componentColumn[E](v.ids[4])
+				f = current.componentColumn[F](v.ids[5])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -577,19 +577,19 @@ func (v QueryView6[A, B, C, D, E, F]) All(yield func(Entity, Components6[A, B, C
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := componentColumn[C](cursor.archetype, v.ids[2])
+		c := cursor.archetype.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := componentColumn[D](cursor.archetype, v.ids[3])
+		d := cursor.archetype.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := componentColumn[E](cursor.archetype, v.ids[4])
+		e := cursor.archetype.componentColumn[E](v.ids[4])
 		eValues := e.values
-		f := componentColumn[F](cursor.archetype, v.ids[5])
+		f := cursor.archetype.componentColumn[F](v.ids[5])
 		fValues := f.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components6[A, B, C, D, E, F]{
@@ -640,9 +640,9 @@ type Components7[A, B, C, D, E, F, G any] struct {
 
 // Query7 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func Query7[A, B, C, D, E, F, G any](world *World, options ...QueryOption) QueryView7[A, B, C, D, E, F, G] {
+func (world *World) Query7[A, B, C, D, E, F, G any](options ...QueryOption) QueryView7[A, B, C, D, E, F, G] {
 	requireWorld(world)
-	ids := [7]componentID{registerComponent[A](world), registerComponent[B](world), registerComponent[C](world), registerComponent[D](world), registerComponent[E](world), registerComponent[F](world), registerComponent[G](world)}
+	ids := [7]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F](), world.registerComponent[G]()}
 	key := simpleQueryKey{count: 7}
 	copy(key.ids[:], ids[:])
 	return QueryView7[A, B, C, D, E, F, G]{view: buildQuery(world, key, options), ids: ids}
@@ -681,13 +681,13 @@ func (v QueryView7[A, B, C, D, E, F, G]) All(yield func(Entity, Components7[A, B
 		for cursor.nextEntity() {
 			if cursor.archetype != current {
 				current = cursor.archetype
-				a = componentColumn[A](current, v.ids[0])
-				b = componentColumn[B](current, v.ids[1])
-				c = componentColumn[C](current, v.ids[2])
-				d = componentColumn[D](current, v.ids[3])
-				e = componentColumn[E](current, v.ids[4])
-				f = componentColumn[F](current, v.ids[5])
-				g = componentColumn[G](current, v.ids[6])
+				a = current.componentColumn[A](v.ids[0])
+				b = current.componentColumn[B](v.ids[1])
+				c = current.componentColumn[C](v.ids[2])
+				d = current.componentColumn[D](v.ids[3])
+				e = current.componentColumn[E](v.ids[4])
+				f = current.componentColumn[F](v.ids[5])
+				g = current.componentColumn[G](v.ids[6])
 			}
 			row := cursor.row
 			entity := cursor.archetype.entities[row]
@@ -707,21 +707,21 @@ func (v QueryView7[A, B, C, D, E, F, G]) All(yield func(Entity, Components7[A, B
 	}
 	for cursor.nextArchetype() {
 		entities := cursor.archetype.entities
-		a := componentColumn[A](cursor.archetype, v.ids[0])
+		a := cursor.archetype.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := componentColumn[B](cursor.archetype, v.ids[1])
+		b := cursor.archetype.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := componentColumn[C](cursor.archetype, v.ids[2])
+		c := cursor.archetype.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := componentColumn[D](cursor.archetype, v.ids[3])
+		d := cursor.archetype.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := componentColumn[E](cursor.archetype, v.ids[4])
+		e := cursor.archetype.componentColumn[E](v.ids[4])
 		eValues := e.values
-		f := componentColumn[F](cursor.archetype, v.ids[5])
+		f := cursor.archetype.componentColumn[F](v.ids[5])
 		fValues := f.values
-		g := componentColumn[G](cursor.archetype, v.ids[6])
+		g := cursor.archetype.componentColumn[G](v.ids[6])
 		gValues := g.values
-		if v.view.filters.count == 0 {
+		if v.view.filters.count == 0 && cursor.scopeTable == nil {
 			for row := 0; row < len(entities); row++ {
 				entity := entities[row]
 				if !yield(entity, Components7[A, B, C, D, E, F, G]{

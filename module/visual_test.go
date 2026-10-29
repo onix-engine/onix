@@ -38,7 +38,7 @@ func visualTestFixture(t testing.TB, bind bool) *visualFixture {
 		"provider/mod.json":          `{}`,
 	})
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("client", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		f.client = c
 		f.label, _ = c.Slot("label")
 		f.text, _ = c.Slot("text")
@@ -57,7 +57,7 @@ func visualTestFixture(t testing.TB, bind bool) *visualFixture {
 		f.requester, err = testRequester[string, RenderOutputHandle](c, "ask", callback)
 		return err
 	}}))
-	must(t, RegisterMod(&registry, "provider", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("provider", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		f.provider = c
 		return handleRequest(c, "ask", func(_ *Context, q Request[string, RenderOutputHandle]) error { f.request = q; return nil })
 	}, Destroy: func(*Context, *Signal) error { return f.output.Release() }}))
@@ -188,8 +188,8 @@ func TestFailedMountReleasesTransferredVisualPayload(t *testing.T) {
 		"fail/mod.json":              `{}`,
 	})
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "fail", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
-		emit, err := BindEmitter[RenderOutputHandle](c, "output")
+	must(t, registry.RegisterMod("fail", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+		emit, err := c.BindEmitter[RenderOutputHandle]("output")
 		if err != nil {
 			return err
 		}
@@ -215,7 +215,7 @@ func TestModuleForwardRetainsVisualUntilNextDelivery(t *testing.T) {
 	var delivered int
 	f.client.message = func(m Message) error { return f.client.Forward("provider", m) }
 	f.provider.message = func(m Message) error {
-		output, ok := Value[RenderOutputHandle](m)
+		output, ok := m.Value[RenderOutputHandle]()
 		if !ok || !output.Valid() {
 			t.Fatal("forwarded lease expired")
 		}
@@ -224,7 +224,7 @@ func TestModuleForwardRetainsVisualUntilNextDelivery(t *testing.T) {
 	}
 	lease, err := f.output.Retain()
 	must(t, err)
-	must(t, Send(f.provider, "client", "output", lease))
+	must(t, f.provider.Send("client", "output", lease))
 	must(t, f.r.Dispatch())
 	if delivered != 0 || f.pool.Leases() != 2 {
 		t.Fatal("queued relay lost its lease", delivered, f.pool.Leases())

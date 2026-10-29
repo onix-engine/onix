@@ -17,16 +17,16 @@ func TestUpdateParticleEmitter2DSystemSpawnsLoopingParticles(t *testing.T) {
 	emitter.Count = 3
 	emitter.Rate = 12
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, emitter)
+	bundle.Put(emitter)
 	world.Spawn(bundle)
-	ecs.InsertResource(world, &Time{Delta: time.Second})
+	world.InsertResource(&Time{Delta: time.Second})
 
 	if err := UpdateParticleEmitter2DSystem("").Run(world); err != nil {
 		t.Fatalf("update particle emitter: %v", err)
 	}
 
 	count := 0
-	for _, access := range ecs.Query[ParticleEmitter2D](world).All {
+	for _, access := range world.Query[ParticleEmitter2D]().All {
 		emitter := access.Mut()
 
 		count = len(emitter.particles)

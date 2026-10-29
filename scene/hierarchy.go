@@ -31,7 +31,7 @@ type Hierarchy struct {
 // HierarchyFor synchronizes topology and invalidates inherited state only in
 // affected subtrees. Borrowed lists remain valid until the next synchronization.
 func HierarchyFor(world *ecs.World) *Hierarchy {
-	h := ecs.FrameValue[Hierarchy, Hierarchy](world)
+	h := world.FrameValue[Hierarchy, Hierarchy]()
 	h.sync(world)
 	return h
 }
@@ -77,9 +77,9 @@ func (h *Hierarchy) sync(world *ecs.World) {
 		return
 	}
 	var versions, members [3]uint64
-	versions[0], members[0] = ecs.ComponentValueRevision[Parent](world)
-	versions[1], members[1] = ecs.ComponentValueRevision[Activity](world)
-	versions[2], members[2] = ecs.ComponentValueRevision[Visibility](world)
+	versions[0], members[0] = world.ComponentValueRevision[Parent]()
+	versions[1], members[1] = world.ComponentValueRevision[Activity]()
+	versions[2], members[2] = world.ComponentValueRevision[Visibility]()
 	h.invalidated, h.recomputed = 0, 0
 	if !h.initialized || h.entityVersion != world.EntityVersion() {
 		h.rebuild(world)
@@ -96,13 +96,13 @@ func (h *Hierarchy) sync(world *ecs.World) {
 					h.refreshParent(world, entity)
 				}
 			} else {
-				for entity := range ecs.Query[Parent](world, ecs.Unscoped(), ecs.Changed[Parent](changes)).All {
+				for entity := range world.Query[Parent](ecs.Unscoped(), changes.Changed[Parent]()).All {
 					h.refreshParent(world, entity)
 				}
 			}
 		}
-		refreshHierarchyFlags[Activity](h, world, changes, versions, members, 1)
-		refreshHierarchyFlags[Visibility](h, world, changes, versions, members, 2)
+		h.refreshFlags[Activity](world, changes, versions, members, 1)
+		h.refreshFlags[Visibility](world, changes, versions, members, 2)
 		for i := 0; i < len(h.queue); i++ {
 			n := h.node(h.queue[i])
 			n.valid = false
@@ -132,7 +132,7 @@ func (h *Hierarchy) rebuild(world *ecs.World) {
 	h.entities = h.entities[:0]
 	for entity := range world.Entities() {
 		index, _ := entity.Index()
-		parent, _ := ecs.Get[Parent](world, entity)
+		parent, _ := world.Get[Parent](entity)
 		h.nodes[index] = hierarchyNode{entity: entity, parent: parent.Entity, local: hierarchyLocalFlags(world, entity)}
 		h.entities = append(h.entities, entity)
 	}
@@ -155,7 +155,7 @@ func (h *Hierarchy) link(n *hierarchyNode) {
 
 func (h *Hierarchy) refreshParent(world *ecs.World, entity ecs.Entity) {
 	n := h.node(entity)
-	parent, _ := ecs.Get[Parent](world, entity)
+	parent, _ := world.Get[Parent](entity)
 	if n.parent == parent.Entity {
 		return
 	}
@@ -175,16 +175,16 @@ func (h *Hierarchy) refreshParent(world *ecs.World, entity ecs.Entity) {
 
 func hierarchyLocalFlags(world *ecs.World, entity ecs.Entity) uint8 {
 	flags := uint8(hierarchyEnabled)
-	if value := ecs.GetRef[Activity](world, entity); value != nil && !value.Active {
+	if value := world.GetRef[Activity](entity); value != nil && !value.Active {
 		flags &^= hierarchyActive
 	}
-	if value := ecs.GetRef[Visibility](world, entity); value != nil && !value.Visible {
+	if value := world.GetRef[Visibility](entity); value != nil && !value.Visible {
 		flags &^= hierarchyVisible
 	}
 	return flags
 }
 
-func refreshHierarchyFlags[T any](h *Hierarchy, world *ecs.World, changes *ecs.SystemContext, versions, members [3]uint64, index int) {
+func (h *Hierarchy) refreshFlags[T any](world *ecs.World, changes *ecs.SystemContext, versions, members [3]uint64, index int) {
 	if h.versions[index] == versions[index] {
 		return
 	}
@@ -201,7 +201,7 @@ func refreshHierarchyFlags[T any](h *Hierarchy, world *ecs.World, changes *ecs.S
 			refresh(entity)
 		}
 	} else {
-		for entity := range ecs.Query[T](world, ecs.Unscoped(), ecs.Changed[T](changes)).All {
+		for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
 			refresh(entity)
 		}
 	}

@@ -19,8 +19,8 @@ func TestSceneManagedResourcesAndHooksFollowForegroundLifetime(t *testing.T) {
 	probe := &managedProbe{}
 	var hooks []string
 	delete(registry.scenes, "main.json")
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
-		Install: func(c *Context, _ *Signal) error { hooks = append(hooks, "install"); return Own(c, probe) },
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+		Install: func(c *Context, _ *Signal) error { hooks = append(hooks, "install"); return c.Own(probe) },
 		Enter:   func(*Context, *Signal, SceneStartup) error { hooks = append(hooks, "enter"); return nil },
 		Exit:    func(*Context, *Signal) error { hooks = append(hooks, "exit"); return nil },
 		Suspend: func(*Context, *Signal) error { hooks = append(hooks, "suspend"); return nil },
@@ -64,8 +64,8 @@ func TestModuleManagedResourcesFollowCommittedSceneLifetime(t *testing.T) {
 	})
 	var probes []*managedProbe
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "speaker", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error { p := &managedProbe{}; probes = append(probes, p); return Own(c, p) }}))
-	must(t, RegisterScene(&registry, "broken.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(*Context, *Signal) error { return errors.New("failed startup") }}))
+	must(t, registry.RegisterMod("speaker", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error { p := &managedProbe{}; probes = append(probes, p); return c.Own(p) }}))
+	must(t, registry.RegisterScene("broken.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(*Context, *Signal) error { return errors.New("failed startup") }}))
 	r := newFixture(t, plan, registry, Options{})
 	main, err := r.Manager().StartEntry()
 	must(t, err)
@@ -89,8 +89,8 @@ func TestModuleManagedResourcesFollowCommittedSceneLifetime(t *testing.T) {
 	}
 	a := &main.modules[0]
 	extra := &managedProbe{}
-	must(t, Own(a, extra))
-	Disown(a, extra)
+	must(t, a.Own(extra))
+	a.Disown(extra)
 	must(t, a.Dispose())
 	if probes[0].closes != 1 || probes[1].closes != 0 || extra.closes != 0 {
 		t.Fatal("resource disposal crossed instance ownership")

@@ -13,13 +13,13 @@ func Test3DDynamicShapesSettleOnStaticBox(t *testing.T) {
 		settledAt float64
 	}{
 		{name: "sphere", add: func(world *World3D, body Body3D) {
-			AddCollider3D(world, body, NewColliderDef(Sphere{Radius: 1}))
+			world.AddCollider(body, NewColliderDef(Sphere{Radius: 1}))
 		}, position: V3(-4, 8, 0), settledAt: 2},
 		{name: "box", add: func(world *World3D, body Body3D) {
-			AddCollider3D(world, body, NewColliderDef(NewBox3D(1, 1, 1)))
+			world.AddCollider(body, NewColliderDef(NewBox3D(1, 1, 1)))
 		}, position: V3(0, 8, 0), settledAt: 1.5},
 		{name: "capsule", add: func(world *World3D, body Body3D) {
-			AddCollider3D(world, body, NewColliderDef(NewCapsule(4, .5)))
+			world.AddCollider(body, NewColliderDef(NewCapsule(4, .5)))
 		}, position: V3(4, 8, 0), settledAt: 3},
 	}
 
@@ -27,7 +27,7 @@ func Test3DDynamicShapesSettleOnStaticBox(t *testing.T) {
 	world.Gravity = V3(0, -20, 0)
 	world.Iterations = 10
 	floor := world.CreateBody(NewBodyDef3D(BodyStatic))
-	AddCollider3D(world, floor, NewColliderDef(NewBox3D(30, 2, 30)))
+	world.AddCollider(floor, NewColliderDef(NewBox3D(30, 2, 30)))
 	for _, test := range tests {
 		def := NewBodyDef3D(BodyDynamic)
 		def.Position = test.position
@@ -51,11 +51,11 @@ func Test3DRotatedBoxCollidesWithSphere(t *testing.T) {
 	boxDef := NewBodyDef3D(BodyStatic)
 	boxDef.Rotation = QuaternionFromAxisAngle(V3(0, 0, 1), math.Pi/4)
 	box := world.CreateBody(boxDef)
-	AddCollider3D(world, box, NewColliderDef(NewBox3D(4, 1, 2)))
+	world.AddCollider(box, NewColliderDef(NewBox3D(4, 1, 2)))
 	sphereDef := NewBodyDef3D(BodyDynamic)
 	sphereDef.Position = V3(1.5, 1.5, 0)
 	sphere := world.CreateBody(sphereDef)
-	AddCollider3D(world, sphere, NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(sphere, NewColliderDef(Sphere{Radius: 1}))
 
 	world.Step(1.0 / 60)
 	if len(world.Events()) != 1 || world.Events()[0].Phase != CollisionBegin {
@@ -71,17 +71,17 @@ func Test3DEveryShapePairProducesContact(t *testing.T) {
 	addSphere := func(world *World3D, body Body3D, sensor bool) {
 		definition := NewColliderDef(Sphere{Radius: 1})
 		definition.Sensor = sensor
-		AddCollider3D(world, body, definition)
+		world.AddCollider(body, definition)
 	}
 	addBox := func(world *World3D, body Body3D, sensor bool) {
 		definition := NewColliderDef(NewBox3D(2, 2, 2))
 		definition.Sensor = sensor
-		AddCollider3D(world, body, definition)
+		world.AddCollider(body, definition)
 	}
 	addCapsule := func(world *World3D, body Body3D, sensor bool) {
 		definition := NewColliderDef(NewCapsule(3, .5))
 		definition.Sensor = sensor
-		AddCollider3D(world, body, definition)
+		world.AddCollider(body, definition)
 	}
 	tests := []struct {
 		name   string
@@ -121,8 +121,8 @@ func Test3DFilterAndSensorCollisionEvents(t *testing.T) {
 	first.Filter = NewFilter(0, 1, 1)
 	second := NewColliderDef(Sphere{Radius: 2})
 	second.Filter = NewFilter(0, 2, 2)
-	firstCollider := AddCollider3D(world, a, first)
-	secondCollider := AddCollider3D(world, b, second)
+	firstCollider := world.AddCollider(a, first)
+	secondCollider := world.AddCollider(b, second)
 	world.Step(1.0 / 60)
 	if len(world.Events()) != 0 {
 		t.Fatal("rejected filters emitted a collision")
@@ -161,12 +161,12 @@ func Test3DStepReusesScratchStorage(t *testing.T) {
 	world.Reserve(64, 64)
 	world.Gravity = V3(0, -10, 0)
 	floor := world.CreateBody(NewBodyDef3D(BodyStatic))
-	AddCollider3D(world, floor, NewColliderDef(NewBox3D(100, 2, 100)))
+	world.AddCollider(floor, NewColliderDef(NewBox3D(100, 2, 100)))
 	for index := range 24 {
 		def := NewBodyDef3D(BodyDynamic)
 		def.Position = V3(float64(index%6)*3-8, 4+float64(index/6)*3, float64(index%4)*3-5)
 		body := world.CreateBody(def)
-		AddCollider3D(world, body, NewColliderDef(Sphere{Radius: 1}))
+		world.AddCollider(body, NewColliderDef(Sphere{Radius: 1}))
 	}
 	for range 180 {
 		world.Step(1.0 / 60)

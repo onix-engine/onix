@@ -3,7 +3,38 @@ package piecetree
 import (
 	"strings"
 	"testing"
+	"unsafe"
 )
+
+func TestCompactDetachesTailSnapshot(t *testing.T) {
+	for _, appended := range []bool{false, true} {
+		var tree Tree
+		tree.Reset(strings.Repeat("a", 1<<20))
+		if appended {
+			tree.Replace(tree.Len(), tree.Len(), "tail")
+		}
+		previous := tree.String()
+		tree.Replace(1024, tree.Len(), "")
+		// Exercise both cached and unmaterialized snapshots at compaction.
+		if appended {
+			tree.String()
+		}
+		tree.Compact()
+		value := tree.String()
+		if value != strings.Repeat("a", 1024) || unsafe.StringData(value) == unsafe.StringData(previous) {
+			t.Fatal("compaction retained the oversized snapshot")
+		}
+		tree.Replace(0, 1, "x")
+		if value[0] != 'a' || previous[0] != 'a' || len(previous) < 1<<20 {
+			t.Fatal("compaction or subsequent edit mutated a published snapshot")
+		}
+		tree.Replace(0, tree.Len(), "")
+		tree.Compact()
+		if tree.String() != "" || tree.RetainedBytes() != 0 {
+			t.Fatal("empty document retained text")
+		}
+	}
+}
 
 func TestSnapshotsRetainOldVersionsAcrossTailEdits(t *testing.T) {
 	var tree Tree

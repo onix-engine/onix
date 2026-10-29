@@ -560,9 +560,14 @@ func (t *Tree) String() string {
 // Matches checks the cached snapshot without materializing a new version.
 func (t *Tree) Matches(value string) bool { return t.cached && t.snapshot == value }
 
-// Compact reclaims deleted edit bytes and unused arena nodes. Call at a
-// document checkpoint; snapshots already handed to readers remain immutable.
-func (t *Tree) Compact() { value := t.String(); *t = Tree{}; t.Reset(value) }
+// Compact reclaims deleted bytes and unused arena nodes. Copy directly from
+// the tree: String may still share a large backing store after tail deletion.
+// Previously published snapshots remain immutable.
+func (t *Tree) Compact() {
+	value := t.Slice(0, t.Len())
+	*t = Tree{}
+	t.Reset(value)
+}
 
 // RetainedEditBytes reports append-buffer usage, including deleted bytes.
 func (t *Tree) RetainedEditBytes() int { return len(t.added) }

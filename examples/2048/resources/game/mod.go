@@ -84,7 +84,7 @@ func (m *Mod) OnMessage(_ *module.Context, message module.Message) error {
 	if message.Topic != module.InputTopic {
 		return nil
 	}
-	event, ok := module.Value[module.Input](message)
+	event, ok := message.Value[module.Input]()
 	if !ok {
 		return module.ErrType
 	}

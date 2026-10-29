@@ -14,7 +14,7 @@ projection without changing world axes or scene entities.
 Install the system:
 
 ```go
-if err := onix.InstallSystems[onix.Physics3D](app); err != nil {
+if err := app.InstallSystems[onix.Physics3D](); err != nil {
 	return err
 }
 ```
@@ -27,9 +27,9 @@ An entity needs Transform, RigidBody3D and a generic collider:
 
 ```go
 bundle := ecs.NewBundle(3)
-ecs.Put(&bundle, scene.TransformFromXYZ(0, 8, 0))
-ecs.Put(&bundle, physics.NewRigidBody3D(physics.BodyDynamic))
-ecs.Put(&bundle, physics.NewCollider3D(physics.Sphere{Radius: 1}))
+bundle.Put(scene.TransformFromXYZ(0, 8, 0))
+bundle.Put(physics.NewRigidBody3D(physics.BodyDynamic))
+bundle.Put(physics.NewCollider3D(physics.Sphere{Radius: 1}))
 entity := app.World.Spawn(bundle)
 ```
 
@@ -37,9 +37,9 @@ A static floor can use Box3D:
 
 ```go
 bundle := ecs.NewBundle(3)
-ecs.Put(&bundle, scene.TransformFromXYZ(0, 0, 0))
-ecs.Put(&bundle, physics.NewRigidBody3D(physics.BodyStatic))
-ecs.Put(&bundle, physics.NewCollider3D(physics.NewBox3D(20, 2, 20)))
+bundle.Put(scene.TransformFromXYZ(0, 0, 0))
+bundle.Put(physics.NewRigidBody3D(physics.BodyStatic))
+bundle.Put(physics.NewCollider3D(physics.NewBox3D(20, 2, 20)))
 app.World.Spawn(bundle)
 ```
 
@@ -102,7 +102,7 @@ Release builds load preprocessed binaries without source-format parsers.
 ## Forces and messages
 
 ```go
-body := ecs.GetMut[physics.RigidBody3D](app.World, entity)
+body := app.World.GetMut[physics.RigidBody3D](entity)
 if body != nil {
 	body.ApplyForce(physics.V3(0, 20, 0))
 	body.ApplyTorque(physics.V3(0, 2, 0))
@@ -125,7 +125,7 @@ world.Reserve(128, 256)
 definition := physics.NewBodyDef3D(physics.BodyDynamic)
 definition.Position = physics.V3(0, 8, 0)
 body := world.CreateBody(definition)
-physics.AddCollider3D(world, body, physics.NewColliderDef(physics.Sphere{Radius: 1}))
+world.AddCollider(body, physics.NewColliderDef(physics.Sphere{Radius: 1}))
 
 world.Step(1.0 / 60.0)
 position := body.Position()

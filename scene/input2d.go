@@ -67,7 +67,7 @@ func RemapInputEntity2D(world *ecs.World, previous, current ecs.Entity) {
 		return
 	}
 	hovered, pressed := false, false
-	if tracker, ok := ecs.GetResource[*inputTracker2D](world); ok && tracker != nil {
+	if tracker, ok := world.GetResource[*inputTracker2D](); ok && tracker != nil {
 		if tracker.activeReceiver == previous {
 			tracker.active, tracker.activeReceiver = current, current
 			pressed = tracker.hasActive
@@ -83,14 +83,14 @@ func RemapInputEntity2D(world *ecs.World, previous, current ecs.Entity) {
 			hovered = true
 		}
 	}
-	if capture, ok := ecs.GetResource[*InputCapture2D](world); ok && capture != nil {
+	if capture, ok := world.GetResource[*InputCapture2D](); ok && capture != nil {
 		if capture.Receiver == previous {
 			capture.Target, capture.Receiver = current, current
 		} else if capture.Target == previous {
 			capture.Target = current
 		}
 	}
-	if state := ecs.GetMut[InputState2D](world, current); state != nil {
+	if state := world.GetMut[InputState2D](current); state != nil {
 		state.Hovered, state.Pressed = hovered, pressed
 	}
 }
@@ -220,23 +220,23 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	inputState, ok := ecs.GetResource[*input.State](world)
+	inputState, ok := world.GetResource[*input.State]()
 	if !ok || inputState == nil {
 		return nil
 	}
-	tracker, ok := ecs.GetResource[*inputTracker2D](world)
+	tracker, ok := world.GetResource[*inputTracker2D]()
 	if !ok || tracker == nil {
 		tracker = &inputTracker2D{}
-		ecs.InsertResource(world, tracker)
+		world.InsertResource(tracker)
 	}
-	capture, ok := ecs.GetResource[*InputCapture2D](world)
+	capture, ok := world.GetResource[*InputCapture2D]()
 	if !ok || capture == nil {
 		capture = &InputCapture2D{}
-		ecs.InsertResource(world, capture)
+		world.InsertResource(capture)
 	}
 	pointer := inputState.Pointer()
 	pointerActive := pointer.Pressed || pointer.Released || pointer.DeltaX != 0 || pointer.DeltaY != 0 || pointer.WheelX != 0 || pointer.WheelY != 0
-	cache := ecs.ScopeValue[inputPickCache2D, inputPickCache2D](world)
+	cache := world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 	changed := cache.refresh(world, tracker.active, tracker.activeCamera)
 	if !changed && !pointerActive {
 		return nil
@@ -334,13 +334,13 @@ func pointerInputEvent(device input.PointerDevice, entity ecs.Entity, path []ecs
 }
 
 func setInputHovered2D(world *ecs.World, entity ecs.Entity, value bool) {
-	if state := ecs.GetMut[InputState2D](world, entity); state != nil {
+	if state := world.GetMut[InputState2D](entity); state != nil {
 		state.Hovered = value
 	}
 }
 
 func setPointerPressed2D(world *ecs.World, entity ecs.Entity, value bool) {
-	if state := ecs.GetMut[InputState2D](world, entity); state != nil {
+	if state := world.GetMut[InputState2D](entity); state != nil {
 		state.Pressed = value
 	}
 }
@@ -348,7 +348,7 @@ func setPointerPressed2D(world *ecs.World, entity ecs.Entity, value bool) {
 // DispatchInputEvent delivers an event to its target path and publishes the result.
 // Handlers may stop propagation or consume the event; nested dispatch reuses scratch storage.
 func DispatchInputEvent(world *ecs.World, event InputEvent) {
-	arena := ecs.FrameValue[inputEventArena2DScratch, inputEventArena2D](world)
+	arena := world.FrameValue[inputEventArena2DScratch, inputEventArena2D]()
 	index := len(arena.values)
 	arena.values = append(arena.values, event)
 	contextIndex := len(arena.contexts)
@@ -375,7 +375,7 @@ func DispatchInputEvent(world *ecs.World, event InputEvent) {
 		if context.Handled {
 			eventPtr.Handled = true
 		}
-		ecs.WriteMessage(world, *eventPtr)
+		world.WriteMessage(*eventPtr)
 		return
 	}
 	for _, entity := range path {
@@ -386,7 +386,7 @@ func DispatchInputEvent(world *ecs.World, event InputEvent) {
 			break
 		}
 	}
-	ecs.WriteMessage(world, *eventPtr)
+	world.WriteMessage(*eventPtr)
 }
 
 func dispatchInputHandler2D(world *ecs.World, context *InputEventContext, entity ecs.Entity) bool {
@@ -394,11 +394,11 @@ func dispatchInputHandler2D(world *ecs.World, context *InputEventContext, entity
 		return false
 	}
 	filter := InputFilterPass
-	if target := ecs.GetRef[InputTarget2D](world, entity); target != nil {
+	if target := world.GetRef[InputTarget2D](entity); target != nil {
 		filter = target.InputFilter
 	}
 	if filter != InputFilterIgnore {
-		if handler := ecs.GetRef[InputHandler2D](world, entity); handler != nil && handler.Handle != nil {
+		if handler := world.GetRef[InputHandler2D](entity); handler != nil && handler.Handle != nil {
 			context.Current = entity
 			handler.Handle(context)
 		}
@@ -412,11 +412,11 @@ func inputEventPath2D(world *ecs.World, entity ecs.Entity) []ecs.Entity {
 	if world == nil || entity == 0 {
 		return nil
 	}
-	parent, ok := ecs.Get[Parent](world, entity)
+	parent, ok := world.Get[Parent](entity)
 	if !ok {
 		return nil
 	}
-	path := ecs.MessageScratch[inputPathScratch, ecs.Entity](world)
+	path := world.MessageScratch[inputPathScratch, ecs.Entity]()
 	start := len(path.Values)
 	for remaining := world.EntityCount() + 1; entity != 0 && remaining > 0; remaining-- {
 		if !world.IsAlive(entity) {
@@ -427,7 +427,7 @@ func inputEventPath2D(world *ecs.World, entity ecs.Entity) []ecs.Entity {
 		if entity == 0 {
 			break
 		}
-		parent, ok = ecs.Get[Parent](world, entity)
+		parent, ok = world.Get[Parent](entity)
 		if !ok {
 			if world.IsAlive(entity) {
 				path.Values = append(path.Values, entity)
@@ -439,7 +439,7 @@ func inputEventPath2D(world *ecs.World, entity ecs.Entity) []ecs.Entity {
 }
 
 func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
-	scratch := ecs.FrameScratch[inputCameras2DScratch, inputCamera2D](world)
+	scratch := world.FrameScratch[inputCameras2DScratch, inputCamera2D]()
 	var captureDefaultCamera ecs.Entity
 	scratch.Values, captureDefaultCamera = collectInputCamerasInto2D(world, scratch.Values, capture)
 	scratch.ReleaseUnused()
@@ -448,10 +448,10 @@ func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]i
 
 func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
 	cameras = cameras[:0]
-	state, _ := ecs.GetResource[*RenderWorld](world)
+	state, _ := world.GetResource[*RenderWorld]()
 	var defaultCamera inputCamera2D
 	var fallback inputCamera2D
-	for entity, access := range ecs.Query[Camera](world).All {
+	for entity, access := range world.Query[Camera]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
@@ -460,8 +460,8 @@ func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, captur
 		if !camera.Active {
 			continue
 		}
-		projection, projectionOK := ecs.Get[Projection](world, entity)
-		transform, transformOK := ecs.Get[GlobalTransform](world, entity)
+		projection, projectionOK := world.Get[Projection](entity)
+		transform, transformOK := world.Get[GlobalTransform](entity)
 		if !projectionOK || !transformOK {
 			continue
 		}
@@ -500,7 +500,7 @@ func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, captur
 }
 
 func collectInputTargets2D(world *ecs.World, capture *inputCaptureLookup2D) []inputPickTarget2D {
-	scratch := ecs.FrameScratch[inputTargets2DScratch, inputPickTarget2D](world)
+	scratch := world.FrameScratch[inputTargets2DScratch, inputPickTarget2D]()
 	scratch.Values = collectInputTargetsInto2D(world, scratch.Reserve(world.EntityCount()), capture)
 	scratch.ReleaseUnused()
 	return scratch.Values
@@ -509,16 +509,16 @@ func collectInputTargets2D(world *ecs.World, capture *inputCaptureLookup2D) []in
 func collectInputTargetsInto2D(world *ecs.World, targets []inputPickTarget2D, capture *inputCaptureLookup2D) []inputPickTarget2D {
 	targets = targets[:0]
 	hierarchy := frameRenderHierarchy2DCachePtr(world)
-	targets = collectInputTargetsWithTransform2D[GlobalTransform](world, hierarchy, targets, false, capture)
-	targets = collectInputTargetsWithTransform2D[UIGlobalTransform](world, hierarchy, targets, true, capture)
-	targets = collectInputBlockersWithTransform2D[GlobalTransform](world, hierarchy, targets, false, capture)
-	targets = collectInputBlockersWithTransform2D[UIGlobalTransform](world, hierarchy, targets, true, capture)
+	targets = hierarchy.collectInputTargetsWithTransform2D[GlobalTransform](world, targets, false, capture)
+	targets = hierarchy.collectInputTargetsWithTransform2D[UIGlobalTransform](world, targets, true, capture)
+	targets = hierarchy.collectInputBlockersWithTransform2D[GlobalTransform](world, targets, false, capture)
+	targets = hierarchy.collectInputBlockersWithTransform2D[UIGlobalTransform](world, targets, true, capture)
 	slices.SortFunc(targets, compareInputPickTarget2D)
 	return targets
 }
 
-func collectInputTargetsWithTransform2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, targets []inputPickTarget2D, ui bool, capture *inputCaptureLookup2D) []inputPickTarget2D {
-	for entity, access := range ecs.Query3[InputTarget2D, T, Visibility](world).All {
+func (hierarchy *renderHierarchy2DCache) collectInputTargetsWithTransform2D[T renderGlobalTransform2D](world *ecs.World, targets []inputPickTarget2D, ui bool, capture *inputCaptureLookup2D) []inputPickTarget2D {
+	for entity, access := range world.Query3[InputTarget2D, T, Visibility]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
@@ -562,8 +562,8 @@ func collectInputTargetsWithTransform2D[T renderGlobalTransform2D](world *ecs.Wo
 	return targets
 }
 
-func collectInputBlockersWithTransform2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, targets []inputPickTarget2D, ui bool, capture *inputCaptureLookup2D) []inputPickTarget2D {
-	for entity, access := range ecs.Query3[InputBlocker2D, T, Visibility](world).All {
+func (hierarchy *renderHierarchy2DCache) collectInputBlockersWithTransform2D[T renderGlobalTransform2D](world *ecs.World, targets []inputPickTarget2D, ui bool, capture *inputCaptureLookup2D) []inputPickTarget2D {
+	for entity, access := range world.Query3[InputBlocker2D, T, Visibility]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
@@ -712,10 +712,10 @@ func inputDimensions2D(world *ecs.World, entity ecs.Entity, target *InputTarget2
 		return target.Width, target.Height
 	}
 	var width, height float32
-	if sprite := ecs.GetRef[Sprite2D](world, entity); sprite != nil {
+	if sprite := world.GetRef[Sprite2D](entity); sprite != nil {
 		width, height = sprite.Size()
 	}
-	if layers := ecs.GetRef[SpriteLayers2D](world, entity); layers != nil {
+	if layers := world.GetRef[SpriteLayers2D](entity); layers != nil {
 		for index := range layers.Layers {
 			layer := &layers.Layers[index]
 			if !layer.Visible || layer.Sprite.Alpha <= 0 {

@@ -15,13 +15,13 @@ func htmlStyleVisible(computed *style.ComputedStyle) bool {
 // the ancestor's. Only the element's own primitives inherit its hidden state.
 func syncHTMLCSSVisibility(world *ecs.World, entity ecs.Entity, computed *style.ComputedStyle) {
 	visible := htmlStyleVisible(computed)
-	if scroll := ecs.GetMut[scene.UIScroll](world, entity); scroll != nil {
+	if scroll := world.GetMut[scene.UIScroll](entity); scroll != nil {
 		scroll.DisableInput = !visible
 	}
-	if visible || ecs.Has[htmlOverflowClip](world, entity) || ecs.Has[htmlOpacitySurface](world, entity) {
+	if visible || world.Has[htmlOverflowClip](entity) || world.Has[htmlOpacitySurface](entity) {
 		return
 	}
-	if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+	if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 		visibility.Visible = false
 	}
 }

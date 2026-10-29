@@ -15,7 +15,7 @@ func TestSlotChangeCoalescesAndIgnoresUnchangedWrites(t *testing.T) {
 	registry := Registry{}
 	var text, size Slot
 	callbacks := 0
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		text, _ = c.Slot("text")
 		size, _ = c.Slot("size")
 		return OnSlotsChange(c, []string{"text", "size"}, func(*Context) error { callbacks++; return nil })

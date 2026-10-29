@@ -9,8 +9,8 @@ type buttonLabelWidthsScratch struct{}
 type selectorLabelsScratch struct{}
 
 func collectButtonLabelWidths(world *ecs.World) map[ecs.Entity]float32 {
-	widths := ecs.FrameScratchMap[buttonLabelWidthsScratch, ecs.Entity, float32](world)
-	for _, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, Part[LabelPart]](world).All {
+	widths := world.FrameScratchMap[buttonLabelWidthsScratch, ecs.Entity, float32]()
+	for _, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, Part[LabelPart]]().All {
 		relation := access.A.Ref()
 		text := access.B.Ref()
 
@@ -22,14 +22,14 @@ func collectButtonLabelWidths(world *ecs.World) map[ecs.Entity]float32 {
 }
 
 func collectSelectorLabels(world *ecs.World) map[ecs.Entity]string {
-	labels := ecs.FrameScratchMap[selectorLabelsScratch, ecs.Entity, string](world)
-	for _, access := range ecs.Query[SelectorItem](world).All {
+	labels := world.FrameScratchMap[selectorLabelsScratch, ecs.Entity, string]()
+	for _, access := range world.Query[SelectorItem]().All {
 		item := access.Ref()
 
 		if _, exists := labels[item.Owner]; exists {
 			continue
 		}
-		if selector := ecs.GetRef[Selector](world, item.Owner); (selector != nil) && selector.Selected == item.Index {
+		if selector := world.GetRef[Selector](item.Owner); (selector != nil) && selector.Selected == item.Index {
 			labels[item.Owner] = item.Label
 		}
 	}

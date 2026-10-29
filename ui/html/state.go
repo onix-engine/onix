@@ -143,7 +143,7 @@ type SyncDiagnostics struct {
 }
 
 func Diagnostics(world *ecs.World, owner ecs.Entity) SyncDiagnostics {
-	if state := ecs.GetRef[htmlRenderState](world, owner); state != nil {
+	if state := world.GetRef[htmlRenderState](owner); state != nil {
 		return state.Diagnostics
 	}
 	return SyncDiagnostics{}

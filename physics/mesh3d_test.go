@@ -102,11 +102,11 @@ func TestSphereSettlesOnTriangleMesh(t *testing.T) {
 	}
 	world := NewWorld3D()
 	floor := world.CreateBody(NewBodyDef3D(BodyStatic))
-	AddCollider3D(world, floor, NewColliderDef(mesh))
+	world.AddCollider(floor, NewColliderDef(mesh))
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position = V3(0, 3, 0)
 	ball := world.CreateBody(def)
-	AddCollider3D(world, ball, NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(ball, NewColliderDef(Sphere{Radius: 1}))
 	for range 120 {
 		world.Step(1.0 / 60)
 	}
@@ -125,11 +125,11 @@ func TestSphereSettlesOnConvexHull(t *testing.T) {
 	}
 	world := NewWorld3D()
 	floor := world.CreateBody(NewBodyDef3D(BodyStatic))
-	AddCollider3D(world, floor, NewColliderDef(hull))
+	world.AddCollider(floor, NewColliderDef(hull))
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position = V3(0, 4, 0)
 	ball := world.CreateBody(def)
-	AddCollider3D(world, ball, NewColliderDef(Sphere{Radius: 1}))
+	world.AddCollider(ball, NewColliderDef(Sphere{Radius: 1}))
 	for range 120 {
 		world.Step(1.0 / 60)
 	}
@@ -151,8 +151,8 @@ func TestConvexHullsUseNarrowPhaseInsteadOfOnlyAABB(t *testing.T) {
 	secondDef := NewBodyDef3D(BodyDynamic)
 	secondDef.Position = V3(1.5, 0, 0)
 	second := world.CreateBody(secondDef)
-	AddCollider3D(world, first, NewColliderDef(hull))
-	AddCollider3D(world, second, NewColliderDef(hull))
+	world.AddCollider(first, NewColliderDef(hull))
+	world.AddCollider(second, NewColliderDef(hull))
 	world.Step(1.0 / 60)
 	if len(world.Events()) == 0 {
 		t.Fatal("overlapping convex hulls did not produce a contact")
@@ -207,8 +207,8 @@ func TestCookedHullStepDoesNotAllocateAfterReserve(t *testing.T) {
 	secondDef := NewBodyDef3D(BodyDynamic)
 	secondDef.Position = V3(1.5, 0, 0)
 	second := world.CreateBody(secondDef)
-	AddCollider3D(world, first, NewColliderDef(hull))
-	AddCollider3D(world, second, NewColliderDef(hull))
+	world.AddCollider(first, NewColliderDef(hull))
+	world.AddCollider(second, NewColliderDef(hull))
 	world.Step(1.0 / 60)
 	if allocations := testing.AllocsPerRun(100, func() { world.Step(1.0 / 60) }); allocations != 0 {
 		t.Fatalf("cooked hull step allocated %f times", allocations)

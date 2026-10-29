@@ -16,7 +16,7 @@ func TestHTMLAsymmetricRoundedBackgroundAntialiasesCorners(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<button id="close" style="width:46px;height:36px;border:0;border-radius:0 7px 7px 0;background:#c42b34"></button>`)
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "close")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	computed := state.Styles[node.node]
 	var raster image.RGBA
 	rasterHTMLBoxPaintPrepared(&raster, computed, 46, 36, 1, nil)
@@ -55,7 +55,7 @@ func TestHTMLZIndexKeepsDescendantsAboveContainerBackground(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="overlay" style="position:absolute;z-index:90000;background:black;width:400px;height:300px"><div id="panel" style="background:white;width:200px;height:160px"><button id="button">Action</button></div></div>`)
 	html.Width, html.Height, html.Font = 400, 300, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	for iteration := range 3 {
 		root, _ := Root(world, owner)
@@ -65,11 +65,11 @@ func TestHTMLZIndexKeepsDescendantsAboveContainerBackground(t *testing.T) {
 			t.Fatal(err)
 		}
 		stacks := map[string]scene.UIStackIndex{}
-		for entity, access := range ecs.Query2[htmlChild, scene.UIStackIndex](world).All {
+		for entity, access := range world.Query2[htmlChild, scene.UIStackIndex]().All {
 			child := access.A.Get()
 			stack := access.B.Get()
 
-			if child.Owner == owner && child.Node != nil && (ecs.Has[scene.Sprite2D](world, entity) || ecs.Has[Control](world, entity)) {
+			if child.Owner == owner && child.Node != nil && (world.Has[scene.Sprite2D](entity) || world.Has[Control](entity)) {
 				id, _ := child.Node.Attr("id")
 				stacks[id] = stack
 			}
@@ -85,12 +85,12 @@ func TestHTMLRasterizesLayeredBackgroundsIndependentCornersAndShadows(t *testing
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="box" style="display:block;width:80px;height:40px;background-color:#112233;background-image:linear-gradient(to right,red,blue),linear-gradient(to bottom,white,black);border-radius:18px 4px 12px 2px;box-shadow:0 3px 6px rgba(0,0,0,.5)"></div>`)
 	html.Width, html.Height = 120, 80
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatalf("render layered background: %v", err)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	node, ok := NodeByID(world, owner, "box")
 	if !ok {
 		t.Fatal("missing box")
@@ -102,7 +102,7 @@ func TestHTMLRasterizesLayeredBackgroundsIndependentCornersAndShadows(t *testing
 	if shadow == nil || len(shadow.Bindings) != 1 {
 		t.Fatal("box shadow sprite was not emitted")
 	}
-	sprite, exists := ecs.Get[scene.Sprite2D](world, shadow.Bindings[0].Entity)
+	sprite, exists := world.Get[scene.Sprite2D](shadow.Bindings[0].Entity)
 	if !exists || sprite.Texture == nil || !sprite.Texture.Valid() || sprite.Shape.Kind != 0 {
 		t.Fatal("box shadow was not rasterized with its blur")
 	}
@@ -118,12 +118,12 @@ func TestHTMLPaintTexturesResizeAndReleaseDetachedNodes(t *testing.T) {
 	box := incrementalHTMLNode(t, world, owner, "box")
 	group := incrementalHTMLNode(t, world, owner, "group")
 	child := incrementalHTMLNode(t, world, owner, "child")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	key := htmlTextureKey{node: box.node, variant: "background"}
 	old := state.Textures.paint[key].texture
 	box.SetAttribute("style", "width:70px;height:25px;background:linear-gradient(to right,red,blue);box-shadow:0 2px 3px black")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	replacement := state.Textures.paint[key].texture
 	if old == replacement || replacement.Width != 70 || replacement.Height != 25 || old.Valid() {
 		t.Fatalf("texture did not resize/release: old valid=%v new=%dx%d", old.Valid(), replacement.Width, replacement.Height)
@@ -131,7 +131,7 @@ func TestHTMLPaintTexturesResizeAndReleaseDetachedNodes(t *testing.T) {
 	box.Remove()
 	group.Remove()
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if replacement.Valid() || state.Textures.paint[key] != nil || state.Textures.rasters[group.node] != nil || state.Textures.rasters[child.node] != nil || len(state.Textures.entries) != 0 || len(state.Textures.entities) != 0 {
 		t.Fatalf("detached paint retained resources: entries=%d entities=%d rasters=%d paint=%d", len(state.Textures.entries), len(state.Textures.entities), len(state.Textures.rasters), len(state.Textures.paint))
 	}
@@ -142,7 +142,7 @@ func TestHTMLOverflowCreatesHierarchyClipForDescendants(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="viewport" style="width:100px;height:40px;overflow:hidden"><div id="content" style="width:240px;height:40px;background:#fff">content</div></div>`)
 	html.Width, html.Height = 300, 100
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestHTMLOverflowCreatesHierarchyClipForDescendants(t *testing.T) {
 	var clip ecs.Entity
 	var clipRect scene.ClipRect2D
 	var contentParent ecs.Entity
-	for entity, access := range ecs.Query3[htmlChild, htmlOverflowClip, scene.ClipRect2D](world).All {
+	for entity, access := range world.Query3[htmlChild, htmlOverflowClip, scene.ClipRect2D]().All {
 		child := access.A.Get()
 		rect := access.C.Get()
 
@@ -167,7 +167,7 @@ func TestHTMLOverflowCreatesHierarchyClipForDescendants(t *testing.T) {
 		t.Fatalf("overflow clip = %d %+v", clip, clipRect)
 	}
 	content, _ := NodeByID(world, owner, "content")
-	for _, access := range ecs.Query2[htmlChild, scene.Parent](world).All {
+	for _, access := range world.Query2[htmlChild, scene.Parent]().All {
 		child := access.A.Get()
 		parent := access.B.Get()
 
@@ -182,7 +182,7 @@ func TestHTMLOverflowCreatesHierarchyClipForDescendants(t *testing.T) {
 	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	global, ok := ecs.Get[scene.UIGlobalTransform](world, contentParent)
+	global, ok := world.Get[scene.UIGlobalTransform](contentParent)
 	bounds, clipped := global.ClipRect()
 	if !ok || !clipped || bounds.Width != 100 || bounds.Height != 40 {
 		t.Fatalf("descendant clip = %+v, clipped=%t", bounds, clipped)
@@ -194,13 +194,13 @@ func TestHTMLOverflowAutoCreatesScrollState(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="viewport" style="width:100px;height:40px;overflow:auto"><div style="width:240px;height:80px;background:#fff"></div></div>`)
 	html.Width, html.Height = 300, 100
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	var clip ecs.Entity
-	for entity, access := range ecs.Query2[htmlChild, scene.UIScroll](world).All {
+	for entity, access := range world.Query2[htmlChild, scene.UIScroll]().All {
 		child := access.A.Get()
 		scroll := access.B.Get()
 
@@ -224,17 +224,17 @@ func TestHTMLZIndexRespectsNegativeContextsAndDocumentOrder(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="negative" style="position:absolute;z-index:-1;width:80px;height:20px"><div id="deep" style="width:80px;height:20px;background:#fff"></div></div><div id="later" style="position:absolute;width:80px;height:20px;background:#fff"></div>`)
 	html.Width, html.Height = 100, 40
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	stacks := map[string]scene.UIStackIndex{}
-	for entity, access := range ecs.Query2[htmlChild, scene.UIStackIndex](world).All {
+	for entity, access := range world.Query2[htmlChild, scene.UIStackIndex]().All {
 		child := access.A.Get()
 		stack := access.B.Get()
 
-		if child.Owner != owner || child.Node == nil || !ecs.Has[scene.Sprite2D](world, entity) {
+		if child.Owner != owner || child.Node == nil || !world.Has[scene.Sprite2D](entity) {
 			continue
 		}
 		id, _ := child.Node.Attr("id")
@@ -255,17 +255,17 @@ func TestHTMLZIndexKeepsNestedContextInsideParent(t *testing.T) {
 	bundle := ecs.NewBundle(1)
 	html := New(`<div id="low" style="position:absolute;z-index:1;width:80px;height:20px;background:#111"><div id="low-child" style="position:absolute;z-index:999999;width:80px;height:20px;background:#222"></div></div><div id="high" style="position:absolute;z-index:2;width:80px;height:20px;background:#333"><div id="high-child" style="position:absolute;z-index:-999999;width:80px;height:20px;background:#444"></div></div>`)
 	html.Width, html.Height = 100, 40
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
 	stacks := map[string]scene.UIStackIndex{}
-	for entity, access := range ecs.Query2[htmlChild, scene.UIStackIndex](world).All {
+	for entity, access := range world.Query2[htmlChild, scene.UIStackIndex]().All {
 		child := access.A.Get()
 		stack := access.B.Get()
 
-		if child.Owner != owner || child.Node == nil || !ecs.Has[scene.Sprite2D](world, entity) {
+		if child.Owner != owner || child.Node == nil || !world.Has[scene.Sprite2D](entity) {
 			continue
 		}
 		id, _ := child.Node.Attr("id")
@@ -297,35 +297,35 @@ func TestHTMLObjectFitPreservesLayoutAndClipsImage(t *testing.T) {
 	} {
 		t.Run(test.fit+"/"+test.position, func(t *testing.T) {
 			world := ecs.NewWorld()
-			ecs.InsertResource[ImageProvider](world, testHTMLImageProvider{texture: texture})
+			world.InsertResource[ImageProvider](testHTMLImageProvider{texture: texture})
 			bundle := ecs.NewBundle(1)
 			html := New(fmt.Sprintf(`<img id="image" src="test.png" style="display:block;width:200px;height:200px;object-fit:%s;object-position:%s">`, test.fit, test.position))
 			html.Width, html.Height = 300, 300
-			ecs.Put(&bundle, html)
+			bundle.Put(html)
 			owner := world.Spawn(bundle)
 			if err := Sync(world); err != nil {
 				t.Fatal(err)
 			}
 			node, _ := NodeByID(world, owner, "image")
 			var entity ecs.Entity
-			for candidate, access := range ecs.Query[htmlChild](world).All {
+			for candidate, access := range world.Query[htmlChild]().All {
 				child := access.Get()
 
-				if child.Owner == owner && child.Node == node.node && (ecs.Has[scene.Sprite2D](world, candidate) || ecs.Has[scene.SpriteLayers2D](world, candidate)) {
+				if child.Owner == owner && child.Node == node.node && (world.Has[scene.Sprite2D](candidate) || world.Has[scene.SpriteLayers2D](candidate)) {
 					entity = candidate
 					break
 				}
 			}
-			sprite, _ := ecs.Get[scene.Sprite2D](world, entity)
+			sprite, _ := world.Get[scene.Sprite2D](entity)
 			x, y := float32(0), float32(0)
 			if test.fit != "fill" {
-				layers, ok := ecs.Get[scene.SpriteLayers2D](world, entity)
+				layers, ok := world.Get[scene.SpriteLayers2D](entity)
 				if !ok || len(layers.Layers) != 1 {
 					t.Fatal("fitted image layer missing")
 				}
 				layer := layers.Layers[0]
 				sprite, x, y = layer.Sprite, layer.Transform.X, layer.Transform.Y
-				clip, _ := ecs.Get[scene.ClipRect2D](world, entity)
+				clip, _ := world.Get[scene.ClipRect2D](entity)
 				if clip != (scene.ClipRect2D{Width: 200, Height: 200}) {
 					t.Fatalf("image escaped content box: %+v", clip)
 				}
@@ -333,8 +333,8 @@ func TestHTMLObjectFitPreservesLayoutAndClipsImage(t *testing.T) {
 			if x != test.x || y != test.y || sprite.Width != test.width || sprite.Height != test.height {
 				t.Fatalf("image rect = %v,%v %vx%v", x, y, sprite.Width, sprite.Height)
 			}
-			size, _ := ecs.Get[scene.Size2D](world, entity)
-			target, _ := ecs.Get[scene.InputTarget2D](world, entity)
+			size, _ := world.Get[scene.Size2D](entity)
+			target, _ := world.Get[scene.InputTarget2D](entity)
 			if size != (scene.Size2D{Width: 200, Height: 200}) || target.Width != 200 || target.Height != 200 {
 				t.Fatal("object-fit changed layout or hit bounds")
 			}

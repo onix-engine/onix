@@ -90,21 +90,21 @@ func editorHTMLIcon(source string, color graphics.ColorRGBA) *graphics.Texture {
 }
 
 func installEditorHTMLImages(world *ecs.World) {
-	previous, _ := ecs.GetResource[htmlui.ImageProvider](world)
+	previous, _ := world.GetResource[htmlui.ImageProvider]()
 	if images, installed := previous.(editorHTMLImages); installed {
 		if images.dialogTextures == nil {
 			images.dialogTextures = make(map[string]*graphics.Texture)
-			ecs.InsertResource[htmlui.ImageProvider](world, images)
+			world.InsertResource[htmlui.ImageProvider](images)
 		}
 		return
 	}
-	ecs.InsertResource[htmlui.ImageProvider](world, editorHTMLImages{previous: previous, dialogTextures: make(map[string]*graphics.Texture)})
+	world.InsertResource[htmlui.ImageProvider](editorHTMLImages{previous: previous, dialogTextures: make(map[string]*graphics.Texture)})
 }
 
 func registerEditorHTMLDialogTexture(world *ecs.World, source string, texture *graphics.Texture) {
 	// GetResourceMut marks the provider changed; only do that when the source
 	// actually resolves to a different texture so stable dialogs keep fast path.
-	provider, ok := ecs.GetResource[htmlui.ImageProvider](world)
+	provider, ok := world.GetResource[htmlui.ImageProvider]()
 	if !ok {
 		return
 	}
@@ -119,7 +119,7 @@ func registerEditorHTMLDialogTexture(world *ecs.World, source string, texture *g
 		images.dialogTextures = make(map[string]*graphics.Texture)
 	}
 	images.dialogTextures[source] = texture
-	if provider, ok := ecs.GetResourceMut[htmlui.ImageProvider](world); ok && provider != nil {
+	if provider, ok := world.GetResourceMut[htmlui.ImageProvider](); ok && provider != nil {
 		*provider = images
 	}
 }
@@ -130,12 +130,12 @@ func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBou
 	html.Font, html.FontSize = font, 14
 	html.Width, html.Height = top.W, rootBounds.H
 	bundle := ecs.NewBundle(7)
-	ecs.Put(&bundle, scene.UITransformFromXY(top.X, top.Y))
-	ecs.Put(&bundle, scene.UIGlobalTransform{})
-	ecs.Put(&bundle, scene.Visibility{Visible: true})
-	ecs.Put(&bundle, scene.AnchorTopLeft)
-	ecs.Put(&bundle, scene.Size2D{})
-	ecs.Put(&bundle, html)
+	bundle.Put(scene.UITransformFromXY(top.X, top.Y))
+	bundle.Put(scene.UIGlobalTransform{})
+	bundle.Put(scene.Visibility{Visible: true})
+	bundle.Put(scene.AnchorTopLeft)
+	bundle.Put(scene.Size2D{})
+	bundle.Put(html)
 	t.entity = world.Spawn(bundle)
 	installEditorHTMLImages(world)
 	root, err := htmlui.Root(world, t.entity)
@@ -179,7 +179,7 @@ func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBou
 	if err != nil {
 		return err
 	}
-	t.component, err = htmlui.HydrateComponent(world, t.entity, definition, editorTitlebarView{}, titlebarComponentState{}, 1)
+	t.component, err = definition.HydrateComponent(world, t.entity, editorTitlebarView{}, titlebarComponentState{}, 1)
 	if err != nil {
 		return err
 	}
@@ -202,13 +202,13 @@ func (t *editorTitlebar) syncView(world *ecs.World, view editorTitlebarView) err
 			return err
 		}
 	}
-	html := ecs.GetMut[htmlui.Surface](world, t.entity)
+	html := world.GetMut[htmlui.Surface](t.entity)
 	html.Width, html.Height, html.Font = view.top.W, view.root.H, view.font
-	ecs.GetMut[scene.UITransform](world, t.entity).Translation = scene.Px2(view.top.X, view.top.Y)
+	world.GetMut[scene.UITransform](t.entity).Translation = scene.Px2(view.top.X, view.top.Y)
 	modal := view.modal
 	// A modal owns the whole window surface. Hide the titlebar entity so its
 	// retained HTML visuals do not participate in the native UI draw pass.
-	if visibility := ecs.GetMut[scene.Visibility](world, t.entity); visibility != nil {
+	if visibility := world.GetMut[scene.Visibility](t.entity); visibility != nil {
 		visibility.Visible = !modal
 	}
 	t.recentPaths = append(t.recentPaths[:0], view.recent[:min(len(view.recent), recentProjectLimit)]...)

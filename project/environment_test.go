@@ -36,11 +36,11 @@ func TestCameraHDREnvironmentSharesBakeAndReleasesTexture(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(scene.Dispose)
-	first, ok := ecs.Get[render3d.Environment](scene.World, scene.MustEntity("camera"))
+	first, ok := scene.World.Get[render3d.Environment](scene.MustEntity("camera"))
 	if !ok || first.Atlas == nil || first.Encoding != render.EnvironmentRGBE || first.Intensity != .6 || first.Exposure != 1.2 || !first.Background {
 		t.Fatalf("HDR environment = %+v", first)
 	}
-	second, _ := ecs.Get[render3d.Environment](scene.World, scene.MustEntity("second"))
+	second, _ := scene.World.Get[render3d.Environment](scene.MustEntity("second"))
 	if first.Atlas != second.Atlas || first.Panorama != second.Panorama || first.Encoding != second.Encoding || second.Intensity != 2 || second.Exposure != .8 || second.Background {
 		t.Fatalf("second camera must share the bake but retain settings: %+v", second)
 	}
@@ -110,7 +110,7 @@ func TestCameraEnvironmentLoadsRelativeToProjectAndUpdates(t *testing.T) {
 	}
 	t.Cleanup(scene.Dispose)
 	entity := scene.MustEntity("camera")
-	environment, ok := ecs.Get[render3d.Environment](scene.World, entity)
+	environment, ok := scene.World.Get[render3d.Environment](entity)
 	if !ok || environment.Atlas == nil || environment.Atlas.Format() != render.TextureFormatRGBA8 || environment.Intensity != .6 || environment.Exposure != 1.2 || !environment.Background {
 		t.Fatalf("camera environment not loaded: %+v", environment)
 	}
@@ -125,14 +125,14 @@ func TestCameraEnvironmentLoadsRelativeToProjectAndUpdates(t *testing.T) {
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "camera", Components: components}); err != nil {
 		t.Fatal(err)
 	}
-	environment, _ = ecs.Get[render3d.Environment](scene.World, entity)
+	environment, _ = scene.World.Get[render3d.Environment](entity)
 	if environment.Atlas != nil || environment.Exposure != 2 {
 		t.Fatalf("camera retained its previous atlas: %+v", environment)
 	}
 	if err := scene.ApplyNode(SceneNodeSpec{ID: "camera"}); err != nil {
 		t.Fatal(err)
 	}
-	if ecs.Has[render3d.Environment](scene.World, entity) {
+	if scene.World.Has[render3d.Environment](entity) {
 		t.Fatal("removed camera retained its environment component")
 	}
 }

@@ -37,10 +37,10 @@ func TestFogSettingsValidationAndCameraIsolation(t *testing.T) {
 	state.lights = []extractedLight3D{{Light3D: render.Light3D{Kind: render.Light3DAmbient}}}
 	b := ecs.NewBundle(1)
 	fog := NewFogSettings()
-	ecs.Put(&b, Camera{Fog: fog, ToneMapping: graphics.ToneMappingACES})
+	b.Put(Camera{Fog: fog, ToneMapping: graphics.ToneMappingACES})
 	first := world.Spawn(b)
 	b = ecs.NewBundle(1)
-	ecs.Put(&b, Camera{})
+	b.Put(Camera{})
 	second := world.Spawn(b)
 	a, other := &renderView3D{}, &renderView3D{}
 	a.frame.Camera.screenProjection = mgl32.Ident4()
@@ -58,7 +58,7 @@ func TestFogSettingsValidationAndCameraIsolation(t *testing.T) {
 	if other.lighting.FogParams != ([4]float32{}) || other.lighting.ToneMapping != 0 {
 		t.Fatal("camera fog/curve leaked")
 	}
-	settings := ecs.GetMut[Camera](world, first)
+	settings := world.GetMut[Camera](first)
 	if settings.Fog != fog {
 		t.Fatal("fog authoring was modified")
 	}

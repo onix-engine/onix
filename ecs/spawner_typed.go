@@ -15,12 +15,12 @@ func (s *Spawner1[A]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner1[A any](world *World) Spawner1[A] {
-	aID := registerComponent[A](world)
+func (world *World) NewSpawner1[A any]() Spawner1[A] {
+	aID := world.registerComponent[A]()
 	ids := [1]componentID{aID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner1[A]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
+		a: plan.archetype.componentColumn[A](aID),
 	}
 }
 
@@ -45,14 +45,14 @@ func (s *Spawner2[A, B]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner2[A, B any](world *World) Spawner2[A, B] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
+func (world *World) NewSpawner2[A, B any]() Spawner2[A, B] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
 	ids := [2]componentID{aID, bID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner2[A, B]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
 	}
 }
 
@@ -79,16 +79,16 @@ func (s *Spawner3[A, B, C]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner3[A, B, C any](world *World) Spawner3[A, B, C] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
+func (world *World) NewSpawner3[A, B, C any]() Spawner3[A, B, C] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
 	ids := [3]componentID{aID, bID, cID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner3[A, B, C]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
 	}
 }
 
@@ -117,18 +117,18 @@ func (s *Spawner4[A, B, C, D]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner4[A, B, C, D any](world *World) Spawner4[A, B, C, D] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
-	dID := registerComponent[D](world)
+func (world *World) NewSpawner4[A, B, C, D any]() Spawner4[A, B, C, D] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
 	ids := [4]componentID{aID, bID, cID, dID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner4[A, B, C, D]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
-		d: componentColumn[D](plan.archetype, dID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
 	}
 }
 
@@ -159,20 +159,20 @@ func (s *Spawner5[A, B, C, D, E]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner5[A, B, C, D, E any](world *World) Spawner5[A, B, C, D, E] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
-	dID := registerComponent[D](world)
-	eID := registerComponent[E](world)
+func (world *World) NewSpawner5[A, B, C, D, E any]() Spawner5[A, B, C, D, E] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
 	ids := [5]componentID{aID, bID, cID, dID, eID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner5[A, B, C, D, E]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
-		d: componentColumn[D](plan.archetype, dID),
-		e: componentColumn[E](plan.archetype, eID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
 	}
 }
 
@@ -205,22 +205,22 @@ func (s *Spawner6[A, B, C, D, E, F]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner6[A, B, C, D, E, F any](world *World) Spawner6[A, B, C, D, E, F] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
-	dID := registerComponent[D](world)
-	eID := registerComponent[E](world)
-	fID := registerComponent[F](world)
+func (world *World) NewSpawner6[A, B, C, D, E, F any]() Spawner6[A, B, C, D, E, F] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
 	ids := [6]componentID{aID, bID, cID, dID, eID, fID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner6[A, B, C, D, E, F]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
-		d: componentColumn[D](plan.archetype, dID),
-		e: componentColumn[E](plan.archetype, eID),
-		f: componentColumn[F](plan.archetype, fID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
 	}
 }
 
@@ -255,24 +255,24 @@ func (s *Spawner7[A, B, C, D, E, F, G]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner7[A, B, C, D, E, F, G any](world *World) Spawner7[A, B, C, D, E, F, G] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
-	dID := registerComponent[D](world)
-	eID := registerComponent[E](world)
-	fID := registerComponent[F](world)
-	gID := registerComponent[G](world)
+func (world *World) NewSpawner7[A, B, C, D, E, F, G any]() Spawner7[A, B, C, D, E, F, G] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
 	ids := [7]componentID{aID, bID, cID, dID, eID, fID, gID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner7[A, B, C, D, E, F, G]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
-		d: componentColumn[D](plan.archetype, dID),
-		e: componentColumn[E](plan.archetype, eID),
-		f: componentColumn[F](plan.archetype, fID),
-		g: componentColumn[G](plan.archetype, gID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
 	}
 }
 
@@ -309,26 +309,26 @@ func (s *Spawner8[A, B, C, D, E, F, G, H]) Reserve(capacity int) {
 	}
 }
 
-func NewSpawner8[A, B, C, D, E, F, G, H any](world *World) Spawner8[A, B, C, D, E, F, G, H] {
-	aID := registerComponent[A](world)
-	bID := registerComponent[B](world)
-	cID := registerComponent[C](world)
-	dID := registerComponent[D](world)
-	eID := registerComponent[E](world)
-	fID := registerComponent[F](world)
-	gID := registerComponent[G](world)
-	hID := registerComponent[H](world)
+func (world *World) NewSpawner8[A, B, C, D, E, F, G, H any]() Spawner8[A, B, C, D, E, F, G, H] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
+	hID := world.registerComponent[H]()
 	ids := [8]componentID{aID, bID, cID, dID, eID, fID, gID, hID}
 	plan := newSpawnPlan(world, ids[:])
 	return Spawner8[A, B, C, D, E, F, G, H]{plan: plan,
-		a: componentColumn[A](plan.archetype, aID),
-		b: componentColumn[B](plan.archetype, bID),
-		c: componentColumn[C](plan.archetype, cID),
-		d: componentColumn[D](plan.archetype, dID),
-		e: componentColumn[E](plan.archetype, eID),
-		f: componentColumn[F](plan.archetype, fID),
-		g: componentColumn[G](plan.archetype, gID),
-		h: componentColumn[H](plan.archetype, hID),
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
+		h: plan.archetype.componentColumn[H](hID),
 	}
 }
 

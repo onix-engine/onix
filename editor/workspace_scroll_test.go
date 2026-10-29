@@ -22,11 +22,11 @@ func TestWorkspaceOutlinerLongListScrolls(t *testing.T) {
 	if !ok {
 		t.Fatal("missing scene heading")
 	}
-	content, ok := ecs.Get[htmlui.ScrollContent](world, control)
+	content, ok := world.Get[htmlui.ScrollContent](control)
 	if !ok {
 		t.Fatal("scene list has no scroll container")
 	}
-	scroll, ok := ecs.Get[scene.UIScroll](world, content.Area)
+	scroll, ok := world.Get[scene.UIScroll](content.Area)
 	if !ok || !scroll.Vertical || scroll.ContentSize[1] <= scroll.ViewportSize[1] {
 		t.Fatalf("long list is not scrollable: %+v", scroll)
 	}
@@ -40,14 +40,14 @@ func TestWorkspaceOutlinerLongListScrolls(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := input.NewState()
-	ecs.InsertResource(world, in)
+	world.InsertResource(in)
 	layout := a.layout()
 	in.MoveMouse(float64(layout.Files.X+40), float64(layout.Files.Y+60))
 	in.ScrollMouse(0, -1)
 	if err := scene.UIScrollSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	scroll, _ = ecs.Get[scene.UIScroll](world, content.Area)
+	scroll, _ = world.Get[scene.UIScroll](content.Area)
 	if scroll.Position[1] >= 0 {
 		t.Fatalf("wheel did not scroll the list: %+v", scroll)
 	}
@@ -55,8 +55,8 @@ func TestWorkspaceOutlinerLongListScrolls(t *testing.T) {
 	a.selectInstance("row-20")
 	syncWorkspaceTest(t, a, world)
 	control, _ = htmlui.ControlByID(world, a.shell, "scene:main.json")
-	content, _ = ecs.Get[htmlui.ScrollContent](world, control)
-	scroll, _ = ecs.Get[scene.UIScroll](world, content.Area)
+	content, _ = world.Get[htmlui.ScrollContent](control)
+	scroll, _ = world.Get[scene.UIScroll](content.Area)
 	if scroll.Position != position {
 		t.Fatalf("selection reset list scroll: got %v, want %v", scroll.Position, position)
 	}

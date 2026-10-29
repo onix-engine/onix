@@ -52,7 +52,7 @@ func TestInstantiateSceneSpawnsSpriteTrailFromJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate ecs: %v", err)
 	}
-	trail, ok := ecs.Get[sceneapi.SpriteTrail2D](scene.World, scene.MustEntity("hero"))
+	trail, ok := scene.World.Get[sceneapi.SpriteTrail2D](scene.MustEntity("hero"))
 	if !ok {
 		t.Fatal("sprite trail component was not instantiated")
 	}
@@ -275,7 +275,7 @@ func TestPreloadSceneReusesInlineAnimationsAndCachesGlyphs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate preloaded scene: %v", err)
 	}
-	animator, ok := ecs.Get[sceneapi.Animator](scene.World, scene.MustEntity("pulse"))
+	animator, ok := scene.World.Get[sceneapi.Animator](scene.MustEntity("pulse"))
 	if !ok || animator.Clip != clip {
 		t.Fatal("scene did not use the precompiled animation clip")
 	}
@@ -421,40 +421,40 @@ func TestInstantiateSceneSpawnsHierarchyAndRenderComponentsFromJSON(t *testing.T
 		t.Fatalf("expected root to be indexed")
 	}
 	button := scene.Entities["button"]
-	parent, ok := ecs.Get[sceneapi.Parent](world, button)
+	parent, ok := world.Get[sceneapi.Parent](button)
 	if !ok || parent.Entity != root {
 		t.Fatalf("expected button parent %d, got %+v ok=%v", root, parent, ok)
 	}
-	transform, ok := ecs.Get[sceneapi.UITransform](world, root)
+	transform, ok := world.Get[sceneapi.UITransform](root)
 	if !ok || transform.Translation != sceneapi.Px2(12, 18) {
 		t.Fatalf("unexpected root transform: %+v ok=%v", transform, ok)
 	}
-	if stackIndex, ok := ecs.Get[sceneapi.UIStackIndex](world, root); !ok || stackIndex != 0 {
+	if stackIndex, ok := world.Get[sceneapi.UIStackIndex](root); !ok || stackIndex != 0 {
 		t.Fatalf("unexpected root UI stack index: %d ok=%v", stackIndex, ok)
 	}
 	x0, y0, x1, y1, ok := scene.BoundsByID("root")
 	if !ok || x0 != -38 || y0 != -7 || x1 != 62 || y1 != 43 {
 		t.Fatalf("unexpected authored node bounds: (%v, %v)-(%v, %v) ok=%v", x0, y0, x1, y1, ok)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](world, button)
+	sprite, ok := world.Get[sceneapi.Sprite2D](button)
 	if !ok || sprite.Width != 80 || sprite.Height != 24 {
 		t.Fatalf("unexpected button sprite: %+v ok=%v", sprite, ok)
 	}
 	label := scene.Entities["label"]
-	text, ok := ecs.Get[sceneapi.Text2D](world, label)
+	text, ok := world.Get[sceneapi.Text2D](label)
 	if !ok || text.Value != "Play" || text.MaxWidth != 42 || text.WrapMode != sceneapi.TextWrapNewlines || text.WrapWidth != 96 || text.LetterSpacing != 3 || text.LineHeight != 28 || text.TextAlignment != sceneapi.TextAlignRight || text.OutlineWidth != 2.5 || text.OutlineColor.GoColor() != (color.RGBA{R: 0x12, G: 0x34, B: 0x56, A: 0xff}) {
 		t.Fatalf("unexpected label text: %+v ok=%v", text, ok)
 	}
-	settings, ok := ecs.GetResource[sceneapi.RenderSettings2D](world)
+	settings, ok := world.GetResource[sceneapi.RenderSettings2D]()
 	if !ok || settings.ClearColor.GoColor().R != 0x11 {
 		t.Fatalf("unexpected render settings: %+v ok=%v", settings, ok)
 	}
 	particle := scene.MustEntity("spark")
-	emitter, ok := ecs.Get[sceneapi.ParticleEmitter2D](world, particle)
+	emitter, ok := world.Get[sceneapi.ParticleEmitter2D](particle)
 	if !ok || emitter.Count != 5 {
 		t.Fatalf("unexpected particle emitter: %+v ok=%v", emitter, ok)
 	}
-	if order, ok := ecs.Get[sceneapi.RenderOrder2D](world, particle); !ok || order != sceneapi.DefaultParticleRenderOrder {
+	if order, ok := world.Get[sceneapi.RenderOrder2D](particle); !ok || order != sceneapi.DefaultParticleRenderOrder {
 		t.Fatalf("unexpected particle render order: %d ok=%v", order, ok)
 	}
 }
@@ -536,7 +536,7 @@ func TestSceneInstancePreviewQueriesAndApplyNode(t *testing.T) {
 	if !ok || x0 != 20 || y0 != 23 || x1 != 50 || y1 != 35 {
 		t.Fatalf("unexpected updated bounds: (%v, %v)-(%v, %v) ok=%v", x0, y0, x1, y1, ok)
 	}
-	sprite, ok := ecs.Get[sceneapi.Sprite2D](scene.World, scene.MustEntity("hero"))
+	sprite, ok := scene.World.Get[sceneapi.Sprite2D](scene.MustEntity("hero"))
 	wantTint := graphics.ColorFromRGBA(0x44, 0xcc, 0x88, 0xff)
 	if !ok || sprite.Width != 30 || sprite.Height != 12 || sprite.Tint != wantTint || sprite.Texture.BatchKey() != graphics.CreateTextureByColor(graphics.White).BatchKey() {
 		t.Fatalf("expected hero sprite size update, got %+v ok=%v", sprite, ok)
@@ -604,7 +604,7 @@ func TestRenderItemsPreserveStableSceneOrderWithinOrder(t *testing.T) {
 		t.Fatalf("unexpected render items: %+v", items)
 	}
 	for _, item := range items {
-		order, ok := ecs.Get[sceneapi.RenderOrder2D](scene.World, item.Entity)
+		order, ok := scene.World.Get[sceneapi.RenderOrder2D](item.Entity)
 		if !ok || order != 5 || item.SortIndex != 5 {
 			t.Fatalf("project order was not applied to entity %d: component=%d item=%+v", item.Entity, order, item)
 		}
@@ -774,7 +774,7 @@ func TestMountedTilemapCreatesRenderableGameObject(t *testing.T) {
 		t.Fatalf("instantiate project: %v", err)
 	}
 	entity := scene.MustEntity("map")
-	tilemap, ok := ecs.Get[sceneapi.Tilemap2D](scene.World, entity)
+	tilemap, ok := scene.World.Get[sceneapi.Tilemap2D](entity)
 	if !ok || !tilemap.Valid() || tilemap.Width != 2 || tilemap.Tiles[0] != 1 {
 		t.Fatalf("unexpected tilemap component: %+v ok=%v", tilemap, ok)
 	}
@@ -790,18 +790,18 @@ func TestRenderItemsMatchRuntimeParticleBeforeTextOrder(t *testing.T) {
 	world := ecs.NewWorld()
 	scene := &SceneInstance{World: world}
 	particleBundle := ecs.NewBundle(4)
-	ecs.Put(&particleBundle, sceneapi.NewTransform())
-	ecs.Put(&particleBundle, sceneapi.GlobalTransform{})
-	ecs.Put(&particleBundle, sceneapi.Visibility{Visible: true})
-	ecs.Put(&particleBundle, sceneapi.ParticleEmitter2D{})
-	ecs.Put(&particleBundle, sceneapi.RenderOrder2D(500))
+	particleBundle.Put(sceneapi.NewTransform())
+	particleBundle.Put(sceneapi.GlobalTransform{})
+	particleBundle.Put(sceneapi.Visibility{Visible: true})
+	particleBundle.Put(sceneapi.ParticleEmitter2D{})
+	particleBundle.Put(sceneapi.RenderOrder2D(500))
 	particle := world.Spawn(particleBundle)
 	labelBundle := ecs.NewBundle(4)
-	ecs.Put(&labelBundle, sceneapi.NewTransform())
-	ecs.Put(&labelBundle, sceneapi.GlobalTransform{})
-	ecs.Put(&labelBundle, sceneapi.Visibility{Visible: true})
-	ecs.Put(&labelBundle, sceneapi.Text2D{Value: "label", Font: &onixtext.Font{}})
-	ecs.Put(&labelBundle, sceneapi.RenderOrder2D(500))
+	labelBundle.Put(sceneapi.NewTransform())
+	labelBundle.Put(sceneapi.GlobalTransform{})
+	labelBundle.Put(sceneapi.Visibility{Visible: true})
+	labelBundle.Put(sceneapi.Text2D{Value: "label", Font: &onixtext.Font{}})
+	labelBundle.Put(sceneapi.RenderOrder2D(500))
 	label := world.Spawn(labelBundle)
 
 	items := scene.RenderItems()
@@ -819,12 +819,12 @@ func TestSceneTransformMatrix2DSupportsWorldAndUIEntities(t *testing.T) {
 
 	worldBundle := ecs.NewBundle(1)
 	worldMatrix := mgl32.Translate3D(-300, -188, 0)
-	ecs.Put(&worldBundle, sceneapi.GlobalTransform{Matrix: worldMatrix})
+	worldBundle.Put(sceneapi.GlobalTransform{Matrix: worldMatrix})
 	worldEntity := world.Spawn(worldBundle)
 
 	uiBundle := ecs.NewBundle(1)
 	uiMatrix := mgl32.Translate3D(300, 20, 0)
-	ecs.Put(&uiBundle, sceneapi.UIGlobalTransform{Matrix: uiMatrix})
+	uiBundle.Put(sceneapi.UIGlobalTransform{Matrix: uiMatrix})
 	uiEntity := world.Spawn(uiBundle)
 
 	for name, test := range map[string]struct {
@@ -891,11 +891,11 @@ func TestApplyParticleSpecUpdatesEmitterInPreviewScene(t *testing.T) {
 	}
 
 	entity := scene.MustEntity("spark")
-	transform, ok := ecs.Get[sceneapi.Transform](scene.World, entity)
+	transform, ok := scene.World.Get[sceneapi.Transform](entity)
 	if !ok || transform.Translation.X() != 40 || transform.Translation.Y() != 50 {
 		t.Fatalf("unexpected particle transform: %+v ok=%v", transform, ok)
 	}
-	emitter, ok := ecs.Get[sceneapi.ParticleEmitter2D](scene.World, entity)
+	emitter, ok := scene.World.Get[sceneapi.ParticleEmitter2D](entity)
 	if !ok || emitter.Count != 8 || emitter.Rate != 14 {
 		t.Fatalf("unexpected particle emitter: %+v ok=%v", emitter, ok)
 	}
@@ -1021,10 +1021,10 @@ func TestApplyNodeReplacesAuthoredComponentsAcrossDimensions(t *testing.T) {
 	if scene.MustEntity("node") != entity {
 		t.Fatal("replacing authored components changed entity identity")
 	}
-	if !ecs.Has[render3d.Camera](scene.World, entity) || !ecs.Has[sceneapi.Transform](scene.World, entity) {
+	if !scene.World.Has[render3d.Camera](entity) || !scene.World.Has[sceneapi.Transform](entity) {
 		t.Fatal("camera components were not installed")
 	}
-	if ecs.Has[sceneapi.Sprite2D](scene.World, entity) || ecs.Has[sceneapi.UITransform](scene.World, entity) || ecs.Has[sceneapi.InputBlocker2D](scene.World, entity) {
+	if scene.World.Has[sceneapi.Sprite2D](entity) || scene.World.Has[sceneapi.UITransform](entity) || scene.World.Has[sceneapi.InputBlocker2D](entity) {
 		t.Fatal("2D components remained after changing node to camera")
 	}
 
@@ -1036,10 +1036,10 @@ func TestApplyNodeReplacesAuthoredComponentsAcrossDimensions(t *testing.T) {
 	if err := scene.ApplyNode(textSpec); err != nil {
 		t.Fatalf("replace camera with text: %v", err)
 	}
-	if !ecs.Has[sceneapi.Text2D](scene.World, entity) || !ecs.Has[sceneapi.UITransform](scene.World, entity) || !ecs.Has[sceneapi.InputBlocker2D](scene.World, entity) {
+	if !scene.World.Has[sceneapi.Text2D](entity) || !scene.World.Has[sceneapi.UITransform](entity) || !scene.World.Has[sceneapi.InputBlocker2D](entity) {
 		t.Fatal("UI text components were not installed")
 	}
-	if ecs.Has[sceneapi.Camera](scene.World, entity) || ecs.Has[render3d.Camera](scene.World, entity) || ecs.Has[sceneapi.Projection](scene.World, entity) || ecs.Has[sceneapi.Transform](scene.World, entity) {
+	if scene.World.Has[sceneapi.Camera](entity) || scene.World.Has[render3d.Camera](entity) || scene.World.Has[sceneapi.Projection](entity) || scene.World.Has[sceneapi.Transform](entity) {
 		t.Fatal("3D components remained after changing node to UI text")
 	}
 }
@@ -1066,7 +1066,7 @@ func TestApplyNodeInstallsMultipleComponentsOnOneEntity(t *testing.T) {
 		t.Fatalf("multiple component apply error = %v", err)
 	}
 	entity, err := scene.Entity("invalid")
-	if err != nil || !ecs.Has[sceneapi.Sprite2D](scene.World, entity) || !ecs.Has[sceneapi.Text2D](scene.World, entity) {
+	if err != nil || !scene.World.Has[sceneapi.Sprite2D](entity) || !scene.World.Has[sceneapi.Text2D](entity) {
 		t.Fatalf("composed components were not installed: entity=%v err=%v", entity, err)
 	}
 }

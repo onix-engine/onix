@@ -35,12 +35,12 @@ func TestAppModuleFrameUpdateCanIdleAndRunsOncePerWake(t *testing.T) {
 	app.now = func() time.Time { return now }
 	frames := 0
 	registry := module.Registry{}
-	if err := module.RegisterMod(&registry, "mod", func() struct{} { return struct{}{} }, module.Lifecycle[struct{}]{
+	if err := registry.RegisterMod("mod", func() struct{} { return struct{}{} }, module.Lifecycle[struct{}]{
 		FrameUpdate: func(*module.Context, *struct{}, module.Tick) error { frames++; return nil },
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(appModulePlan(t, `{}`), registry, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](appModulePlan(t, `{}`), registry, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.Frame(); err != nil {
@@ -85,7 +85,7 @@ func TestAppSceneScopesSeparateSimulationAndOverlayRendering(t *testing.T) {
 	game := plan.Scenes[0]
 	game.ID = "game.json"
 	plan.Scenes = append(plan.Scenes, game)
-	main, err := app.LoadModules(plan, module.Registry{}, module.Options{})
+	main, err := app.LoadModules[module.FullContent](plan, module.Registry{}, module.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestAppSceneScopesSeparateSimulationAndOverlayRendering(t *testing.T) {
 	updated, rendered := 0, 0
 	count := func(world *ecs.World) int {
 		n := 0
-		for range ecs.Query[scene.Sprite2D](world).All {
+		for range world.Query[scene.Sprite2D]().All {
 			n++
 		}
 		return n
@@ -144,22 +144,22 @@ func TestAppModuleAuthoredCameraSettingsSurviveSystemInstallation(t *testing.T) 
 	app := NewApp()
 	defer app.Destroy()
 	authored := scene.SpawnCamera2D(app.World)
-	camera := ecs.GetMut[scene.Camera](app.World, authored)
+	camera := app.World.GetMut[scene.Camera](authored)
 	camera.Order, camera.Clear, camera.ClearColor = 17, false, graphics.ColorFromRGB(3, 4, 5)
 	before := *camera
-	ecs.InsertResource(app.World, scene.RenderSettings2D{ClearColor: graphics.White})
-	if err := InstallSystems[Render2D](app); err != nil {
+	app.World.InsertResource(scene.RenderSettings2D{ClearColor: graphics.White})
+	if err := app.InstallSystems[Render2D](); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(appModulePlan(t, `{}`), module.Registry{}, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](appModulePlan(t, `{}`), module.Registry{}, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := ecs.Get[scene.Camera](app.World, authored)
+	after, _ := app.World.Get[scene.Camera](authored)
 	if before.Order != after.Order || before.Clear != after.Clear || before.ClearColor != after.ClearColor || after.Fallback {
 		t.Fatal("host installation overwrote the authored camera")
 	}
 	fallbacks := 0
-	for _, camera := range ecs.Query[scene.Camera](app.World).All {
+	for _, camera := range app.World.Query[scene.Camera]().All {
 		if camera.Get().Fallback {
 			fallbacks++
 		}
@@ -179,23 +179,23 @@ func TestAppModuleClearColorAppliesToFallbackCamera(t *testing.T) {
 			app := NewApp()
 			defer app.Destroy()
 			if preinstall {
-				if err := InstallSystems[Render2D](app); err != nil {
+				if err := app.InstallSystems[Render2D](); err != nil {
 					t.Fatal(err)
 				}
 			}
 			plan := appModulePlan(t, `{"components":{"sprite":{"color":"#ffffff","size":[10,10]}}}`)
 			plan.Spec.ClearColor = "#092a38"
-			if _, err := app.LoadModules(plan, module.Registry{}, module.Options{}); err != nil {
+			if _, err := app.LoadModules[module.FullContent](plan, module.Registry{}, module.Options{}); err != nil {
 				t.Fatal(err)
 			}
 			want := graphics.ColorFromRGB(9, 42, 56)
-			settings, ok := ecs.GetResource[scene.RenderSettings2D](app.World)
+			settings, ok := app.World.GetResource[scene.RenderSettings2D]()
 			if !ok || settings.ClearColor != want {
 				t.Fatalf("project clear color resource = %+v, present=%t", settings, ok)
 			}
 			app.Modules().SyncScopes()
 			fallbacks := 0
-			for _, camera := range ecs.Query[scene.Camera](app.World).All {
+			for _, camera := range app.World.Query[scene.Camera]().All {
 				value := camera.Get()
 				if !value.Fallback {
 					continue
@@ -226,9 +226,9 @@ func TestAppModulesDispatchPerFixedTickAndDestroy(t *testing.T) {
 	updates, received, destroyed := 0, 0, 0
 	var emitters []module.Emitter[int64]
 	registry := module.Registry{}
-	err := module.RegisterMod(&registry, "mod", func() state { return state{} }, module.Lifecycle[state]{
+	err := registry.RegisterMod("mod", func() state { return state{} }, module.Lifecycle[state]{
 		Install: func(c *module.Context, s *state) error {
-			emit, err := module.BindEmitter[int64](c, "ping")
+			emit, err := c.BindEmitter[int64]("ping")
 			if err != nil {
 				return err
 			}
@@ -237,7 +237,7 @@ func TestAppModulesDispatchPerFixedTickAndDestroy(t *testing.T) {
 			return nil
 		},
 		OnMessage: func(c *module.Context, s *state, message module.Message) error {
-			value, ok := module.Value[int64](message)
+			value, ok := message.Value[int64]()
 			if !ok {
 				return nil
 			}
@@ -258,14 +258,14 @@ func TestAppModulesDispatchPerFixedTickAndDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := app.LoadModules(plan, registry, module.Options{})
+	entry, err := app.LoadModules[module.FullContent](plan, registry, module.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if app.Context != nil {
 		t.Fatal("loading modules opened a native window")
 	}
-	if _, err := app.LoadModules(plan, registry, module.Options{}); err == nil {
+	if _, err := app.LoadModules[module.FullContent](plan, registry, module.Options{}); err == nil {
 		t.Fatal("second runtime loaded without disposal")
 	}
 	if _, err := app.Modules().MountEntry(); err != nil {
@@ -323,19 +323,19 @@ func TestAppModuleColorContentInputAndStableFrames(t *testing.T) {
 	plan := appModulePlan(t, `{"components":{"sprite":{"color":"#2f7df6","size":[160,48]},"input":{"pointer":true}}}`)
 	registry := module.Registry{}
 	clicks := 0
-	if err := module.RegisterScene(&registry, "main.json", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{OnMessage: func(c *module.Context, _ *module.Signal, message module.Message) error {
+	if err := registry.RegisterScene("main.json", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{OnMessage: func(c *module.Context, _ *module.Signal, message module.Message) error {
 		if message.Topic == module.InputTopic {
-			value, ok := module.Value[module.Input](message)
+			value, ok := message.Value[module.Input]()
 			if !ok || value.Event.Kind != scene.InputEventTap {
 				return nil
 			}
-			return module.Send(c, "a", "clicked", module.Signal{})
+			return c.Send("a", "clicked", module.Signal{})
 		}
 		return nil
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := module.RegisterMod(&registry, "mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{OnMessage: func(_ *module.Context, _ *module.Signal, m module.Message) error {
+	if err := registry.RegisterMod("mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{OnMessage: func(_ *module.Context, _ *module.Signal, m module.Message) error {
 		if m.Topic == "clicked" {
 			clicks++
 		}
@@ -343,11 +343,11 @@ func TestAppModuleColorContentInputAndStableFrames(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(plan, registry, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](plan, registry, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	var root ecs.Entity
-	for entity := range ecs.Query[scene.Sprite2D](app.World).All {
+	for entity := range app.World.Query[scene.Sprite2D]().All {
 		root = entity
 	}
 	if root == 0 {
@@ -393,14 +393,14 @@ func TestAppModulePendingEventsPreventIdle(t *testing.T) {
 	plan := appModulePlan(t, `{}`)
 	registry := module.Registry{}
 	var emit module.Emitter[module.Signal]
-	if err := module.RegisterMod(&registry, "mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
+	if err := registry.RegisterMod("mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
 		var err error
-		emit, err = module.BindEmitter[module.Signal](c, "ping")
+		emit, err = c.BindEmitter[module.Signal]("ping")
 		return err
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(plan, registry, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](plan, registry, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if !app.idleEligible() {
@@ -436,19 +436,19 @@ func TestAppModulePendingRequestsPreventIdleUntilTimeout(t *testing.T) {
 	registry := module.Registry{}
 	var failure error
 	var requester module.Requester[string, int64]
-	if err := module.RegisterMod(&registry, "service", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
+	if err := registry.RegisterMod("service", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
 		var err error
-		requester, err = module.BindRequester[string, int64](c, "ask")
+		requester, err = c.BindRequester[string, int64]("ask")
 		return err
 	}, OnMessage: func(_ *module.Context, _ *module.Signal, message module.Message) error {
-		if result, ok := module.ResultValue[int64](message); ok {
+		if result, ok := message.ResultValue[int64](); ok {
 			failure = result.Err
 		}
 		return nil
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(plan, registry, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](plan, registry, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := requester.SendTo("a", "work", module.RequestOptions{TimeoutTicks: 3}); err != nil {
@@ -479,17 +479,17 @@ func TestAppModuleFailedMountCanRetryWithNewCapabilities(t *testing.T) {
 	defer app.Destroy()
 	invalid := appModulePlan(t, `{}`)
 	badRegistry := module.Registry{}
-	if err := module.RegisterMod(&badRegistry, "mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(*module.Context, *module.Signal) error { return module.ErrInvalid }}); err != nil {
+	if err := badRegistry.RegisterMod("mod", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(*module.Context, *module.Signal) error { return module.ErrInvalid }}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(invalid, badRegistry, module.Options{}); err == nil {
+	if _, err := app.LoadModules[module.FullContent](invalid, badRegistry, module.Options{}); err == nil {
 		t.Fatal("failed installation was accepted")
 	}
 	if app.Modules() != nil || app.World.EntityCount() != 0 {
 		t.Fatal("failed entry mount polluted the app")
 	}
 	valid := appModulePlan(t, `{"components":{"sprite":{"color":"#ff0000","size":[10,10]},"input":{"pointer":true}}}`)
-	if _, err := app.LoadModules(valid, module.Registry{}, module.Options{}); err != nil {
+	if _, err := app.LoadModules[module.FullContent](valid, module.Registry{}, module.Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if !app.hasSystemSet(systemSetRender2D) || !app.hasSystemSet(systemSetInput2D) {

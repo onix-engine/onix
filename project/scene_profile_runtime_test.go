@@ -50,17 +50,17 @@ func testRender2DProfileRuntime[P LoadProfile](t *testing.T) {
 	world := scene.MustEntity("world")
 	canvas := scene.MustEntity("canvas")
 	child := scene.MustEntity("child")
-	beforeWorld, _ := ecs.Get[sceneapi.GlobalTransform](scene.World, world)
-	beforeUI, _ := ecs.Get[sceneapi.UIGlobalTransform](scene.World, child)
-	transform := ecs.GetMut[sceneapi.Transform](scene.World, world)
+	beforeWorld, _ := scene.World.Get[sceneapi.GlobalTransform](world)
+	beforeUI, _ := scene.World.Get[sceneapi.UIGlobalTransform](child)
+	transform := scene.World.GetMut[sceneapi.Transform](world)
 	transform.Translation[1] += 7
-	uiTransform := ecs.GetMut[sceneapi.UITransform](scene.World, canvas)
+	uiTransform := scene.World.GetMut[sceneapi.UITransform](canvas)
 	uiTransform.Translation.X.Value += 5
 	if err := scene.RefreshTransforms(); err != nil {
 		t.Fatal(err)
 	}
-	afterWorld, _ := ecs.Get[sceneapi.GlobalTransform](scene.World, world)
-	afterUI, _ := ecs.Get[sceneapi.UIGlobalTransform](scene.World, child)
+	afterWorld, _ := scene.World.Get[sceneapi.GlobalTransform](world)
+	afterUI, _ := scene.World.Get[sceneapi.UIGlobalTransform](child)
 	if afterWorld.Matrix[13] != beforeWorld.Matrix[13]+7 || afterUI.Matrix[12] != beforeUI.Matrix[12]+5 {
 		t.Fatalf("hierarchy refresh world=%v UI=%v", afterWorld.Matrix, afterUI.Matrix)
 	}
@@ -87,8 +87,8 @@ func TestPreparedScenePreservesWidgetLayoutAndControlCleanup(t *testing.T) {
 	}
 	defer scene.Dispose()
 	canvas, panel := scene.MustEntity("canvas"), scene.MustEntity("panel")
-	widget, ok := ecs.Get[engineui.Widget](scene.World, panel)
-	transform, _ := ecs.Get[sceneapi.UITransform](scene.World, panel)
+	widget, ok := scene.World.Get[engineui.Widget](panel)
+	transform, _ := scene.World.Get[sceneapi.UITransform](panel)
 	if !ok || widget.Target != canvas || transform.Translation.X.Value != 86 {
 		t.Fatalf("prepared widget=%+v transform=%+v", widget, transform)
 	}
@@ -101,7 +101,7 @@ func TestPreparedScenePreservesWidgetLayoutAndControlCleanup(t *testing.T) {
 	if removed := scene.RemoveNodes("panel"); removed != 1 {
 		t.Fatalf("removed %d nodes", removed)
 	}
-	variants, _ := ecs.Get[engineui.Variants[engineui.ControlVariant]](scene.World, canvas)
+	variants, _ := scene.World.Get[engineui.Variants[engineui.ControlVariant]](canvas)
 	for _, variant := range variants.Items {
 		if variant.Entity == panel {
 			t.Fatal("removed control part remains bound to its surviving owner")

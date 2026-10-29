@@ -41,9 +41,9 @@ func TestModuleAudioPlayerRetainsCursorAndHonorsPauseIntent(t *testing.T) {
 	registry := module.Registry{}
 	backend := &silentPlayback{}
 	var player *Player
-	err = module.RegisterMod(&registry, "speaker", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
+	err = registry.RegisterMod("speaker", func() module.Signal { return module.Signal{} }, module.Lifecycle[module.Signal]{Install: func(c *module.Context, _ *module.Signal) error {
 		player = &Player{context: c, player: backend, suspended: !c.Active()}
-		if err := module.Own(c, player); err != nil {
+		if err := c.Own(player); err != nil {
 			return err
 		}
 		if err := player.Play(); err != nil {
@@ -57,7 +57,7 @@ func TestModuleAudioPlayerRetainsCursorAndHonorsPauseIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := module.New(ecs.NewWorld(), plan, registry, module.Options{Source: files})
+	r, err := module.New[module.FullContent](ecs.NewWorld(), plan, registry, module.Options{Source: files})
 	if err != nil {
 		t.Fatal(err)
 	}

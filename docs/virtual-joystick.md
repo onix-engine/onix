@@ -10,7 +10,7 @@ joystick := ui.SpawnVirtualJoystick(app.World, ui.VirtualJoystickOptions{
     DeadZone: .16,
 })
 
-value, _ := ecs.Get[ui.VirtualJoystick](app.World, joystick)
+value, _ := app.World.Get[ui.VirtualJoystick](joystick)
 movement := value.Value // normalized mgl32.Vec2 in [-1, 1]
 ```
 
@@ -28,7 +28,7 @@ to clear it.
 For a scene-authored UI root, bind the same behavior after loading it:
 
 ```go
-err := project.BindControl(scene, "move-stick", ui.VirtualJoystick{
+err := scene.BindControl("move-stick", ui.VirtualJoystick{
     DeadZone: .16,
     Track: scene.MustEntity("move-stick-track"),
     Knob: scene.MustEntity("move-stick-knob"),

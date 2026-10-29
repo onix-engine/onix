@@ -112,7 +112,7 @@ Camera exit, size/device changes or lost eligibility release targets. App shutdo
 calls RenderWorld.Dispose().
 
 ```go
-ecs.InsertResource(world, scene.CompositeSettings2D{MaxCacheBytes: 32 << 20})
+world.InsertResource(scene.CompositeSettings2D{MaxCacheBytes: 32 << 20})
 // Zero selects the default budget; negative disables pixel caching.
 ```
 

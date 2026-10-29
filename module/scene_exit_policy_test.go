@@ -61,7 +61,7 @@ func TestSceneExitPolicyControlsDepartingScene(t *testing.T) {
 			button := &current.modules[current.instances["button"]]
 			text, err := button.Slot("text")
 			must(t, err)
-			value, err := ReadSlot[string](text)
+			value, err := text.Read[string]()
 			must(t, err)
 			if (value == "saved state") != test.kept {
 				t.Fatal("return did not preserve or reset scene state as configured")

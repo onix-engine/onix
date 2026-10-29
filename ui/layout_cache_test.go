@@ -15,45 +15,45 @@ func TestUILayoutHierarchyCacheInvalidation(t *testing.T) {
 		mutate  func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity)
 	}{
 		{"unchanged", false, func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity) {}},
-		{"size", false, func(world *ecs.World, _, child, _ ecs.Entity) { _ = ecs.Insert(world, child, scene.Size2D{Width: 25}) }},
+		{"size", false, func(world *ecs.World, _, child, _ ecs.Entity) { _ = world.Insert(child, scene.Size2D{Width: 25}) }},
 		{"layout_values", false, func(world *ecs.World, parent, _, _ ecs.Entity) {
-			layout := ecs.GetMut[Layout](world, parent)
+			layout := world.GetMut[Layout](parent)
 			layout.SpacingX++
 		}},
 		{"transform_values", false, func(world *ecs.World, _, child, _ ecs.Entity) {
-			transform := ecs.GetMut[scene.UITransform](world, child)
+			transform := world.GetMut[scene.UITransform](child)
 			transform.Translation.X.Value++
 		}},
 		{"reparent", true, func(world *ecs.World, _, child, other ecs.Entity) {
-			parent := ecs.GetMut[scene.Parent](world, child)
+			parent := world.GetMut[scene.Parent](child)
 			parent.Entity = other
 		}},
-		{"remove_parent", true, func(world *ecs.World, _, child, _ ecs.Entity) { ecs.Remove[scene.Parent](world, child) }},
+		{"remove_parent", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.Parent](child) }},
 		{"order", true, func(world *ecs.World, _, child, _ ecs.Entity) {
-			order := ecs.GetMut[scene.SiblingOrder](world, child)
+			order := world.GetMut[scene.SiblingOrder](child)
 			*order = -10
 		}},
-		{"remove_order", true, func(world *ecs.World, _, child, _ ecs.Entity) { ecs.Remove[scene.SiblingOrder](world, child) }},
-		{"remove_layout", true, func(world *ecs.World, parent, _, _ ecs.Entity) { ecs.Remove[Layout](world, parent) }},
-		{"remove_transform", true, func(world *ecs.World, parent, _, _ ecs.Entity) { ecs.Remove[scene.UITransform](world, parent) }},
+		{"remove_order", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.SiblingOrder](child) }},
+		{"remove_layout", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[Layout](parent) }},
+		{"remove_transform", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[scene.UITransform](parent) }},
 		{"despawn_child", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Despawn(child) }},
 		{"despawn_parent", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Despawn(parent) }},
 		{"spawn_child", true, func(world *ecs.World, parent, _, _ ecs.Entity) {
-			spawner := ecs.NewSpawner2[scene.Parent, scene.UITransform](world)
+			spawner := world.NewSpawner2[scene.Parent, scene.UITransform]()
 			spawner.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform())
 		}},
 		{"reuse_slot", true, func(world *ecs.World, parent, child, _ ecs.Entity) {
 			world.Despawn(child)
-			spawner := ecs.NewSpawner2[scene.Parent, scene.UITransform](world)
+			spawner := world.NewSpawner2[scene.Parent, scene.UITransform]()
 			spawner.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform())
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()
-			parents := ecs.NewSpawner2[Layout, scene.UITransform](world)
+			parents := world.NewSpawner2[Layout, scene.UITransform]()
 			parent := parents.Spawn(NewLayout(), scene.NewUITransform())
 			other := parents.Spawn(NewLayout(), scene.NewUITransform())
-			children := ecs.NewSpawner4[scene.Parent, scene.UITransform, scene.SiblingOrder, scene.Size2D](world)
+			children := world.NewSpawner4[scene.Parent, scene.UITransform, scene.SiblingOrder, scene.Size2D]()
 			child := children.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform(), 1, scene.Size2D{})
 			children.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform(), 2, scene.Size2D{})
 			var cache uiLayoutScratch
@@ -78,18 +78,18 @@ func TestUILayoutHierarchyCacheInvalidation(t *testing.T) {
 
 func TestUILayoutHierarchyCacheTracksAncestorsWithoutLayout(t *testing.T) {
 	world := ecs.NewWorld()
-	roots := ecs.NewSpawner1[scene.UITransform](world)
+	roots := world.NewSpawner1[scene.UITransform]()
 	root := roots.Spawn(scene.NewUITransform())
-	ancestors := ecs.NewSpawner1[scene.Parent](world)
+	ancestors := world.NewSpawner1[scene.Parent]()
 	ancestor := ancestors.Spawn(scene.Parent{Entity: root})
-	layouts := ecs.NewSpawner3[scene.Parent, Layout, scene.UITransform](world)
+	layouts := world.NewSpawner3[scene.Parent, Layout, scene.UITransform]()
 	leaf := layouts.Spawn(scene.Parent{Entity: ancestor}, NewLayout(), scene.NewUITransform())
 	var cache uiLayoutScratch
 	refreshUILayoutHierarchy(world, &cache)
 	if cache.depths[leaf] != 2 {
 		t.Fatalf("initial depth=%d, want 2", cache.depths[leaf])
 	}
-	ecs.Remove[scene.Parent](world, ancestor)
+	world.Remove[scene.Parent](ancestor)
 	if !refreshUILayoutHierarchy(world, &cache) || cache.depths[leaf] != 1 {
 		t.Fatalf("ancestor change not reflected: depth=%d", cache.depths[leaf])
 	}
@@ -110,9 +110,9 @@ func TestUILayoutHierarchyCacheDoesNotAllocate(t *testing.T) {
 
 func benchmarkUILayoutWorld(count int) (*ecs.World, ecs.Entity) {
 	world := ecs.NewWorld()
-	parents := ecs.NewSpawner2[Layout, scene.UITransform](world)
+	parents := world.NewSpawner2[Layout, scene.UITransform]()
 	parent := parents.Spawn(NewLayout(), scene.NewUITransform())
-	children := ecs.NewSpawner3[scene.Parent, scene.UITransform, scene.SiblingOrder](world)
+	children := world.NewSpawner3[scene.Parent, scene.UITransform, scene.SiblingOrder]()
 	children.Reserve(count)
 	var child ecs.Entity
 	for index := range count {
@@ -135,7 +135,7 @@ func BenchmarkUILayoutHierarchy(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				if rebuild {
-					order := ecs.GetMut[scene.SiblingOrder](world, child)
+					order := world.GetMut[scene.SiblingOrder](child)
 					*order = -*order
 				}
 				refreshUILayoutHierarchy(world, &cache)

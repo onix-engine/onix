@@ -34,13 +34,13 @@ func TestSSAOViewRenderingReuseAndLifecycle(t *testing.T) {
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	t.Cleanup(func() { _ = state.Dispose() })
 	b := ecs.NewBundle(4)
-	ecs.Put(&b, scene.NewCamera())
-	ecs.Put(&b, Camera{SSAO: NewSSAOSettings()})
-	ecs.Put(&b, scene.PerspectiveProjection3D())
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(scene.NewCamera())
+	b.Put(Camera{SSAO: NewSSAOSettings()})
+	b.Put(scene.PerspectiveProjection3D())
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	entity := world.Spawn(b)
 	mesh := graphics.CubeMesh(.5)
 	t.Cleanup(func() { _ = mesh.Dispose() })
@@ -51,11 +51,11 @@ func TestSSAOViewRenderingReuseAndLifecycle(t *testing.T) {
 			material.AlphaMode = graphics.AlphaBlend
 		}
 		b = ecs.NewBundle(4)
-		ecs.Put(&b, Mesh{Mesh: mesh})
-		ecs.Put(&b, Material[graphics.StandardMaterial]{Material: material})
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(index)*.1, 0, -3)})
+		b.Put(Mesh{Mesh: mesh})
+		b.Put(Material[graphics.StandardMaterial]{Material: material})
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(index)*.1, 0, -3)})
 		if index == 3 {
-			ecs.Put(&b, NoAmbientOcclusion{})
+			b.Put(NoAmbientOcclusion{})
 		}
 		world.Spawn(b)
 	}
@@ -115,7 +115,7 @@ func TestSSAOViewRenderingReuseAndLifecycle(t *testing.T) {
 	if view.occlusionActive || view.occlusion.frame.Target != target || view.lighting.OcclusionTexture.Valid() || driver.destroyed != 0 {
 		t.Fatal("picking destroyed or consumed the SSAO cache")
 	}
-	settings := ecs.GetMut[Camera](world, entity)
+	settings := world.GetMut[Camera](entity)
 	settings.SSAO.Enabled = false
 	view.frame.Mode = render.RenderViewLit
 	if err := setupViewLighting3D(world, state, view, entity); err != nil {

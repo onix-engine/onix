@@ -24,7 +24,7 @@ func (r *bufferRetention) trimCapacity(capacity, used, minimum int) int {
 	return target
 }
 
-func trimUploadBuffer[T any](buffer []T, retention *bufferRetention, used, minimum int) []T {
+func (retention *bufferRetention) trimUploadBuffer[T any](buffer []T, used, minimum int) []T {
 	idle := retention.peak == 0 && used == 0
 	if capacity := retention.trimCapacity(cap(buffer), used, minimum); capacity != 0 {
 		if idle {
@@ -43,13 +43,13 @@ type scratchRetention struct {
 	used      int
 }
 
-func resetScratch[T any](buffer []T, retention *scratchRetention) []T {
+func (retention *scratchRetention) resetScratch[T any](buffer []T) []T {
 	retention.used = max(retention.used, len(buffer))
 	return buffer[:0]
 }
 
-func trimScratch[T any](buffer []T, retention *scratchRetention, minimum int) []T {
+func (retention *scratchRetention) trimScratch[T any](buffer []T, minimum int) []T {
 	used := max(retention.used, len(buffer))
 	retention.used = 0
-	return trimUploadBuffer(buffer, &retention.retention, used, minimum)
+	return (&retention.retention).trimUploadBuffer(buffer, used, minimum)
 }

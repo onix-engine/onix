@@ -59,14 +59,14 @@ func TestPrefabRegisteredByResourcesMountsUnderSceneNode(t *testing.T) {
 	if !ok {
 		t.Fatal("prefab child was not indexed by local id")
 	}
-	if parent, ok := ecs.Get[sceneapi.Parent](world, root); !ok || parent.Entity != host {
+	if parent, ok := world.Get[sceneapi.Parent](root); !ok || parent.Entity != host {
 		t.Fatalf("prefab root parent = %#v, want %d", parent, host)
 	}
-	if parent, ok := ecs.Get[sceneapi.Parent](world, child); !ok || parent.Entity != root {
+	if parent, ok := world.Get[sceneapi.Parent](child); !ok || parent.Entity != root {
 		t.Fatalf("prefab child parent = %#v, want %d", parent, root)
 	}
 
-	transform := ecs.GetMut[sceneapi.UITransform](world, root)
+	transform := world.GetMut[sceneapi.UITransform](root)
 	ok = transform != nil
 	if !ok || transform == nil {
 		t.Fatal("prefab root UI transform is missing")
@@ -79,11 +79,11 @@ func TestPrefabRegisteredByResourcesMountsUnderSceneNode(t *testing.T) {
 	if got := transform.Translation; got != sceneapi.Px2(8, 12) {
 		t.Fatalf("reset translation = %#v, want %#v", got, sceneapi.Px2(8, 12))
 	}
-	if size, ok := ecs.Get[sceneapi.Size2D](world, root); !ok || size.Width != 80 || size.Height != 64 {
+	if size, ok := world.Get[sceneapi.Size2D](root); !ok || size.Width != 80 || size.Height != 64 {
 		t.Fatalf("preserved prefab bounds = %#v, want 80x64", size)
 	}
 	for _, entity := range []ecs.Entity{root, child} {
-		visibility, ok := ecs.Get[sceneapi.Visibility](world, entity)
+		visibility, ok := world.Get[sceneapi.Visibility](entity)
 		if !ok || visibility.Visible {
 			t.Fatalf("reset visibility for %d = %#v, want hidden", entity, visibility)
 		}

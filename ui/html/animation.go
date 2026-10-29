@@ -245,12 +245,12 @@ func syncHTMLNodeTransform(world *ecs.World, state *htmlRenderState, entity ecs.
 }
 
 func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *dom.Node) {
-	child := ecs.GetRef[htmlChild](world, entity)
+	child := world.GetRef[htmlChild](entity)
 	ok := child != nil
 	if !ok {
 		return
 	}
-	transform, ok := ecs.Get[scene.UITransform](world, entity)
+	transform, ok := world.Get[scene.UITransform](entity)
 	if !ok {
 		return
 	}
@@ -258,8 +258,8 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	// above its node; only compose the portion below that ECS parent.
 	var stop *dom.Node
 	originOffset := child.scrollOrigin
-	if parent, ok := ecs.Get[scene.Parent](world, entity); ok {
-		if ancestor, ok := ecs.Get[htmlChild](world, parent.Entity); ok && ancestor.Owner == child.Owner {
+	if parent, ok := world.Get[scene.Parent](entity); ok {
+		if ancestor, ok := world.Get[htmlChild](parent.Entity); ok && ancestor.Owner == child.Owner {
 			stop = ancestor.Node
 			// Reparented visuals use coordinates relative to their generated
 			// container, while CSS transform origins remain in page coordinates.
@@ -303,7 +303,7 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 		}
 		// Opacity is composited into flattened sprites. Their root opacity is
 		// deliberately left out of the raster when an animation controls it.
-		if current == node && ecs.Has[htmlOpacitySurface](world, entity) {
+		if current == node && world.Has[htmlOpacitySurface](entity) {
 			if computed.AnimatedOpacity {
 				opacity *= value.Opacity
 			}
@@ -370,24 +370,24 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 		}
 	}
 	if transform.Rotation != rotation || transform.Scale != scale || transform.Pivot != pivot || transform.Skew != skew || transform.LinearMatrix != linear || child.transformOffset != offset {
-		updated := ecs.GetMut[scene.UITransform](world, entity)
+		updated := world.GetMut[scene.UITransform](entity)
 		updated.Rotation, updated.Scale, updated.Pivot, updated.Skew, updated.LinearMatrix = rotation, scale, pivot, skew, linear
 		updated.Translation.X.Value += offset.X() - child.transformOffset.X()
 		updated.Translation.Y.Value += offset.Y() - child.transformOffset.Y()
-		mutable := ecs.GetMut[htmlChild](world, entity)
+		mutable := world.GetMut[htmlChild](entity)
 		mutable.transformOffset = offset
 	}
-	if sprite := ecs.GetRef[scene.Sprite2D](world, entity); (sprite != nil) && sprite.Alpha != float32(opacity) {
-		updated := ecs.GetMut[scene.Sprite2D](world, entity)
+	if sprite := world.GetRef[scene.Sprite2D](entity); (sprite != nil) && sprite.Alpha != float32(opacity) {
+		updated := world.GetMut[scene.Sprite2D](entity)
 		updated.Alpha = float32(opacity)
 	}
-	if text := ecs.GetRef[scene.Text2D](world, entity); text != nil {
+	if text := world.GetRef[scene.Text2D](entity); text != nil {
 		lcd := false
 		if computed := state.Styles[ownNode]; computed != nil {
 			lcd = computed.TextOpaqueBackdrop && !computed.TextInOpacityGroup && opacity == 1
 		}
 		if text.Alpha != float32(opacity) || text.LCD != lcd {
-			updated := ecs.GetMut[scene.Text2D](world, entity)
+			updated := world.GetMut[scene.Text2D](entity)
 			updated.Alpha, updated.LCD = float32(opacity), lcd
 		}
 	}

@@ -54,12 +54,12 @@ func TestCapsuleSettlesOnTransformedTriangleMesh(t *testing.T) {
 	ground.Position = V3(3, 2, -5)
 	ground.Rotation = QuaternionFromAxisAngle(V3(0, 1, 0), .6)
 	groundBody := world.CreateBody(ground)
-	AddCollider3D(world, groundBody, NewColliderDef(mesh))
+	world.AddCollider(groundBody, NewColliderDef(mesh))
 	def := NewBodyDef3D(BodyDynamic)
 	def.Position = V3(3, 4, -5)
 	def.FixedRotation = true
 	body := world.CreateBody(def)
-	AddCollider3D(world, body, NewColliderDef(NewCapsule(1.75, .34)))
+	world.AddCollider(body, NewColliderDef(NewCapsule(1.75, .34)))
 	for range 360 {
 		world.Step(1.0 / 120)
 	}

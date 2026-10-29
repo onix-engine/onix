@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/diiyw/onix/examples/spine/contracts"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/examples/spine/contracts"
 	"github.com/diiyw/onix/scene"
 	htmlui "github.com/diiyw/onix/ui/html"
 )
@@ -20,10 +20,10 @@ type Mod struct {
 
 func (m *Mod) Install(c *module.Context) error {
 	var err error
-	if m.resource, err = module.BindEmitter[int64](c, "resource"); err != nil {
+	if m.resource, err = c.BindEmitter[int64]("resource"); err != nil {
 		return err
 	}
-	if m.animation, err = module.BindEmitter[int64](c, "animation"); err != nil {
+	if m.animation, err = c.BindEmitter[int64]("animation"); err != nil {
 		return err
 	}
 	root, err := module.HTML(c, c.Root())

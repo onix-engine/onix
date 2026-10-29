@@ -32,8 +32,8 @@ func TestPhysicsSceneComponentsMaterializeOnNode(t *testing.T) {
 	}
 	world := ecs.NewWorld()
 	entity := world.Spawn(components)
-	body, bodyOK := ecs.Get[enginephysics.RigidBody2D](world, entity)
-	collider, colliderOK := ecs.Get[enginephysics.CircleCollider2D](world, entity)
+	body, bodyOK := world.Get[enginephysics.RigidBody2D](entity)
+	collider, colliderOK := world.Get[enginephysics.CircleCollider2D](entity)
 	if !bodyOK || !colliderOK {
 		t.Fatalf("physics components missing: body=%v collider=%v", bodyOK, colliderOK)
 	}
@@ -88,10 +88,10 @@ func TestPhysics3DSceneComponentsUseCookedModelCollision(t *testing.T) {
 	}
 	world := ecs.NewWorld()
 	entity := world.Spawn(components)
-	if _, ok := ecs.Get[enginephysics.RigidBody3D](world, entity); !ok {
+	if _, ok := world.Get[enginephysics.RigidBody3D](entity); !ok {
 		t.Fatal("missing RigidBody3D component")
 	}
-	collider, ok := ecs.Get[enginephysics.ConvexHullCollider3D](world, entity)
+	collider, ok := world.Get[enginephysics.ConvexHullCollider3D](entity)
 	if !ok || !collider.Shape.Cooked() {
 		t.Fatalf("missing cooked convex hull collider: %+v", collider)
 	}

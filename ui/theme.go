@@ -88,7 +88,7 @@ func themeWithFallback(theme, fallback Theme) Theme {
 
 func themeForWorld(world *ecs.World, theme Theme) Theme {
 	fallback := DefaultTheme()
-	if configured, ok := ecs.GetResource[Theme](world); ok {
+	if configured, ok := world.GetResource[Theme](); ok {
 		fallback = themeWithFallback(configured, fallback)
 	}
 	return themeWithFallback(theme, fallback)

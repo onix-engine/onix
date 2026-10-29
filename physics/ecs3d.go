@@ -29,10 +29,10 @@ func stepECS3D(context *ecs.SystemContext) error {
 		return nil
 	}
 	world := context.World
-	runtime, ok := ecs.GetResource[*Runtime3D](world)
+	runtime, ok := world.GetResource[*Runtime3D]()
 	if !ok || runtime == nil {
 		runtime = NewRuntime3D()
-		ecs.InsertResource(world, runtime)
+		world.InsertResource(runtime)
 	}
 	if runtime.Simulation == nil {
 		runtime.Simulation = NewWorld3D()
@@ -44,15 +44,15 @@ func stepECS3D(context *ecs.SystemContext) error {
 	if err := runtime.syncBodies(world); err != nil {
 		return err
 	}
-	syncECSColliders3D[Sphere](runtime, world)
-	syncECSColliders3D[Box3D](runtime, world)
-	syncECSColliders3D[Capsule](runtime, world)
-	syncECSColliders3D[TriangleMesh](runtime, world)
-	syncECSColliders3D[ConvexHull](runtime, world)
-	syncECSColliders3D[Compound](runtime, world)
+	runtime.syncECSColliders3D[Sphere](world)
+	runtime.syncECSColliders3D[Box3D](world)
+	runtime.syncECSColliders3D[Capsule](world)
+	runtime.syncECSColliders3D[TriangleMesh](world)
+	runtime.syncECSColliders3D[ConvexHull](world)
+	runtime.syncECSColliders3D[Compound](world)
 	runtime.sweepManaged()
 	delta := 1.0 / 60
-	if time, ok := ecs.GetResource[*scene.Time](world); ok && time != nil && time.Delta > 0 {
+	if time, ok := world.GetResource[*scene.Time](); ok && time != nil && time.Delta > 0 {
 		delta = time.Delta.Seconds()
 	}
 	runtime.Simulation.Step(delta)
@@ -64,7 +64,7 @@ func stepECS3D(context *ecs.SystemContext) error {
 
 func (runtime *Runtime3D) syncBodies(world *ecs.World) error {
 	runtime.managedBodies = 0
-	for entity, access := range ecs.Query2[RigidBody3D, scene.Transform](world).All {
+	for entity, access := range world.Query2[RigidBody3D, scene.Transform]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -121,8 +121,8 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World) error {
 	return nil
 }
 
-func syncECSColliders3D[S Shape3D](runtime *Runtime3D, world *ecs.World) {
-	for entity, access := range ecs.Query2[RigidBody3D, Collider3D[S]](world).All {
+func (runtime *Runtime3D) syncECSColliders3D[S Shape3D](world *ecs.World) {
+	for entity, access := range world.Query2[RigidBody3D, Collider3D[S]]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -140,11 +140,11 @@ func syncECSColliders3D[S Shape3D](runtime *Runtime3D, world *ecs.World) {
 				Filter: collider.Filter.normalized(), CollisionType: collider.CollisionType,
 			}
 			collider = colliderAccess.Mut()
-			collider.handle = AddCollider3D(runtime.Simulation, body.body, definition)
+			collider.handle = runtime.Simulation.AddCollider(body.body, definition)
 			runtime.Simulation.colliderState3D(collider.handle.id).managed = true
 		} else {
 			state := runtime.Simulation.colliderState3D(collider.handle.id)
-			setColliderShape3D(state, collider.Shape)
+			state.setColliderShape3D(collider.Shape)
 			state.friction, state.restitution = max(collider.Friction, 0), clamp(collider.Restitution, 0, 1)
 			state.sensor, state.filter, state.collisionType = collider.Sensor, collider.Filter.normalized(), collider.CollisionType
 		}
@@ -169,7 +169,7 @@ func (runtime *Runtime3D) sweepManaged() {
 }
 
 func (runtime *Runtime3D) writeBodies(world *ecs.World) {
-	for entity, access := range ecs.Query2[RigidBody3D, scene.Transform](world).All {
+	for entity, access := range world.Query2[RigidBody3D, scene.Transform]().All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -203,7 +203,7 @@ func (runtime *Runtime3D) writeEvents(world *ecs.World) {
 	for _, event := range runtime.Simulation.Events() {
 		entityA, entityB := ecs.Entity(event.UserDataA), ecs.Entity(event.UserDataB)
 		if entityA != 0 {
-			ecs.WriteMessage(world, CollisionMessage3D{
+			world.WriteMessage(CollisionMessage3D{
 				Phase: event.Phase, Entity: entityA, Other: entityB,
 				Collider: event.ColliderA, OtherCollider: event.ColliderB,
 				CollisionType: event.CollisionTypeA, OtherType: event.CollisionTypeB,
@@ -211,7 +211,7 @@ func (runtime *Runtime3D) writeEvents(world *ecs.World) {
 			})
 		}
 		if entityB != 0 {
-			ecs.WriteMessage(world, CollisionMessage3D{
+			world.WriteMessage(CollisionMessage3D{
 				Phase: event.Phase, Entity: entityB, Other: entityA,
 				Collider: event.ColliderB, OtherCollider: event.ColliderA,
 				CollisionType: event.CollisionTypeB, OtherType: event.CollisionTypeA,

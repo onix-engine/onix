@@ -113,7 +113,7 @@ func TestWithResourceOverlayCleansGeneratedFiles(t *testing.T) {
 			}
 			writeBuildTestFile(t, filepath.Join(layout.AppDir, "generated.go"), "package main")
 			writeBuildTestFile(t, layout.OverlayPath, `{}`)
-			value, err := withResourceOverlay(layout, func() (int, error) { return 42, test.buildErr })
+			value, err := layout.withResourceOverlay(func() (int, error) { return 42, test.buildErr })
 			if !errors.Is(err, test.buildErr) {
 				t.Fatalf("build error = %v, want %v", err, test.buildErr)
 			}

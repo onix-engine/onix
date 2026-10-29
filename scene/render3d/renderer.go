@@ -47,7 +47,7 @@ func UpdateDeformationsSystem(name string) ecs.SystemConfig {
 }
 
 func updateMeshDeformations3D(context *ecs.SystemContext) error {
-	for entity, access := range ecs.Query[Deformation](context.World).All {
+	for entity, access := range context.World.Query[Deformation]().All {
 		if !scene.IsActive(context.World, entity) {
 			continue
 		}
@@ -63,7 +63,7 @@ func updateMeshDeformations3D(context *ecs.SystemContext) error {
 			return fmt.Errorf("ecs: mesh deformation node entity and inverse bind counts differ")
 		}
 		meshFromWorld := mgl32.Ident4()
-		if global, ok := ecs.Get[scene.GlobalTransform](context.World, entity); ok {
+		if global, ok := context.World.Get[scene.GlobalTransform](entity); ok {
 			determinant := global.Matrix.Det()
 			if math.IsNaN(float64(determinant)) || math.IsInf(float64(determinant), 0) || math.Abs(float64(determinant)) < 1e-12 {
 				return fmt.Errorf("ecs: mesh deformation owner transform is singular")
@@ -76,7 +76,7 @@ func updateMeshDeformations3D(context *ecs.SystemContext) error {
 			deformation.gpuJoints = reuse.Resize(deformation.gpuJoints, len(deformation.JointEntities))
 		}
 		for index, jointEntity := range deformation.JointEntities {
-			global, ok := ecs.Get[scene.GlobalTransform](context.World, jointEntity)
+			global, ok := context.World.Get[scene.GlobalTransform](jointEntity)
 			if !ok {
 				deformation.JointMatrices[index] = mgl32.Ident4()
 				deformation.gpuJoints[index] = [16]float32(mgl32.Ident4())
@@ -89,7 +89,7 @@ func updateMeshDeformations3D(context *ecs.SystemContext) error {
 			deformation.NodeMatrices = reuse.Resize(deformation.NodeMatrices, len(deformation.NodeEntities))
 			for index, nodeEntity := range deformation.NodeEntities {
 				deformation.NodeMatrices[index] = mgl32.Ident4()
-				if global, ok := ecs.Get[scene.GlobalTransform](context.World, nodeEntity); ok {
+				if global, ok := context.World.Get[scene.GlobalTransform](nodeEntity); ok {
 					deformation.NodeMatrices[index] = meshFromWorld.Mul4(global.Matrix).Mul4(deformation.NodeInverseBind[index])
 				}
 			}
@@ -278,7 +278,7 @@ func NewWorld() *World {
 		lights:     make([]extractedLight3D, 0, render.MaxMeshLights),
 		registered: make(map[reflect.Type]struct{}),
 	}
-	registerMaterial3DReader[graphics.StandardMaterial](state)
+	state.RegisterMaterial[graphics.StandardMaterial]()
 	return state
 }
 
@@ -310,18 +310,14 @@ func (state *World) Dispose() error {
 
 // RegisterMaterial enables extraction of Material[T] components. Like
 // Bevy's MaterialPlugin<T>, each custom material type is registered once.
-func RegisterMaterial[T graphics.Material3D](world *ecs.World) {
-	registerMaterial3DReader[T](renderWorld3D(world))
-}
-
-func registerMaterial3DReader[T graphics.Material3D](state *World) {
+func (state *World) RegisterMaterial[T graphics.Material3D]() {
 	typ := reflect.TypeFor[T]()
 	if _, ok := state.registered[typ]; ok {
 		return
 	}
 	state.registered[typ] = struct{}{}
 	state.materials = append(state.materials, func(world *ecs.World, entity ecs.Entity, slot int) (graphics.Material3DData, bool) {
-		component, ok := ecs.Get[Material[T]](world, entity)
+		component, ok := world.Get[Material[T]](entity)
 		if !ok {
 			return graphics.Material3DData{}, false
 		}
@@ -343,7 +339,7 @@ func (state *World) materialFor(world *ecs.World, entity ecs.Entity, slot int) g
 			break
 		}
 	}
-	if shader, ok := ecs.Get[scene.Shader[graphics.MeshShader]](world, entity); ok {
+	if shader, ok := world.Get[scene.Shader[graphics.MeshShader]](entity); ok {
 		result.Shader, result.Custom = shader.Program, shader.Custom
 	}
 	return result
@@ -392,19 +388,20 @@ func DrawSystem(name string) ecs.SystemConfig {
 	return ecs.SystemConfig{Name: name, System: render3D}
 }
 
-func renderWorld3D(world *ecs.World) *World {
-	state, ok := ecs.GetResource[*World](world)
+// WorldFor returns the world's 3D render state, creating it on first use.
+func WorldFor(world *ecs.World) *World {
+	state, ok := world.GetResource[*World]()
 	if ok && state != nil {
 		return state
 	}
 	state = NewWorld()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	return state
 }
 
 func extractRender3D(context *ecs.SystemContext) (err error) {
 	world := context.World
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	defer func() {
 		if err != nil {
 			for _, view := range state.views {
@@ -413,8 +410,8 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		}
 	}()
 	state.viewOrder = state.viewOrder[:0]
-	activeViews := ecs.FrameScratchMap[activeRenderViews3DScratch, ecs.Entity, bool](world)
-	renderState, _ := ecs.GetResource[*scene.RenderWorld](world)
+	activeViews := world.FrameScratchMap[activeRenderViews3DScratch, ecs.Entity, bool]()
+	renderState, _ := world.GetResource[*scene.RenderWorld]()
 	if renderState == nil {
 		return fmt.Errorf("render3d: camera renderer has not been registered")
 	}
@@ -425,7 +422,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 	}
 
 	ambient := NewAmbientLight()
-	if value, ok := ecs.GetResource[*AmbientLight](world); ok && value != nil {
+	if value, ok := world.GetResource[*AmbientLight](); ok && value != nil {
 		ambient = value
 	}
 	state.ambient = [4]float32{ambient.Color.R * ambient.Brightness, ambient.Color.G * ambient.Brightness, ambient.Color.B * ambient.Brightness, 1}
@@ -434,10 +431,10 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 	state.lights = state.lights[:0]
 	state.lights = append(state.lights, extractedLight3D{Light3D: render.Light3D{Kind: render.Light3DAmbient, Color: state.ambient}})
 	directionalSet := false
-	for entity, access := range ecs.Query2[AmbientLight, scene.GlobalTransform](world).All {
+	for entity, access := range world.Query2[AmbientLight, scene.GlobalTransform]().All {
 		light := access.A.Get()
 
-		if visibility, ok := ecs.Get[scene.Visibility](world, entity); ok && !visibility.Visible {
+		if visibility, ok := world.Get[scene.Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
 		color := [4]float32{light.Color.R * light.Brightness, light.Color.G * light.Brightness, light.Color.B * light.Brightness, 1}
@@ -448,14 +445,14 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 			state.lights = append(state.lights, extractedLight3D{entity: entity, scene: layer.ID, Light3D: render.Light3D{Kind: render.Light3DAmbient, Color: color}})
 		}
 	}
-	for entity, access := range ecs.Query2[DirectionalLight, scene.GlobalTransform](world).All {
+	for entity, access := range world.Query2[DirectionalLight, scene.GlobalTransform]().All {
 		light := access.A.Get()
 		transform := access.B.Get()
 
 		if light.Validate() != nil {
 			continue
 		}
-		if visibility, ok := ecs.Get[scene.Visibility](world, entity); ok && !visibility.Visible {
+		if visibility, ok := world.Get[scene.Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
 		direction := transform.Matrix.Mul4x1(mgl32.Vec4{0, 0, -1, 0}).Vec3().Normalize()
@@ -471,21 +468,21 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 			Direction:         [4]float32{direction.X(), direction.Y(), direction.Z(), 0},
 			Color:             directionalColor, Params: [4]float32{0, strength}}})
 	}
-	extractLocalLights[PointLight](world, state)
-	extractLocalLights[SpotLight](world, state)
-	extractLocalLights[AreaLight](world, state)
+	state.extractLocalLights[PointLight](world)
+	state.extractLocalLights[SpotLight](world)
+	state.extractLocalLights[AreaLight](world)
 
-	meshScratch := ecs.FrameScratch[extractedMeshes3DScratch, extractedMeshCandidate3D](world)
+	meshScratch := world.FrameScratch[extractedMeshes3DScratch, extractedMeshCandidate3D]()
 	meshScratch.Values = meshScratch.Values[:0]
 	var deformationErr error
-	for entity, access := range ecs.Query2[Mesh, scene.GlobalTransform](world).All {
+	for entity, access := range world.Query2[Mesh, scene.GlobalTransform]().All {
 		mesh := access.A.Get()
 		transform := access.B.Get()
 
 		if mesh.Mesh == nil || len(mesh.Mesh.Vertices) == 0 || len(mesh.Mesh.Indices) == 0 {
 			continue
 		}
-		if visibility, ok := ecs.Get[scene.Visibility](world, entity); ok && !visibility.Visible {
+		if visibility, ok := world.Get[scene.Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
 		material := state.materialFor(world, entity, -1)
@@ -493,7 +490,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		for _, part := range mesh.Mesh.Submeshes {
 			customShader = customShader || state.materialFor(world, entity, int(part.Material)).Shader != nil
 		}
-		deformation := ecs.GetMut[Deformation](world, entity)
+		deformation := world.GetMut[Deformation](entity)
 		meshScratch.Values = append(meshScratch.Values, extractedMeshCandidate3D{
 			entity: entity, scene: scene.LayerForEntity(world, entity).ID, mesh: mesh.Mesh, material: material, transform: transform.Matrix,
 			bounds: mesh.Mesh.Bounds, layers: scene.LayersForEntity(world, entity), deformation: deformation,
@@ -572,9 +569,9 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 				meshKey = uint32(len(view.meshKeys) + 1)
 				view.meshKeys[base.mesh] = meshKey
 			}
-			_, noShadow := ecs.Get[NoShadow](world, base.entity)
-			_, noOcclusion := ecs.Get[NoAmbientOcclusion](world, base.entity)
-			_, noReflection := ecs.Get[NoScreenReflection](world, base.entity)
+			_, noShadow := world.Get[NoShadow](base.entity)
+			_, noOcclusion := world.Get[NoAmbientOcclusion](base.entity)
+			_, noReflection := world.Get[NoScreenReflection](base.entity)
 			for partIndex := 0; partIndex < max(1, len(base.mesh.Submeshes)); partIndex++ {
 				part := graphics.Submesh{IndexCount: uint32(len(base.mesh.Indices)), Node: -1}
 				material, transform := base.material, base.transform
@@ -630,7 +627,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 }
 
 func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
-	state := renderWorld3D(context.World)
+	state := WorldFor(context.World)
 	// A failed preparation must not leave partially queued views available.
 	defer func() {
 		if err != nil {
@@ -643,9 +640,9 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 	if len(state.viewOrder) == 0 {
 		return nil
 	}
-	meshHandles := ecs.FrameScratchMap[preparedMeshHandles3DScratch, *graphics.Mesh, render.MeshHandle](context.World)
-	shaderHandles := ecs.FrameScratchMap[preparedShaderHandles3DScratch, *graphics.MeshShader, render.MeshShaderHandle](context.World)
-	textureHandles := ecs.FrameScratchMap[preparedTextureHandles3DScratch, *graphics.Texture, render.TextureHandle](context.World)
+	meshHandles := context.World.FrameScratchMap[preparedMeshHandles3DScratch, *graphics.Mesh, render.MeshHandle]()
+	shaderHandles := context.World.FrameScratchMap[preparedShaderHandles3DScratch, *graphics.MeshShader, render.MeshShaderHandle]()
+	textureHandles := context.World.FrameScratchMap[preparedTextureHandles3DScratch, *graphics.Texture, render.TextureHandle]()
 	defer func() {
 		clear(meshHandles)
 		clear(shaderHandles)
@@ -737,7 +734,7 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 }
 
 func sortRenderPhases3D(context *ecs.SystemContext) error {
-	state := renderWorld3D(context.World)
+	state := WorldFor(context.World)
 	for _, entity := range state.viewOrder {
 		view := state.views[entity]
 		slices.SortFunc(view.opaque.items, compareOpaque3D)
@@ -792,7 +789,7 @@ func compareOpaque3D(a, b extractedMesh3D) int {
 }
 
 func render3D(context *ecs.SystemContext) error {
-	state := renderWorld3D(context.World)
+	state := WorldFor(context.World)
 	c := graphics.CanvasFor(context.World)
 	if c == nil {
 		return nil

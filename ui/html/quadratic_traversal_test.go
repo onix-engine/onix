@@ -92,9 +92,9 @@ func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
 func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entity) {
 	world := ecs.NewWorld()
 	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), NodeByID: make(map[string]*dom.Node)}}
-	owners := ecs.NewSpawner1[htmlRenderState](world)
+	owners := world.NewSpawner1[htmlRenderState]()
 	owner := owners.Spawn(state)
-	children := ecs.NewSpawner3[htmlChild, scene.UITransform, scene.Parent](world)
+	children := world.NewSpawner3[htmlChild, scene.UITransform, scene.Parent]()
 	for i := range count {
 		id := fmt.Sprint(i)
 		node := dom.NewElement("div", map[string]string{"id": id})
@@ -103,46 +103,46 @@ func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entit
 		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{ID: id, Offset: mgl32.Vec2{float32(i), 1}})
 		state.Children = append(state.Children, children.Spawn(htmlChild{Owner: owner, Node: node}, scene.NewUITransform(), scene.Parent{Entity: owner}))
 	}
-	*ecs.GetMut[htmlRenderState](world, owner) = state
+	*world.GetMut[htmlRenderState](owner) = state
 	SetNodeOffset(world, owner, "0", 0, 1)
 	return world, owner, state.Children
 }
 
 func TestHTMLBindingBatchIgnoresDeadScrollAndRefreshesRoutes(t *testing.T) {
 	world, owner, entities := quadraticHTMLBindingFixture(32)
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	target := state.Root.Children[1]
 	state.Root.Children = slices.Delete(state.Root.Children, 1, 2)
 	state.Root.Children[0].AppendChild(target)
 	first, second := htmlBindingArea(world, 0, 0), htmlBindingArea(world, 0, 0)
 	SetNodeScroll(world, owner, "0", first, 0, 0)
 	SetNodeScroll(world, owner, "1", second, 0, 0)
-	parent, _ := ecs.Get[scene.Parent](world, entities[1])
+	parent, _ := world.Get[scene.Parent](entities[1])
 	if parent.Entity != first {
 		t.Fatal("first registered ancestor did not own the scroll")
 	}
 	world.Despawn(first)
 	SetNodeOffset(world, owner, "0", 5, 7)
-	parent, _ = ecs.Get[scene.Parent](world, entities[1])
+	parent, _ = world.Get[scene.Parent](entities[1])
 	if parent.Entity != second {
 		t.Fatal("dead earlier scroll prevented live descendant binding")
 	}
 	// Register the ancestor last: precedence follows registration, not depth.
-	state = ecs.GetMut[htmlRenderState](world, owner)
+	state = world.GetMut[htmlRenderState](owner)
 	state.NodeOffsets[0], state.NodeOffsets[1] = state.NodeOffsets[1], state.NodeOffsets[0]
 	SetNodeOffset(world, owner, "0", 5, 7)
-	child, _ := ecs.Get[htmlChild](world, entities[1])
+	child, _ := world.Get[htmlChild](entities[1])
 	if child.offset != (mgl32.Vec2{5, 7}) {
 		t.Fatal("late ancestor offset lost to an earlier descendant")
 	}
 	if n := testing.AllocsPerRun(100, func() { SetNodeOffset(world, owner, "0", 5, 7) }); n != 0 {
 		t.Fatalf("warm binding batch allocated %v objects", n)
 	}
-	state = ecs.GetMut[htmlRenderState](world, owner)
+	state = world.GetMut[htmlRenderState](owner)
 	state.Root.Children[0].Children = nil
 	state.Root.AppendChild(target)
 	SetNodeOffset(world, owner, "0", 5, 7)
-	child, _ = ecs.Get[htmlChild](world, entities[1])
+	child, _ = world.Get[htmlChild](entities[1])
 	if child.offset != (mgl32.Vec2{1, 1}) {
 		t.Fatal("reparented node retained an old ancestor route")
 	}

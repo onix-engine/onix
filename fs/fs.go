@@ -73,13 +73,13 @@ func Mount(root string) error {
 }
 
 func (f *FileSystem) Open(name string) (iofs.File, error) {
-	return withPath(f, "open", name, func(name string) (iofs.File, error) {
+	return f.withPath("open", name, func(name string) (iofs.File, error) {
 		return f.backend.Open(name)
 	})
 }
 
 func (f *FileSystem) ReadFile(name string) ([]byte, error) {
-	return withPath(f, "read", name, func(name string) ([]byte, error) {
+	return f.withPath("read", name, func(name string) ([]byte, error) {
 		return f.backend.ReadFile(name)
 	})
 }
@@ -88,27 +88,27 @@ func (f *FileSystem) WriteFile(name string, data []byte) error {
 	if name == "." {
 		return newPathError("write", name, ErrInvalid)
 	}
-	_, err := withPath(f, "write", name, func(name string) (struct{}, error) {
+	_, err := f.withPath("write", name, func(name string) (struct{}, error) {
 		return struct{}{}, f.backend.WriteFile(name, data)
 	})
 	return err
 }
 
 func (f *FileSystem) MkdirAll(name string) error {
-	_, err := withPath(f, "mkdir", name, func(name string) (struct{}, error) {
+	_, err := f.withPath("mkdir", name, func(name string) (struct{}, error) {
 		return struct{}{}, f.backend.MkdirAll(name)
 	})
 	return err
 }
 
 func (f *FileSystem) ReadDir(name string) ([]iofs.DirEntry, error) {
-	return withPath(f, "readdir", name, func(name string) ([]iofs.DirEntry, error) {
+	return f.withPath("readdir", name, func(name string) ([]iofs.DirEntry, error) {
 		return f.backend.ReadDir(name)
 	})
 }
 
 func (f *FileSystem) Stat(name string) (iofs.FileInfo, error) {
-	return withPath(f, "stat", name, func(name string) (iofs.FileInfo, error) {
+	return f.withPath("stat", name, func(name string) (iofs.FileInfo, error) {
 		return f.backend.Stat(name)
 	})
 }
@@ -117,14 +117,14 @@ func (f *FileSystem) Remove(name string) error {
 	if name == "." {
 		return newPathError("remove", name, ErrInvalid)
 	}
-	_, err := withPath(f, "remove", name, func(name string) (struct{}, error) {
+	_, err := f.withPath("remove", name, func(name string) (struct{}, error) {
 		return struct{}{}, f.backend.Remove(name)
 	})
 	return err
 }
 
 func (f *FileSystem) RemoveAll(name string) error {
-	_, err := withPath(f, "removeall", name, func(name string) (struct{}, error) {
+	_, err := f.withPath("removeall", name, func(name string) (struct{}, error) {
 		return struct{}{}, f.backend.RemoveAll(name)
 	})
 	return err
@@ -159,7 +159,7 @@ func Remove(name string) error                     { return Default().Remove(nam
 func RemoveAll(name string) error                  { return Default().RemoveAll(name) }
 func Rename(oldName, newName string) error         { return Default().Rename(oldName, newName) }
 
-func withPath[T any](f *FileSystem, op, name string, operation func(string) (T, error)) (T, error) {
+func (f *FileSystem) withPath[T any](op, name string, operation func(string) (T, error)) (T, error) {
 	var zero T
 	if err := validatePath(op, name); err != nil {
 		return zero, err

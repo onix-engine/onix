@@ -75,19 +75,19 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 	}
 	spec := node.Spec
 	components := ecs.NewBundle(16)
-	ecs.Put(&components, scene.Name{Value: spec.ID})
+	components.Put(scene.Name{Value: spec.ID})
 	if node.UI {
-		ecs.Put(&components, node.UITransform.Component())
-		ecs.Put(&components, scene.UIGlobalTransform{})
-		ecs.Put(&components, scene.UIStackIndex(spec.Order))
-		ecs.Put(&components, scene.SiblingOrder(node.LayoutOrder))
+		components.Put(node.UITransform.Component())
+		components.Put(scene.UIGlobalTransform{})
+		components.Put(scene.UIStackIndex(spec.Order))
+		components.Put(scene.SiblingOrder(node.LayoutOrder))
 	} else {
-		ecs.Put(&components, node.Transform)
-		ecs.Put(&components, scene.GlobalTransform{})
-		ecs.Put(&components, scene.RenderOrder2D(spec.Order))
+		components.Put(node.Transform)
+		components.Put(scene.GlobalTransform{})
+		components.Put(scene.RenderOrder2D(spec.Order))
 	}
-	ecs.Put(&components, scene.Visibility{Visible: node.Visible})
-	ecs.Put(&components, spec.Anchor)
+	components.Put(scene.Visibility{Visible: node.Visible})
+	components.Put(spec.Anchor)
 	var animator scene.Animator
 	requiresSprite := false
 	if animations && node.HasAnimation {
@@ -98,7 +98,7 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 		}
 	}
 	if spec.Components.VisualsEmpty() {
-		ecs.Put(&components, scene.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
+		components.Put(scene.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
 	}
 	if node.HasSprite {
 		sprite, err := bundle.ecsSpriteForSpec(spec)
@@ -117,14 +117,14 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 				}
 			}
 		}
-		ecs.Put(&components, sprite)
+		components.Put(sprite)
 	}
 	if node.HasText {
 		text, err := bundle.ecsTextForPlanNode(node)
 		if err != nil {
 			return ecs.Bundle{}, err
 		}
-		ecs.Put(&components, text)
+		components.Put(text)
 	}
 	if animations && node.HasAnimation {
 		if requiresSprite && !node.HasSprite {
@@ -136,9 +136,9 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 			if spec.Height > 0 {
 				sprite.Height = float32(spec.Height)
 			}
-			ecs.Put(&components, sprite)
+			components.Put(sprite)
 		}
-		ecs.Put(&components, animator)
+		components.Put(animator)
 	}
 	return components, nil
 }

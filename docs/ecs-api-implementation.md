@@ -4,18 +4,23 @@ Recorded 2026-10-05. Eight completed phases implement the [design](ecs-api-desig
 starting from d1bdabb6. All source callers migrated directly; old APIs have no forwarding
 compatibility layer. Measurements and platform results below are historical records.
 
+The 2026-10-29 [generic-method migrations](ecs-generic-methods.md) move component,
+resource, command, context, cache and typed-constructor operations onto their owners.
+Usage examples below use the
+current API; historical names and benchmark labels retain their recorded meaning.
+
 ## Component access, queries and scripts
 
 GetRef/GetMut and Slot variants return *T, nil if absent. Get by value retains (T,bool).
-Resources keep presence semantics, including a present nil pointer. MustMut/MustMutSlot
-report entity/type on missing required components. project.Component supports named
+Resources keep presence semantics, including a present nil pointer. World.MustMut/EntitySlot.MustMut
+report entity/type on missing required components. SceneInstance.Component supports named
 low-frequency access; RequireComponent validates at installation without Changed and
 returns a generation/World-checked Slot for repeated access. Rebind after scene replacement.
 
 Query and Query2..Query7 return reusable views. Range over .All without parentheses;
 Get copies, Ref is read-only by convention, Mut marks only the requested component,
 and CommitComponent compares comparable values before marking. Go cannot enforce Ref
-immutability. With/Without/Added/Changed work; views capture the change window without
+immutability. With/Without and SystemContext.Added/Changed work; views capture the change window without
 nested-query interference. In borrows a slice, preserves supplied order, validates live
 handles/components/filters, and treats nil as empty. Access values/pointers are borrowed
 for the iteration; Commands defer structural edits. Completion/break/return/panic release
@@ -146,7 +151,7 @@ optional 3D resources. Install onix.Render3D or explicitly call render3d.Registe
 | `scene.Camera3D` | `render3d.Camera` |
 | `scene.RenderWorld3D` / `NewRenderWorld3D` | `render3d.World` / `NewWorld` |
 | `scene.RegisterCameraRenderer3D` | `render3d.Register` |
-| `scene.RegisterMaterial3D[T]` | `render3d.RegisterMaterial[T]` |
+| `scene.RegisterMaterial3D[T]` | `render3d.World.RegisterMaterial[T]` |
 | `scene.ExtractRender3DSystem` / `PrepareRenderResources3DSystem` | `render3d.ExtractSystem` / `PrepareSystem` |
 | `scene.SortRenderPhases3DSystem` / `Render3DSystem` | `render3d.SortSystem` / `DrawSystem` |
 | `scene.UpdateMeshDeformations3DSystem` | `render3d.UpdateDeformationsSystem` |
@@ -319,20 +324,20 @@ Raw logs: [phase 4](ecs-fourth-benchmarks.txt), [phase 5](ecs-fifth-benchmarks.t
 ## Usage examples
 
 ```go
-if animator := ecs.GetMut[scene.Animator](context.World, context.Entity); animator != nil {
+if animator := context.World.GetMut[scene.Animator](context.Entity); animator != nil {
     animator.Speed = script.Speed
     animator.Play()
 }
 ```
 
 ```go
-for entity, access := range ecs.Query[scene.Visibility](world).All {
+for entity, access := range world.Query[scene.Visibility]().All {
     if access.Get().Visible {
         visit(entity)
     }
 }
 
-for _, row := range ecs.Query2[themeColor[engineui.Label], engineui.Label](world).All {
+for _, row := range world.Query2[themeColor[engineui.Label], engineui.Label]().All {
     binding := row.A.Get()
     label := row.B.Get()
     label.Color = themeColorFor(mode, binding.Role)
@@ -341,7 +346,7 @@ for _, row := range ecs.Query2[themeColor[engineui.Label], engineui.Label](world
 ```
 
 ```go
-query := ecs.Query[scene.Visibility](world, ecs.With[scene.UITransform]())
+query := world.Query[scene.Visibility](ecs.With[scene.UITransform]())
 for entity, access := range query.In(entities).All {
     ecs.CommitComponent(access, scene.Visibility{Visible: shouldShow(entity)})
 }
@@ -386,7 +391,7 @@ label := ui.SpawnNode2(world, ui.NodeOptions{Parent: entity},
 ```
 
 ```go
-removal := ecs.PrepareRemoval(world,
+removal := world.PrepareRemoval(
     ecs.Type[ui.Control](),
     ecs.Type[scene.InputTarget2D](),
     ecs.Type[scene.InputState2D](),
@@ -396,8 +401,8 @@ removal.Reserve(128) // Prepare populated/preallocated sources and target capaci
 changed := removal.Apply(entity)
 
 // Defer through Commands during iteration.
-for entity := range ecs.Query[ui.Control](world).All {
-    ecs.CommandRemovePrepared(world.Commands(), entity, removal)
+for entity := range world.Query[ui.Control]().All {
+    world.Commands().RemovePrepared(entity, removal)
 }
 err := world.FlushCommands()
 ```
@@ -414,15 +419,15 @@ label := ui.SpawnNode2(world, ui.NodeOptions{Parent: group},
     scene.NewText2D("Group"), scene.ClipRect2D{Width: 120, Height: 24})
 ui.SetText(world, label, "Renamed")
 
-for entity, text := range ecs.Query[scene.Text2D](world).All {
+for entity, text := range world.Query[scene.Text2D]().All {
     draw(entity, text.Ref())
 }
 ```
 
 ```go
 window := world.ChangesSince(lastTick)
-for entity, transform := range ecs.Query[scene.Transform](world,
-    ecs.Changed[scene.Transform](&window)).All {
+for entity, transform := range world.Query[scene.Transform](
+    window.Changed[scene.Transform]()).All {
     updateTransform(entity, transform.Ref())
 }
 lastTick = window.ThisRun()
@@ -442,9 +447,9 @@ if entity, ok := html.ControlByID(world, surface, "quick-open-query"); ok {
 ```go
 import "github.com/diiyw/onix/scene/render3d"
 
-render3d.RegisterMaterial[effectMaterial](context.World)
+render3d.WorldFor(context.World).RegisterMaterial[effectMaterial]()
 material := effectMaterial{Shader: shader}
-return ecs.Insert(context.World, context.Entity,
+return context.World.Insert(context.Entity,
     render3d.Material[effectMaterial]{Material: &material})
 ```
 
@@ -454,9 +459,7 @@ app.scriptInputEvents.Discard(context.World)
 
 ```go
 // Prepare once: remove Sprite2D and write two components.
-patch := ecs.NewPatch2[scene.SpriteLayers2D, scene.Size2D](
-    world, ecs.Type[scene.Sprite2D](),
-)
+patch := world.NewPatch2[scene.SpriteLayers2D, scene.Size2D](ecs.Type[scene.Sprite2D]())
 patch.Reserve(128)
 
 // Apply immediately with one migration.
@@ -469,7 +472,7 @@ patch.Queue(context.Commands, entity, layers, size)
 ```
 
 ```go
-return ecs.Insert2(world, content,
+return world.Insert2(content,
     scene.Parent{Entity: area},
     ui.ScrollContent{Area: area, X: localX, Y: localY},
 )
@@ -480,7 +483,7 @@ return cache.patch.Apply(entity, layers, scene.Size2D{Width: 1, Height: 1})
 ```
 
 ```go
-if layout := ecs.GetMut[ui.Layout](world, sceneInstance.MustEntity("signalsGrid")); layout != nil {
+if layout := world.GetMut[ui.Layout](sceneInstance.MustEntity("signalsGrid")); layout != nil {
     layout.Type = ui.LayoutGrid
     layout.Constraint, layout.ConstraintNum = ui.LayoutConstraintFixedColumn, 3
 }

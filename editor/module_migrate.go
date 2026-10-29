@@ -455,7 +455,7 @@ func (m *moduleMigration) inspectCode() error {
 							if object, ok := fun.X.(*ast.Ident); ok {
 								name := object.Name + "." + fun.Sel.Name
 								switch name {
-								case "onix.NewApp", "onix.InstallSystems", "app.LoadScene", "app.Run", "project.MustLoadDefault", "project.MustDefault":
+								case "onix.NewApp", "app.InstallSystems", "app.LoadScene", "app.Run", "project.MustLoadDefault", "project.MustDefault":
 									return true
 								}
 							}

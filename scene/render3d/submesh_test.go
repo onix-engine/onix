@@ -33,10 +33,10 @@ func TestRenderSubmeshesShareGeometryAndPreserveMaterialsAndRigidMotion(t *testi
 			graphics.BindFrame(world, graphics.CurrentContext())
 			Register(world)
 			camera := ecs.NewBundle(4)
-			ecs.Put(&camera, scene.NewCamera())
-			ecs.Put(&camera, Camera{})
-			ecs.Put(&camera, scene.PerspectiveProjection3D())
-			ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+			camera.Put(scene.NewCamera())
+			camera.Put(Camera{})
+			camera.Put(scene.PerspectiveProjection3D())
+			camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 			world.Spawn(camera)
 			vertices := []render.Vertex3D{
 				{Position: [3]float32{-1, -1, 0}, Normal: [3]float32{0, 0, 1}},
@@ -60,10 +60,10 @@ func TestRenderSubmeshesShareGeometryAndPreserveMaterialsAndRigidMotion(t *testi
 				*graphics.NewStandardMaterial(graphics.ColorRGBA{B: 1, A: 1}),
 			}
 			entity := spawnMesh3DForTest(world, mesh, nil, mgl32.Vec3{0, 0, -4})
-			if err := ecs.Insert(world, entity, Material[graphics.StandardMaterial]{Materials: materials}); err != nil {
+			if err := world.Insert(entity, Material[graphics.StandardMaterial]{Materials: materials}); err != nil {
 				t.Fatal(err)
 			}
-			if err := ecs.Insert(world, entity, Deformation{
+			if err := world.Insert(entity, Deformation{
 				JointMatrices: []mgl32.Mat4{mgl32.Translate3D(0, .5, 0)},
 				NodeMatrices:  []mgl32.Mat4{mgl32.Translate3D(.75, 0, 0)},
 			}); err != nil {
@@ -99,7 +99,7 @@ func TestRenderSubmeshesShareGeometryAndPreserveMaterialsAndRigidMotion(t *testi
 				t.Fatal("CPU submeshes duplicated geometry or deformed rigid vertices")
 			}
 
-			state := renderWorld3D(world)
+			state := WorldFor(world)
 			view := state.views[state.viewOrder[0]]
 			frame := func() {
 				if err := extractRender3D(&ecs.SystemContext{World: world}); err != nil {
@@ -136,11 +136,11 @@ func TestRigidNodeEntitiesFollowParentsWithoutReplacingManualSkinMatrices(t *tes
 	child := world.Spawn(ecs.NewBundle(2))
 	owner := world.Spawn(ecs.NewBundle(2))
 	for _, err := range []error{
-		ecs.Insert(world, parent, scene.TransformFromTranslation(mgl32.Vec3{7, 0, 0})),
-		ecs.Insert(world, child, scene.TransformFromTranslation(mgl32.Vec3{0, 2, 0})),
-		ecs.Insert(world, child, scene.Parent{Entity: parent}),
-		ecs.Insert(world, owner, scene.TransformFromTranslation(mgl32.Vec3{5, 0, 0})),
-		ecs.Insert(world, owner, Deformation{
+		world.Insert(parent, scene.TransformFromTranslation(mgl32.Vec3{7, 0, 0})),
+		world.Insert(child, scene.TransformFromTranslation(mgl32.Vec3{0, 2, 0})),
+		world.Insert(child, scene.Parent{Entity: parent}),
+		world.Insert(owner, scene.TransformFromTranslation(mgl32.Vec3{5, 0, 0})),
+		world.Insert(owner, Deformation{
 			NodeEntities: []ecs.Entity{child}, NodeInverseBind: []mgl32.Mat4{mgl32.Translate3D(0, -2, 0)},
 			JointMatrices: []mgl32.Mat4{mgl32.Ident4()},
 		}),
@@ -155,7 +155,7 @@ func TestRigidNodeEntitiesFollowParentsWithoutReplacingManualSkinMatrices(t *tes
 	if err := UpdateDeformationsSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := ecs.Get[Deformation](world, owner)
+	got, _ := world.Get[Deformation](owner)
 	if len(got.JointMatrices) != 1 || got.JointMatrices[0] != mgl32.Ident4() || len(got.NodeMatrices) != 1 || got.NodeMatrices[0] != mgl32.Translate3D(2, 0, 0) {
 		t.Fatalf("node deformation: %+v", got)
 	}
@@ -168,21 +168,21 @@ func TestRigidNodeMotionKeepsStaticGeometry(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	world.Spawn(camera)
 	mesh := graphics.CubeMesh(1)
 	mesh.Submeshes = []graphics.Submesh{{IndexCount: uint32(len(mesh.Indices)), Node: 0}}
 	entity := spawnMesh3DForTest(world, mesh, graphics.NewStandardMaterial(graphics.White), mgl32.Vec3{0, 0, -4})
-	if err := ecs.Insert(world, entity, Deformation{NodeMatrices: []mgl32.Mat4{mgl32.Translate3D(.5, 0, 0)}}); err != nil {
+	if err := world.Insert(entity, Deformation{NodeMatrices: []mgl32.Mat4{mgl32.Translate3D(.5, 0, 0)}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ExtractSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	items := state.views[state.viewOrder[0]].extracted
 	if len(items) != 1 || len(items[0].vertices) != 0 || items[0].transform != mgl32.Translate3D(.5, 0, -4) {
 		t.Fatal("rigid animation should change only the draw transform")

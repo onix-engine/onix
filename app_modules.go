@@ -34,7 +34,7 @@ func (app *App) OpenModuleWindow(spec project.ProjectSpec, source fs.FS, decoder
 
 // LoadModules mounts the entry of the new module format. It does not open a
 // native window, so loading and logic tests work independently of rendering.
-func (app *App) LoadModules(plan *project.ProjectPlan, registry module.Registry, options module.Options) (*module.Scene, error) {
+func (app *App) LoadModules[P module.ContentProfile](plan *project.ProjectPlan, registry module.Registry, options module.Options) (*module.Scene, error) {
 	if app == nil || plan == nil {
 		return nil, module.ErrInvalid
 	}
@@ -98,7 +98,7 @@ func (app *App) LoadModules(plan *project.ProjectPlan, registry module.Registry,
 			},
 		}
 	}
-	runtime, err := module.New(app.World, plan, registry, options)
+	runtime, err := module.New[P](app.World, plan, registry, options)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (app *App) LoadModules(plan *project.ProjectPlan, registry module.Registry,
 			app.moduleRuntime = nil
 			return nil, err
 		}
-		ecs.InsertResource(app.World, scene.RenderSettings2D{ClearColor: color})
+		app.World.InsertResource(scene.RenderSettings2D{ClearColor: color})
 		if app.hasSystemSet(systemSetRender2D) {
 			// Include fallback cameras created after the entry scene established its query scope.
 			runtime.SyncScopes()
@@ -135,7 +135,7 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 	if app.moduleSystemsInstalled {
 		return nil
 	}
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		return err
 	}
 	var renders, inputs bool
@@ -165,12 +165,12 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 		}
 	}
 	if renders {
-		if err := InstallSystems[Render2D](app); err != nil {
+		if err := app.InstallSystems[Render2D](); err != nil {
 			return err
 		}
 	}
 	if inputs {
-		if err := InstallSystems[Input2D](app); err != nil {
+		if err := app.InstallSystems[Input2D](); err != nil {
 			return err
 		}
 	}
@@ -201,7 +201,7 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 		if app.moduleRuntime == nil {
 			return nil
 		}
-		clock, ok := ecs.GetResource[*scene.Time](context.World)
+		clock, ok := context.World.GetResource[*scene.Time]()
 		if !ok {
 			return nil
 		}
@@ -216,7 +216,7 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 		if app.moduleRuntime == nil {
 			return nil
 		}
-		clock, _ := ecs.GetResource[*scene.Time](context.World)
+		clock, _ := context.World.GetResource[*scene.Time]()
 		return app.moduleRuntime.UpdateFrame(clock.DeltaSeconds())
 	}}); err != nil {
 		return err
@@ -236,13 +236,26 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 func (app *App) dispatchModuleInput(context *ecs.SystemContext) error {
 	if app.moduleRuntime == nil {
 		app.moduleInputEvents.Discard(context.World)
-		app.moduleHTMLEvents.Discard(context.World)
+		if app.moduleHTMLInput != nil {
+			return app.moduleHTMLInput(context)
+		}
 		return nil
 	}
 	for event := range app.moduleInputEvents.All(context.World) {
 		if err := app.moduleRuntime.HandleInput(*event); err != nil {
 			return err
 		}
+	}
+	if app.moduleHTMLInput != nil {
+		return app.moduleHTMLInput(context)
+	}
+	return nil
+}
+
+func (app *App) dispatchModuleHTMLInput(context *ecs.SystemContext) error {
+	if app.moduleRuntime == nil {
+		app.moduleHTMLEvents.Discard(context.World)
+		return nil
 	}
 	for event := range app.moduleHTMLEvents.All(context.World) {
 		if err := app.moduleRuntime.HandleHTMLEvent(*event); err != nil {

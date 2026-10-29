@@ -56,30 +56,30 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 		html.StackIndex = editorHTMLDialogStack(stackIndex)
 		html.PassThrough = false
 		bundle := ecs.NewBundle(6)
-		ecs.Put(&bundle, scene.UITransformFromXY(0, 0))
-		ecs.Put(&bundle, scene.UIGlobalTransform{})
-		ecs.Put(&bundle, scene.Visibility{Visible: true})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.UIStackIndex(editorHTMLDialogStack(stackIndex)))
-		ecs.Put(&bundle, scene.Size2D{})
-		ecs.Put(&bundle, html)
+		bundle.Put(scene.UITransformFromXY(0, 0))
+		bundle.Put(scene.UIGlobalTransform{})
+		bundle.Put(scene.Visibility{Visible: true})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.UIStackIndex(editorHTMLDialogStack(stackIndex)))
+		bundle.Put(scene.Size2D{})
+		bundle.Put(html)
 		entity = world.Spawn(bundle)
-		_ = ecs.Insert(world, entity, engineui.Dialog{})
+		_ = world.Insert(entity, engineui.Dialog{})
 		shell := engineui.ColorSurface(editorTheme.panel)
 		shell.Background.Radius = float32(editorDialogCornerRadius)
 		background := scene.NewUIBackground2D(shell.Background)
 		background.Alpha = 0
-		_ = ecs.Insert(world, entity, background)
-		_ = ecs.Insert(world, entity, scene.NewUIImage2D(nil))
-		_ = ecs.Insert(world, entity, scene.NewUIBorder2D(scene.OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, editorTheme.panelBorder, float32(editorDialogCornerRadius), 1)))
-		_ = ecs.Insert(world, entity, scene.InputBlocker2D{Width: u.rootRect.W, Height: u.rootRect.H, PassThrough: false})
-		if background := ecs.GetMut[scene.UIBackground2D](world, entity); background != nil {
+		_ = world.Insert(entity, background)
+		_ = world.Insert(entity, scene.NewUIImage2D(nil))
+		_ = world.Insert(entity, scene.NewUIBorder2D(scene.OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, editorTheme.panelBorder, float32(editorDialogCornerRadius), 1)))
+		_ = world.Insert(entity, scene.InputBlocker2D{Width: u.rootRect.W, Height: u.rootRect.H, PassThrough: false})
+		if background := world.GetMut[scene.UIBackground2D](entity); background != nil {
 			background.Alpha = 0
 		}
-		if image := ecs.GetMut[scene.UIImage2D](world, entity); image != nil {
+		if image := world.GetMut[scene.UIImage2D](entity); image != nil {
 			image.Alpha = 0
 		}
-		if border := ecs.GetMut[scene.UIBorder2D](world, entity); border != nil {
+		if border := world.GetMut[scene.UIBorder2D](entity); border != nil {
 			border.Alpha = 0
 		}
 		u.htmlDialogs[name] = entity
@@ -90,7 +90,7 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 			if err != nil {
 				panic(err)
 			}
-			component, err := htmlui.HydrateComponent(world, entity, definition, welcomeComponentProps{}, welcomeComponentState{}, 1)
+			component, err := definition.HydrateComponent(world, entity, welcomeComponentProps{}, welcomeComponentState{}, 1)
 			if err != nil {
 				panic(err)
 			}
@@ -102,7 +102,7 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 			if err != nil {
 				panic(err)
 			}
-			component, err := htmlui.HydrateComponent(world, entity, definition, editorDialogComponentProps{Frame: frame}, editorDialogComponentState{}, 1)
+			component, err := definition.HydrateComponent(world, entity, editorDialogComponentProps{Frame: frame}, editorDialogComponentState{}, 1)
 			if err != nil {
 				panic(err)
 			}
@@ -110,17 +110,17 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 		}
 		installEditorHTMLImages(world)
 	}
-	html := ecs.GetMut[htmlui.Surface](world, entity)
+	html := world.GetMut[htmlui.Surface](entity)
 	html.Width, html.Height, html.Font = u.rootRect.W, u.rootRect.H, u.font
 	html.StackIndex = editorHTMLDialogStack(stackIndex)
-	if size := ecs.GetMut[scene.Size2D](world, entity); size != nil {
+	if size := world.GetMut[scene.Size2D](entity); size != nil {
 		// The HTML surface covers the whole editor window.  The dialog panel is
 		// positioned inside that surface by CSS; using the panel dimensions here
 		// makes the retained document viewport change whenever the modal is
 		// rebuilt, which can clip/reflow its contents after input events.
 		size.Width, size.Height = u.rootRect.W, u.rootRect.H
 	}
-	if index := ecs.GetMut[scene.UIStackIndex](world, entity); index != nil {
+	if index := world.GetMut[scene.UIStackIndex](entity); index != nil {
 		*index = scene.UIStackIndex(editorHTMLDialogStack(stackIndex))
 	}
 	u.htmlDialogPanels[name] = panel
@@ -163,10 +163,10 @@ func (u *editorDialogUI) show(world *ecs.World, entity ecs.Entity) {
 		return
 	}
 	u.active[entity] = struct{}{}
-	if visibility := ecs.GetRef[scene.Visibility](world, entity); visibility != nil && visibility.Visible {
+	if visibility := world.GetRef[scene.Visibility](entity); visibility != nil && visibility.Visible {
 		return
 	}
-	if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+	if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 		visibility.Visible = true
 	}
 }
@@ -183,8 +183,8 @@ func (u *editorDialogUI) removeInactive(world *ecs.World) {
 			continue
 		}
 		if _, active := u.active[page]; !active {
-			if visibility := ecs.GetRef[scene.Visibility](world, page); visibility != nil && visibility.Visible {
-				ecs.GetMut[scene.Visibility](world, page).Visible = false
+			if visibility := world.GetRef[scene.Visibility](page); visibility != nil && visibility.Visible {
+				world.GetMut[scene.Visibility](page).Visible = false
 			}
 		}
 	}

@@ -3,17 +3,16 @@ package ui
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
 func TestTextareaTokenWrapPercentTracksViewport(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnTextarea(world, TextOptions{Width: 300, Height: 100, Wrap: true, Value: "prefix extraordinarily_long_identifier suffix"})
-	textarea := ecs.GetMut[Textarea](world, field)
+	textarea := world.GetMut[Textarea](field)
 	textarea.WrapTokens, textarea.WrapWidthPercent = true, 50
 	for _, width := range []float32{300, 200, 400} {
-		ecs.GetMut[scene.Size2D](world, field).Width = width
+		world.GetMut[scene.Size2D](field).Width = width
 		if err := SyncSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
@@ -21,7 +20,7 @@ func TestTextareaTokenWrapPercentTracksViewport(t *testing.T) {
 		if !ok {
 			t.Fatal("textarea value text missing")
 		}
-		text := ecs.GetMut[scene.Text2D](world, textEntity)
+		text := world.GetMut[scene.Text2D](textEntity)
 		control, _ := controlViewFor(world, field)
 		_, _, viewportWidth, _ := textareaContentBox(world, textEntity, textarea, control)
 		if text.WrapMode != scene.TextWrapTokens || text.WrapWidth != viewportWidth*.5 {

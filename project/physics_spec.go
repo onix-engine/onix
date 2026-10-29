@@ -96,7 +96,7 @@ func (spec Collider2DSettingsSpec) filter() enginephysics.Filter {
 	return enginephysics.NewFilter(spec.Group, spec.Categories, spec.Mask)
 }
 
-func applyColliderSettings[S enginephysics.Shape2D](spec Collider2DSettingsSpec, collider *enginephysics.Collider2D[S]) {
+func (spec Collider2DSettingsSpec) applyColliderSettings[S enginephysics.Shape2D](collider *enginephysics.Collider2D[S]) {
 	collider.Friction, collider.Restitution, collider.Sensor = spec.Friction, spec.Restitution, spec.Sensor
 	collider.Filter, collider.CollisionType = spec.filter(), spec.CollisionType
 }
@@ -109,7 +109,7 @@ func (spec CircleCollider2DSpec) component(node SceneNodeSpec) enginephysics.Cir
 	collider := enginephysics.NewCollider2D(enginephysics.Circle{
 		Center: enginephysics.V(spec.Offset[0], spec.Offset[1]), Radius: radius,
 	})
-	applyColliderSettings(spec.Collider2DSettingsSpec, &collider)
+	spec.Collider2DSettingsSpec.applyColliderSettings(&collider)
 	return collider
 }
 
@@ -124,7 +124,7 @@ func (spec BoxCollider2DSpec) component(node SceneNodeSpec) enginephysics.BoxCol
 	shape := enginephysics.NewBox(width, height)
 	shape.Center, shape.Rotation = enginephysics.V(spec.Offset[0], spec.Offset[1]), spec.Rotation
 	collider := enginephysics.NewCollider2D(shape)
-	applyColliderSettings(spec.Collider2DSettingsSpec, &collider)
+	spec.Collider2DSettingsSpec.applyColliderSettings(&collider)
 	return collider
 }
 
@@ -132,7 +132,7 @@ func (spec SegmentCollider2DSpec) component() enginephysics.SegmentCollider2D {
 	collider := enginephysics.NewCollider2D(enginephysics.Segment{
 		Start: enginephysics.V(spec.Start[0], spec.Start[1]), End: enginephysics.V(spec.End[0], spec.End[1]), Radius: spec.Radius,
 	})
-	applyColliderSettings(spec.Collider2DSettingsSpec, &collider)
+	spec.Collider2DSettingsSpec.applyColliderSettings(&collider)
 	return collider
 }
 
@@ -149,16 +149,16 @@ func minPositiveSize(width, height int) int {
 func putPhysics2DComponents(bundle *ecs.Bundle, spec SceneNodeSpec) {
 	components := spec.Components
 	if components.RigidBody2D != nil {
-		ecs.Put(bundle, components.RigidBody2D.component())
+		bundle.Put(components.RigidBody2D.component())
 	}
 	if components.CircleCollider2D != nil {
-		ecs.Put(bundle, components.CircleCollider2D.component(spec))
+		bundle.Put(components.CircleCollider2D.component(spec))
 	}
 	if components.BoxCollider2D != nil {
-		ecs.Put(bundle, components.BoxCollider2D.component(spec))
+		bundle.Put(components.BoxCollider2D.component(spec))
 	}
 	if components.SegmentCollider2D != nil {
-		ecs.Put(bundle, components.SegmentCollider2D.component())
+		bundle.Put(components.SegmentCollider2D.component())
 	}
 }
 
@@ -178,10 +178,10 @@ func applyPhysics2DComponents(world *ecs.World, entity ecs.Entity, spec SceneNod
 
 func replacePhysicsComponent[Spec any, Component any](world *ecs.World, entity ecs.Entity, spec *Spec, build func(Spec) Component) error {
 	if spec == nil {
-		ecs.Remove[Component](world, entity)
+		world.Remove[Component](entity)
 		return nil
 	}
-	return ecs.Insert(world, entity, build(*spec))
+	return world.Insert(entity, build(*spec))
 }
 
 func validatePhysics2DComponents(name, id string, components SceneComponents) error {
@@ -317,7 +317,7 @@ func (spec Collider3DSettingsSpec) filter() enginephysics.Filter {
 	return enginephysics.NewFilter(spec.Group, spec.Categories, spec.Mask)
 }
 
-func applyColliderSettings3D[S enginephysics.Shape3D](spec Collider3DSettingsSpec, collider *enginephysics.Collider3D[S]) {
+func (spec Collider3DSettingsSpec) applyColliderSettings3D[S enginephysics.Shape3D](collider *enginephysics.Collider3D[S]) {
 	collider.Friction, collider.Restitution, collider.Sensor = spec.Friction, spec.Restitution, spec.Sensor
 	collider.Filter, collider.CollisionType = spec.filter(), spec.CollisionType
 }
@@ -335,7 +335,7 @@ func collisionModelID(node SceneNodeSpec, explicit string) string {
 func putPhysics3DComponents(bundle *Bundle, output *ecs.Bundle, spec SceneNodeSpec) error {
 	components := spec.Components
 	if components.RigidBody3D != nil {
-		ecs.Put(output, components.RigidBody3D.component())
+		output.Put(components.RigidBody3D.component())
 	}
 	if components.TriangleMeshCollider3D != nil {
 		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.TriangleMeshCollider3D.Model))
@@ -346,8 +346,8 @@ func putPhysics3DComponents(bundle *Bundle, output *ecs.Bundle, spec SceneNodeSp
 			return fmt.Errorf("game object %q triangleMeshCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeTriangleMesh)
 		}
 		collider := enginephysics.NewCollider3D(cooked.TriangleMesh)
-		applyColliderSettings3D(components.TriangleMeshCollider3D.Collider3DSettingsSpec, &collider)
-		ecs.Put(output, collider)
+		components.TriangleMeshCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		output.Put(collider)
 	}
 	if components.ConvexHullCollider3D != nil {
 		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.ConvexHullCollider3D.Model))
@@ -358,8 +358,8 @@ func putPhysics3DComponents(bundle *Bundle, output *ecs.Bundle, spec SceneNodeSp
 			return fmt.Errorf("game object %q convexHullCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeSingleConvex)
 		}
 		collider := enginephysics.NewCollider3D(cooked.ConvexHull)
-		applyColliderSettings3D(components.ConvexHullCollider3D.Collider3DSettingsSpec, &collider)
-		ecs.Put(output, collider)
+		components.ConvexHullCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		output.Put(collider)
 	}
 	if components.CompoundCollider3D != nil {
 		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.CompoundCollider3D.Model))
@@ -370,8 +370,8 @@ func putPhysics3DComponents(bundle *Bundle, output *ecs.Bundle, spec SceneNodeSp
 			return fmt.Errorf("game object %q compoundCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeConvexDecomposition)
 		}
 		collider := enginephysics.NewCollider3D(cooked.Compound)
-		applyColliderSettings3D(components.CompoundCollider3D.Collider3DSettingsSpec, &collider)
-		ecs.Put(output, collider)
+		components.CompoundCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		output.Put(collider)
 	}
 	return nil
 }
@@ -382,9 +382,9 @@ func applyPhysics3DComponents(bundle *Bundle, world *ecs.World, entity ecs.Entit
 		return err
 	}
 	remove3D := func() {
-		ecs.Remove[enginephysics.TriangleMeshCollider3D](world, entity)
-		ecs.Remove[enginephysics.ConvexHullCollider3D](world, entity)
-		ecs.Remove[enginephysics.CompoundCollider3D](world, entity)
+		world.Remove[enginephysics.TriangleMeshCollider3D](entity)
+		world.Remove[enginephysics.ConvexHullCollider3D](entity)
+		world.Remove[enginephysics.CompoundCollider3D](entity)
 	}
 	remove3D()
 	if components.TriangleMeshCollider3D != nil || components.ConvexHullCollider3D != nil || components.CompoundCollider3D != nil {
@@ -404,8 +404,8 @@ func insertPhysics3DCollider(world *ecs.World, entity ecs.Entity, bundle *Bundle
 			return fmt.Errorf("game object %q triangleMeshCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeTriangleMesh)
 		}
 		collider := enginephysics.NewCollider3D(cooked.TriangleMesh)
-		applyColliderSettings3D(components.TriangleMeshCollider3D.Collider3DSettingsSpec, &collider)
-		if err := ecs.Insert(world, entity, collider); err != nil {
+		components.TriangleMeshCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		if err := world.Insert(entity, collider); err != nil {
 			return err
 		}
 	}
@@ -418,8 +418,8 @@ func insertPhysics3DCollider(world *ecs.World, entity ecs.Entity, bundle *Bundle
 			return fmt.Errorf("game object %q convexHullCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeSingleConvex)
 		}
 		collider := enginephysics.NewCollider3D(cooked.ConvexHull)
-		applyColliderSettings3D(components.ConvexHullCollider3D.Collider3DSettingsSpec, &collider)
-		if err := ecs.Insert(world, entity, collider); err != nil {
+		components.ConvexHullCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		if err := world.Insert(entity, collider); err != nil {
 			return err
 		}
 	}
@@ -432,8 +432,8 @@ func insertPhysics3DCollider(world *ecs.World, entity ecs.Entity, bundle *Bundle
 			return fmt.Errorf("game object %q compoundCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeConvexDecomposition)
 		}
 		collider := enginephysics.NewCollider3D(cooked.Compound)
-		applyColliderSettings3D(components.CompoundCollider3D.Collider3DSettingsSpec, &collider)
-		return ecs.Insert(world, entity, collider)
+		components.CompoundCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+		return world.Insert(entity, collider)
 	}
 	return nil
 }

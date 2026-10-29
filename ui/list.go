@@ -97,7 +97,7 @@ func SpawnList[T any](world *ecs.World, opts ListOptions[T]) ecs.Entity {
 // scroll areas authored in a scene, whose transform and visual parts should be
 // preserved.
 func BindList[T any](world *ecs.World, entity ecs.Entity, opts ListOptions[T]) bool {
-	area := ecs.GetRef[ScrollArea](world, entity)
+	area := world.GetRef[ScrollArea](entity)
 	if area == nil {
 		return false
 	}
@@ -109,7 +109,7 @@ func BindList[T any](world *ecs.World, entity ecs.Entity, opts ListOptions[T]) b
 		Items: slices.Clone(opts.Items), Axis: axis, ItemSize: itemSize, Overscan: overscan,
 		BindItem: opts.BindItem, UnbindItem: opts.UnbindItem,
 	}
-	if err := ecs.Insert(world, entity, component); err != nil {
+	if err := world.Insert(entity, component); err != nil {
 		return false
 	}
 
@@ -119,11 +119,11 @@ func BindList[T any](world *ecs.World, entity ecs.Entity, opts ListOptions[T]) b
 	itemCount := listItemPoolSize(viewportSize, itemSize, overscan)
 	for range itemCount {
 		item := spawnInteractiveAnchor(world, 0, 0, itemWidth, itemHeight, theme.StackIndex+1, false, opts.PassThrough)
-		_ = ecs.Insert(world, item, scene.Parent{Entity: entity})
-		_ = ecs.Insert(world, item, ScrollContent{Area: entity})
-		_ = ecs.Insert(world, item, ListItem[T]{List: entity, Index: -1})
+		_ = world.Insert(item, scene.Parent{Entity: entity})
+		_ = world.Insert(item, ScrollContent{Area: entity})
+		_ = world.Insert(item, ListItem[T]{List: entity, Index: -1})
 		setVisible(world, item, false)
-		component := ecs.GetMut[List[T]](world, entity)
+		component := world.GetMut[List[T]](entity)
 		component.itemEntities = append(component.itemEntities, item)
 		if opts.BuildItem != nil {
 			opts.BuildItem(world, item)
@@ -138,7 +138,7 @@ func BindList[T any](world *ecs.World, entity ecs.Entity, opts ListOptions[T]) b
 
 // SetListItems replaces a list's data with an owned copy.
 func SetListItems[T any](world *ecs.World, entity ecs.Entity, items []T) bool {
-	list := ecs.GetMut[List[T]](world, entity)
+	list := world.GetMut[List[T]](entity)
 	if list == nil {
 		return false
 	}
@@ -148,7 +148,7 @@ func SetListItems[T any](world *ecs.World, entity ecs.Entity, items []T) bool {
 
 // ListItemEntities returns a copy of the pooled item entity handles.
 func ListItemEntities[T any](world *ecs.World, entity ecs.Entity) []ecs.Entity {
-	list := ecs.GetRef[List[T]](world, entity)
+	list := world.GetRef[List[T]](entity)
 	if list == nil {
 		return nil
 	}
@@ -169,8 +169,8 @@ func syncLists[T any](context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	entities := ecs.FrameScratch[listEntitiesScratch[T], ecs.Entity](world)
-	for entity, _ := range ecs.Query[List[T]](world).All {
+	entities := world.FrameScratch[listEntitiesScratch[T], ecs.Entity]()
+	for entity, _ := range world.Query[List[T]]().All {
 		entities.Values = append(entities.Values, entity)
 	}
 	for _, entity := range entities.Values {
@@ -181,13 +181,13 @@ func syncLists[T any](context *ecs.SystemContext) error {
 }
 
 func syncListEntity[T any](world *ecs.World, entity ecs.Entity) {
-	list := ecs.GetMut[List[T]](world, entity)
-	area := ecs.GetMut[ScrollArea](world, entity)
+	list := world.GetMut[List[T]](entity)
+	area := world.GetMut[ScrollArea](entity)
 	if (list == nil) || (area == nil) {
 		return
 	}
 	area.ContentWidth, area.ContentHeight = listContentSize(list.Axis, list.ItemSize, len(list.Items))
-	clip := ecs.GetMut[scene.ClipRect2D](world, entity)
+	clip := world.GetMut[scene.ClipRect2D](entity)
 	prepareScrollArea(world, entity, area, clip)
 
 	offset, _ := GetScrollAreaOffset(world, entity)
@@ -204,14 +204,14 @@ func syncListEntity[T any](world *ecs.World, entity ecs.Entity) {
 		index := first + slot
 		visible := index < len(items)
 		setVisible(world, itemEntity, visible)
-		item := ecs.GetMut[ListItem[T]](world, itemEntity)
-		content := ecs.GetMut[ScrollContent](world, itemEntity)
-		transform := ecs.GetMut[scene.UITransform](world, itemEntity)
+		item := world.GetMut[ListItem[T]](itemEntity)
+		content := world.GetMut[ScrollContent](itemEntity)
+		transform := world.GetMut[scene.UITransform](itemEntity)
 		x, y, width, height := layout.itemBounds(float32(index) * list.ItemSize)
-		if target := ecs.GetMut[scene.InputTarget2D](world, itemEntity); target != nil {
+		if target := world.GetMut[scene.InputTarget2D](itemEntity); target != nil {
 			target.Width, target.Height = width, height
 		}
-		if size := ecs.GetMut[scene.Size2D](world, itemEntity); size != nil {
+		if size := world.GetMut[scene.Size2D](itemEntity); size != nil {
 			size.Width, size.Height = width, height
 		}
 		if !visible {

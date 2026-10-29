@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/diiyw/onix/examples/spine/contracts"
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/examples/spine/contracts"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/spine"
 	"github.com/go-gl/mathgl/mgl32"
@@ -35,10 +35,10 @@ func (m *Mod) Install(c *module.Context) error {
 	if m.animation, err = c.Slot("animation"); err != nil {
 		return err
 	}
-	if m.option, err = module.BindEmitter[contracts.AnimationOption](c, "option"); err != nil {
+	if m.option, err = c.BindEmitter[contracts.AnimationOption]("option"); err != nil {
 		return err
 	}
-	if m.selection, err = module.BindEmitter[contracts.GallerySelection](c, "selection"); err != nil {
+	if m.selection, err = c.BindEmitter[contracts.GallerySelection]("selection"); err != nil {
 		return err
 	}
 	for index, name := range [...]string{"coin", "goblins", "raptor", "spineboy", "stretchyman", "stretchyman-ik", "tank", "vine"} {
@@ -46,7 +46,7 @@ func (m *Mod) Install(c *module.Context) error {
 		if err != nil {
 			return err
 		}
-		component, ok := module.Get[scene.Spine2D](c, entity)
+		component, ok := c.Get[scene.Spine2D](entity)
 		if !ok || component.Player == nil {
 			return fmt.Errorf("spine gallery: missing player %q", name)
 		}
@@ -70,7 +70,7 @@ func (m *Mod) OnResource(_ *module.Context, index int64) error {
 }
 
 func (m *Mod) OnAnimation(_ *module.Context, index int64) error {
-	resource, err := module.ReadSlot[int64](m.resource)
+	resource, err := m.resource.Read[int64]()
 	if err != nil {
 		return err
 	}
@@ -81,11 +81,11 @@ func (m *Mod) OnAnimation(_ *module.Context, index int64) error {
 }
 
 func (m *Mod) applySelection(c *module.Context) error {
-	resource, err := module.ReadSlot[int64](m.resource)
+	resource, err := m.resource.Read[int64]()
 	if err != nil {
 		return err
 	}
-	animation, err := module.ReadSlot[int64](m.animation)
+	animation, err := m.animation.Read[int64]()
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (m *Mod) applySelection(c *module.Context) error {
 	}
 	if changedResource {
 		for index, entry := range m.items {
-			if err := module.Set(c, entry.entity, scene.Visibility{Visible: index == int(resource)}); err != nil {
+			if err := c.Set(entry.entity, scene.Visibility{Visible: index == int(resource)}); err != nil {
 				return err
 			}
 		}
@@ -139,11 +139,11 @@ func fitPlayer(c *module.Context, item galleryItem) error {
 		return fmt.Errorf("spine gallery: animation %q has no drawable bounds", item.player.Animation)
 	}
 	scale := min(900/(maxX-minX), 600/(maxY-minY), 1.6)
-	transform, ok := module.Get[scene.UITransform](c, item.entity)
+	transform, ok := c.Get[scene.UITransform](item.entity)
 	if !ok {
 		return module.ErrType
 	}
 	transform.Translation = scene.Px2(-(minX+maxX)*scale*.5, (minY+maxY)*scale*.5)
 	transform.Scale = mgl32.Vec2{scale, scale}
-	return module.Set(c, item.entity, transform)
+	return c.Set(item.entity, transform)
 }

@@ -289,16 +289,16 @@ func (l AreaLight) renderLight(m mgl32.Mat4) render.Light3D {
 }
 
 // The generic extraction path reuses the world's typed query and light storage.
-func extractLocalLights[L interface {
+func (state *World) extractLocalLights[L interface {
 	Validate() error
 	renderLight(mgl32.Mat4) render.Light3D
 	shadowSettings() PunctualShadowSettings
-}](world *ecs.World, state *World) {
-	for entity, access := range ecs.Query2[L, scene.GlobalTransform](world).All {
+}](world *ecs.World) {
+	for entity, access := range world.Query2[L, scene.GlobalTransform]().All {
 		light := access.A.Get()
 		transform := access.B.Get()
 
-		if visibility, ok := ecs.Get[scene.Visibility](world, entity); ok && !visibility.Visible {
+		if visibility, ok := world.Get[scene.Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
 		if light.Validate() == nil {

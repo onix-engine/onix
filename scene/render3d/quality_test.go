@@ -13,7 +13,7 @@ import (
 func TestRenderQualityBudgetsInheritanceAndEffects(t *testing.T) {
 	world := ecs.NewWorld()
 	Register(world)
-	ecs.InsertResource(world, QualityLow)
+	world.InsertResource(QualityLow)
 	budget, err := effectiveQuality3D(world, Camera{})
 	if err != nil || budget.lights != 8 || budget.shadowMaps != 4 {
 		t.Fatal("world quality was not inherited", budget, err)
@@ -51,7 +51,7 @@ func TestRenderQualityBudgetsInheritanceAndEffects(t *testing.T) {
 	if _, err := effectiveQuality3D(world, Camera{Quality: "ultra"}); err == nil {
 		t.Fatal("invalid camera quality accepted")
 	}
-	ecs.InsertResource(world, Quality("ultra"))
+	world.InsertResource(Quality("ultra"))
 	if _, err := effectiveQuality3D(world, Camera{}); err == nil {
 		t.Fatal("invalid world quality accepted")
 	}

@@ -11,14 +11,14 @@ func BenchmarkCommandBatch(b *testing.B) {
 	for _, mode := range []string{"Insert", "Spawn", "RemovePrepared"} {
 		b.Run(mode, func(b *testing.B) {
 			world := NewWorld()
-			spawner := NewSpawner2[testPosition, testVelocity](world)
+			spawner := world.NewSpawner2[testPosition, testVelocity]()
 			spawner.Reserve(count)
 			entities := make([]Entity, count)
-			removal := PrepareRemoval(world, Type[testVelocity]())
+			removal := world.PrepareRemoval(Type[testVelocity]())
 			removal.Reserve(count)
 			bundle := NewBundle(2)
-			Put(&bundle, testPosition{})
-			Put(&bundle, testVelocity{})
+			bundle.Put(testPosition{})
+			bundle.Put(testVelocity{})
 			prepared := world.PrepareBundle(bundle)
 			commands := world.Commands()
 			commands.Reserve(count)
@@ -31,12 +31,12 @@ func BenchmarkCommandBatch(b *testing.B) {
 				for i := range entities {
 					switch mode {
 					case "Insert":
-						CommandInsert(commands, entities[i], testPosition{X: float32(i)})
+						commands.Insert(entities[i], testPosition{X: float32(i)})
 					case "Spawn":
-						entities[i] = CommandSpawnPrepared(commands, prepared)
+						entities[i] = commands.SpawnPrepared(prepared)
 					case "RemovePrepared":
 						entities[i] = spawner.Spawn(testPosition{}, testVelocity{})
-						CommandRemovePrepared(commands, entities[i], removal)
+						commands.RemovePrepared(entities[i], removal)
 					}
 				}
 				if err := world.FlushCommands(); err != nil {
@@ -62,16 +62,16 @@ func BenchmarkCommandBatch(b *testing.B) {
 func BenchmarkPatchReserveShapes(b *testing.B) {
 	for b.Loop() {
 		world := NewWorld()
-		spawner := NewSpawner2[testPosition, testVelocity](world)
+		spawner := world.NewSpawner2[testPosition, testVelocity]()
 		spawner.Reserve(1)
 		spawner.Spawn(testPosition{}, testVelocity{})
 		// Registered but unused shapes must not multiply the capacity request.
-		NewSpawner1[testName](world)
-		NewSpawner1[testVisibility](world)
-		NewSpawner1[testParent](world)
-		NewSpawner1[testAnchor](world)
-		NewSpawner1[testStack](world)
-		patch := NewPatch1[testSize](world, Type[testVelocity]())
+		world.NewSpawner1[testName]()
+		world.NewSpawner1[testVisibility]()
+		world.NewSpawner1[testParent]()
+		world.NewSpawner1[testAnchor]()
+		world.NewSpawner1[testStack]()
+		patch := world.NewPatch1[testSize](Type[testVelocity]())
 		patch.Reserve(1024)
 	}
 	b.ReportAllocs()
@@ -82,7 +82,7 @@ func BenchmarkChangedQueryDistribution(b *testing.B) {
 		for _, pattern := range []string{"None", "One", "Scattered", "All"} {
 			b.Run(fmt.Sprintf("%d/%s", count, pattern), func(b *testing.B) {
 				world := NewWorld()
-				spawner := NewSpawner1[testPosition](world)
+				spawner := world.NewSpawner1[testPosition]()
 				spawner.Reserve(count)
 				entities := make([]Entity, count)
 				for i := range entities {
@@ -91,13 +91,13 @@ func BenchmarkChangedQueryDistribution(b *testing.B) {
 				last := world.ChangeTick()
 				for i, entity := range entities {
 					if pattern == "All" || pattern == "One" && i == count/2 || pattern == "Scattered" && i%64 == 0 {
-						GetMut[testPosition](world, entity).X++
+						world.GetMut[testPosition](entity).X++
 					}
 				}
 				window := world.ChangesSince(last)
 				run := func() {
 					var total float32
-					for _, access := range Query[testPosition](world, Changed[testPosition](&window)).All {
+					for _, access := range world.Query[testPosition](window.Changed[testPosition]()).All {
 						total += access.Ref().X
 					}
 					benchmarkTotal = total
@@ -117,7 +117,7 @@ func BenchmarkChangedQueryDistribution(b *testing.B) {
 // new change window every frame rather than repeatedly reading one snapshot.
 func BenchmarkChangedQueryFrames(b *testing.B) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	spawner.Reserve(100_000)
 	var changed Entity
 	for i := range 100_000 {
@@ -129,9 +129,9 @@ func BenchmarkChangedQueryFrames(b *testing.B) {
 	window := world.ChangesSince(0)
 	run := func() {
 		last := world.ChangeTick()
-		GetMut[testPosition](world, changed).X++
+		world.GetMut[testPosition](changed).X++
 		window = world.ChangesSince(last)
-		for _, access := range Query[testPosition](world, Changed[testPosition](&window)).All {
+		for _, access := range world.Query[testPosition](window.Changed[testPosition]()).All {
 			benchmarkTotal = access.Ref().X
 		}
 	}

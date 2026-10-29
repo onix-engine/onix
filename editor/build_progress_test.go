@@ -161,7 +161,7 @@ func TestWorkspaceProgressKeepsNewestLogLineVisible(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		for entity, access := range ecs.Query[htmlui.Control](world).All {
+		for entity, access := range world.Query[htmlui.Control]().All {
 			if control := access.Ref(); control.Owner == a.dialogUI.htmlDialogs["progress"] && control.ID == htmlDialogFieldID("progress", "log") {
 				return entity
 			}
@@ -171,18 +171,18 @@ func TestWorkspaceProgressKeepsNewestLogLineVisible(t *testing.T) {
 	}
 	verifyTail := func(control ecs.Entity) {
 		t.Helper()
-		textarea, _ := ecs.Get[engineui.Textarea](world, control)
-		field, _ := ecs.Get[engineui.TextField](world, control)
+		textarea, _ := world.Get[engineui.Textarea](control)
+		field, _ := world.Get[engineui.TextField](control)
 		if field.Focused || !textarea.FollowTail || textarea.ScrollY <= 0 {
 			t.Fatalf("unfocused log did not follow its tail: %+v", textarea)
 		}
-		for entity, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+		for entity, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 			link := access.A.Ref()
-			if link.Control != control || !ecs.Has[engineui.Part[engineui.ValuePart]](world, entity) {
+			if link.Control != control || !world.Has[engineui.Part[engineui.ValuePart]](entity) {
 				continue
 			}
 			_, height, measured := scene.MeasureText2D(access.B.Ref())
-			transform, _ := ecs.Get[scene.UITransform](world, entity)
+			transform, _ := world.Get[scene.UITransform](entity)
 			if !measured || transform.Translation.Y.Value+height > link.Content.Y+link.Content.Height+.01 {
 				t.Fatal("newest log line extends below the content viewport")
 			}
@@ -195,12 +195,12 @@ func TestWorkspaceProgressKeepsNewestLogLineVisible(t *testing.T) {
 	}
 	control := syncLog()
 	verifyTail(control)
-	previous, _ := ecs.Get[engineui.Textarea](world, control)
-	ecs.GetMut[engineui.Textarea](world, control).ScrollY = 0
+	previous, _ := world.Get[engineui.Textarea](control)
+	world.GetMut[engineui.Textarea](control).ScrollY = 0
 	a.buildProgress.report(BuildProgress{Message: "Linking latest module", Indeterminate: true})
 	control = syncLog()
 	verifyTail(control)
-	current, _ := ecs.Get[engineui.Textarea](world, control)
+	current, _ := world.Get[engineui.Textarea](control)
 	if current.ScrollY <= previous.ScrollY {
 		t.Fatal("appended log did not advance the viewport")
 	}

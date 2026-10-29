@@ -13,7 +13,7 @@ func TestSpriteTrail2DSamplesMovementCapsHistoryAndExpires(t *testing.T) {
 	world := ecs.NewWorld()
 	clock := NewTime()
 	clock.Set(20*time.Millisecond, 0, 1)
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 
 	trail := NewSpriteTrail2D()
 	trail.Lifetime = 0.1
@@ -21,22 +21,22 @@ func TestSpriteTrail2DSamplesMovementCapsHistoryAndExpires(t *testing.T) {
 	trail.MinDistance = 5
 	trail.MaxSamples = 2
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
-	ecs.Put(&bundle, trail)
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
+	bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
+	bundle.Put(trail)
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
 	entity := world.Spawn(bundle)
 
 	update := UpdateSpriteTrail2DSystem("")
 	if err := update.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	component := ecs.GetMut[SpriteTrail2D](world, entity)
+	component := world.GetMut[SpriteTrail2D](entity)
 	if component.SampleCount() != 1 {
 		t.Fatalf("initial sample count = %d, want 1", component.SampleCount())
 	}
 
-	global := ecs.GetMut[GlobalTransform](world, entity)
+	global := world.GetMut[GlobalTransform](entity)
 	global.Matrix = mgl32.Translate3D(3, 0, 0)
 	if err := update.Run(world); err != nil {
 		t.Fatal(err)
@@ -74,25 +74,25 @@ func TestSpriteTrail2DHiddenEntityAgesWithoutSampling(t *testing.T) {
 	trail.Interval = 0
 	trail.MinDistance = 0
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
-	ecs.Put(&bundle, trail)
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Ident4()})
-	ecs.Put(&bundle, Visibility{Visible: true})
+	bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 1})
+	bundle.Put(trail)
+	bundle.Put(GlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
 	entity := world.Spawn(bundle)
 	update := UpdateSpriteTrail2DSystem("")
 	if err := update.Run(world); err != nil {
 		t.Fatal(err)
 	}
 
-	visibility := ecs.GetMut[Visibility](world, entity)
+	visibility := world.GetMut[Visibility](entity)
 	visibility.Visible = false
 	clock := NewTime()
 	clock.Set(100*time.Millisecond, 0, 1)
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	if err := update.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	component, _ := ecs.Get[SpriteTrail2D](world, entity)
+	component, _ := world.Get[SpriteTrail2D](entity)
 	if component.SampleCount() != 0 {
 		t.Fatalf("hidden entity retained or added samples: %d", component.SampleCount())
 	}
@@ -105,10 +105,10 @@ func TestSpriteTrail2DRenderItemsPrecedeSourceAndSnapshotState(t *testing.T) {
 	trail := NewSpriteTrail2D()
 	trail.AlphaStart = 0.5
 	bundle := ecs.NewBundle(4)
-	ecs.Put(&bundle, Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 0.8})
-	ecs.Put(&bundle, trail)
-	ecs.Put(&bundle, GlobalTransform{Matrix: mgl32.Translate3D(7, 9, 0)})
-	ecs.Put(&bundle, Visibility{Visible: true})
+	bundle.Put(Sprite2D{Shape: RoundedRectShape2D(graphics.White, 2), Width: 20, Height: 10, Alpha: 0.8})
+	bundle.Put(trail)
+	bundle.Put(GlobalTransform{Matrix: mgl32.Translate3D(7, 9, 0)})
+	bundle.Put(Visibility{Visible: true})
 	entity := world.Spawn(bundle)
 	if err := UpdateSpriteTrail2DSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestSpriteTrail2DRenderItemsPrecedeSourceAndSnapshotState(t *testing.T) {
 	if items[0].sprite.Alpha != 0.4 || items[1].sprite.Alpha != 0.8 {
 		t.Fatalf("trail/source alpha = %v/%v, want 0.4/0.8", items[0].sprite.Alpha, items[1].sprite.Alpha)
 	}
-	component := ecs.GetMut[SpriteTrail2D](world, entity)
+	component := world.GetMut[SpriteTrail2D](entity)
 	component.Clear()
 	if items[0].sprite.Alpha != 0.4 || items[0].transform[12] != 7 {
 		t.Fatalf("render snapshot changed after clearing simulation component: %+v", items[0])

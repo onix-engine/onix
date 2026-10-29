@@ -10,20 +10,20 @@ import (
 
 func TestUpdateTransformIsPropagatedBeforeRender(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[Transforms](app); err != nil {
+	if err := app.InstallSystems[Transforms](); err != nil {
 		t.Fatal(err)
 	}
-	spawner := ecs.NewSpawner1[scene.Transform](app.World)
+	spawner := app.World.NewSpawner1[scene.Transform]()
 	entity := spawner.Spawn(scene.NewTransform())
 	if err := app.AddSystem(StageUpdate, ecs.SystemConfig{Name: "move", System: func(context *ecs.SystemContext) error {
-		pose := ecs.GetMut[scene.Transform](context.World, entity)
+		pose := context.World.GetMut[scene.Transform](entity)
 		pose.Translation[0] = 42
 		return nil
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.AddSystem(StageRender, ecs.SystemConfig{Name: "observe", After: []string{"sync_render_transform"}, System: func(context *ecs.SystemContext) error {
-		pose, ok := ecs.Get[scene.GlobalTransform](context.World, entity)
+		pose, ok := context.World.Get[scene.GlobalTransform](entity)
 		if !ok || pose.Matrix[12] != 42 {
 			t.Fatalf("render observed stale transform: %+v", pose)
 		}
@@ -38,10 +38,10 @@ func TestUpdateTransformIsPropagatedBeforeRender(t *testing.T) {
 
 func TestPhysicsSystemSetsShareTransformPropagation(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[Physics2D](app); err != nil {
+	if err := app.InstallSystems[Physics2D](); err != nil {
 		t.Fatal(err)
 	}
-	if err := InstallSystems[Physics3D](app); err != nil {
+	if err := app.InstallSystems[Physics3D](); err != nil {
 		t.Fatal(err)
 	}
 	order, err := app.Schedule(StageFixedPostUpdate).Order()
@@ -55,23 +55,23 @@ func TestPhysicsSystemSetsShareTransformPropagation(t *testing.T) {
 
 func TestLateUITransformIsPropagatedBeforeExtraction(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[UIWidgets](app); err != nil {
+	if err := app.InstallSystems[UIWidgets](); err != nil {
 		t.Fatal(err)
 	}
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		t.Fatal(err)
 	}
-	spawner := ecs.NewSpawner1[scene.UITransform](app.World)
+	spawner := app.World.NewSpawner1[scene.UITransform]()
 	entity := spawner.Spawn(scene.NewUITransform())
 	if err := app.AddSystem(StagePostUpdate, ecs.SystemConfig{Name: "late_ui_move", After: []string{"sync_ui_global_transform_after_layout"}, System: func(context *ecs.SystemContext) error {
-		pose := ecs.GetMut[scene.UITransform](context.World, entity)
+		pose := context.World.GetMut[scene.UITransform](entity)
 		pose.Translation.X = scene.Px(42)
 		return nil
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.AddSystem(StageRender, ecs.SystemConfig{Name: "observe_ui", After: []string{"sync_render_ui_transform"}, Before: []string{"extract_cameras"}, System: func(context *ecs.SystemContext) error {
-		pose, ok := ecs.Get[scene.UIGlobalTransform](context.World, entity)
+		pose, ok := context.World.Get[scene.UIGlobalTransform](entity)
 		if !ok || pose.Matrix[12] != 42 {
 			t.Fatalf("render observed stale UI transform: %+v", pose)
 		}
@@ -88,15 +88,15 @@ func TestRenderSynchronizationOrderAcrossInstallationOrders(t *testing.T) {
 	for _, rendererFirst := range []bool{false, true} {
 		app := NewApp()
 		if rendererFirst {
-			if err := InstallSystems[Render2D](app); err != nil {
+			if err := app.InstallSystems[Render2D](); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if err := InstallSystems[UIWidgets](app); err != nil {
+		if err := app.InstallSystems[UIWidgets](); err != nil {
 			t.Fatal(err)
 		}
 		if !rendererFirst {
-			if err := InstallSystems[Render2D](app); err != nil {
+			if err := app.InstallSystems[Render2D](); err != nil {
 				t.Fatal(err)
 			}
 		}

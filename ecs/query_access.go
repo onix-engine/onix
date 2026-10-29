@@ -1,7 +1,7 @@
 package ecs
 
-// ComponentAccess provides explicit per-component change tracking during a query.
-// Access values and returned pointers must not be retained after the iteration.
+// ComponentAccess provides explicit per-component change tracking. Query accesses
+// expire after iteration; binding accesses expire after structural mutation.
 type ComponentAccess[T any] struct {
 	value *T
 	state *columnState
@@ -19,17 +19,25 @@ func (a ComponentAccess[T]) Ref() *T {
 }
 
 func (a ComponentAccess[T]) Mut() *T {
-	a.state.markChanged(int(uint32(a.rowTick)), Tick(a.rowTick>>32))
+	a.markChanged()
 	return a.value
 }
 
-// CommitComponent writes through query access only when the value differs.
-// It uses the query's tick and does not mark equal values changed.
+func (a ComponentAccess[T]) markChanged() {
+	tick := Tick(a.rowTick >> 32)
+	if tick == 0 {
+		tick = a.state.world.mutationTick()
+	}
+	a.state.markChanged(int(uint32(a.rowTick)), tick)
+}
+
+// CommitComponent writes only when the value differs. Query accesses use their
+// query tick; bindings obtain a mutation tick only when a value actually changes.
 func CommitComponent[T comparable](access ComponentAccess[T], value T) bool {
-	if *access.value == value {
+	if access.value == nil || *access.value == value {
 		return false
 	}
 	*access.value = value
-	access.state.markChanged(int(uint32(access.rowTick)), Tick(access.rowTick>>32))
+	access.markChanged()
 	return true
 }

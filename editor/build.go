@@ -510,7 +510,7 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return withResourceOverlay(layout, func() (string, error) {
+	return layout.withResourceOverlay(func() (string, error) {
 		output := filepath.Join(layout.BaseDir, "resources", wasmFilename)
 		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 			return "", fmt.Errorf("create output directory: %w", err)
@@ -534,7 +534,7 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 	})
 }
 
-func withResourceOverlay[T any](layout projectBuildLayout, build func() (T, error)) (T, error) {
+func (layout projectBuildLayout) withResourceOverlay[T any](build func() (T, error)) (T, error) {
 	result, buildErr := build()
 	cleanupErr := cleanupResourceOverlay(layout)
 	if err := errors.Join(buildErr, cleanupErr); err != nil {

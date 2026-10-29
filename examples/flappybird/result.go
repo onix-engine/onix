@@ -6,7 +6,7 @@ type SceneResult struct{}
 
 func (m *SceneResult) OnMessage(c *module.Context, message module.Message) error {
 	if message.Topic == "scene.switch.result" {
-		result, _ := module.Value[module.SceneSwitchResult](message)
+		result, _ := message.Value[module.SceneSwitchResult]()
 		return result.Err
 	}
 	if message.Topic == module.InputTopic {

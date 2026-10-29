@@ -51,23 +51,32 @@ import (
 type Mod struct { slot m.Slot }
 func (s *Mod) Install(c *m.Context) error {
   var err error; s.slot,err=c.Slot("text"); if err!=nil { return err }
-  p,err:=m.BindRequester[contracts.Label,string](c,"ask"); if err!=nil { return err }
+  p,err:=c.BindRequester[contracts.Label,string]("ask"); if err!=nil { return err }
   _,err=p.SendTo("b",contracts.Label{Text:"delivered",Point:[2]float32{1,2}},m.RequestOptions{}); return err
 }
-func (s *Mod) OnMessage(c *m.Context,message m.Message) error { v,ok:=m.ResultValue[string](message); if !ok {return nil}
-  if v.Err!=nil { return v.Err }; if err:=s.slot.Set(project.SlotValue{Type:project.StringValue,String:v.Value}); err!=nil { return err }; return m.Set(c,c.Root(),contracts.Label{Text:v.Value})
+func (s *Mod) OnMessage(c *m.Context,message m.Message) error { v,ok:=message.ResultValue[string](); if !ok {return nil}
+  if v.Err!=nil { return v.Err }; if err:=s.slot.Set(project.SlotValue{Type:project.StringValue,String:v.Value}); err!=nil { return err }; return c.Set(c.Root(),contracts.Label{Text:v.Value})
 }
 func (s *Mod) Update(*m.Context,m.Tick) error { return nil }
 func (s *Mod) FrameUpdate(*m.Context,m.Tick) error { return nil }
 func (s *Mod) Destroy(*m.Context) error { return nil }
 `)
 	moduleBuildFile(t, directory, "b/mod.go", `package b
+
 import (
-  "github.com/diiyw/onix/module"
-  "example.com/game/contracts"
+	"example.com/game/contracts"
+	"github.com/diiyw/onix/module"
 )
+
 type Mod struct{}
-func (*Mod) OnMessage(c *module.Context,message module.Message) error { v,ok:=module.RequestValue[contracts.Label,string](message); if !ok {return nil}; return v.Reply(c,v.Value.Text) }
+
+func (*Mod) OnMessage(c *module.Context, message module.Message) error {
+	v, ok := message.RequestValue[contracts.Label, string]()
+	if !ok {
+		return nil
+	}
+	return v.Reply(c, v.Value.Text)
+}
 `)
 	return directory
 }
@@ -90,7 +99,7 @@ func TestModuleBuildGeneratesTypedRegistryAndExecutesRequests(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("generation is not deterministic")
 	}
-	if strings.Count(string(after), "module.RegisterMod") != 2 || strings.Count(string(after), "OnMessage:") != 2 {
+	if strings.Count(string(after), "r.RegisterMod") != 2 || strings.Count(string(after), "OnMessage:") != 2 {
 		t.Fatal("registry lacks independent duplicate type bindings")
 	}
 	if !strings.Contains(string(after), "FrameUpdate:") {
@@ -108,10 +117,10 @@ import (
 func TestGeneratedRuntime(t *testing.T) {
  plan,err:=project.CompileProjectDirectory("."); if err!=nil { t.Fatal(err) }
  reg,err:=OnixRegistry(); if err!=nil { t.Fatal(err) }
- world:=ecs.NewWorld(); runtime,err:=module.New(world,plan,reg,module.Options{Source:os.DirFS(".")}); if err!=nil { t.Fatal(err) }; defer runtime.Close()
+ world:=ecs.NewWorld(); runtime,err:=module.New[OnixContentProfile](world,plan,reg,module.Options{Source:os.DirFS(".")}); if err!=nil { t.Fatal(err) }; defer runtime.Close()
  _,err=runtime.MountEntry(); if err!=nil { t.Fatal(err) }
  for range 4 { if err=runtime.Dispatch(); err!=nil { t.Fatal(err) } }
- count:=0; for _,value:=range ecs.Query[contracts.Label](world).All { count++; if value.Get().Text!="delivered" { t.Fatal("generated reply was not delivered") } }; if count!=1 { t.Fatal("missing private reply value") }
+ count:=0; for _,value:=range world.Query[contracts.Label]().All { count++; if value.Get().Text!="delivered" { t.Fatal("generated reply was not delivered") } }; if count!=1 { t.Fatal("missing private reply value") }
  value,err:=contracts.DecodeLabel(project.SlotValue{Type:"Label",Fields:[]project.SlotFieldValue{{Name:"point",Value:project.SlotValue{Type:project.Vec2Value,Vector:[4]float32{1,2}}},{Name:"text",Value:project.SlotValue{Type:project.StringValue,String:"typed"}}}})
  if err!=nil || value.Text!="typed" || value.Point!=[2]float32{1,2} { t.Fatal("typed decoder",value,err) }
  step:=func() { if err:=runtime.Update(0.016); err!=nil { panic(err) }; if err:=runtime.Dispatch(); err!=nil { panic(err) } }
@@ -235,9 +244,9 @@ func TestReleasePackage(t *testing.T) {
  if _,err=fs.Stat(source,"resources/scenes/main.json"); !errors.Is(err,fs.ErrNotExist) { t.Fatal("raw scene JSON is mounted",err) }
  asset,err:=fs.ReadFile(source,"asset/custom/value.dat"); if err!=nil || string(asset)!="scene two asset" { t.Fatal("missing asset",err) }
  reg,err:=OnixRegistry(); if err!=nil { t.Fatal(err) }
- world:=ecs.NewWorld(); r,err:=module.New(world,plan,reg,module.Options{Source:source}); if err!=nil { t.Fatal(err) }; defer r.Close()
+ world:=ecs.NewWorld(); r,err:=module.New[OnixContentProfile](world,plan,reg,module.Options{Source:source}); if err!=nil { t.Fatal(err) }; defer r.Close()
  if _,err=r.MountEntry(); err!=nil { t.Fatal(err) }; for range 4 { if err=r.Dispatch(); err!=nil { t.Fatal(err) } }
- count:=0; for _,v:=range ecs.Query[contracts.Label](world).All { count++; if v.Get().Text!="delivered" { t.Fatal("missing reply") } }; if count!=1 { t.Fatal("missing private component") }
+ count:=0; for _,v:=range world.Query[contracts.Label]().All { count++; if v.Get().Text!="delivered" { t.Fatal("missing reply") } }; if count!=1 { t.Fatal("missing private component") }
 }
 `)
 	build, err := PrepareDevelopmentBuild(d, nil)
@@ -250,6 +259,29 @@ func TestReleasePackage(t *testing.T) {
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "ONIX_RESOURCE_DIR="+build.ResourceDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("headless release package failed: %v\n%s", err, output)
+	}
+
+	binary := filepath.Join(t.TempDir(), "game")
+	compile := exec.Command("go", "build", "-p", "2", "-mod=mod", "-buildvcs=false", "-trimpath", "-tags", "onix_release", "-overlay", build.OverlayPath, "-o", binary, ".")
+	compile.Dir, compile.Env = d, cmd.Env
+	if output, err := compile.CombinedOutput(); err != nil {
+		t.Fatalf("build release for link inspection: %v\n%s", err, output)
+	}
+	symbols, err := exec.Command("go", "tool", "nm", binary).CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect release symbols: %v\n%s", err, symbols)
+	}
+	for _, forbidden := range []string{
+		"github.com/diiyw/onix/project.(*Resources).ModContent",
+		"github.com/diiyw/onix/ui/html.renderHTML",
+		"github.com/diiyw/onix/html/style.applyProperty",
+		"github.com/diiyw/onix/spine.restoreResource",
+		"github.com/diiyw/onix/physics.(*World).buildBroadphase",
+		"github.com/diiyw/onix/scene/render3d.UpdateDeformationsSystem",
+	} {
+		if bytes.Contains(symbols, []byte(forbidden)) {
+			t.Errorf("2D release retains optional implementation %s", forbidden)
+		}
 	}
 }
 
@@ -282,7 +314,7 @@ func TestModuleBuildChecksEmbeddedAssetsAndSelectsOnlyRequiredFeatures(t *testin
 	}
 	data, _ := os.ReadFile(filepath.Join(d, "onix_generated.go"))
 	source := string(data)
-	if !strings.Contains(source, "InstallSystems[onix.Animations2D]") || !strings.Contains(source, "graphics/codec/png") || strings.Contains(source, "graphics/codec/jpeg") || strings.Contains(source, "InstallSystems[onix.Render3D]") || strings.Contains(source, "example.com/game/unused") {
+	if !strings.Contains(source, "type OnixContentProfile = module.WithContent[module.Render2D, module.AnimationsContent]") || !strings.Contains(source, "InstallSystems[onix.Animations2D]") || !strings.Contains(source, "graphics/codec/png") || strings.Contains(source, "graphics/codec/jpeg") || strings.Contains(source, "InstallSystems[onix.Render3D]") || strings.Contains(source, "example.com/game/unused") {
 		t.Fatal("generation did not trim unused features and decoders")
 	}
 	moduleBuildFile(t, d, "private/mod.json", `{}`)
@@ -293,6 +325,36 @@ var data []byte
 `)
 	if _, err := CheckModuleProject(d); err == nil || !strings.Contains(err.Error(), "must stay within its module") {
 		t.Fatal("embed escape accepted", err)
+	}
+}
+
+func TestModuleBuildSelectsContentLifecycle(t *testing.T) {
+	d := moduleBuildFixture(t)
+	for _, test := range []struct {
+		name, component, features, profile string
+	}{
+		{"sprite", `"sprite":{"color":"#ffffff"}`, `[]`, "Render2D"},
+		{"layout", `"layout":{}`, `[]`, "WithContent[module.Render2D, module.LayoutContent]"},
+		{"collider", `"rigidBody2D":{},"circleCollider2D":{"radius":10}`, `[]`, "WithContent[module.Render2D, module.Physics2DContent]"},
+		{"script HTML", `"sprite":{"color":"#ffffff"}`, `["render2d","input2d","ui-widgets","ui-html"]`, "WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]"},
+		{"animation", `"sprite":{"color":"#ffffff"}`, `["render2d","animations2d"]`, "WithContent[module.Render2D, module.AnimationsContent]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			moduleBuildFile(t, d, "resources/project.json", `{"entry":"game.json","scenes":["main.json","game.json"],"engine":{"features":`+test.features+`},"types":{"Label":{"fields":{"text":"string","point":"vec2"}}}}`)
+			moduleBuildFile(t, d, "asset/mod.json", `{"space":"world","components":{`+test.component+`}}`)
+			// Unreferenced content must not force the full profile.
+			moduleBuildFile(t, d, "unused/mod.json", `{"components":{"layout":{}}}`)
+			if _, err := GenerateModuleProject(d); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(d, "onix_generated.go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(data), "type OnixContentProfile = module."+test.profile) {
+				t.Fatalf("wrong generated profile, want %s", test.profile)
+			}
+		})
 	}
 }
 

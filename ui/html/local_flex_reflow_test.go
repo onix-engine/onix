@@ -2,8 +2,6 @@ package html
 
 import (
 	"testing"
-
-	"github.com/diiyw/onix/ecs"
 )
 
 func TestHTMLLocalFlexOrderPropagatesSizeChanges(t *testing.T) {
@@ -15,7 +13,7 @@ func TestHTMLLocalFlexOrderPropagatesSizeChanges(t *testing.T) {
 	for _, order := range []string{"-1", "0", "-1", "0"} {
 		target.SetAttribute("style", "width:40px;height:100px;order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.LayoutWork.LocalFlexReflows != 0 {
 			t.Fatal("changed outer height was treated as isolated")
 		}
@@ -33,7 +31,7 @@ func TestHTMLLocalFlexOrderConservativeContexts(t *testing.T) {
 			target := incrementalHTMLNode(t, world, owner, "target")
 			target.SetAttribute("style", "order:1")
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			if state.SyncStats.LayoutWork.LocalFlexReflows != 0 {
 				t.Fatal("dependent formatting context isolated")
 			}
@@ -50,7 +48,7 @@ func TestHTMLLocalFlexOrderWithExternalDirtyNode(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "order:1")
 	incrementalHTMLNode(t, world, owner, "other").SetAttribute("style", "height:60px")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.LayoutWork.LocalFlexReflows != 0 {
 		t.Fatal("external dirty node skipped")
 	}
@@ -66,7 +64,7 @@ func TestHTMLLocalFlexOrderUpdatesAncestorClipExtents(t *testing.T) {
 	for _, order := range []string{"1", "0", "1", "0"} {
 		target.SetAttribute("style", "position:relative;width:100px;order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.LayoutWork.LocalFlexReflows != 1 {
 			t.Fatal("stable outer flow was not isolated")
 		}

@@ -6,10 +6,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/physics"
 	"github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
 )
 
 type appIdleState struct {
@@ -58,16 +55,29 @@ func (app *App) idleEligible() bool {
 	if app.moduleRuntime != nil {
 		app.moduleRuntime.SyncScopes()
 	}
-	return (!app.hasSystemSet(systemSetAnimations2D) || scene.AnimationTaskCount(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetSpriteTrails2D) || scene.SpriteTrailTaskCount(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetParticles2D) || scene.ParticleTaskCount(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetSpine2D) || scene.SpineTaskCount(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetPhysics2D) || physics.TaskCount2D(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetPhysics3D) || physics.TaskCount3D(app.World) == 0) &&
-		(!app.hasSystemSet(systemSetWebView) || scene.WebViewTaskCount(app.World) == 0) &&
-		(app.moduleRuntime == nil || !app.moduleRuntime.NeedsTick()) &&
-		(!app.hasSystemSet(systemSetUIRuntime) || !engineui.LayoutPending(app.World)) &&
-		(!app.hasSystemSet(systemSetUIHTML) || !html.NeedsFrame(app.World))
+	for _, count := range app.idleTaskCounts {
+		if count == nil {
+			break
+		}
+		if count(app.World) != 0 {
+			return false
+		}
+	}
+	return (app.moduleRuntime == nil || !app.moduleRuntime.NeedsTick()) &&
+		(app.uiLayoutPending == nil || !app.uiLayoutPending(app.World)) &&
+		(app.htmlNeedsFrame == nil || !app.htmlNeedsFrame(app.World))
+}
+
+// Each optional system installs its own task counter once, keeping unused
+// solvers and effects out of the app loop's static call graph.
+func (app *App) addIdleTaskCounter(count func(*ecs.World) int) {
+	for i := range app.idleTaskCounts {
+		if app.idleTaskCounts[i] == nil {
+			app.idleTaskCounts[i] = count
+			return
+		}
+	}
+	panic("onix: idle task counter capacity exceeded")
 }
 
 func (app *App) idleEnabled() bool {
@@ -78,8 +88,8 @@ func (app *App) idleEnabled() bool {
 }
 
 func (app *App) pendingFrame() bool {
-	request, _ := ecs.GetResource[*scene.RenderRequest](app.World)
-	state, _ := ecs.GetResource[*input.State](app.World)
+	request, _ := app.World.GetResource[*scene.RenderRequest]()
+	state, _ := app.World.GetResource[*input.State]()
 	return app.renderRequested.Load() || request.Pending() || state.HasPendingEvents() ||
 		(app.Context != nil && app.Context.FrameRequested()) || app.World.MutationVersion() != app.idle.version
 }
@@ -104,9 +114,9 @@ func (app *App) takeWakeDeadline(now time.Time) {
 }
 
 func (app *App) recordIdleFrame() {
-	if app.idleEnabled() && app.hasSystemSet(systemSetUIRuntime) {
+	if app.idleEnabled() && app.uiCaretBlinkDelay != nil {
 		deadline := time.Time{}
-		if delay, blinking := engineui.CaretBlinkDelay(app.World); blinking {
+		if delay, blinking := app.uiCaretBlinkDelay(app.World); blinking {
 			deadline = app.currentTime().Add(delay)
 		}
 		app.idle.Lock()

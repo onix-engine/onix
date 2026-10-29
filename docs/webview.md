@@ -14,7 +14,7 @@ import (
 
 app := onix.NewApp()
 webview.Register()
-if err := onix.InstallSystems[onix.WebView](app); err != nil {
+if err := app.InstallSystems[onix.WebView](); err != nil {
 	panic(err)
 }
 app.SetWindowSize(1024, 720)
@@ -28,7 +28,7 @@ page.Bind("greet", func(payload string) (string, error) {
 	return `{"ok":true,"payload":` + payload + `}`, nil
 })
 entity := app.World.Spawn(ecs.NewBundle(0))
-if err := ecs.Insert(app.World, entity, page); err != nil {
+if err := app.World.Insert(entity, page); err != nil {
 	panic(err)
 }
 ```
@@ -46,7 +46,7 @@ existing browser surface. `scene.NavigateWebView` does the same immediately for
 an already materialized component. URL takes precedence if both `URL` and
 `HTML` are set.
 
-`onix.InstallSystems[onix.WebView]` is opt-in. It registers the ECS synchronizer
+`app.InstallSystems[onix.WebView]` is opt-in. It registers the ECS synchronizer
 and creates the built-in backend after the window context is ready, so projects
 that do not use WebView do not retain the platform browser implementation in
 their generated system installation. Applications that own a native view can

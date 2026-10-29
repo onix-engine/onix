@@ -12,7 +12,7 @@ import (
 
 func OnixRegistry() (module.Registry, error) {
 	r := module.Registry{}
-	if err := module.RegisterMod(&r, "resources/game", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
+	if err := r.RegisterMod("resources/game", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
 		Install: func(c *module.Context, m *mod0.Mod) error {
 			return m.Install(c)
 		},
@@ -20,7 +20,7 @@ func OnixRegistry() (module.Registry, error) {
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterScene(&r, "main.json", func() Main { return Main{} }, module.Lifecycle[Main]{
+	if err := r.RegisterScene("main.json", func() Main { return Main{} }, module.Lifecycle[Main]{
 		Install: func(c *module.Context, m *Main) error {
 			return nil
 		},
@@ -32,17 +32,19 @@ func OnixRegistry() (module.Registry, error) {
 }
 
 func OnixInstallSystems(app *onix.App) error {
-	if err := onix.InstallSystems[onix.Render2D](app); err != nil {
+	if err := app.InstallSystems[onix.Render2D](); err != nil {
 		return err
 	}
-	if err := onix.InstallSystems[onix.Input2D](app); err != nil {
+	if err := app.InstallSystems[onix.Input2D](); err != nil {
 		return err
 	}
-	if err := onix.InstallSystems[onix.UIHTML](app); err != nil {
+	if err := app.InstallSystems[onix.UIHTML](); err != nil {
 		return err
 	}
 	return nil
 }
+
+type OnixContentProfile = module.WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]
 
 type OnixImageDecoder = graphics.ImageDecoderSet[graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder]
 

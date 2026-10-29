@@ -58,7 +58,7 @@ type workspaceAnimationDetail struct {
 	Time                                    float32
 }
 
-func selectedAnimationKey[T any](s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) (scene.AnimationBinding, project.AnimationKeyframeSpec[T], bool) {
+func (s *workspaceAnimation) selectedAnimationKey[T any](tracks []project.AnimationTrackSpec[T]) (scene.AnimationBinding, project.AnimationKeyframeSpec[T], bool) {
 	if s.Track < 0 || s.Track >= len(tracks) || s.Key < 0 || s.Key >= len(tracks[s.Track].Keyframes) {
 		return scene.AnimationBinding{}, project.AnimationKeyframeSpec[T]{}, false
 	}
@@ -86,17 +86,17 @@ func (a *ModuleEditor) animationInspectorIndex(mod project.ModSpec, index int) i
 	switch s.Kind {
 	case "float":
 		var key project.AnimationKeyframeSpec[float32]
-		binding, key, valid = selectedAnimationKey(s, clip.FloatTracks)
+		binding, key, valid = s.selectedAnimationKey(clip.FloatTracks)
 		detail.Value = animationNumber(key.Value)
 		detail.Time = key.Time
 	case "texture":
 		var key project.AnimationKeyframeSpec[project.TextureSpec]
-		binding, key, valid = selectedAnimationKey(s, clip.TextureTracks)
+		binding, key, valid = s.selectedAnimationKey(clip.TextureTracks)
 		detail.Texture = key.Value
 		detail.Time = key.Time
 	case "bool":
 		var key project.AnimationKeyframeSpec[bool]
-		binding, key, valid = selectedAnimationKey(s, clip.BoolTracks)
+		binding, key, valid = s.selectedAnimationKey(clip.BoolTracks)
 		detail.Value = strconv.FormatBool(key.Value)
 		detail.Time = key.Time
 	}
@@ -183,11 +183,11 @@ func (a *ModuleEditor) updateResourceTabKeys(in *input.State) {
 	if !in.KeyPressed(input.KeyLeft) && !in.KeyPressed(input.KeyRight) && !in.KeyPressed(input.KeyHome) && !in.KeyPressed(input.KeyEnd) {
 		return
 	}
-	focus, _ := ecs.GetResource[*scene.InputFocus](a.world)
+	focus, _ := a.world.GetResource[*scene.InputFocus]()
 	if focus == nil {
 		return
 	}
-	target := ecs.GetRef[htmlui.Focusable](a.world, focus.Keyboard)
+	target := a.world.GetRef[htmlui.Focusable](focus.Keyboard)
 	if target == nil || target.Owner != a.shell || target.ID != "resources-tab" && target.ID != "animation-tab" {
 		return
 	}
@@ -211,7 +211,7 @@ func (a *ModuleEditor) updateResourceTabKeys(in *input.State) {
 	if active {
 		id = "animation-tab"
 	}
-	for entity, access := range ecs.Query[htmlui.Focusable](a.world).All {
+	for entity, access := range a.world.Query[htmlui.Focusable]().All {
 		value := access.Ref()
 		if value.Owner == a.shell && value.ID == id {
 			engineui.FocusControl(a.world, entity)
@@ -249,7 +249,7 @@ func (a *ModuleEditor) openAnimation() {
 func (a *ModuleEditor) releaseAnimationPreview() {
 	s := &a.animation
 	if s.PreviewWorld != nil {
-		if animator := ecs.GetMut[scene.Animator](s.PreviewWorld, s.PreviewEntity); animator != nil {
+		if animator := s.PreviewWorld.GetMut[scene.Animator](s.PreviewEntity); animator != nil {
 			animator.Play()
 		}
 	}
@@ -271,7 +271,7 @@ func (a *ModuleEditor) syncAnimationPreview(delta float32) {
 			break
 		}
 	}
-	animator := ecs.GetMut[scene.Animator](v.world, entity)
+	animator := v.world.GetMut[scene.Animator](entity)
 	if animator == nil || animator.Clip == nil {
 		a.releaseAnimationPreview()
 		return
@@ -326,7 +326,7 @@ func (a *ModuleEditor) updateAnimationPlaybackUI() {
 	if s.Time == s.UITime {
 		return
 	}
-	animator := ecs.GetRef[scene.Animator](s.PreviewWorld, s.PreviewEntity)
+	animator := s.PreviewWorld.GetRef[scene.Animator](s.PreviewEntity)
 	if animator == nil || animator.Clip == nil {
 		return
 	}
@@ -343,11 +343,11 @@ func (a *ModuleEditor) animationTimelineScroll(world *ecs.World) *scene.UIScroll
 	if !ok {
 		return nil
 	}
-	content, ok := ecs.Get[htmlui.ScrollContent](world, control)
+	content, ok := world.Get[htmlui.ScrollContent](control)
 	if !ok {
 		return nil
 	}
-	return ecs.GetMut[scene.UIScroll](world, content.Area)
+	return world.GetMut[scene.UIScroll](content.Area)
 }
 
 func (a *ModuleEditor) captureAnimationScroll(world *ecs.World) {
@@ -701,9 +701,9 @@ func (a *ModuleEditor) renderAnimation(b *editorVNodeView) bool {
 	b.text("div", "cursor", "", "id", "animation:playhead:ruler", "class", "animation-playhead", "style", animationPlayheadStyle(s.Time, start, end))
 	b.close()
 	b.close()
-	renderAnimationTracks(b, s, "float", clip.FloatTracks, start, end)
-	renderAnimationTracks(b, s, "texture", clip.TextureTracks, start, end)
-	renderAnimationTracks(b, s, "bool", clip.BoolTracks, start, end)
+	b.renderAnimationTracks(s, "float", clip.FloatTracks, start, end)
+	b.renderAnimationTracks(s, "texture", clip.TextureTracks, start, end)
+	b.renderAnimationTracks(s, "bool", clip.BoolTracks, start, end)
 	b.close()
 	b.close()
 	b.close()
@@ -756,7 +756,7 @@ func normalizeAnimationSelection(s *workspaceAnimation, clip *project.AnimationC
 	s.CurveOpen = s.CurveOpen && s.Segment
 	s.Time = min(max(s.Time, 0), clip.Duration)
 }
-func renderAnimationTracks[T any](b *editorVNodeView, s *workspaceAnimation, kind string, tracks []project.AnimationTrackSpec[T], start, end float32) {
+func (b *editorVNodeView) renderAnimationTracks[T any](s *workspaceAnimation, kind string, tracks []project.AnimationTrackSpec[T], start, end float32) {
 	span := end - start
 	title := "Double-click to edit transition"
 	if kind == "texture" {
@@ -796,7 +796,7 @@ func (a *ModuleEditor) renderAnimationInterpolation(b *editorVNodeView, keys []p
 	s := &a.animation
 	key := keys[s.Key]
 	b.text("p", "interval", fmt.Sprintf("Interval: %g → %g s", key.Time, keys[s.Key+1].Time))
-	tween := project.EffectiveAnimationTween(key, scene.AnimationLinear)
+	tween := key.EffectiveAnimationTween(scene.AnimationLinear)
 	a.animationSelect(b, "tween", "Interpolation", string(tween), &animationTweens)
 	var spline [3]float32
 	if tween == scene.AnimationCubicSpline {
@@ -867,11 +867,11 @@ func (a *ModuleEditor) finishAnimationDrafts(clip *project.AnimationClipSpec) er
 		}
 		switch s.Kind {
 		case "float":
-			err = mutateAnimationKeys(s, clip.FloatTracks, "key-time", float32(value))
+			err = s.mutateAnimationKeys(clip.FloatTracks, "key-time", float32(value))
 		case "texture":
-			err = mutateAnimationKeys(s, clip.TextureTracks, "key-time", float32(value))
+			err = s.mutateAnimationKeys(clip.TextureTracks, "key-time", float32(value))
 		case "bool":
-			err = mutateAnimationKeys(s, clip.BoolTracks, "key-time", float32(value))
+			err = s.mutateAnimationKeys(clip.BoolTracks, "key-time", float32(value))
 		}
 		if err != nil {
 			return err
@@ -921,14 +921,14 @@ func (a *ModuleEditor) stageAnimationInspectorDrafts() error {
 	}
 	return a.stagePatches(patches)
 }
-func animationKeys[T any](s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) ([]project.AnimationKeyframeSpec[T], error) {
+func (s *workspaceAnimation) animationKeys[T any](tracks []project.AnimationTrackSpec[T]) ([]project.AnimationKeyframeSpec[T], error) {
 	if s.Track < 0 || s.Track >= len(tracks) {
 		return nil, fmt.Errorf("select an animation track")
 	}
 	return tracks[s.Track].Keyframes, nil
 }
-func mutateAnimationKeys[T any](s *workspaceAnimation, tracks []project.AnimationTrackSpec[T], action string, number float32) error {
-	keys, err := animationKeys(s, tracks)
+func (s *workspaceAnimation) mutateAnimationKeys[T any](tracks []project.AnimationTrackSpec[T], action string, number float32) error {
+	keys, err := s.animationKeys(tracks)
 	if err != nil {
 		return err
 	}
@@ -950,9 +950,9 @@ func mutateAnimationKeys[T any](s *workspaceAnimation, tracks []project.Animatio
 				var sample [2]scene.AnimationKeyframe[float32]
 				for j := range sample {
 					source := keys[i-1+j]
-					sample[j] = scene.AnimationKeyframe[float32]{Time: source.Time, Value: any(source.Value).(float32), InTangent: any(source.InTangent).(float32), OutTangent: any(source.OutTangent).(float32), Tween: project.EffectiveAnimationTween(source, scene.AnimationLinear), Curve: source.Curve}
+					sample[j] = scene.AnimationKeyframe[float32]{Time: source.Time, Value: any(source.Value).(float32), InTangent: any(source.InTangent).(float32), OutTangent: any(source.OutTangent).(float32), Tween: source.EffectiveAnimationTween(scene.AnimationLinear), Curve: source.Curve}
 				}
-				value, _ := scene.SampleAnimationTrack(scene.AnimationTrack[float32]{Keyframes: sample[:]}, s.Time, func(a, b, t float32) float32 { return a + (b-a)*t })
+				value, _ := (scene.AnimationTrack[float32]{Keyframes: sample[:]}).Sample(s.Time, func(a, b, t float32) float32 { return a + (b-a)*t })
 				key.Value = any(value).(T)
 			}
 			keys = slices.Insert(keys, i, key)
@@ -1143,15 +1143,15 @@ func (a *ModuleEditor) animationEvent(event htmlui.Event) bool {
 			}
 			switch s.Kind {
 			case "float":
-				if keys, err := animationKeys(s, clip.FloatTracks); err == nil && key >= 0 && key < len(keys) {
+				if keys, err := s.animationKeys(clip.FloatTracks); err == nil && key >= 0 && key < len(keys) {
 					s.Time = keys[key].Time
 				}
 			case "texture":
-				if keys, err := animationKeys(s, clip.TextureTracks); err == nil && key >= 0 && key < len(keys) {
+				if keys, err := s.animationKeys(clip.TextureTracks); err == nil && key >= 0 && key < len(keys) {
 					s.Time = keys[key].Time
 				}
 			case "bool":
-				if keys, err := animationKeys(s, clip.BoolTracks); err == nil && key >= 0 && key < len(keys) {
+				if keys, err := s.animationKeys(clip.BoolTracks); err == nil && key >= 0 && key < len(keys) {
 					s.Time = keys[key].Time
 				}
 			}
@@ -1207,11 +1207,11 @@ func (a *ModuleEditor) animationEvent(event htmlui.Event) bool {
 		case "add-key", "delete-key", "key-time":
 			switch s.Kind {
 			case "float":
-				return mutateAnimationKeys(s, clip.FloatTracks, name, number)
+				return s.mutateAnimationKeys(clip.FloatTracks, name, number)
 			case "texture":
-				return mutateAnimationKeys(s, clip.TextureTracks, name, number)
+				return s.mutateAnimationKeys(clip.TextureTracks, name, number)
 			case "bool":
-				return mutateAnimationKeys(s, clip.BoolTracks, name, number)
+				return s.mutateAnimationKeys(clip.BoolTracks, name, number)
 			}
 		}
 		switch name {
@@ -1239,7 +1239,7 @@ func (a *ModuleEditor) animationEvent(event htmlui.Event) bool {
 		}
 		switch s.Kind {
 		case "float":
-			keys, err := animationKeys(s, clip.FloatTracks)
+			keys, err := s.animationKeys(clip.FloatTracks)
 			if err != nil {
 				return err
 			}

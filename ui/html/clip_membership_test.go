@@ -24,21 +24,21 @@ func TestHTMLClipMembershipMatchesFresh(t *testing.T) {
 				world, owner := incrementalHTMLFixture(t, source("width:120px;height:40px"))
 				target := incrementalHTMLNode(t, world, owner, "target")
 				other := incrementalControl(t, world, owner, "other")
-				before, _ := ecs.Get[Control](world, other)
+				before, _ := world.Get[Control](other)
 				for _, size := range []string{"width:120px;height:0px", "width:120px;height:40px", "width:0px;height:40px", "width:120px;height:40px", "width:0px;height:0px", "width:120px;height:40px"} {
 					target.SetAttribute("style", "position:relative;overflow:"+mode+";"+size)
 					incrementalSync(t, world)
-					state, _ := ecs.Get[htmlRenderState](world, owner)
+					state, _ := world.Get[htmlRenderState](owner)
 					if state.SyncStats.PartialReconciles != 1 {
 						t.Fatalf("membership fell back: %+v", state.SyncStats)
 					}
-					after, _ := ecs.Get[Control](world, other)
+					after, _ := world.Get[Control](other)
 					if after.RenderRevision != before.RenderRevision {
 						t.Fatal("unrelated control rebuilt")
 					}
 					assertHTMLContextMatchesFresh(t, world, owner, source(size))
 					for _, entity := range state.Children {
-						if parent, ok := ecs.Get[scene.Parent](world, entity); ok && !world.IsAlive(parent.Entity) {
+						if parent, ok := world.Get[scene.Parent](entity); ok && !world.IsAlive(parent.Entity) {
 							t.Fatal("visual parent is retired")
 						}
 					}
@@ -70,7 +70,7 @@ func TestHTMLNestedClipMembershipChangesTogether(t *testing.T) {
 		outer.SetAttribute("class", class)
 		inner.SetAttribute("class", class)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("nested membership fell back")
 		}
@@ -92,7 +92,7 @@ func TestHTMLClipMembershipFocusAndEditingContexts(t *testing.T) {
 			for _, height := range []string{"0px", "40px", "0px", "40px"} {
 				target.SetAttribute("style", "overflow:auto;height:"+height)
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatal("focus clip transition fell back")
 				}
@@ -131,12 +131,12 @@ func TestHTMLClipMembershipUsesPaddingBox(t *testing.T) {
 	}
 	world, owner := incrementalHTMLFixture(t, source("height:40px;padding:5px"))
 	node := incrementalHTMLNode(t, world, owner, "clip")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	initial := state.OverflowBindings[node.node].entity
 	for index, css := range []string{"height:0px;padding:5px", "height:0px;padding:0px", "height:0px;padding:5px"} {
 		node.SetAttribute("style", "overflow:auto;"+css)
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
+		state, _ = world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("padding transition fell back")
 		}
@@ -164,12 +164,12 @@ func TestHTMLClipMembershipWithExternalBindingsMatchesFull(t *testing.T) {
 	for _, height := range []string{"0px", "40px", "0px", "40px"} {
 		target.SetAttribute("style", "overflow:auto;height:"+height)
 		refTarget.SetAttribute("style", "overflow:auto;height:"+height)
-		refState := ecs.GetMut[htmlRenderState](reference, refOwner)
+		refState := reference.GetMut[htmlRenderState](refOwner)
 		refState.PartialValid = false
 		incrementalSync(t, world)
 		incrementalSync(t, reference)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
-		want, _ := ecs.Get[htmlRenderState](reference, refOwner)
+		state, _ := world.Get[htmlRenderState](owner)
+		want, _ := reference.Get[htmlRenderState](refOwner)
 		if state.SyncStats.PartialReconciles != 1 || !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, state), htmlPrimitiveSnapshot(reference, want)) {
 			t.Fatal("bound clip transition differs from full render")
 		}
@@ -180,7 +180,7 @@ func TestHTMLClipMembershipSkipsUnrelatedControls(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div style="height:120px"><div id="target" style="overflow:auto;height:40px"><div><input value="Value"/></div></div></div>`+strings.Repeat(`<div style="overflow:auto;height:40px"><input value="Unchanged"/></div>`, 1000))
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "overflow:auto;height:0px")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 0 {
 		t.Fatalf("unrelated controls or clips rebuilt: %+v", state.SyncStats)
 	}
@@ -190,19 +190,19 @@ func TestHTMLClipMembershipKeepsNestedScrollState(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div style="height:160px"><div id="target" style="overflow:auto;height:40px"><div id="inner" style="overflow:auto;height:30px"><div style="height:100px">Text</div></div></div></div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
 	inner := incrementalHTMLNode(t, world, owner, "inner")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	entity := state.OverflowBindings[inner.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, entity)
+	scroll := world.GetMut[scene.UIScroll](entity)
 	scroll.Position[1] = -15
 	for _, height := range []string{"0px", "40px", "0px", "40px"} {
 		target.SetAttribute("style", "overflow:auto;height:"+height)
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
-		scroll, _ := ecs.Get[scene.UIScroll](world, entity)
+		state, _ = world.Get[htmlRenderState](owner)
+		scroll, _ := world.Get[scene.UIScroll](entity)
 		if state.OverflowBindings[inner.node].entity != entity || scroll.Position[1] != -15 {
 			t.Fatal("surviving nested clip lost scroll state")
 		}
-		parent, _ := ecs.Get[scene.Parent](world, entity)
+		parent, _ := world.Get[scene.Parent](entity)
 		expected := owner
 		if height == "40px" {
 			expected = state.OverflowBindings[target.node].entity

@@ -234,7 +234,7 @@ func (r *WebViewRuntime) Navigate(world *ecs.World, entity ecs.Entity, url strin
 	if world == nil {
 		return errors.New("ecs: webview world is nil")
 	}
-	value := ecs.GetMut[WebView](world, entity)
+	value := world.GetMut[WebView](entity)
 	if value == nil {
 		return fmt.Errorf("ecs: entity %d has no WebView component", entity)
 	}
@@ -272,8 +272,8 @@ func (r *WebViewRuntime) drain(world *ecs.World) {
 			delete(r.invokes, event.Entity)
 			r.mu.Unlock()
 		}
-		if world.IsAlive(event.Entity) && ecs.Has[WebView](world, event.Entity) {
-			ecs.WriteMessage(world, event)
+		if world.IsAlive(event.Entity) && world.Has[WebView](event.Entity) {
+			world.WriteMessage(event)
 		}
 	}
 	clear(pending)
@@ -292,7 +292,7 @@ func WebViewSystem(name string) ecs.SystemConfig {
 // Installing the feature without any browser surfaces does not prevent idle.
 func WebViewTaskCount(world *ecs.World) int {
 	count := 0
-	for range ecs.Query[WebView](world).All {
+	for range world.Query[WebView]().All {
 		count++
 	}
 	return count
@@ -308,7 +308,7 @@ func EvalWebView(world *ecs.World, entity ecs.Entity, script string) error {
 	if world == nil {
 		return errors.New("ecs: webview world is nil")
 	}
-	runtime, ok := ecs.GetResource[*WebViewRuntime](world)
+	runtime, ok := world.GetResource[*WebViewRuntime]()
 	if !ok || runtime == nil {
 		return ErrWebViewUnavailable
 	}
@@ -322,7 +322,7 @@ func NavigateWebView(world *ecs.World, entity ecs.Entity, url string) error {
 	if world == nil {
 		return errors.New("ecs: webview world is nil")
 	}
-	runtime, ok := ecs.GetResource[*WebViewRuntime](world)
+	runtime, ok := world.GetResource[*WebViewRuntime]()
 	if !ok || runtime == nil {
 		return ErrWebViewUnavailable
 	}
@@ -333,7 +333,7 @@ func syncWebViews(context *ecs.SystemContext) error {
 	if context == nil || context.World == nil {
 		return nil
 	}
-	runtime, ok := ecs.GetResource[*WebViewRuntime](context.World)
+	runtime, ok := context.World.GetResource[*WebViewRuntime]()
 	if !ok || runtime == nil {
 		return nil
 	}
@@ -347,14 +347,14 @@ func syncWebViews(context *ecs.SystemContext) error {
 		runtime.invokes = make(map[ecs.Entity]webViewInvocation)
 	}
 	runtime.drain(context.World)
-	for entity, access := range ecs.Query[WebView](context.World).All {
+	for entity, access := range context.World.Query[WebView](ecs.Unscoped()).All {
 		value := access.Get()
 		value.Visible = value.Visible && IsInteractive(context.World, entity)
 
 		runtime.syncEntity(context.World, entity, value)
 	}
 	for entity, entry := range runtime.entries {
-		if context.World.IsAlive(entity) && ecs.Has[WebView](context.World, entity) {
+		if context.World.IsAlive(entity) && context.World.Has[WebView](entity) {
 			continue
 		}
 		if entry.handle != nil {
@@ -385,7 +385,7 @@ func (r *WebViewRuntime) syncEntity(world *ecs.World, entity ecs.Entity, value W
 	entry, exists := r.entries[entity]
 	if !exists {
 		if r.Backend == nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: ErrWebViewUnavailable.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: ErrWebViewUnavailable.Error()})
 			r.entries[entity] = webViewEntry{url: url, html: html, bounds: bounds, visible: value.Visible, devTools: value.DevTools, transparent: value.Transparent}
 			return
 		}
@@ -399,7 +399,7 @@ func (r *WebViewRuntime) syncEntity(world *ecs.World, entity ecs.Entity, value W
 			err = errors.New("ecs: webview backend returned a nil handle")
 		}
 		if err != nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
 			r.entries[entity] = webViewEntry{url: url, html: html, bounds: bounds, visible: value.Visible, devTools: value.DevTools, transparent: value.Transparent}
 			return
 		}
@@ -422,24 +422,24 @@ func (r *WebViewRuntime) syncEntity(world *ecs.World, entity ecs.Entity, value W
 	}
 	if url != "" && entry.url != url {
 		if err := entry.handle.Navigate(url); err != nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
 		}
 		entry.url, entry.html = url, html
 	} else if url == "" && (entry.url != "" || entry.html != html) {
 		if err := entry.handle.SetHTML(html); err != nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
 		}
 		entry.html = html
 	}
 	if entry.bounds != bounds {
 		if err := entry.handle.SetBounds(bounds); err != nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
 		}
 		entry.bounds = bounds
 	}
 	if entry.visible != value.Visible {
 		if err := entry.handle.SetVisible(value.Visible); err != nil {
-			ecs.WriteMessage(world, WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
+			world.WriteMessage(WebViewEvent{Entity: entity, Kind: WebViewEventError, Error: err.Error()})
 		}
 		entry.visible = value.Visible
 	}

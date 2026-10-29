@@ -156,9 +156,9 @@ func Run(directory string) error {
 	registerEditorUIRenderers2D(app.World)
 	scene.RegisterCameraRenderer2D(app.World)
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](app.World)
-	ecs.InsertResource(app.World, editorUITheme(a.font))
+	app.World.InsertResource(editorUITheme(a.font))
 	camera := scene.SpawnCamera2D(app.World)
-	ecs.GetMut[scene.Camera](app.World, camera).Clear = false
+	app.World.GetMut[scene.Camera](camera).Clear = false
 	if err := app.AddSystems(onix.StagePreUpdate,
 		scene.SyncGlobalTransformSystem("mod_editor_transform"),
 		ecs.SystemConfig{Name: "mod_editor_input", After: []string{"mod_editor_transform"}, System: scene.DispatchInputEvents2DSystem("").System},
@@ -263,7 +263,7 @@ func (a *ModuleEditor) update(context *ecs.SystemContext) error {
 			a.handleEvent(*event)
 		}
 	}
-	if in, ok := ecs.GetResource[*input.State](context.World); ok && in != nil {
+	if in, ok := context.World.GetResource[*input.State](); ok && in != nil {
 		a.updateOutlinerMenu(in)
 		a.updateWorkspaceMenus(in)
 		if a.modalVisible() {
@@ -975,7 +975,7 @@ func (a *ModuleEditor) sync(context *ecs.SystemContext) error {
 }
 
 func (a *ModuleEditor) syncControlValues() {
-	for entity, access := range ecs.Query[htmlui.Control](a.world).All {
+	for entity, access := range a.world.Query[htmlui.Control]().All {
 		control := access.Ref()
 		if control.Owner != a.shell {
 			continue
@@ -1000,11 +1000,11 @@ func spawnWorkspaceSurface(w *ecs.World, source, css string, font *onixtext.Font
 	value.CSS, value.Font, value.FontSize = css, font, 13
 	value.Width, value.Height, value.StackIndex = bounds.W, bounds.H, stack
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, scene.UITransformFromXY(bounds.X, bounds.Y))
-	ecs.Put(&bundle, scene.UIGlobalTransform{})
-	ecs.Put(&bundle, scene.AnchorTopLeft)
-	ecs.Put(&bundle, scene.Visibility{Visible: true})
-	ecs.Put(&bundle, value)
+	bundle.Put(scene.UITransformFromXY(bounds.X, bounds.Y))
+	bundle.Put(scene.UIGlobalTransform{})
+	bundle.Put(scene.AnchorTopLeft)
+	bundle.Put(scene.Visibility{Visible: true})
+	bundle.Put(value)
 	return w.Spawn(bundle)
 }
 

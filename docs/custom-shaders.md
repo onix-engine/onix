@@ -44,12 +44,12 @@ module entity handles:
 
 ```go
 func UpdateEffect(c *module.Context, effect module.Entity, tick module.Tick) error {
-    shader, ok := module.Get[scene.Shader[graphics.Material2DShader]](c, effect)
+    shader, ok := c.Get[scene.Shader[graphics.Material2DShader]](effect)
     if !ok {
         return module.ErrType
     }
     shader.Custom[0][0] += tick.Delta
-    return module.Set(c, effect, shader)
+    return c.Set(effect, shader)
 }
 ```
 
@@ -60,7 +60,7 @@ shader, err := graphics.NewMaterial2DShader(descriptor)
 if err != nil {
     return err
 }
-ecs.Put(&bundle, scene.Shader[graphics.Material2DShader]{Program: shader})
+bundle.Put(scene.Shader[graphics.Material2DShader]{Program: shader})
 ```
 
 | Location | Type | Input |
@@ -117,7 +117,7 @@ shader, err := graphics.NewMeshShader(descriptor)
 if err != nil {
     return err
 }
-ecs.Put(&bundle, scene.Shader[graphics.MeshShader]{
+bundle.Put(scene.Shader[graphics.MeshShader]{
     Program: shader,
     Custom: [4][4]float32{{0.35}},
 })

@@ -23,7 +23,7 @@ func FrameFor(world *ecs.World) *FrameContext {
 	if world == nil {
 		return nil
 	}
-	frame, _ := ecs.GetResource[*FrameContext](world)
+	frame, _ := world.GetResource[*FrameContext]()
 	return frame
 }
 func CanvasFor(world *ecs.World) *Canvas2D {
@@ -40,7 +40,7 @@ func BindFrame(world *ecs.World, canvas *Canvas2D) *FrameContext {
 	frame := FrameFor(world)
 	if frame == nil {
 		frame = &FrameContext{}
-		ecs.InsertResource(world, frame)
+		world.InsertResource(frame)
 	}
 	frame.Canvas = canvas
 	return frame

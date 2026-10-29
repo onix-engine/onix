@@ -11,28 +11,28 @@ import (
 
 func TestStepSystemSimulatesOnlyComponentBodies(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	runtime := NewRuntime2D()
 	runtime.Simulation.Gravity = V(0, -20)
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 
 	floorBundle := ecs.NewBundle(4)
-	ecs.Put(&floorBundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&floorBundle, scene.GlobalTransform{})
-	ecs.Put(&floorBundle, NewRigidBody2D(BodyStatic))
-	ecs.Put(&floorBundle, NewCollider2D(NewBox(20, 2)))
+	floorBundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	floorBundle.Put(scene.GlobalTransform{})
+	floorBundle.Put(NewRigidBody2D(BodyStatic))
+	floorBundle.Put(NewCollider2D(NewBox(20, 2)))
 	world.Spawn(floorBundle)
 
 	ballBundle := ecs.NewBundle(4)
-	ecs.Put(&ballBundle, scene.TransformFromXYZ(0, 8, 0))
-	ecs.Put(&ballBundle, scene.GlobalTransform{})
-	ecs.Put(&ballBundle, NewRigidBody2D(BodyDynamic))
-	ecs.Put(&ballBundle, NewCollider2D(Circle{Radius: 1}))
+	ballBundle.Put(scene.TransformFromXYZ(0, 8, 0))
+	ballBundle.Put(scene.GlobalTransform{})
+	ballBundle.Put(NewRigidBody2D(BodyDynamic))
+	ballBundle.Put(NewCollider2D(Circle{Radius: 1}))
 	ball := world.Spawn(ballBundle)
 
 	plainBundle := ecs.NewBundle(2)
-	ecs.Put(&plainBundle, scene.TransformFromXYZ(3, 8, 0))
-	ecs.Put(&plainBundle, scene.GlobalTransform{})
+	plainBundle.Put(scene.TransformFromXYZ(3, 8, 0))
+	plainBundle.Put(scene.GlobalTransform{})
 	plain := world.Spawn(plainBundle)
 
 	system := StepSystem2D("")
@@ -40,13 +40,13 @@ func TestStepSystemSimulatesOnlyComponentBodies(t *testing.T) {
 		if err := system.Run(world); err != nil {
 			t.Fatal(err)
 		}
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
-	transform, _ := ecs.Get[scene.Transform](world, ball)
+	transform, _ := world.Get[scene.Transform](ball)
 	if transform.Translation.Y() < 1.9 || transform.Translation.Y() > 2.1 {
 		t.Fatalf("physics node y = %v, want approximately 2", transform.Translation.Y())
 	}
-	plainTransform, _ := ecs.Get[scene.Transform](world, plain)
+	plainTransform, _ := world.Get[scene.Transform](plain)
 	if plainTransform.Translation.Y() != 8 {
 		t.Fatalf("node without RigidBody2D moved to %v", plainTransform.Translation.Y())
 	}
@@ -55,15 +55,15 @@ func TestStepSystemSimulatesOnlyComponentBodies(t *testing.T) {
 func TestDynamicPoseRetainsPrecisionBetweenECSWrites(t *testing.T) {
 	world := ecs.NewWorld()
 	delta := time.Second / 60
-	ecs.InsertResource(world, &scene.Time{Delta: delta})
+	world.InsertResource(&scene.Time{Delta: delta})
 	runtime := NewRuntime2D()
 	runtime.Simulation.Gravity = Vector{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	bundle := ecs.NewBundle(2)
-	ecs.Put(&bundle, scene.TransformFromXYZ(1e6, 0, 0))
+	bundle.Put(scene.TransformFromXYZ(1e6, 0, 0))
 	component := NewRigidBody2D(BodyDynamic)
 	component.Velocity, component.AngularVelocity = V(.01, .02), .123
-	ecs.Put(&bundle, component)
+	bundle.Put(component)
 	entity := world.Spawn(bundle)
 	system := StepSystem2D("")
 	position, rotation := V(1e6, 0), 0.0
@@ -74,7 +74,7 @@ func TestDynamicPoseRetainsPrecisionBetweenECSWrites(t *testing.T) {
 		position = position.Add(component.Velocity.Mul(delta.Seconds()))
 		rotation += component.AngularVelocity * delta.Seconds()
 	}
-	result, _ := ecs.Get[RigidBody2D](world, entity)
+	result, _ := world.Get[RigidBody2D](entity)
 	if result.Handle().Position().Sub(position).Length() > 1e-10 || math.Abs(result.Handle().Rotation()-rotation) > 1e-12 {
 		t.Fatalf("ECS rounded simulation pose: position=%v want=%v rotation=%v want=%v", result.Handle().Position(), position, result.Handle().Rotation(), rotation)
 	}
@@ -84,19 +84,19 @@ func TestRemovingTransformDoesNotRecreateOrphanColliders(t *testing.T) {
 	world := ecs.NewWorld()
 	runtime := NewRuntime2D()
 	runtime.Simulation.Gravity = Vector{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	bundle := ecs.NewBundle(3)
-	ecs.Put(&bundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&bundle, NewRigidBody2D(BodyDynamic))
-	ecs.Put(&bundle, NewCollider2D(Circle{Radius: 1}))
+	bundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	bundle.Put(NewRigidBody2D(BodyDynamic))
+	bundle.Put(NewCollider2D(Circle{Radius: 1}))
 	entity := world.Spawn(bundle)
 	system := StepSystem2D("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := ecs.Get[RigidBody2D](world, entity)
-	collider, _ := ecs.Get[CircleCollider2D](world, entity)
-	ecs.Remove[scene.Transform](world, entity)
+	body, _ := world.Get[RigidBody2D](entity)
+	collider, _ := world.Get[CircleCollider2D](entity)
+	world.Remove[scene.Transform](entity)
 	for range 3 {
 		if err := system.Run(world); err != nil {
 			t.Fatal(err)
@@ -109,25 +109,25 @@ func TestRemovingTransformDoesNotRecreateOrphanColliders(t *testing.T) {
 
 func TestDynamicTransformEditTeleportsBody(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, &scene.Time{Delta: time.Second / 60})
+	world.InsertResource(&scene.Time{Delta: time.Second / 60})
 	runtime := NewRuntime2D()
 	runtime.Simulation.Gravity = Vector{}
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	bodyBundle := ecs.NewBundle(3)
-	ecs.Put(&bodyBundle, scene.TransformFromXYZ(0, 0, 0))
-	ecs.Put(&bodyBundle, NewRigidBody2D(BodyDynamic))
-	ecs.Put(&bodyBundle, NewCollider2D(Circle{Radius: 1}))
+	bodyBundle.Put(scene.TransformFromXYZ(0, 0, 0))
+	bodyBundle.Put(NewRigidBody2D(BodyDynamic))
+	bodyBundle.Put(NewCollider2D(Circle{Radius: 1}))
 	entity := world.Spawn(bodyBundle)
 	system := StepSystem2D("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform := ecs.GetMut[scene.Transform](world, entity)
+	transform := world.GetMut[scene.Transform](entity)
 	transform.Translation[0], transform.Translation[1] = 40, 30
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := ecs.Get[RigidBody2D](world, entity)
+	body, _ := world.Get[RigidBody2D](entity)
 	if got := body.Handle().Position(); got.X != 40 || got.Y != 30 {
 		t.Fatalf("teleported body position = %+v", got)
 	}

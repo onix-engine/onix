@@ -70,7 +70,7 @@ func fullSceneUISync() sceneUISync {
 }
 
 func resolveSceneWidgetTarget(world *ecs.World, entity, target ecs.Entity) error {
-	widget := ecs.GetMut[engineui.Widget](world, entity)
+	widget := world.GetMut[engineui.Widget](entity)
 	if widget == nil {
 		return fmt.Errorf("widget target requires a Widget component")
 	}
@@ -106,7 +106,7 @@ func (b *Bundle) PreloadSceneFor(device *render.Device, id SceneID) error {
 
 	var uploads graphics.UploadQueue
 	for entity := range scene.World.Entities() {
-		if text := ecs.GetMut[sceneapi.Text2D](scene.World, entity); text != nil {
+		if text := scene.World.GetMut[sceneapi.Text2D](entity); text != nil {
 			sceneapi.PrepareText2D(text)
 		}
 		QueueEntityUploads(&uploads, scene.World, entity)
@@ -174,7 +174,7 @@ func (b *Bundle) newSceneInstance(world *ecs.World, id SceneID) (*SceneInstance,
 		return nil, sceneSpawnPlan{}, fmt.Errorf("scene %q is not registered by %s", id, sceneCatalogFileName)
 	}
 	if clr, ok := b.ClearColor(); ok {
-		ecs.InsertResource(world, sceneapi.RenderSettings2D{ClearColor: clr})
+		world.InsertResource(sceneapi.RenderSettings2D{ClearColor: clr})
 	}
 
 	scene := &SceneInstance{
@@ -220,7 +220,7 @@ func (b *Bundle) spawnPreparedScenePlanNode(scene *SceneInstance, plan sceneSpaw
 func (b *Bundle) resolveScenePlanNode(scene *SceneInstance, plan sceneSpawnPlan, entities []ecs.Entity, index int) error {
 	node := plan.Nodes[index]
 	if node.TargetCamera != 0 {
-		if err := ecs.Insert(scene.World, entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
+		if err := scene.World.Insert(entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
 			return fmt.Errorf("game object %q targetCamera: %w", node.Spec.ID, err)
 		}
 	}
@@ -387,7 +387,7 @@ func (s *SceneInstance) rollbackClones(clones map[string]ecs.Entity) {
 
 func sceneChildIndex(world *ecs.World) map[ecs.Entity][]ecs.Entity {
 	children := make(map[ecs.Entity][]ecs.Entity)
-	for entity, access := range ecs.Query[sceneapi.Parent](world).All {
+	for entity, access := range world.Query[sceneapi.Parent]().All {
 		parent := access.Ref().Entity
 		children[parent] = append(children[parent], entity)
 	}
@@ -399,7 +399,7 @@ func sceneChildIndex(world *ecs.World) map[ecs.Entity][]ecs.Entity {
 
 func sceneChildCount(world *ecs.World, parent ecs.Entity) int {
 	count := 0
-	for _, access := range ecs.Query[sceneapi.Parent](world).All {
+	for _, access := range world.Query[sceneapi.Parent]().All {
 		if access.Ref().Entity == parent {
 			count++
 		}
@@ -428,7 +428,7 @@ func (s *SceneInstance) cloneTemplateNode(parent, source ecs.Entity, prefix stri
 	if err != nil {
 		return err
 	}
-	ecs.Put(&components, sceneapi.Parent{Entity: parent})
+	components.Put(sceneapi.Parent{Entity: parent})
 	entity := s.World.Spawn(components)
 	cleanup := func() {
 		s.destroyScripts(entity)
@@ -443,7 +443,7 @@ func (s *SceneInstance) cloneTemplateNode(parent, source ecs.Entity, prefix stri
 		s.World.Despawn(entity)
 	}
 	if clone.Spec.BlockInput && (clone.Spec.Components.Has2D() || clone.Spec.Control != nil) {
-		_ = ecs.Insert(s.World, entity, sceneapi.InputBlocker2D{
+		_ = s.World.Insert(entity, sceneapi.InputBlocker2D{
 			Width: float32(clone.Spec.Width), Height: float32(clone.Spec.Height), PassThrough: clone.Spec.PassThrough,
 		})
 	}
@@ -483,7 +483,7 @@ func sceneEntityIsUnder(world *ecs.World, entity, root ecs.Entity) bool {
 		if entity == root {
 			return true
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](world, entity)
+		parent, ok := world.Get[sceneapi.Parent](entity)
 		if !ok {
 			return false
 		}
@@ -550,7 +550,7 @@ func (s *SceneInstance) ReplaceNodes(specs []SceneNodeSpec) error {
 	}
 	for index, node := range plan.Nodes {
 		if node.TargetCamera != 0 {
-			if err := ecs.Insert(s.World, entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
+			if err := s.World.Insert(entities[index], sceneapi.UITargetCamera{Entity: entities[node.TargetCamera-1]}); err != nil {
 				s.Dispose()
 				return fmt.Errorf("game object %q targetCamera: %w", node.Spec.ID, err)
 			}
@@ -613,7 +613,7 @@ func (s *SceneInstance) removeNodes(refresh bool, ids ...string) int {
 	}
 
 	children := make(map[ecs.Entity][]ecs.Entity)
-	for entity, access := range ecs.Query[sceneapi.Parent](s.World).All {
+	for entity, access := range s.World.Query[sceneapi.Parent]().All {
 		parent := access.Ref()
 
 		children[parent.Entity] = append(children[parent.Entity], entity)
@@ -759,7 +759,7 @@ func (s *SceneInstance) Child(parent ecs.Entity, id string) (ecs.Entity, error) 
 	if err != nil {
 		return 0, err
 	}
-	relation, ok := ecs.Get[sceneapi.Parent](s.World, entity)
+	relation, ok := s.World.Get[sceneapi.Parent](entity)
 	if !ok || relation.Entity != parent {
 		return 0, fmt.Errorf("ecs entity %q is not a child of %q", id, s.ID(parent))
 	}
@@ -792,7 +792,7 @@ func (s *SceneInstance) Path(id string) string {
 		if name != "" {
 			parts = append(parts, name)
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](s.World, current)
+		parent, ok := s.World.Get[sceneapi.Parent](current)
 		if !ok {
 			break
 		}
@@ -852,7 +852,7 @@ func (s *SceneInstance) RenderItems() []SceneRenderItem {
 }
 
 func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRenderItem, ui bool, matrix func(T) mgl32.Mat4) []SceneRenderItem {
-	for entity, access := range ecs.Query3[sceneapi.Sprite2D, T, sceneapi.Visibility](world).All {
+	for entity, access := range world.Query3[sceneapi.Sprite2D, T, sceneapi.Visibility]().All {
 		sprite := access.A.Get()
 		transform := access.B.Get()
 		visibility := access.C.Get()
@@ -869,7 +869,7 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Material:  sprite.Texture.BatchKey(),
 		})
 	}
-	for entity, access := range ecs.Query3[sceneapi.ParticleEmitter2D, T, sceneapi.Visibility](world).All {
+	for entity, access := range world.Query3[sceneapi.ParticleEmitter2D, T, sceneapi.Visibility]().All {
 		emitter := access.A.Get()
 		transform := access.B.Get()
 		visibility := access.C.Get()
@@ -890,7 +890,7 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Material:  texture.BatchKey(),
 		})
 	}
-	for entity, access := range ecs.Query3[sceneapi.Tilemap2D, T, sceneapi.Visibility](world).All {
+	for entity, access := range world.Query3[sceneapi.Tilemap2D, T, sceneapi.Visibility]().All {
 		tilemap := access.A.Get()
 		transform := access.B.Get()
 		visibility := access.C.Get()
@@ -902,7 +902,7 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Entity: entity, UI: ui, SortIndex: sceneSortIndex(world, entity, ui, 0), Depth: matrix(transform)[14], Sequence: uint64(entity), Material: tilemap.Texture.BatchKey(),
 		})
 	}
-	for entity, access := range ecs.Query3[sceneapi.Text2D, T, sceneapi.Visibility](world).All {
+	for entity, access := range world.Query3[sceneapi.Text2D, T, sceneapi.Visibility]().All {
 		text := access.A.Get()
 		transform := access.B.Get()
 		visibility := access.C.Get()
@@ -918,7 +918,7 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Sequence:  uint64(entity),
 		})
 	}
-	for entity, access := range ecs.Query3[sceneapi.Spine2D, T, sceneapi.Visibility](world).All {
+	for entity, access := range world.Query3[sceneapi.Spine2D, T, sceneapi.Visibility]().All {
 		component := access.A.Get()
 		transform := access.B.Get()
 		visibility := access.C.Get()
@@ -939,8 +939,8 @@ func (s *SceneInstance) Bounds(entity ecs.Entity) (float32, float32, float32, fl
 	if !ok {
 		return 0, 0, 0, 0, false
 	}
-	anchor, _ := ecs.Get[sceneapi.Anchor](s.World, entity)
-	ui := ecs.Has[sceneapi.UITransform](s.World, entity)
+	anchor, _ := s.World.Get[sceneapi.Anchor](entity)
+	ui := s.World.Has[sceneapi.UITransform](entity)
 	var minX, minY, maxX, maxY float32
 	found := false
 	include := func(x0, y0, x1, y1 float32, ok bool) {
@@ -954,22 +954,22 @@ func (s *SceneInstance) Bounds(entity ecs.Entity) (float32, float32, float32, fl
 		minX, minY = min(minX, x0), min(minY, y0)
 		maxX, maxY = max(maxX, x1), max(maxY, y1)
 	}
-	if size, ok := ecs.Get[sceneapi.Size2D](s.World, entity); ok {
+	if size, ok := s.World.Get[sceneapi.Size2D](entity); ok {
 		include(sceneapi.BoundsInSpace2D(transform, anchor, size.Width, size.Height, ui))
 	}
-	if sprite, ok := ecs.Get[sceneapi.Sprite2D](s.World, entity); ok {
+	if sprite, ok := s.World.Get[sceneapi.Sprite2D](entity); ok {
 		include(sceneapi.SpriteBounds2D(&sprite, anchor, transform, ui))
 	}
-	if text := ecs.GetMut[sceneapi.Text2D](s.World, entity); text != nil {
+	if text := s.World.GetMut[sceneapi.Text2D](entity); text != nil {
 		include(sceneapi.TextBounds2D(text, anchor, transform, ui))
 	}
-	if emitter, ok := ecs.Get[sceneapi.ParticleEmitter2D](s.World, entity); ok {
+	if emitter, ok := s.World.Get[sceneapi.ParticleEmitter2D](entity); ok {
 		include(sceneapi.ParticleEmitterBounds2D(&emitter, transform, ui))
 	}
-	if tilemap, ok := ecs.Get[sceneapi.Tilemap2D](s.World, entity); ok {
+	if tilemap, ok := s.World.Get[sceneapi.Tilemap2D](entity); ok {
 		include(sceneapi.BoundsInSpace2D(transform, anchor, tilemap.PixelWidth(), tilemap.PixelHeight(), ui))
 	}
-	if component, ok := ecs.Get[sceneapi.Spine2D](s.World, entity); ok && component.Player != nil {
+	if component, ok := s.World.Get[sceneapi.Spine2D](entity); ok && component.Player != nil {
 		x0, y0, x1, y1, valid := component.Player.AnimationBounds()
 		if valid {
 			spineTransform := sceneapi.SpineModelMatrix2D(transform, ui)
@@ -984,7 +984,7 @@ func (s *SceneInstance) Bounds(entity ecs.Entity) (float32, float32, float32, fl
 			include(spineMinX, spineMinY, spineMaxX, spineMaxY, true)
 		}
 	}
-	if size, ok := ecs.Get[sceneapi.Size2D](s.World, entity); ok {
+	if size, ok := s.World.Get[sceneapi.Size2D](entity); ok {
 		include(sceneapi.BoundsInSpace2D(transform, anchor, size.Width, size.Height, ui))
 	}
 	return minX, minY, maxX, maxY, found
@@ -999,10 +999,10 @@ func (s *SceneInstance) TransformMatrix2D(entity ecs.Entity) (mgl32.Mat4, bool) 
 }
 
 func sceneTransformMatrix(world *ecs.World, entity ecs.Entity) (mgl32.Mat4, bool) {
-	if transform, ok := ecs.Get[sceneapi.UIGlobalTransform](world, entity); ok {
+	if transform, ok := world.Get[sceneapi.UIGlobalTransform](entity); ok {
 		return transform.Matrix, true
 	}
-	if transform, ok := ecs.Get[sceneapi.GlobalTransform](world, entity); ok {
+	if transform, ok := world.Get[sceneapi.GlobalTransform](entity); ok {
 		return transform.Matrix, true
 	}
 	return mgl32.Mat4{}, false
@@ -1017,13 +1017,13 @@ func (s *SceneInstance) BoundsByID(id string) (float32, float32, float32, float3
 }
 
 func (s *SceneInstance) IsUI(entity ecs.Entity) bool {
-	return s != nil && s.World != nil && ecs.Has[sceneapi.UITransform](s.World, entity)
+	return s != nil && s.World != nil && s.World.Has[sceneapi.UITransform](entity)
 }
 
 func (s *SceneInstance) Pick(worldPosition, viewportPosition mgl32.Vec2) (string, bool) {
 	items := s.RenderItems()
 	for i := len(items) - 1; i >= 0; i-- {
-		if !ecs.Has[sceneapi.Sprite2D](s.World, items[i].Entity) && !ecs.Has[sceneapi.Text2D](s.World, items[i].Entity) && !ecs.Has[sceneapi.Spine2D](s.World, items[i].Entity) && !ecs.Has[sceneapi.ParticleEmitter2D](s.World, items[i].Entity) {
+		if !s.World.Has[sceneapi.Sprite2D](items[i].Entity) && !s.World.Has[sceneapi.Text2D](items[i].Entity) && !s.World.Has[sceneapi.Spine2D](items[i].Entity) && !s.World.Has[sceneapi.ParticleEmitter2D](items[i].Entity) {
 			continue
 		}
 		x0, y0, x1, y1, ok := s.Bounds(items[i].Entity)
@@ -1031,7 +1031,7 @@ func (s *SceneInstance) Pick(worldPosition, viewportPosition mgl32.Vec2) (string
 			continue
 		}
 		point := worldPosition
-		if ecs.Has[sceneapi.UITransform](s.World, items[i].Entity) {
+		if s.World.Has[sceneapi.UITransform](items[i].Entity) {
 			point = viewportPosition
 		}
 		x, y := point.X(), point.Y()
@@ -1077,7 +1077,7 @@ func (s *SceneInstance) applyNodeUnder(parentID string, spec SceneNodeSpec) erro
 		if parentID != "" && !hasParent {
 			return fmt.Errorf("game object %q references unknown parent %q", spec.ID, parentID)
 		}
-		if hasParent && ecs.Has[sceneapi.UITransform](s.World, parent) != usesUI {
+		if hasParent && s.World.Has[sceneapi.UITransform](parent) != usesUI {
 			return fmt.Errorf("game object %q cannot use %s coordinates under parent %q", spec.ID, coordinateSpaceName(usesUI), parentID)
 		}
 		siblingIndex := len(s.Roots)
@@ -1116,10 +1116,10 @@ func (s *SceneInstance) applyNodeUnder(parentID string, spec SceneNodeSpec) erro
 		return nil
 	}
 	previousNode := s.nodes[entity]
-	previousAnimator, hadAnimator := ecs.Get[sceneapi.Animator](s.World, entity)
+	previousAnimator, hadAnimator := s.World.Get[sceneapi.Animator](entity)
 	scriptsChanged := !scriptComponentsEqual(previousNode.Spec.Scripts, spec.Scripts)
-	if parent, ok := ecs.Get[sceneapi.Parent](s.World, entity); ok {
-		if ecs.Has[sceneapi.UITransform](s.World, parent.Entity) != usesUI {
+	if parent, ok := s.World.Get[sceneapi.Parent](entity); ok {
+		if s.World.Has[sceneapi.UITransform](parent.Entity) != usesUI {
 			return fmt.Errorf("entity %q cannot change coordinate space independently of its parent", spec.ID)
 		}
 	}
@@ -1168,11 +1168,11 @@ func (s *SceneInstance) restoreAppliedNode(entity ecs.Entity, previous sceneSpaw
 		return err
 	}
 	if hadAnimator {
-		if err := ecs.Insert(s.World, entity, previousAnimator); err != nil {
+		if err := s.World.Insert(entity, previousAnimator); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Animator](s.World, entity)
+		s.World.Remove[sceneapi.Animator](entity)
 	}
 	// Dynamic recompilation does not have the static plan's cache key and
 	// pre-resolved target arrays. Restore the complete plan node metadata after
@@ -1200,40 +1200,40 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 	// Keep an existing runtime control alive until every fallible authored and
 	// animation operation has completed. This makes an unsuccessful replacement
 	// reversible even when the new spec removes the control declaration.
-	removeControl := spec.Control == nil && ecs.Has[engineui.Control](s.World, entity)
+	removeControl := spec.Control == nil && s.World.Has[engineui.Control](entity)
 	s.project.clearComponents(s.World, entity)
-	if err := ecs.Insert(s.World, entity, sceneapi.Name{Value: strings.TrimSpace(spec.ID)}); err != nil {
+	if err := s.World.Insert(entity, sceneapi.Name{Value: strings.TrimSpace(spec.ID)}); err != nil {
 		return err
 	}
 	if node.UI {
-		if err := ecs.Insert(s.World, entity, node.UITransform.Component()); err != nil {
+		if err := s.World.Insert(entity, node.UITransform.Component()); err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, sceneapi.UIGlobalTransform{}); err != nil {
+		if err := s.World.Insert(entity, sceneapi.UIGlobalTransform{}); err != nil {
 			return err
 		}
-		ecs.Remove[sceneapi.Transform](s.World, entity)
-		ecs.Remove[sceneapi.GlobalTransform](s.World, entity)
-		ecs.Remove[sceneapi.RenderOrder2D](s.World, entity)
-		if err := ecs.Insert(s.World, entity, sceneapi.UIStackIndex(spec.Order)); err != nil {
+		s.World.Remove[sceneapi.Transform](entity)
+		s.World.Remove[sceneapi.GlobalTransform](entity)
+		s.World.Remove[sceneapi.RenderOrder2D](entity)
+		if err := s.World.Insert(entity, sceneapi.UIStackIndex(spec.Order)); err != nil {
 			return err
 		}
 	} else {
-		if err := ecs.Insert(s.World, entity, node.Transform); err != nil {
+		if err := s.World.Insert(entity, node.Transform); err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, sceneapi.GlobalTransform{}); err != nil {
+		if err := s.World.Insert(entity, sceneapi.GlobalTransform{}); err != nil {
 			return err
 		}
-		ecs.Remove[sceneapi.UITransform](s.World, entity)
-		ecs.Remove[sceneapi.UIGlobalTransform](s.World, entity)
-		ecs.Remove[sceneapi.UIStackIndex](s.World, entity)
+		s.World.Remove[sceneapi.UITransform](entity)
+		s.World.Remove[sceneapi.UIGlobalTransform](entity)
+		s.World.Remove[sceneapi.UIStackIndex](entity)
 		applyRenderOrderSpec(s.World, entity, spec)
 	}
-	if err := ecs.Insert(s.World, entity, sceneapi.Visibility{Visible: node.Visible}); err != nil {
+	if err := s.World.Insert(entity, sceneapi.Visibility{Visible: node.Visible}); err != nil {
 		return err
 	}
-	if err := ecs.Insert(s.World, entity, spec.Anchor); err != nil {
+	if err := s.World.Insert(entity, spec.Anchor); err != nil {
 		return err
 	}
 	if node.UI {
@@ -1241,45 +1241,45 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 		if authored, exists := s.nodes[entity]; exists {
 			layoutOrder = authored.LayoutOrder
 		}
-		if err := ecs.Insert(s.World, entity, sceneapi.SiblingOrder(layoutOrder)); err != nil {
+		if err := s.World.Insert(entity, sceneapi.SiblingOrder(layoutOrder)); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.SiblingOrder](s.World, entity)
+		s.World.Remove[sceneapi.SiblingOrder](entity)
 	}
 	if spec.Layout != nil {
-		if err := ecs.Insert(s.World, entity, *spec.Layout); err != nil {
+		if err := s.World.Insert(entity, *spec.Layout); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[engineui.Layout](s.World, entity)
+		s.World.Remove[engineui.Layout](entity)
 	}
 	if spec.Widget != nil {
-		if err := ecs.Insert(s.World, entity, *spec.Widget); err != nil {
+		if err := s.World.Insert(entity, *spec.Widget); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[engineui.Widget](s.World, entity)
+		s.World.Remove[engineui.Widget](entity)
 	}
 	if err := resolveWidgetTarget(s.World, entity, spec, s.Entities); err != nil {
 		return err
 	}
 	applyRenderLayersSpec(s.World, entity, spec.RenderLayers)
-	if spec.Control != nil || spec.Components.VisualsEmpty() || (ecs.Has[engineui.Control](s.World, entity) && !removeControl) {
-		if err := ecs.Insert(s.World, entity, sceneapi.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)}); err != nil {
+	if spec.Control != nil || spec.Components.VisualsEmpty() || (s.World.Has[engineui.Control](entity) && !removeControl) {
+		if err := s.World.Insert(entity, sceneapi.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)}); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Size2D](s.World, entity)
+		s.World.Remove[sceneapi.Size2D](entity)
 	}
 	if spec.BlockInput && (spec.Components.Has2D() || spec.Control != nil) {
-		if err := ecs.Insert(s.World, entity, sceneapi.InputBlocker2D{
+		if err := s.World.Insert(entity, sceneapi.InputBlocker2D{
 			Width: float32(spec.Width), Height: float32(spec.Height), PassThrough: spec.PassThrough,
 		}); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.InputBlocker2D](s.World, entity)
+		s.World.Remove[sceneapi.InputBlocker2D](entity)
 	}
 	if err := s.applyAuthoredVisualComponents(entity, node); err != nil {
 		return err
@@ -1287,7 +1287,7 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 	if err := applyUITargetCameraSpec(s.World, entity, spec.TargetCamera, s.Entities); err != nil {
 		return fmt.Errorf("game object %q: %w", spec.ID, err)
 	}
-	if ecs.Has[engineui.Control](s.World, entity) && !removeControl {
+	if s.World.Has[engineui.Control](entity) && !removeControl {
 		if err := s.project.applyBoundControlSpec(s.World, entity, spec); err != nil {
 			return err
 		}
@@ -1333,20 +1333,20 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 				}
 			}
 		}
-		if err := ecs.Insert(s.World, entity, sprite); err != nil {
+		if err := s.World.Insert(entity, sprite); err != nil {
 			return err
 		}
 		if trail := spec.Components.Sprite.Trail; trail != nil {
-			if err := ecs.Insert(s.World, entity, trail.component()); err != nil {
+			if err := s.World.Insert(entity, trail.component()); err != nil {
 				return err
 			}
 		} else {
-			ecs.Remove[sceneapi.SpriteTrail2D](s.World, entity)
+			s.World.Remove[sceneapi.SpriteTrail2D](entity)
 		}
 	} else {
-		ecs.Remove[sceneapi.Sprite2D](s.World, entity)
-		ecs.Remove[sceneapi.SpriteTrail2D](s.World, entity)
-		ecs.Remove[sceneapi.Animator](s.World, entity)
+		s.World.Remove[sceneapi.Sprite2D](entity)
+		s.World.Remove[sceneapi.SpriteTrail2D](entity)
+		s.World.Remove[sceneapi.Animator](entity)
 	}
 	if node.HasAnimation {
 		if requiresSprite && !node.HasSprite {
@@ -1358,17 +1358,17 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			if spec.Height > 0 {
 				sprite.Height = float32(spec.Height)
 			}
-			if err := ecs.Insert(s.World, entity, sprite); err != nil {
+			if err := s.World.Insert(entity, sprite); err != nil {
 				return err
 			}
 		}
-		if err := ecs.Insert(s.World, entity, animator); err != nil {
+		if err := s.World.Insert(entity, animator); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Animator](s.World, entity)
+		s.World.Remove[sceneapi.Animator](entity)
 		if !node.HasSprite {
-			ecs.Remove[sceneapi.Sprite2D](s.World, entity)
+			s.World.Remove[sceneapi.Sprite2D](entity)
 		}
 	}
 	if node.HasText {
@@ -1376,44 +1376,44 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, text); err != nil {
+		if err := s.World.Insert(entity, text); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Text2D](s.World, entity)
+		s.World.Remove[sceneapi.Text2D](entity)
 	}
 	if node.HasParticle {
 		emitter, err := s.project.ecsParticleEmitterForGameObject(spec)
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, emitter); err != nil {
+		if err := s.World.Insert(entity, emitter); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.ParticleEmitter2D](s.World, entity)
+		s.World.Remove[sceneapi.ParticleEmitter2D](entity)
 	}
 	if node.HasTilemap {
 		tilemap, err := s.project.ecsTilemapForGameObject(spec)
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, tilemap); err != nil {
+		if err := s.World.Insert(entity, tilemap); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Tilemap2D](s.World, entity)
+		s.World.Remove[sceneapi.Tilemap2D](entity)
 	}
 	if node.HasSpine {
 		component, err := s.project.ecsSpineForGameObject(spec)
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, component); err != nil {
+		if err := s.World.Insert(entity, component); err != nil {
 			return err
 		}
 	} else {
-		ecs.Remove[sceneapi.Spine2D](s.World, entity)
+		s.World.Remove[sceneapi.Spine2D](entity)
 	}
 	if node.HasModel {
 		mesh, material, supported, err := s.project.modelForSpec(spec)
@@ -1421,15 +1421,15 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			return err
 		}
 		if supported {
-			if err := ecs.Insert(s.World, entity, render3d.Mesh{Mesh: mesh}); err != nil {
+			if err := s.World.Insert(entity, render3d.Mesh{Mesh: mesh}); err != nil {
 				return err
 			}
-			if err := ecs.Insert(s.World, entity, material); err != nil {
+			if err := s.World.Insert(entity, material); err != nil {
 				return err
 			}
 		} else {
-			ecs.Remove[render3d.Mesh](s.World, entity)
-			ecs.Remove[render3d.Material[graphics.StandardMaterial]](s.World, entity)
+			s.World.Remove[render3d.Mesh](entity)
+			s.World.Remove[render3d.Material[graphics.StandardMaterial]](entity)
 		}
 	}
 	if node.HasCamera {
@@ -1440,49 +1440,49 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			Clear:      true,
 			ClearColor: node.Camera.ClearColor,
 		}
-		if err := ecs.Insert(s.World, entity, camera); err != nil {
+		if err := s.World.Insert(entity, camera); err != nil {
 			return err
 		}
 		renderSettings, err := spec.Components.Camera.renderSettings()
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, renderSettings); err != nil {
+		if err := s.World.Insert(entity, renderSettings); err != nil {
 			return err
 		}
 		environment, err := s.project.cameraEnvironment(spec.Components.Camera)
 		if err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, environment); err != nil {
+		if err := s.World.Insert(entity, environment); err != nil {
 			return err
 		}
-		if err := ecs.Insert(s.World, entity, node.Camera.Projection); err != nil {
+		if err := s.World.Insert(entity, node.Camera.Projection); err != nil {
 			return err
 		}
 	}
 	if node.HasLight {
-		if err := ecs.Insert(s.World, entity, node.Light); err != nil {
+		if err := s.World.Insert(entity, node.Light); err != nil {
 			return err
 		}
 	}
 	if node.HasAmbientLight {
-		if err := ecs.Insert(s.World, entity, node.AmbientLight); err != nil {
+		if err := s.World.Insert(entity, node.AmbientLight); err != nil {
 			return err
 		}
 	}
 	if node.HasPointLight {
-		if err := ecs.Insert(s.World, entity, node.PointLight); err != nil {
+		if err := s.World.Insert(entity, node.PointLight); err != nil {
 			return err
 		}
 	}
 	if node.HasSpotLight {
-		if err := ecs.Insert(s.World, entity, node.SpotLight); err != nil {
+		if err := s.World.Insert(entity, node.SpotLight); err != nil {
 			return err
 		}
 	}
 	if node.HasAreaLight {
-		if err := ecs.Insert(s.World, entity, node.AreaLight); err != nil {
+		if err := s.World.Insert(entity, node.AreaLight); err != nil {
 			return err
 		}
 	}
@@ -1494,17 +1494,17 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 
 func (s *SceneInstance) recomposeAuthoredNode(entity ecs.Entity) error {
 	root := entity
-	if !ecs.Has[engineui.Control](s.World, root) {
-		if relation, ok := ecs.Get[engineui.Relation[engineui.Control]](s.World, entity); ok {
+	if !s.World.Has[engineui.Control](root) {
+		if relation, ok := s.World.Get[engineui.Relation[engineui.Control]](entity); ok {
 			root = relation.Owner
-		} else if parent, ok := ecs.Get[sceneapi.Parent](s.World, entity); ok {
+		} else if parent, ok := s.World.Get[sceneapi.Parent](entity); ok {
 			root = parent.Entity
 		} else {
 			root = 0
 		}
 	}
-	for root != 0 && !ecs.Has[engineui.Control](s.World, root) {
-		parent, ok := ecs.Get[sceneapi.Parent](s.World, root)
+	for root != 0 && !s.World.Has[engineui.Control](root) {
+		parent, ok := s.World.Get[sceneapi.Parent](root)
 		if !ok {
 			root = 0
 			break
@@ -1521,7 +1521,7 @@ func (s *SceneInstance) recordSceneNodes(spec SceneNodeSpec) {
 	entity := s.Entities[strings.TrimSpace(spec.ID)]
 	if entity != 0 {
 		if node, err := compileSceneSpawnNode(spec); err == nil {
-			if order, ok := ecs.Get[sceneapi.SiblingOrder](s.World, entity); ok {
+			if order, ok := s.World.Get[sceneapi.SiblingOrder](entity); ok {
 				node.LayoutOrder = int(order)
 			}
 			s.nodes[entity] = node
@@ -1626,16 +1626,16 @@ func (b *Bundle) spawnECSEntity(world *ecs.World, spec SceneNodeSpec, parent ecs
 		return 0, err
 	}
 	if hasParent {
-		ecs.Put(&components, sceneapi.Parent{Entity: parent})
+		components.Put(sceneapi.Parent{Entity: parent})
 	}
 	entity := world.Spawn(components)
 	if specUsesUI(&spec) {
-		if err := ecs.Insert(world, entity, sceneapi.SiblingOrder(siblingIndex)); err != nil {
+		if err := world.Insert(entity, sceneapi.SiblingOrder(siblingIndex)); err != nil {
 			return 0, err
 		}
 	}
 	if spec.BlockInput && (spec.Components.Has2D() || spec.Control != nil) {
-		_ = ecs.Insert(world, entity, sceneapi.InputBlocker2D{
+		_ = world.Insert(entity, sceneapi.InputBlocker2D{
 			Width: float32(spec.Width), Height: float32(spec.Height), PassThrough: spec.PassThrough,
 		})
 	}
@@ -1653,7 +1653,7 @@ func (b *Bundle) spawnECSEntity(world *ecs.World, spec SceneNodeSpec, parent ecs
 
 func resolveWidgetTarget(world *ecs.World, entity ecs.Entity, spec SceneNodeSpec, entities map[string]ecs.Entity) error {
 	if spec.Widget != nil {
-		widget := ecs.GetMut[engineui.Widget](world, entity)
+		widget := world.GetMut[engineui.Widget](entity)
 		if widget == nil {
 			return fmt.Errorf("game object %q widget target requires a Widget component", spec.ID)
 		}
@@ -1687,11 +1687,11 @@ func (b *Bundle) spawnECSPlanNode(world *ecs.World, node sceneSpawnNode, parent 
 
 func spawnECSComponents(world *ecs.World, node sceneSpawnNode, parent ecs.Entity, index map[string]ecs.Entity, reverse map[ecs.Entity]string, components ecs.Bundle) (ecs.Entity, error) {
 	if node.Parent > 0 {
-		ecs.Put(&components, sceneapi.Parent{Entity: parent})
+		components.Put(sceneapi.Parent{Entity: parent})
 	}
 	entity := world.Spawn(components)
 	if node.Spec.BlockInput && (node.Spec.Components.Has2D() || node.Spec.Control != nil) {
-		_ = ecs.Insert(world, entity, sceneapi.InputBlocker2D{
+		_ = world.Insert(entity, sceneapi.InputBlocker2D{
 			Width: float32(node.Spec.Width), Height: float32(node.Spec.Height), PassThrough: node.Spec.PassThrough,
 		})
 	}
@@ -1726,12 +1726,12 @@ func (s *SceneInstance) recomposeControlsUnder(roots map[ecs.Entity]struct{}) er
 		s.unbindControlPart(entity)
 	}
 	for _, entity := range entities {
-		if ecs.Has[engineui.Control](s.World, entity) {
-			ecs.Remove[engineui.Variants[engineui.ControlVariant]](s.World, entity)
+		if s.World.Has[engineui.Control](entity) {
+			s.World.Remove[engineui.Variants[engineui.ControlVariant]](entity)
 		}
 	}
 	for _, entity := range entities {
-		if !ecs.Has[engineui.Control](s.World, entity) {
+		if !s.World.Has[engineui.Control](entity) {
 			continue
 		}
 		if err := s.bindControlComposition(entity); err != nil {
@@ -1746,7 +1746,7 @@ func sceneEntityUnder(world *ecs.World, entity ecs.Entity, roots map[ecs.Entity]
 		if _, ok := roots[entity]; ok {
 			return true
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](world, entity)
+		parent, ok := world.Get[sceneapi.Parent](entity)
 		if !ok {
 			return false
 		}
@@ -1757,7 +1757,7 @@ func sceneEntityUnder(world *ecs.World, entity ecs.Entity, roots map[ecs.Entity]
 
 // BindControl installs an explicitly selected runtime behavior on an authored
 // control root.
-func BindControl[T any](scene *SceneInstance, id string, component T) error {
+func (scene *SceneInstance) BindControl[T any](id string, component T) error {
 	if scene == nil || scene.World == nil || scene.project == nil {
 		return fmt.Errorf("scene instance is nil")
 	}
@@ -1771,7 +1771,7 @@ func BindControl[T any](scene *SceneInstance, id string, component T) error {
 	if !scene.nodes[entity].UI {
 		return fmt.Errorf("game object %q requires coordinate space ui before binding a control", id)
 	}
-	if err := bindSceneControl(scene, entity, component); err != nil {
+	if err := scene.bindSceneControl(entity, component); err != nil {
 		return err
 	}
 	return scene.RefreshTransforms()
@@ -1779,7 +1779,7 @@ func BindControl[T any](scene *SceneInstance, id string, component T) error {
 
 // BindControlEntity installs behavior on a runtime entity created from a
 // scene template. It is the entity-based counterpart to BindControl.
-func BindControlEntity[T any](scene *SceneInstance, entity ecs.Entity, component T) error {
+func (scene *SceneInstance) BindControlEntity[T any](entity ecs.Entity, component T) error {
 	if scene == nil || scene.World == nil || scene.project == nil {
 		return fmt.Errorf("scene instance is nil")
 	}
@@ -1787,10 +1787,10 @@ func BindControlEntity[T any](scene *SceneInstance, entity ecs.Entity, component
 	if !ok || node.Spec.Control == nil || !node.UI {
 		return fmt.Errorf("entity %d is not an authored UI control", entity)
 	}
-	return bindSceneControl(scene, entity, component)
+	return scene.bindSceneControl(entity, component)
 }
 
-func bindSceneControl[T any](scene *SceneInstance, entity ecs.Entity, component T) error {
+func (scene *SceneInstance) bindSceneControl[T any](entity ecs.Entity, component T) error {
 	node, ok := scene.authoredNode(entity)
 	if !ok {
 		return fmt.Errorf("entity %d is not an authored node", entity)
@@ -1818,14 +1818,14 @@ func bindSceneControl[T any](scene *SceneInstance, entity ecs.Entity, component 
 	}
 	switch any(component).(type) {
 	case engineui.Button, engineui.Toggle[bool]:
-		if err := ecs.Insert(scene.World, entity, engineui.Content[string]{Value: sceneNodeControlText(node.Spec)}); err != nil {
+		if err := scene.World.Insert(entity, engineui.Content[string]{Value: sceneNodeControlText(node.Spec)}); err != nil {
 			return err
 		}
-		if err := ecs.Insert(scene.World, entity, engineui.Typography{FontSize: theme.FontSize, DPI: theme.DPI}); err != nil {
+		if err := scene.World.Insert(entity, engineui.Typography{FontSize: theme.FontSize, DPI: theme.DPI}); err != nil {
 			return err
 		}
 	case engineui.ScrollArea:
-		if err := ecs.Insert(scene.World, entity, sceneapi.ClipRect2D{}); err != nil {
+		if err := scene.World.Insert(entity, sceneapi.ClipRect2D{}); err != nil {
 			return err
 		}
 	}
@@ -1835,7 +1835,7 @@ func bindSceneControl[T any](scene *SceneInstance, entity ecs.Entity, component 
 			engineui.UnbindControlCompositionPart(scene.World, child)
 		}
 	})
-	ecs.Remove[engineui.Variants[engineui.ControlVariant]](scene.World, entity)
+	scene.World.Remove[engineui.Variants[engineui.ControlVariant]](entity)
 	return scene.bindControlComposition(entity)
 }
 
@@ -1863,7 +1863,7 @@ func (s *SceneInstance) bindControlComposition(owner ecs.Entity) error {
 		}
 	})
 	return engineui.BindControlComposition(s.World, composition, owner, func(entity ecs.Entity) error {
-		return bindSceneControl(s, entity, engineui.Button{})
+		return s.bindSceneControl(entity, engineui.Button{})
 	})
 }
 
@@ -1905,7 +1905,7 @@ func (s *SceneInstance) authoredNodeUnder(owner, entity ecs.Entity) bool {
 		if entity == owner {
 			return true
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](s.World, entity)
+		parent, ok := s.World.Get[sceneapi.Parent](entity)
 		if !ok {
 			return false
 		}
@@ -1917,7 +1917,7 @@ func (s *SceneInstance) authoredNodeUnder(owner, entity ecs.Entity) bool {
 func (b *Bundle) uiThemeForSpec(world *ecs.World, spec SceneNodeSpec) (engineui.Theme, error) {
 	theme := engineui.DefaultTheme()
 	// A project can install one shared UI theme before scene instantiation.
-	if configured, ok := ecs.GetResource[engineui.Theme](world); ok {
+	if configured, ok := world.GetResource[engineui.Theme](); ok {
 		theme = configured
 	}
 	theme.StackIndex = spec.Order
@@ -1961,13 +1961,13 @@ func (b *Bundle) applyBoundControlSpec(world *ecs.World, entity ecs.Entity, spec
 	engineui.SetControlDisabled(world, entity, spec.Disabled)
 	engineui.SetControlPassThrough(world, entity, spec.PassThrough)
 	setUIStackIndex(world, entity, theme.StackIndex)
-	if content := ecs.GetMut[engineui.Content[string]](world, entity); content != nil {
+	if content := world.GetMut[engineui.Content[string]](entity); content != nil {
 		content.Value = sceneNodeControlText(spec)
 	}
-	if typography := ecs.GetMut[engineui.Typography](world, entity); typography != nil {
+	if typography := world.GetMut[engineui.Typography](entity); typography != nil {
 		typography.FontSize, typography.DPI = theme.FontSize, theme.DPI
 	}
-	if blocker := ecs.GetMut[sceneapi.InputBlocker2D](world, entity); blocker != nil {
+	if blocker := world.GetMut[sceneapi.InputBlocker2D](entity); blocker != nil {
 		blocker.Width, blocker.Height = width, height
 	}
 	return err
@@ -2042,32 +2042,32 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 	spec := node.Spec
 	components := ecs.NewBundle(28)
 	if named {
-		ecs.Put(&components, sceneapi.Name{Value: spec.ID})
+		components.Put(sceneapi.Name{Value: spec.ID})
 	}
 	if node.UI {
-		ecs.Put(&components, node.UITransform.Component())
-		ecs.Put(&components, sceneapi.UIGlobalTransform{})
-		ecs.Put(&components, sceneapi.UIStackIndex(spec.Order))
-		ecs.Put(&components, sceneapi.SiblingOrder(node.LayoutOrder))
+		components.Put(node.UITransform.Component())
+		components.Put(sceneapi.UIGlobalTransform{})
+		components.Put(sceneapi.UIStackIndex(spec.Order))
+		components.Put(sceneapi.SiblingOrder(node.LayoutOrder))
 	} else {
-		ecs.Put(&components, node.Transform)
-		ecs.Put(&components, sceneapi.GlobalTransform{})
+		components.Put(node.Transform)
+		components.Put(sceneapi.GlobalTransform{})
 		order := spec.Order
 		if node.HasParticle && order == 0 {
 			order = int(sceneapi.DefaultParticleRenderOrder)
 		}
-		ecs.Put(&components, sceneapi.RenderOrder2D(order))
+		components.Put(sceneapi.RenderOrder2D(order))
 	}
 	if spec.Layout != nil {
-		ecs.Put(&components, *spec.Layout)
+		components.Put(*spec.Layout)
 	}
 	if spec.Widget != nil {
-		ecs.Put(&components, *spec.Widget)
+		components.Put(*spec.Widget)
 	}
-	ecs.Put(&components, sceneapi.Visibility{Visible: node.Visible})
-	ecs.Put(&components, spec.Anchor)
+	components.Put(sceneapi.Visibility{Visible: node.Visible})
+	components.Put(spec.Anchor)
 	if layers, ok := renderLayersFromSpec(spec.RenderLayers); ok {
-		ecs.Put(&components, layers)
+		components.Put(layers)
 	}
 	var animator sceneapi.Animator
 	requiresSprite := false
@@ -2079,7 +2079,7 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 		}
 	}
 	if spec.Control != nil || spec.Components.VisualsEmpty() {
-		ecs.Put(&components, sceneapi.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
+		components.Put(sceneapi.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
 	}
 	if node.HasSprite {
 		sprite, err := b.ecsSpriteForSpec(spec)
@@ -2098,12 +2098,12 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 				}
 			}
 		}
-		ecs.Put(&components, sprite)
+		components.Put(sprite)
 		if trail := spec.Components.Sprite.Trail; trail != nil {
 			if err := trail.validate(); err != nil {
 				return ecs.Bundle{}, fmt.Errorf("game object %q trail %w", spec.ID, err)
 			}
-			ecs.Put(&components, trail.component())
+			components.Put(trail.component())
 		}
 	}
 	if node.HasText {
@@ -2111,35 +2111,35 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 		if err != nil {
 			return ecs.Bundle{}, err
 		}
-		ecs.Put(&components, text)
+		components.Put(text)
 	}
 	if node.HasHTML {
 		value, err := b.resources.HTML(spec.Components.HTML.Resource)
 		if err != nil {
 			return ecs.Bundle{}, fmt.Errorf("game object %q html: %w", spec.ID, err)
 		}
-		ecs.Put(&components, html.Surface{Value: value, Width: float32(spec.Width), Height: float32(spec.Height), PassThrough: spec.PassThrough, StackIndex: spec.Order})
+		components.Put(html.Surface{Value: value, Width: float32(spec.Width), Height: float32(spec.Height), PassThrough: spec.PassThrough, StackIndex: spec.Order})
 	}
 	if node.HasParticle {
 		emitter, err := b.ecsParticleEmitterForGameObject(spec)
 		if err != nil {
 			return ecs.Bundle{}, err
 		}
-		ecs.Put(&components, emitter)
+		components.Put(emitter)
 	}
 	if node.HasTilemap {
 		tilemap, err := b.ecsTilemapForGameObject(spec)
 		if err != nil {
 			return ecs.Bundle{}, err
 		}
-		ecs.Put(&components, tilemap)
+		components.Put(tilemap)
 	}
 	if node.HasSpine {
 		component, err := b.ecsSpineForGameObject(spec)
 		if err != nil {
 			return ecs.Bundle{}, err
 		}
-		ecs.Put(&components, component)
+		components.Put(component)
 	}
 	if node.HasAnimation {
 		if requiresSprite && !node.HasSprite {
@@ -2151,9 +2151,9 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 			if spec.Height > 0 {
 				sprite.Height = float32(spec.Height)
 			}
-			ecs.Put(&components, sprite)
+			components.Put(sprite)
 		}
-		ecs.Put(&components, animator)
+		components.Put(animator)
 	}
 	if include3D {
 		if node.HasModel {
@@ -2162,12 +2162,12 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 				return ecs.Bundle{}, err
 			}
 			if supported {
-				ecs.Put(&components, render3d.Mesh{Mesh: mesh})
-				ecs.Put(&components, material)
+				components.Put(render3d.Mesh{Mesh: mesh})
+				components.Put(material)
 			}
 		}
 		if node.HasCamera {
-			ecs.Put(&components, sceneapi.Camera{
+			components.Put(sceneapi.Camera{
 				Viewport: node.Camera.Viewport, Order: node.Camera.Order, Active: node.Camera.Active,
 				Clear: true, ClearColor: node.Camera.ClearColor,
 			})
@@ -2175,28 +2175,28 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 			if err != nil {
 				return ecs.Bundle{}, err
 			}
-			ecs.Put(&components, renderSettings)
-			ecs.Put(&components, node.Camera.Projection)
+			components.Put(renderSettings)
+			components.Put(node.Camera.Projection)
 			environment, err := b.cameraEnvironment(spec.Components.Camera)
 			if err != nil {
 				return ecs.Bundle{}, err
 			}
-			ecs.Put(&components, environment)
+			components.Put(environment)
 		}
 		if node.HasLight {
-			ecs.Put(&components, node.Light)
+			components.Put(node.Light)
 		}
 		if node.HasAmbientLight {
-			ecs.Put(&components, node.AmbientLight)
+			components.Put(node.AmbientLight)
 		}
 		if node.HasPointLight {
-			ecs.Put(&components, node.PointLight)
+			components.Put(node.PointLight)
 		}
 		if node.HasSpotLight {
-			ecs.Put(&components, node.SpotLight)
+			components.Put(node.SpotLight)
 		}
 		if node.HasAreaLight {
-			ecs.Put(&components, node.AreaLight)
+			components.Put(node.AreaLight)
 		}
 	}
 	if err := putPhysics3DComponents(b, &components, spec); err != nil {
@@ -2361,7 +2361,7 @@ func bindSceneAnimationTargets(world *ecs.World, plan sceneSpawnPlan, entities [
 		if index >= len(entities) || node.Spec.Components.Animation == nil || !node.Spec.Components.Animation.Clip.HasContent() {
 			continue
 		}
-		animator := ecs.GetMut[sceneapi.Animator](world, entities[index])
+		animator := world.GetMut[sceneapi.Animator](entities[index])
 		if animator == nil {
 			return fmt.Errorf("game object %q animation component is missing", node.Spec.ID)
 		}
@@ -2408,7 +2408,7 @@ func (s *SceneInstance) bindRuntimeAnimationTargets(owners ...ecs.Entity) error 
 		if _, duplicate := requested[owner]; duplicate {
 			continue
 		}
-		animator, ok := ecs.Get[sceneapi.Animator](s.World, owner)
+		animator, ok := s.World.Get[sceneapi.Animator](owner)
 		if !ok || animator.Clip == nil {
 			return fmt.Errorf("game object %q animation component is missing", node.Spec.ID)
 		}
@@ -2429,7 +2429,7 @@ func (s *SceneInstance) bindRuntimeAnimationTargets(owners ...ecs.Entity) error 
 	nextTarget := 0
 	for _, owner := range requestedOwners {
 		node := s.nodes[owner]
-		animator, ok := ecs.Get[sceneapi.Animator](s.World, owner)
+		animator, ok := s.World.Get[sceneapi.Animator](owner)
 		if !ok || animator.Clip == nil {
 			return fmt.Errorf("game object %q animation component is missing", node.Spec.ID)
 		}
@@ -2440,20 +2440,20 @@ func (s *SceneInstance) bindRuntimeAnimationTargets(owners ...ecs.Entity) error 
 		textureTargets := targets[floatEnd:textureEnd]
 		boolTargets := targets[textureEnd:boolEnd]
 		nextTarget = boolEnd
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.FloatTracks, animationTrackFloatTarget, claims, seen, floatTargets); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.FloatTracks, animationTrackFloatTarget, claims, seen, floatTargets); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.TextureTracks, animationTrackTextureTarget, claims, seen, textureTargets); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.TextureTracks, animationTrackTextureTarget, claims, seen, textureTargets); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.BoolTracks, animationTrackBoolTarget, claims, seen, boolTargets); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.BoolTracks, animationTrackBoolTarget, claims, seen, boolTargets); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
 	}
 	nextTarget = 0
 	for _, owner := range requestedOwners {
 		node := s.nodes[owner]
-		animator := ecs.GetMut[sceneapi.Animator](s.World, owner)
+		animator := s.World.GetMut[sceneapi.Animator](owner)
 		if animator == nil || animator.Clip == nil {
 			return fmt.Errorf("game object %q animation component is missing", node.Spec.ID)
 		}
@@ -2500,7 +2500,7 @@ func (s *SceneInstance) bindRuntimeAnimationTargetsForEntity(entity ecs.Entity) 
 		if node, exists := s.nodes[entity]; exists && node.Spec.Components.Animation != nil {
 			owners = append(owners, entity)
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](s.World, entity)
+		parent, ok := s.World.Get[sceneapi.Parent](entity)
 		if !ok {
 			break
 		}
@@ -2558,7 +2558,7 @@ func (s *SceneInstance) runtimeAnimationChildIndex() map[runtimeAnimationChildKe
 	}
 	children := make(map[runtimeAnimationChildKey]runtimeAnimationChild, len(s.nodes))
 	for entity, node := range s.nodes {
-		parent, ok := ecs.Get[sceneapi.Parent](s.World, entity)
+		parent, ok := s.World.Get[sceneapi.Parent](entity)
 		if !ok {
 			continue
 		}
@@ -2610,24 +2610,24 @@ func (s *SceneInstance) claimExistingRuntimeAnimationTargets(children map[runtim
 		if _, rebind := requested[owner]; rebind || node.Spec.Components.Animation == nil {
 			continue
 		}
-		animator, ok := ecs.Get[sceneapi.Animator](s.World, owner)
+		animator, ok := s.World.Get[sceneapi.Animator](owner)
 		if !ok || animator.Clip == nil {
 			continue
 		}
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.FloatTracks, animationTrackFloatTarget, claims, seen, nil); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.FloatTracks, animationTrackFloatTarget, claims, seen, nil); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.TextureTracks, animationTrackTextureTarget, claims, seen, nil); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.TextureTracks, animationTrackTextureTarget, claims, seen, nil); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
-		if err := resolveRuntimeAnimationTrackTargets(s, children, owner, animator.Clip.BoolTracks, animationTrackBoolTarget, claims, seen, nil); err != nil {
+		if err := s.resolveRuntimeAnimationTrackTargets(children, owner, animator.Clip.BoolTracks, animationTrackBoolTarget, claims, seen, nil); err != nil {
 			return fmt.Errorf("game object %q animation: %w", node.Spec.ID, err)
 		}
 	}
 	return nil
 }
 
-func resolveRuntimeAnimationTrackTargets[T any](s *SceneInstance, children map[runtimeAnimationChildKey]runtimeAnimationChild, owner ecs.Entity, tracks []sceneapi.AnimationTrack[T], kind animationTrackTargetKind, claims map[runtimeAnimationClaim]ecs.Entity, seen map[runtimeAnimationSeen]struct{}, result []ecs.Entity) error {
+func (s *SceneInstance) resolveRuntimeAnimationTrackTargets[T any](children map[runtimeAnimationChildKey]runtimeAnimationChild, owner ecs.Entity, tracks []sceneapi.AnimationTrack[T], kind animationTrackTargetKind, claims map[runtimeAnimationClaim]ecs.Entity, seen map[runtimeAnimationSeen]struct{}, result []ecs.Entity) error {
 	for index, track := range tracks {
 		entity, err := s.resolveRuntimeAnimationPathIndexed(children, owner, track.Binding.Path)
 		if err != nil {
@@ -2686,31 +2686,31 @@ func validateRuntimeAnimationTarget(world *ecs.World, entity ecs.Entity, target 
 	}
 	switch kind {
 	case animationTrackTextureTarget:
-		if target != sceneapi.AnimationTargetSpriteTexture || !ecs.Has[sceneapi.Sprite2D](world, entity) {
+		if target != sceneapi.AnimationTargetSpriteTexture || !world.Has[sceneapi.Sprite2D](entity) {
 			return fmt.Errorf("target requires Sprite2D texture")
 		}
 	case animationTrackBoolTarget:
-		if target != sceneapi.AnimationTargetVisibility || !ecs.Has[sceneapi.Visibility](world, entity) {
+		if target != sceneapi.AnimationTargetVisibility || !world.Has[sceneapi.Visibility](entity) {
 			return fmt.Errorf("target requires Visibility")
 		}
 	case animationTrackFloatTarget:
 		switch target {
 		case sceneapi.AnimationTargetSpriteAlpha:
-			if !ecs.Has[sceneapi.Sprite2D](world, entity) {
+			if !world.Has[sceneapi.Sprite2D](entity) {
 				return fmt.Errorf("target requires Sprite2D")
 			}
 		case sceneapi.AnimationTargetTransformRotationX, sceneapi.AnimationTargetTransformRotationY:
-			if !ecs.Has[sceneapi.Transform](world, entity) {
+			if !world.Has[sceneapi.Transform](entity) {
 				return fmt.Errorf("X/Y rotation requires Transform")
 			}
 		case sceneapi.AnimationTargetTransformPositionZ, sceneapi.AnimationTargetTransformScaleZ:
-			if !ecs.Has[sceneapi.Transform](world, entity) {
+			if !world.Has[sceneapi.Transform](entity) {
 				return fmt.Errorf("Z transform animation requires Transform")
 			}
 		case sceneapi.AnimationTargetTransformPositionX, sceneapi.AnimationTargetTransformPositionY,
 			sceneapi.AnimationTargetTransformScaleX, sceneapi.AnimationTargetTransformScaleY,
 			sceneapi.AnimationTargetTransformRotationZ:
-			if !ecs.Has[sceneapi.Transform](world, entity) && !ecs.Has[sceneapi.UITransform](world, entity) {
+			if !world.Has[sceneapi.Transform](entity) && !world.Has[sceneapi.UITransform](entity) {
 				return fmt.Errorf("target requires Transform or UITransform")
 			}
 		default:
@@ -2864,16 +2864,16 @@ func renderLayersFromSpec(values []uint) (sceneapi.RenderLayers, bool) {
 
 func sceneSortIndex(world *ecs.World, entity ecs.Entity, ui bool, fallback int) int {
 	if !ui {
-		if order, ok := ecs.Get[sceneapi.RenderOrder2D](world, entity); ok {
+		if order, ok := world.Get[sceneapi.RenderOrder2D](entity); ok {
 			return int(order)
 		}
 		return fallback
 	}
 	for steps := 0; entity != 0 && steps <= world.EntityCount(); steps++ {
-		if stackIndex, ok := ecs.Get[sceneapi.UIStackIndex](world, entity); ok {
+		if stackIndex, ok := world.Get[sceneapi.UIStackIndex](entity); ok {
 			return int(stackIndex)
 		}
-		parent, ok := ecs.Get[sceneapi.Parent](world, entity)
+		parent, ok := world.Get[sceneapi.Parent](entity)
 		if !ok {
 			break
 		}
@@ -2884,62 +2884,62 @@ func sceneSortIndex(world *ecs.World, entity ecs.Entity, ui bool, fallback int) 
 
 func applyRenderOrderSpec(world *ecs.World, entity ecs.Entity, spec SceneNodeSpec) {
 	if specUsesUI(&spec) {
-		ecs.Remove[sceneapi.RenderOrder2D](world, entity)
+		world.Remove[sceneapi.RenderOrder2D](entity)
 		setUIStackIndex(world, entity, spec.Order)
 		return
 	}
-	ecs.Remove[sceneapi.UIStackIndex](world, entity)
+	world.Remove[sceneapi.UIStackIndex](entity)
 	order := spec.Order
 	if spec.Components.Particle != nil && order == 0 {
 		order = int(sceneapi.DefaultParticleRenderOrder)
 	}
-	if current := ecs.GetMut[sceneapi.RenderOrder2D](world, entity); current != nil {
+	if current := world.GetMut[sceneapi.RenderOrder2D](entity); current != nil {
 		*current = sceneapi.RenderOrder2D(order)
 		return
 	}
-	_ = ecs.Insert(world, entity, sceneapi.RenderOrder2D(order))
+	_ = world.Insert(entity, sceneapi.RenderOrder2D(order))
 }
 
 func setUIStackIndex(world *ecs.World, entity ecs.Entity, stackIndex int) {
-	if current := ecs.GetMut[sceneapi.UIStackIndex](world, entity); current != nil {
+	if current := world.GetMut[sceneapi.UIStackIndex](entity); current != nil {
 		*current = sceneapi.UIStackIndex(stackIndex)
 		return
 	}
-	_ = ecs.Insert(world, entity, sceneapi.UIStackIndex(stackIndex))
+	_ = world.Insert(entity, sceneapi.UIStackIndex(stackIndex))
 }
 
 func applyRenderLayersSpec(world *ecs.World, entity ecs.Entity, values []uint) {
 	layers, ok := renderLayersFromSpec(values)
 	if !ok {
-		ecs.Remove[sceneapi.RenderLayers](world, entity)
+		world.Remove[sceneapi.RenderLayers](entity)
 		return
 	}
-	if current := ecs.GetMut[sceneapi.RenderLayers](world, entity); current != nil {
+	if current := world.GetMut[sceneapi.RenderLayers](entity); current != nil {
 		*current = layers
 		return
 	}
-	_ = ecs.Insert(world, entity, layers)
+	_ = world.Insert(entity, layers)
 }
 
 func applyUITargetCameraSpec(world *ecs.World, entity ecs.Entity, targetID string, entities map[string]ecs.Entity) error {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
-		ecs.Remove[sceneapi.UITargetCamera](world, entity)
+		world.Remove[sceneapi.UITargetCamera](entity)
 		return nil
 	}
 	target, ok := entities[targetID]
 	if !ok {
 		return fmt.Errorf("targetCamera %q does not exist", targetID)
 	}
-	if !ecs.Has[sceneapi.Camera](world, target) {
+	if !world.Has[sceneapi.Camera](target) {
 		return fmt.Errorf("targetCamera %q is not a camera", targetID)
 	}
 	component := sceneapi.UITargetCamera{Entity: target}
-	if current := ecs.GetMut[sceneapi.UITargetCamera](world, entity); current != nil {
+	if current := world.GetMut[sceneapi.UITargetCamera](entity); current != nil {
 		*current = component
 		return nil
 	}
-	return ecs.Insert(world, entity, component)
+	return world.Insert(entity, component)
 }
 
 func (b *Bundle) ecsParticleEmitterForSpec(spec ParticleSpec) (sceneapi.ParticleEmitter2D, error) {

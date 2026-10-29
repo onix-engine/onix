@@ -3,7 +3,6 @@ package editor
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -70,7 +69,7 @@ func (a *ModuleEditor) beginViewport3DDrag(id, element string, x, y float32) {
 
 func (a *ModuleEditor) viewport3DDragPoint(drag *workspacePlacementDrag, x, y float32) (mgl32.Vec3, bool) {
 	v, bounds := &a.viewport3D, a.canvasBounds()
-	projection, _ := ecs.Get[scene.Projection](v.world, v.view.camera)
+	projection, _ := v.world.Get[scene.Projection](v.view.camera)
 	camera := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
 	ray, ok := preview3DScreenRay(bounds, x, y, projection, camera)
 	if !ok {

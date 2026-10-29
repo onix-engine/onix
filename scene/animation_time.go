@@ -14,7 +14,7 @@ func ValidateAnimationTimeCurve(tween AnimationTween, curve AnimationCurve) erro
 	return nil
 }
 
-func animationTrackTime[T any](track *AnimationTrack[T], time float32) float32 {
+func (track *AnimationTrack[T]) sampleTime(time float32) float32 {
 	keys := track.Keyframes
 	if track.TimeTween == "" || track.TimeTween == AnimationLinear || len(keys) < 2 {
 		return time

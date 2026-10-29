@@ -4,7 +4,6 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/spine"
@@ -32,7 +31,7 @@ func TestModSpineContentAppliesConfiguredAnimationBeforeFirstTick(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	component, ok := ecs.BundleValue[scene.Spine2D](bundle)
+	component, ok := bundle.Value[scene.Spine2D]()
 	if !ok || component.Player == nil {
 		t.Fatal("Spine content has no player")
 	}

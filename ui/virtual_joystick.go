@@ -74,7 +74,7 @@ func SpawnVirtualJoystick(world *ecs.World, opts VirtualJoystickOptions) ecs.Ent
 	setCornerRadius(world, track, Circle)
 	knob := spawnSurfacePart[VirtualJoystickKnobPart](world, entity, (size-knobSize)*.5, (size-knobSize)*.5, knobSize, knobSize, theme.Primary, theme.StackIndex+1)
 	setCornerRadius(world, knob, Circle)
-	_ = ecs.Insert(world, entity, VirtualJoystick{
+	_ = world.Insert(entity, VirtualJoystick{
 		DeadZone: normalizedVirtualJoystickDeadZone(opts.DeadZone), Axis: normalizedVirtualJoystickAxis(opts.Axis),
 		Floating: opts.Floating, Track: track, Knob: knob,
 	})
@@ -97,7 +97,7 @@ func (joystick VirtualJoystick) bindControl(world *ecs.World, entity ecs.Entity,
 	joystick.Axis = normalizedVirtualJoystickAxis(joystick.Axis)
 	joystick.RawValue = constrainedVirtualJoystickValue(joystick.RawValue, joystick.Axis)
 	joystick.Value = virtualJoystickOutput(joystick.RawValue, joystick.DeadZone)
-	if err := ecs.Insert(world, entity, joystick); err != nil {
+	if err := world.Insert(entity, joystick); err != nil {
 		return err
 	}
 	if joystick.Floating && !joystick.Active {
@@ -108,7 +108,7 @@ func (joystick VirtualJoystick) bindControl(world *ecs.World, entity ecs.Entity,
 
 // ResetVirtualJoystick releases a joystick and publishes state changes.
 func ResetVirtualJoystick(world *ecs.World, entity ecs.Entity) bool {
-	joystick := ecs.GetMut[VirtualJoystick](world, entity)
+	joystick := world.GetMut[VirtualJoystick](entity)
 	if joystick == nil {
 		return false
 	}
@@ -119,7 +119,7 @@ func ResetVirtualJoystick(world *ecs.World, entity ecs.Entity) bool {
 // SetVirtualJoystickRawValue sets a joystick's physical normalized deflection.
 // The value is clamped to the unit circle before Axis and DeadZone are applied.
 func SetVirtualJoystickRawValue(world *ecs.World, entity ecs.Entity, value mgl32.Vec2) bool {
-	joystick := ecs.GetMut[VirtualJoystick](world, entity)
+	joystick := world.GetMut[VirtualJoystick](entity)
 	if joystick == nil {
 		return false
 	}
@@ -131,7 +131,7 @@ func updateVirtualJoystickInput(world *ecs.World, event *scene.InputEvent) {
 	if event == nil || event.Entity == 0 {
 		return
 	}
-	joystick := ecs.GetMut[VirtualJoystick](world, event.Entity)
+	joystick := world.GetMut[VirtualJoystick](event.Entity)
 	if joystick == nil {
 		return
 	}
@@ -183,10 +183,10 @@ func setVirtualJoystickState(world *ecs.World, entity ecs.Entity, joystick *Virt
 		setVirtualJoystickVisualsVisible(world, joystick.Track, joystick.Knob, active)
 	}
 	if valueChanged {
-		ecs.WriteMessage(world, ChangedEvent[mgl32.Vec2]{Entity: entity, Value: value})
+		world.WriteMessage(ChangedEvent[mgl32.Vec2]{Entity: entity, Value: value})
 	}
 	if activeChanged {
-		ecs.WriteMessage(world, VirtualJoystickActiveEvent{Entity: entity, Active: active})
+		world.WriteMessage(VirtualJoystickActiveEvent{Entity: entity, Active: active})
 	}
 }
 
@@ -229,7 +229,7 @@ func floatingVirtualJoystickPointerValue(world *ecs.World, entity ecs.Entity, jo
 }
 
 func virtualJoystickPointerPosition(world *ecs.World, entity ecs.Entity, x, y float32) (mgl32.Vec2, bool) {
-	transform := ecs.GetRef[scene.UIGlobalTransform](world, entity)
+	transform := world.GetRef[scene.UIGlobalTransform](entity)
 	if transform == nil || math.Abs(float64(transform.Matrix.Det())) <= 1e-8 {
 		return mgl32.Vec2{}, false
 	}
@@ -291,7 +291,7 @@ func normalizedVirtualJoystickAxis(axis VirtualJoystickAxis) VirtualJoystickAxis
 }
 
 func syncVirtualJoysticks(world *ecs.World, skin Skin) {
-	for entity, access := range ecs.Query[VirtualJoystick](world).All {
+	for entity, access := range world.Query[VirtualJoystick]().All {
 		joystick := access.Get()
 
 		width, height, ok := ControlBounds(world, entity)
@@ -312,7 +312,7 @@ func syncVirtualJoysticks(world *ecs.World, skin Skin) {
 		if joystick.Floating {
 			radius = min(trackWidth, trackHeight) * .5
 			centerX, centerY = joystick.origin.X(), joystick.origin.Y()
-			if trackTransform := ecs.GetMut[scene.UITransform](world, joystick.Track); trackTransform != nil {
+			if trackTransform := world.GetMut[scene.UITransform](joystick.Track); trackTransform != nil {
 				trackTransform.Translation.X.Value = centerX - trackWidth*.5
 				trackTransform.Translation.Y.Value = centerY - trackHeight*.5
 			}
@@ -321,7 +321,7 @@ func syncVirtualJoysticks(world *ecs.World, skin Skin) {
 			continue
 		}
 		knobWidth, knobHeight, sizeOK := virtualJoystickPartSize(world, joystick.Knob)
-		transform := ecs.GetMut[scene.UITransform](world, joystick.Knob)
+		transform := world.GetMut[scene.UITransform](joystick.Knob)
 		if (!sizeOK) || (transform == nil) {
 			continue
 		}
@@ -337,10 +337,10 @@ func virtualJoystickPartSize(world *ecs.World, entity ecs.Entity) (float32, floa
 	if entity == 0 || !world.IsAlive(entity) {
 		return 0, 0, false
 	}
-	if size := ecs.GetRef[scene.Size2D](world, entity); size != nil && size.Width > 0 && size.Height > 0 {
+	if size := world.GetRef[scene.Size2D](entity); size != nil && size.Width > 0 && size.Height > 0 {
 		return size.Width, size.Height, true
 	}
-	if sprite := ecs.GetRef[scene.Sprite2D](world, entity); sprite != nil && sprite.Width > 0 && sprite.Height > 0 {
+	if sprite := world.GetRef[scene.Sprite2D](entity); sprite != nil && sprite.Width > 0 && sprite.Height > 0 {
 		return sprite.Width, sprite.Height, true
 	}
 	return 0, 0, false
@@ -348,14 +348,14 @@ func virtualJoystickPartSize(world *ecs.World, entity ecs.Entity) (float32, floa
 
 func setVirtualJoystickVisualsVisible(world *ecs.World, track, knob ecs.Entity, visible bool) {
 	for _, entity := range [...]ecs.Entity{track, knob} {
-		if visibility := ecs.GetMut[scene.Visibility](world, entity); visibility != nil {
+		if visibility := world.GetMut[scene.Visibility](entity); visibility != nil {
 			visibility.Visible = visible
 		}
 	}
 }
 
 func applyVirtualJoystickSurface(world *ecs.World, entity ecs.Entity, width, height float32, style SurfaceStyle, stackIndex int) {
-	if !ecs.Has[scene.UIBackground2D](world, entity) {
+	if !world.Has[scene.UIBackground2D](entity) {
 		return
 	}
 	applySurface(world, entity, width, height, style)

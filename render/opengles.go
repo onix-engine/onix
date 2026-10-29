@@ -857,12 +857,12 @@ func (d *openGLESDriver) BeginFrame(clear Color) error {
 	if restoreScissor {
 		d.scissorEnabled = d.scissorSet
 	}
-	d.pixels = trimUploadBuffer(d.pixels, &d.pixelRetention, d.pixelBytes, 64<<10)
+	d.pixels = (&d.pixelRetention).trimUploadBuffer(d.pixels, d.pixelBytes, 64<<10)
 	d.pixelBytes = 0
-	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
-	d.spriteDraws = trimScratch(d.spriteDraws, &d.spriteDrawsRetention, 64)
-	d.meshDraws = trimScratch(d.meshDraws, &d.meshDrawsRetention, 64)
-	d.pickingDraws = trimScratch(d.pickingDraws, &d.pickingDrawsRetention, 64)
+	d.updates = (&d.updateRetention).trimScratch(d.updates, 32)
+	d.spriteDraws = (&d.spriteDrawsRetention).trimScratch(d.spriteDraws, 64)
+	d.meshDraws = (&d.meshDrawsRetention).trimScratch(d.meshDraws, 64)
+	d.pickingDraws = (&d.pickingDrawsRetention).trimScratch(d.pickingDraws, 64)
 	d.beginFrameStatistics(d.width, d.height)
 	return glError("begin frame")
 }
@@ -960,7 +960,7 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = resetScratch(d.updates, &d.updateRetention)
+	d.updates = (&d.updateRetention).resetScratch(d.updates)
 	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
@@ -1223,7 +1223,7 @@ func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 	d.setBlendEnabled(true)
 	geometry := &d.spriteGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	err := uploadGLESInstanceBuffer(d, geometry, scratch.data)
+	err := d.uploadGLESInstanceBuffer(geometry, scratch.data)
 	if err != nil {
 		return err
 	}
@@ -1235,7 +1235,7 @@ func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 		}
 		d.useProgram(program)
 		d.setProjection(program, batch.Projection)
-		d.spriteDraws = resetScratch(d.spriteDraws, &d.spriteDrawsRetention)
+		d.spriteDraws = (&d.spriteDrawsRetention).resetScratch(d.spriteDraws)
 		for index < len(batch.Draws) {
 			draw := batch.Draws[index]
 			drawProgram := &d.programs[PipelineSprite]
@@ -1273,7 +1273,7 @@ func (d *openGLESDriver) CreateMaterial2DShader(descriptor ShaderDescriptor) (Ma
 }
 
 func (d *openGLESDriver) DestroyMaterial2DShader(handle Material2DShaderHandle) error {
-	return destroyGLESShader(handle, "Material2D", &d.material2DShaders, d)
+	return d.destroyGLESShader(handle, "Material2D", &d.material2DShaders)
 }
 
 func (d *openGLESDriver) DrawShapes(batch ShapeBatch) error {
@@ -1287,7 +1287,7 @@ func (d *openGLESDriver) DrawShapes(batch ShapeBatch) error {
 	d.setProjection(program, batch.Projection)
 	geometry := &d.shapeGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	if err := uploadGLESInstanceBuffer(d, geometry, batch.Instances); err != nil {
+	if err := d.uploadGLESInstanceBuffer(geometry, batch.Instances); err != nil {
 		return err
 	}
 	C.glDrawElementsInstanced(C.GL_TRIANGLES, 6, C.GL_UNSIGNED_SHORT, nil, C.GLsizei(len(batch.Instances)))
@@ -1358,7 +1358,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
 	var counts meshDrawStatistics
-	d.meshDraws = resetScratch(d.meshDraws, &d.meshDrawsRetention)
+	d.meshDraws = (&d.meshDrawsRetention).resetScratch(d.meshDraws)
 	flush := func(program *glesProgram, vertexBuffer, indexBuffer C.GLuint) {
 		if len(d.meshDraws) == 0 {
 			return
@@ -1366,7 +1366,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 		d.boundTexture = C.onix_gl_draw_mesh_run(&d.meshDraws[0], C.size_t(len(d.meshDraws)), d.meshGeometry.instanceBuffer,
 			vertexBuffer, indexBuffer, program.hasNormalTexture, program.hasMetallicRoughnessTexture,
 			C.GLsizei(unsafe.Sizeof(Vertex3D{})), C.GLsizei(unsafe.Sizeof(Instance3D{})), d.boundTexture)
-		d.meshDraws = resetScratch(d.meshDraws, &d.meshDrawsRetention)
+		d.meshDraws = (&d.meshDrawsRetention).resetScratch(d.meshDraws)
 	}
 	var currentDrawProgram *glesProgram
 	for _, draw := range batch.Draws {
@@ -1489,14 +1489,14 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 	boundGeometry := false
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
-	d.pickingDraws = resetScratch(d.pickingDraws, &d.pickingDrawsRetention)
+	d.pickingDraws = (&d.pickingDrawsRetention).resetScratch(d.pickingDraws)
 	flush := func() {
 		if len(d.pickingDraws) == 0 {
 			return
 		}
 		C.onix_gl_draw_mesh_picking_run(&d.pickingDraws[0], C.size_t(len(d.pickingDraws)), d.meshGeometry.instanceBuffer,
 			currentVertexBuffer, currentIndexBuffer, C.GLsizei(unsafe.Sizeof(Vertex3D{})), C.GLsizei(unsafe.Sizeof(Instance3D{})))
-		d.pickingDraws = resetScratch(d.pickingDraws, &d.pickingDrawsRetention)
+		d.pickingDraws = (&d.pickingDrawsRetention).resetScratch(d.pickingDraws)
 	}
 	for _, draw := range batch.Draws {
 		if !boundGeometry || draw.Mesh != boundMesh {
@@ -1612,7 +1612,7 @@ func (d *openGLESDriver) CreateMeshShader(descriptor ShaderDescriptor) (MeshShad
 }
 
 func (d *openGLESDriver) DestroyMeshShader(handle MeshShaderHandle) error {
-	return destroyGLESShader(handle, "mesh", &d.meshShaders, d)
+	return d.destroyGLESShader(handle, "mesh", &d.meshShaders)
 }
 
 func (d *openGLESDriver) Present() error {
@@ -1819,7 +1819,7 @@ func (d *openGLESDriver) configureShapeAttributes(initialize bool) {
 	}
 }
 
-func uploadGLESInstanceBuffer[T any](d *openGLESDriver, geometry *glesGeometry, values []T) error {
+func (d *openGLESDriver) uploadGLESInstanceBuffer[T any](geometry *glesGeometry, values []T) error {
 	var value T
 	byteLength := len(values) * int(unsafe.Sizeof(value))
 	buffer := C.onix_gl_upload_buffer(&d.uploads[d.frameIndex], C.GL_ARRAY_BUFFER, C.size_t(byteLength), sliceData(values), 0)
@@ -1971,7 +1971,7 @@ func createGLESShader[R any](descriptor ShaderDescriptor, defaultVertex, default
 	return pool.Insert(program), nil
 }
 
-func destroyGLESShader[R any](handle Handle[R], kind string, pool *GenerationPool[R, *glesProgram], driver *openGLESDriver) error {
+func (driver *openGLESDriver) destroyGLESShader[R any](handle Handle[R], kind string, pool *GenerationPool[R, *glesProgram]) error {
 	program, ok := pool.Remove(handle)
 	if !ok {
 		return fmt.Errorf("render: invalid OpenGL ES %s shader handle %s", kind, handle)

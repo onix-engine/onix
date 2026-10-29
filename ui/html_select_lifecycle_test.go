@@ -16,7 +16,7 @@ func TestHTMLSelectPopupTextFollowsCSSColor(t *testing.T) {
 	surface := htmlui.New(`<select id="mode" style="width:180px;height:28px"><option>Alpha</option><option selected>Beta</option></select>`)
 	surface.Width, surface.Height, surface.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, surface)
+	bundle.Put(surface)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	for _, fixture := range []struct {
@@ -28,18 +28,18 @@ func TestHTMLSelectPopupTextFollowsCSSColor(t *testing.T) {
 		{"foreground only", `select{background:#ffffff;color:#123456}`, graphics.ColorFromRGB(0x12, 0x34, 0x56)},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			ecs.GetMut[htmlui.Surface](world, owner).CSS = fixture.css
+			world.GetMut[htmlui.Surface](owner).CSS = fixture.css
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
 			control := htmlControlByID(t, world, owner, "mode")
-			ecs.GetMut[Selector](world, control).Open = true
+			world.GetMut[Selector](control).Open = true
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
-			runtime := ecs.GetRef[htmlSelectorRuntime](world, control)
+			runtime := world.GetRef[htmlSelectorRuntime](control)
 			var labels [2]ecs.Entity
-			for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+			for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 				for index, item := range runtime.Items {
 					if access.A.Ref().Owner == item {
 						labels[index] = entity
@@ -47,7 +47,7 @@ func TestHTMLSelectPopupTextFollowsCSSColor(t *testing.T) {
 				}
 			}
 			for index, label := range labels {
-				text := ecs.GetRef[scene.Text2D](world, label)
+				text := world.GetRef[scene.Text2D](label)
 				want := fixture.color
 				if index == 1 {
 					want = graphics.White
@@ -56,18 +56,18 @@ func TestHTMLSelectPopupTextFollowsCSSColor(t *testing.T) {
 					t.Fatalf("option %d text = %+v, want color %v", index, text, want)
 				}
 			}
-			ecs.GetMut[scene.InputState2D](world, runtime.Items[0]).Hovered = true
+			world.GetMut[scene.InputState2D](runtime.Items[0]).Hovered = true
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
-			if text := ecs.GetRef[scene.Text2D](world, labels[0]); text == nil || text.Color != graphics.White {
+			if text := world.GetRef[scene.Text2D](labels[0]); text == nil || text.Color != graphics.White {
 				t.Fatalf("highlighted option text = %+v, want white", text)
 			}
-			ecs.GetMut[scene.InputState2D](world, runtime.Items[0]).Hovered = false
+			world.GetMut[scene.InputState2D](runtime.Items[0]).Hovered = false
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
-			if text := ecs.GetRef[scene.Text2D](world, labels[0]); text == nil || text.Color != fixture.color {
+			if text := world.GetRef[scene.Text2D](labels[0]); text == nil || text.Color != fixture.color {
 				t.Fatalf("unhighlighted option text = %+v, want color %v", text, fixture.color)
 			}
 		})
@@ -80,7 +80,7 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 	surface := htmlui.New(`<select id="mode" style="width:180px;height:28px"><option id="first">Alpha</option><option>Beta</option></select>`)
 	surface.Width, surface.Height, surface.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, surface)
+	bundle.Put(surface)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -91,9 +91,9 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 	option, _ := htmlui.NodeByID(world, owner, "first")
 	for _, step := range []string{"resize width", "resize height", "option text"} {
 		t.Run(step, func(t *testing.T) {
-			ecs.GetMut[Selector](world, control).Open = true
-			runtime := ecs.GetRef[htmlSelectorRuntime](world, control)
-			state := ecs.GetMut[scene.InputState2D](world, runtime.Items[0])
+			world.GetMut[Selector](control).Open = true
+			runtime := world.GetRef[htmlSelectorRuntime](control)
+			state := world.GetMut[scene.InputState2D](runtime.Items[0])
 			state.Hovered, state.Pressed = true, true
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
@@ -101,7 +101,7 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 			// Include every generated entity, including the highlighted option's
 			// background, independently of the runtime's teardown list.
 			var previous []ecs.Entity
-			for entity, access := range ecs.Query[htmlSelectorElement](world).All {
+			for entity, access := range world.Query[htmlSelectorElement]().All {
 				if access.Ref().Owner == control {
 					previous = append(previous, entity)
 				}
@@ -122,11 +122,11 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 			}
 			for _, entity := range previous {
 				if world.IsAlive(entity) {
-					t.Errorf("popup refresh left generated entity %d alive (option background: %v)", entity, ecs.Has[Part[BodyPart]](world, entity))
+					t.Errorf("popup refresh left generated entity %d alive (option background: %v)", entity, world.Has[Part[BodyPart]](entity))
 				}
 			}
 			count := 0
-			for _, access := range ecs.Query[htmlSelectorElement](world).All {
+			for _, access := range world.Query[htmlSelectorElement]().All {
 				if access.Ref().Owner == control {
 					count++
 				}

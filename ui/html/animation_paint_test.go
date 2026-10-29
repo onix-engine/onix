@@ -17,10 +17,10 @@ import (
 func htmlAnimationRole(t *testing.T, world *ecs.World, owner ecs.Entity, id string, role htmlRenderRole) ecs.Entity {
 	t.Helper()
 	node := incrementalHTMLNode(t, world, owner, id)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if rendered := state.RenderNodes[node.node]; rendered != nil {
 		for _, entity := range rendered.Entities {
-			if child := ecs.GetRef[htmlChild](world, entity); (child != nil) && child.role == role {
+			if child := world.GetRef[htmlChild](entity); (child != nil) && child.role == role {
 				return entity
 			}
 		}
@@ -37,18 +37,18 @@ func TestHTMLCSSColorAnimationRetainsTransparentPaint(t *testing.T) {
 	background := htmlAnimationRole(t, world, owner, "item", htmlRoleSurface)
 	top := htmlAnimationRole(t, world, owner, "item", htmlRoleBorderTop)
 	right := htmlAnimationRole(t, world, owner, "item", htmlRoleBorderRight)
-	initial, _ := ecs.Get[htmlRenderState](world, owner)
+	initial, _ := world.Get[htmlRenderState](owner)
 	children := slices.Clone(initial.Children)
 	node := incrementalHTMLNode(t, world, owner, "item")
 	computed := initial.Styles[node.node]
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
-	fill, _ := ecs.Get[scene.Sprite2D](world, background)
-	borderTop, _ := ecs.Get[scene.Sprite2D](world, top)
-	borderRight, _ := ecs.Get[scene.Sprite2D](world, right)
+	fill, _ := world.Get[scene.Sprite2D](background)
+	borderTop, _ := world.Get[scene.Sprite2D](top)
+	borderRight, _ := world.Get[scene.Sprite2D](right)
 	if fill.Shape.Fill != (graphics.ColorRGBA{R: 1, A: .5}) || borderTop.Shape.Fill != (graphics.ColorRGBA{B: 1, A: .5}) || borderRight.Shape.Fill != (graphics.ColorRGBA{R: 1, A: .5}) {
 		t.Fatalf("premultiplied color animation: fill=%v top=%v right=%v", fill.Shape.Fill, borderTop.Shape.Fill, borderRight.Shape.Fill)
 	}
-	after, _ := ecs.Get[htmlRenderState](world, owner)
+	after, _ := world.Get[htmlRenderState](owner)
 	if after.Styles[node.node] != computed || computed.BackgroundColor.Color.A != 0 || initial.Boxes != after.Boxes || !slices.Equal(children, after.Children) || after.SyncStats.Layouts != 0 || after.SyncStats.Spawned != 0 {
 		t.Fatalf("paint animation mutated styles/rebuilt geometry: %+v", after.SyncStats)
 	}
@@ -70,7 +70,7 @@ func TestHTMLCSSAnimatedColorInheritanceAndCurrentColor(t *testing.T) {
 	@keyframes ink {to{color:blue}}
 	</style><div id="parent"><span id="inherited">inherit</span><span id="fixed">fixed</span><span id="current">current</span></div>`)
 	clock := scene.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	incrementalSync(t, world)
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
 	for _, c := range []struct {
@@ -83,7 +83,7 @@ func TestHTMLCSSAnimatedColorInheritanceAndCurrentColor(t *testing.T) {
 	} {
 		node := incrementalHTMLNode(t, world, owner, c.id)
 		texts, decorations, surfaces := 0, 0, 0
-		for _, access := range ecs.Query2[htmlChild, scene.Text2D](world).All {
+		for _, access := range world.Query2[htmlChild, scene.Text2D]().All {
 			child := access.A.Ref()
 			text := access.B.Ref()
 
@@ -94,7 +94,7 @@ func TestHTMLCSSAnimatedColorInheritanceAndCurrentColor(t *testing.T) {
 				}
 			}
 		}
-		for _, access := range ecs.Query2[htmlChild, scene.Sprite2D](world).All {
+		for _, access := range world.Query2[htmlChild, scene.Sprite2D]().All {
 			child := access.A.Ref()
 			sprite := access.B.Ref()
 
@@ -134,19 +134,19 @@ func TestHTMLCSSColorTransitionReversesAndCancels(t *testing.T) {
 	visual := htmlAnimationRole(t, world, owner, "item", htmlRoleSurface)
 	SetVisualHover(world, visual, true)
 	htmlAnimationStep(t, world, clock, 400*time.Millisecond)
-	value, _ := ecs.Get[scene.Sprite2D](world, visual)
+	value, _ := world.Get[scene.Sprite2D](visual)
 	if value.Shape.Fill != (graphics.ColorRGBA{R: .6, B: .4, A: 1}) {
 		t.Fatalf("transition color=%v", value.Shape.Fill)
 	}
 	SetVisualHover(world, visual, false)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "item")
 	animation := state.Animations[node.node]
 	if math.Abs(animation.Transitions[style.AnimationBackground+2].Config.Duration-.4) > 1e-8 {
 		t.Fatalf("reverse duration=%v", animation.Transitions[style.AnimationBackground+2].Config.Duration)
 	}
 	htmlAnimationStep(t, world, clock, 200*time.Millisecond)
-	value, _ = ecs.Get[scene.Sprite2D](world, visual)
+	value, _ = world.Get[scene.Sprite2D](visual)
 	if value.Shape.Fill != (graphics.ColorRGBA{R: .8, B: .2, A: 1}) {
 		t.Fatalf("shortened reverse halfway=%v", value.Shape.Fill)
 	}
@@ -159,9 +159,9 @@ func TestHTMLCSSColorTransitionReversesAndCancels(t *testing.T) {
 	node.SetAttribute("style", "transition-property:none")
 	incrementalSync(t, world)
 	visual = htmlAnimationRole(t, world, owner, "item", htmlRoleSurface)
-	value, _ = ecs.Get[scene.Sprite2D](world, visual)
-	transform, _ := ecs.Get[scene.UITransform](world, visual)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	value, _ = world.Get[scene.Sprite2D](visual)
+	transform, _ := world.Get[scene.UITransform](visual)
+	state, _ = world.Get[htmlRenderState](owner)
 	current := state.Animations[node.node].Current
 	if Animating(world) || current.Colors[style.AnimationBackground].Color() != (style.Color{B: 255, A: 255}) || current.Opacity != .5 || transform.Translation.X.Value != 100 {
 		t.Fatalf("removed transition property did not cancel: current=%+v active=%v", current, Animating(world))
@@ -181,7 +181,7 @@ func TestHTMLCSSTransitionDurationChangeKeepsRunningTransition(t *testing.T) {
 	incrementalSync(t, world)
 	htmlAnimationStep(t, world, clock, 250*time.Millisecond)
 	visual = htmlAnimationVisual(t, world, owner, "item")
-	value, _ := ecs.Get[scene.Sprite2D](world, visual)
+	value, _ := world.Get[scene.Sprite2D](visual)
 	if value.Alpha != .5 || !Animating(world) {
 		t.Fatalf("duration-only mutation canceled transition: alpha=%v", value.Alpha)
 	}
@@ -193,7 +193,7 @@ func TestHTMLCSSInheritedColorTransitionUsesDisplayedColor(t *testing.T) {
 	#child {transition:color 2s linear}
 	</style><div id="parent"><span id="child">text</span></div>`)
 	clock := scene.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	incrementalSync(t, world)
 	parent := incrementalHTMLNode(t, world, owner, "parent")
 	child := incrementalHTMLNode(t, world, owner, "child")
@@ -201,7 +201,7 @@ func TestHTMLCSSInheritedColorTransitionUsesDisplayedColor(t *testing.T) {
 	incrementalSync(t, world)
 	htmlAnimationStep(t, world, clock, time.Second)
 	found := false
-	for _, access := range ecs.Query2[htmlChild, scene.Text2D](world).All {
+	for _, access := range world.Query2[htmlChild, scene.Text2D]().All {
 		retained := access.A.Ref()
 		text := access.B.Ref()
 
@@ -223,12 +223,12 @@ func TestHTMLCSSStepsDelayAndReverseFill(t *testing.T) {
 	@keyframes move {from{transform:translateX(0)}to{transform:translateX(100px)}}
 	</style><div id="item"></div>`)
 	visual := htmlAnimationVisual(t, world, owner, "item")
-	initial, _ := ecs.Get[scene.UITransform](world, visual)
+	initial, _ := world.Get[scene.UITransform](visual)
 	if initial.Translation.X.Value != 0 {
 		t.Fatalf("backwards-filled step jumped during delay: %v", initial.Translation)
 	}
 	htmlAnimationStep(t, world, clock, time.Second)
-	start, _ := ecs.Get[scene.UITransform](world, visual)
+	start, _ := world.Get[scene.UITransform](visual)
 	if start.Translation.X.Value != 25 {
 		t.Fatalf("step-start failed at active start: %v", start.Translation)
 	}
@@ -236,7 +236,7 @@ func TestHTMLCSSStepsDelayAndReverseFill(t *testing.T) {
 	node.SetAttribute("style", "animation-direction:reverse")
 	incrementalSync(t, world)
 	htmlAnimationStep(t, world, clock, time.Second)
-	end, _ := ecs.Get[scene.UITransform](world, visual)
+	end, _ := world.Get[scene.UITransform](visual)
 	if end.Translation.X.Value != 0 || Animating(world) {
 		t.Fatalf("reverse forwards-fill retained first step: %v", end.Translation)
 	}
@@ -252,17 +252,17 @@ func TestHTMLCSSTransitionReverseScalesNegativeDelay(t *testing.T) {
 	htmlAnimationStep(t, world, clock, 200*time.Millisecond)
 	SetVisualHover(world, visual, false)
 	node := incrementalHTMLNode(t, world, owner, "item")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	transition := state.Animations[node.node].Transitions[0]
 	if math.Abs(transition.Config.Duration-.4) > 1e-8 || math.Abs(transition.Config.Delay+.08) > 1e-8 {
 		t.Fatalf("reverse timing = %+v", transition)
 	}
-	value, _ := ecs.Get[scene.UITransform](world, visual)
+	value, _ := world.Get[scene.UITransform](visual)
 	if math.Abs(float64(value.Translation.X.Value)-32) > 1e-6 {
 		t.Fatalf("reverse negative delay progress=%v", value.Translation)
 	}
 	htmlAnimationStep(t, world, clock, 320*time.Millisecond)
-	value, _ = ecs.Get[scene.UITransform](world, visual)
+	value, _ = world.Get[scene.UITransform](visual)
 	if value.Translation.X.Value != 0 || Animating(world) {
 		t.Fatalf("reverse did not finish: %v", value.Translation)
 	}
@@ -276,13 +276,13 @@ func TestHTMLCSSAnimatedBackdropRemainsUnderTransparentChild(t *testing.T) {
 	</style><div id="parent"><div id="child"></div></div>`)
 	parent := htmlAnimationRole(t, world, owner, "parent", htmlRoleSurface)
 	clip := htmlAnimationRole(t, world, owner, "parent", htmlRoleOverflow)
-	initial, _ := ecs.Get[scene.Sprite2D](world, parent)
+	initial, _ := world.Get[scene.Sprite2D](parent)
 	if initial.Shape.Fill != (graphics.ColorRGBA{R: 1, A: 1}) {
 		t.Fatalf("dynamic child incorrectly suppressed parent backdrop: %v", initial.Shape.Fill)
 	}
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
-	shape, _ := ecs.Get[scene.Sprite2D](world, parent)
-	mask, _ := ecs.Get[scene.RoundedClip2D](world, clip)
+	shape, _ := world.Get[scene.Sprite2D](parent)
+	mask, _ := world.Get[scene.RoundedClip2D](clip)
 	want := graphics.ColorRGBA{R: .5, B: .5, A: 1}
 	if shape.Shape.Fill != want || mask.MaskColor != want {
 		t.Fatalf("background/rounded mask did not animate together: %v / %v", shape.Shape.Fill, mask.MaskColor)
@@ -295,13 +295,13 @@ func TestHTMLCSSAnimatedRasterPaintReusesTexture(t *testing.T) {
 	@keyframes paint {from{background:transparent;border-top-color:red} to{background:blue;border-top-color:blue}}
 	</style><div id="item"></div>`)
 	visual := htmlAnimationRole(t, world, owner, "item", htmlRoleSurface)
-	initial, _ := ecs.Get[scene.Sprite2D](world, visual)
+	initial, _ := world.Get[scene.Sprite2D](visual)
 	if initial.Texture == nil {
 		t.Fatal("rounded animated borders need a retained raster")
 	}
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
-	value, _ := ecs.Get[scene.Sprite2D](world, visual)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	value, _ := world.Get[scene.Sprite2D](visual)
+	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "item")
 	raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
 	if value.Texture != initial.Texture || raster.image.RGBAAt(15, 10).B != 255 || raster.image.RGBAAt(15, 10).A != 128 || raster.image.RGBAAt(15, 0).R != 128 || raster.image.RGBAAt(15, 0).B != 128 {
@@ -323,11 +323,11 @@ func TestHTMLCSSAnimatedRasterPaintReusesTexture(t *testing.T) {
 func BenchmarkHTMLCSSColorAnimationFrame(b *testing.B) {
 	world := ecs.NewWorld()
 	clock := scene.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	value := New(`<style>.item {width:10px;height:10px;background:transparent;border:1px solid transparent;animation:paint 1s linear infinite alternate}@keyframes paint {to{background:red;border-top-color:blue}}</style>` + strings.Repeat(`<div class="item"></div>`, 100))
 	value.Width, value.Height = 240, 1600
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, value)
+	bundle.Put(value)
 	world.Spawn(bundle)
 	incrementalSync(b, world)
 	b.ReportAllocs()

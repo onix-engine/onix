@@ -15,7 +15,7 @@ func spawnHTMLInlineBackgrounds(world *ecs.World, owner ecs.Entity, state *htmlR
 		shape := scene.RoundedRectShape2D(htmlColor(background.Style.BackgroundColor), htmlOverflowClipRadius(background.Style, r.Width, r.Height))
 		entity := spawnHTMLSurface(world, owner, background.Node, htmlRoleInlineBackground, float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), shape, stackIndex, visible)
 		markHTMLChildNode(world, entity, background.Node)
-		_ = ecs.Insert(world, entity, htmlElementSurface{})
+		_ = world.Insert(entity, htmlElementSurface{})
 		if control != 0 {
 			attachHTMLImageToControl(world, entity, control, controlRect)
 		}

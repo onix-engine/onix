@@ -4,7 +4,6 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 )
@@ -18,10 +17,10 @@ func TestHTMLVisibilityControlAndEditableDescendants(t *testing.T) {
 			}
 			world, owner := incrementalHTMLFixture(t, `<`+tag+` id="parent" style="visibility:hidden">Hidden<span id="shown" style="visibility:visible">Visible</span></`+closeTag+`>`)
 			defer Dispose(world)
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			seen := false
 			for _, entity := range state.Children {
-				if text, ok := ecs.Get[scene.Text2D](world, entity); ok && text.Value == "Visible" {
+				if text, ok := world.Get[scene.Text2D](entity); ok && text.Value == "Visible" {
 					seen = true
 					if !scene.IsVisible(world, entity) {
 						t.Fatal("hidden control suppressed a visible descendant")
@@ -40,9 +39,9 @@ func TestHTMLVisibilityDefersPaintTexturesAndImages(t *testing.T) {
 	defer Dispose(world)
 	texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 10, 10)))
 	defer texture.Dispose()
-	ecs.InsertResource[ImageProvider](world, testHTMLImageProvider{texture: texture})
+	world.InsertResource[ImageProvider](testHTMLImageProvider{texture: texture})
 	incrementalSync(t, world)
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	if len(state.Textures.entries) != 0 || len(state.Textures.rasters) != 0 {
 		t.Fatal("fully hidden content generated paint textures or composite rasters")
 	}
@@ -65,10 +64,10 @@ func TestHTMLVisibilityPreservesLayoutAndVisibleDescendants(t *testing.T) {
 	hidden := incrementalHTMLNode(t, world, owner, "hidden")
 	shown := incrementalHTMLNode(t, world, owner, "shown")
 	after := incrementalHTMLNode(t, world, owner, "after")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	parentBox, afterRect := state.BoxesByNode[parent.node], state.BoxesByNode[after.node].BorderBox()
 	clip := state.OverflowBindings[parent.node].entity
-	scroll, _ := ecs.Get[scene.UIScroll](world, clip)
+	scroll, _ := world.Get[scene.UIScroll](clip)
 	if !scroll.DisableInput || !scene.IsVisible(world, clip) {
 		t.Fatal("hidden scrollport must retain clipping and disable its own input")
 	}
@@ -86,8 +85,8 @@ func TestHTMLVisibilityPreservesLayoutAndVisibleDescendants(t *testing.T) {
 	for _, class := range []string{"", "hidden", ""} {
 		parent.SetAttribute("class", class)
 		incrementalSync(t, world)
-		state = ecs.GetRef[htmlRenderState](world, owner)
-		current, _ := ecs.Get[scene.UIScroll](world, clip)
+		state = world.GetRef[htmlRenderState](owner)
+		current, _ := world.Get[scene.UIScroll](clip)
 		if state.SyncStats.Layouts != 0 || state.BoxesByNode[parent.node] != parentBox || state.BoxesByNode[after.node].BorderBox() != afterRect || current.ContentSize != scroll.ContentSize {
 			t.Fatalf("visibility changed geometry or scroll extent: %+v", state.SyncStats)
 		}
@@ -103,17 +102,17 @@ func TestHTMLVisibilityPreservesLayoutAndVisibleDescendants(t *testing.T) {
 func TestHTMLVisibilityInlineFragmentsAndFocus(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="parent" tabindex="0" style="visibility:hidden">Hidden <span id="shown" style="visibility:visible">Visible</span><a id="link" href="#x" style="visibility:visible">Link</a><span id="hidden">Hidden too</span><img id="image" src="missing.png" width="20" height="20"></div>`)
 	defer Dispose(world)
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	seen := false
 	for _, entity := range state.Children {
-		child, _ := ecs.Get[htmlChild](world, entity)
+		child, _ := world.Get[htmlChild](entity)
 		computed := state.Styles[child.Node]
-		if text, ok := ecs.Get[scene.Text2D](world, entity); ok {
+		if text, ok := world.Get[scene.Text2D](entity); ok {
 			if !htmlStyleVisible(computed) {
 				t.Fatalf("hidden text emitted: %q", text.Value)
 			}
 			seen = true
-			if route, ok := ecs.Get[FocusOwner](world, entity); ok && !scene.IsInteractive(world, route.Entity) {
+			if route, ok := world.Get[FocusOwner](entity); ok && !scene.IsInteractive(world, route.Entity) {
 				t.Fatal("visible fragment routed focus to its hidden ancestor")
 			}
 		}
@@ -138,7 +137,7 @@ func TestHTMLVisibilityRetainsNativeControlState(t *testing.T) {
 	parent := incrementalHTMLNode(t, world, owner, "parent")
 	field := incrementalHTMLNode(t, world, owner, "field")
 	control := htmlCullRole(world, owner, field, htmlRoleControl)
-	value := ecs.GetMut[Control](world, control)
+	value := world.GetMut[Control](control)
 	value.Value, value.DirtyValue, value.SelectionAnchor, value.SelectionFocus = "edited", true, 1, 4
 	for _, class := range []string{"hidden", "", "hidden", ""} {
 		parent.SetAttribute("class", class)
@@ -146,7 +145,7 @@ func TestHTMLVisibilityRetainsNativeControlState(t *testing.T) {
 		if next := htmlCullRole(world, owner, field, htmlRoleControl); next != control {
 			t.Fatal("visibility replaced the native control")
 		}
-		value := ecs.GetRef[Control](world, control)
+		value := world.GetRef[Control](control)
 		if value.Value != "edited" || value.SelectionAnchor != 1 || value.SelectionFocus != 4 || !value.DirtyValue {
 			t.Fatalf("visibility lost live editing state: %+v", value)
 		}
@@ -173,7 +172,7 @@ func TestHTMLVisibilityCompositeOnlyPaintsVisibleContent(t *testing.T) {
 			defer Dispose(world)
 			group := incrementalHTMLNode(t, world, owner, "group")
 			child := incrementalHTMLNode(t, world, owner, "child")
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			raster := state.Textures.rasters[group.node]
 			if raster == nil || raster.image.Rect.Dx() != 20 || raster.image.Rect.Dy() != 20 {
 				t.Fatalf("hidden ancestor enlarged composite bounds: %+v", raster)
@@ -210,7 +209,7 @@ func TestHTMLVisibilityHiddenChildRestoresCoveredBackground(t *testing.T) {
 	child.SetAttribute("class", "hidden")
 	incrementalSync(t, world)
 	entity := htmlCullRole(world, owner, parent, htmlRoleSurface)
-	sprite, ok := ecs.Get[scene.Sprite2D](world, entity)
+	sprite, ok := world.Get[scene.Sprite2D](entity)
 	if !ok || sprite.Shape.Fill != graphics.ColorFromRGB(255, 0, 0) || !scene.IsVisible(world, entity) {
 		t.Fatal("hiding the covering child did not restore the parent background")
 	}
@@ -219,7 +218,7 @@ func TestHTMLVisibilityHiddenChildRestoresCoveredBackground(t *testing.T) {
 func TestHTMLVisibilityOwnerHideShow(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<input id="hidden" style="visibility:hidden"><input id="shown"><div style="visibility:hidden;overflow:hidden;height:40px"><button id="child" style="visibility:visible">Visible</button></div>`)
 	for _, visible := range []bool{false, true} {
-		_ = ecs.Insert(world, owner, scene.Visibility{Visible: visible})
+		_ = world.Insert(owner, scene.Visibility{Visible: visible})
 		incrementalSync(t, world)
 		for _, id := range []string{"hidden", "shown", "child"} {
 			node := incrementalHTMLNode(t, world, owner, id)
@@ -242,7 +241,7 @@ func TestHTMLVisibilityHoverDoesNotRunLayout(t *testing.T) {
 			t.Fatal("could not update hover")
 		}
 		incrementalSync(t, world)
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		if state.SyncStats.Layouts != 0 {
 			t.Fatalf("hover visibility ran layout: %+v", state.SyncStats)
 		}
@@ -261,7 +260,7 @@ func TestHTMLVisibilityHoverRefreshesCompositedInlineText(t *testing.T) {
 	for _, hover := range []bool{true, false, true, false} {
 		SetControlHover(world, control, hover)
 		incrementalSync(t, world)
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		raster := state.Textures.rasters[group.node]
 		if raster == nil || state.SyncStats.Layouts != 0 {
 			t.Fatal("visibility lost the composite or ran layout")
@@ -291,8 +290,8 @@ func TestHTMLVisibilityMutationMatchesFreshRender(t *testing.T) {
 			incrementalSync(t, world)
 			freshSource := `<style>.hidden{visibility:hidden}</style><div id="target" class="` + class + `" style="overflow:auto;height:60px">` + content + `</div>`
 			fresh, freshOwner := incrementalHTMLFixture(t, freshSource)
-			got, _ := ecs.Get[htmlRenderState](world, owner)
-			want, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+			got, _ := world.Get[htmlRenderState](owner)
+			want, _ := fresh.Get[htmlRenderState](freshOwner)
 			compareHTMLLayout(t, got.Boxes, want.Boxes)
 			if !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, got), htmlPrimitiveSnapshot(fresh, want)) {
 				t.Fatalf("visibility=%q differs from fresh rendering for %s", class, content)

@@ -33,7 +33,7 @@ func TestProceduralDescendantsFollowPrivateLifetime(t *testing.T) {
 			root := a.SpawnScrollArea(ui.ScrollAreaOptions{Width: 100, Height: 100})
 			var children []ecs.Entity
 			for e := range r.world.Entities() {
-				if parent, ok := ecs.Get[scene.Parent](r.world, e); ok && parent.Entity == root {
+				if parent, ok := r.world.Get[scene.Parent](e); ok && parent.Entity == root {
 					children = append(children, e)
 					if !a.owns(e) || b.owns(e) {
 						t.Fatal("procedural ownership crossed modules")
@@ -66,28 +66,28 @@ func TestProceduralDescendantsFollowPrivateLifetime(t *testing.T) {
 
 func TestContentQueryDefersWritesSpawnsAndDeletionAcrossNestedQueries(t *testing.T) {
 	r, a, b := boundaryContent(t)
-	first := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{1})
-	second := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{2})
-	ContentSpawnNode(b, ui.NodeOptions{}, boundaryValue{99})
+	first := a.SpawnNode(ui.NodeOptions{}, boundaryValue{1})
+	second := a.SpawnNode(ui.NodeOptions{}, boundaryValue{2})
+	b.SpawnNode(ui.NodeOptions{}, boundaryValue{99})
 	var spawned ecs.Entity
 	visits := 0
-	for e, access := range ContentQuery[boundaryValue](a) {
+	for e, access := range a.Query[boundaryValue]() {
 		visits++
 		if e != first {
 			continue
 		}
-		must(t, ContentInsert(a, e, boundaryValue{10}))
-		must(t, ContentInsert(a, e, boundaryExtra{20}))
+		must(t, a.Insert(e, boundaryValue{10}))
+		must(t, a.Insert(e, boundaryExtra{20}))
 		bundle := ecs.NewBundle(1)
-		ecs.Put(&bundle, boundaryValue{3})
+		bundle.Put(boundaryValue{3})
 		spawned = a.Spawn(bundle)
-		must(t, ContentInsert(a, spawned, boundaryExtra{30}))
-		must(t, ContentInsert(a, spawned, scene.Parent{Entity: second}))
-		if r.world.IsAlive(spawned) || ContentHas[boundaryExtra](a, e) || access.Get().Number != 10 {
+		must(t, a.Insert(spawned, boundaryExtra{30}))
+		must(t, a.Insert(spawned, scene.Parent{Entity: second}))
+		if r.world.IsAlive(spawned) || a.Has[boundaryExtra](e) || access.Get().Number != 10 {
 			t.Fatal("replacement was deferred or structural writes changed the query snapshot")
 		}
 		nested := 0
-		for range ContentQuery2[boundaryValue, scene.Visibility](a) {
+		for range a.Query2[boundaryValue, scene.Visibility]() {
 			nested++
 		}
 		if nested != 2 || !a.Despawn(e) || !r.world.IsAlive(e) {
@@ -97,8 +97,8 @@ func TestContentQueryDefersWritesSpawnsAndDeletionAcrossNestedQueries(t *testing
 	if visits != 2 || r.world.IsAlive(first) || !r.world.IsAlive(spawned) {
 		t.Fatal("query crossed modules or lost deferred structural commands")
 	}
-	extra, ok := ContentGet[boundaryExtra](a, spawned)
-	parent, _ := ContentGet[scene.Parent](a, spawned)
+	extra, ok := a.Get[boundaryExtra](spawned)
+	parent, _ := a.Get[scene.Parent](spawned)
 	if !ok || extra.Number != 30 || parent.Entity != second {
 		t.Fatal("reserved entity initialization was lost")
 	}
@@ -109,16 +109,16 @@ func TestContentQueryDefersWritesSpawnsAndDeletionAcrossNestedQueries(t *testing
 
 func TestContentQueryEarlyBreakCommitsAndUpdateKeepsOuterBoundary(t *testing.T) {
 	r, a, _ := boundaryContent(t)
-	entity := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{1})
-	for e := range ContentQuery[boundaryValue](a) {
-		must(t, ContentInsert(a, e, boundaryExtra{2}))
+	entity := a.SpawnNode(ui.NodeOptions{}, boundaryValue{1})
+	for e := range a.Query[boundaryValue]() {
+		must(t, a.Insert(e, boundaryExtra{2}))
 		break
 	}
-	if !ContentHas[boundaryExtra](a, entity) {
+	if !a.Has[boundaryExtra](entity) {
 		t.Fatal("early break skipped structural commit")
 	}
 	a.context.update = func(Tick) error {
-		for e := range ContentQuery2[boundaryValue, boundaryExtra](a) {
+		for e := range a.Query2[boundaryValue, boundaryExtra]() {
 			if !a.Despawn(e) {
 				return ErrOwnership
 			}
@@ -138,15 +138,15 @@ func TestContentQueryEarlyBreakCommitsAndUpdateKeepsOuterBoundary(t *testing.T) 
 
 func TestReparentCommandsPreserveSubtreeOrderAndRejectPendingCycles(t *testing.T) {
 	r, a, _ := boundaryContent(t)
-	left := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{1})
-	right := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{2})
-	child := ContentSpawnNode(a, ui.NodeOptions{Parent: left}, boundaryExtra{3})
-	for e := range ContentQuery[boundaryValue](a) {
+	left := a.SpawnNode(ui.NodeOptions{}, boundaryValue{1})
+	right := a.SpawnNode(ui.NodeOptions{}, boundaryValue{2})
+	child := a.SpawnNode(ui.NodeOptions{Parent: left}, boundaryExtra{3})
+	for e := range a.Query[boundaryValue]() {
 		if e != left {
 			continue
 		}
-		must(t, ContentInsert(a, child, scene.Parent{Entity: right}))
-		if err := ContentInsert(a, right, scene.Parent{Entity: child}); err == nil {
+		must(t, a.Insert(child, scene.Parent{Entity: right}))
+		if err := a.Insert(right, scene.Parent{Entity: child}); err == nil {
 			t.Fatal("pending reparent cycle was accepted")
 		}
 		if !a.Despawn(left) {
@@ -165,18 +165,18 @@ func TestModuleQueriesIncludeProceduralDescendantsAndAllocateNothingWarm(t *test
 	_, a, b := boundaryContent(t)
 	root := a.SpawnScrollArea(ui.ScrollAreaOptions{})
 	visits := 0
-	for _, access := range ContentQuery[scene.ClipExempt2D](a) {
+	for _, access := range a.Query[scene.ClipExempt2D]() {
 		_ = access.Get()
 		visits++
 	}
 	if visits != 4 {
 		t.Fatalf("private query found %d procedural parts, want 4", visits)
 	}
-	for range ContentQuery[scene.ClipExempt2D](b) {
+	for range b.Query[scene.ClipExempt2D]() {
 		t.Fatal("private query visited another module's descendants")
 	}
 	step := func() {
-		for e := range ContentQuery[scene.Visibility](a) {
+		for e := range a.Query[scene.Visibility]() {
 			if !a.owns(e) {
 				panic(ErrOwnership)
 			}
@@ -194,9 +194,9 @@ func TestModuleQueriesIncludeProceduralDescendantsAndAllocateNothingWarm(t *test
 func TestPrivateSubtreeCreationAndDeletionAllocateNothingWarm(t *testing.T) {
 	_, a, _ := boundaryContent(t)
 	step := func() {
-		root := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{})
+		root := a.SpawnNode(ui.NodeOptions{}, boundaryValue{})
 		for range 8 {
-			ContentSpawnNode(a, ui.NodeOptions{Parent: root}, boundaryValue{})
+			a.SpawnNode(ui.NodeOptions{Parent: root}, boundaryValue{})
 		}
 		if !a.Despawn(root) {
 			panic(ErrOwnership)
@@ -212,11 +212,11 @@ func TestPrivateSubtreeCreationAndDeletionAllocateNothingWarm(t *testing.T) {
 
 func TestQueuedNodesAllocateNothingWarmAndKeepPrivateSpawnDefaults(t *testing.T) {
 	r, a, b := boundaryContent(t)
-	trigger := ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{})
+	trigger := a.SpawnNode(ui.NodeOptions{}, boundaryValue{})
 	step := func() {
-		for range ContentQuery[boundaryValue](a) {
-			parent := ContentSpawnNode(a, ui.NodeOptions{X: 7, Y: 9}, boundaryValue{1})
-			child := ContentSpawnNode2(a, ui.NodeOptions{Parent: parent}, boundaryValue{2}, boundaryExtra{3})
+		for range a.Query[boundaryValue]() {
+			parent := a.SpawnNode(ui.NodeOptions{X: 7, Y: 9}, boundaryValue{1})
+			child := a.SpawnNode2(ui.NodeOptions{Parent: parent}, boundaryValue{2}, boundaryExtra{3})
 			if r.world.IsAlive(parent) || b.owns(child) || !a.owns(child) || !a.Despawn(parent) {
 				panic(ErrOwnership)
 			}
@@ -232,16 +232,16 @@ func TestQueuedNodesAllocateNothingWarmAndKeepPrivateSpawnDefaults(t *testing.T)
 		t.Fatalf("queued node creation/deletion allocated %g times", allocs)
 	}
 	bundle := ecs.NewBundle(2)
-	ecs.Put(&bundle, scene.Parent{})
-	ecs.Put(&bundle, scene.Activity{})
+	bundle.Put(scene.Parent{})
+	bundle.Put(scene.Activity{})
 	var first, second ecs.Entity
-	for range ContentQuery[boundaryValue](a) {
+	for range a.Query[boundaryValue]() {
 		first = a.Spawn(bundle)
 		second = b.Spawn(bundle)
 	}
-	firstParent, _ := ContentGet[scene.Parent](a, first)
-	secondParent, _ := ContentGet[scene.Parent](b, second)
-	activity, _ := ContentGet[scene.Activity](a, first)
+	firstParent, _ := a.Get[scene.Parent](first)
+	secondParent, _ := b.Get[scene.Parent](second)
+	activity, _ := a.Get[scene.Activity](first)
 	if firstParent.Entity != a.Root() || secondParent.Entity != b.Root() || !activity.Active {
 		t.Fatal("private spawn defaults changed or mutated a reused bundle")
 	}
@@ -252,17 +252,17 @@ func BenchmarkContentQuery(b *testing.B) {
 		b.Run("foreign="+strconv.Itoa(foreign), func(b *testing.B) {
 			r, a, other := boundaryContent(b)
 			for range 64 {
-				ContentSpawnNode(a, ui.NodeOptions{}, boundaryValue{})
+				a.SpawnNode(ui.NodeOptions{}, boundaryValue{})
 			}
 			for range foreign {
-				ContentSpawnNode(other, ui.NodeOptions{}, boundaryValue{})
+				other.SpawnNode(ui.NodeOptions{}, boundaryValue{})
 			}
 			r.SyncScopes()
 			b.Run("private", func(b *testing.B) {
 				b.ReportAllocs()
 				visits := 0
 				for b.Loop() {
-					for range ContentQuery[boundaryValue](a) {
+					for range a.Query[boundaryValue]() {
 						visits++
 					}
 				}
@@ -274,7 +274,7 @@ func BenchmarkContentQuery(b *testing.B) {
 				b.ReportAllocs()
 				visits := 0
 				for b.Loop() {
-					for e := range ecs.Query[boundaryValue](r.world).All {
+					for e := range r.world.Query[boundaryValue]().All {
 						if a.owns(e) {
 							visits++
 						}

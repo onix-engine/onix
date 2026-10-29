@@ -48,8 +48,8 @@ type controlView struct {
 }
 
 func controlViewFor(world *ecs.World, entity ecs.Entity) (controlView, bool) {
-	control := ecs.GetRef[Control](world, entity)
-	target := ecs.GetRef[scene.InputTarget2D](world, entity)
+	control := world.GetRef[Control](entity)
+	target := world.GetRef[scene.InputTarget2D](entity)
 	if (control == nil) || (target == nil) {
 		return controlView{}, false
 	}
@@ -58,10 +58,10 @@ func controlViewFor(world *ecs.World, entity ecs.Entity) (controlView, bool) {
 		InputFilter: target.InputFilter,
 		PassThrough: target.PassThrough,
 	}
-	if stackIndex, ok := ecs.Get[scene.UIStackIndex](world, entity); ok {
+	if stackIndex, ok := world.Get[scene.UIStackIndex](entity); ok {
 		view.StackIndex = int(stackIndex)
 	}
-	if pointer := ecs.GetRef[scene.InputState2D](world, entity); pointer != nil {
+	if pointer := world.GetRef[scene.InputState2D](entity); pointer != nil {
 		view.Hovered, view.Pressed = pointer.Hovered, pointer.Pressed
 	}
 	view.Selected = control.Selected
@@ -74,50 +74,50 @@ func ControlBounds(world *ecs.World, entity ecs.Entity) (float32, float32, bool)
 }
 
 func SetControlBounds(world *ecs.World, entity ecs.Entity, width, height float32) {
-	if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok {
+	if target, ok := world.Get[scene.InputTarget2D](entity); ok {
 		if target.Width == width && target.Height == height {
 			return
 		}
-		if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+		if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 			target.Width, target.Height = width, height
 		}
 	}
 }
 
 func SetControlDisabled(world *ecs.World, entity ecs.Entity, disabled bool) {
-	if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok {
+	if target, ok := world.Get[scene.InputTarget2D](entity); ok {
 		if target.Disabled == disabled {
 			return
 		}
-		if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+		if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 			target.Disabled = disabled
 		}
 	}
 }
 
 func SetControlSelected(world *ecs.World, entity ecs.Entity, selected bool) {
-	if control := ecs.GetMut[Control](world, entity); control != nil {
+	if control := world.GetMut[Control](entity); control != nil {
 		control.Selected = selected
 	}
 }
 
 func SetControlPassThrough(world *ecs.World, entity ecs.Entity, passThrough bool) {
-	if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok {
+	if target, ok := world.Get[scene.InputTarget2D](entity); ok {
 		if target.PassThrough == passThrough {
 			return
 		}
-		if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+		if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 			target.PassThrough = passThrough
 		}
 	}
 }
 
 func SetControlInputFilter(world *ecs.World, entity ecs.Entity, filter scene.InputFilter) {
-	if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok {
+	if target, ok := world.Get[scene.InputTarget2D](entity); ok {
 		if target.InputFilter == filter {
 			return
 		}
-		if target := ecs.GetMut[scene.InputTarget2D](world, entity); target != nil {
+		if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 			target.InputFilter = filter
 		}
 	}

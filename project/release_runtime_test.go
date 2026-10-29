@@ -88,21 +88,21 @@ func TestReleaseRuntimeLoadsAuthoredUIComposition(t *testing.T) {
 		t.Fatalf("instantiate release UI scene: %v", err)
 	}
 	defer scene.Dispose()
-	if err := BindControl(scene, "run", engineui.Button{}); err != nil {
+	if err := scene.BindControl("run", engineui.Button{}); err != nil {
 		t.Fatalf("bind release UI controls: %v", err)
 	}
 
 	root := scene.MustEntity("run")
 	child := scene.MustEntity("run-normal")
-	element, ok := ecs.Get[engineui.Relation[engineui.Control]](scene.World, child)
-	if !ok || element.Owner != root || !ecs.Has[engineui.Part[engineui.BodyPart]](scene.World, child) {
+	element, ok := scene.World.Get[engineui.Relation[engineui.Control]](child)
+	if !ok || element.Owner != root || !scene.World.Has[engineui.Part[engineui.BodyPart]](child) {
 		t.Fatalf("release UI element = %#v", element)
 	}
-	variants, ok := ecs.Get[engineui.Variants[engineui.ControlVariant]](scene.World, root)
+	variants, ok := scene.World.Get[engineui.Variants[engineui.ControlVariant]](root)
 	if !ok || !hasControlVariant(variants, child, engineui.VariantAlways) {
 		t.Fatalf("release UI variants = %#v", variants)
 	}
-	visibility, _ := ecs.Get[sceneapi.Visibility](scene.World, child)
+	visibility, _ := scene.World.Get[sceneapi.Visibility](child)
 	if !visibility.Visible {
 		t.Fatal("release UI body is hidden")
 	}

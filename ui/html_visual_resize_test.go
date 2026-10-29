@@ -21,7 +21,7 @@ func TestHTMLTextVisualRolesSurviveResize(t *testing.T) {
 			html := htmlui.New(`<style>#editor{width:300px;height:240px;margin:0;padding:0;border:0;font-size:14px;line-height:20px}</style>` + markup)
 			html.Width, html.Height, html.Font = 400, 400, notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, html)
+			bundle.Put(html)
 			owner := world.Spawn(bundle)
 			sync := func() {
 				t.Helper()
@@ -36,7 +36,7 @@ func TestHTMLTextVisualRolesSurviveResize(t *testing.T) {
 			} else {
 				control = htmlControlByID(t, world, owner, "editor")
 			}
-			field := ecs.GetMut[TextField](world, control)
+			field := world.GetMut[TextField](control)
 			field.Focused, field.Caret, field.Anchor = true, 3, 1
 			node, _ := htmlui.NodeByID(world, owner, "editor")
 			var identities [5]ecs.Entity
@@ -47,7 +47,7 @@ func TestHTMLTextVisualRolesSurviveResize(t *testing.T) {
 				verify := func(entity ecs.Entity, kind htmlui.ControlVisualKind, selection bool) {
 					t.Helper()
 					isCaret := !selection && kind == htmlui.ControlVisualCaret
-					if ecs.Has[Part[CaretPart]](world, entity) != isCaret || ecs.Has[Part[SelectionPart]](world, entity) != selection {
+					if world.Has[Part[CaretPart]](entity) != isCaret || world.Has[Part[SelectionPart]](entity) != selection {
 						t.Fatalf("height %s: visual kind=%d selection=%v retained another runtime role", size, kind, selection)
 					}
 					if selection {
@@ -61,18 +61,18 @@ func TestHTMLTextVisualRolesSurviveResize(t *testing.T) {
 						caret = entity
 					}
 				}
-				for entity, access := range ecs.Query[htmlui.ControlVisual](world).All {
+				for entity, access := range world.Query[htmlui.ControlVisual]().All {
 					if visual := access.Get(); visual.Control == control {
 						verify(entity, visual.Kind, visual.Selection)
 					}
 				}
-				for entity, access := range ecs.Query[htmlui.EditableVisual](world).All {
+				for entity, access := range world.Query[htmlui.EditableVisual]().All {
 					if visual := access.Get(); visual.Editable == control {
 						verify(entity, htmlui.ControlVisualCaret, visual.Selection)
 					}
 				}
-				visibility, _ := ecs.Get[scene.Visibility](world, caret)
-				bounds, _ := ecs.Get[scene.Size2D](world, caret)
+				visibility, _ := world.Get[scene.Visibility](caret)
+				bounds, _ := world.Get[scene.Size2D](caret)
 				if caret == 0 || !visibility.Visible || bounds.Width <= 0 || bounds.Height <= 0 {
 					t.Fatalf("height %s: caret hidden or empty: visible=%v bounds=%+v", size, visibility.Visible, bounds)
 				}

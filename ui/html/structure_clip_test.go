@@ -24,7 +24,7 @@ func TestHTMLStructureClipInsertionRemovalMatchesFresh(t *testing.T) {
 				parent := incrementalHTMLNode(t, world, owner, "parent")
 				child := incrementalHTMLNode(t, world, owner, "child")
 				field := incrementalControl(t, world, owner, "field")
-				before, _ := ecs.Get[Control](world, field)
+				before, _ := world.Get[Control](field)
 				for _, present := range []bool{false, true, false, true} {
 					if present {
 						parent.Append(child)
@@ -32,11 +32,11 @@ func TestHTMLStructureClipInsertionRemovalMatchesFresh(t *testing.T) {
 						child.Remove()
 					}
 					incrementalSync(t, world)
-					state, _ := ecs.Get[htmlRenderState](world, owner)
+					state, _ := world.Get[htmlRenderState](owner)
 					if state.SyncStats.PartialReconciles != 1 {
 						t.Fatalf("clip structure fell back: %+v", state.SyncStats)
 					}
-					after, _ := ecs.Get[Control](world, field)
+					after, _ := world.Get[Control](field)
 					if after.RenderRevision != before.RenderRevision {
 						t.Fatal("unrelated clipped control rebuilt")
 					}
@@ -75,7 +75,7 @@ func TestHTMLStructureCreatesFirstClipAndRemovesLast(t *testing.T) {
 			child.Remove()
 		}
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("first/last clip fell back")
 		}
@@ -98,9 +98,9 @@ func TestHTMLStructureClipExtentAndPosition(t *testing.T) {
 	parent := incrementalHTMLNode(t, world, owner, "parent")
 	child := incrementalHTMLNode(t, world, owner, "child")
 	scroller := incrementalHTMLNode(t, world, owner, "scroller")
-	initial, _ := ecs.Get[htmlRenderState](world, owner)
+	initial, _ := world.Get[htmlRenderState](owner)
 	clip := initial.OverflowBindings[scroller.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -150
 	for _, present := range []bool{false, true, false, true} {
 		if present {
@@ -109,8 +109,8 @@ func TestHTMLStructureClipExtentAndPosition(t *testing.T) {
 			child.Remove()
 		}
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
-		scroll, _ := ecs.Get[scene.UIScroll](world, clip)
+		state, _ := world.Get[htmlRenderState](owner)
+		scroll, _ := world.Get[scene.UIScroll](clip)
 		if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[scroller.node].entity != clip || scroll.Position[1] != -40 {
 			t.Fatalf("stable scroller state lost: stats=%+v clip=%v/%v position=%v", state.SyncStats, state.OverflowBindings[scroller.node].entity, clip, scroll.Position)
 		}
@@ -135,7 +135,7 @@ func TestHTMLStructureMovesClipWithAbsoluteDescendant(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, prefix+suffix)
 	incrementalHTMLNode(t, world, owner, "remove").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("moved clip fell back")
 	}
@@ -146,7 +146,7 @@ func TestHTMLStructureClipSizeMembershipIsLocal(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="scroller" style="overflow:auto"><div id="child">Text</div></div>`)
 	incrementalHTMLNode(t, world, owner, "child").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("existing clip size membership fell back")
 	}
@@ -208,7 +208,7 @@ func TestHTMLStructuralClipFocusAndControls(t *testing.T) {
 					child.Remove()
 				}
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatalf("clipped context fell back: %+v", state.SyncStats)
 				}
@@ -226,7 +226,7 @@ func TestHTMLStructuralClippingSkipsUnrelatedControls(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="scroller" style="height:40px;overflow:auto"><div id="child" style="height:80px">Target</div></div>`+strings.Repeat(`<div style="height:40px;overflow:auto"><input value="Unchanged"/></div>`, 1000))
 	incrementalHTMLNode(t, world, owner, "child").Remove()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.SnapshottedControls != 0 || state.SyncStats.ReconciledBoxes > 3 {
 		t.Fatalf("unrelated clipped controls updated: %+v", state.SyncStats)
 	}
@@ -256,12 +256,12 @@ func TestHTMLStructuralClipWithExternalBindingMatchesFull(t *testing.T) {
 			child.Remove()
 			refChild.Remove()
 		}
-		refState := ecs.GetMut[htmlRenderState](reference, refOwner)
+		refState := reference.GetMut[htmlRenderState](refOwner)
 		refState.PartialValid = false
 		incrementalSync(t, world)
 		incrementalSync(t, reference)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
-		want, _ := ecs.Get[htmlRenderState](reference, refOwner)
+		state, _ := world.Get[htmlRenderState](owner)
+		want, _ := reference.Get[htmlRenderState](refOwner)
 		if state.SyncStats.PartialReconciles != 1 || !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, state), htmlPrimitiveSnapshot(reference, want)) {
 			t.Fatal("external binding and structural clip differ from full rendering")
 		}

@@ -17,17 +17,17 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 
 	html := htmlui.New(`<div><input id="name" name="display_name" value="Onix" maxlength="8"><button id="send">Send</button></div>`)
 	html.Width, html.Height = 320, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(5)
-	ecs.Put(&bundle, scene.NewUITransform())
-	ecs.Put(&bundle, scene.UIGlobalTransform{})
-	ecs.Put(&bundle, scene.Visibility{Visible: true})
-	ecs.Put(&bundle, scene.AnchorTopLeft)
-	ecs.Put(&bundle, html)
+	bundle.Put(scene.NewUITransform())
+	bundle.Put(scene.UIGlobalTransform{})
+	bundle.Put(scene.Visibility{Visible: true})
+	bundle.Put(scene.AnchorTopLeft)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 
 	if err := SyncSystem("").Run(world); err != nil {
@@ -35,23 +35,23 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "name")
 	button := htmlControlByID(t, world, owner, "send")
-	textField, ok := ecs.Get[TextField](world, field)
-	if !ok || textField.Value != "Onix" || textField.MaxRunes != 8 || !ecs.Has[Input](world, field) {
+	textField, ok := world.Get[TextField](field)
+	if !ok || textField.Value != "Onix" || textField.MaxRunes != 8 || !world.Has[Input](field) {
 		t.Fatalf("HTML input was not bound to TextField: %#v, ok=%v", textField, ok)
 	}
-	if !ecs.Has[Button](world, button) {
+	if !world.Has[Button](button) {
 		t.Fatal("HTML button was not bound to Button")
 	}
 
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: field, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: field, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	assertHTMLEvent(t, reader.Read(world), owner, "name", htmlui.EventFocus, "Onix")
-	textField, _ = ecs.Get[TextField](world, field)
-	textField.Caret, textField.Anchor = 3, 3
-	if current := ecs.GetMut[TextField](world, field); current != nil {
+	textField, _ = world.Get[TextField](field)
+	textField.Caret, textField.Anchor = 4, 4
+	if current := world.GetMut[TextField](field); current != nil {
 		*current = textField
 	}
 
@@ -61,7 +61,7 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertHTMLEvent(t, reader.Read(world), owner, "name", htmlui.EventInput, "Onix!")
-	control, _ := ecs.Get[htmlui.Control](world, field)
+	control, _ := world.Get[htmlui.Control](field)
 	if control.Value != "Onix!" {
 		t.Fatalf("HTML control value = %q, want Onix!", control.Value)
 	}
@@ -76,7 +76,7 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 	assertHTMLEvent(t, events, owner, "name", htmlui.EventSubmit, "Onix!")
 
 	uiInputState.EndFrame()
-	ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	foundValue := false
-	for _, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for _, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		relation := access.A.Get()
 		text := access.B.Get()
 
@@ -100,7 +100,7 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 		t.Fatal("edited HTML input value was not synchronized to its text visual")
 	}
 	foundCaret := false
-	for _, access := range ecs.Query2[htmlui.ControlVisual, scene.Visibility](world).All {
+	for _, access := range world.Query2[htmlui.ControlVisual, scene.Visibility]().All {
 		visual := access.A.Get()
 		visibility := access.B.Get()
 
@@ -120,13 +120,13 @@ func TestHTMLOverflowScrollMovesContentAfterLayout(t *testing.T) {
 	html := htmlui.New(`<div id="viewport" style="width:100px;height:40px;overflow:auto"><div style="width:240px;height:80px;background:#fff"></div></div>`)
 	html.Width, html.Height = 300, 100
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var area ecs.Entity
-	for entity, access := range ecs.Query2[htmlui.ScrollContent, scene.UITransform](world).All {
+	for entity, access := range world.Query2[htmlui.ScrollContent, scene.UITransform]().All {
 		content := access.A.Get()
 
 		if content.Area != 0 {
@@ -138,13 +138,13 @@ func TestHTMLOverflowScrollMovesContentAfterLayout(t *testing.T) {
 	if area == 0 {
 		t.Fatal("missing generated HTML scroll content")
 	}
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	if scroll == nil {
 		t.Fatal("missing generated HTML scroll state")
 	}
 	var contentEntity ecs.Entity
 	var before float32
-	for entity, access := range ecs.Query2[htmlui.ScrollContent, scene.UITransform](world).All {
+	for entity, access := range world.Query2[htmlui.ScrollContent, scene.UITransform]().All {
 		content := access.A.Get()
 		transform := access.B.Get()
 
@@ -157,7 +157,7 @@ func TestHTMLOverflowScrollMovesContentAfterLayout(t *testing.T) {
 	if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, contentEntity)
+	transform, _ := world.Get[scene.UITransform](contentEntity)
 	if transform.Translation.X.Value != before-30 {
 		t.Fatalf("scroll content x = %v, want %v", transform.Translation.X.Value, before-30)
 	}
@@ -183,12 +183,12 @@ func TestHTMLTextControlSelectionSurvivesDOMUpdateAndSourceReplacement(t *testin
 			world := ecs.NewWorld()
 			RegisterRuntimeFeature[HTMLRenderer](world)
 			uiInputState := input.NewState()
-			ecs.InsertResource(world, uiInputState)
+			world.InsertResource(uiInputState)
 			html := htmlui.New(test.html)
 			html.Width, html.Height = 320, 100
 			html.Font = notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, html)
+			bundle.Put(html)
 			owner := world.Spawn(bundle)
 			sync := SyncSystem("")
 			if err := sync.Run(world); err != nil {
@@ -196,14 +196,14 @@ func TestHTMLTextControlSelectionSurvivesDOMUpdateAndSourceReplacement(t *testin
 			}
 			oldEntity := htmlControlByID(t, world, owner, test.id)
 			input := &uiEventState{}
-			ecs.InsertResource(world, input)
+			world.InsertResource(input)
 			focus(world, input, oldEntity)
-			field := ecs.GetMut[TextField](world, oldEntity)
+			field := world.GetMut[TextField](oldEntity)
 			field.Anchor, field.Caret, field.Selecting = test.anchor, test.caret, true
 			selectionStart, selectionEnd := orderedSelection(test.anchor, test.caret)
 			uiInputState.SetTextInputSelection(selectionStart, selectionEnd)
 			capture := &scene.InputCapture2D{Target: oldEntity, Receiver: oldEntity}
-			ecs.InsertResource(world, capture)
+			world.InsertResource(capture)
 
 			if test.reparse {
 				if !htmlui.Set(world, owner, test.html+`<style>input{width:180px}</style>`) {
@@ -226,19 +226,19 @@ func TestHTMLTextControlSelectionSurvivesDOMUpdateAndSourceReplacement(t *testin
 			} else if newEntity != oldEntity || !world.IsAlive(oldEntity) {
 				t.Fatalf("DOM update replaced control: old=%d new=%d", oldEntity, newEntity)
 			}
-			field = ecs.GetMut[TextField](world, newEntity)
+			field = world.GetMut[TextField](newEntity)
 			if !field.Focused || !field.Selecting || field.Anchor != test.anchor || field.Caret != test.caret {
 				t.Fatalf("rebuilt text field state = %#v", *field)
 			}
 			if test.multiline {
-				if !ecs.Has[Textarea](world, newEntity) {
+				if !world.Has[Textarea](newEntity) {
 					t.Fatal("rebuilt textarea lost its textarea component")
 				}
 			}
 			if input.Focused != newEntity {
 				t.Fatalf("input focus = %d, want %d", input.Focused, newEntity)
 			}
-			keyboard, _ := ecs.GetResource[*scene.InputFocus](world)
+			keyboard, _ := world.GetResource[*scene.InputFocus]()
 			if keyboard == nil || keyboard.Keyboard != newEntity {
 				t.Fatalf("keyboard focus = %#v, want %d", keyboard, newEntity)
 			}
@@ -254,7 +254,7 @@ func TestHTMLTextControlSelectionSurvivesDOMUpdateAndSourceReplacement(t *testin
 				t.Fatal(err)
 			}
 			selectionVisible := false
-			for _, access := range ecs.Query2[htmlui.ControlVisual, scene.Visibility](world).All {
+			for _, access := range world.Query2[htmlui.ControlVisual, scene.Visibility]().All {
 				visual := access.A.Get()
 				visibility := access.B.Get()
 
@@ -274,13 +274,13 @@ func TestHTMLTextareaSelectionPaintsEveryRowThroughTheCaret(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	value := strings.Repeat("word\n", 24) + "tail"
 	html := htmlui.New("<textarea id=\"field\">" + value + "</textarea><style>textarea{width:640px;height:600px;font-size:13px;line-height:20px;white-space:pre}</style>")
 	html.Width, html.Height = 700, 700
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -288,16 +288,16 @@ func TestHTMLTextareaSelectionPaintsEveryRowThroughTheCaret(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "field")
 	input := &uiEventState{}
-	ecs.InsertResource(world, input)
+	world.InsertResource(input)
 	focus(world, input, field)
-	if fieldState := ecs.GetMut[TextField](world, field); fieldState != nil {
+	if fieldState := world.GetMut[TextField](field); fieldState != nil {
 		fieldState.Anchor, fieldState.Caret, fieldState.Selecting = 0, runeCount(value), true
 	}
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	painted := 0
-	for _, access := range ecs.Query3[htmlui.ControlVisual, scene.Visibility, scene.Size2D](world).All {
+	for _, access := range world.Query3[htmlui.ControlVisual, scene.Visibility, scene.Size2D]().All {
 		visual, visibility, size := access.A.Get(), access.B.Get(), access.C.Get()
 
 		if visual.Control == field && visual.Selection && visibility.Visible && size.Width > 0 {
@@ -313,13 +313,13 @@ func TestHTMLTextareaSelectionPaintsWrappedRows(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	value := strings.Repeat("word ", 20) + "end"
 	html := htmlui.New("<textarea id=\"field\">" + value + "</textarea><style>textarea{width:120px;height:300px;font-size:13px;line-height:20px;white-space:pre-wrap}</style>")
 	html.Width, html.Height = 200, 400
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -327,9 +327,9 @@ func TestHTMLTextareaSelectionPaintsWrappedRows(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "field")
 	input := &uiEventState{}
-	ecs.InsertResource(world, input)
+	world.InsertResource(input)
 	focus(world, input, field)
-	if fieldState := ecs.GetMut[TextField](world, field); fieldState != nil {
+	if fieldState := world.GetMut[TextField](field); fieldState != nil {
 		fieldState.Anchor, fieldState.Caret, fieldState.Selecting = 0, runeCount(value), true
 	}
 	if err := sync.Run(world); err != nil {
@@ -339,18 +339,18 @@ func TestHTMLTextareaSelectionPaintsWrappedRows(t *testing.T) {
 	if !ok {
 		t.Fatal("textarea value visual missing")
 	}
-	valueText := ecs.GetRef[scene.Text2D](world, textEntity)
-	textTransform, _ := ecs.Get[scene.UITransform](world, textEntity)
+	valueText := world.GetRef[scene.Text2D](textEntity)
+	textTransform, _ := world.Get[scene.UITransform](textEntity)
 	rows := scene.TextLineCount2D(valueText)
 	painted, lowest := 0, float32(0)
-	for entity, access := range ecs.Query3[htmlui.ControlVisual, scene.Visibility, scene.Size2D](world).All {
+	for entity, access := range world.Query3[htmlui.ControlVisual, scene.Visibility, scene.Size2D]().All {
 		visual, visibility, size := access.A.Get(), access.B.Get(), access.C.Get()
 
 		if visual.Control != field || !visual.Selection || !visibility.Visible || size.Width <= 0 {
 			continue
 		}
 		painted++
-		transform, _ := ecs.Get[scene.UITransform](world, entity)
+		transform, _ := world.Get[scene.UITransform](entity)
 		lowest = max(lowest, transform.Translation.Y.Value+size.Height)
 	}
 	if rows < 2 {
@@ -372,13 +372,13 @@ func TestHTMLTextareaPaintsSelectionBehindCaretAndValueText(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	value := strings.Repeat("word\n", 4) + "tail"
 	html := htmlui.New("<textarea id=\"field\">" + value + "</textarea><style>textarea{width:320px;height:160px;font-size:13px;line-height:20px;white-space:pre}</style>")
 	html.Width, html.Height = 400, 240
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -386,9 +386,9 @@ func TestHTMLTextareaPaintsSelectionBehindCaretAndValueText(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "field")
 	input := &uiEventState{}
-	ecs.InsertResource(world, input)
+	world.InsertResource(input)
 	focus(world, input, field)
-	if fieldState := ecs.GetMut[TextField](world, field); fieldState != nil {
+	if fieldState := world.GetMut[TextField](field); fieldState != nil {
 		fieldState.Anchor, fieldState.Caret, fieldState.Selecting = 0, runeCount(value), true
 	}
 	if err := sync.Run(world); err != nil {
@@ -398,14 +398,14 @@ func TestHTMLTextareaPaintsSelectionBehindCaretAndValueText(t *testing.T) {
 	if !ok {
 		t.Fatal("textarea value visual missing")
 	}
-	textStack, ok := ecs.Get[scene.UIStackIndex](world, textEntity)
+	textStack, ok := world.Get[scene.UIStackIndex](textEntity)
 	if !ok {
 		t.Fatal("textarea value visual has no paint stack")
 	}
 	var selectionTop scene.UIStackIndex
 	overlayBottom := scene.UIStackIndex(1 << 30)
 	overlays := 0
-	for _, access := range ecs.Query2[htmlui.ControlVisual, scene.UIStackIndex](world).All {
+	for _, access := range world.Query2[htmlui.ControlVisual, scene.UIStackIndex]().All {
 		visual, stack := access.A.Get(), access.B.Get()
 
 		if visual.Control != field {
@@ -445,7 +445,7 @@ line 10</textarea><style>textarea{width:120px;height:64px;padding:8px;overflow-x
 	html.Width, html.Height = 180, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	for range 2 {
 		if err := SyncSystem("").Run(world); err != nil {
@@ -454,13 +454,13 @@ line 10</textarea><style>textarea{width:120px;height:64px;padding:8px;overflow-x
 	}
 
 	textarea := htmlControlByID(t, world, owner, "notes")
-	state, ok := ecs.Get[Textarea](world, textarea)
+	state, ok := world.Get[Textarea](textarea)
 	if !ok || state.BarSize != 10 {
 		t.Fatalf("HTML textarea state = %#v, ok=%v", state, ok)
 	}
-	controlSize, _ := ecs.Get[scene.Size2D](world, textarea)
+	controlSize, _ := world.Get[scene.Size2D](textarea)
 	verticalTrack, verticalThumb, horizontalTrack := false, false, false
-	for entity, access := range ecs.Query3[Relation[SurfaceStyle], scene.UITransform, scene.Size2D](world).All {
+	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.UITransform, scene.Size2D]().All {
 		relation := access.A.Mut()
 		transform := access.B.Mut()
 		size := access.C.Mut()
@@ -468,19 +468,19 @@ line 10</textarea><style>textarea{width:120px;height:64px;padding:8px;overflow-x
 		if relation.Owner != textarea {
 			continue
 		}
-		background, _ := ecs.Get[scene.UIBackground2D](world, entity)
+		background, _ := world.Get[scene.UIBackground2D](entity)
 		switch {
-		case ecs.Has[Part[ScrollTrackVerticalPart]](world, entity):
+		case world.Has[Part[ScrollTrackVerticalPart]](entity):
 			verticalTrack = size.Width == 10 && size.Height > 0 && transform.Translation.X.Value+size.Width <= controlSize.Width
 			if background.Shape.Fill != graphics.ColorFromRGBA(12, 17, 23, 255) {
 				t.Fatalf("vertical scrollbar track color = %v", background.Shape.Fill)
 			}
-		case ecs.Has[Part[ScrollThumbVerticalPart]](world, entity):
+		case world.Has[Part[ScrollThumbVerticalPart]](entity):
 			verticalThumb = size.Width > 0 && size.Height > 0
 			if background.Shape.Fill != graphics.ColorFromRGBA(58, 112, 111, 255) {
 				t.Fatalf("vertical scrollbar thumb color = %v", background.Shape.Fill)
 			}
-		case ecs.Has[Part[ScrollTrackHorizontalPart]](world, entity):
+		case world.Has[Part[ScrollTrackHorizontalPart]](entity):
 			horizontalTrack = size.Width > 0 && size.Height > 0
 		}
 	}
@@ -498,7 +498,7 @@ func TestHTMLTextareaTransparentScrollbarColors(t *testing.T) {
 	html.Width, html.Height = 180, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	defaults := skinFor(world, Theme{}).Scroll
 	for _, test := range []struct {
@@ -520,7 +520,7 @@ func TestHTMLTextareaTransparentScrollbarColors(t *testing.T) {
 			}
 		}
 		textarea := htmlControlByID(t, world, owner, "notes")
-		override, ok := ecs.Get[StyleOverride[ScrollStyle]](world, textarea)
+		override, ok := world.Get[StyleOverride[ScrollStyle]](textarea)
 		if !ok || override.Value.Track.Background.Fill != test.track || override.Value.Thumb.Normal.Background.Fill != test.thumb {
 			t.Fatalf("%s: scrollbar style = %+v, ok=%v", test.css, override.Value, ok)
 		}
@@ -528,18 +528,18 @@ func TestHTMLTextareaTransparentScrollbarColors(t *testing.T) {
 			t.Fatalf("explicit transparent hover color was ignored: %+v", override.Value.Thumb.Hovered)
 		}
 		seenTrack, seenThumb := false, false
-		for entity, access := range ecs.Query2[Relation[SurfaceStyle], scene.Size2D](world).All {
+		for entity, access := range world.Query2[Relation[SurfaceStyle], scene.Size2D]().All {
 			if access.A.Get().Owner != textarea || access.B.Get().Height <= 0 {
 				continue
 			}
-			background, _ := ecs.Get[scene.UIBackground2D](world, entity)
-			if ecs.Has[Part[ScrollTrackVerticalPart]](world, entity) {
+			background, _ := world.Get[scene.UIBackground2D](entity)
+			if world.Has[Part[ScrollTrackVerticalPart]](entity) {
 				seenTrack = true
 				if background.Shape.Fill != test.track {
 					t.Fatalf("%s: painted track = %v, want %v", test.css, background.Shape.Fill, test.track)
 				}
 			}
-			if ecs.Has[Part[ScrollThumbVerticalPart]](world, entity) {
+			if world.Has[Part[ScrollThumbVerticalPart]](entity) {
 				seenThumb = true
 				if background.Shape.Fill != test.thumb {
 					t.Fatalf("%s: painted thumb = %v, want %v", test.css, background.Shape.Fill, test.thumb)
@@ -559,7 +559,7 @@ func TestHTMLButtonTextKeepsHTMLLayoutPositions(t *testing.T) {
 	html.Width, html.Height = 160, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -570,7 +570,7 @@ func TestHTMLButtonTextKeepsHTMLLayoutPositions(t *testing.T) {
 	}
 	minX, maxX := float32(1<<30), float32(-1<<30)
 	count := 0
-	for _, access := range ecs.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform](world).All {
+	for _, access := range world.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform]().All {
 		link := access.A.Mut()
 		access.B.Mut()
 		transform := access.C.Mut()
@@ -594,7 +594,7 @@ func TestEmptyHTMLInputCreatesValueVisual(t *testing.T) {
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 
 	if err := SyncSystem("").Run(world); err != nil {
@@ -602,7 +602,7 @@ func TestEmptyHTMLInputCreatesValueVisual(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "empty")
 	count := 0
-	for entity, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+	for entity, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 		link := access.A.Get()
 		text := access.B.Get()
 
@@ -610,7 +610,7 @@ func TestEmptyHTMLInputCreatesValueVisual(t *testing.T) {
 			continue
 		}
 		count++
-		if text.Value != "输入你的名字" || !ecs.Has[Part[ValuePart]](world, entity) {
+		if text.Value != "输入你的名字" || !world.Has[Part[ValuePart]](entity) {
 			t.Fatalf("HTML input value visual = value:%q entity:%d", text.Value, entity)
 		}
 	}
@@ -622,19 +622,19 @@ func TestEmptyHTMLInputCreatesValueVisual(t *testing.T) {
 func TestHTMLButtonSynchronizesHoverStyles(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="window-close">Close</button><style>#window-close{background:#112233}#window-close:hover{background:#445566}</style>`)
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	button := htmlControlByID(t, world, owner, "window-close")
 	buttonSurface := func() graphics.ColorRGBA {
-		surface, ok := ecs.Get[scene.Sprite2D](world, button)
+		surface, ok := world.Get[scene.Sprite2D](button)
 		if !ok {
 			t.Fatal("HTML button surface was not generated")
 		}
@@ -644,7 +644,7 @@ func TestHTMLButtonSynchronizesHoverStyles(t *testing.T) {
 		t.Fatalf("normal HTML button color = %+v", got)
 	}
 
-	ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +653,7 @@ func TestHTMLButtonSynchronizesHoverStyles(t *testing.T) {
 	}
 	button = htmlControlByID(t, world, owner, "window-close")
 	buttonSurface = func() graphics.ColorRGBA {
-		surface, ok := ecs.Get[scene.Sprite2D](world, button)
+		surface, ok := world.Get[scene.Sprite2D](button)
 		if !ok {
 			t.Fatal("hovered HTML button surface was not generated")
 		}
@@ -667,12 +667,12 @@ func TestHTMLButtonSynchronizesHoverStyles(t *testing.T) {
 func TestHTMLInputSynchronizesFocusStyles(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="first"><input id="second"><style>input{border:1px solid #112233}input:focus{border-color:#445566}</style>`)
 	html.Width, html.Height = 320, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -680,7 +680,7 @@ func TestHTMLInputSynchronizesFocusStyles(t *testing.T) {
 	first := htmlControlByID(t, world, owner, "first")
 	second := htmlControlByID(t, world, owner, "second")
 	borderColor := func(entity ecs.Entity) graphics.ColorRGBA {
-		surface, ok := ecs.Get[scene.Sprite2D](world, entity)
+		surface, ok := world.Get[scene.Sprite2D](entity)
 		if !ok {
 			t.Fatalf("HTML input surface was not generated for %d", entity)
 		}
@@ -690,7 +690,7 @@ func TestHTMLInputSynchronizesFocusStyles(t *testing.T) {
 		t.Fatalf("unfocused HTML input border = %+v", got)
 	}
 
-	ecs.WriteMessage(world, scene.InputEvent{Entity: first, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: first, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -698,7 +698,7 @@ func TestHTMLInputSynchronizesFocusStyles(t *testing.T) {
 		t.Fatalf("focused HTML input border = %+v", got)
 	}
 
-	ecs.WriteMessage(world, scene.InputEvent{Entity: second, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: second, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -717,7 +717,7 @@ func TestHTMLInputTextKeepsLayoutPositionAcrossRebuild(t *testing.T) {
 	html.Width, html.Height = 320, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	for range 2 {
@@ -759,7 +759,7 @@ func TestHTMLInputTextScrollDoesNotAccumulate(t *testing.T) {
 	html.Width, html.Height = 120, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	for range 2 {
@@ -768,13 +768,13 @@ func TestHTMLInputTextScrollDoesNotAccumulate(t *testing.T) {
 		}
 	}
 	field := htmlControlByID(t, world, owner, "field")
-	state, _ := ecs.Get[TextField](world, field)
+	state, _ := world.Get[TextField](field)
 	if state.ScrollX >= 0 {
 		t.Fatalf("HTML input scroll = %v, want negative offset at end caret", state.ScrollX)
 	}
 	textX := func() float32 {
 		var x float32
-		for _, access := range ecs.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform](world).All {
+		for _, access := range world.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform]().All {
 			link := access.A.Mut()
 			access.B.Mut()
 			transform := access.C.Mut()
@@ -804,7 +804,7 @@ func TestHTMLInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {
 	html.Width, html.Height = 120, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	for range 2 {
@@ -813,14 +813,14 @@ func TestHTMLInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {
 		}
 	}
 	field := htmlControlByID(t, world, owner, "field")
-	fieldState := ecs.GetMut[TextField](world, field)
+	fieldState := world.GetMut[TextField](field)
 	fieldState.Focused, fieldState.Caret, fieldState.Anchor = true, 10, 10
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var text *scene.Text2D
 	var transform *scene.UITransform
-	for _, access := range ecs.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform](world).All {
+	for _, access := range world.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform]().All {
 		link := access.A.Mut()
 		value := access.B.Mut()
 		position := access.C.Mut()
@@ -862,7 +862,7 @@ func TestHTMLSelectTextIsVerticallyCenteredWithTightPadding(t *testing.T) {
 				surface := htmlui.New(`<select id="mode"><option>none</option><option>System 系统</option></select><style>select{box-sizing:border-box;width:180px;height:` + height + `;padding:7px 9px;border:1px solid #3b404b;font:14px sans-serif;` + display + `}</style>`)
 				surface.Width, surface.Height, surface.Font = 240, 120, notosanssc.NotoSansSCRegular
 				bundle := ecs.NewBundle(1)
-				ecs.Put(&bundle, surface)
+				bundle.Put(surface)
 				owner := world.Spawn(bundle)
 				if err := SyncSystem("").Run(world); err != nil {
 					t.Fatal(err)
@@ -873,9 +873,9 @@ func TestHTMLSelectTextIsVerticallyCenteredWithTightPadding(t *testing.T) {
 					if err := SyncSystem("").Run(world); err != nil {
 						t.Fatal(err)
 					}
-					size := ecs.GetRef[scene.Size2D](world, control)
+					size := world.GetRef[scene.Size2D](control)
 					found := false
-					for _, access := range ecs.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform](world).All {
+					for _, access := range world.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform]().All {
 						if access.A.Ref().Control != control {
 							continue
 						}
@@ -905,19 +905,19 @@ func TestHTMLInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<input id="field" value="value"><style>*{box-sizing:border-box}input{width:180px;height:38px;padding:7px 10px;font:14px ui}</style>`)
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	field := htmlControlByID(t, world, owner, "field")
 	var controlHeight float32
-	if controlSize, ok := ecs.Get[scene.Size2D](world, field); ok {
+	if controlSize, ok := world.Get[scene.Size2D](field); ok {
 		controlHeight = controlSize.Height
 	} else {
 		t.Fatal("HTML input control has no size")
@@ -925,7 +925,7 @@ func TestHTMLInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 
 	var textY, lineHeight float32
 	foundText := false
-	for _, access := range ecs.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform](world).All {
+	for _, access := range world.Query3[htmlui.ControlText, scene.Text2D, scene.UITransform]().All {
 		link := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
@@ -946,7 +946,7 @@ func TestHTMLInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 		t.Fatalf("HTML input text y=%v, want %v", textY, wantY)
 	}
 
-	if fieldState := ecs.GetMut[TextField](world, field); fieldState != nil {
+	if fieldState := world.GetMut[TextField](field); fieldState != nil {
 		fieldState.Focused = true
 	} else {
 		t.Fatal("HTML input has no text field state")
@@ -956,7 +956,7 @@ func TestHTMLInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 	}
 	var caretY, caretHeight float32
 	foundCaret := false
-	for _, access := range ecs.Query3[htmlui.ControlVisual, scene.UITransform, scene.Size2D](world).All {
+	for _, access := range world.Query3[htmlui.ControlVisual, scene.UITransform, scene.Size2D]().All {
 		visual := access.A.Mut()
 		transform := access.B.Mut()
 		size := access.C.Mut()
@@ -990,14 +990,14 @@ func htmlInputTextTransforms(t *testing.T, world *ecs.World, owner ecs.Entity) m
 	t.Helper()
 	transforms := make(map[string]scene.UITransform, 2)
 	controls := make(map[ecs.Entity]string, 2)
-	for entity, access := range ecs.Query[htmlui.Control](world).All {
+	for entity, access := range world.Query[htmlui.Control]().All {
 		control := access.Get()
 
 		if control.Owner == owner && (control.ID == "search" || control.ID == "rename") {
 			controls[entity] = control.ID
 		}
 	}
-	for _, access := range ecs.Query2[htmlui.ControlText, scene.UITransform](world).All {
+	for _, access := range world.Query2[htmlui.ControlText, scene.UITransform]().All {
 		link := access.A.Get()
 		transform := access.B.Get()
 
@@ -1014,12 +1014,12 @@ func htmlInputTextTransforms(t *testing.T, world *ecs.World, owner ecs.Entity) m
 func TestHTMLControlRuntimeDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="name" value="Onix">`)
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	syncSystem, updateSystem := SyncSystem(""), UpdateSystem("")
 	for range 2 {
@@ -1046,24 +1046,24 @@ func TestHTMLControlRuntimeDoesNotAllocateAfterWarmup(t *testing.T) {
 func TestHTMLCheckboxTogglesAndUpdatesCheckedState(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="enabled" type="checkbox" checked>`)
 	html.Width, html.Height = 220, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	checkbox := htmlControlByID(t, world, owner, "enabled")
-	control, _ := ecs.Get[htmlui.Control](world, checkbox)
-	if !control.Checked || !ecs.Has[Toggle[bool]](world, checkbox) {
+	control, _ := world.Get[htmlui.Control](checkbox)
+	if !control.Checked || !world.Has[Toggle[bool]](checkbox) {
 		t.Fatalf("checkbox state = %#v", control)
 	}
 	checkedMark := false
-	controlSize, _ := ecs.Get[scene.Size2D](world, checkbox)
-	for _, access := range ecs.Query3[scene.Parent, scene.Sprite2D, scene.UITransform](world).All {
+	controlSize, _ := world.Get[scene.Size2D](checkbox)
+	for _, access := range world.Query3[scene.Parent, scene.Sprite2D, scene.UITransform]().All {
 		parent := access.A.Mut()
 		mark := access.B.Mut()
 		transform := access.C.Mut()
@@ -1081,16 +1081,16 @@ func TestHTMLCheckboxTogglesAndUpdatesCheckedState(t *testing.T) {
 		t.Fatal("checked checkbox did not render its mark")
 	}
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ = ecs.Get[htmlui.Control](world, checkbox)
+	control, _ = world.Get[htmlui.Control](checkbox)
 	if control.Checked {
 		t.Fatalf("checkbox remained checked: %#v", control)
 	}
 	markHidden := false
-	for _, access := range ecs.Query3[scene.Parent, scene.Sprite2D, scene.Visibility](world).All {
+	for _, access := range world.Query3[scene.Parent, scene.Sprite2D, scene.Visibility]().All {
 		parent := access.A.Mut()
 		mark := access.B.Mut()
 		visibility := access.C.Mut()
@@ -1111,18 +1111,18 @@ func TestHTMLCheckboxTogglesAndUpdatesCheckedState(t *testing.T) {
 func TestHTMLCheckboxWithoutIDToggles(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input type="checkbox">`)
 	html.Width, html.Height = 80, 30
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var checkbox ecs.Entity
-	for entity, access := range ecs.Query[htmlui.Control](world).All {
+	for entity, access := range world.Query[htmlui.Control]().All {
 		control := access.Get()
 
 		if control.Owner == owner && control.Tag == "input" && control.Type == "checkbox" {
@@ -1133,11 +1133,11 @@ func TestHTMLCheckboxWithoutIDToggles(t *testing.T) {
 	if checkbox == 0 {
 		t.Fatal("checkbox without id was not generated")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, checkbox)
+	control, _ := world.Get[htmlui.Control](checkbox)
 	if !control.Checked {
 		t.Fatalf("checkbox without id did not toggle: %#v", control)
 	}
@@ -1146,26 +1146,26 @@ func TestHTMLCheckboxWithoutIDToggles(t *testing.T) {
 func TestHTMLCheckboxUpdatesCheckedCSSWithoutRebuild(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="enabled" type="checkbox" checked><style>input{background:#112233}input:checked{background:#445566}</style>`)
 	html.Width, html.Height = 80, 30
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	checkbox := htmlControlByID(t, world, owner, "enabled")
-	surface, _ := ecs.Get[scene.Sprite2D](world, checkbox)
+	surface, _ := world.Get[scene.Sprite2D](checkbox)
 	if surface.Shape.Fill != graphics.ColorFromRGB(68, 85, 102) {
 		t.Fatalf("checked CSS fill = %#v", surface.Shape.Fill)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	surface, _ = ecs.Get[scene.Sprite2D](world, checkbox)
+	surface, _ = world.Get[scene.Sprite2D](checkbox)
 	if surface.Shape.Fill != graphics.ColorFromRGB(17, 34, 51) {
 		t.Fatalf("unchecked CSS fill = %#v", surface.Shape.Fill)
 	}
@@ -1173,7 +1173,7 @@ func TestHTMLCheckboxUpdatesCheckedCSSWithoutRebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	markVisible := true
-	for _, access := range ecs.Query3[scene.Parent, scene.Sprite2D, scene.Visibility](world).All {
+	for _, access := range world.Query3[scene.Parent, scene.Sprite2D, scene.Visibility]().All {
 		parent := access.A.Mut()
 		mark := access.B.Mut()
 		visibility := access.C.Mut()
@@ -1191,22 +1191,22 @@ func TestHTMLCheckboxUpdatesCheckedCSSWithoutRebuild(t *testing.T) {
 func TestHTMLCheckboxKeepsAuthoredCheckedAttribute(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="enabled" type="checkbox" checked>`)
 	html.Width, html.Height = 80, 30
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	checkbox := htmlControlByID(t, world, owner, "enabled")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, checkbox)
+	control, _ := world.Get[htmlui.Control](checkbox)
 	if control.Checked || !control.DefaultChecked {
 		t.Fatalf("checkbox live/default checkedness = %v/%v", control.Checked, control.DefaultChecked)
 	}
@@ -1219,29 +1219,29 @@ func TestHTMLCheckboxKeepsAuthoredCheckedAttribute(t *testing.T) {
 func TestHTMLActiveStylesFollowPointerLifecycle(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="press">Press</button><style>#press{background:#112233}#press:active{background:#445566}</style>`)
 	html.Width, html.Height = 120, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	button := htmlControlByID(t, world, owner, "press")
 	fill := func() graphics.ColorRGBA {
-		sprite, _ := ecs.Get[scene.Sprite2D](world, button)
+		sprite, _ := world.Get[scene.Sprite2D](button)
 		return sprite.Shape.Fill
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	if got := fill(); got != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("active button fill = %#v", got)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: scene.InputEventRelease})
+	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventRelease})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -1253,12 +1253,12 @@ func TestHTMLActiveStylesFollowPointerLifecycle(t *testing.T) {
 func TestHTMLControlInteractionStylesKeepEntityStable(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="sibling" value="keep"><button id="action">Action</button><style>#action{background:transparent}#action:hover{background:#334455}#action:active{background:#445566}#action:focus-visible{background:#556677}</style>`)
 	html.Width, html.Height = 120, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1276,7 +1276,7 @@ func TestHTMLControlInteractionStylesKeepEntityStable(t *testing.T) {
 		if current := htmlControlByID(t, world, owner, "sibling"); current != sibling {
 			t.Fatalf("interaction rebuilt HTML sibling: before=%d after=%d", sibling, current)
 		}
-		surface, ok := ecs.Get[scene.Sprite2D](world, button)
+		surface, ok := world.Get[scene.Sprite2D](button)
 		if !ok {
 			t.Fatal("HTML button surface was removed")
 		}
@@ -1286,7 +1286,7 @@ func TestHTMLControlInteractionStylesKeepEntityStable(t *testing.T) {
 	}
 	runInput := func(kind scene.InputEventKind, want graphics.ColorRGBA) {
 		t.Helper()
-		ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: kind})
+		world.WriteMessage(scene.InputEvent{Entity: button, Kind: kind})
 		if err := UpdateSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
@@ -1297,7 +1297,7 @@ func TestHTMLControlInteractionStylesKeepEntityStable(t *testing.T) {
 	}
 	runFocus := func(focused bool, want graphics.ColorRGBA) {
 		t.Helper()
-		ecs.WriteMessage(world, FocusChangedEvent{Entity: button, Focused: focused, FocusVisible: focused})
+		world.WriteMessage(FocusChangedEvent{Entity: button, Focused: focused, FocusVisible: focused})
 		if err := UpdateSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
@@ -1332,23 +1332,23 @@ func TestHTMLControlInteractionStylesKeepEntityStable(t *testing.T) {
 func TestHTMLFocusWithinUpdatesAncestorSurface(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="wrap"><input id="field"></div><style>#wrap{background:#112233;padding:2px}#wrap:focus-within{background:#445566}</style>`)
 	html.Width, html.Height = 220, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	field := htmlControlByID(t, world, owner, "field")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: field, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: field, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for _, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1364,12 +1364,12 @@ func TestHTMLFocusWithinUpdatesAncestorSurface(t *testing.T) {
 func TestHTMLInputValueUpdatesPlaceholderShownStyles(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<input id="field" placeholder=""><style>#field{background:#112233}#field:placeholder-shown{background:#445566}</style>`)
 	html.Width, html.Height = 180, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1378,7 +1378,7 @@ func TestHTMLInputValueUpdatesPlaceholderShownStyles(t *testing.T) {
 	if !htmlui.SetControlValue(world, field, "typed") {
 		t.Fatal("live value update failed")
 	}
-	sprite, _ := ecs.Get[scene.Sprite2D](world, field)
+	sprite, _ := world.Get[scene.Sprite2D](field)
 	if sprite.Shape.Fill != graphics.ColorFromRGB(0x11, 0x22, 0x33) {
 		t.Fatalf("filled input retained placeholder-shown style: %#v", sprite.Shape.Fill)
 	}
@@ -1390,7 +1390,7 @@ func TestHTMLControlValueSetterSynchronizesTextField(t *testing.T) {
 	html := htmlui.New(`<textarea id="editor">old</textarea>`)
 	html.Width, html.Height = 180, 80
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1400,8 +1400,8 @@ func TestHTMLControlValueSetterSynchronizesTextField(t *testing.T) {
 	if !SetHTMLControlValue(world, editor, content) {
 		t.Fatal("textarea live value update failed")
 	}
-	control, _ := ecs.Get[htmlui.Control](world, editor)
-	field, _ := ecs.Get[TextField](world, editor)
+	control, _ := world.Get[htmlui.Control](editor)
+	field, _ := world.Get[TextField](editor)
 	if control.Value != content || field.Value != content || field.Caret != 3 || field.Anchor != 3 {
 		t.Fatalf("textarea value was not synchronized: control=%+v field=%+v", control, field)
 	}
@@ -1413,7 +1413,7 @@ func TestHTMLControlValueFilledAfterEmptyRenderKeepsCSSColor(t *testing.T) {
 	html := htmlui.New(`<textarea id="editor" style="color:transparent"></textarea>`)
 	html.Width, html.Height, html.Font = 180, 80, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1422,7 +1422,7 @@ func TestHTMLControlValueFilledAfterEmptyRenderKeepsCSSColor(t *testing.T) {
 	readEditorText := func() (scene.Text2D, bool) {
 		var text scene.Text2D
 		found := false
-		for _, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+		for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 			link := access.A.Get()
 			value := access.B.Get()
 
@@ -1453,18 +1453,18 @@ func TestHTMLControlValueFilledAfterEmptyRenderKeepsCSSColor(t *testing.T) {
 func TestHTMLOrdinaryElementHoverUpdatesDescendantStyle(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="card" style="background:#111111;padding:2px"><span>Label</span></div><style>#card:hover span{color:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var card ecs.Entity
-	for entity, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for entity, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1476,12 +1476,12 @@ func TestHTMLOrdinaryElementHoverUpdatesDescendantStyle(t *testing.T) {
 	if card == 0 {
 		t.Fatal("ordinary HTML surface did not expose an input target")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: card, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: card, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query[scene.Text2D](world).All {
+	for _, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
 		if text.Value == "Label" && text.Color == graphics.ColorFromRGB(0x44, 0x55, 0x66) {
@@ -1496,22 +1496,22 @@ func TestHTMLOrdinaryElementHoverUpdatesDescendantStyle(t *testing.T) {
 func TestHTMLHoverCreatesPreviouslyTransparentSurface(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="card" style="width:120px;height:32px">Label</div><style>#card:hover{background:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var target ecs.Entity
-	for entity, access := range ecs.Query[scene.Text2D](world).All {
+	for entity, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
-		if text.Value == "Label" && ecs.Has[scene.InputTarget2D](world, entity) {
+		if text.Value == "Label" && world.Has[scene.InputTarget2D](entity) {
 			target = entity
 			break
 		}
@@ -1519,7 +1519,7 @@ func TestHTMLHoverCreatesPreviouslyTransparentSurface(t *testing.T) {
 	if target == 0 {
 		t.Fatal("transparent element had no descendant hit target")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: target, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: target, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -1527,7 +1527,7 @@ func TestHTMLHoverCreatesPreviouslyTransparentSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for _, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1544,19 +1544,19 @@ func TestHTMLHoverCreatesPreviouslyTransparentSurface(t *testing.T) {
 func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="card" style="width:120px;height:32px">Label</div><style>#card{border:2px solid #112233}#card:hover{border-left-color:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	var target ecs.Entity
-	for entity, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for entity, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1568,7 +1568,7 @@ func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 	if target == 0 {
 		t.Fatal("uniform border surface was not generated")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: target, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: target, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -1576,7 +1576,7 @@ func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for _, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1593,26 +1593,26 @@ func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 func TestHTMLDisabledControlStillMatchesHover(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="button" disabled>Button</button><style>#button{background:#112233}#button:disabled:hover{background:#445566}</style>`)
 	html.Width, html.Height = 160, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	button := htmlControlByID(t, world, owner, "button")
-	target, _ := ecs.Get[scene.InputTarget2D](world, button)
+	target, _ := world.Get[scene.InputTarget2D](button)
 	if !target.Disabled || !target.AllowDisabledInput {
 		t.Fatalf("disabled HTML target policy = %#v", target)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: button, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	sprite, _ := ecs.Get[scene.Sprite2D](world, button)
+	sprite, _ := world.Get[scene.Sprite2D](button)
 	if sprite.Shape.Fill != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("disabled hovered button fill = %#v", sprite.Shape.Fill)
 	}
@@ -1622,12 +1622,12 @@ func TestHTMLTabOrderAndFocusVisible(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<button id="second" tabindex="2">Second</button><button id="first" tabindex="1">First</button><button id="skipped" tabindex="-1">Skipped</button><button id="normal">Normal</button><style>button{background:#112233}button:focus-visible{background:#445566}</style>`)
 	html.Width, html.Height = 420, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1645,11 +1645,11 @@ func TestHTMLTabOrderAndFocusVisible(t *testing.T) {
 	}
 	for _, want := range []ecs.Entity{first, second, normal} {
 		pressTab()
-		focus, _ := ecs.GetResource[*scene.InputFocus](world)
+		focus, _ := world.GetResource[*scene.InputFocus]()
 		if focus == nil || focus.Keyboard != want {
 			t.Fatalf("tab focus = %v, want %v", focus, want)
 		}
-		sprite, _ := ecs.Get[scene.Sprite2D](world, want)
+		sprite, _ := world.Get[scene.Sprite2D](want)
 		if sprite.Shape.Fill != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 			t.Fatalf("keyboard-focused control fill = %#v", sprite.Shape.Fill)
 		}
@@ -1660,12 +1660,12 @@ func TestHTMLTabOrderIncludesOrdinaryElementsAndEditingHosts(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<div id="second" tabindex="2">Second</div><button id="normal">Normal</button><div id="first" tabindex="1">First</div><a id="link" href="#next">Link</a><div id="editable" contenteditable>Edit</div><div id="negative" tabindex="-1">Negative</div><div id="invalid" tabindex="nope">Invalid</div><a id="nohref">No link</a><div id="outer" contenteditable>Outer<span id="nested" contenteditable>Nested</span></div><style>div:focus-visible{background:#445566}</style>`)
 	html.Width, html.Height = 480, 220
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1689,7 +1689,7 @@ func TestHTMLTabOrderIncludesOrdinaryElementsAndEditingHosts(t *testing.T) {
 		}
 		uiInputState.ReleaseKey(input.KeyTab)
 		uiInputState.EndFrame()
-		focus, _ := ecs.GetResource[*scene.InputFocus](world)
+		focus, _ := world.GetResource[*scene.InputFocus]()
 		return focus.Keyboard
 	}
 	for _, want := range []ecs.Entity{first, second, normal, link, editable, outer} {
@@ -1701,11 +1701,11 @@ func TestHTMLTabOrderIncludesOrdinaryElementsAndEditingHosts(t *testing.T) {
 		t.Fatalf("wrapped tab focus = %d, want %d", got, first)
 	}
 
-	ecs.WriteMessage(world, scene.InputEvent{Entity: negative, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: negative, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
+	focus, _ := world.GetResource[*scene.InputFocus]()
 	if focus.Keyboard != negative {
 		t.Fatalf("pointer focus for tabindex=-1 = %d, want %d", focus.Keyboard, negative)
 	}
@@ -1714,24 +1714,24 @@ func TestHTMLTabOrderIncludesOrdinaryElementsAndEditingHosts(t *testing.T) {
 func TestHTMLFocusTraversalDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div tabindex="2">Second</div><button>Normal</button><span tabindex="1">First</span><div contenteditable>Editor</div>`)
 	html.Width, html.Height = 320, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*uiEventState](world)
+	state, _ := world.GetResource[*uiEventState]()
 	for range 4 {
 		focusNextHTMLElement(world, state, false)
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	allocations := testing.AllocsPerRun(100, func() {
 		focusNextHTMLElement(world, state, false)
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	})
 	if allocations != 0 {
 		t.Fatalf("HTML focus traversal allocated %.0f objects, want 0", allocations)
@@ -1741,19 +1741,19 @@ func TestHTMLFocusTraversalDoesNotAllocateAfterWarmup(t *testing.T) {
 func TestHTMLFocusOwnerPreservesDescendantHoverTarget(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="editor" tabindex="0"><span id="child">Child</span></div><style>#child{color:#112233}#child:hover{color:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	focusOwner := htmlFocusableByID(t, world, owner, "editor")
 	var childText ecs.Entity
-	for entity, access := range ecs.Query[scene.Text2D](world).All {
+	for entity, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
 		if text.Value == "Child" {
@@ -1761,23 +1761,23 @@ func TestHTMLFocusOwnerPreservesDescendantHoverTarget(t *testing.T) {
 			break
 		}
 	}
-	ownerLink, ok := ecs.Get[htmlui.FocusOwner](world, childText)
+	ownerLink, ok := world.Get[htmlui.FocusOwner](childText)
 	if childText == 0 || !ok || ownerLink.Entity != focusOwner {
 		t.Fatalf("descendant focus owner = text:%d link:%#v", childText, ownerLink)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: childText, Kind: scene.InputEventEnter})
+	world.WriteMessage(scene.InputEvent{Entity: childText, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	text, _ := ecs.Get[scene.Text2D](world, childText)
+	text, _ := world.Get[scene.Text2D](childText)
 	if text.Color != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("descendant hover color = %#v", text.Color)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: childText, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: childText, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
+	focus, _ := world.GetResource[*scene.InputFocus]()
 	if focus.Keyboard != focusOwner {
 		t.Fatalf("descendant pointer focus = %d, want %d", focus.Keyboard, focusOwner)
 	}
@@ -1786,19 +1786,19 @@ func TestHTMLFocusOwnerPreservesDescendantHoverTarget(t *testing.T) {
 func TestHTMLContentEditablePointerFocusMatchesFocusVisible(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="editor" contenteditable style="width:120px;height:32px">Edit</div><style>#editor{background:#112233}#editor:focus-visible{background:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	target := htmlFocusableByID(t, world, owner, "editor")
 	var surface ecs.Entity
-	for entity, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for entity, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1807,17 +1807,17 @@ func TestHTMLContentEditablePointerFocusMatchesFocusVisible(t *testing.T) {
 			break
 		}
 	}
-	route, routeOK := ecs.Get[scene.InputTarget2D](world, surface)
-	focusOwner, focusOwnerOK := ecs.Get[htmlui.FocusOwner](world, surface)
+	route, routeOK := world.Get[scene.InputTarget2D](surface)
+	focusOwner, focusOwnerOK := world.Get[htmlui.FocusOwner](surface)
 	if surface == 0 || !routeOK || route.Receiver != 0 || !focusOwnerOK || focusOwner.Entity != target {
 		t.Fatalf("editing host input route = surface:%d target:%d route:%#v focus-owner:%#v", surface, target, route, focusOwner)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: surface, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: surface, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range ecs.Query2[scene.Sprite2D, scene.Parent](world).All {
+	for _, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
 		sprite := access.A.Get()
 		parent := access.B.Get()
 
@@ -1835,12 +1835,12 @@ func TestHTMLOrdinaryFocusSurvivesLayoutUpdate(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<div id="panel" tabindex="0">Panel</div><style>#panel:focus{width:180px}</style>`)
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -1860,7 +1860,7 @@ func TestHTMLOrdinaryFocusSurvivesLayoutUpdate(t *testing.T) {
 	if current != previous || !world.IsAlive(previous) {
 		t.Fatalf("focus layout change replaced target: old=%d new=%d", previous, current)
 	}
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
+	focus, _ := world.GetResource[*scene.InputFocus]()
 	if focus.Keyboard != current {
 		t.Fatalf("rebuilt ordinary focus = %d, want %d", focus.Keyboard, current)
 	}
@@ -1869,12 +1869,12 @@ func TestHTMLOrdinaryFocusSurvivesLayoutUpdate(t *testing.T) {
 func TestHTMLResetButtonSynchronizesRuntimeControls(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<form id="settings"><input id="field" value="default"><input id="check" type="checkbox" checked><select id="mode"><option>A</option><option selected>B</option></select><button id="reset" type="reset">Reset</button></form>`)
 	html.Width, html.Height = 420, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1886,26 +1886,26 @@ func TestHTMLResetButtonSynchronizesRuntimeControls(t *testing.T) {
 	if !htmlui.SetControlValue(world, field, "edited") || !htmlui.SetControlChecked(world, check, false) || !htmlui.SetControlSelected(world, mode, 0) {
 		t.Fatal("failed to dirty form controls")
 	}
-	if text := ecs.GetMut[TextField](world, field); text != nil {
+	if text := world.GetMut[TextField](field); text != nil {
 		text.Value = "edited"
 	}
-	if toggle := ecs.GetMut[Toggle[bool]](world, check); toggle != nil {
+	if toggle := world.GetMut[Toggle[bool]](check); toggle != nil {
 		toggle.Value = false
 	}
-	if selector := ecs.GetMut[Selector](world, mode); selector != nil {
+	if selector := world.GetMut[Selector](mode); selector != nil {
 		selector.Selected = 0
 	}
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	fieldState, _ := ecs.Get[htmlui.Control](world, field)
-	checkState, _ := ecs.Get[htmlui.Control](world, check)
-	modeState, _ := ecs.Get[htmlui.Control](world, mode)
-	text, _ := ecs.Get[TextField](world, field)
-	toggle, _ := ecs.Get[Toggle[bool]](world, check)
-	selector, _ := ecs.Get[Selector](world, mode)
+	fieldState, _ := world.Get[htmlui.Control](field)
+	checkState, _ := world.Get[htmlui.Control](check)
+	modeState, _ := world.Get[htmlui.Control](mode)
+	text, _ := world.Get[TextField](field)
+	toggle, _ := world.Get[Toggle[bool]](check)
+	selector, _ := world.Get[Selector](mode)
 	if fieldState.Value != "default" || text.Value != "default" || !checkState.Checked || !toggle.Value || modeState.Selected != 1 || selector.Selected != 1 {
 		t.Fatalf("reset runtime state = field:%#v text:%#v check:%#v toggle:%#v mode:%#v selector:%#v", fieldState, text, checkState, toggle, modeState, selector)
 	}
@@ -1915,12 +1915,12 @@ func TestHTMLResetButtonSynchronizesRuntimeControls(t *testing.T) {
 func TestHTMLResetDefaultActionCanBePreventedBeforeStateChanges(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<form id="settings"><input id="field" value="default"><button id="reset" type="reset">Reset</button></form>`)
 	html.Width, html.Height = 300, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -1931,22 +1931,22 @@ func TestHTMLResetDefaultActionCanBePreventedBeforeStateChanges(t *testing.T) {
 		t.Fatal("dirty field")
 	}
 	seenPreReset := false
-	if err := ecs.Insert(world, owner, htmlui.ActionHandler{Handle: func(context *htmlui.ActionContext) {
+	if err := world.Insert(owner, htmlui.ActionHandler{Handle: func(context *htmlui.ActionContext) {
 		if context.Event.Kind != htmlui.EventReset {
 			return
 		}
-		control, _ := ecs.Get[htmlui.Control](world, field)
+		control, _ := world.Get[htmlui.Control](field)
 		seenPreReset = control.Value == "dirty"
 		context.PreventDefault()
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, field)
+	control, _ := world.Get[htmlui.Control](field)
 	if !seenPreReset || control.Value != "dirty" || !control.DirtyValue {
 		t.Fatalf("cancelled reset changed state: pre=%v control=%#v", seenPreReset, control)
 	}
@@ -1964,19 +1964,19 @@ func TestHTMLResetDefaultActionCanBePreventedBeforeStateChanges(t *testing.T) {
 func TestHTMLResetButtonWithoutFormOnlyEmitsClick(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="reset" type="reset">Reset</button>`)
 	html.Width, html.Height = 160, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	reset := htmlControlByID(t, world, owner, "reset")
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -1990,18 +1990,18 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<select id="mode" multiple size="5"><option>A</option><option>B</option><option disabled>C</option><option>D</option><option>E</option></select>`)
 	html.Width, html.Height = 180, 160
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	mode := htmlControlByID(t, world, owner, "mode")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: mode, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: mode, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -2013,7 +2013,7 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 			uiInputState.PressKey(input.KeyLeftControl)
 		}
 		uiInputState.PressKey(key)
-		ecs.WriteMessage(world, input.Event{Seq: uint64(key) + 1, Kind: input.EventKeyDown, Key: key})
+		world.WriteMessage(input.Event{Seq: uint64(key) + 1, Kind: input.EventKeyDown, Key: key})
 		if err := FocusedInputSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
@@ -2025,30 +2025,30 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 	press(input.KeyDown, false, false)
 	press(input.KeyDown, true, false)
 	press(input.KeyDown, true, false)
-	control, _ := ecs.Get[htmlui.Control](world, mode)
+	control, _ := world.Get[htmlui.Control](mode)
 	if control.SelectionAnchor != 0 || control.SelectionFocus != 3 || control.SelectedCount != 3 ||
 		!control.Options[0].Selected || !control.Options[1].Selected || control.Options[2].Selected || !control.Options[3].Selected {
 		t.Fatalf("shift range = %#v", control)
 	}
-	for entity, access := range ecs.Query[SelectorItem](world).All {
+	for entity, access := range world.Query[SelectorItem]().All {
 		item := access.Get()
 
 		if item.Owner != mode {
 			continue
 		}
-		state, _ := ecs.Get[Control](world, entity)
+		state, _ := world.Get[Control](entity)
 		want := item.Index == 0 || item.Index == 1 || item.Index == 3
 		if state.Selected != want {
 			t.Fatalf("option %d visual selected = %v, want %v", item.Index, state.Selected, want)
 		}
 	}
 	press(input.KeyUp, false, true)
-	control, _ = ecs.Get[htmlui.Control](world, mode)
+	control, _ = world.Get[htmlui.Control](mode)
 	if control.SelectionFocus != 1 || control.SelectedCount != 3 {
 		t.Fatalf("ctrl navigation changed selection = %#v", control)
 	}
 	press(input.KeySpace, false, true)
-	control, _ = ecs.Get[htmlui.Control](world, mode)
+	control, _ = world.Get[htmlui.Control](mode)
 	if control.Options[1].Selected || control.SelectedCount != 2 {
 		t.Fatalf("ctrl-space did not toggle navigation focus = %#v", control)
 	}
@@ -2061,8 +2061,8 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 		t.Fatal(err)
 	}
 	mode = htmlControlByID(t, world, owner, "mode")
-	control, _ = ecs.Get[htmlui.Control](world, mode)
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
+	control, _ = world.Get[htmlui.Control](mode)
+	focus, _ := world.GetResource[*scene.InputFocus]()
 	if mode != previous || focus.Keyboard != mode || control.SelectionAnchor != 0 || control.SelectionFocus != 1 || control.SelectedCount != 2 {
 		t.Fatalf("multiple selection rebuild state = old:%d new:%d focus:%#v control:%#v", previous, mode, focus, control)
 	}
@@ -2072,12 +2072,12 @@ func TestHTMLMultipleSelectKeyboardDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<select id="mode" multiple size="3"><option>A</option><option>B</option><option>C</option></select>`)
 	html.Width, html.Height = 180, 100
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -2092,7 +2092,7 @@ func TestHTMLMultipleSelectKeyboardDoesNotAllocateAfterWarmup(t *testing.T) {
 		}
 		uiInputState.ReleaseKey(key)
 		uiInputState.EndFrame()
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 	for range 4 {
 		press(input.KeyDown)
@@ -2111,32 +2111,32 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<div id="editor" contenteditable style="width:160px;height:48px">ab</div>`)
 	html.Width, html.Height = 220, 80
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	editor := htmlFocusableByID(t, world, owner, "editor")
-	editable, ok := ecs.Get[htmlui.Editable](world, editor)
-	field, fieldOK := ecs.Get[TextField](world, editor)
+	editable, ok := world.Get[htmlui.Editable](editor)
+	field, fieldOK := world.Get[TextField](editor)
 	if !ok || !fieldOK || editable.Value != "ab" || field.Value != "ab" {
 		t.Fatalf("contenteditable runtime = editable:%#v field:%#v", editable, field)
 	}
 	textCount, caretCount, selectionCount := 0, 0, 0
-	for _, access := range ecs.Query[htmlui.EditableText](world).All {
+	for _, access := range world.Query[htmlui.EditableText]().All {
 		text := access.Get()
 
 		if text.Editable == editor {
 			textCount++
 		}
 	}
-	for _, access := range ecs.Query[htmlui.EditableVisual](world).All {
+	for _, access := range world.Query[htmlui.EditableVisual]().All {
 		visual := access.Get()
 
 		if visual.Editable == editor {
@@ -2150,7 +2150,7 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	if textCount != 1 || caretCount != 1 || selectionCount != 16 {
 		t.Fatalf("contenteditable visuals = text:%d caret:%d selection:%d", textCount, caretCount, selectionCount)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: editor, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: editor, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -2162,7 +2162,7 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	editable, _ = ecs.Get[htmlui.Editable](world, editor)
+	editable, _ = world.Get[htmlui.Editable](editor)
 	if editable.Value != "aXb" || editable.Anchor != 2 || editable.Focus != 2 {
 		t.Fatalf("edited contenteditable = %#v", editable)
 	}
@@ -2173,7 +2173,7 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	}
 	uiInputState.EndFrame()
 	cancelled := false
-	if err := ecs.Insert(world, owner, htmlui.ActionHandler{Handle: func(context *htmlui.ActionContext) {
+	if err := world.Insert(owner, htmlui.ActionHandler{Handle: func(context *htmlui.ActionContext) {
 		if context.Event.Kind == htmlui.EventBeforeInput {
 			cancelled = true
 			context.PreventDefault()
@@ -2185,7 +2185,7 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	field, _ = ecs.Get[TextField](world, editor)
+	field, _ = world.Get[TextField](editor)
 	if !cancelled || field.Value != "aXb" {
 		t.Fatalf("prevented beforeinput changed value: cancelled=%v field=%#v", cancelled, field)
 	}
@@ -2195,8 +2195,8 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 		t.Fatal(err)
 	}
 	editor = htmlFocusableByID(t, world, owner, "editor")
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
-	field, _ = ecs.Get[TextField](world, editor)
+	focus, _ := world.GetResource[*scene.InputFocus]()
+	field, _ = world.Get[TextField](editor)
 	if editor != previous || focus.Keyboard != editor || field.Value != "aXb" || field.Caret != 2 || field.Anchor != 2 {
 		t.Fatalf("contenteditable rebuild state = old:%d new:%d focus:%#v field:%#v", previous, editor, focus, field)
 	}
@@ -2206,18 +2206,18 @@ func TestHTMLContentEditableStablePathsDoNotAllocate(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	uiInputState := input.NewState()
-	ecs.InsertResource(world, uiInputState)
+	world.InsertResource(uiInputState)
 	html := htmlui.New(`<div id="editor" contenteditable style="width:160px;height:48px">text</div>`)
 	html.Width, html.Height = 220, 80
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	editor := htmlFocusableByID(t, world, owner, "editor")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: editor, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: editor, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -2249,19 +2249,19 @@ func TestHTMLContentEditableStablePathsDoNotAllocate(t *testing.T) {
 func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<select id="mode" multiple><option selected>A</option><option>B</option><option selected>C</option></select>`)
 	html.Width, html.Height = 180, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	mode := htmlControlByID(t, world, owner, "mode")
 	var item ecs.Entity
-	for entity, access := range ecs.Query[SelectorItem](world).All {
+	for entity, access := range world.Query[SelectorItem]().All {
 		candidate := access.Get()
 
 		if candidate.Owner == mode && candidate.Index == 1 {
@@ -2272,22 +2272,22 @@ func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 	if item == 0 {
 		t.Fatal("multiple select item was not generated")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: item, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: item, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, mode)
-	selector, _ := ecs.Get[Selector](world, mode)
+	control, _ := world.Get[htmlui.Control](mode)
+	selector, _ := world.Get[Selector](mode)
 	if control.SelectedCount != 1 || control.Options[0].Selected || !control.Options[1].Selected || control.Options[2].Selected || !selector.Open || control.SelectionAnchor != 1 || control.SelectionFocus != 1 {
 		t.Fatalf("multiple plain-click state = control:%#v selector:%#v", control, selector)
 	}
-	uiInputState, _ := ecs.GetResource[*input.State](world)
+	uiInputState, _ := world.GetResource[*input.State]()
 	uiInputState.PressKey(input.KeyLeftControl)
-	ecs.WriteMessage(world, scene.InputEvent{Entity: item, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: item, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ = ecs.Get[htmlui.Control](world, mode)
+	control, _ = world.Get[htmlui.Control](mode)
 	if control.SelectedCount != 0 || control.Options[1].Selected {
 		t.Fatalf("multiple ctrl-click did not toggle target = %#v", control)
 	}
@@ -2296,26 +2296,26 @@ func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 func TestHTMLAutofocusCreatesRealFocusOnce(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="auto" autofocus>Auto</button><button id="other">Other</button><style>#auto{background:#112233}#auto:focus{background:#445566}</style>`)
 	html.Width, html.Height = 240, 60
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	auto := htmlControlByID(t, world, owner, "auto")
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
+	focus, _ := world.GetResource[*scene.InputFocus]()
 	if focus == nil || focus.Keyboard != auto {
 		t.Fatalf("autofocus target = %v, want %v", focus, auto)
 	}
-	sprite, _ := ecs.Get[scene.Sprite2D](world, auto)
+	sprite, _ := world.Get[scene.Sprite2D](auto)
 	if sprite.Shape.Fill != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("autofocused button fill = %#v", sprite.Shape.Fill)
 	}
-	input, _ := ecs.GetResource[*uiEventState](world)
+	input, _ := world.GetResource[*uiEventState]()
 	focusWithVisibility(world, input, 0, false)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -2328,29 +2328,29 @@ func TestHTMLAutofocusCreatesRealFocusOnce(t *testing.T) {
 func TestHTMLRadioActivationUpdatesOneLiveCheckedState(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<form><input id="first" type="radio" name="mode" checked><input id="second" type="radio" name="mode"></form><style>input{background:#112233}input:checked{background:#445566}</style>`)
 	html.Width, html.Height = 100, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	first := htmlControlByID(t, world, owner, "first")
 	second := htmlControlByID(t, world, owner, "second")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: second, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: second, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	firstState, _ := ecs.Get[htmlui.Control](world, first)
-	secondState, _ := ecs.Get[htmlui.Control](world, second)
+	firstState, _ := world.Get[htmlui.Control](first)
+	secondState, _ := world.Get[htmlui.Control](second)
 	if firstState.Checked || !secondState.Checked || !firstState.DefaultChecked || secondState.DefaultChecked {
 		t.Fatalf("radio live/default state = first:%#v second:%#v", firstState, secondState)
 	}
-	firstSprite, _ := ecs.Get[scene.Sprite2D](world, first)
-	secondSprite, _ := ecs.Get[scene.Sprite2D](world, second)
+	firstSprite, _ := world.Get[scene.Sprite2D](first)
+	secondSprite, _ := world.Get[scene.Sprite2D](second)
 	if firstSprite.Shape.Fill != graphics.ColorFromRGB(0x11, 0x22, 0x33) || secondSprite.Shape.Fill != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("radio checked styles = first:%#v second:%#v", firstSprite.Shape.Fill, secondSprite.Shape.Fill)
 	}
@@ -2359,18 +2359,18 @@ func TestHTMLRadioActivationUpdatesOneLiveCheckedState(t *testing.T) {
 func TestHTMLFocusedButtonSurvivesStateLayoutUpdate(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<button id="button">Button</button><style>#button{box-sizing:border-box;width:100px}#button:focus{width:140px}</style>`)
 	html.Width, html.Height = 200, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	before := htmlControlByID(t, world, owner, "button")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: before, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: before, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -2381,12 +2381,12 @@ func TestHTMLFocusedButtonSurvivesStateLayoutUpdate(t *testing.T) {
 	if before != after || !world.IsAlive(before) {
 		t.Fatalf("layout state replaced control: before=%v after=%v", before, after)
 	}
-	focus, _ := ecs.GetResource[*scene.InputFocus](world)
-	input, _ := ecs.GetResource[*uiEventState](world)
+	focus, _ := world.GetResource[*scene.InputFocus]()
+	input, _ := world.GetResource[*uiEventState]()
 	if focus == nil || focus.Keyboard != after || input == nil || input.Focused != after {
 		t.Fatalf("focus after layout rebuild = input:%v input:%v want:%v", focus, input, after)
 	}
-	size, _ := ecs.Get[scene.Size2D](world, after)
+	size, _ := world.Get[scene.Size2D](after)
 	if size.Width != 140 {
 		t.Fatalf("focused rebuilt width = %v, want 140", size.Width)
 	}
@@ -2399,7 +2399,7 @@ func TestHTMLSelectKeepsOneCurrentLabelVisualAcrossSyncs(t *testing.T) {
 	html.Width, html.Height = 180, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -2410,7 +2410,7 @@ func TestHTMLSelectKeepsOneCurrentLabelVisualAcrossSyncs(t *testing.T) {
 	selectEntity := htmlControlByID(t, world, owner, "look")
 	count := 0
 	value := ""
-	for _, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 		link := access.A.Get()
 		text := access.B.Get()
 
@@ -2427,24 +2427,24 @@ func TestHTMLSelectKeepsOneCurrentLabelVisualAcrossSyncs(t *testing.T) {
 func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<select id="mode"><option value="a">Alpha</option><option value="b" selected>Beta</option></select>`)
 	html.Width, html.Height = 180, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	selectEntity := htmlControlByID(t, world, owner, "mode")
-	control, _ := ecs.Get[htmlui.Control](world, selectEntity)
-	if control.Selected != 1 || control.Value != "b" || len(control.Options) != 2 || !ecs.Has[Selector](world, selectEntity) {
+	control, _ := world.Get[htmlui.Control](selectEntity)
+	if control.Selected != 1 || control.Value != "b" || len(control.Options) != 2 || !world.Has[Selector](selectEntity) {
 		t.Fatalf("select state = %#v", control)
 	}
 	selectLabel := func() string {
 		var value string
-		for _, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+		for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 			link := access.A.Get()
 			text := access.B.Get()
 
@@ -2459,7 +2459,7 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 		t.Fatalf("initial select label = %q, want Beta", got)
 	}
 	indicatorFound := false
-	for _, access := range ecs.Query3[scene.Parent, scene.UIImage2D, scene.Size2D](world).All {
+	for _, access := range world.Query3[scene.Parent, scene.UIImage2D, scene.Size2D]().All {
 		parent := access.A.Mut()
 		image := access.B.Mut()
 		size := access.C.Mut()
@@ -2473,7 +2473,7 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 		t.Fatal("select dropdown icon was not rendered")
 	}
 	textIndicatorFound := false
-	for _, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for _, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		parent := access.A.Get()
 		text := access.B.Get()
 
@@ -2488,28 +2488,28 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := ecs.Get[Selector](world, selectEntity)
+	selector, _ := world.Get[Selector](selectEntity)
 	if !selector.Open {
 		t.Fatal("select did not open")
 	}
 	listVisible := false
 	itemVisible := false
 	popupEscapesControlClip := false
-	for entity, access := range ecs.Query2[SelectorList, scene.Visibility](world).All {
+	for entity, access := range world.Query2[SelectorList, scene.Visibility]().All {
 		list := access.A.Mut()
 		visibility := access.B.Mut()
 
 		if list != nil && visibility != nil && list.Selector == selectEntity {
 			listVisible = visibility.Visible
-			parent, parentOK := ecs.Get[scene.Parent](world, entity)
-			popupEscapesControlClip = parentOK && parent.Entity == selectEntity && ecs.Has[scene.ClipExempt2D](world, entity)
+			parent, parentOK := world.Get[scene.Parent](entity)
+			popupEscapesControlClip = parentOK && parent.Entity == selectEntity && world.Has[scene.ClipExempt2D](entity)
 		}
 	}
-	for _, access := range ecs.Query2[SelectorItem, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.Visibility]().All {
 		item := access.A.Mut()
 		visibility := access.B.Mut()
 
@@ -2524,14 +2524,14 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 		t.Fatal("select popup remained inside the clipped control hierarchy")
 	}
 	popupTextFont := false
-	for _, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for _, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		parent := access.A.Mut()
 		text := access.B.Mut()
 
 		if parent == nil || text == nil {
 			continue
 		}
-		item, itemOK := ecs.Get[SelectorItem](world, parent.Entity)
+		item, itemOK := world.Get[SelectorItem](parent.Entity)
 		if itemOK && item.Owner == selectEntity && text.Font == html.Font {
 			popupTextFont = true
 			break
@@ -2542,16 +2542,16 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	}
 	popupTextVisible := false
 	popupTextAbovePanel := false
-	for entity, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for entity, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		parent := access.A.Get()
 		text := access.B.Get()
 
-		item, itemOK := ecs.Get[SelectorItem](world, parent.Entity)
+		item, itemOK := world.Get[SelectorItem](parent.Entity)
 		if !itemOK || item.Owner != selectEntity || text.Value != "Alpha" {
 			continue
 		}
-		visibility, visibleOK := ecs.Get[scene.Visibility](world, entity)
-		stack, stackOK := ecs.Get[scene.UIStackIndex](world, entity)
+		visibility, visibleOK := world.Get[scene.Visibility](entity)
+		stack, stackOK := world.Get[scene.UIStackIndex](entity)
 		popupTextVisible = visibleOK && visibility.Visible
 		popupTextAbovePanel = stackOK && int(stack) > selectorPopupStackBase+1
 		break
@@ -2560,7 +2560,7 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 		t.Fatalf("select popup option text visibility/stack = visible:%v abovePanel:%v", popupTextVisible, popupTextAbovePanel)
 	}
 	var option ecs.Entity
-	for entity, access := range ecs.Query[SelectorItem](world).All {
+	for entity, access := range world.Query[SelectorItem]().All {
 		item := access.Get()
 
 		if item.Owner == selectEntity && item.Index == 0 {
@@ -2571,11 +2571,11 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	if option == 0 {
 		t.Fatal("select option was not generated")
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: option, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: option, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ = ecs.Get[htmlui.Control](world, selectEntity)
+	control, _ = world.Get[htmlui.Control](selectEntity)
 	if control.Selected != 0 || control.Value != "a" || control.Open {
 		t.Fatalf("selected option state = %#v", control)
 	}
@@ -2591,9 +2591,9 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 	html := htmlui.New(`<div id="panel"><select id="mode" style="width:180px;height:28px;border-radius:3px"><option>Alpha</option><option selected>Beta</option></select></div>`)
 	html.Width, html.Height, html.Font = 240, 180, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
-	if err := ecs.Insert(world, owner, scene.Parent{Entity: parent}); err != nil {
+	if err := world.Insert(owner, scene.Parent{Entity: parent}); err != nil {
 		t.Fatal(err)
 	}
 	if err := SyncSystem("").Run(world); err != nil {
@@ -2613,9 +2613,9 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 		{name: "shown again", open: true, visible: true},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			selector := ecs.GetMut[Selector](world, selectEntity)
+			selector := world.GetMut[Selector](selectEntity)
 			selector.Open = step.open
-			parentVisibility := ecs.GetMut[scene.Visibility](world, parent)
+			parentVisibility := world.GetMut[scene.Visibility](parent)
 			parentVisibility.Visible = !step.hidden
 			if err := SyncSystem("").Run(world); err != nil {
 				t.Fatal(err)
@@ -2623,19 +2623,19 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 			if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			runtime := ecs.GetRef[htmlSelectorRuntime](world, selectEntity)
-			controlSize := ecs.GetRef[scene.Size2D](world, selectEntity)
-			transform := ecs.GetRef[scene.UITransform](world, runtime.List)
+			runtime := world.GetRef[htmlSelectorRuntime](selectEntity)
+			controlSize := world.GetRef[scene.Size2D](selectEntity)
+			transform := world.GetRef[scene.UITransform](runtime.List)
 			if gap := transform.Translation.Y.Value - controlSize.Height; gap != 4 {
 				t.Fatalf("popup gap=%v, want 4", gap)
 			}
-			size := ecs.GetRef[scene.Size2D](world, runtime.List)
-			clip := ecs.GetRef[scene.RoundedClip2D](world, runtime.List)
+			size := world.GetRef[scene.Size2D](runtime.List)
+			clip := world.GetRef[scene.RoundedClip2D](runtime.List)
 			if clip == nil || clip.Width != size.Width || clip.Height != size.Height || clip.Radius != 3 {
 				t.Fatalf("popup does not clip all option backgrounds to its rounded bounds: clip=%+v, size=%+v", clip, size)
 			}
 			for _, entity := range runtime.Elements {
-				visibility := ecs.GetRef[scene.Visibility](world, entity)
+				visibility := world.GetRef[scene.Visibility](entity)
 				if visibility == nil || visibility.Visible != step.visible {
 					t.Errorf("popup element %d visibility = %+v, want %v", entity, visibility, step.visible)
 				}
@@ -2644,22 +2644,22 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 	}
 	// Fitting the picker above the control must retain the same rounded clip,
 	// including when the viewport is too short to show all options.
-	ecs.SetIfChanged(world, parent, scene.UITransformFromXY(0, 30))
-	if err := ecs.Insert(world, owner, scene.NewUITransform()); err != nil {
+	world.SetIfChanged(parent, scene.UITransformFromXY(0, 30))
+	if err := world.Insert(owner, scene.NewUITransform()); err != nil {
 		t.Fatal(err)
 	}
 	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	ecs.InsertResource(world, scene.ViewportSize{Width: 240, Height: 65})
-	ecs.GetMut[Selector](world, selectEntity).Upward = true
+	world.InsertResource(scene.ViewportSize{Width: 240, Height: 65})
+	world.GetMut[Selector](selectEntity).Upward = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	runtime := ecs.GetRef[htmlSelectorRuntime](world, selectEntity)
-	size := ecs.GetRef[scene.Size2D](world, runtime.List)
-	transform := ecs.GetRef[scene.UITransform](world, runtime.List)
-	clip := ecs.GetRef[scene.RoundedClip2D](world, runtime.List)
+	runtime := world.GetRef[htmlSelectorRuntime](selectEntity)
+	size := world.GetRef[scene.Size2D](runtime.List)
+	transform := world.GetRef[scene.UITransform](runtime.List)
+	clip := world.GetRef[scene.RoundedClip2D](runtime.List)
 	if size.Height >= 60 || clip.Height != size.Height || transform.Translation.Y.Value != -size.Height-4 {
 		t.Fatalf("picker did not fit above the control: size=%+v, clip=%+v, y=%v", size, clip, transform.Translation.Y.Value)
 	}
@@ -2668,12 +2668,12 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<select id="mode"><option>Alpha</option><option selected>Beta</option></select><button id="outside">Outside</button>`)
 	html.Width, html.Height = 240, 80
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -2683,26 +2683,26 @@ func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 	}
 	selectEntity := htmlControlByID(t, world, owner, "mode")
 	outside := htmlControlByID(t, world, owner, "outside")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := ecs.Get[Selector](world, selectEntity)
+	selector, _ := world.Get[Selector](selectEntity)
 	if !selector.Open {
 		t.Fatal("select did not open")
 	}
 
-	ecs.WriteMessage(world, scene.InputEvent{Entity: outside, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: outside, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, selectEntity)
-	selector, _ = ecs.Get[Selector](world, selectEntity)
+	control, _ := world.Get[htmlui.Control](selectEntity)
+	selector, _ = world.Get[Selector](selectEntity)
 	if selector.Open || control.Open {
 		t.Fatalf("select remained open after focus left: selector=%v control=%v", selector.Open, control.Open)
 	}
 	listVisible := false
-	for _, access := range ecs.Query2[SelectorList, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorList, scene.Visibility]().All {
 		list := access.A.Mut()
 		visibility := access.B.Mut()
 
@@ -2716,16 +2716,16 @@ func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 
 	// Focus loss must close the popup even when it is delivered directly by
 	// the focus manager instead of a pointer press on another control.
-	ecs.WriteMessage(world, scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: selectEntity, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	ecs.WriteMessage(world, FocusChangedEvent{Entity: selectEntity, Focused: false})
+	world.WriteMessage(FocusChangedEvent{Entity: selectEntity, Focused: false})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ = ecs.Get[Selector](world, selectEntity)
-	control, _ = ecs.Get[htmlui.Control](world, selectEntity)
+	selector, _ = world.Get[Selector](selectEntity)
+	control, _ = world.Get[htmlui.Control](selectEntity)
 	if selector.Open || control.Open {
 		t.Fatalf("select remained open after direct focus loss: selector=%v control=%v", selector.Open, control.Open)
 	}
@@ -2738,7 +2738,7 @@ func TestHTMLSelectPopupUsesControlSurfaceRadiusAndBorder(t *testing.T) {
 	html.Width, html.Height = 180, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -2747,19 +2747,19 @@ func TestHTMLSelectPopupUsesControlSurfaceRadiusAndBorder(t *testing.T) {
 		t.Fatal(err)
 	}
 	selectEntity := htmlControlByID(t, world, owner, "mode")
-	control, _ := ecs.Get[scene.Sprite2D](world, selectEntity)
-	controlSize, _ := ecs.Get[scene.Size2D](world, selectEntity)
+	control, _ := world.Get[scene.Sprite2D](selectEntity)
+	controlSize, _ := world.Get[scene.Size2D](selectEntity)
 	var panel ecs.Entity
 	var border ecs.Entity
 	var listY float32
-	for entity, _ := range ecs.Query[Part[SelectorPanelPart]](world).All {
-		parent, parentOK := ecs.Get[scene.Parent](world, entity)
+	for entity, _ := range world.Query[Part[SelectorPanelPart]]().All {
+		parent, parentOK := world.Get[scene.Parent](entity)
 		if !parentOK {
 			continue
 		}
-		list, listOK := ecs.Get[SelectorList](world, parent.Entity)
+		list, listOK := world.Get[SelectorList](parent.Entity)
 		if listOK && list.Selector == selectEntity {
-			if transform, transformOK := ecs.Get[scene.UITransform](world, parent.Entity); transformOK {
+			if transform, transformOK := world.Get[scene.UITransform](parent.Entity); transformOK {
 				listY = transform.Translation.Y.Value
 			}
 			panel = entity
@@ -2769,9 +2769,9 @@ func TestHTMLSelectPopupUsesControlSurfaceRadiusAndBorder(t *testing.T) {
 	if panel == 0 {
 		t.Fatal("select popup panel was not generated")
 	}
-	list, _ := ecs.Get[scene.Parent](world, panel)
-	for entity, _ := range ecs.Query[Part[SelectorPanelBorderPart]](world).All {
-		parent, parentOK := ecs.Get[scene.Parent](world, entity)
+	list, _ := world.Get[scene.Parent](panel)
+	for entity, _ := range world.Query[Part[SelectorPanelBorderPart]]().All {
+		parent, parentOK := world.Get[scene.Parent](entity)
 		if parentOK && parent.Entity == list.Entity {
 			border = entity
 			break
@@ -2780,9 +2780,9 @@ func TestHTMLSelectPopupUsesControlSurfaceRadiusAndBorder(t *testing.T) {
 	if border == 0 {
 		t.Fatalf("select popup border = %d, want generated", border)
 	}
-	background, _ := ecs.Get[scene.UIBackground2D](world, panel)
-	radius, _ := ecs.Get[CornerRadius](world, panel)
-	borderSurface, _ := ecs.Get[scene.UIBorder2D](world, border)
+	background, _ := world.Get[scene.UIBackground2D](panel)
+	radius, _ := world.Get[CornerRadius](panel)
+	borderSurface, _ := world.Get[scene.UIBorder2D](border)
 	if background.Shape.Fill != control.Shape.Fill {
 		t.Fatalf("select popup fill = %#v, want control fill %#v", background.Shape.Fill, control.Shape.Fill)
 	}
@@ -2800,19 +2800,19 @@ func TestHTMLSelectPopupUsesControlSurfaceRadiusAndBorder(t *testing.T) {
 func TestHTMLDisabledSelectOptionDoesNotChange(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<select id="mode"><option disabled>Unavailable</option><option selected>Available</option></select>`)
 	html.Width, html.Height = 180, 40
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	selectEntity := htmlControlByID(t, world, owner, "mode")
 	option := ecs.Entity(0)
-	for entity, access := range ecs.Query[SelectorItem](world).All {
+	for entity, access := range world.Query[SelectorItem]().All {
 		item := access.Get()
 
 		if item.Owner == selectEntity && item.Index == 0 {
@@ -2824,11 +2824,11 @@ func TestHTMLDisabledSelectOptionDoesNotChange(t *testing.T) {
 		t.Fatal("disabled select option was not generated")
 	}
 	reader := &ecs.MessageReader[htmlui.Event]{}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: option, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: option, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control, _ := ecs.Get[htmlui.Control](world, selectEntity)
+	control, _ := world.Get[htmlui.Control](selectEntity)
 	if control.Selected != 1 || control.Value != "Available" {
 		t.Fatalf("disabled option changed select = %#v", control)
 	}
@@ -2840,12 +2840,12 @@ func TestHTMLDisabledSelectOptionDoesNotChange(t *testing.T) {
 func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	html := htmlui.New(`<div id="root"><input id="enabled" type="checkbox" checked><select id="mode"><option>A</option><option selected>B</option></select></div>`)
 	html.Width, html.Height = 240, 80
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
@@ -2856,16 +2856,16 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: checkbox, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := ecs.Get[Selector](world, selectEntity)
+	selector, _ := world.Get[Selector](selectEntity)
 	selector.Open = true
-	if current := ecs.GetMut[Selector](world, selectEntity); current != nil {
+	if current := world.GetMut[Selector](selectEntity); current != nil {
 		*current = selector
 	}
-	if current := ecs.GetMut[htmlui.Control](world, selectEntity); current != nil {
+	if current := world.GetMut[htmlui.Control](selectEntity); current != nil {
 		current.Open = true
 	}
 	root, _ := htmlui.NodeByID(world, owner, "root")
@@ -2874,22 +2874,22 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkbox = htmlControlByID(t, world, owner, "enabled")
-	control, _ := ecs.Get[htmlui.Control](world, checkbox)
+	control, _ := world.Get[htmlui.Control](checkbox)
 	if control.Checked {
 		t.Fatal("checkbox checked state was lost during HTML rebuild")
 	}
 	selectEntity = htmlControlByID(t, world, owner, "mode")
-	control, _ = ecs.Get[htmlui.Control](world, selectEntity)
+	control, _ = world.Get[htmlui.Control](selectEntity)
 	if control.Selected != 1 {
 		t.Fatalf("select selected state was lost during HTML rebuild: %#v", control)
 	}
-	selector, ok := ecs.Get[Selector](world, selectEntity)
+	selector, ok := world.Get[Selector](selectEntity)
 	if !ok || !selector.Open {
 		t.Fatalf("select open state was lost during HTML rebuild: %#v, ok=%v", selector, ok)
 	}
 	listVisible := false
 	itemVisible := false
-	for _, access := range ecs.Query2[SelectorList, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorList, scene.Visibility]().All {
 		list := access.A.Mut()
 		visibility := access.B.Mut()
 
@@ -2897,7 +2897,7 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 			listVisible = visibility.Visible
 		}
 	}
-	for _, access := range ecs.Query2[SelectorItem, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.Visibility]().All {
 		item := access.A.Mut()
 		visibility := access.B.Mut()
 
@@ -2915,7 +2915,7 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	remaining := 0
-	for range ecs.Query[htmlSelectorElement](world).All {
+	for range world.Query[htmlSelectorElement]().All {
 		remaining++
 	}
 	if remaining != 0 {
@@ -2926,7 +2926,7 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 func htmlControlByID(t *testing.T, world *ecs.World, owner ecs.Entity, id string) ecs.Entity {
 	t.Helper()
 	var found ecs.Entity
-	for entity, access := range ecs.Query[htmlui.Control](world).All {
+	for entity, access := range world.Query[htmlui.Control]().All {
 		control := access.Get()
 
 		if control.Owner == owner && control.ID == id {
@@ -2944,7 +2944,7 @@ func htmlControlByID(t *testing.T, world *ecs.World, owner ecs.Entity, id string
 
 func findHTMLFocusable(world *ecs.World, owner ecs.Entity, id string) ecs.Entity {
 	var found ecs.Entity
-	for entity, access := range ecs.Query[htmlui.Focusable](world).All {
+	for entity, access := range world.Query[htmlui.Focusable]().All {
 		focusable := access.Get()
 
 		if focusable.Owner == owner && focusable.ID == id {
@@ -2978,34 +2978,34 @@ func TestHTMLTextareaEnterAndExplicitBlur(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	html := htmlui.New(`<textarea id="notes">hello</textarea>`)
 	html.Width, html.Height, html.Font = 320, 160, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "notes")
-	ecs.WriteMessage(world, scene.InputEvent{Entity: entity, Kind: scene.InputEventPress})
+	world.WriteMessage(scene.InputEvent{Entity: entity, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Caret, field.Anchor = 5, 5
 	state.EndFrame()
 	state.PressKey(input.KeyEnter)
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	field = ecs.GetMut[TextField](world, entity)
+	field = world.GetMut[TextField](entity)
 	if field.Value != "hello\n" || !field.Focused || field.Submitted {
 		t.Fatalf("textarea Enter: %+v", field)
 	}
 	BlurHTMLControl(world, entity)
-	field = ecs.GetMut[TextField](world, entity)
-	runtime, _ := ecs.GetResource[*uiEventState](world)
+	field = world.GetMut[TextField](entity)
+	runtime, _ := world.GetResource[*uiEventState]()
 	if field.Focused || runtime.Focused != 0 {
 		t.Fatal("explicit HTML blur retained focus")
 	}
@@ -3020,22 +3020,22 @@ func TestHTMLButtonSpaceActivatesOnReleaseAndCancelsOnBlur(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	html := htmlui.New(`<button id="action" type="button">Action</button>`)
 	html.Width, html.Height, html.Font = 160, 60, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "action")
-	runtime, _ := ecs.GetResource[*uiEventState](world)
+	runtime, _ := world.GetResource[*uiEventState]()
 	if runtime == nil {
 		if err := UpdateSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		runtime, _ = ecs.GetResource[*uiEventState](world)
+		runtime, _ = world.GetResource[*uiEventState]()
 	}
 	var reader ecs.MessageReader[htmlui.Event]
 	clicks := func() int {
@@ -3082,7 +3082,7 @@ func TestHTMLRetainedControlsRefreshAuthoredAttributes(t *testing.T) {
 	html := htmlui.New(`<input id="field" placeholder="Before"/><input id="check" type="checkbox"/><div id="editor" contenteditable="true">Before</div><select id="select"><option id="option">Before</option></select>`)
 	html.Width, html.Height, html.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncHTML(world); err != nil {
 		t.Fatal(err)
@@ -3107,11 +3107,11 @@ func TestHTMLRetainedControlsRefreshAuthoredAttributes(t *testing.T) {
 	if htmlControlByID(t, world, owner, "field") != fieldEntity || htmlControlByID(t, world, owner, "check") != checkEntity || htmlControlByID(t, world, owner, "select") != selectEntity || htmlFocusableByID(t, world, owner, "editor") != editorEntity {
 		t.Fatal("authored attribute update replaced controls")
 	}
-	field, _ := ecs.Get[TextField](world, fieldEntity)
-	toggle, _ := ecs.Get[Toggle[bool]](world, checkEntity)
-	editor, _ := ecs.Get[TextField](world, editorEntity)
-	runtime, _ := ecs.Get[htmlSelectorRuntime](world, selectEntity)
-	item, _ := ecs.Get[SelectorItem](world, runtime.Items[0])
+	field, _ := world.Get[TextField](fieldEntity)
+	toggle, _ := world.Get[Toggle[bool]](checkEntity)
+	editor, _ := world.Get[TextField](editorEntity)
+	runtime, _ := world.Get[htmlSelectorRuntime](selectEntity)
+	item, _ := world.Get[SelectorItem](runtime.Items[0])
 	if field.Placeholder != "After" || field.MaxRunes != 4 || field.Value != "New" || !toggle.Value || editor.Value != "After" || item.Label != "After" {
 		t.Fatalf("stale authored values: field=%+v toggle=%+v editor=%+v item=%+v", field, toggle, editor, item)
 	}
@@ -3123,7 +3123,7 @@ func TestHTMLTextReparentUpdatesRuntimeRelations(t *testing.T) {
 	html := htmlui.New(`<button id="first"><span id="label">Label</span></button><button id="second">Second</button>`)
 	html.Width, html.Height, html.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncHTML(world); err != nil {
 		t.Fatal(err)
@@ -3137,12 +3137,12 @@ func TestHTMLTextReparentUpdatesRuntimeRelations(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for entity, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+	for entity, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 		link := access.A.Get()
 		text := access.B.Get()
 
 		if strings.Contains(text.Value, "Label") {
-			relation, _ := ecs.Get[Relation[Control]](world, entity)
+			relation, _ := world.Get[Relation[Control]](entity)
 			if link.Control != second || relation.Owner != second {
 				t.Fatalf("text kept old control relation: link=%+v relation=%+v", link, relation)
 			}
@@ -3160,7 +3160,7 @@ func TestHTMLLocalScrollTextUpdateKeepsOffsetsAcrossFrames(t *testing.T) {
 	html := htmlui.New(`<div id="viewport" style="width:200px;height:40px;overflow:auto"><div id="target">Before</div><div style="height:100px">Unchanged</div></div>`)
 	html.Width, html.Height, html.Font = 300, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3170,7 +3170,7 @@ func TestHTMLLocalScrollTextUpdateKeepsOffsetsAcrossFrames(t *testing.T) {
 		t.Fatal("missing target")
 	}
 	var area, unchanged ecs.Entity
-	for entity, access := range ecs.Query2[scene.Text2D, htmlui.ScrollContent](world).All {
+	for entity, access := range world.Query2[scene.Text2D, htmlui.ScrollContent]().All {
 		text := access.A.Get()
 		content := access.B.Get()
 
@@ -3181,7 +3181,7 @@ func TestHTMLLocalScrollTextUpdateKeepsOffsetsAcrossFrames(t *testing.T) {
 	if area == 0 {
 		t.Fatal("missing scroll content")
 	}
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	scroll.Position[1] = -10
 	for _, value := range []string{"After", "Before", "After"} {
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
@@ -3194,11 +3194,11 @@ func TestHTMLLocalScrollTextUpdateKeepsOffsetsAcrossFrames(t *testing.T) {
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		scroll, _ := ecs.Get[scene.UIScroll](world, area)
+		scroll, _ := world.Get[scene.UIScroll](area)
 		if scroll.Position[1] != -10 || !world.IsAlive(unchanged) {
 			t.Fatal("local update lost scroll state or sibling")
 		}
-		for _, access := range ecs.Query2[htmlui.ScrollContent, scene.UITransform](world).All {
+		for _, access := range world.Query2[htmlui.ScrollContent, scene.UITransform]().All {
 			content := access.A.Get()
 			transform := access.B.Get()
 
@@ -3215,7 +3215,7 @@ func TestHTMLLocalControlResizeKeepsTextFieldSelection(t *testing.T) {
 	html := htmlui.New(`<div><input id="target" value="Value"/></div><div><input id="other" value="Other"/></div>`)
 	html.Width, html.Height = 320, 200
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3226,19 +3226,19 @@ func TestHTMLLocalControlResizeKeepsTextFieldSelection(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Anchor, field.Caret = 1, 3
-	previous, _ := ecs.Get[htmlui.Control](world, other)
+	previous, _ := world.Get[htmlui.Control](other)
 	target, _ := htmlui.NodeByID(world, owner, "target")
 	for _, css := range []string{"width:180px", "width:120px"} {
 		target.SetAttribute("style", css)
 		if err := SyncSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		field = ecs.GetMut[TextField](world, entity)
-		after, _ := ecs.Get[htmlui.Control](world, other)
+		field = world.GetMut[TextField](entity)
+		after, _ := world.Get[htmlui.Control](other)
 		if field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 || after.RenderRevision != previous.RenderRevision {
 			t.Fatal("local resize reset TextField state or rewrote unrelated control")
 		}
@@ -3251,17 +3251,17 @@ func TestHTMLExternalBindingSurvivesScrollFramesAndLocalResize(t *testing.T) {
 	html := htmlui.New(`<div><input id="target" value="Value"/></div>`)
 	html.Width, html.Height = 320, 200
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "target")
-	base, _ := ecs.Get[scene.UITransform](world, entity)
+	base, _ := world.Get[scene.UITransform](entity)
 	areaBundle := ecs.NewBundle(1)
 	scroll := scene.UIScroll{Vertical: true}
 	scroll.Position[1] = -7
-	ecs.Put(&areaBundle, scroll)
+	areaBundle.Put(scroll)
 	area := world.Spawn(areaBundle)
 	htmlui.SetNodeScroll(world, owner, "target", area, 0, 13)
 	htmlui.SetNodeOffset(world, owner, "target", 0, 11)
@@ -3274,9 +3274,9 @@ func TestHTMLExternalBindingSurvivesScrollFramesAndLocalResize(t *testing.T) {
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		content, _ := ecs.Get[htmlui.ScrollContent](world, entity)
-		transform, _ := ecs.Get[scene.UITransform](world, entity)
-		parent, _ := ecs.Get[scene.Parent](world, entity)
+		content, _ := world.Get[htmlui.ScrollContent](entity)
+		transform, _ := world.Get[scene.UITransform](entity)
+		parent, _ := world.Get[scene.Parent](entity)
 		if content.Area != area || parent.Entity != area || content.Y != base.Translation.Y.Value-2 || transform.Translation.Y.Value != content.Y-7 {
 			t.Fatalf("scroll frame lost bound coordinates: content=%+v transform=%+v parent=%v", content, transform, parent)
 		}
@@ -3289,7 +3289,7 @@ func TestHTMLStructureKeepsUnchangedTextFieldState(t *testing.T) {
 	html := htmlui.New(`<div style="height:40px"><div id="remove">Remove</div></div><div><input id="field" value="Value"/></div><div><select id="select"><option>A</option></select></div>`)
 	html.Width, html.Height = 320, 200
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3299,18 +3299,18 @@ func TestHTMLStructureKeepsUnchangedTextFieldState(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Value, field.Anchor, field.Caret = "Typed", 1, 3
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	revision := control.RenderRevision
 	selectEntity := htmlControlByID(t, world, owner, "select")
-	selectControl := ecs.GetMut[htmlui.Control](world, selectEntity)
+	selectControl := world.GetMut[htmlui.Control](selectEntity)
 	selectControl.Open = true
 	selectRevision := selectControl.RenderRevision
-	selector := ecs.GetMut[Selector](world, selectEntity)
+	selector := world.GetMut[Selector](selectEntity)
 	selector.Open = true
-	focus, _ := ecs.Get[htmlui.Focusable](world, entity)
+	focus, _ := world.Get[htmlui.Focusable](entity)
 	removed, _ := htmlui.NodeByID(world, owner, "remove")
 	removed.Remove()
 	if err := SyncSystem("").Run(world); err != nil {
@@ -3319,12 +3319,12 @@ func TestHTMLStructureKeepsUnchangedTextFieldState(t *testing.T) {
 	if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	field = ecs.GetMut[TextField](world, entity)
-	after, _ := ecs.Get[htmlui.Control](world, entity)
-	nextFocus, _ := ecs.Get[htmlui.Focusable](world, entity)
-	selector = ecs.GetMut[Selector](world, selectEntity)
-	selectControl = ecs.GetMut[htmlui.Control](world, selectEntity)
-	selectStack, _ := ecs.Get[scene.UIStackIndex](world, selectEntity)
+	field = world.GetMut[TextField](entity)
+	after, _ := world.Get[htmlui.Control](entity)
+	nextFocus, _ := world.Get[htmlui.Focusable](entity)
+	selector = world.GetMut[Selector](selectEntity)
+	selectControl = world.GetMut[htmlui.Control](selectEntity)
+	selectStack, _ := world.Get[scene.UIStackIndex](selectEntity)
 	if selector.StackIndex != int(selectStack) || !selector.Open || !selectControl.Open || selectControl.RenderRevision != selectRevision {
 		t.Fatal("selector order cache or live state changed incorrectly")
 	}
@@ -3339,18 +3339,18 @@ func TestHTMLStructuralScrollRangeAppliesAfterLayout(t *testing.T) {
 	html := htmlui.New(`<div id="scroller" style="overflow:auto;height:40px"><div id="remove" style="height:200px">Tall</div><div style="position:absolute;top:0"><input id="field" value="Value"/></div></div>`)
 	html.Width, html.Height = 320, 240
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	field := htmlControlByID(t, world, owner, "field")
-	content, ok := ecs.Get[htmlui.ScrollContent](world, field)
+	content, ok := world.Get[htmlui.ScrollContent](field)
 	if !ok {
 		t.Fatal("missing clipped input")
 	}
 	area := content.Area
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	scroll.Position[1] = -100
 	if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3364,11 +3364,11 @@ func TestHTMLStructuralScrollRangeAppliesAfterLayout(t *testing.T) {
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
-		scroll, _ := ecs.Get[scene.UIScroll](world, area)
+		scroll, _ := world.Get[scene.UIScroll](area)
 		if scroll.Position[1] != 0 || scroll.ContentSize[1] != 40 {
 			t.Fatalf("range did not shrink: %+v", scroll)
 		}
-		for _, access := range ecs.Query2[htmlui.ScrollContent, scene.UITransform](world).All {
+		for _, access := range world.Query2[htmlui.ScrollContent, scene.UITransform]().All {
 			content := access.A.Get()
 			transform := access.B.Get()
 
@@ -3385,21 +3385,21 @@ func TestHTMLClipMembershipKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 	html := htmlui.New(`<div style="height:200px"><div id="clip" style="overflow:auto;height:40px"><div style="height:100px"><input id="field" value="Value"/></div></div></div>`)
 	html.Width, html.Height = 320, 240
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "field")
 	htmlui.SetControlValue(world, entity, "Typed")
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Value, field.Anchor, field.Caret = "Typed", 1, 3
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	clip, _ := htmlui.NodeByID(world, owner, "clip")
-	content, _ := ecs.Get[htmlui.ScrollContent](world, entity)
+	content, _ := world.Get[htmlui.ScrollContent](entity)
 	oldArea := content.Area
-	scroll := ecs.GetMut[scene.UIScroll](world, oldArea)
+	scroll := world.GetMut[scene.UIScroll](oldArea)
 	scroll.Position[1] = -10
 	if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3413,13 +3413,13 @@ func TestHTMLClipMembershipKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 			if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			field, _ := ecs.Get[TextField](world, entity)
+			field, _ := world.Get[TextField](entity)
 			if field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 {
 				t.Fatal("clip membership reset live input")
 			}
-			parent, _ := ecs.Get[scene.Parent](world, entity)
-			transform, _ := ecs.Get[scene.UITransform](world, entity)
-			content, attached := ecs.Get[htmlui.ScrollContent](world, entity)
+			parent, _ := world.Get[scene.Parent](entity)
+			transform, _ := world.Get[scene.UITransform](entity)
+			content, attached := world.Get[htmlui.ScrollContent](entity)
 			if height == "0px" {
 				if attached || parent.Entity != owner || world.IsAlive(oldArea) {
 					t.Fatal("removed clip still owns input")
@@ -3444,21 +3444,21 @@ func TestHTMLOverflowModeKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 	html := htmlui.New(`<div style="height:200px"><div id="clip" style="overflow:auto;height:40px"><div style="height:100px"><input id="field" value="Value"/></div></div></div>`)
 	html.Width, html.Height = 320, 240
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "field")
 	htmlui.SetControlValue(world, entity, "Typed")
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Value, field.Anchor, field.Caret = "Typed", 1, 3
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	clip, _ := htmlui.NodeByID(world, owner, "clip")
-	content, _ := ecs.Get[htmlui.ScrollContent](world, entity)
+	content, _ := world.Get[htmlui.ScrollContent](entity)
 	oldArea := content.Area
-	scroll := ecs.GetMut[scene.UIScroll](world, oldArea)
+	scroll := world.GetMut[scene.UIScroll](oldArea)
 	scroll.Position[1] = -10
 	if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -3472,19 +3472,19 @@ func TestHTMLOverflowModeKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 			if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			field, _ := ecs.Get[TextField](world, entity)
+			field, _ := world.Get[TextField](entity)
 			if field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 {
 				t.Fatal("clip membership reset live input")
 			}
-			parent, _ := ecs.Get[scene.Parent](world, entity)
-			transform, _ := ecs.Get[scene.UITransform](world, entity)
-			content, attached := ecs.Get[htmlui.ScrollContent](world, entity)
+			parent, _ := world.Get[scene.Parent](entity)
+			transform, _ := world.Get[scene.UITransform](entity)
+			content, attached := world.Get[htmlui.ScrollContent](entity)
 			if mode == "visible" {
 				if attached || parent.Entity != owner || world.IsAlive(oldArea) {
 					t.Fatal("removed clip still owns input")
 				}
 			} else if mode == "hidden" || mode == "clip" {
-				if attached || parent.Entity != oldArea || !world.IsAlive(oldArea) || ecs.Has[scene.UIScroll](world, oldArea) {
+				if attached || parent.Entity != oldArea || !world.IsAlive(oldArea) || world.Has[scene.UIScroll](oldArea) {
 					t.Fatal("non-scrolling clip retained stale scroll state")
 				}
 				if transform.Translation.Y.Value != 0 {
@@ -3510,22 +3510,22 @@ func TestHTMLReparentKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 	html := htmlui.New(`<div id="left" style="height:40px;overflow:auto"><div id="moved" style="height:100px"><input id="field" value="Value"/></div></div><div id="right" style="height:40px;overflow:auto"></div>`)
 	html.Width, html.Height = 320, 240
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "field")
 	htmlui.SetControlValue(world, entity, "Typed")
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Value, field.Anchor, field.Caret = "Typed", 1, 3
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	moved, _ := htmlui.NodeByID(world, owner, "moved")
 	for _, id := range []string{"right", "left", "right", "left"} {
-		content, _ := ecs.Get[htmlui.ScrollContent](world, entity)
+		content, _ := world.Get[htmlui.ScrollContent](entity)
 		oldArea := content.Area
-		scroll := ecs.GetMut[scene.UIScroll](world, oldArea)
+		scroll := world.GetMut[scene.UIScroll](oldArea)
 		scroll.Position[1] = -10
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 			t.Fatal(err)
@@ -3540,16 +3540,16 @@ func TestHTMLReparentKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 			if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			field, _ := ecs.Get[TextField](world, entity)
+			field, _ := world.Get[TextField](entity)
 			if htmlControlByID(t, world, owner, "field") != entity || field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 {
 				t.Fatal("move reset live input")
 			}
-			content, ok := ecs.Get[htmlui.ScrollContent](world, entity)
-			parent, _ := ecs.Get[scene.Parent](world, entity)
+			content, ok := world.Get[htmlui.ScrollContent](entity)
+			parent, _ := world.Get[scene.Parent](entity)
 			if !ok || content.Area == oldArea || parent.Entity != content.Area || !world.IsAlive(content.Area) {
 				t.Fatal("move retained old scroll parent")
 			}
-			transform, _ := ecs.Get[scene.UITransform](world, entity)
+			transform, _ := world.Get[scene.UITransform](entity)
 			position, _ := scene.GetUIScrollOffset(world, content.Area)
 			if transform.Translation.X.Value != content.X+position[0] || transform.Translation.Y.Value != content.Y+position[1] {
 				t.Fatal("move used stale scroll base")
@@ -3564,22 +3564,22 @@ func TestHTMLRetiredSourceKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 	html := htmlui.New(`<div id="left" style="height:40px;overflow:auto"><div id="moved" style="height:100px"><input id="field" value="Value"/></div></div><div id="right" style="height:40px;overflow:auto"></div>`)
 	html.Width, html.Height = 320, 240
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	entity := htmlControlByID(t, world, owner, "field")
 	htmlui.SetControlValue(world, entity, "Typed")
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	field.Value, field.Anchor, field.Caret = "Typed", 1, 3
-	control := ecs.GetMut[htmlui.Control](world, entity)
+	control := world.GetMut[htmlui.Control](entity)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	moved, _ := htmlui.NodeByID(world, owner, "moved")
 	for _, id := range []string{"right"} {
-		content, _ := ecs.Get[htmlui.ScrollContent](world, entity)
+		content, _ := world.Get[htmlui.ScrollContent](entity)
 		oldArea := content.Area
-		scroll := ecs.GetMut[scene.UIScroll](world, oldArea)
+		scroll := world.GetMut[scene.UIScroll](oldArea)
 		scroll.Position[1] = -10
 		if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 			t.Fatal(err)
@@ -3599,16 +3599,16 @@ func TestHTMLRetiredSourceKeepsLiveInputAcrossScrollFrames(t *testing.T) {
 			if world.IsAlive(oldArea) {
 				t.Fatal("retired source scroll area is alive")
 			}
-			field, _ := ecs.Get[TextField](world, entity)
+			field, _ := world.Get[TextField](entity)
 			if htmlControlByID(t, world, owner, "field") != entity || field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 {
 				t.Fatal("move reset live input")
 			}
-			content, ok := ecs.Get[htmlui.ScrollContent](world, entity)
-			parent, _ := ecs.Get[scene.Parent](world, entity)
+			content, ok := world.Get[htmlui.ScrollContent](entity)
+			parent, _ := world.Get[scene.Parent](entity)
 			if !ok || content.Area == oldArea || parent.Entity != content.Area || !world.IsAlive(content.Area) {
 				t.Fatal("move retained old scroll parent")
 			}
-			transform, _ := ecs.Get[scene.UITransform](world, entity)
+			transform, _ := world.Get[scene.UITransform](entity)
 			position, _ := scene.GetUIScrollOffset(world, content.Area)
 			if transform.Translation.X.Value != content.X+position[0] || transform.Translation.Y.Value != content.Y+position[1] {
 				t.Fatal("move used stale scroll base")

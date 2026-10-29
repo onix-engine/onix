@@ -27,7 +27,7 @@ func setupHot(t testing.TB) hotFixture {
 	})
 	f := hotFixture{structured: project.SlotValue{Type: "Style", Fields: []project.SlotFieldValue{{Name: "size", Value: project.SlotValue{Type: project.IntValue, Integer: 18}}}}}
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "hot", func() hotState { return hotState{} }, Lifecycle[hotState]{
+	must(t, registry.RegisterMod("hot", func() hotState { return hotState{} }, Lifecycle[hotState]{
 		Install: func(c *Context, state *hotState) error {
 			f.state = state
 			var err error
@@ -35,7 +35,7 @@ func setupHot(t testing.TB) hotFixture {
 			if err != nil {
 				return err
 			}
-			f.emitter, err = BindEmitter[int64](c, "ping")
+			f.emitter, err = c.BindEmitter[int64]("ping")
 			if err != nil {
 				return err
 			}
@@ -53,7 +53,7 @@ func setupHot(t testing.TB) hotFixture {
 		},
 		Update: func(_ *Context, state *hotState, _ Tick) error { state.updates++; return nil },
 	}))
-	must(t, RegisterMod(&registry, "service", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, registry.RegisterMod("service", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		return handleRequest(c, "ask", func(c *Context, q Request[string, int64]) error { return q.Reply(c, int64(len(q.Value))) })
 	}}))
 	f.runtime = newFixture(t, plan, registry, Options{EventCapacity: 8, RequestCapacity: 4})

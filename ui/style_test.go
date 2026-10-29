@@ -80,7 +80,7 @@ func TestAllWidgetStylesAcceptNineSliceSurfaces(t *testing.T) {
 			style := ButtonGroupStyle{Button: button, Divider: surface}
 			return SpawnButtonGroup(world, ButtonGroupOptions[string]{Height: 32, Items: []ButtonGroupItem[string]{{Value: "a", Width: 50}}, Style: &style})
 		}, target: func(world *ecs.World, entity ecs.Entity) ecs.Entity {
-			group, _ := ecs.Get[ButtonGroup](world, entity)
+			group, _ := world.Get[ButtonGroup](entity)
 			return group.Buttons[0]
 		}},
 		{name: "input", spawn: func(world *ecs.World) ecs.Entity {
@@ -138,7 +138,7 @@ func TestAllWidgetStylesAcceptNineSliceSurfaces(t *testing.T) {
 			return SpawnImageGrid(world, ImageGridOptions{Width: 100, Columns: 1, Items: []ImageGridItem{{Label: "A"}}, Style: &style})
 		}, target: func(world *ecs.World, entity ecs.Entity) ecs.Entity {
 			var cellEntity ecs.Entity
-			for candidate, access := range ecs.Query[imageGridCell](world).All {
+			for candidate, access := range world.Query[imageGridCell]().All {
 				cell := access.Get()
 
 				if cell.Grid == entity {
@@ -182,7 +182,7 @@ func TestWidgetStateTexturesSurviveRepeatedSync(t *testing.T) {
 		WithDisabled(TextureSurface(disabled))
 	style := ButtonStyle{Body: state, JoinedEdge: state}
 	button := SpawnButton(world, ButtonOptions{Width: 100, Height: 32, Style: &style})
-	pointer := ecs.GetMut[scene.InputState2D](world, button)
+	pointer := world.GetMut[scene.InputState2D](button)
 
 	assertSyncTexture := func(want *graphics.Texture) {
 		t.Helper()
@@ -191,7 +191,7 @@ func TestWidgetStateTexturesSurviveRepeatedSync(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		image, _ := ecs.Get[scene.UIImage2D](world, styledSurfaceEntity(world, button))
+		image, _ := world.Get[scene.UIImage2D](styledSurfaceEntity(world, button))
 		if image.Texture != want {
 			t.Fatalf("button texture = %p, want %p", image.Texture, want)
 		}
@@ -218,14 +218,14 @@ func TestToggleTexturesCoverSelectedCheckedAndFocusedStates(t *testing.T) {
 	checkbox := SpawnCheckbox(world, CheckboxOptions{Width: 100, Height: 32, Style: &checkboxStyle})
 	fieldStyle := TextFieldStyle{Body: NewStateStyle(TextureSurface(off)).WithFocused(TextureSurface(focused))}
 	field := SpawnInput(world, TextOptions{Width: 100, Height: 32, Style: &fieldStyle})
-	fieldComponent := ecs.GetMut[TextField](world, field)
+	fieldComponent := world.GetMut[TextField](field)
 	fieldComponent.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 
 	var selectedItem ecs.Entity
-	for entity, access := range ecs.Query[TabItem](world).All {
+	for entity, access := range world.Query[TabItem]().All {
 		item := access.Get()
 
 		if item.Tabs == tabs && item.Index == 0 {
@@ -237,9 +237,9 @@ func TestToggleTexturesCoverSelectedCheckedAndFocusedStates(t *testing.T) {
 	assertImageTexture(t, world, findSurfacePart[TrackPart](world, checkbox), off)
 	assertImageTexture(t, world, field, focused)
 
-	checkboxComponent := ecs.GetMut[Toggle[bool]](world, checkbox)
+	checkboxComponent := world.GetMut[Toggle[bool]](checkbox)
 	checkboxComponent.Value = true
-	tab := ecs.GetMut[Tab](world, tabs)
+	tab := world.GetMut[Tab](tabs)
 	tab.Selected = 1
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -258,11 +258,11 @@ func TestGlobalSkinAndPerEntityStyleOverride(t *testing.T) {
 	skin.Button.Primary = ButtonStyle{Body: globalState, JoinedEdge: globalState}
 	skin.ButtonGroup.Button = ButtonStyle{Body: globalState, JoinedEdge: globalState}
 	skin.Menu.Trigger = ButtonStyle{Body: globalState, JoinedEdge: globalState}
-	ecs.InsertResource(world, skin)
+	world.InsertResource(skin)
 
 	globalButton := SpawnButton(world, ButtonOptions{Width: 100, Height: 32})
 	groupEntity := SpawnButtonGroup(world, ButtonGroupOptions[string]{Height: 32, Items: []ButtonGroupItem[string]{{Value: "a", Width: 50}}})
-	group, _ := ecs.Get[ButtonGroup](world, groupEntity)
+	group, _ := world.Get[ButtonGroup](groupEntity)
 	menu := SpawnMenu(world, MenuOptions{Width: 100, Height: 32, Items: []string{"A"}})
 	overrideState := NewStateStyle(TextureSurface(overrideTexture))
 	overrideStyle := ButtonStyle{Body: overrideState, JoinedEdge: overrideState}
@@ -298,7 +298,7 @@ func TestIconSwitchesBetweenFallbackAndTextureAtRuntime(t *testing.T) {
 	}
 
 	assertIcon(">", nil)
-	component := ecs.GetMut[IconContent](world, button)
+	component := world.GetMut[IconContent](button)
 	component.Value.Texture = texture
 	assertIcon("", texture)
 	component.Value.Texture = nil
@@ -326,7 +326,7 @@ func TestTreeIndicatorTexturesFollowNodeState(t *testing.T) {
 	assertTreeIndicatorTexture(t, world, rootNode, collapsed)
 	assertTreeIndicatorTexture(t, world, leafNode, leaf)
 
-	node := ecs.GetMut[TreeNode[string]](world, rootNode)
+	node := world.GetMut[TreeNode[string]](rootNode)
 	node.Expanded = true
 	for range 2 {
 		if err := SyncTreeSystem[string]("").Run(world); err != nil {
@@ -342,7 +342,7 @@ func assertNineSliceSurface(t *testing.T, world *ecs.World, entity ecs.Entity, t
 	if entity == 0 {
 		t.Fatal("missing styled surface entity")
 	}
-	image, ok := ecs.Get[scene.UIImage2D](world, entity)
+	image, ok := world.Get[scene.UIImage2D](entity)
 	if !ok || image.Texture != texture || image.Mode != scene.UIImageSliced || image.Slice == nil || *image.Slice != slice {
 		t.Fatalf("nine-slice surface = %#v", image)
 	}
@@ -351,14 +351,14 @@ func assertNineSliceSurface(t *testing.T, world *ecs.World, entity ecs.Entity, t
 func assertImageTexture(t *testing.T, world *ecs.World, entity ecs.Entity, texture *graphics.Texture) {
 	t.Helper()
 	entity = styledSurfaceEntity(world, entity)
-	image, ok := ecs.Get[scene.UIImage2D](world, entity)
+	image, ok := world.Get[scene.UIImage2D](entity)
 	if !ok || image.Texture != texture {
 		t.Fatalf("entity %d image = %#v, want texture %p", entity, image, texture)
 	}
 }
 
 func styledSurfaceEntity(world *ecs.World, entity ecs.Entity) ecs.Entity {
-	if ecs.Has[scene.UIImage2D](world, entity) {
+	if world.Has[scene.UIImage2D](entity) {
 		return entity
 	}
 	return findSurfacePart[BodyPart](world, entity)
@@ -371,11 +371,11 @@ func findSurfacePart[P any](world *ecs.World, owner ecs.Entity) ecs.Entity {
 
 func iconTextValue(world *ecs.World, owner ecs.Entity) string {
 	value := ""
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		visual := access.A.Ref()
 		text := access.B.Ref()
 
-		if visual.Owner == owner && ecs.Has[Part[IconPart]](world, entity) {
+		if visual.Owner == owner && world.Has[Part[IconPart]](entity) {
 			value = text.Value
 			break
 		}
@@ -385,7 +385,7 @@ func iconTextValue(world *ecs.World, owner ecs.Entity) string {
 
 func findTreeNode(world *ecs.World, tree ecs.Entity, id string) ecs.Entity {
 	var result ecs.Entity
-	for entity, access := range ecs.Query[TreeNode[string]](world).All {
+	for entity, access := range world.Query[TreeNode[string]]().All {
 		node := access.Get()
 
 		if node.Tree == tree && node.ID == id {
@@ -399,10 +399,10 @@ func findTreeNode(world *ecs.World, tree ecs.Entity, id string) ecs.Entity {
 func assertTreeIndicatorTexture(t *testing.T, world *ecs.World, owner ecs.Entity, texture *graphics.Texture) {
 	t.Helper()
 	found := false
-	for entity, access := range ecs.Query[Relation[TreeNode[string]]](world).All {
+	for entity, access := range world.Query[Relation[TreeNode[string]]]().All {
 		element := access.Get()
 
-		if element.Owner == owner && ecs.Has[Part[TreeIndicatorImagePart]](world, entity) {
+		if element.Owner == owner && world.Has[Part[TreeIndicatorImagePart]](entity) {
 			assertImageTexture(t, world, entity, texture)
 			found = true
 			break

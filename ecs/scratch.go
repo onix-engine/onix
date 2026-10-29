@@ -26,16 +26,19 @@ func (s *Scratch[T]) Reserve(want int) []T {
 	return s.Values[:0]
 }
 
-func FrameValue[Tag, T any](world *World) *T {
+// Distinct key types keep persistent values, slices and maps independent even
+// when they share tags and their element types contain pointers.
+type valueCacheKey[Tag, T any] struct{}
+type sliceCacheKey[Tag, T any] struct{}
+type mapCacheKey[Tag any, K comparable, V any] struct{}
+
+func (world *World) FrameValue[Tag, T any]() *T {
 	requireWorld(world)
 	return cachedValue[Tag, T](world.frameScratch)
 }
 
 func cachedValue[Tag, T any](values map[reflect.Type]any) *T {
-	key := reflect.TypeFor[struct {
-		Tag Tag
-		Val *T
-	}]()
+	key := reflect.TypeFor[valueCacheKey[Tag, T]]()
 	if value, ok := values[key]; ok {
 		return value.(*T)
 	}
@@ -44,12 +47,9 @@ func cachedValue[Tag, T any](values map[reflect.Type]any) *T {
 	return value
 }
 
-func FrameScratch[Tag, T any](world *World) *Scratch[T] {
+func (world *World) FrameScratch[Tag, T any]() *Scratch[T] {
 	requireWorld(world)
-	key := reflect.TypeFor[struct {
-		Tag Tag
-		Val T
-	}]()
+	key := reflect.TypeFor[sliceCacheKey[Tag, T]]()
 	if value, ok := world.frameScratch[key]; ok {
 		scratch := value.(*Scratch[T])
 		scratch.previousLen = max(scratch.previousLen, len(scratch.Values))
@@ -63,13 +63,9 @@ func FrameScratch[Tag, T any](world *World) *Scratch[T] {
 
 // FrameScratchMap returns a per-frame map that is cleared on every call. Maps
 // are reference values, so the stored map is the one callers mutate.
-func FrameScratchMap[Tag any, K comparable, V any](world *World) map[K]V {
+func (world *World) FrameScratchMap[Tag any, K comparable, V any]() map[K]V {
 	requireWorld(world)
-	key := reflect.TypeFor[struct {
-		Tag Tag
-		Key K
-		Val V
-	}]()
+	key := reflect.TypeFor[mapCacheKey[Tag, K, V]]()
 	if value, ok := world.frameScratch[key]; ok {
 		scratch := value.(map[K]V)
 		clear(scratch)

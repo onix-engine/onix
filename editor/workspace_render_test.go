@@ -31,6 +31,18 @@ func (d *viewport3DTestDriver) DrawShapes(batch render.ShapeBatch) error {
 	d.shapes = append(d.shapes, batch.Instances...)
 	return nil
 }
+
+// Recover the authored contour from the quad expanded for antialiasing.
+func shapeContourModel(shape render.ShapeInstance2D) [6]float32 {
+	m, l := shape.Model, shape.LocalModel
+	det := l[0]*l[4] - l[1]*l[3]
+	inv := [6]float32{l[4] / det, -l[1] / det, (l[1]*l[5] - l[4]*l[2]) / det,
+		-l[3] / det, l[0] / det, (l[3]*l[2] - l[0]*l[5]) / det}
+	return [6]float32{
+		m[0]*inv[0] + m[1]*inv[3], m[0]*inv[1] + m[1]*inv[4], m[0]*inv[2] + m[1]*inv[5] + m[2],
+		m[3]*inv[0] + m[4]*inv[3], m[3]*inv[1] + m[4]*inv[4], m[3]*inv[2] + m[4]*inv[5] + m[5],
+	}
+}
 func (*viewport3DTestDriver) Present() error               { return nil }
 func (*viewport3DTestDriver) ResizeSurface(int, int) error { return nil }
 func (*viewport3DTestDriver) SetVSync(bool)                {}

@@ -27,7 +27,7 @@ func TestHTMLResourceComponentMaterializesHTMLNode(t *testing.T) {
 	}
 	defer scene.Dispose()
 	entity := scene.Entities["screen"]
-	html, ok := ecs.Get[htmlui.Surface](scene.World, entity)
+	html, ok := scene.World.Get[htmlui.Surface](entity)
 	if !ok || html.Value != `<main id="content">Hello</main>` {
 		t.Fatalf("HTML component = %+v, present=%v", html, ok)
 	}

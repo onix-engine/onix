@@ -116,7 +116,7 @@ func (app *App) Step() (bool, error) {
 	if err := app.runMainFrame(now); err != nil {
 		return false, err
 	}
-	if request, ok := ecs.GetResource[*scene.RenderRequest](app.World); ok && request.Take() {
+	if request, ok := app.World.GetResource[*scene.RenderRequest](); ok && request.Take() {
 		app.renderRequested.Store(true)
 	}
 	defer app.recordIdleFrame()
@@ -136,7 +136,7 @@ func (app *App) Step() (bool, error) {
 }
 
 func (app *App) runMainFrame(now time.Time) error {
-	clock, ok := ecs.GetResource[*scene.Time](app.World)
+	clock, ok := app.World.GetResource[*scene.Time]()
 	if !ok || clock == nil {
 		return nil
 	}
@@ -164,7 +164,7 @@ func (app *App) runMainFrame(now time.Time) error {
 		}
 		state.EndFrame()
 	}
-	ecs.AdvanceMessages(app.World)
+	app.World.AdvanceMessages()
 	return nil
 }
 
@@ -232,27 +232,27 @@ func (app *App) ensureECSResources() {
 		app.World = ecs.NewWorld()
 	}
 	app.ensureInputSystem()
-	if _, ok := ecs.GetResource[*input.State](app.World); !ok {
-		ecs.InsertResource(app.World, input.NewState())
+	if _, ok := app.World.GetResource[*input.State](); !ok {
+		app.World.InsertResource(input.NewState())
 	}
-	if state, ok := ecs.GetResource[*input.State](app.World); ok && state != nil && app.Context != nil {
+	if state, ok := app.World.GetResource[*input.State](); ok && state != nil && app.Context != nil {
 		if app.clipboardContext != app.Context || app.clipboardState != state {
 			state.SetClipboard(app.Context.SetClipboardText, app.Context.ClipboardText)
 			app.clipboardContext = app.Context
 			app.clipboardState = state
 		}
 	}
-	if _, ok := ecs.GetResource[*scene.Time](app.World); !ok {
-		ecs.InsertResource(app.World, scene.NewTime())
+	if _, ok := app.World.GetResource[*scene.Time](); !ok {
+		app.World.InsertResource(scene.NewTime())
 	}
-	if _, ok := ecs.GetResource[*scene.RenderRequest](app.World); !ok {
-		ecs.InsertResource(app.World, scene.NewRenderRequest(app.wakeLoop))
+	if _, ok := app.World.GetResource[*scene.RenderRequest](); !ok {
+		app.World.InsertResource(scene.NewRenderRequest(app.wakeLoop))
 	}
-	if fixedTime, ok := ecs.GetResource[*scene.FixedTime](app.World); ok && fixedTime != nil {
+	if fixedTime, ok := app.World.GetResource[*scene.FixedTime](); ok && fixedTime != nil {
 		app.fixedTime = fixedTime
 		return
 	}
-	ecs.InsertResource(app.World, app.ensureFixedTime())
+	app.World.InsertResource(app.ensureFixedTime())
 }
 
 func (app *App) ensureInputSystem() {
@@ -282,13 +282,13 @@ func processInputEventsWithHandlers(context *ecs.SystemContext, handlers map[inp
 	if context == nil || context.World == nil {
 		return nil
 	}
-	state, ok := ecs.GetResource[*input.State](context.World)
+	state, ok := context.World.GetResource[*input.State]()
 	if !ok || state == nil {
 		return nil
 	}
 	for _, event := range state.DrainEvents() {
 		state.ApplyEvent(event)
-		ecs.WriteMessage(context.World, event)
+		context.World.WriteMessage(event)
 		dispatch := input.Dispatch{Event: event}
 		for _, phase := range []input.Phase{input.PhaseGlobal, input.PhaseGUI, input.PhaseShortcut, input.PhaseUnhandled} {
 			dispatch.Phase = phase
@@ -305,7 +305,7 @@ func processInputEventsWithHandlers(context *ecs.SystemContext, handlers map[inp
 		}
 		if inputEvent, ok := scene.InputEventFromPlatform(event); ok {
 			inputEvent.Handled = dispatch.Handled
-			ecs.WriteMessage(context.World, inputEvent)
+			context.World.WriteMessage(inputEvent)
 		}
 	}
 	return nil
@@ -357,12 +357,12 @@ func (app *App) syncViewportState() {
 	canvas.SetRasterScale(rasterScale)
 	viewport := scene.ViewportSize{Width: float32(vw), Height: float32(vh), ScaleFactor: 1}
 	changed := false
-	if previous, ok := ecs.GetResource[scene.ViewportSize](app.World); !ok || previous != viewport {
-		ecs.InsertResource(app.World, viewport)
+	if previous, ok := app.World.GetResource[scene.ViewportSize](); !ok || previous != viewport {
+		app.World.InsertResource(viewport)
 		changed = true
 	}
-	if changed || app.cameraVersion != ecs.ComponentVersion[scene.Camera](app.World) {
-		for _, row := range ecs.Query[scene.Camera](app.World).All {
+	if changed || app.cameraVersion != app.World.ComponentVersion[scene.Camera]() {
+		for _, row := range app.World.Query[scene.Camera]().All {
 			access := row
 
 			camera := *access.Ref()
@@ -371,7 +371,7 @@ func (app *App) syncViewportState() {
 				*access.Mut() = camera
 			}
 		}
-		app.cameraVersion = ecs.ComponentVersion[scene.Camera](app.World)
+		app.cameraVersion = app.World.ComponentVersion[scene.Camera]()
 	}
 }
 
@@ -380,7 +380,7 @@ func (app *App) ecsInput() *input.State {
 		return nil
 	}
 	app.ensureECSResources()
-	state, _ := ecs.GetResource[*input.State](app.World)
+	state, _ := app.World.GetResource[*input.State]()
 	return state
 }
 

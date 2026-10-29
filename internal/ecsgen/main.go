@@ -34,9 +34,9 @@ func main() {
 		}
 		fmt.Fprintf(&source, "\n// %s iterates matching entities. Get and Ref do not mark changes; Mut does.\n", name)
 		fmt.Fprintln(&source, "// Access values and component pointers must not outlive the iteration.")
-		fmt.Fprintf(&source, "func %s[%s any](world *World, options ...QueryOption) QueryView%d[%s] {\nrequireWorld(world)\nids := [%d]componentID{", name, params, count, params, count)
+		fmt.Fprintf(&source, "func (world *World) %s[%s any](options ...QueryOption) QueryView%d[%s] {\nrequireWorld(world)\nids := [%d]componentID{", name, params, count, params, count)
 		for _, letter := range letters {
-			fmt.Fprintf(&source, "registerComponent[%s](world),", letter)
+			fmt.Fprintf(&source, "world.registerComponent[%s](),", letter)
 		}
 		fmt.Fprintf(&source, "}\nkey := simpleQueryKey{count: %d}\ncopy(key.ids[:], ids[:])\nreturn QueryView%d[%s]{view: buildQuery(world, key, options), ids: ids}\n}\n", count, count, params)
 		fmt.Fprintf(&source, "\n// QueryView%d retains a query plan and its filter snapshot. Range over All to iterate.\ntype QueryView%d[%s any] struct {\nview queryView\nids [%d]componentID\n}\n", count, count, params, count)
@@ -50,7 +50,7 @@ func main() {
 		}
 		fmt.Fprintln(&source, "for cursor.nextEntity() {\nif cursor.archetype != current {\ncurrent = cursor.archetype")
 		for index, letter := range letters {
-			fmt.Fprintf(&source, "%s = componentColumn[%s](current, v.ids[%d])\n", strings.ToLower(letter), letter, index)
+			fmt.Fprintf(&source, "%s = current.componentColumn[%s](v.ids[%d])\n", strings.ToLower(letter), letter, index)
 		}
 		fmt.Fprintln(&source, "}\nrow := cursor.row\nentity := cursor.archetype.entities[row]")
 		writeYield(&source, letters, count, params, false)
@@ -58,10 +58,10 @@ func main() {
 		fmt.Fprintln(&source, "for cursor.nextArchetype() {\nentities := cursor.archetype.entities")
 		for index, letter := range letters {
 			column := strings.ToLower(letter)
-			fmt.Fprintf(&source, "%s := componentColumn[%s](cursor.archetype, v.ids[%d])\n%sValues := %s.values\n", column, letter, index, column, column)
+			fmt.Fprintf(&source, "%s := cursor.archetype.componentColumn[%s](v.ids[%d])\n%sValues := %s.values\n", column, letter, index, column, column)
 		}
 		// Keep the unfiltered scan free of filter bookkeeping.
-		fmt.Fprintln(&source, "if v.view.filters.count == 0 {\nfor row := 0; row < len(entities); row++ {\nentity := entities[row]")
+		fmt.Fprintln(&source, "if v.view.filters.count == 0 && cursor.scopeTable == nil {\nfor row := 0; row < len(entities); row++ {\nentity := entities[row]")
 		writeYield(&source, letters, count, params, true)
 		fmt.Fprintln(&source, "}\ncontinue\n}")
 		source.WriteString("for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {\nfor row := start; row < end; row++ {\ncursor.row = row\nif !cursor.rowMatches() { continue }\nentity := entities[row]\n")
@@ -98,9 +98,9 @@ func writeSpawners(path string) {
 		fmt.Fprintln(&source, "}")
 		fmt.Fprintln(&source, "\n// Reserve preallocates the archetype and world metadata for capacity entities.")
 		fmt.Fprintf(&source, "func (s *%s[%s]) Reserve(capacity int) {\nif s != nil { s.plan.reserve(capacity) }\n}\n", name, params)
-		fmt.Fprintf(&source, "\nfunc New%s[%s any](world *World) %s[%s] {\n", name, params, name, params)
+		fmt.Fprintf(&source, "\nfunc (world *World) New%s[%s any]() %s[%s] {\n", name, params, name, params)
 		for _, letter := range letters {
-			fmt.Fprintf(&source, "%sID := registerComponent[%s](world)\n", strings.ToLower(letter), letter)
+			fmt.Fprintf(&source, "%sID := world.registerComponent[%s]()\n", strings.ToLower(letter), letter)
 		}
 		fmt.Fprintf(&source, "ids := [%d]componentID{", count)
 		for _, letter := range letters {
@@ -109,7 +109,7 @@ func writeSpawners(path string) {
 		fmt.Fprintf(&source, "}\nplan := newSpawnPlan(world, ids[:])\nreturn %s[%s]{plan: plan,\n", name, params)
 		for _, letter := range letters {
 			column := strings.ToLower(letter)
-			fmt.Fprintf(&source, "%s: componentColumn[%s](plan.archetype, %sID),\n", column, letter, column)
+			fmt.Fprintf(&source, "%s: plan.archetype.componentColumn[%s](%sID),\n", column, letter, column)
 		}
 		fmt.Fprintln(&source, "}\n}")
 		fmt.Fprintf(&source, "\nfunc (s *%s[%s]) Spawn(", name, params)
@@ -164,9 +164,9 @@ func writePatches(path string) {
 		fmt.Fprintf(&source, "\n// %s upserts typed values and removes other components in one migration.\n", name)
 		fmt.Fprintln(&source, "// Prepare once per world; copies share transitions. Inserted types take precedence over removals.")
 		fmt.Fprintf(&source, "type %s[%s any] struct { plan *patchPlan }\n", name, params)
-		fmt.Fprintf(&source, "func New%s[%s any](world *World, removed ...ComponentType) %s[%s] {\nrequireWorld(world)\nworld.assertStructuralMutationAllowed()\nids := [%d]componentID{", name, params, name, params, count)
+		fmt.Fprintf(&source, "func (world *World) New%s[%s any](removed ...ComponentType) %s[%s] {\nrequireWorld(world)\nworld.assertStructuralMutationAllowed()\nids := [%d]componentID{", name, params, name, params, count)
 		for _, letter := range letters {
-			fmt.Fprintf(&source, "registerComponent[%s](world),", letter)
+			fmt.Fprintf(&source, "world.registerComponent[%s](),", letter)
 		}
 		fmt.Fprintf(&source, "}\nreturn %s[%s]{plan: newPatchPlan(world, ids[:], removed)}\n}\n", name, params)
 		fmt.Fprintf(&source, "\n// Reserve prepares populated or preallocated source tables and reserves their migration targets.\nfunc (p %s[%s]) Reserve(capacity int) { p.plan.reserve(capacity) }\n", name, params)
@@ -174,11 +174,11 @@ func writePatches(path string) {
 		fmt.Fprintln(&source, "// Cleanup hooks run before any writes; warmed transitions and capacities allocate nothing.")
 		fmt.Fprintf(&source, "func (p %s[%s]) Apply(entity Entity, %s) error {\nrow, err := p.plan.begin(entity)\nif err != nil { return err }\n", name, params, args)
 		for index, value := range values {
-			fmt.Fprintf(&source, "writePatchColumn(row, %d, %s)\n", index, value)
+			fmt.Fprintf(&source, "row.writePatchColumn(%d, %s)\n", index, value)
 		}
 		fmt.Fprintln(&source, "p.plan.finish(row)\nreturn nil\n}")
 		fmt.Fprintln(&source, "\n// Queue copies typed values into reusable command storage for deferred application.")
-		fmt.Fprintf(&source, "func (p %s[%s]) Queue(commands *Commands, entity Entity, %s) {\nqueuePatch(commands, entity, p.plan, patchCommand%d[%s]{patch: p, ", name, params, args, count, params)
+		fmt.Fprintf(&source, "func (p %s[%s]) Queue(commands *Commands, entity Entity, %s) {\ncommands.queuePatch(entity, p.plan, patchCommand%d[%s]{patch: p, ", name, params, args, count, params)
 		for _, value := range values {
 			fmt.Fprintf(&source, "%s: %s,", value, value)
 		}
@@ -192,7 +192,7 @@ func writePatches(path string) {
 		if count > 1 {
 			fmt.Fprintf(&source, "type patchCache%d[%s any] struct{}\n", count, params)
 			fmt.Fprintln(&source, "\n// Insert"+fmt.Sprint(count)+" upserts values together, reusing a world-local patch plan.")
-			fmt.Fprintf(&source, "func Insert%d[%s any](world *World, entity Entity, %s) error {\np := FrameValue[patchCache%d[%s], %s[%s]](world)\nif p.plan == nil { *p = New%s[%s](world) }\nreturn p.Apply(entity, %s)\n}\n", count, params, args, count, params, name, params, name, params, vals)
+			fmt.Fprintf(&source, "func (world *World) Insert%d[%s any](entity Entity, %s) error {\np := world.FrameValue[patchCache%d[%s], %s[%s]]()\nif p.plan == nil { *p = world.New%s[%s]() }\nreturn p.Apply(entity, %s)\n}\n", count, params, args, count, params, name, params, name, params, vals)
 		}
 	}
 	writeSource(path, source.Bytes())

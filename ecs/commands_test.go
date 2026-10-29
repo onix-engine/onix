@@ -4,18 +4,18 @@ import "testing"
 
 func TestCommandSpawnReusesAndClearsStorage(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	spawner.Reserve(1)
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{X: 1})
+	bundle.Put(testPosition{X: 1})
 	prepared := world.PrepareBundle(bundle)
 	for _, usePrepared := range []bool{false, true} {
 		run := func() {
 			var entity Entity
 			if usePrepared {
-				entity = CommandSpawnPrepared(world.Commands(), prepared)
+				entity = world.Commands().SpawnPrepared(prepared)
 			} else {
-				entity = CommandSpawn(world.Commands(), bundle)
+				entity = world.Commands().Spawn(bundle)
 			}
 			if err := world.FlushCommands(); err != nil {
 				t.Fatal(err)
@@ -62,29 +62,29 @@ func TestCommandStreamsReactivateAfterPartialRollback(t *testing.T) {
 	entity := world.Spawn(NewBundle(0))
 	commands := world.Commands()
 	value := 7
-	patch := NewPatch1[*int](world)
-	CommandInsert(commands, entity, testName{Value: "kept"})
+	patch := world.NewPatch1[*int]()
+	commands.Insert(entity, testName{Value: "kept"})
 	checkpoint := commands.checkpoint()
 	patch.Queue(commands, entity, &value)
-	CommandInsert(commands, entity, &value)
+	commands.Insert(entity, &value)
 	commands.discardFrom(checkpoint)
 	if len(commands.activeStreams) != 1 {
 		t.Fatal("rollback retained empty streams or lost the preceding stream")
 	}
-	stream := insertCommandStreamFor[*int](commands)
+	stream := commands.insertCommandStreamFor[*int]()
 	for _, pointer := range stream.values[:cap(stream.values)] {
 		if pointer != nil {
 			t.Fatal("rollback retained a pointer payload")
 		}
 	}
 	// Removal commands need a dispatch stream but own no queued values.
-	CommandRemove[testVelocity](commands, entity)
+	commands.Remove[testVelocity](entity)
 	if len(commands.activeStreams) != 1 {
 		t.Fatal("value-free removal activated a value stream")
 	}
 	for range 3 {
 		patch.Queue(commands, entity, &value)
-		CommandInsert(commands, entity, &value)
+		commands.Insert(entity, &value)
 	}
 	if len(commands.activeStreams) != 3 {
 		t.Fatal("reactivation duplicated or omitted a stream")
@@ -92,7 +92,7 @@ func TestCommandStreamsReactivateAfterPartialRollback(t *testing.T) {
 	if err := world.FlushCommands(); err != nil {
 		t.Fatal(err)
 	}
-	if len(commands.activeStreams) != 0 || GetRef[testName](world, entity).Value != "kept" || *GetRef[*int](world, entity) != &value {
+	if len(commands.activeStreams) != 0 || world.GetRef[testName](entity).Value != "kept" || *world.GetRef[*int](entity) != &value {
 		t.Fatal("flush lost retained values or failed to reset the active streams")
 	}
 	for _, pointer := range stream.values[:cap(stream.values)] {
@@ -101,7 +101,7 @@ func TestCommandStreamsReactivateAfterPartialRollback(t *testing.T) {
 		}
 	}
 	run := func() {
-		CommandInsert(commands, entity, &value)
+		commands.Insert(entity, &value)
 		checkpoint := commands.checkpoint()
 		patch.Queue(commands, entity, &value)
 		commands.discardFrom(checkpoint)
@@ -117,14 +117,14 @@ func TestCommandStreamsReactivateAfterPartialRollback(t *testing.T) {
 
 func TestEmptyCommandFlushKeepsStructuralGuards(t *testing.T) {
 	world := NewWorld()
-	spawn := NewSpawner1[testPosition](world)
+	spawn := world.NewSpawner1[testPosition]()
 	entity := spawn.Spawn(testPosition{})
 	assertRemovalPanic(t, func() {
-		for range Query[testPosition](world).All {
+		for range world.Query[testPosition]().All {
 			_ = world.FlushCommands()
 		}
 	})
-	OnComponentRemove[testPosition](world, func(w *World, _ Entity, _ *testPosition) {
+	world.OnComponentRemove[testPosition](func(w *World, _ Entity, _ *testPosition) {
 		assertRemovalPanic(t, func() { _ = w.FlushCommands() })
 	})
 	world.Despawn(entity)
@@ -139,16 +139,16 @@ func TestCommandValueStreamsRecoverAfterFailedFlush(t *testing.T) {
 		entity := world.Spawn(NewBundle(0))
 		commands := world.Commands()
 		value := 42
-		patch := NewPatch1[*int](world)
+		patch := world.NewPatch1[*int]()
 		if panics {
 			bundle := NewBundle(1)
-			PutEntity(&bundle, func(Entity) testPosition { panic("build failed") })
-			CommandSpawn(commands, bundle)
+			bundle.PutEntity(func(Entity) testPosition { panic("build failed") })
+			commands.Spawn(bundle)
 		} else {
-			CommandInsert(commands, Entity(0), testPosition{})
+			commands.Insert(Entity(0), testPosition{})
 		}
 		patch.Queue(commands, entity, &value)
-		CommandInsert(commands, entity, &value)
+		commands.Insert(entity, &value)
 		func() {
 			defer func() {
 				if got := recover(); (got != nil) != panics {
@@ -159,16 +159,16 @@ func TestCommandValueStreamsRecoverAfterFailedFlush(t *testing.T) {
 				t.Fatal("expected failed flush")
 			}
 		}()
-		if len(commands.activeStreams) != 0 || Has[*int](world, entity) {
+		if len(commands.activeStreams) != 0 || world.Has[*int](entity) {
 			t.Fatal("failed flush retained streams or applied pending writes")
 		}
-		stream := insertCommandStreamFor[*int](commands)
+		stream := commands.insertCommandStreamFor[*int]()
 		for _, pointer := range stream.values[:cap(stream.values)] {
 			if pointer != nil {
 				t.Fatal("failed flush retained an insert payload")
 			}
 		}
-		patchStream := commandStreamFor(commands, func() *valueCommandStream[patchCommand1[*int]] {
+		patchStream := commands.commandStreamFor(func() *valueCommandStream[patchCommand1[*int]] {
 			return &valueCommandStream[patchCommand1[*int]]{}
 		})
 		for _, command := range patchStream.values[:cap(patchStream.values)] {
@@ -177,8 +177,8 @@ func TestCommandValueStreamsRecoverAfterFailedFlush(t *testing.T) {
 			}
 		}
 		patch.Queue(commands, entity, &value)
-		CommandInsert(commands, entity, &value)
-		if err := world.FlushCommands(); err != nil || *GetRef[*int](world, entity) != &value {
+		commands.Insert(entity, &value)
+		if err := world.FlushCommands(); err != nil || *world.GetRef[*int](entity) != &value {
 			t.Fatalf("reactivation after failed flush: %v", err)
 		}
 	}
@@ -190,14 +190,14 @@ func TestCommandStorageRecycledAfterFailure(t *testing.T) {
 		commands := world.Commands()
 		if panics {
 			bundle := NewBundle(1)
-			PutEntity(&bundle, func(Entity) testPosition { panic("build failed") })
-			CommandSpawn(commands, bundle)
+			bundle.PutEntity(func(Entity) testPosition { panic("build failed") })
+			commands.Spawn(bundle)
 		} else {
-			CommandInsert(commands, Entity(0), testPosition{})
+			commands.Insert(Entity(0), testPosition{})
 		}
 		bundle := NewBundle(1)
-		Put(&bundle, testPosition{})
-		reserved := CommandSpawn(commands, bundle)
+		bundle.Put(testPosition{})
+		reserved := commands.Spawn(bundle)
 		func() {
 			defer func() {
 				if value := recover(); (value != nil) != panics {
@@ -212,7 +212,7 @@ func TestCommandStorageRecycledAfterFailure(t *testing.T) {
 		if world.IsAlive(reserved) || world.EntityCount() != 0 {
 			t.Fatal("failed flush retained a reserved entity")
 		}
-		entity := CommandSpawn(commands, bundle)
+		entity := commands.Spawn(bundle)
 		if err := world.FlushCommands(); err != nil || !world.IsAlive(entity) {
 			t.Fatalf("flush after failure: alive=%v err=%v", world.IsAlive(entity), err)
 		}
@@ -221,13 +221,13 @@ func TestCommandStorageRecycledAfterFailure(t *testing.T) {
 
 func BenchmarkCommandSpawnPreparedRecycled(b *testing.B) {
 	world := NewWorld()
-	spawner := NewSpawner1[benchmarkPosition](world)
+	spawner := world.NewSpawner1[benchmarkPosition]()
 	spawner.Reserve(1)
 	bundle := NewBundle(1)
-	Put(&bundle, benchmarkPosition{})
+	bundle.Put(benchmarkPosition{})
 	prepared := world.PrepareBundle(bundle)
 	run := func() {
-		entity := CommandSpawnPrepared(world.Commands(), prepared)
+		entity := world.Commands().SpawnPrepared(prepared)
 		if err := world.FlushCommands(); err != nil {
 			b.Fatal(err)
 		}

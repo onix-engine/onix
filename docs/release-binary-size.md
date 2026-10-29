@@ -1,5 +1,69 @@
 # Release binary size
 
+## Flappy Bird module profiles (2026-10-29)
+
+Measured on Linux amd64 with Go 1.27.3, the standard Portable release builder,
+`onix_release`, `-trimpath`, and `-s -w`. These measurements use the current
+module-based Flappy Bird example and are separate from the historical sample
+below. All values are bytes; unpacked totals sum regular file lengths.
+
+| Artifact | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| Linux tar.gz | 10,782,136 | 2,971,655 | 72.44% |
+| Unpacked application | 22,778,563 | 7,664,881 | 66.35% |
+| Executable | 11,934,000 | 7,361,840 | 38.31% |
+| base.dat | 10,841,940 | 300,420 | 97.23% |
+| UI font | 10,559,284 | 17,764 | 99.83% |
+| ELF .text | 5,547,420 | 3,027,100 | 45.43% |
+| ELF .gopclntab | 3,943,157 | 2,451,380 | 37.83% |
+| ELF .go.type | 1,512,528 | 1,067,504 | 29.42% |
+
+At the time of these measurements, module creation selected `module.Render2D`,
+an animation profile, or `module.FullContent`. The current API composes additions
+with `module.WithContent[P, F]`, for example
+`module.WithContent[module.Render2D, module.AnimationsContent]`, through
+`module.New[P]` / `app.LoadModules[P]`. The size figures above predate that
+composition change. Generation
+uses the project's required runtime features for the `OnixContentProfile` alias.
+The selected lifecycle includes component construction, async preload, layout,
+deformation, upload collection, HTML input metadata and cleanup. Unsupported
+components fail explicitly instead of falling back to the full loader.
+
+Optional systems register their idle counters and shutdown/input callbacks when
+installed. The generic app loop and Destroy no longer retain all HTML, Spine,
+physics ECS and 3D implementations. Module-specific model, animation, HTML,
+rig and particle caches are allocated only when used. FullContent uses the same
+2D component builders as the minimal profiles.
+
+The final Flappy Bird binary contains no ui/html, Spine or scene/render3d text
+symbols. Its private simulation directly uses the physics World; approximately
+58 KiB of physics machine code remains an actual game dependency. Tiny HTML
+style/layout helpers and type metadata may remain through shared data types.
+Package-level import membership is not a measure of linked machine code.
+
+The example font is an ASCII/nonbreaking-space subset of the original Noto Sans
+SC font, with the original license and font metadata retained. All printable
+ASCII glyph outlines, advances and line metrics are compared against the source
+font by a headless test. Regeneration is documented beside the font. Image and
+atlas aliases remain deduplicated; the final DAT has 7 logical resources and
+5 unique contents.
+
+Validation covered the root app, project, module, module/audio, Flappy Bird and
+its simulation, 2048, Pelican and Spine package tests; editor module/build and CLI
+checks; profile rejection and cleanup; async preload; zero-allocation warm
+Flappy Bird routing; and generated release linking with forbidden optional
+implementation symbols. Packaged resource hashes/checksums passed. A diagnostic
+build with the identical native resource overlay had byte-identical .text and
+identical shared ELF section sizes. Visual acceptance was not run.
+
+The WebView example's existing `TestWebViewModuleOwnsPageBoundsBridgeAndLifecycle`
+fails with "suspended browser remained visible". It also fails with the original
+HEAD sources restored through a read-only Go overlay; it is not attributed to
+this change. Editor tests change HOME, so independent build tests were run with
+explicit GOMODCACHE, GOPATH and GOCACHE pointing to the existing toolchain caches.
+
+## Historical measurements
+
 Historical measurements from 2026-09-30 used Go 1.26.0 on Linux amd64 and MinGW-w64
 for Windows amd64. A small independent 2D game used the same resources, toolchain,
 `onix_release`, `-trimpath`, and `-s -w` throughout. Windows measurements include

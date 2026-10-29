@@ -46,7 +46,9 @@ Desktop uses resource directories plus compile overlays; Web preloads catalogs/p
 
 ## Mounting and scheduling
 
-CompileProject, CompileProjectDirectory and CreateProjectDirectory produce immutable-lifetime ProjectPlan/ScenePlan/ModPlan data. Compilation validates JSON/types/defaults and resolves indexes. App.LoadModules does not open a window. Source must match the compilation root. Headless logic can use module.New directly; normal entries configure a window and call Run. OnixOpenWindow applies project window metadata; OnixModuleOptions supplies private resources and static decoders.
+CompileProject, CompileProjectDirectory and CreateProjectDirectory produce immutable-lifetime ProjectPlan/ScenePlan/ModPlan data. Compilation validates JSON/types/defaults and resolves indexes. app.LoadModules[P] does not open a window. Source must match the compilation root. Headless logic can use module.New[P] directly; normal entries configure a window and call Run. OnixOpenWindow applies project window metadata; OnixModuleOptions supplies private resources and static decoders.
+
+The required content profile is selected at the generic loading boundary. Generated projects use `OnixContentProfile`: `module.Render2D` for sprites/text/materials/2D cameras, composed with `module.WithContent[P, F]` for additional capabilities. For example, `module.WithContent[module.Render2D, module.AnimationsContent]` adds animations. Other capabilities are `LayoutContent`, `TrailsContent`, `HTMLContent`, `ParticlesContent`, `TilemapsContent`, `SpineContent`, `Physics2DContent` and `SpatialContent` (models, cameras, lights and 3D physics). Nest `WithContent` to combine capabilities; duplicate capabilities are installed once. `module.FullContent` explicitly selects all capabilities. The profile controls component loading, preload preparation, uploads, input metadata and cleanup. Unsupported authored components return an error. Optional ECS content created only by Go behavior code must declare its required systems in `engine.features` so generation selects matching systems and content support. Calling a standalone library, such as a private physics World, does not require installing its ECS system. Regenerate project bindings after changing features. Select the profile with `app.LoadModules[OnixContentProfile](...)`; direct runtime hosts use `module.New[P](...)`.
 
 App.Modules exposes the orchestration Runtime. LoadModules starts the entry through Manager.StartEntry, completing budgeted startup before Active. Manager.Switch queues work for the next Dispatch structural boundary. Direct MountEntry/Mount APIs create independently scoped/generation-tracked active scenes for tools/tests; games normally use Manager. Dispose destroys instances; App.Destroy closes the runtime.
 
@@ -66,13 +68,13 @@ OpenResource accepts a declared private resource name; OpenFile accepts a privat
 
 Send/Emit/request/Reply always queue. Dispatch freezes a batch and callback-generated messages enter the next batch. BindEmitter[T] resolves reusable typed storage during Install. Topic names the message and From is the original instance ID, empty for scenes/untargeted keyboard input. Addressing stays within the current scene instance; unknown/destroyed targets return ErrUnavailable, disabled targets ignore delivery. Receivers handle unknown topics/type mismatches explicitly.
 
-Scene Forward directly transfers the current borrowed payload during delivery, preserving From; ForwardAs additionally renames the topic. Module Forward queues for the next batch. Forward is valid only inside current OnMessage, and requests forward to at most one target. Message/Value borrows expire with the callback. Pointer/slice payloads must remain immutable until delivery finishes. No message JSON codec or reflective dispatch is involved. Applications send via SceneEmitter[T].
+Scene Forward directly transfers the current borrowed payload during delivery, preserving From; ForwardAs additionally renames the topic. Module Forward queues for the next batch. Forward is valid only inside current OnMessage, and requests forward to at most one target. Message/Value borrows expire with the callback. Pointer/slice payloads must remain immutable until delivery finishes. No message JSON codec or reflective dispatch is involved. Applications send via Scene.Emitter[T].
 
 Input first reaches the owning scene's OnMessage under InputTopic with module.Input. Raw Entity/Path are cleared; Target retains ownership and Element/HTML fields preserve semantics. There is no automatic module Input hook or input.emit dispatch. Scenes explicitly forward keyboard input or translate clicks into domain messages. Collision emit names likewise route to the scene for orchestration.
 
 ## Slots and requests
 
-ReadSlot[T] decodes registered values. Set mutates only owned slots, increments revisions and notifies only when values change. SlotValue.Fields is an immutable borrow; write with Set. Slot roots are owned private handles. UI content/slots default to top-left anchors independently from placement.
+Slot.Read[T] decodes registered values. Set mutates only owned slots, increments revisions and notifies only when values change. SlotValue.Fields is an immutable borrow; write with Set. Slot roots are owned private handles. UI content/slots default to top-left anchors independently from placement.
 
 Application SlotWriter queues built-in writes for the next ModuleEvents batch, validating writable/type/liveness/capacity. Structured payloads copy into type-reserved storage, so later caller mutation cannot change queued data; alternating structure types stays warm allocation-free. Modules cannot obtain foreign writers and must ask receivers through messages.
 
@@ -96,7 +98,7 @@ Default switching destroys the source. Retain keeps behavior/slots/leases, hides
 
 Manager.Preload synchronously installs, dispatches startup, lays out HTML, updates transforms and warms static text without a window, leaving Ready outside normal updates/rendering. Foreground queues, requests and clock survive. Activate can start without a current scene; StartEntry reuses preloaded entry instances. Dispose discards a preload. Enter runs before first activation; Resume before restoration; their preparation messages can fail commit. Preload startup has empty From, while Enter/Resume receive the actual source/activation data. Exit then Suspend run when leaving retained foreground; Destroy runs finally. Business side effects of hooks are not transactionally rolled back.
 
-A structural/hierarchy traversal builds logic scope, rendering scope, full scene ownership, per-module entity lists and parent adjacency, including generated HTML/scroll descendants. Ready/hidden Suspended scenes leave ordinary queries; overlay backgrounds enter render scope only. Stable scopes/caches reuse storage. ContentQuery/ContentQuery2 iterate owned lists; cached ownership avoids repeated parent walks. Direct Get/Set, explicit Query.In and Runtime.Mount are ownership/loading tools rather than replacements for Manager scheduling.
+A structural/hierarchy traversal builds logic scope, rendering scope, full scene ownership, per-module entity lists and parent adjacency, including generated HTML/scroll descendants. Ready/hidden Suspended scenes leave ordinary queries; overlay backgrounds enter render scope only. Stable scopes/caches reuse storage. Content.Query/Content.Query2 iterate owned lists; cached ownership avoids repeated parent walks. Direct Get/Set, explicit Query.In and Runtime.Mount are ownership/loading tools rather than replacements for Manager scheduling.
 
 Existing component replacements are in-place. New components, Content.Spawn/SpawnNode variants, reparent/remove/destroy defer until traversal ends. Standalone queries commit on exit; nested queries share outer boundaries; queries inside Update/OnMessage commit at runtime batch boundaries. New entities can initialize within the batch but do not enter its active query. Typed command storage and prepared bundles reuse warm capacity. Command overflow returns ErrCommandFull; commit errors on query exit panic.
 
@@ -104,7 +106,7 @@ Foreground and preparation use independent double-buffered typed payload storage
 
 ## Validation scope
 
-Default content covers private sprites/text, images/atlases, animation, HTML, Spine, particles, models, cameras and physics; generated Options.Resources chooses decoders. Options.Content can replace the installer. Examples are external and communicate through domain messages rather than implementation imports.
+The selected content profile covers private authored components; `module.FullContent` includes sprites/text, images/atlases, animation, HTML, Spine, particles, models, cameras and physics. Generated `Options.Resources` chooses decoders. Behaviors can create private components through the Content APIs; their selected profile must cover the required preparation and cleanup. Examples communicate through domain messages rather than implementation imports.
 
 Recorded warm allocation tests cover events, ordinary/structured slots, alternating structures, requests, updates, visual leases/replacement, cached font requests and complete font/button frame chains. Loading, entity creation, type registration, reservation, first glyphs and new capacity remain cold. Use explicit package lists for headless validation; do not run all repository tests or editor screenshots.
 
@@ -169,7 +171,7 @@ plan, err := project.CreateProjectDirectory(directory, project.CreateProjectOpti
 
 ```go
 app := onix.NewApp()
-entry, err := app.LoadModules(plan, registry, module.Options{
+entry, err := app.LoadModules[module.FullContent](plan, registry, module.Options{
     Source: os.DirFS("."),
     EventCapacity: 256,
     RequestCapacity: 128,
@@ -184,7 +186,7 @@ registry, err := OnixRegistry()
 app := onix.NewApp()
 if err := OnixInstallSystems(app); err != nil { panic(err) }
 if err := OnixOpenWindow(app, plan.Spec, source); err != nil { panic(err) }
-_, err = app.LoadModules(plan, registry, OnixModuleOptions(source))
+_, err = app.LoadModules[OnixContentProfile](plan, registry, OnixModuleOptions(source))
 ```
 
 ```go
@@ -200,16 +202,16 @@ func (m *Mod) Install(c *module.Context) error {
 
 ```go
 // Send by instance ID from any callback; module.SceneTarget addresses the current scene.
-err := module.Send(c, "status", "setText", "Ready")
+err := c.Send("status", "setText", "Ready")
 
 // Bind frequent emitters once in Install; generic double buffers store typed payloads.
-changed, err := module.BindEmitter[int64](c, "changed")
+changed, err := c.BindEmitter[int64]("changed")
 err = changed.EmitTo("simulation", 1)
 err = changed.Emit(1) // Deliver to the current scene.
 
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
     if message.Topic != "setText" { return nil }
-    value, ok := module.Value[string](message)
+    value, ok := message.Value[string]()
     if !ok { return module.ErrType }
     return m.text.Set(project.SlotValue{Type: project.StringValue, String: value})
 }
@@ -218,10 +220,10 @@ func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
 ```go
 func (m *Main) OnMessage(c *module.Context, message module.Message) error {
     if message.Topic != module.InputTopic { return nil }
-    value, ok := module.Value[module.Input](message)
+    value, ok := message.Value[module.Input]()
     if !ok { return module.ErrType }
     if message.From == "start" && value.Event.Kind == scene.InputEventTap {
-        return module.Send(c, "simulation", "start", module.Signal{})
+        return c.Send("simulation", "start", module.Signal{})
     }
     // The scene explicitly chooses modules that receive keyboard input.
     if message.From == "" { return c.Forward("keyboard", message) }
@@ -231,19 +233,19 @@ func (m *Main) OnMessage(c *module.Context, message module.Message) error {
 
 ```go
 // Bind types in requester Install; no port, reply callback or route configuration is needed.
-requester, err := module.BindRequester[string, int64](c, "length")
+requester, err := c.BindRequester[string, int64]("length")
 id, err := requester.SendTo("service", "hello", module.RequestOptions{TimeoutTicks: 120})
 
 // Inside the service OnMessage:
 if message.IsRequest() && message.Topic == "length" {
-    request, ok := module.RequestValue[string, int64](message)
+    request, ok := message.RequestValue[string, int64]()
     if !ok { return module.ErrType }
     return request.Reply(c, int64(len(request.Value)))
 }
 
 // Inside the requester OnMessage:
 if message.IsReply() && message.Topic == "length" {
-    result, ok := module.ResultValue[int64](message)
+    result, ok := message.ResultValue[int64]()
     if !ok { return module.ErrType }
     if result.Err != nil { return result.Err }
     // result.ID and result.Value belong to this request.

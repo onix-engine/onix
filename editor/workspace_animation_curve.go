@@ -58,7 +58,7 @@ func (a *ModuleEditor) renderAnimationCurvePopup(b *editorVNodeView) {
 	case "texture":
 		a.renderAnimationSequenceCurve(b, clip.TextureTracks[s.Track])
 	case "bool":
-		renderAnimationStepTransition(a, b, s, clip.BoolTracks)
+		a.renderAnimationStepTransition(b, s, clip.BoolTracks)
 	}
 	if a.dialogError != "" {
 		b.text("p", "error", a.dialogError, "class", "danger", "role", "alert")
@@ -90,7 +90,7 @@ func editableAnimationCurve(s *workspaceAnimation, clip *project.AnimationClipSp
 		return &track.TimeTween, &track.TimeCurve, nil
 	}
 	if s.Kind == "float" {
-		keys, err := animationKeys(s, clip.FloatTracks)
+		keys, err := s.animationKeys(clip.FloatTracks)
 		if err == nil && s.Key >= 0 && s.Key < len(keys) {
 			return &keys[s.Key].Tween, &keys[s.Key].Curve, nil
 		}
@@ -125,7 +125,7 @@ func (a *ModuleEditor) renderAnimationBezierControls(b *editorVNodeView, curve s
 	b.close()
 }
 
-func renderAnimationStepTransition[T any](a *ModuleEditor, b *editorVNodeView, s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) {
+func (a *ModuleEditor) renderAnimationStepTransition[T any](b *editorVNodeView, s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) {
 	keys := tracks[s.Track].Keyframes
 	b.text("p", "interval", fmt.Sprintf("Interval: %g → %g s", keys[s.Key].Time, keys[s.Key+1].Time))
 	b.text("p", "discrete", "This track switches values at keyframes and uses Step interpolation.")
@@ -269,10 +269,10 @@ func (a *ModuleEditor) updateAnimationCurveFocus(in *input.State) {
 		return
 	}
 	s := &a.animation
-	focus, _ := ecs.GetResource[*scene.InputFocus](a.world)
+	focus, _ := a.world.GetResource[*scene.InputFocus]()
 	tab := in.KeyPressed(input.KeyTab) && !in.KeyHeld(input.KeyLeftControl) && !in.KeyHeld(input.KeyRightControl) && !in.KeyHeld(input.KeyLeftAlt) && !in.KeyHeld(input.KeyRightAlt)
 	if !tab && focus != nil {
-		if target := ecs.GetRef[htmlui.Focusable](a.world, focus.Keyboard); target != nil && target.Owner == a.shell {
+		if target := a.world.GetRef[htmlui.Focusable](focus.Keyboard); target != nil && target.Owner == a.shell {
 			switch target.ID {
 			case "animation:close-curve", "animation:save-curve", "animation:tween", "animation:custom-curve", "animation:x1", "animation:y1", "animation:x2", "animation:y2", "animation:inTangent", "animation:outTangent", "animation:handle:1", "animation:handle:2":
 				s.CurveFocus = focus.Keyboard

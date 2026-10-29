@@ -85,7 +85,7 @@ func editorWelcomeDefinitions() (*html.Definition[welcomeComponentProps, welcome
 					count := min(len(props.Rows), len(children))
 					for index := 0; index < count; index++ {
 						row := props.Rows[index]
-						children[index] = html.ComponentChild(uint64(index), welcomeRowDefinition, welcomeRecentProjectProps{
+						children[index] = welcomeRowDefinition.ComponentChild(uint64(index), welcomeRecentProjectProps{
 							Index: index, Panel: props.Panel, Row: row.Rect, RemoveRect: row.RemoveRect, Path: row.Path,
 						}, struct{}{})
 					}

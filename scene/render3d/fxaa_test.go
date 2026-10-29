@@ -23,7 +23,7 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	t.Cleanup(func() { _ = state.Dispose() })
 	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: 320, Height: 240, Depth: true})
 	if err != nil {
@@ -33,10 +33,10 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 	b := ecs.NewBundle(4)
 	camera := scene.NewCamera()
 	camera.Viewport = scene.CameraViewport{X: 24, Y: 16, Width: 160, Height: 120}
-	ecs.Put(&b, camera)
-	ecs.Put(&b, Camera{FXAA: true, SSAO: NewSSAOSettings(), SSR: NewSSRSettings(), Fog: NewFogSettings(), ToneMapping: graphics.ToneMappingACES, Target: target})
-	ecs.Put(&b, scene.PerspectiveProjection3D())
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(camera)
+	b.Put(Camera{FXAA: true, SSAO: NewSSAOSettings(), SSR: NewSSRSettings(), Fog: NewFogSettings(), ToneMapping: graphics.ToneMappingACES, Target: target})
+	b.Put(scene.PerspectiveProjection3D())
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	entity := world.Spawn(b)
 	mesh := graphics.CubeMesh(.5)
 	t.Cleanup(func() { _ = mesh.Dispose() })
@@ -54,9 +54,9 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 			material.Shader = shader
 		}
 		b = ecs.NewBundle(3)
-		ecs.Put(&b, Mesh{Mesh: mesh})
-		ecs.Put(&b, Material[graphics.StandardMaterial]{Material: material})
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -3)})
+		b.Put(Mesh{Mesh: mesh})
+		b.Put(Material[graphics.StandardMaterial]{Material: material})
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -3)})
 		world.Spawn(b)
 	}
 	ctx := &ecs.SystemContext{World: world}
@@ -94,7 +94,7 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 		t.Fatal("final composite erased color or did not release scene depth")
 	}
 	// Transparent overlay cameras always clear their private source to zero.
-	cameraSettings := ecs.GetMut[scene.Camera](world, entity)
+	cameraSettings := world.GetMut[scene.Camera](entity)
 	cameraSettings.Clear = false
 	reset()
 	frame()
@@ -108,7 +108,7 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 	if allocations := testing.AllocsPerRun(100, frame); allocations != 0 {
 		t.Fatalf("complete FXAA/SSAO/SSR frame allocated %g times", allocations)
 	}
-	settings := ecs.GetMut[Camera](world, entity)
+	settings := world.GetMut[Camera](entity)
 	settings.Target = nil
 	for range 5 {
 		frame()
@@ -141,10 +141,10 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 	camera = scene.NewCamera()
 	camera.Order, camera.Clear = 1, false
 	camera.Viewport = scene.CameraViewport{X: 220, Y: 16, Width: 100, Height: 120}
-	ecs.Put(&b, camera)
-	ecs.Put(&b, Camera{FXAA: true, Target: target})
-	ecs.Put(&b, scene.PerspectiveProjection3D())
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(camera)
+	b.Put(Camera{FXAA: true, Target: target})
+	b.Put(scene.PerspectiveProjection3D())
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	second := world.Spawn(b)
 	reset()
 	frame()
@@ -154,7 +154,7 @@ func TestFXAACompleteCameraPhasesReuseAndLifecycle(t *testing.T) {
 	}
 	world.Despawn(second)
 	frame()
-	settings = ecs.GetMut[Camera](world, entity)
+	settings = world.GetMut[Camera](entity)
 	before := driver.destroyed
 	view.frame.Mode = render.RenderViewPicking
 	if err := setupViewLighting3D(world, state, view, entity); err != nil {

@@ -35,7 +35,22 @@ type Canvas2D struct {
 	material2DShader *Material2DShader
 	material2DCustom [4][4]float32
 	shapes           []render.ShapeInstance2D
+	retained         []any
 	scratch          scratchValues
+}
+
+// RetainUntilFlush keeps a resource owner alive while its draw commands are
+// queued on the CPU. Drivers retire submitted resources after GPU completion.
+func (canvas *Canvas2D) RetainUntilFlush[T comparable](value T) {
+	if canvas == nil {
+		return
+	}
+	if n := len(canvas.retained); n > 0 {
+		if last, ok := canvas.retained[n-1].(T); ok && last == value {
+			return
+		}
+	}
+	canvas.retained = append(canvas.retained, value)
 }
 
 var canvas2DContext *Canvas2D
@@ -355,6 +370,8 @@ func (c *Canvas2D) DrawFrame() {
 	}
 	c.finishSpriteDraw()
 	if len(c.draws) == 0 && len(c.shapes) == 0 {
+		clear(c.retained)
+		c.retained = c.retained[:0]
 		return
 	}
 	driver := c.device.Driver()
@@ -390,6 +407,8 @@ func (c *Canvas2D) resetDrawBatch() {
 	c.draws = c.draws[:0]
 	c.drawStart = 0
 	c.shapes = c.shapes[:0]
+	clear(c.retained)
+	c.retained = c.retained[:0]
 }
 
 // DrawMeshes flushes pending 2D work and submits a 3D render phase into the

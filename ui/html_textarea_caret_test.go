@@ -36,7 +36,7 @@ func TestHTMLTextareaCaretRespectsWhiteSpaceWrapping(t *testing.T) {
 			html := htmlui.New(`<textarea id="ed" style="` + initialStyle + `">` + value + `</textarea>`)
 			html.Width, html.Height, html.Font = 220, 820, notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, html)
+			bundle.Put(html)
 			owner := world.Spawn(bundle)
 			verify := func(wrap bool) {
 				t.Helper()
@@ -47,7 +47,7 @@ func TestHTMLTextareaCaretRespectsWhiteSpaceWrapping(t *testing.T) {
 				}
 				control := htmlControlByID(t, world, owner, "ed")
 				entity, _ := htmlTextareaValueText(t, world, control)
-				text := ecs.GetMut[scene.Text2D](world, entity)
+				text := world.GetMut[scene.Text2D](entity)
 				caret := strings.IndexByte(value, '\n') + 1 + len("second")
 				x, y, _, height, ok := scene.TextCaretRect2D(text, value, caret)
 				if !ok || math.Abs(float64(height-21.45)) > 0.01 {
@@ -85,7 +85,7 @@ func TestHTMLTextareaCaretRespectsWhiteSpaceWrapping(t *testing.T) {
 func TestHTMLTextareaCaretUsesCSSContentOrigin(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 
 	const lines = 12
 	body := make([]string, lines)
@@ -98,7 +98,7 @@ func TestHTMLTextareaCaretUsesCSSContentOrigin(t *testing.T) {
 	html := htmlui.New(`<textarea id="ed" style="width:300px;height:400px;margin:0;padding:20px 24px;border:0;font-size:13px;line-height:1.65;white-space:pre">` + value + `</textarea>`)
 	html.Width, html.Height, html.Font = 360, 420, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	for range 2 {
 		if err := SyncSystem("").Run(world); err != nil {
@@ -122,7 +122,7 @@ func TestHTMLTextareaCaretUsesCSSContentOrigin(t *testing.T) {
 	for i := 0; i < caretLine; i++ {
 		caret += len(body[i]) + 1
 	}
-	if field := ecs.GetMut[TextField](world, control); field != nil {
+	if field := world.GetMut[TextField](control); field != nil {
 		field.Focused, field.Caret, field.Anchor = true, caret, caret
 	} else {
 		t.Fatal("textarea control has no TextField")
@@ -134,7 +134,7 @@ func TestHTMLTextareaCaretUsesCSSContentOrigin(t *testing.T) {
 	}
 
 	wantY := 20 + caretLine*21.45
-	caretTransform, ok := ecs.Get[scene.UITransform](world, htmlCaretVisual(t, world, control))
+	caretTransform, ok := world.Get[scene.UITransform](htmlCaretVisual(t, world, control))
 	if !ok {
 		t.Fatal("caret visual has no UITransform")
 	}
@@ -149,10 +149,10 @@ func TestHTMLTextareaCaretUsesCSSContentOrigin(t *testing.T) {
 func htmlTextareaValueText(t *testing.T, world *ecs.World, control ecs.Entity) (ecs.Entity, *scene.UITransform) {
 	t.Helper()
 	var entity ecs.Entity
-	for candidate, access := range ecs.Query[Relation[scene.Text2D]](world).All {
+	for candidate, access := range world.Query[Relation[scene.Text2D]]().All {
 		relation := access.Ref()
 
-		if relation.Owner == control && ecs.Has[Part[ValuePart]](world, candidate) {
+		if relation.Owner == control && world.Has[Part[ValuePart]](candidate) {
 			entity = candidate
 			break
 		}
@@ -160,7 +160,7 @@ func htmlTextareaValueText(t *testing.T, world *ecs.World, control ecs.Entity) (
 	if entity == 0 {
 		t.Fatal("textarea has no value text visual")
 	}
-	transform := ecs.GetMut[scene.UITransform](world, entity)
+	transform := world.GetMut[scene.UITransform](entity)
 	if transform == nil {
 		t.Fatal("value text visual has no UITransform")
 	}
@@ -170,8 +170,8 @@ func htmlTextareaValueText(t *testing.T, world *ecs.World, control ecs.Entity) (
 func htmlCaretVisual(t *testing.T, world *ecs.World, control ecs.Entity) ecs.Entity {
 	t.Helper()
 	var found ecs.Entity
-	for entity, _ := range ecs.Query[Part[CaretPart]](world).All {
-		if relation, ok := ecs.Get[Relation[SurfaceStyle]](world, entity); ok && relation.Owner == control {
+	for entity, _ := range world.Query[Part[CaretPart]]().All {
+		if relation, ok := world.Get[Relation[SurfaceStyle]](entity); ok && relation.Owner == control {
 			found = entity
 			break
 		}

@@ -7,9 +7,9 @@ type scopeCacheTag struct{}
 
 func TestQueryScopeUsesCurrentScopeForCachedQueries(t *testing.T) {
 	w := NewWorld()
-	spawn := NewSpawner1[scopeNumber](w)
+	spawn := w.NewSpawner1[scopeNumber]()
 	a, b := spawn.Spawn(1), spawn.Spawn(2)
-	query := Query[scopeNumber](w)
+	query := w.Query[scopeNumber]()
 	var first, second QueryScope
 	first.Reset([]Entity{a})
 	second.Reset([]Entity{b})
@@ -48,30 +48,30 @@ func TestQueryScopeUsesCurrentScopeForCachedQueries(t *testing.T) {
 
 func TestQueryScopesReuseIndependentCachesWithoutAllocating(t *testing.T) {
 	w := NewWorld()
-	spawn := NewSpawner1[scopeNumber](w)
+	spawn := w.NewSpawner1[scopeNumber]()
 	entity := spawn.Spawn(3)
 	var a, b QueryScope
 	a.Reset([]Entity{entity})
 	b.Reset(nil)
 	w.SetQueryScope(&a)
-	value := ScopeValue[scopeCacheTag, int](w)
+	value := w.ScopeValue[scopeCacheTag, int]()
 	*value = 42
 	w.SetQueryScope(&b)
-	if *ScopeValue[scopeCacheTag, int](w) != 0 {
+	if *w.ScopeValue[scopeCacheTag, int]() != 0 {
 		t.Fatal("scope caches were shared")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		w.SetQueryScope(&a)
-		if *ScopeValue[scopeCacheTag, int](w) != 42 {
+		if *w.ScopeValue[scopeCacheTag, int]() != 42 {
 			panic("lost scope cache")
 		}
-		for _, n := range Query[scopeNumber](w).All {
+		for _, n := range w.Query[scopeNumber]().All {
 			if n.Get() != 3 {
 				panic("wrong value")
 			}
 		}
 		w.SetQueryScope(&b)
-		for range Query[scopeNumber](w).All {
+		for range w.Query[scopeNumber]().All {
 			panic("empty scope")
 		}
 	}); allocations != 0 {

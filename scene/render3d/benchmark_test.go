@@ -24,16 +24,16 @@ func BenchmarkRender3DPreparedFrame(b *testing.B) {
 			world := ecs.NewWorld()
 			graphics.BindFrame(world, graphics.CurrentContext())
 			Register(world)
-			state := renderWorld3D(world)
+			state := WorldFor(world)
 			b.Cleanup(func() { _ = state.Dispose() })
-			cameras := ecs.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform](world)
+			cameras := world.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform]()
 			for range 2 {
 				cameras.Spawn(scene.NewCamera(), Camera{}, scene.PerspectiveProjection3D(), scene.GlobalTransform{Matrix: mgl32.Ident4()})
 			}
 			mesh := graphics.CubeMesh(1)
 			b.Cleanup(func() { _ = mesh.Dispose() })
 			material := graphics.NewStandardMaterial(graphics.White)
-			meshes := ecs.NewSpawner3[Mesh, Material[graphics.StandardMaterial], scene.GlobalTransform](world)
+			meshes := world.NewSpawner3[Mesh, Material[graphics.StandardMaterial], scene.GlobalTransform]()
 			for i := range count {
 				meshes.Spawn(Mesh{mesh}, Material[graphics.StandardMaterial]{Material: material},
 					scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(i%10)-5, 0, -float32(i/10)-5)})
@@ -70,13 +70,13 @@ func BenchmarkMeshDeformationUpdate(b *testing.B) {
 			var joints []ecs.Entity
 			var inverse []mgl32.Mat4
 			if active {
-				spawner := ecs.NewSpawner1[scene.GlobalTransform](world)
+				spawner := world.NewSpawner1[scene.GlobalTransform]()
 				for i := range 8 {
 					joints = append(joints, spawner.Spawn(scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(i), 0, 0)}))
 					inverse = append(inverse, mgl32.Ident4())
 				}
 			}
-			meshes := ecs.NewSpawner2[Deformation, scene.GlobalTransform](world)
+			meshes := world.NewSpawner2[Deformation, scene.GlobalTransform]()
 			for range 1000 {
 				meshes.Spawn(Deformation{JointEntities: joints, InverseBind: inverse}, scene.GlobalTransform{Matrix: mgl32.Ident4()})
 			}

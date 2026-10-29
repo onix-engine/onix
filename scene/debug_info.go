@@ -50,7 +50,7 @@ func NewDebugInfo() DebugInfo {
 }
 
 func SpawnDebugInfo(world *ecs.World) ecs.Entity {
-	spawner := ecs.NewSpawner1[DebugInfo](world)
+	spawner := world.NewSpawner1[DebugInfo]()
 	return spawner.Spawn(NewDebugInfo())
 }
 
@@ -82,10 +82,10 @@ func renderDebugInfo(context *ecs.SystemContext) error {
 	}
 	var component DebugInfo
 	found := false
-	for entity, access := range ecs.Query[DebugInfo](world).All {
+	for entity, access := range world.Query[DebugInfo]().All {
 		value := access.Get()
 
-		if visibility, ok := ecs.Get[Visibility](world, entity); ok && !visibility.Visible {
+		if visibility, ok := world.Get[Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
 		component = value
@@ -99,7 +99,7 @@ func renderDebugInfo(context *ecs.SystemContext) error {
 	// Flush the game first so the snapshot excludes this overlay itself.
 	c.DrawFrame()
 	statistics := c.Device().Statistics()
-	state := ecs.Local[debugInfoSystemStateTag, debugInfoSystemState](context)
+	state := context.Local[debugInfoSystemStateTag, debugInfoSystemState]()
 	state.sample(time.Now(), c.Device())
 	if state.atlas == nil {
 		state.atlas = newDebugGlyphAtlas()

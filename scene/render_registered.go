@@ -28,7 +28,7 @@ const (
 )
 
 func RegisterSpriteRenderer2D(world *ecs.World) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorSprite2D] = collectSprites2D
 	state.drawers2D[renderItemSprite2D] = drawSpriteRenderItem2D
@@ -36,60 +36,59 @@ func RegisterSpriteRenderer2D(world *ecs.World) {
 }
 
 func RegisterTextRenderer2D(world *ecs.World) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorText2D] = collectText2D
 	state.drawers2D[renderItemTextLayer2D] = drawTextRenderItem2D
 }
 
 func RegisterUIRenderer2D(world *ecs.World) {
-	renderWorld(world).registry2D++
-	renderWorld(world).collectors2D[renderCollectorUIVisual2D] = appendUIVisualRenderItems2D
+	RenderWorldFor(world).registry2D++
+	RenderWorldFor(world).collectors2D[renderCollectorUIVisual2D] = appendUIVisualRenderItems2D
 }
 
 func RegisterSpriteTrailRenderer2D(world *ecs.World) {
-	renderWorld(world).registry2D++
-	renderWorld(world).collectors2D[renderCollectorSpriteTrail2D] = collectSpriteTrails2D
+	RenderWorldFor(world).registry2D++
+	RenderWorldFor(world).collectors2D[renderCollectorSpriteTrail2D] = collectSpriteTrails2D
 }
 
 func RegisterSpriteLayersRenderer2D(world *ecs.World) {
-	renderWorld(world).registry2D++
-	renderWorld(world).collectors2D[renderCollectorSpriteLayers2D] = collectSpriteLayers2D
+	RenderWorldFor(world).registry2D++
+	RenderWorldFor(world).collectors2D[renderCollectorSpriteLayers2D] = collectSpriteLayers2D
 }
 
 func RegisterParticleRenderer2D(world *ecs.World) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorParticle2D] = collectParticles2D
 	state.drawers2D[renderItemParticle2D] = drawParticleRenderItem2D
 }
 
 func RegisterTilemapRenderer2D(world *ecs.World) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorTilemap2D] = collectTilemaps2D
 	state.drawers2D[renderItemTilemap2D] = drawTilemapRenderItem2D
 }
 
 func RegisterSpineRenderer2D(world *ecs.World) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorSpine2D] = collectSpines2D
 	state.batchDrawers2D[renderItemSpine2D] = drawSpineRenderBatch2D
 }
 
 func RegisterCameraRenderer2D(world *ecs.World) {
-	renderWorld(world).camera2DLayer = render2DLayer
+	RenderWorldFor(world).camera2DLayer = render2DLayer
 }
 
 // RegisterCameraRenderer binds a typed camera component to a render pipeline.
 // Registration is idempotent for the same type and pipeline. Extraction borrows
 // the component and stores only output settings; stable frames do not allocate.
-func RegisterCameraRenderer[T any](world *ecs.World, pipeline CameraPipeline, describe func(*T) CameraRenderOptions, draw CameraRenderer) {
+func (state *RenderWorld) RegisterCameraRenderer[T any](pipeline CameraPipeline, describe func(*T) CameraRenderOptions, draw CameraRenderer) {
 	if pipeline >= cameraPipelineCount {
 		panic("scene: camera pipeline is out of range")
 	}
-	state := renderWorld(world)
 	typ := reflect.TypeFor[T]()
 	if state.cameraSettings[pipeline].typ == typ {
 		return
@@ -97,7 +96,7 @@ func RegisterCameraRenderer[T any](world *ecs.World, pipeline CameraPipeline, de
 	state.cameraSettings[pipeline] = cameraSettingsReader{
 		typ: typ,
 		read: func(world *ecs.World, entity ecs.Entity) (CameraRenderOptions, bool) {
-			component := ecs.GetRef[T](world, entity)
+			component := world.GetRef[T](entity)
 			if component == nil {
 				return CameraRenderOptions{}, false
 			}
@@ -106,11 +105,10 @@ func RegisterCameraRenderer[T any](world *ecs.World, pipeline CameraPipeline, de
 			}
 			return describe(component), true
 		},
-		revision: ecs.ComponentVersion[T],
+		revision: (*ecs.World).ComponentVersion[T],
 	}
 	state.registry2D++
 	state.cameraRenderers[pipeline] = draw
-	ecs.InsertResource(world, state)
 }
 
 // ExtractRender2DSystem extracts items for the renderers registered in world.
@@ -126,19 +124,19 @@ func extractRender2D(context *ecs.SystemContext) error {
 	if c == nil || context.World == nil {
 		return nil
 	}
-	cache := ecs.ScopeValue[retainedRender2D, retainedRender2D](context.World)
-	state := renderWorld(context.World)
+	cache := context.World.ScopeValue[retainedRender2D, retainedRender2D]()
+	state := RenderWorldFor(context.World)
 	state.Items2D = cache.extract(c, context.World, state)
 	state.Preparation2D = cache.stats
 	return nil
 }
 
 func collectRenderItems2D(c *graphics.Canvas2D, world *ecs.World, cull bool) []renderItem2D {
-	state := renderWorld(world)
-	snapshots := ecs.FrameValue[renderSnapshots2DScratch, renderSnapshots2D](world)
+	state := RenderWorldFor(world)
+	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
 	snapshots.reset()
 	hierarchy := frameRenderHierarchy2DCachePtr(world)
-	scratch := ecs.FrameScratch[renderItems2DScratch, renderItem2D](world)
+	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
 	items := scratch.Reserve(world.EntityCount())
 	for _, collect := range state.collectors2D {
 		if collect != nil {
@@ -166,7 +164,7 @@ func renderCameras(context *ecs.SystemContext) error {
 	if world == nil || c == nil {
 		return nil
 	}
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.compositeFrame2D++
 	state.Composite2D = CompositeStatistics2D{}
 	defer func() {
@@ -226,10 +224,10 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 		state.activeCamera2D = camera
 		state.activeCamera2DSet = true
 	}
-	cache := ecs.ScopeValue[retainedRender2D, retainedRender2D](world)
+	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
 	if state.compositeAllowed2D && cache.initialized && !cache.direct && state.cameraRenderers[camera.Pipeline] == nil {
 		budget := int64(defaultCompositeBudget2D)
-		if settings, ok := ecs.GetResource[CompositeSettings2D](world); ok && settings.MaxCacheBytes != 0 {
+		if settings, ok := world.GetResource[CompositeSettings2D](); ok && settings.MaxCacheBytes != 0 {
 			budget = settings.MaxCacheBytes
 		}
 		key := compositeViewKey2D{camera.Entity, camera.Scene.ID}
@@ -305,7 +303,7 @@ func entityInSubtree2D(world *ecs.World, entity, root ecs.Entity) bool {
 		if entity == root {
 			return true
 		}
-		parent, ok := ecs.Get[Parent](world, entity)
+		parent, ok := world.Get[Parent](entity)
 		if !ok || parent.Entity == entity {
 			return false
 		}
@@ -315,7 +313,7 @@ func entityInSubtree2D(world *ecs.World, entity, root ecs.Entity) bool {
 }
 
 func drawRenderItems2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, views DrawViews2D, cull bool) {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	drawRenderPhase2D(c, world, items, views, cull, func(item *renderItem2D) bool {
 		return state.batchDrawers2D[item.kind] != nil
 	}, func(batch renderBatch2D, viewport renderViewport2D, begin bool) {

@@ -45,7 +45,7 @@ type htmlSyncStats struct {
 }
 
 func (n Node) markMutation(kind htmlMutation) {
-	state := ecs.GetMut[htmlRenderState](n.world, n.owner)
+	state := n.world.GetMut[htmlRenderState](n.owner)
 	if state == nil {
 		return
 	}
@@ -134,7 +134,7 @@ func (n Node) markAttributeDirty(name string) {
 		}
 	}
 	if name == "id" {
-		if state := ecs.GetMut[htmlRenderState](n.world, n.owner); state != nil {
+		if state := n.world.GetMut[htmlRenderState](n.owner); state != nil {
 			state.IndexDirty = true
 		}
 	}
@@ -240,12 +240,12 @@ func sameHTMLRenderEnvironment(left, right htmlRenderKey) bool {
 type htmlSurfaceOwners struct{ Children map[ecs.Entity][]ecs.Entity }
 
 func htmlOwners(world *ecs.World) *htmlSurfaceOwners {
-	owners, ok := ecs.GetResource[*htmlSurfaceOwners](world)
+	owners, ok := world.GetResource[*htmlSurfaceOwners]()
 	if !ok {
 		owners = &htmlSurfaceOwners{Children: make(map[ecs.Entity][]ecs.Entity)}
-		ecs.InsertResource(world, owners)
-		ecs.OnComponentRemove[htmlRenderState](world, cleanupHTMLTextures)
-		ecs.OnComponentRemove[Surface](world, cleanupHTMLSurface)
+		world.InsertResource(owners)
+		world.OnComponentRemove[htmlRenderState](cleanupHTMLTextures)
+		world.OnComponentRemove[Surface](cleanupHTMLSurface)
 	}
 	return owners
 }

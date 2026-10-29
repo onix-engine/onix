@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 	htmlui "github.com/diiyw/onix/ui/html"
 )
@@ -149,11 +148,11 @@ func (a *ModuleEditor) elementPickerAnchor(id string) (rect, bool) {
 		return rect{}, false
 	}
 	for entity := control; entity != 0 && entity != a.shell; {
-		if scroll := ecs.GetRef[scene.UIScroll](a.world, entity); scroll != nil {
+		if scroll := a.world.GetRef[scene.UIScroll](entity); scroll != nil {
 			anchor.X += scroll.Position.X()
 			anchor.Y += scroll.Position.Y()
 		}
-		parent := ecs.GetRef[scene.Parent](a.world, entity)
+		parent := a.world.GetRef[scene.Parent](entity)
 		if parent == nil {
 			break
 		}

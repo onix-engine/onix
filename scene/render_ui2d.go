@@ -62,14 +62,14 @@ func (border UIBorder2D) uiShape() Shape2D         { return border.Shape }
 func (border UIBorder2D) uiAlpha() float32         { return border.Alpha }
 
 func appendUIVisualRenderItems2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
-	items = appendUIShapeLayer2D[UIBackground2D](c, world, snapshots, hierarchy, items, cull)
+	items = snapshots.appendUIShapeLayer2D[UIBackground2D](c, world, hierarchy, items, cull)
 	items = appendUIImageLayer2D(c, world, snapshots, hierarchy, items, cull)
-	return appendUIShapeLayer2D[UIBorder2D](c, world, snapshots, hierarchy, items, cull)
+	return snapshots.appendUIShapeLayer2D[UIBorder2D](c, world, hierarchy, items, cull)
 }
 
-func appendUIShapeLayer2D[T uiShapeLayer2D](c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
+func (snapshots *renderSnapshots2D) appendUIShapeLayer2D[T uiShapeLayer2D](c *graphics.Canvas2D, world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
 	viewport := renderViewport2DForSpace(c, world, true)
-	for entity, access := range ecs.Query3[T, UIGlobalTransform, Visibility](world).All {
+	for entity, access := range world.Query3[T, UIGlobalTransform, Visibility]().All {
 		layer := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -99,7 +99,7 @@ func appendUIShapeLayer2D[T uiShapeLayer2D](c *graphics.Canvas2D, world *ecs.Wor
 
 func appendUIImageLayer2D(c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull bool) []renderItem2D {
 	viewport := renderViewport2DForSpace(c, world, true)
-	for entity, access := range ecs.Query3[UIImage2D, UIGlobalTransform, Visibility](world).All {
+	for entity, access := range world.Query3[UIImage2D, UIGlobalTransform, Visibility]().All {
 		image := access.A.Ref()
 		transform := access.B.Ref()
 		visibility := access.C.Ref()
@@ -142,7 +142,7 @@ func appendUIImageLayer2D(c *graphics.Canvas2D, world *ecs.World, snapshots *ren
 }
 
 func uiVisualSize2D(world *ecs.World, entity ecs.Entity, fallbackWidth, fallbackHeight float32) (float32, float32) {
-	if size, ok := ecs.Get[Size2D](world, entity); ok {
+	if size, ok := world.Get[Size2D](entity); ok {
 		return size.Width, size.Height
 	}
 	return fallbackWidth, fallbackHeight

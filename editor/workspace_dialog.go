@@ -3,6 +3,7 @@ package editor
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -201,6 +202,11 @@ func (a *ModuleEditor) syncWorkspaceDialogs(world *ecs.World) error {
 				bar.Attrs = append(bar.Attrs, editorDialogAttr{Name: "aria-valuenow", Value: strconv.Itoa(int(a.buildState.Value * 100))})
 			}
 			a.dialogElement(name, "progress-bar", 24, 120, width*clamp(a.buildState.Value, 0, 1), 8).Style += ";background:#84ccff"
+			if a.buildState.Indeterminate {
+				activityWidth := width / 4
+				phase := float32(a.time - math.Floor(a.time))
+				a.dialogElement(name, "progress-activity", 24+(width-activityWidth)*phase, 120, activityWidth, 8).Style += ";background:#84ccff"
+			}
 			elapsed := time.Duration(0)
 			if a.buildProgress != nil {
 				elapsed = time.Since(a.buildProgress.started).Truncate(time.Second)

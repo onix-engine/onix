@@ -31,7 +31,7 @@ func TestHTMLStructureStylesStayWithinParent(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, css+before+siblings+strings.Repeat(`<div>Unchanged</div>`, 1000))
 			tc.mutate(t, world, owner)
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			if state.SyncStats.Styled > 8 {
 				t.Fatalf("unrelated branches restyled: %+v", state.SyncStats)
 			}
@@ -52,14 +52,14 @@ func TestHTMLStructureStyleRootsMergeAndRemainDisjoint(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "left").Clear()
 	incrementalHTMLNode(t, world, owner, "right").Clear()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.Styled != 2 {
 		t.Fatalf("disjoint roots visited %d nodes", state.SyncStats.Styled)
 	}
 	incrementalHTMLNode(t, world, owner, "left").Append(child)
 	incrementalHTMLNode(t, world, owner, "outer").Clear()
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.Styled != 1 {
 		t.Fatalf("removed root was restyled: %+v", state.SyncStats)
 	}
@@ -71,7 +71,7 @@ func TestHTMLStructureMediaStylesStayLocal(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, css+`<div id="parent"><span>A</span></div><div>Unchanged</div>`)
 	incrementalHTMLNode(t, world, owner, "parent").Clear()
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.Styled > 2 {
 		t.Fatal("media query forced unrelated branches to restyle")
 	}
@@ -105,8 +105,8 @@ func TestHTMLStructureFilterDefinitionsInvalidateOutsideBranch(t *testing.T) {
 			}
 			incrementalSync(t, world)
 			fresh, freshOwner := incrementalHTMLFixture(t, prefix+middle+strings.Replace(suffix, `id="target"`, `id="target" class="warm"`, 1))
-			got, _ := ecs.Get[htmlRenderState](world, owner)
-			want, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+			got, _ := world.Get[htmlRenderState](owner)
+			want, _ := fresh.Get[htmlRenderState](freshOwner)
 			node := incrementalHTMLNode(t, world, owner, "target")
 			expected := incrementalHTMLNode(t, fresh, freshOwner, "target")
 			if !reflect.DeepEqual(got.Styles[node.node], want.Styles[expected.node]) {
@@ -142,7 +142,7 @@ func BenchmarkHTMLStructureLocalCascade(b *testing.B) {
 				incrementalSync(b, world)
 			}
 			b.StopTimer()
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			b.ReportMetric(float64(state.SyncStats.Styled), "styled/last-op")
 		})
 	}
@@ -169,10 +169,10 @@ func TestHTMLStructureRemovedFilterSubtreeAndReattach(t *testing.T) {
 				definitions.SetText("Text")
 			}
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			node := incrementalHTMLNode(t, world, owner, "target")
 			fresh, freshOwner := incrementalHTMLFixture(t, fallback+target)
-			expected, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+			expected, _ := fresh.Get[htmlRenderState](freshOwner)
 			expectedNode := incrementalHTMLNode(t, fresh, freshOwner, "target")
 			if !reflect.DeepEqual(state.Styles[node.node].Filters, expected.Styles[expectedNode.node].Filters) {
 				t.Fatal("removed filter subtree still overrides fallback definition")
@@ -180,7 +180,7 @@ func TestHTMLStructureRemovedFilterSubtreeAndReattach(t *testing.T) {
 			if action == "remove" {
 				parent.Append(definitions)
 				incrementalSync(t, world)
-				restored, _ := ecs.Get[htmlRenderState](world, owner)
+				restored, _ := world.Get[htmlRenderState](owner)
 				if reflect.DeepEqual(restored.Styles[node.node].Filters, expected.Styles[expectedNode.node].Filters) {
 					t.Fatal("reinserted filter definition was not discovered")
 				}

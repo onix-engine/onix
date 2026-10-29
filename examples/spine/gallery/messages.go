@@ -7,13 +7,13 @@ import (
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
 	switch message.Topic {
 	case "resource":
-		value, ok := module.Value[int64](message)
+		value, ok := message.Value[int64]()
 		if !ok {
 			return module.ErrType
 		}
 		return m.OnResource(c, value)
 	case "animation":
-		value, ok := module.Value[int64](message)
+		value, ok := message.Value[int64]()
 		if !ok {
 			return module.ErrType
 		}

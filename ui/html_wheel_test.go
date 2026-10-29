@@ -19,14 +19,14 @@ import (
 func TestHTMLWheelOverNonScrollableTextareaChainsToScrollContainer(t *testing.T) {
 	world, editor := newHTMLWheelTextareaWorld(t, `position:absolute;top:0;left:0;right:0;bottom:0;height:100%`)
 	area, areas := ecs.Entity(0), 0
-	for entity, _ := range ecs.Query[scene.UIScroll](world).All {
+	for entity, _ := range world.Query[scene.UIScroll]().All {
 		area, areas = entity, areas+1
 	}
 	if areas != 1 {
 		t.Fatalf("scroll areas = %d, want 1", areas)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(150, 100)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -39,14 +39,14 @@ func TestHTMLWheelOverNonScrollableTextareaChainsToScrollContainer(t *testing.T)
 		t.Fatal(err)
 	}
 
-	scroll, ok := ecs.Get[scene.UIScroll](world, area)
+	scroll, ok := world.Get[scene.UIScroll](area)
 	if !ok {
 		t.Fatal("missing scroll viewport")
 	}
 	if scroll.Position.Y() == 0 {
 		t.Fatalf("wheel over the textarea never reached the container (content %v, viewport %v)", scroll.ContentSize, scroll.ViewportSize)
 	}
-	textarea, ok := ecs.Get[Textarea](world, editor)
+	textarea, ok := world.Get[Textarea](editor)
 	if !ok {
 		t.Fatal("missing textarea")
 	}
@@ -60,7 +60,7 @@ func TestHTMLWheelOverNonScrollableTextareaChainsToScrollContainer(t *testing.T)
 func TestHTMLWheelOverScrollableTextareaStaysInTextarea(t *testing.T) {
 	world, editor := newHTMLWheelTextareaWorld(t, `position:absolute;top:0;left:0;right:0;bottom:0;height:120px;overflow:auto`)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(150, 60)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -70,7 +70,7 @@ func TestHTMLWheelOverScrollableTextareaStaysInTextarea(t *testing.T) {
 		t.Fatalf("scrollable textarea did not consume the wheel: %+v", pointer)
 	}
 
-	textarea, ok := ecs.Get[Textarea](world, editor)
+	textarea, ok := world.Get[Textarea](editor)
 	if !ok {
 		t.Fatal("missing textarea")
 	}
@@ -96,7 +96,7 @@ func newHTMLWheelTextareaWorld(t *testing.T, editorStyle string) (*ecs.World, ec
 		`</div></div></div>`)
 	html.Width, html.Height, html.Font = 300, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	owner := world.Spawn(bundle)
 	for range 3 {
 		if err := runUIFrame(world); err != nil {
@@ -112,7 +112,7 @@ func TestHTMLOverflowWheelChainsNestedAxisToAncestor(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	html := htmlui.New(`<div id="outer" style="width:300px;height:200px;overflow-y:auto;overflow-x:hidden">` +
 		`<div style="height:600px">` +
 		`<div id="inner" style="width:200px;height:100px;overflow-x:auto;overflow-y:hidden">` +
@@ -120,14 +120,14 @@ func TestHTMLOverflowWheelChainsNestedAxisToAncestor(t *testing.T) {
 		`</div></div></div>`)
 	html.Width, html.Height = 300, 200
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	scrollAreas := func() (outer, inner scene.UIScroll) {
 		t.Helper()
-		for _, access := range ecs.Query[scene.UIScroll](world).All {
+		for _, access := range world.Query[scene.UIScroll]().All {
 			scroll := access.Get()
 
 			if scroll.Vertical && !scroll.Horizontal {
@@ -178,14 +178,14 @@ func TestHTMLOverflowWheelScrollsHoveredContainer(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	html := htmlui.New(`<div style="display:flex;width:300px;height:200px">` +
 		`<div id="list" style="width:100px;height:200px;overflow:auto"><div style="height:600px">A</div></div>` +
 		`<div id="side" style="width:200px;height:200px;overflow:auto"><div style="height:600px">B</div></div>` +
 		`</div>`)
 	html.Width, html.Height, html.Font = 300, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -197,13 +197,13 @@ func TestHTMLOverflowWheelScrollsHoveredContainer(t *testing.T) {
 	}
 	var areas []mgl32.Vec3
 	seen := map[ecs.Entity]bool{}
-	for _, access := range ecs.Query[htmlui.ScrollContent](world).All {
+	for _, access := range world.Query[htmlui.ScrollContent]().All {
 		content := access.Get()
 
 		if content.Area != 0 && !seen[content.Area] {
 			seen[content.Area] = true
-			if scroll, ok := ecs.Get[scene.UIScroll](world, content.Area); ok {
-				transform, _ := ecs.Get[scene.UITransform](world, content.Area)
+			if scroll, ok := world.Get[scene.UIScroll](content.Area); ok {
+				transform, _ := world.Get[scene.UITransform](content.Area)
 				areas = append(areas, mgl32.Vec3{transform.Translation.X.Value, scroll.Position.X(), scroll.Position.Y()})
 			}
 		}

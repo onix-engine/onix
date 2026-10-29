@@ -52,13 +52,13 @@ func TestModuleShaderProgramsAreSharedAndUniformsBelongToElements(t *testing.T) 
 		}
 		entities[i] = world.Spawn(bundle)
 	}
-	first := ecs.GetMut[scene.Shader[graphics.Material2DShader]](world, entities[0])
-	second := ecs.GetRef[scene.Shader[graphics.Material2DShader]](world, entities[1])
+	first := world.GetMut[scene.Shader[graphics.Material2DShader]](entities[0])
+	second := world.GetRef[scene.Shader[graphics.Material2DShader]](entities[1])
 	if first.Program == nil || first.Program != second.Program || first.Custom[0][0] != .25 || second.Custom[0][0] != .75 {
 		t.Fatal("shader programs were not shared or element uniforms were lost")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
-		ecs.GetMut[scene.Shader[graphics.Material2DShader]](world, entities[0]).Custom[0][0] += .01
+		world.GetMut[scene.Shader[graphics.Material2DShader]](entities[0]).Custom[0][0] += .01
 	}); allocations != 0 {
 		t.Fatalf("shader uniform updates allocated %g", allocations)
 	}

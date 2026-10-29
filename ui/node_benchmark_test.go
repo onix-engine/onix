@@ -12,13 +12,13 @@ func BenchmarkSpawnNodeBundleRecycled(b *testing.B) {
 	world := ecs.NewWorld()
 	spawn := func() ecs.Entity {
 		bundle := ecs.NewBundle(7)
-		ecs.Put(&bundle, scene.UITransformFromXY(10, 20))
-		ecs.Put(&bundle, scene.UIGlobalTransform{})
-		ecs.Put(&bundle, scene.Parent{})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Visibility{Visible: true})
-		ecs.Put(&bundle, scene.UIStackIndex(3))
-		ecs.Put(&bundle, scene.Size2D{Width: 40, Height: 50})
+		bundle.Put(scene.UITransformFromXY(10, 20))
+		bundle.Put(scene.UIGlobalTransform{})
+		bundle.Put(scene.Parent{})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Visibility{Visible: true})
+		bundle.Put(scene.UIStackIndex(3))
+		bundle.Put(scene.Size2D{Width: 40, Height: 50})
 		return world.Spawn(bundle)
 	}
 	world.Despawn(spawn())
@@ -32,7 +32,7 @@ func BenchmarkSpawnNodeBundleRecycled(b *testing.B) {
 // Recycling keeps capacity growth outside the measured cleanup path.
 func BenchmarkUnbindControlRecycled(b *testing.B) {
 	world := ecs.NewWorld()
-	nodes := ecs.NewSpawner7[scene.Name, Control, scene.InputTarget2D, scene.InputState2D, Button, Part[BodyPart], Content[string]](world)
+	nodes := world.NewSpawner7[scene.Name, Control, scene.InputTarget2D, scene.InputState2D, Button, Part[BodyPart], Content[string]]()
 	nodes.Reserve(1)
 	run := func() {
 		entity := nodes.Spawn(scene.Name{Value: "authored"}, Control{}, scene.InputTarget2D{}, scene.InputState2D{}, Button{}, Part[BodyPart]{}, Content[string]{})

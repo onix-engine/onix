@@ -52,10 +52,10 @@ func (c treeIconWidthCache) width(leaf, expanded bool) float32 {
 }
 
 func cachedTreeIconWidth(world *ecs.World, tree ecs.Entity, theme Theme, style TreeStyle, leaf, expanded bool) float32 {
-	cache, ok := ecs.Get[treeIconWidthCache](world, tree)
+	cache, ok := world.Get[treeIconWidthCache](tree)
 	if !ok || !cache.matches(theme, style) {
 		cache.update(theme, style)
-		_ = ecs.Insert(world, tree, cache)
+		_ = world.Insert(tree, cache)
 	}
 	return cache.width(leaf, expanded)
 }
@@ -140,11 +140,11 @@ func SpawnTree[T comparable](world *ecs.World, opts TreeOptions[T]) ecs.Entity {
 	height := rowHeight * float32(len(opts.Nodes))
 	tree := spawnBox(world, opts.X, opts.Y, opts.Width, height, theme.StackIndex, theme.Background)
 	setCornerRadius(world, tree, opts.Radius)
-	_ = ecs.Insert(world, tree, scene.InputBlocker2D{Width: opts.Width, Height: height, PassThrough: opts.PassThrough})
-	_ = ecs.Insert(world, tree, Tree[T]{Width: opts.Width, RowHeight: rowHeight})
+	_ = world.Insert(tree, scene.InputBlocker2D{Width: opts.Width, Height: height, PassThrough: opts.PassThrough})
+	_ = world.Insert(tree, Tree[T]{Width: opts.Width, RowHeight: rowHeight})
 	iconWidths := treeIconWidthCache{}
 	iconWidths.update(theme, style)
-	_ = ecs.Insert(world, tree, iconWidths)
+	_ = world.Insert(tree, iconWidths)
 	putStyleOverride(world, tree, opts.Style)
 	depthByID := map[T]int{}
 	rowVisualHeight := treeRowVisualHeight(rowHeight)
@@ -157,8 +157,8 @@ func SpawnTree[T comparable](world *ecs.World, opts TreeOptions[T]) ecs.Entity {
 		depthByID[spec.ID] = depth
 		node := spawnInteractiveBox(world, 0, float32(i)*rowHeight+rowInset, opts.Width, rowVisualHeight, theme.StackIndex+1, graphics.ColorRGBA{}, false, opts.PassThrough)
 		setCornerRadius(world, node, opts.Radius)
-		_ = ecs.Insert(world, node, scene.Parent{Entity: tree})
-		_ = ecs.Insert(world, node, TreeNode[T]{
+		_ = world.Insert(node, scene.Parent{Entity: tree})
+		_ = world.Insert(node, TreeNode[T]{
 			Tree:      tree,
 			Order:     i,
 			ID:        spec.ID,
@@ -169,19 +169,19 @@ func SpawnTree[T comparable](world *ecs.World, opts TreeOptions[T]) ecs.Entity {
 			Leaf:      spec.Leaf,
 			Depth:     depth,
 		})
-		_ = ecs.Insert(world, node, treeActivation{activate: activateTreeNode[T]})
+		_ = world.Insert(node, treeActivation{activate: activateTreeNode[T]})
 		icon := treeNodeIcon(style, spec.Leaf, spec.Expanded)
 		indicator := spawnText[LabelPart](world, node, treeIndicatorX(depth), textBaseline(rowVisualHeight), iconFallback(icon), theme)
-		_ = ecs.Insert(world, indicator, Relation[TreeNode[T]]{Owner: node})
-		_ = ecs.Insert(world, indicator, Part[TreeIndicatorTextPart]{})
+		_ = world.Insert(indicator, Relation[TreeNode[T]]{Owner: node})
+		_ = world.Insert(indicator, Part[TreeIndicatorTextPart]{})
 		indicatorImage := spawnBox(world, treeIndicatorX(depth), 0, 0, 0, theme.StackIndex+2, graphics.ColorRGBA{})
-		_ = ecs.Insert(world, indicatorImage, scene.Parent{Entity: node})
-		_ = ecs.Insert(world, indicatorImage, Relation[TreeNode[T]]{Owner: node})
-		_ = ecs.Insert(world, indicatorImage, Part[TreeIndicatorImagePart]{})
+		_ = world.Insert(indicatorImage, scene.Parent{Entity: node})
+		_ = world.Insert(indicatorImage, Relation[TreeNode[T]]{Owner: node})
+		_ = world.Insert(indicatorImage, Part[TreeIndicatorImagePart]{})
 		iconWidth := iconWidths.width(spec.Leaf, spec.Expanded)
 		text := spawnText[LabelPart](world, node, treeLabelX(depth, iconWidth), textBaseline(rowVisualHeight), spec.Label, theme)
-		_ = ecs.Insert(world, text, Relation[TreeNode[T]]{Owner: node})
-		_ = ecs.Insert(world, text, Part[TreeTextPart]{})
+		_ = world.Insert(text, Relation[TreeNode[T]]{Owner: node})
+		_ = world.Insert(text, Part[TreeTextPart]{})
 	}
 	return tree
 }
@@ -194,18 +194,18 @@ func SyncTreeSystem[T comparable](name string) ecs.SystemConfig {
 }
 
 func activateTreeNode[T comparable](world *ecs.World, entity ecs.Entity) {
-	node := ecs.GetMut[TreeNode[T]](world, entity)
+	node := world.GetMut[TreeNode[T]](entity)
 	if node == nil || node.Disabled {
 		return
 	}
 	if !node.Leaf {
 		node.Expanded = !node.Expanded
 	}
-	if tree := ecs.GetMut[Tree[T]](world, node.Tree); tree != nil {
+	if tree := world.GetMut[Tree[T]](node.Tree); tree != nil {
 		tree.Selected = node.ID
 		tree.HasSelection = true
 	}
-	ecs.WriteMessage(world, TreeEvent[T]{Tree: node.Tree, Node: entity, ID: node.ID, Label: node.Label})
+	world.WriteMessage(TreeEvent[T]{Tree: node.Tree, Node: entity, ID: node.ID, Label: node.Label})
 }
 
 func syncTree[T comparable](context *ecs.SystemContext) error {
@@ -213,19 +213,19 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	theme, ok := ecs.GetResource[Theme](world)
+	theme, ok := world.GetResource[Theme]()
 	if ok {
 		theme = themeWithDefaults(theme)
 	} else {
 		theme = DefaultTheme()
 	}
 	skin := skinFor(world, theme)
-	nodes := ecs.FrameScratchMap[treeNodesScratch[T], treeNodeKey[T], TreeNode[T]](world)
-	visibility := ecs.FrameScratchMap[treeVisibilityScratch[T], treeNodeKey[T], bool](world)
-	visiting := ecs.FrameScratchMap[treeVisitingScratch[T], treeNodeKey[T], bool](world)
-	states := ecs.FrameScratch[treeStatesScratch[T], treeNodeState[T]](world)
+	nodes := world.FrameScratchMap[treeNodesScratch[T], treeNodeKey[T], TreeNode[T]]()
+	visibility := world.FrameScratchMap[treeVisibilityScratch[T], treeNodeKey[T], bool]()
+	visiting := world.FrameScratchMap[treeVisitingScratch[T], treeNodeKey[T], bool]()
+	states := world.FrameScratch[treeStatesScratch[T], treeNodeState[T]]()
 	defer states.ReleaseUnused()
-	for entity, access := range ecs.Query[TreeNode[T]](world).All {
+	for entity, access := range world.Query[TreeNode[T]]().All {
 		node := access.Get()
 
 		key := treeNodeKey[T]{tree: node.Tree, id: node.ID}
@@ -243,33 +243,33 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 			return err
 		}
 	}
-	rowOffsets := ecs.FrameScratchMap[treeRowOffsetsScratch[T], treeNodeKey[T], float32](world)
-	visibleCountByTree := ecs.FrameScratchMap[treeVisibleCountsScratch[T], ecs.Entity, int](world)
+	rowOffsets := world.FrameScratchMap[treeRowOffsetsScratch[T], treeNodeKey[T], float32]()
+	visibleCountByTree := world.FrameScratchMap[treeVisibleCountsScratch[T], ecs.Entity, int]()
 	for _, state := range states.Values {
 		if !visibility[state.key] {
 			continue
 		}
-		tree, ok := ecs.Get[Tree[T]](world, state.node.Tree)
+		tree, ok := world.Get[Tree[T]](state.node.Tree)
 		if !ok {
 			continue
 		}
 		rowOffsets[state.key] = float32(visibleCountByTree[state.node.Tree])*tree.RowHeight + treeRowInset(tree.RowHeight)
 		visibleCountByTree[state.node.Tree]++
 	}
-	for entity, access := range ecs.Query3[TreeNode[T], scene.Visibility, scene.Size2D](world).All {
+	for entity, access := range world.Query3[TreeNode[T], scene.Visibility, scene.Size2D]().All {
 		node := access.A.Mut()
 		visible := access.B.Mut()
 		size := access.C.Mut()
 
 		key := treeNodeKey[T]{tree: node.Tree, id: node.ID}
 		visible.Visible = visibility[key]
-		node.Selected = treeNodeSelected(world, node)
-		tree, ok := ecs.Get[Tree[T]](world, node.Tree)
+		node.Selected = node.treeNodeSelected(world)
+		tree, ok := world.Get[Tree[T]](node.Tree)
 		if !ok {
 			continue
 		}
 		rowHeight := treeRowVisualHeight(tree.RowHeight)
-		if transform := ecs.GetMut[scene.UITransform](world, entity); transform != nil {
+		if transform := world.GetMut[scene.UITransform](entity); transform != nil {
 			transform.Translation.X.Value = 0
 			transform.Translation.Y.Value = rowOffsets[key]
 		}
@@ -283,36 +283,36 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		style := styleFor(world, node.Tree, skin.Tree)
 		applySurface(world, entity, size.Width, size.Height, style.Row.Resolve(node.Selected, state))
 	}
-	for entity, access := range ecs.Query[Relation[TreeNode[T]]](world).All {
+	for entity, access := range world.Query[Relation[TreeNode[T]]]().All {
 		element := access.Get()
 
-		node, ok := ecs.Get[TreeNode[T]](world, element.Owner)
+		node, ok := world.Get[TreeNode[T]](element.Owner)
 		if !ok {
 			continue
 		}
-		tree, ok := ecs.Get[Tree[T]](world, node.Tree)
+		tree, ok := world.Get[Tree[T]](node.Tree)
 		if !ok {
 			continue
 		}
 		style := styleFor(world, node.Tree, skin.Tree)
 		icon := treeNodeIcon(style, node.Leaf, node.Expanded)
 		iconWidth := cachedTreeIconWidth(world, node.Tree, theme, style, node.Leaf, node.Expanded)
-		text := ecs.GetMut[scene.Text2D](world, entity)
-		transform := ecs.GetMut[scene.UITransform](world, entity)
+		text := world.GetMut[scene.Text2D](entity)
+		transform := world.GetMut[scene.UITransform](entity)
 		if (text != nil) && (transform != nil) {
 			transform.Translation.Y.Value = textBaseline(treeRowVisualHeight(tree.RowHeight))
 			switch {
-			case ecs.Has[Part[TreeTextPart]](world, entity):
+			case world.Has[Part[TreeTextPart]](entity):
 				text.Value = node.Label
 				text.Color = theme.Text
 				transform.Translation.X.Value = treeLabelX(node.Depth, iconWidth)
-			case ecs.Has[Part[TreeIndicatorTextPart]](world, entity):
+			case world.Has[Part[TreeIndicatorTextPart]](entity):
 				text.Value = iconFallback(icon)
-				text.Color = treeIndicatorColor(&node, theme)
+				text.Color = (&node).treeIndicatorColor(theme)
 				transform.Translation.X.Value = treeIndicatorX(node.Depth)
 			}
 		}
-		if (ecs.Has[Part[TreeIndicatorImagePart]](world, entity)) && (transform != nil) {
+		if (world.Has[Part[TreeIndicatorImagePart]](entity)) && (transform != nil) {
 			rowHeight := treeRowVisualHeight(tree.RowHeight)
 			width, height := fitIconSize(icon, max(icon.Width, 18), max(rowHeight-4, 0))
 			if icon.Texture == nil {
@@ -323,12 +323,12 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 			image := scene.NewUIImage2D(icon.Texture)
 			applySurface(world, entity, width, height, SurfaceStyle{Image: image})
 		}
-		if current := ecs.GetMut[scene.Visibility](world, entity); current != nil {
-			ownerVisibility, exists := ecs.Get[scene.Visibility](world, element.Owner)
+		if current := world.GetMut[scene.Visibility](entity); current != nil {
+			ownerVisibility, exists := world.Get[scene.Visibility](element.Owner)
 			current.Visible = !exists || ownerVisibility.Visible
 		}
 	}
-	for entity, access := range ecs.Query[Tree[T]](world).All {
+	for entity, access := range world.Query[Tree[T]]().All {
 		tree := access.Get()
 
 		height := tree.RowHeight * float32(visibleCountByTree[entity])
@@ -370,8 +370,8 @@ func treeNodeVisible[T comparable](nodes map[treeNodeKey[T]]TreeNode[T], visibil
 	return visible, nil
 }
 
-func treeNodeSelected[T comparable](world *ecs.World, node *TreeNode[T]) bool {
-	tree, ok := ecs.Get[Tree[T]](world, node.Tree)
+func (node *TreeNode[T]) treeNodeSelected(world *ecs.World) bool {
+	tree, ok := world.Get[Tree[T]](node.Tree)
 	return ok && tree.HasSelection && tree.Selected == node.ID
 }
 
@@ -408,7 +408,7 @@ func treeRowVisualHeight(rowHeight float32) float32 {
 	return height
 }
 
-func treeIndicatorColor[T comparable](node *TreeNode[T], theme Theme) graphics.ColorRGBA {
+func (node *TreeNode[T]) treeIndicatorColor(theme Theme) graphics.ColorRGBA {
 	if node.Disabled {
 		return alphaColor(theme.Muted, 0.65)
 	}

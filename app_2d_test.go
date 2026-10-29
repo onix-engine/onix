@@ -36,7 +36,7 @@ func TestLoadSceneRejectsNilApp(t *testing.T) {
 
 func TestRender2DDoesNotInstallOptionalRenderPipelines(t *testing.T) {
 	app := NewApp()
-	if err := InstallSystems[Render2D](app); err != nil {
+	if err := app.InstallSystems[Render2D](); err != nil {
 		t.Fatal(err)
 	}
 	order, err := app.Schedule(StageRender).Order()

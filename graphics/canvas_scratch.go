@@ -5,7 +5,7 @@ import "reflect"
 type scratchValues map[reflect.Type]any
 
 // ScratchValue returns typed storage retained for the lifetime of the canvas.
-func ScratchValue[Tag, T any](c *Canvas2D) *T {
+func (c *Canvas2D) ScratchValue[Tag, T any]() *T {
 	if c == nil {
 		return nil
 	}

@@ -162,9 +162,9 @@ func (h RenderOutputHandle) Release() error {
 }
 func (p *RenderOutputPool) Leases() int { return len(p.leases) - len(p.free) }
 
-func appendOutputRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, world *ecs.World, snapshots *renderSnapshots2D, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull, ui bool) []renderItem2D {
+func (snapshots *renderSnapshots2D) appendOutputRenderItems2D[T renderGlobalTransform2D](c *graphics.Canvas2D, world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, cull, ui bool) []renderItem2D {
 	viewport := renderViewport2DForSpace(c, world, ui)
-	for entity, access := range ecs.Query3[RenderOutput2D, T, Visibility](world).All {
+	for entity, access := range world.Query3[RenderOutput2D, T, Visibility]().All {
 		o := access.A.Ref().Handle.output()
 		if o == nil || !access.C.Ref().Visible || !o.text.paintsVisibleGlyphs() {
 			continue

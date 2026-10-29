@@ -13,27 +13,27 @@ func BenchmarkMixedPatch(b *testing.B) {
 	for _, mode := range []string{"Sequential", "Patch", "Commands"} {
 		b.Run(mode, func(b *testing.B) {
 			world := NewWorld()
-			spawn := NewSpawner6[patchBenchRemovedA, patchBenchRemovedB, testPosition, testVelocity, testName, testSize](world)
+			spawn := world.NewSpawner6[patchBenchRemovedA, patchBenchRemovedB, testPosition, testVelocity, testName, testSize]()
 			entity := spawn.Spawn(patchBenchRemovedA{}, patchBenchRemovedB{}, testPosition{}, testVelocity{}, testName{}, testSize{})
-			forward := NewPatch2[patchBenchInsertedA, patchBenchInsertedB](world, Type[patchBenchRemovedA](), Type[patchBenchRemovedB]())
-			backward := NewPatch2[patchBenchRemovedA, patchBenchRemovedB](world, Type[patchBenchInsertedA](), Type[patchBenchInsertedB]())
+			forward := world.NewPatch2[patchBenchInsertedA, patchBenchInsertedB](Type[patchBenchRemovedA](), Type[patchBenchRemovedB]())
+			backward := world.NewPatch2[patchBenchRemovedA, patchBenchRemovedB](Type[patchBenchInsertedA](), Type[patchBenchInsertedB]())
 			run := func() {
 				switch mode {
 				case "Sequential":
-					Remove[patchBenchRemovedA](world, entity)
-					Remove[patchBenchRemovedB](world, entity)
-					if err := Insert(world, entity, patchBenchInsertedA{Value: 1}); err != nil {
+					world.Remove[patchBenchRemovedA](entity)
+					world.Remove[patchBenchRemovedB](entity)
+					if err := world.Insert(entity, patchBenchInsertedA{Value: 1}); err != nil {
 						b.Fatal(err)
 					}
-					if err := Insert(world, entity, patchBenchInsertedB{Value: 2}); err != nil {
+					if err := world.Insert(entity, patchBenchInsertedB{Value: 2}); err != nil {
 						b.Fatal(err)
 					}
-					Remove[patchBenchInsertedA](world, entity)
-					Remove[patchBenchInsertedB](world, entity)
-					if err := Insert(world, entity, patchBenchRemovedA{Value: 3}); err != nil {
+					world.Remove[patchBenchInsertedA](entity)
+					world.Remove[patchBenchInsertedB](entity)
+					if err := world.Insert(entity, patchBenchRemovedA{Value: 3}); err != nil {
 						b.Fatal(err)
 					}
-					if err := Insert(world, entity, patchBenchRemovedB{Value: 4}); err != nil {
+					if err := world.Insert(entity, patchBenchRemovedB{Value: 4}); err != nil {
 						b.Fatal(err)
 					}
 				case "Patch":
@@ -57,7 +57,7 @@ func BenchmarkMixedPatch(b *testing.B) {
 			for b.Loop() {
 				run()
 			}
-			if GetRef[patchBenchRemovedA](world, entity).Value != 3 || GetRef[patchBenchRemovedB](world, entity).Value != 4 {
+			if world.GetRef[patchBenchRemovedA](entity).Value != 3 || world.GetRef[patchBenchRemovedB](entity).Value != 4 {
 				b.Fatal("incorrect final payload")
 			}
 		})
@@ -66,10 +66,10 @@ func BenchmarkMixedPatch(b *testing.B) {
 
 func BenchmarkCommandInsertRecycled(b *testing.B) {
 	world := NewWorld()
-	spawn := NewSpawner1[testPosition](world)
+	spawn := world.NewSpawner1[testPosition]()
 	entity := spawn.Spawn(testPosition{})
 	run := func() {
-		CommandInsert(world.Commands(), entity, testPosition{X: 1})
+		world.Commands().Insert(entity, testPosition{X: 1})
 		if err := world.FlushCommands(); err != nil {
 			b.Fatal(err)
 		}
@@ -79,7 +79,7 @@ func BenchmarkCommandInsertRecycled(b *testing.B) {
 	for b.Loop() {
 		run()
 	}
-	if GetRef[testPosition](world, entity).X != 1 {
+	if world.GetRef[testPosition](entity).X != 1 {
 		b.Fatal("insert command did not apply")
 	}
 }

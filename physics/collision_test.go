@@ -14,11 +14,11 @@ func TestCircleInsideBoxUsesNearestExit(t *testing.T) {
 			floorDef := NewBodyDef(BodyStatic)
 			floorDef.Rotation = rotation
 			floor := world.CreateBody(floorDef)
-			AddCollider(world, floor, NewColliderDef(NewBox(2, 2)))
+			world.AddCollider(floor, NewColliderDef(NewBox(2, 2)))
 			def := NewBodyDef(BodyDynamic)
 			def.Position = rotate(position, rotation)
 			body := world.CreateBody(def)
-			AddCollider(world, body, NewColliderDef(Circle{Radius: .25}))
+			world.AddCollider(body, NewColliderDef(Circle{Radius: .25}))
 			world.Step(1.0 / 60)
 			want := rotate(position.Normalize().Mul(1.25), rotation)
 			if body.Position().Sub(want).Length() > 1e-5 {
@@ -79,7 +79,7 @@ func TestBroadphaseMatchesBruteForce(t *testing.T) {
 		collider := NewColliderDef(NewBox(random.Float64()*15, random.Float64()*15))
 		collider.Sensor = index%7 == 0
 		collider.Filter = NewFilter(int32(index%5), uint64(1)<<uint(index%3), uint64(3)<<uint(index%2))
-		AddCollider(world, body, collider)
+		world.AddCollider(body, collider)
 	}
 	for _, size := range []float64{.1, 1, 3, 16, 64, 1e6, math.NaN(), math.Inf(1)} {
 		world.CellSize = size
@@ -115,10 +115,10 @@ func TestBroadphaseExtremeCoordinates(t *testing.T) {
 		for range 2 {
 			def := NewBodyDef(BodyDynamic)
 			def.Position = V(position, position)
-			AddCollider(world, world.CreateBody(def), NewColliderDef(Circle{Radius: 1}))
+			world.AddCollider(world.CreateBody(def), NewColliderDef(Circle{Radius: 1}))
 		}
 	}
-	AddCollider(world, world.CreateBody(NewBodyDef(BodyStatic)), NewColliderDef(NewBox(1e21, 1e21)))
+	world.AddCollider(world.CreateBody(NewBodyDef(BodyStatic)), NewColliderDef(NewBox(1e21, 1e21)))
 	world.buildBroadphase()
 	if len(world.pairs) != 12 {
 		t.Fatalf("extreme-coordinate pair count = %v, want 12", len(world.pairs))

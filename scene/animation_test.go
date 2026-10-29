@@ -11,19 +11,74 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
+func TestEqualAnimationSamplesPreserveComponentChanges(t *testing.T) {
+	for _, ui := range []bool{false, true} {
+		for _, bound := range []bool{false, true} {
+			world := ecs.NewWorld()
+			clip := &AnimationClip{
+				Duration: 1,
+				FloatTracks: []AnimationTrack[float32]{
+					NewAnimationTrack(AnimationBinding{Target: AnimationTargetTransformPositionX}, []AnimationKeyframe[float32]{{Value: 5}}),
+					NewAnimationTrack(AnimationBinding{Target: AnimationTargetTransformRotationZ}, []AnimationKeyframe[float32]{{Value: .3}}),
+					NewAnimationTrack(AnimationBinding{Target: AnimationTargetSpriteAlpha}, []AnimationKeyframe[float32]{{Value: .5}}),
+				},
+				TextureTracks: []AnimationTrack[*graphics.Texture]{NewAnimationTrack(AnimationBinding{Target: AnimationTargetSpriteTexture}, []AnimationKeyframe[*graphics.Texture]{{Value: nil}})},
+				BoolTracks:    []AnimationTrack[bool]{NewAnimationTrack(AnimationBinding{Target: AnimationTargetVisibility}, []AnimationKeyframe[bool]{{Value: false}})},
+			}
+			animator := NewAnimator(clip, false)
+			bundle := ecs.NewBundle(5)
+			bundle.Put(animator)
+			bundle.Put(NewSprite2D())
+			bundle.Put(Visibility{Visible: true})
+			if ui {
+				bundle.Put(NewUITransform())
+			} else {
+				bundle.Put(NewTransform())
+			}
+			e := world.Spawn(bundle)
+			if bound {
+				world.GetMut[Animator](e).BindTargets(e, nil, nil, nil)
+			}
+			system := UpdateWorldAnimatorSystem("")
+			if ui {
+				system = UpdateUIAnimatorSystem("")
+			}
+			if err := system.Run(world); err != nil {
+				t.Fatal(err)
+			}
+			versions := func() [4]uint64 {
+				return [4]uint64{world.ComponentVersion[Transform](), world.ComponentVersion[UITransform](), world.ComponentVersion[Sprite2D](), world.ComponentVersion[Visibility]()}
+			}
+			before := versions()
+			apply := func() {
+				world.GetMut[Animator](e).Seek(.5)
+				if err := system.Run(world); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if n := testing.AllocsPerRun(100, apply); n != 0 {
+				t.Fatalf("UI=%t bound=%t repeat sample allocated %g objects", ui, bound, n)
+			}
+			if after := versions(); after != before {
+				t.Fatalf("UI=%t bound=%t equal samples changed versions: %v -> %v", ui, bound, before, after)
+			}
+		}
+	}
+}
+
 func TestSampleAnimationTrackSupportsStepAndBezier(t *testing.T) {
 	step := NewAnimationTrack(AnimationBinding{Target: AnimationTargetSpriteTexture}, []AnimationKeyframe[int]{
 		{Time: 0, Value: 1, Tween: AnimationStep},
 		{Time: 1, Value: 2, Tween: AnimationStep},
 	})
-	if value, ok := SampleAnimationTrack(step, .75, nil); !ok || value != 1 {
+	if value, ok := step.Sample(.75, nil); !ok || value != 1 {
 		t.Fatalf("step sample = %d, %v", value, ok)
 	}
 	bezier := NewAnimationTrack(AnimationBinding{Target: AnimationTargetSpriteAlpha}, []AnimationKeyframe[float32]{
 		{Time: 0, Value: 0, Tween: AnimationBezier, Curve: AnimationCurve{X1: .42, X2: 1, Y2: 1}},
 		{Time: 1, Value: 1},
 	})
-	value, ok := SampleAnimationTrack(bezier, .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, ok := bezier.Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if !ok || value <= 0 || value >= .5 {
 		t.Fatalf("ease-in sample = %f, %v", value, ok)
 	}
@@ -34,7 +89,7 @@ func TestSampleAnimationTrackUsesCubicHermiteTangents(t *testing.T) {
 		{Time: 0, Value: 0, OutTangent: 2, Tween: AnimationCubicSpline},
 		{Time: 1, Value: 1},
 	})
-	value, ok := SampleAnimationTrack(track, .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, ok := track.Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if !ok || math.Abs(float64(value-.75)) > 1e-6 {
 		t.Fatalf("cubic sample = %g, %v", value, ok)
 	}
@@ -50,7 +105,7 @@ func TestSampleAnimationTrackIgnoresStaleInverseSpan(t *testing.T) {
 		{Time: 0, Value: 0, Tween: AnimationLinear, InverseSpan: 100},
 		{Time: 1, Value: 10},
 	}}
-	value, ok := SampleAnimationTrack(track, .5, func(a, b, progress float32) float32 {
+	value, ok := track.Sample(.5, func(a, b, progress float32) float32 {
 		return a + (b-a)*progress
 	})
 	if !ok || value != 5 {
@@ -101,9 +156,9 @@ func TestBoundAnimatorOwnerFallbackOnlyAppliesRootTracks(t *testing.T) {
 		AnimationBinding{Path: "child", Target: AnimationTargetTransformPositionX},
 		[]AnimationKeyframe[float32]{{Time: 0, Value: 1}, {Time: 1, Value: 3}},
 	)}}
-	spawner := ecs.NewSpawner2[Animator, Transform](world)
+	spawner := world.NewSpawner2[Animator, Transform]()
 	root := spawner.Spawn(NewBoundAnimator(clip, false, ecs.Entity(0), nil, nil, nil), NewTransform())
-	animator := ecs.GetMut[Animator](world, root)
+	animator := world.GetMut[Animator](root)
 	if animator == nil {
 		t.Fatal("bound animator was not spawned")
 	}
@@ -113,7 +168,7 @@ func TestBoundAnimatorOwnerFallbackOnlyAppliesRootTracks(t *testing.T) {
 	if err := UpdateWorldAnimatorSystem("").Run(world); err == nil || !strings.Contains(err.Error(), "has no bound target") {
 		t.Fatalf("missing descendant target error = %v", err)
 	}
-	transform, _ := ecs.Get[Transform](world, root)
+	transform, _ := world.Get[Transform](root)
 	if transform.Translation.X() != 0 {
 		t.Fatalf("owner fallback animated a descendant track: x=%v", transform.Translation.X())
 	}
@@ -121,11 +176,11 @@ func TestBoundAnimatorOwnerFallbackOnlyAppliesRootTracks(t *testing.T) {
 
 func TestBoundAnimatorKeepsTypedTargetSlicesContiguous(t *testing.T) {
 	world := ecs.NewWorld()
-	transformSpawner := ecs.NewSpawner1[Transform](world)
+	transformSpawner := world.NewSpawner1[Transform]()
 	floatEntities := []ecs.Entity{transformSpawner.Spawn(NewTransform()), transformSpawner.Spawn(NewTransform())}
-	textureSpawner := ecs.NewSpawner1[Sprite2D](world)
+	textureSpawner := world.NewSpawner1[Sprite2D]()
 	textureEntities := []ecs.Entity{textureSpawner.Spawn(NewSprite2D()), textureSpawner.Spawn(NewSprite2D())}
-	visibilitySpawner := ecs.NewSpawner1[Visibility](world)
+	visibilitySpawner := world.NewSpawner1[Visibility]()
 	visibilityEntities := []ecs.Entity{visibilitySpawner.Spawn(Visibility{}), visibilitySpawner.Spawn(Visibility{})}
 	first := graphics.CreateTextureByColor(graphics.White)
 	second := graphics.CreateTextureByColor(graphics.Black)
@@ -150,19 +205,19 @@ func TestBoundAnimatorKeepsTypedTargetSlicesContiguous(t *testing.T) {
 	}
 	animator := NewBoundAnimator(clip, false, ecs.Entity(0), floatEntities, textureEntities, visibilityEntities)
 	animator.Pause()
-	animatorSpawner := ecs.NewSpawner1[Animator](world)
+	animatorSpawner := world.NewSpawner1[Animator]()
 	animatorEntity := animatorSpawner.Spawn(animator)
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	for index, entity := range floatEntities {
-		transform, _ := ecs.Get[Transform](world, entity)
+		transform, _ := world.Get[Transform](entity)
 		if got := transform.Translation.X(); got != float32(index+1) {
 			t.Fatalf("float target %d = %v, want %d", index, got, index+1)
 		}
 	}
 	for index, entity := range textureEntities {
-		sprite, _ := ecs.Get[Sprite2D](world, entity)
+		sprite, _ := world.Get[Sprite2D](entity)
 		want := first
 		if index == 1 {
 			want = second
@@ -172,13 +227,13 @@ func TestBoundAnimatorKeepsTypedTargetSlicesContiguous(t *testing.T) {
 		}
 	}
 	for index, entity := range visibilityEntities {
-		visibility, _ := ecs.Get[Visibility](world, entity)
+		visibility, _ := world.Get[Visibility](entity)
 		want := index == 0
 		if visibility.Visible != want {
 			t.Fatalf("visibility target %d = %v, want %v", index, visibility.Visible, want)
 		}
 	}
-	if current, ok := ecs.Get[Animator](world, animatorEntity); !ok || len(current.boundTargets) != 6 {
+	if current, ok := world.Get[Animator](animatorEntity); !ok || len(current.boundTargets) != 6 {
 		t.Fatalf("bound target storage = %#v, want six entities", current)
 	}
 }
@@ -243,17 +298,17 @@ func TestAnimatorBindingTargetsChildNode(t *testing.T) {
 			{Time: 0, Value: 10, Tween: AnimationLinear}, {Time: 1, Value: 30},
 		})},
 	}
-	childSpawner := ecs.NewSpawner1[Transform](world)
+	childSpawner := world.NewSpawner1[Transform]()
 	child := childSpawner.Spawn(NewTransform())
-	rootSpawner := ecs.NewSpawner2[Animator, Transform](world)
+	rootSpawner := world.NewSpawner2[Animator, Transform]()
 	root := rootSpawner.Spawn(NewBoundAnimator(clip, false, ecs.Entity(0), []ecs.Entity{child}, nil, nil), NewTransform())
-	animator := ecs.GetMut[Animator](world, root)
+	animator := world.GetMut[Animator](root)
 	animator.Seek(.5)
 	animator.Pause()
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	transform, _ := ecs.Get[Transform](world, child)
+	transform, _ := world.Get[Transform](child)
 	if transform.Translation.X() != 20 {
 		t.Fatalf("child position x = %v, want 20", transform.Translation.X())
 	}
@@ -269,17 +324,17 @@ func TestAnimatorAppliesXYZRotationTracksToChild(t *testing.T) {
 		},
 	}
 	world := ecs.NewWorld()
-	childSpawner := ecs.NewSpawner1[Transform](world)
+	childSpawner := world.NewSpawner1[Transform]()
 	child := childSpawner.Spawn(NewTransform())
 	animator := NewBoundAnimator(clip, false, ecs.Entity(0), []ecs.Entity{child, child, child}, nil, nil)
 	animator.Seek(.5)
 	animator.Pause()
-	rootSpawner := ecs.NewSpawner1[Animator](world)
+	rootSpawner := world.NewSpawner1[Animator]()
 	root := rootSpawner.Spawn(animator)
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	rotation, _ := ecs.Get[Transform](world, child)
+	rotation, _ := world.Get[Transform](child)
 	want := mgl32.QuatRotate(.4, mgl32.Vec3{0, 0, 1}).Mul(mgl32.QuatRotate(.3, mgl32.Vec3{0, 1, 0})).Mul(mgl32.QuatRotate(.2, mgl32.Vec3{1, 0, 0})).Normalize()
 	got := rotation.Rotation.Mat4()
 	wantMatrix := want.Mat4()
@@ -293,7 +348,7 @@ func TestAnimatorAppliesXYZRotationTracksToChild(t *testing.T) {
 
 func TestBoundRotationUpdateDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := ecs.NewWorld()
-	targetSpawner := ecs.NewSpawner1[Transform](world)
+	targetSpawner := world.NewSpawner1[Transform]()
 	targets := make([]ecs.Entity, 8)
 	for index := range targets {
 		targets[index] = targetSpawner.Spawn(NewTransform())
@@ -318,9 +373,9 @@ func TestBoundRotationUpdateDoesNotAllocateAfterWarmup(t *testing.T) {
 	if err := clip.Prepare(); err != nil {
 		t.Fatal(err)
 	}
-	animatorSpawner := ecs.NewSpawner1[Animator](world)
+	animatorSpawner := world.NewSpawner1[Animator]()
 	animatorEntity := animatorSpawner.Spawn(NewBoundAnimator(clip, true, ecs.Entity(0), boundTargets, nil, nil))
-	animator := ecs.GetMut[Animator](world, animatorEntity)
+	animator := world.GetMut[Animator](animatorEntity)
 	if animator == nil {
 		t.Fatal("bound animator was not spawned")
 	}
@@ -329,7 +384,7 @@ func TestBoundRotationUpdateDoesNotAllocateAfterWarmup(t *testing.T) {
 	}
 	clock := NewTime()
 	clock.Set(16*time.Millisecond, 16*time.Millisecond, 1)
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	system := UpdateWorldAnimatorSystem("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
@@ -364,12 +419,12 @@ func TestAnimatorComposesXYZRotationTracksOnTransform(t *testing.T) {
 		NewAnimationTrack(AnimationBinding{Target: AnimationTargetTransformRotationZ}, []AnimationKeyframe[float32]{{Time: 0, Value: .4}}),
 	}}
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner2[Animator, Transform](world)
+	spawner := world.NewSpawner2[Animator, Transform]()
 	entity := spawner.Spawn(NewAnimator(clip, false), NewTransform())
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ := ecs.Get[Transform](world, entity)
+	transform, _ := world.Get[Transform](entity)
 	want := mgl32.QuatRotate(.4, mgl32.Vec3{0, 0, 1}).
 		Mul(mgl32.QuatRotate(.3, mgl32.Vec3{0, 1, 0})).
 		Mul(mgl32.QuatRotate(.2, mgl32.Vec3{1, 0, 0})).Normalize().Mat4()
@@ -384,11 +439,11 @@ func TestAnimatorComposesXYZRotationTracksOnTransform(t *testing.T) {
 func TestAnimatorEmitsEventsAcrossLoopBoundary(t *testing.T) {
 	world := ecs.NewWorld()
 	clip := &AnimationClip{Duration: 1, Events: []AnimationEvent{{Time: 0, Name: "start"}, {Time: .75, Name: "hit", Value: "heavy"}}}
-	spawner := ecs.NewSpawner1[Animator](world)
+	spawner := world.NewSpawner1[Animator]()
 	entity := spawner.Spawn(NewAnimator(clip, true))
 	clock := NewTime()
 	clock.Set(800*time.Millisecond, 800*time.Millisecond, 1)
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatalf("first update: %v", err)
 	}
@@ -424,18 +479,18 @@ func TestUpdateAnimatorAppliesTypedTracks(t *testing.T) {
 			{Time: 1, Value: 1},
 		})},
 	}
-	spawner := ecs.NewSpawner3[Animator, Sprite2D, Transform](world)
+	spawner := world.NewSpawner3[Animator, Sprite2D, Transform]()
 	slice := NineSlice2D{Left: 2, Right: 2, Top: 2, Bottom: 2}
 	entity := spawner.Spawn(
 		NewAnimator(clip, false), Sprite2D{Slice: &slice}, NewTransform(),
 	)
-	animator := ecs.GetMut[Animator](world, entity)
+	animator := world.GetMut[Animator](entity)
 	animator.Seek(.75)
 	animator.Pause()
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	sprite, _ := ecs.Get[Sprite2D](world, entity)
+	sprite, _ := world.Get[Sprite2D](entity)
 	if sprite.Texture != second || sprite.Alpha != .75 || sprite.Slice != nil {
 		t.Fatalf("sprite was not sampled: texture=%p alpha=%f slice=%+v", sprite.Texture, sprite.Alpha, sprite.Slice)
 	}
@@ -453,12 +508,12 @@ func TestUpdateAnimatorAppliesTransformTracksToUITransform(t *testing.T) {
 	animator := NewAnimator(clip, false)
 	animator.Seek(.5)
 	animator.Pause()
-	spawner := ecs.NewSpawner2[Animator, UITransform](world)
+	spawner := world.NewSpawner2[Animator, UITransform]()
 	entity := spawner.Spawn(animator, NewUITransform())
 	if err := UpdateUIAnimatorSystem("").Run(world); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	transform, _ := ecs.Get[UITransform](world, entity)
+	transform, _ := world.Get[UITransform](entity)
 	if transform.Translation.X.Value != 20 || transform.Rotation != .5 {
 		t.Fatalf("UI transform was not sampled: %+v", transform)
 	}
@@ -474,13 +529,13 @@ func TestPausedAnimatorOnlyReappliesAfterSeek(t *testing.T) {
 	animator := NewAnimator(clip, false)
 	animator.Seek(.5)
 	animator.Pause()
-	spawner := ecs.NewSpawner2[Animator, Transform](world)
+	spawner := world.NewSpawner2[Animator, Transform]()
 	entity := spawner.Spawn(animator, NewTransform())
 	system := UpdateWorldAnimatorSystem("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform := ecs.GetMut[Transform](world, entity)
+	transform := world.GetMut[Transform](entity)
 	transform.Translation[0] = 99
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
@@ -488,7 +543,7 @@ func TestPausedAnimatorOnlyReappliesAfterSeek(t *testing.T) {
 	if transform.Translation[0] != 99 {
 		t.Fatalf("paused animator reapplied unchanged track: %v", transform.Translation[0])
 	}
-	current := ecs.GetMut[Animator](world, entity)
+	current := world.GetMut[Animator](entity)
 	current.Seek(.75)
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
@@ -529,17 +584,17 @@ func TestBoundAnimatorUpdateDoesNotAllocateAfterWarmup(t *testing.T) {
 			{Time: 0, Value: 0, Tween: AnimationLinear}, {Time: 1, Value: 10},
 		}),
 	}}
-	spawner := ecs.NewSpawner2[Transform, Animator](world)
+	spawner := world.NewSpawner2[Transform, Animator]()
 	root := spawner.Spawn(NewTransform(), NewBoundAnimator(clip, true, ecs.Entity(0), nil, nil, nil))
-	childSpawner := ecs.NewSpawner1[Transform](world)
+	childSpawner := world.NewSpawner1[Transform]()
 	child := childSpawner.Spawn(NewTransform())
-	animator := ecs.GetMut[Animator](world, root)
+	animator := world.GetMut[Animator](root)
 	if animator == nil {
 		t.Fatal("bound animator was not spawned")
 	}
 	animator.BindTargets(root, []ecs.Entity{child}, nil, nil)
 	clock := NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	clock.Set(16*time.Millisecond, 16*time.Millisecond, 1)
 	system := UpdateWorldAnimatorSystem("")
 	if err := system.Run(world); err != nil {
@@ -574,13 +629,13 @@ func TestAnimatorReusesCursorStorageWhenClipChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	world := ecs.NewWorld()
-	spawner := ecs.NewSpawner2[Animator, Transform](world)
+	spawner := world.NewSpawner2[Animator, Transform]()
 	entity := spawner.Spawn(NewAnimator(clipA, false), NewTransform())
 	system := UpdateWorldAnimatorSystem("")
 	if err := system.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	animator := ecs.GetMut[Animator](world, entity)
+	animator := world.GetMut[Animator](entity)
 	floatCursors, _, _ := animator.cursorSlices()
 	if animator == nil || len(floatCursors) != 1 {
 		t.Fatal("animator cursors were not initialized")
@@ -632,10 +687,10 @@ func TestAnimatorTrackCursorHandlesLoopWrap(t *testing.T) {
 			{Time: 1, Value: 4},
 		}),
 	}}
-	spawner := ecs.NewSpawner2[Animator, Transform](world)
+	spawner := world.NewSpawner2[Animator, Transform]()
 	entity := spawner.Spawn(NewAnimator(clip, true), NewTransform())
 	clock := NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	clock.Set(800*time.Millisecond, 800*time.Millisecond, 1)
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -644,7 +699,7 @@ func TestAnimatorTrackCursorHandlesLoopWrap(t *testing.T) {
 	if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ := ecs.Get[Transform](world, entity)
+	transform, _ := world.Get[Transform](entity)
 	if math.Abs(float64(transform.Translation[0]-.8)) > 1e-5 {
 		t.Fatalf("wrapped cursor value = %v, want .8", transform.Translation[0])
 	}

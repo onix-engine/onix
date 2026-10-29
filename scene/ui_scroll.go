@@ -66,13 +66,13 @@ func UIScrollSystem(name string) ecs.SystemConfig {
 }
 
 func GetUIScrollContainerData(world *ecs.World, entity ecs.Entity) (UIScrollContainerData, bool) {
-	scroll := ecs.GetMut[UIScroll](world, entity)
+	scroll := world.GetMut[UIScroll](entity)
 	if scroll == nil {
 		return UIScrollContainerData{}, false
 	}
 	viewport := scroll.ViewportSize
 	if viewport == (mgl32.Vec2{}) {
-		if size, exists := ecs.Get[Size2D](world, entity); exists {
+		if size, exists := world.Get[Size2D](entity); exists {
 			viewport = mgl32.Vec2{size.Width, size.Height}
 		}
 	}
@@ -83,7 +83,7 @@ func GetUIScrollContainerData(world *ecs.World, entity ecs.Entity) (UIScrollCont
 }
 
 func GetUIScrollOffset(world *ecs.World, entity ecs.Entity) (mgl32.Vec2, bool) {
-	scroll, ok := ecs.Get[UIScroll](world, entity)
+	scroll, ok := world.Get[UIScroll](entity)
 	if !ok {
 		return mgl32.Vec2{}, false
 	}
@@ -102,22 +102,22 @@ func updateUIScroll(context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	inputState, ok := ecs.GetResource[*input.State](world)
+	inputState, ok := world.GetResource[*input.State]()
 	if !ok || inputState == nil {
 		return nil
 	}
 	pointer := inputState.Pointer()
 	deltaTime := float32(0)
-	if clock, exists := ecs.GetResource[*Time](world); exists {
+	if clock, exists := world.GetResource[*Time](); exists {
 		deltaTime = clock.DeltaSeconds()
 	}
 	scale := uiScrollScaleFactor(world)
-	request, _ := ecs.GetResource[*RenderRequest](world)
+	request, _ := world.GetResource[*RenderRequest]()
 	wheel := pointer.WheelX != 0 || pointer.WheelY != 0
 	panHeld := inputState.MouseHeld(input.MouseMiddle)
 	selected := uiScrollCandidate{}
 
-	for entity, access := range ecs.Query2[UIScroll, Visibility](world).All {
+	for entity, access := range world.Query2[UIScroll, Visibility]().All {
 		scroll := access.A.Ref()
 		visibility := access.B.Ref()
 
@@ -126,7 +126,7 @@ func updateUIScroll(context *ecs.SystemContext) error {
 		}
 		previous := scroll.Position
 		var size Size2D
-		if authoredSize, exists := ecs.Get[Size2D](world, entity); exists {
+		if authoredSize, exists := world.Get[Size2D](entity); exists {
 			size = authoredSize
 		}
 		viewport := scroll.ViewportSize
@@ -183,7 +183,7 @@ func updateUIScroll(context *ecs.SystemContext) error {
 			height = viewport.Y()
 		}
 		if !scroll.DisableInput && acceptsInput && (captured || pointInUIScrollContainer(world, entity, width, height, scale, pointer.X, pointer.Y)) {
-			stack, _ := ecs.Get[UIStackIndex](world, entity)
+			stack, _ := world.Get[UIStackIndex](entity)
 			candidate := uiScrollCandidate{entity: entity, depth: uiScrollDepth(world, entity), stack: stack, captured: captured}
 			if selected.entity == 0 || candidate.captured && !selected.captured || candidate.captured == selected.captured &&
 				(candidate.stack > selected.stack || candidate.stack == selected.stack &&
@@ -196,9 +196,9 @@ func updateUIScroll(context *ecs.SystemContext) error {
 	if selected.entity == 0 {
 		return nil
 	}
-	scroll := ecs.GetMut[UIScroll](world, selected.entity)
+	scroll := world.GetMut[UIScroll](selected.entity)
 	previous := scroll.Position
-	size, _ := ecs.Get[Size2D](world, selected.entity)
+	size, _ := world.Get[Size2D](selected.entity)
 	viewport := scroll.ViewportSize
 	if viewport == (mgl32.Vec2{}) {
 		viewport = mgl32.Vec2{size.Width, size.Height}
@@ -284,7 +284,7 @@ func updateUIScroll(context *ecs.SystemContext) error {
 }
 
 func uiScrollScaleFactor(world *ecs.World) float32 {
-	if viewport, ok := ecs.GetResource[ViewportSize](world); ok && viewport.ScaleFactor > 0 {
+	if viewport, ok := world.GetResource[ViewportSize](); ok && viewport.ScaleFactor > 0 {
 		return viewport.ScaleFactor
 	}
 	return 1
@@ -305,10 +305,10 @@ func clampUIScroll(scroll *UIScroll, viewport, content mgl32.Vec2) {
 // containers behind a popup must never receive its wheel input.
 func uiScrollWheelTarget(world *ecs.World, entity ecs.Entity, axis int) ecs.Entity {
 	for remaining := world.EntityCount(); entity != 0 && remaining > 0; remaining-- {
-		if scroll := ecs.GetRef[UIScroll](world, entity); scroll != nil && !scroll.DisableInput {
+		if scroll := world.GetRef[UIScroll](entity); scroll != nil && !scroll.DisableInput {
 			viewport := scroll.ViewportSize
 			if viewport == (mgl32.Vec2{}) {
-				if size, ok := ecs.Get[Size2D](world, entity); ok {
+				if size, ok := world.Get[Size2D](entity); ok {
 					viewport = mgl32.Vec2{size.Width, size.Height}
 				}
 			}
@@ -320,7 +320,7 @@ func uiScrollWheelTarget(world *ecs.World, entity ecs.Entity, axis int) ecs.Enti
 				return entity
 			}
 		}
-		parent, ok := ecs.Get[Parent](world, entity)
+		parent, ok := world.Get[Parent](entity)
 		if !ok {
 			break
 		}
@@ -335,13 +335,13 @@ func moveUIScrollAxis(world *ecs.World, entity ecs.Entity, axis int, delta, step
 	if entity == 0 || delta == 0 {
 		return false
 	}
-	scroll := ecs.GetMut[UIScroll](world, entity)
+	scroll := world.GetMut[UIScroll](entity)
 	if scroll == nil {
 		return false
 	}
 	viewport := scroll.ViewportSize
 	if viewport == (mgl32.Vec2{}) {
-		if size, exists := ecs.Get[Size2D](world, entity); exists {
+		if size, exists := world.Get[Size2D](entity); exists {
 			viewport = mgl32.Vec2{size.Width, size.Height}
 		}
 	}
@@ -352,7 +352,7 @@ func moveUIScrollAxis(world *ecs.World, entity ecs.Entity, axis int, delta, step
 }
 
 func uiScrollPointerLocal(world *ecs.World, entity ecs.Entity, width, height, scale, x, y float32) (float32, float32, bool) {
-	if transform, ok := ecs.Get[UIGlobalTransform](world, entity); ok && transform.Matrix != (mgl32.Mat4{}) {
+	if transform, ok := world.Get[UIGlobalTransform](entity); ok && transform.Matrix != (mgl32.Mat4{}) {
 		base := quadBaseTransform(transform.Matrix, anchorForEntity2D(world, entity), width, height, true)
 		if absUIFloat(base.Det()) <= 1e-8 {
 			return 0, 0, false
@@ -364,7 +364,7 @@ func uiScrollPointerLocal(world *ecs.World, entity ecs.Entity, width, height, sc
 		local = local.Mul(1 / local.W())
 		return local.X(), local.Y(), true
 	}
-	if transform, ok := ecs.Get[UITransform](world, entity); ok {
+	if transform, ok := world.Get[UITransform](entity); ok {
 		if scale <= 0 {
 			scale = 1
 		}
@@ -408,7 +408,7 @@ func uiScrollScrollbarAxis(scroll *UIScroll, viewport, content mgl32.Vec2, width
 // UIScrollScrollbarActive keeps a thumb expanded while hovered or captured.
 // axis is 0 for horizontal and 1 for vertical.
 func UIScrollScrollbarActive(world *ecs.World, entity ecs.Entity, axis uint8) bool {
-	scroll := ecs.GetRef[UIScroll](world, entity)
+	scroll := world.GetRef[UIScroll](entity)
 	if scroll == nil {
 		return false
 	}
@@ -416,11 +416,11 @@ func UIScrollScrollbarActive(world *ecs.World, entity ecs.Entity, axis uint8) bo
 	if scroll.dragging && scroll.dragAxis == want {
 		return true
 	}
-	state, ok := ecs.GetResource[*input.State](world)
+	state, ok := world.GetResource[*input.State]()
 	if !ok || state == nil {
 		return false
 	}
-	size, _ := ecs.Get[Size2D](world, entity)
+	size, _ := world.Get[Size2D](entity)
 	pointer := state.Pointer()
 	x, y, ok := uiScrollPointerLocal(world, entity, size.Width, size.Height, uiScrollScaleFactor(world), pointer.X, pointer.Y)
 	return ok && uiScrollScrollbarAxis(scroll, scroll.ViewportSize, scroll.ContentSize, size.Width, size.Height, x, y) == want
@@ -448,12 +448,12 @@ func scrollMaxThumbRatio(trackSize, thumbSize, maxScroll float32) float32 {
 }
 
 func pointInUIScrollContainer(world *ecs.World, entity ecs.Entity, width, height, scale, x, y float32) bool {
-	transform, ok := ecs.Get[UIGlobalTransform](world, entity)
+	transform, ok := world.Get[UIGlobalTransform](entity)
 	var minX, minY, maxX, maxY float32
 	valid := false
 	if ok && transform.Matrix != (mgl32.Mat4{}) {
 		minX, minY, maxX, maxY, valid = boundsFromBase2D(transform.Matrix, width, height)
-	} else if authored, exists := ecs.Get[UITransform](world, entity); exists {
+	} else if authored, exists := world.Get[UITransform](entity); exists {
 		minX, minY, maxX, maxY = authored.Translation.X.Value, authored.Translation.Y.Value,
 			authored.Translation.X.Value+width, authored.Translation.Y.Value+height
 		valid = true
@@ -485,7 +485,7 @@ func absUIFloat(value float32) float32 {
 func uiScrollDepth(world *ecs.World, entity ecs.Entity) int {
 	depth := 0
 	for remaining := world.EntityCount(); remaining > 0; remaining-- {
-		parent, ok := ecs.Get[Parent](world, entity)
+		parent, ok := world.Get[Parent](entity)
 		if !ok || parent.Entity == 0 {
 			break
 		}

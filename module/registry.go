@@ -34,7 +34,7 @@ type Lifecycle[T any] struct {
 	Destroy     func(*Context, *T) error
 }
 
-func RegisterMod[T any](r *Registry, id project.ModID, create func() T, hooks Lifecycle[T]) error {
+func (r *Registry) RegisterMod[T any](id project.ModID, create func() T, hooks Lifecycle[T]) error {
 	if r == nil || create == nil {
 		return ErrInvalid
 	}
@@ -44,11 +44,11 @@ func RegisterMod[T any](r *Registry, id project.ModID, create func() T, hooks Li
 	if _, ok := r.mods[id]; ok {
 		return fmt.Errorf("module %q already registered", id)
 	}
-	r.mods[id] = lifecycleInstaller(create, hooks)
+	r.mods[id] = hooks.installer(create)
 	return nil
 }
 
-func RegisterScene[T any](r *Registry, id project.SceneID, create func() T, hooks Lifecycle[T]) error {
+func (r *Registry) RegisterScene[T any](id project.SceneID, create func() T, hooks Lifecycle[T]) error {
 	if r == nil || create == nil {
 		return ErrInvalid
 	}
@@ -58,11 +58,11 @@ func RegisterScene[T any](r *Registry, id project.SceneID, create func() T, hook
 	if _, ok := r.scenes[id]; ok {
 		return fmt.Errorf("scene %q already registered", id)
 	}
-	r.scenes[id] = lifecycleInstaller(create, hooks)
+	r.scenes[id] = hooks.installer(create)
 	return nil
 }
 
-func lifecycleInstaller[T any](create func() T, hooks Lifecycle[T]) installer {
+func (hooks Lifecycle[T]) installer(create func() T) installer {
 	return func(c *Context) error {
 		state := create()
 		if hooks.Enter != nil {
@@ -99,7 +99,7 @@ func lifecycleInstaller[T any](create func() T, hooks Lifecycle[T]) installer {
 // RegisterValue connects a JSON protocol name to a concrete Go type. Decode is
 // used only for slot reads, never to encode message payloads.
 // Slice/pointer fields in event values are immutable until delivery completes.
-func RegisterValue[T any](r *Registry, name project.ValueType, decode func(project.SlotValue) (T, error)) error {
+func (r *Registry) RegisterValue[T any](name project.ValueType, decode func(project.SlotValue) (T, error)) error {
 	if r == nil || name == "" {
 		return ErrInvalid
 	}
@@ -121,33 +121,33 @@ type Signal struct{}
 
 func builtinValues() map[project.ValueType]any {
 	r := Registry{}
-	addValue(&r, "", func(project.SlotValue) (Signal, error) { return Signal{}, nil })
-	addValue(&r, project.StringValue, func(v project.SlotValue) (string, error) { return v.String, nil })
-	addValue(&r, project.BoolValue, func(v project.SlotValue) (bool, error) { return v.Bool, nil })
-	addValue(&r, project.IntValue, func(v project.SlotValue) (int64, error) { return v.Integer, nil })
-	addValue(&r, project.NumberValue, func(v project.SlotValue) (float64, error) { return v.Number, nil })
-	addValue(&r, project.Vec2Value, func(v project.SlotValue) ([2]float32, error) { return [2]float32{v.Vector[0], v.Vector[1]}, nil })
-	addValue(&r, project.Vec3Value, func(v project.SlotValue) ([3]float32, error) {
+	r.addValue("", func(project.SlotValue) (Signal, error) { return Signal{}, nil })
+	r.addValue(project.StringValue, func(v project.SlotValue) (string, error) { return v.String, nil })
+	r.addValue(project.BoolValue, func(v project.SlotValue) (bool, error) { return v.Bool, nil })
+	r.addValue(project.IntValue, func(v project.SlotValue) (int64, error) { return v.Integer, nil })
+	r.addValue(project.NumberValue, func(v project.SlotValue) (float64, error) { return v.Number, nil })
+	r.addValue(project.Vec2Value, func(v project.SlotValue) ([2]float32, error) { return [2]float32{v.Vector[0], v.Vector[1]}, nil })
+	r.addValue(project.Vec3Value, func(v project.SlotValue) ([3]float32, error) {
 		return [3]float32{v.Vector[0], v.Vector[1], v.Vector[2]}, nil
 	})
-	addValue(&r, project.ColorValue, func(v project.SlotValue) ([4]float32, error) { return v.Vector, nil })
-	addValue(&r, "SceneSwitchRequest", func(v project.SlotValue) (SceneSwitchRequest, error) {
+	r.addValue(project.ColorValue, func(v project.SlotValue) ([4]float32, error) { return v.Vector, nil })
+	r.addValue("SceneSwitchRequest", func(v project.SlotValue) (SceneSwitchRequest, error) {
 		if len(v.Fields) != 4 || v.Fields[0].Name != "overlay" || v.Fields[1].Name != "retain" || v.Fields[2].Name != "scene" || v.Fields[3].Name != "startup" {
 			return SceneSwitchRequest{}, ErrType
 		}
 		return SceneSwitchRequest{Scene: project.SceneID(v.Fields[2].Value.String), Retain: v.Fields[1].Value.Bool, Overlay: v.Fields[0].Value.Bool, Startup: v.Fields[3].Value}, nil
 	})
-	addValue[TextRenderRequest](&r, "TextRenderRequest", nil)
-	addValue[SceneStartup](&r, "SceneStartup", nil)
-	addValue[SceneSwitchResult](&r, "SceneSwitchResult", nil)
-	addValue[Collision2D](&r, "Collision2D", nil)
-	addValue[Collision3D](&r, "Collision3D", nil)
-	addValue[RenderOutputHandle](&r, project.VisualValue, nil)
-	addValue[TextRenderResult](&r, "TextRenderResult", nil)
+	r.addValue[TextRenderRequest]("TextRenderRequest", nil)
+	r.addValue[SceneStartup]("SceneStartup", nil)
+	r.addValue[SceneSwitchResult]("SceneSwitchResult", nil)
+	r.addValue[Collision2D]("Collision2D", nil)
+	r.addValue[Collision3D]("Collision3D", nil)
+	r.addValue[RenderOutputHandle](project.VisualValue, nil)
+	r.addValue[TextRenderResult]("TextRenderResult", nil)
 	return r.values
 }
 
-func addValue[T any](r *Registry, name project.ValueType, decode func(project.SlotValue) (T, error)) {
+func (r *Registry) addValue[T any](name project.ValueType, decode func(project.SlotValue) (T, error)) {
 	if r.values == nil {
 		r.values = make(map[project.ValueType]any)
 	}

@@ -25,10 +25,10 @@ func TestMaterialLayersPreparePackAndReuseInstances(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	entity := world.Spawn(camera)
 	material := graphics.NewStandardMaterial(graphics.White)
 	material.IOR, material.EmissiveStrength = 2.42, 64
@@ -54,7 +54,7 @@ func TestMaterialLayersPreparePackAndReuseInstances(t *testing.T) {
 		if err := prepareRenderResources3D(ctx); err != nil {
 			panic(err)
 		}
-		state, _ := ecs.GetResource[*World](world)
+		state, _ := world.GetResource[*World]()
 		view = state.views[entity]
 		view.instances, view.draws = view.instances[:0], view.draws[:0]
 		view.appendPhase(view.opaque.items, state.white, false)

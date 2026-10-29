@@ -51,7 +51,7 @@ func TestImageFeatureInstantiatesPNGSprite(t *testing.T) {
 		t.Fatalf("instantiate PNG sprite: %v", err)
 	}
 	defer scene.Dispose()
-	if !ecs.Has[sceneapi.Sprite2D](scene.World, scene.MustEntity("background")) {
+	if !scene.World.Has[sceneapi.Sprite2D](scene.MustEntity("background")) {
 		t.Fatal("PNG sprite was not instantiated")
 	}
 }

@@ -16,14 +16,14 @@ func BenchmarkQuery2TenThousand(b *testing.B) {
 	world := NewWorld()
 	for i := 0; i < 10_000; i++ {
 		bundle := NewBundle(2)
-		Put(&bundle, benchmarkPosition{})
-		Put(&bundle, benchmarkVelocity{X: 1, Y: 1})
+		bundle.Put(benchmarkPosition{})
+		bundle.Put(benchmarkVelocity{X: 1, Y: 1})
 		world.Spawn(bundle)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		for _, access := range Query2[benchmarkPosition, benchmarkVelocity](world).All {
+		for _, access := range world.Query2[benchmarkPosition, benchmarkVelocity]().All {
 			position := access.A.Mut()
 			velocity := access.B.Mut()
 
@@ -37,15 +37,15 @@ func BenchmarkRead2TenThousand(b *testing.B) {
 	world := NewWorld()
 	for i := 0; i < 10_000; i++ {
 		bundle := NewBundle(2)
-		Put(&bundle, benchmarkPosition{X: float32(i)})
-		Put(&bundle, benchmarkVelocity{X: 1, Y: 1})
+		bundle.Put(benchmarkPosition{X: float32(i)})
+		bundle.Put(benchmarkVelocity{X: 1, Y: 1})
 		world.Spawn(bundle)
 	}
 	var total float32
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		for _, access := range Query2[benchmarkPosition, benchmarkVelocity](world).All {
+		for _, access := range world.Query2[benchmarkPosition, benchmarkVelocity]().All {
 			position := access.A.Get()
 			velocity := access.B.Get()
 
@@ -57,14 +57,14 @@ func BenchmarkRead2TenThousand(b *testing.B) {
 
 func BenchmarkQueryAccess2TenThousand(b *testing.B) {
 	world := NewWorld()
-	spawner := NewSpawner2[benchmarkPosition, benchmarkVelocity](world)
+	spawner := world.NewSpawner2[benchmarkPosition, benchmarkVelocity]()
 	for range 10_000 {
 		spawner.Spawn(benchmarkPosition{}, benchmarkVelocity{X: 1, Y: 1})
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		for _, access := range Query2[benchmarkPosition, benchmarkVelocity](world).All {
+		for _, access := range world.Query2[benchmarkPosition, benchmarkVelocity]().All {
 			position := access.A
 			velocity := access.B
 
@@ -81,8 +81,8 @@ func BenchmarkSpawnBundle2OneThousand(b *testing.B) {
 		world := NewWorld()
 		for range 1000 {
 			bundle := NewBundle(2)
-			Put(&bundle, benchmarkPosition{})
-			Put(&bundle, benchmarkVelocity{X: 1, Y: 1})
+			bundle.Put(benchmarkPosition{})
+			bundle.Put(benchmarkVelocity{X: 1, Y: 1})
 			world.Spawn(bundle)
 		}
 	}
@@ -92,7 +92,7 @@ func BenchmarkSpawner2OneThousand(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		world := NewWorld()
-		spawner := NewSpawner2[benchmarkPosition, benchmarkVelocity](world)
+		spawner := world.NewSpawner2[benchmarkPosition, benchmarkVelocity]()
 		for range 1000 {
 			spawner.Spawn(benchmarkPosition{}, benchmarkVelocity{X: 1, Y: 1})
 		}
@@ -105,10 +105,10 @@ func BenchmarkMessageReaderReadOneHundred(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		for message := range 100 {
-			WriteMessage(world, message)
+			world.WriteMessage(message)
 		}
 		benchmarkTotal += float32(len(reader.Read(world)))
-		AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 }
 
@@ -118,12 +118,12 @@ func BenchmarkMessageReaderAllOneHundred(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		for message := range 100 {
-			WriteMessage(world, message)
+			world.WriteMessage(message)
 		}
 		for message := range reader.All(world) {
 			benchmarkTotal += float32(*message)
 		}
-		AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 }
 
@@ -132,14 +132,14 @@ func BenchmarkGetMutTenThousand(b *testing.B) {
 	entities := make([]Entity, 10_000)
 	for i := range entities {
 		bundle := NewBundle(1)
-		Put(&bundle, benchmarkPosition{})
+		bundle.Put(benchmarkPosition{})
 		entities[i] = world.Spawn(bundle)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
 		for _, entity := range entities {
-			position := GetMut[benchmarkPosition](world, entity)
+			position := world.GetMut[benchmarkPosition](entity)
 			position.X++
 		}
 	}

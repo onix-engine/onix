@@ -55,13 +55,13 @@ func traversalScene(count int) *SceneInstance {
 		project: &Bundle{components: func(_ *Bundle, node sceneSpawnNode) (ecs.Bundle, error) {
 			bundle := ecs.NewBundle(1)
 			if node.Spec.Widget != nil {
-				ecs.Put(&bundle, *node.Spec.Widget)
+				bundle.Put(*node.Spec.Widget)
 			}
 			return bundle, nil
 		}},
 		nodes: make(map[ecs.Entity]sceneSpawnNode), Entities: make(map[string]ecs.Entity), EntityIDs: make(map[ecs.Entity]string),
 	}
-	spawn := ecs.NewSpawner1[scene.Parent](s.World)
+	spawn := s.World.NewSpawner1[scene.Parent]()
 	for index := range count + 1 {
 		id, parent := "host", ecs.Entity(0)
 		if index < count {
@@ -102,11 +102,11 @@ func TestCloneHierarchySnapshotAndWidgetTargetsStayIndependent(t *testing.T) {
 			if index > 0 {
 				want = clones[fmt.Sprintf("%s-node%d", prefix, index-1)]
 			}
-			if relation := ecs.GetRef[scene.Parent](s.World, entity); relation == nil || relation.Entity != want {
+			if relation := s.World.GetRef[scene.Parent](entity); relation == nil || relation.Entity != want {
 				t.Fatalf("clone lost parent relation: %v, want %d", relation, want)
 			}
 		}
-		widget := ecs.GetRef[ui.Widget](s.World, clones[prefix+"-node0"])
+		widget := s.World.GetRef[ui.Widget](clones[prefix+"-node0"])
 		if widget.Target != clones[prefix+"-node1"] || s.nodes[source].Spec.Widget.TargetID != "node1" {
 			t.Fatal("clone modified its source widget or resolved another clone's target")
 		}
@@ -117,7 +117,7 @@ func TestRemoveNodesCollectsOverlappingRootsAndCyclesOnce(t *testing.T) {
 	for _, cycle := range []bool{false, true} {
 		s := traversalScene(5)
 		if cycle {
-			if err := ecs.Insert(s.World, s.Entities["node0"], scene.Parent{Entity: s.Entities["node4"]}); err != nil {
+			if err := s.World.Insert(s.Entities["node0"], scene.Parent{Entity: s.Entities["node4"]}); err != nil {
 				t.Fatal(err)
 			}
 		}

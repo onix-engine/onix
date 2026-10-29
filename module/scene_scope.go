@@ -23,7 +23,7 @@ func (r *Runtime) SyncScopes() {
 	}
 	w := r.world
 	hierarchy := scene.HierarchyFor(w)
-	owners, _ := ecs.ComponentValueRevision[entityOwner](w)
+	owners, _ := w.ComponentValueRevision[entityOwner]()
 	if !r.scopeDirty && r.scopeHierarchy == hierarchy.Version() && r.scopeOwners == owners {
 		return
 	}
@@ -140,7 +140,7 @@ func (r *Runtime) resolveScope(hierarchy *scene.Hierarchy, e ecs.Entity) *Scene 
 	}
 	n.entity, n.visiting = e, true
 	n.scene, n.owner = nil, nil
-	if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
+	if owner, ok := r.world.Get[entityOwner](e); ok {
 		n.owner = owner.context
 		n.scene = owner.context.scene
 	} else if parent := hierarchy.Parent(e); parent != 0 {
@@ -159,11 +159,11 @@ func (r *Runtime) entityContext(e ecs.Entity) *Context {
 	if !r.world.IsAlive(e) {
 		return nil
 	}
-	if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
+	if owner, ok := r.world.Get[entityOwner](e); ok {
 		return owner.context
 	}
 	hierarchy := scene.HierarchyFor(r.world)
-	owners, _ := ecs.ComponentValueRevision[entityOwner](r.world)
+	owners, _ := r.world.ComponentValueRevision[entityOwner]()
 	if r.scopeHierarchy == hierarchy.Version() && r.scopeOwners == owners {
 		index, _ := e.Index()
 		if int(index) < len(r.scopeNodes) && r.scopeNodes[index].entity == e {
@@ -176,7 +176,7 @@ func (r *Runtime) entityContext(e ecs.Entity) *Context {
 			return nil
 		}
 		e = parent
-		if owner, ok := ecs.Get[entityOwner](r.world, e); ok {
+		if owner, ok := r.world.Get[entityOwner](e); ok {
 			return owner.context
 		}
 	}

@@ -69,7 +69,8 @@ func TestWorkspaceCanvasTreeSelectionHighlightsModulesAndElements(t *testing.T) 
 		for _, shape := range driver.shapes {
 			if shape.Border == ([4]float32{color.R, color.G, color.B, color.A}) {
 				found = true
-				if abs(shape.Model[2]-(bounds.X-2)) > .001 || abs(shape.Model[5]-(bounds.Y-2)) > .001 {
+				model := shapeContourModel(shape)
+				if abs(model[2]-(bounds.X-2)) > .001 || abs(model[5]-(bounds.Y-2)) > .001 {
 					t.Fatal("highlight did not follow selected live geometry", shape.Model, bounds)
 				}
 			}
@@ -108,8 +109,8 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 	}
 	row, world := &a.viewport2D.rows[0], a.viewport2D.world
 	child, leaf := row.targets["child"], row.targets["leaf"]
-	original := ecs.GetRef[scene.UIGlobalTransform](world, child).Matrix
-	originalLeaf := ecs.GetRef[scene.UIGlobalTransform](world, leaf).Matrix
+	original := world.GetRef[scene.UIGlobalTransform](child).Matrix
+	originalLeaf := world.GetRef[scene.UIGlobalTransform](leaf).Matrix
 	box, _ := a.viewport2DContentBounds(child, a.viewport2DView(), false)
 	bounds := a.canvasBounds()
 	x, y := bounds.X+box.X+box.W/2, bounds.Y+box.Y+box.H/2
@@ -134,8 +135,8 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 	if a.Document.Revision != revision || len(a.Document.undo) != history {
 		t.Fatal("drag preview changed authored data before release")
 	}
-	global := ecs.GetRef[scene.UIGlobalTransform](world, child).Matrix
-	globalLeaf := ecs.GetRef[scene.UIGlobalTransform](world, leaf).Matrix
+	global := world.GetRef[scene.UIGlobalTransform](child).Matrix
+	globalLeaf := world.GetRef[scene.UIGlobalTransform](leaf).Matrix
 	if abs((global[12]-original[12])*a.canvasScale-30) > .001 || abs((global[13]-original[13])*a.canvasScale-20) > .001 || abs(globalLeaf[12]-originalLeaf[12]-global[12]+original[12]) > .001 {
 		t.Fatal("drag did not invert the parent rotation/scale or move descendants", original, global)
 	}
@@ -174,7 +175,7 @@ func TestWorkspaceCanvasElementDragPreviewCommitUndoAndCancel(t *testing.T) {
 		t.Fatal("Escape did not cancel the drag while retaining module editing")
 	}
 	child = a.viewport2D.rows[0].targets["child"]
-	if got := ecs.GetRef[scene.UIGlobalTransform](a.viewport2D.world, child).Matrix; got != original {
+	if got := a.viewport2D.world.GetRef[scene.UIGlobalTransform](child).Matrix; got != original {
 		t.Fatal("cancel did not restore live element transform", got, original)
 	}
 }
@@ -212,13 +213,13 @@ func TestWorkspaceCanvasMouseCaptureAndElementPicking(t *testing.T) {
 	engineui.RegisterRuntimeFeature[engineui.FullRuntime](world)
 	scene.RegisterCameraRenderer2D(world)
 	camera := scene.SpawnCamera2D(world)
-	ecs.GetMut[scene.Camera](world, camera).UpdateViewport(int(a.width), int(a.height))
-	ecs.InsertResource(world, scene.ViewportSize{Width: a.width, Height: a.height, ScaleFactor: 1})
+	world.GetMut[scene.Camera](camera).UpdateViewport(int(a.width), int(a.height))
+	world.InsertResource(scene.ViewportSize{Width: a.width, Height: a.height, ScaleFactor: 1})
 	if err := scene.SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	in := input.NewState()
-	ecs.InsertResource(world, in)
+	world.InsertResource(in)
 	a.selectInstance("start")
 	syncWorkspaceTest(t, a, world)
 	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
@@ -280,10 +281,10 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 	index := len(a.viewport3D.rows) - 1
 	x, y := workspace3DCanvasPoint(t, a, a.viewport3D.rows[index].parts[0].entity)
 	in := input.NewState()
-	ecs.InsertResource(context.World, in)
+	context.World.InsertResource(in)
 	history, revision, modRevision := len(a.Document.undo), a.Document.Revision, a.Document.Mods["model"].Revision
 	child := a.viewport3D.rows[index].parts[2].entity
-	original := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix
+	original := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix
 	in.PressMouse(input.MouseLeft, float64(x), float64(y))
 	if err := a.update(context); err != nil {
 		t.Fatal(err)
@@ -301,7 +302,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 		t.Fatal(err)
 	}
 	drag := a.canvasDrag
-	global := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix
+	global := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix
 	if global == original || global.Col(3).Vec3().Sub(original.Col(3).Vec3()).Sub(drag.WorldDelta).Len() > .001 || a.Document.Revision != revision {
 		t.Fatal("instance preview lost scene rotation/scale or authored during movement")
 	}
@@ -322,7 +323,7 @@ func TestWorkspace3DCanvasInstanceDragThroughSceneTransform(t *testing.T) {
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
-	if got := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix; got != original {
+	if got := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix; got != original {
 		t.Fatal("3D instance undo did not restore retained geometry")
 	}
 }
@@ -359,7 +360,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 			t.Fatal(err)
 		}
 		child := a.viewport3D.rows[0].parts[2].entity
-		original := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix
+		original := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix
 		move := func(dx float32) {
 			a.updatePlacementDrag(input.Pointer{X: x + dx, Y: y + 15, Down: true})
 			graphics.BindFrame(context.World, graphics.CurrentContext())
@@ -368,7 +369,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 			}
 		}
 		move(25)
-		global := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix
+		global := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix
 		if global == original || global.Col(3).Vec3().Sub(original.Col(3).Vec3()).Sub(a.canvasDrag.WorldDelta).Len() > .001 || a.Document.Revision != revision || len(a.Document.undo) != history {
 			t.Fatal("3D drag did not preview descendants without authoring", element)
 		}
@@ -388,7 +389,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 			t.Fatal(err)
 		}
 		child = a.viewport3D.rows[0].parts[2].entity
-		if got := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, child).Matrix; got != original {
+		if got := a.viewport3D.world.GetRef[scene.GlobalTransform](child).Matrix; got != original {
 			t.Fatal("3D undo lost original geometry", element, got, original)
 		}
 	}

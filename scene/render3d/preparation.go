@@ -9,14 +9,14 @@ import (
 // QueueMaterialUploads resolves registered generic materials and submesh slots
 // with the same readers as rendering, without acquiring GPU handles.
 func QueueMaterialUploads(queue *graphics.UploadQueue, world *ecs.World, entity ecs.Entity) {
-	if state, ok := ecs.GetResource[*World](world); ok && state != nil {
+	if state, ok := world.GetResource[*World](); ok && state != nil {
 		queue.AddMaterial3D(state.materialFor(world, entity, -1))
-		if mesh := ecs.GetRef[Mesh](world, entity); mesh != nil && mesh.Mesh != nil {
+		if mesh := world.GetRef[Mesh](entity); mesh != nil && mesh.Mesh != nil {
 			for _, part := range mesh.Mesh.Submeshes {
 				queue.AddMaterial3D(state.materialFor(world, entity, int(part.Material)))
 			}
 		}
-	} else if material := ecs.GetRef[Material[graphics.StandardMaterial]](world, entity); material != nil {
+	} else if material := world.GetRef[Material[graphics.StandardMaterial]](entity); material != nil {
 		if material.Material != nil {
 			queue.AddMaterial3D(material.Material.Material3D())
 		}
@@ -24,7 +24,7 @@ func QueueMaterialUploads(queue *graphics.UploadQueue, world *ecs.World, entity 
 			queue.AddMaterial3D(value.Material3D())
 		}
 	}
-	if shader := ecs.GetRef[scene.Shader[graphics.MeshShader]](world, entity); shader != nil {
+	if shader := world.GetRef[scene.Shader[graphics.MeshShader]](entity); shader != nil {
 		queue.AddMeshShader(shader.Program)
 	}
 }

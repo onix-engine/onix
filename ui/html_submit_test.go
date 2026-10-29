@@ -24,7 +24,7 @@ func TestHTMLSubmitDispatchesOnceToOwningForm(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()
 			RegisterRuntimeFeature[HTMLRenderer](world)
-			ecs.InsertResource(world, input.NewState())
+			world.InsertResource(input.NewState())
 			calls := 0
 			definition, err := htmlui.Define(htmlui.NewTemplate(test.source), "", htmlui.Behavior[struct{}, struct{}]{
 				Render: func(_ htmlui.RenderContext[struct{}, struct{}], view *htmlui.View) {
@@ -45,22 +45,22 @@ func TestHTMLSubmitDispatchesOnceToOwningForm(t *testing.T) {
 			page.Width, page.Height = 400, 200
 			page.Font = notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(5)
-			ecs.Put(&bundle, scene.NewUITransform())
-			ecs.Put(&bundle, scene.UIGlobalTransform{})
-			ecs.Put(&bundle, scene.Visibility{Visible: true})
-			ecs.Put(&bundle, scene.AnchorTopLeft)
-			ecs.Put(&bundle, page)
+			bundle.Put(scene.NewUITransform())
+			bundle.Put(scene.UIGlobalTransform{})
+			bundle.Put(scene.Visibility{Visible: true})
+			bundle.Put(scene.AnchorTopLeft)
+			bundle.Put(page)
 			owner := world.Spawn(bundle)
-			if _, err := htmlui.MountComponent(world, owner, definition, struct{}{}, struct{}{}, 1); err != nil {
+			if _, err := definition.MountComponent(world, owner, struct{}{}, struct{}{}, 1); err != nil {
 				t.Fatal(err)
 			}
 			if err := SyncSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
 			if test.keyboard {
-				ecs.WriteMessage(world, SubmittedEvent[string]{Entity: htmlControlByID(t, world, owner, "field"), Value: "typed"})
+				world.WriteMessage(SubmittedEvent[string]{Entity: htmlControlByID(t, world, owner, "field"), Value: "typed"})
 			} else {
-				ecs.WriteMessage(world, scene.InputEvent{Entity: htmlControlByID(t, world, owner, "send"), Kind: scene.InputEventTap})
+				world.WriteMessage(scene.InputEvent{Entity: htmlControlByID(t, world, owner, "send"), Kind: scene.InputEventTap})
 			}
 			if err := UpdateSystem("").Run(world); err != nil {
 				t.Fatal(err)

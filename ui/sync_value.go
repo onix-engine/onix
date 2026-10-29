@@ -6,9 +6,9 @@ import (
 )
 
 func setUIPosition(world *ecs.World, entity ecs.Entity, x, y float32) {
-	if transform, ok := ecs.Get[scene.UITransform](world, entity); ok {
+	if transform, ok := world.Get[scene.UITransform](entity); ok {
 		transform.Translation.X.Value, transform.Translation.Y.Value = x, y
-		ecs.SetIfChanged(world, entity, transform)
+		world.SetIfChanged(entity, transform)
 	}
 }
 

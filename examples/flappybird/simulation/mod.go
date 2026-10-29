@@ -1,8 +1,8 @@
 package simulation
 
 import (
-	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/examples/flappybird/contracts"
+	"github.com/diiyw/onix/module"
 )
 
 type Mod struct {
@@ -18,7 +18,7 @@ func (m *Mod) Install(c *module.Context) error {
 	if m.start, err = c.Slot("birdStart"); err != nil {
 		return err
 	}
-	if m.frame, err = module.BindEmitter[contracts.FlappyFrame](c, "frame"); err != nil {
+	if m.frame, err = c.BindEmitter[contracts.FlappyFrame]("frame"); err != nil {
 		return err
 	}
 	if err := module.OnSlotsChange(c, []string{"birdStart"}, m.reset); err != nil {
@@ -28,7 +28,7 @@ func (m *Mod) Install(c *module.Context) error {
 }
 
 func (m *Mod) reset(_ *module.Context) error {
-	start, err := module.ReadSlot[[2]float32](m.start)
+	start, err := m.start.Read[[2]float32]()
 	if err != nil {
 		return err
 	}

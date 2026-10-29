@@ -113,9 +113,9 @@ func (d *metalDriver) BeginFrame(clear Color) error {
 	if C.onix_metal_begin_frame(d.native, &values[0]) == 0 {
 		return metalError("begin frame")
 	}
-	d.pixels = trimUploadBuffer(d.pixels, &d.pixelRetention, d.pixelBytes, 64<<10)
+	d.pixels = (&d.pixelRetention).trimUploadBuffer(d.pixels, d.pixelBytes, 64<<10)
 	d.pixelBytes = 0
-	d.updates = trimScratch(d.updates, &d.updateRetention, 32)
+	d.updates = (&d.updateRetention).trimScratch(d.updates, 32)
 	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
@@ -237,7 +237,7 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	d.updates = resetScratch(d.updates, &d.updateRetention)
+	d.updates = (&d.updateRetention).resetScratch(d.updates)
 	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
@@ -284,7 +284,7 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 }
 
 func (d *metalDriver) DestroyTexture(handle TextureHandle) error {
-	return destroyNativeResource(&d.textures, handle, "Metal texture", func(native uint32) error {
+	return (&d.textures).destroyNativeResource(handle, "Metal texture", func(native uint32) error {
 		if C.onix_metal_destroy_texture(d.native, C.uint32_t(native)) == 0 {
 			return metalError("destroy texture")
 		}
@@ -428,7 +428,7 @@ func (d *metalDriver) CreateMaterial2DShader(descriptor ShaderDescriptor) (Mater
 }
 
 func (d *metalDriver) DestroyMaterial2DShader(handle Material2DShaderHandle) error {
-	return destroyNativeResource(&d.shaders2D, handle, "Metal Material2D shader", func(shader uint32) error {
+	return (&d.shaders2D).destroyNativeResource(handle, "Metal Material2D shader", func(shader uint32) error {
 		if C.onix_metal_destroy_material2d_shader(d.native, C.uint32_t(shader)) == 0 {
 			return metalError("destroy Material2D shader")
 		}
@@ -532,7 +532,7 @@ func (d *metalDriver) DrawMeshPicking(batch MeshBatch3D) error {
 
 func (d *metalDriver) DrawMeshesDeformed(batch MeshBatch3D) error {
 	var err error
-	d.deformationWords = resetScratch(d.deformationWords, &d.deformationRetention)
+	d.deformationWords = (&d.deformationRetention).resetScratch(d.deformationWords)
 	d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 	if err != nil {
 		return fmt.Errorf("render: invalid Metal deformation: %w", err)
@@ -580,7 +580,7 @@ func (d *metalDriver) CreateMeshShader(descriptor ShaderDescriptor) (MeshShaderH
 }
 
 func (d *metalDriver) DestroyMeshShader(handle MeshShaderHandle) error {
-	return destroyNativeResource(&d.shaders, handle, "Metal mesh shader", func(shader uint32) error {
+	return (&d.shaders).destroyNativeResource(handle, "Metal mesh shader", func(shader uint32) error {
 		if C.onix_metal_destroy_mesh_shader(d.native, C.uint32_t(shader)) == 0 {
 			return metalError("destroy mesh shader")
 		}

@@ -238,7 +238,7 @@ func (world *World3D) RemoveBody(body Body3D) bool {
 	return true
 }
 
-func AddCollider3D[S Shape3D](world *World3D, body Body3D, def ColliderDef[S]) ColliderHandle3D[S] {
+func (world *World3D) AddCollider[S Shape3D](body Body3D, def ColliderDef[S]) ColliderHandle3D[S] {
 	if world == nil || body.world != world {
 		return ColliderHandle3D[S]{}
 	}
@@ -264,7 +264,7 @@ func AddCollider3D[S Shape3D](world *World3D, body Body3D, def ColliderDef[S]) C
 		friction: max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
 		sensor: def.Sensor, filter: def.Filter.normalized(), collisionType: def.CollisionType,
 	}
-	setColliderShape3D(state, def.Shape)
+	state.setColliderShape3D(def.Shape)
 	if bodyState3D.inertia <= 0 {
 		bodyState3D.inertia = shapeInertia3D(*state, bodyState3D.mass)
 		bodyState3D.updateInverseMass()
@@ -272,7 +272,7 @@ func AddCollider3D[S Shape3D](world *World3D, body Body3D, def ColliderDef[S]) C
 	return ColliderHandle3D[S]{world: world, id: makeColliderID3D(index, generation)}
 }
 
-func RemoveCollider3D[S Shape3D](world *World3D, collider ColliderHandle3D[S]) bool {
+func (world *World3D) RemoveCollider[S Shape3D](collider ColliderHandle3D[S]) bool {
 	if world == nil || collider.world != world {
 		return false
 	}
@@ -463,7 +463,7 @@ func makeColliderID3D(index, generation uint32) ColliderID3D {
 	return ColliderID3D(uint64(generation)<<32 | uint64(index+1))
 }
 
-func setColliderShape3D[S Shape3D](state *colliderState3D, shape S) {
+func (state *colliderState3D) setColliderShape3D[S Shape3D](shape S) {
 	state.mesh, state.hull, state.compound = TriangleMesh{}, ConvexHull{}, Compound{}
 	switch value := any(shape).(type) {
 	case Sphere:
@@ -510,7 +510,7 @@ func setColliderShape3D[S Shape3D](state *colliderState3D, shape S) {
 	}
 }
 
-func shapeFromState3D[S Shape3D](state colliderState3D) S {
+func (state colliderState3D) shapeFromState3D[S Shape3D]() S {
 	var zero S
 	var value any
 	switch state.kind {

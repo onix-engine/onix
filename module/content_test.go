@@ -28,8 +28,8 @@ func TestModuleHTMLDocumentOwnershipAndChildInput(t *testing.T) {
 	})
 	calls := 0
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "page", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, message Message) error {
-		event, ok := Value[Input](message)
+	must(t, registry.RegisterMod("page", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, message Message) error {
+		event, ok := message.Value[Input]()
 		if !ok {
 			return nil
 		}
@@ -47,7 +47,7 @@ func TestModuleHTMLDocumentOwnershipAndChildInput(t *testing.T) {
 		calls++
 		return nil
 	}}))
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != InputTopic {
 			return nil
 		}
@@ -78,7 +78,7 @@ func TestModuleHTMLDocumentOwnershipAndChildInput(t *testing.T) {
 	}
 	must(t, htmlui.Sync(r.world))
 	var child ecs.Entity
-	for entity, access := range ecs.Query[htmlui.Control](r.world).All {
+	for entity, access := range r.world.Query[htmlui.Control]().All {
 		if value := access.Get(); value.Owner == a.root && value.ID == "click" {
 			child = entity
 			break
@@ -100,9 +100,9 @@ func TestModuleHTMLDocumentOwnershipAndChildInput(t *testing.T) {
 	}); allocs != 0 {
 		t.Fatalf("unchanged private DOM edit allocated %g", allocs)
 	}
-	surface, _ := Get[htmlui.Surface](a, a.Root())
+	surface, _ := a.Get[htmlui.Surface](a.Root())
 	surface.Value = `<span id="label">New</span>`
-	must(t, Set(a, a.Root(), surface))
+	must(t, a.Set(a.Root(), surface))
 	if labelA.SetText("stale") {
 		t.Fatal("old document handle remained valid")
 	}
@@ -127,15 +127,15 @@ func TestModuleImportedModelSharesRigAndIsolatesPoseAndMaterials(t *testing.T) {
 	s, err := r.Manager().StartEntry()
 	must(t, err)
 	a, b := &s.modules[0], &s.modules[1]
-	rigA, okA := Get[*project.ModelRig](a, a.Root())
-	rigB, okB := Get[*project.ModelRig](b, b.Root())
-	poseA, _ := Get[*project.ModelPose](a, a.Root())
-	poseB, _ := Get[*project.ModelPose](b, b.Root())
+	rigA, okA := a.Get[*project.ModelRig](a.Root())
+	rigB, okB := b.Get[*project.ModelRig](b.Root())
+	poseA, _ := a.Get[*project.ModelPose](a.Root())
+	poseB, _ := b.Get[*project.ModelPose](b.Root())
 	if !okA || !okB || rigA != rigB || poseA == nil || poseB == nil || poseA == poseB {
 		t.Fatal("model rig or pose sharing is incorrect")
 	}
-	materialA, _ := Get[render3d.Material[graphics.StandardMaterial]](a, a.Root())
-	materialB, _ := Get[render3d.Material[graphics.StandardMaterial]](b, b.Root())
+	materialA, _ := a.Get[render3d.Material[graphics.StandardMaterial]](a.Root())
+	materialB, _ := b.Get[render3d.Material[graphics.StandardMaterial]](b.Root())
 	if materialA.Material == nil || materialB.Material == nil || materialA.Material == materialB.Material {
 		t.Fatal("model material crossed instances")
 	}
@@ -143,8 +143,8 @@ func TestModuleImportedModelSharesRigAndIsolatesPoseAndMaterials(t *testing.T) {
 	if materialB.Material.PerceptualRoughness == .123 {
 		t.Fatal("mutable material crossed instances")
 	}
-	meshA, _ := Get[render3d.Mesh](a, a.Root())
-	meshB, _ := Get[render3d.Mesh](b, b.Root())
+	meshA, _ := a.Get[render3d.Mesh](a.Root())
+	meshB, _ := b.Get[render3d.Mesh](b.Root())
 	if meshA.Mesh == nil || meshA.Mesh != meshB.Mesh {
 		t.Fatal("immutable mesh was not shared")
 	}
@@ -187,19 +187,19 @@ func TestModulePrivateContentSharesAssetsAndIsolatesMutableState(t *testing.T) {
 	must(t, err)
 	imageB, err := b.Element("image")
 	must(t, err)
-	spriteA, _ := Get[scene.Sprite2D](a, imageA)
-	spriteB, _ := Get[scene.Sprite2D](b, imageB)
+	spriteA, _ := a.Get[scene.Sprite2D](imageA)
+	spriteB, _ := b.Get[scene.Sprite2D](imageB)
 	if spriteA.Texture != spriteB.Texture || a.resources != b.resources {
 		t.Fatal("immutable assets were not shared")
 	}
-	animatorA, _ := Get[scene.Animator](a, imageA)
-	animatorB, _ := Get[scene.Animator](b, imageB)
+	animatorA, _ := a.Get[scene.Animator](imageA)
+	animatorB, _ := b.Get[scene.Animator](imageB)
 	if animatorA.Clip != animatorB.Clip {
 		t.Fatal("immutable clip was copied")
 	}
 	animatorA.Seek(.5)
-	must(t, Set(a, imageA, animatorA))
-	animatorB, _ = Get[scene.Animator](b, imageB)
+	must(t, a.Set(imageA, animatorA))
+	animatorB, _ = b.Get[scene.Animator](imageB)
 	if animatorB.Time() != 0 {
 		t.Fatal("animator state crossed instances")
 	}
@@ -207,13 +207,13 @@ func TestModulePrivateContentSharesAssetsAndIsolatesMutableState(t *testing.T) {
 	must(t, err)
 	mapB, err := b.Element("map")
 	must(t, err)
-	tileA, _ := Get[scene.Tilemap2D](a, mapA)
-	tileB, _ := Get[scene.Tilemap2D](b, mapB)
+	tileA, _ := a.Get[scene.Tilemap2D](mapA)
+	tileB, _ := b.Get[scene.Tilemap2D](mapB)
 	tileA.Tiles[0] = 7
 	if tileB.Tiles[0] != 0 {
 		t.Fatal("tilemap state crossed instances")
 	}
-	if _, ok := Get[scene.Sprite2D](a, imageB); ok {
+	if _, ok := a.Get[scene.Sprite2D](imageB); ok {
 		t.Fatal("private element escaped ownership")
 	}
 	must(t, scene.SyncUIGlobalTransformSystem("").Run(r.world))
@@ -221,8 +221,8 @@ func TestModulePrivateContentSharesAssetsAndIsolatesMutableState(t *testing.T) {
 	must(t, err)
 	childB, err := b.Element("child")
 	must(t, err)
-	globalA, _ := Get[scene.UIGlobalTransform](a, childA)
-	globalB, _ := Get[scene.UIGlobalTransform](b, childB)
+	globalA, _ := a.Get[scene.UIGlobalTransform](childA)
+	globalB, _ := b.Get[scene.UIGlobalTransform](childB)
 	if globalA.Matrix[12] != 5 || globalB.Matrix[12] != 105 {
 		t.Fatal("private hierarchy ignored scene placement")
 	}
@@ -252,7 +252,7 @@ func TestModuleHTMLPrivateURLsPauseResumeAndUnload(t *testing.T) {
 	s, err := r.Manager().StartEntry()
 	must(t, err)
 	c := &s.modules[0]
-	surface, _ := Get[htmlui.Surface](c, c.Root())
+	surface, _ := c.Get[htmlui.Surface](c.Root())
 	for _, name := range []string{"pixel.png", "./pixel.png", "p%69xel.png?version=1#icon"} {
 		if texture, ok := surface.Images.Provider.ResolveHTMLImage(name); !ok || texture == nil {
 			t.Fatal("relative private HTML image was not loaded", name)
@@ -271,12 +271,12 @@ func TestModuleHTMLPrivateURLsPauseResumeAndUnload(t *testing.T) {
 	must(t, r.Manager().Switch(SceneSwitchRequest{Scene: "next.json", Retain: true}))
 	must(t, r.Dispatch())
 	must(t, htmlui.Sync(r.world))
-	for entity, access := range ecs.Query[scene.Sprite2D](r.world).All {
+	for entity, access := range r.world.Query[scene.Sprite2D]().All {
 		_ = access
 		if scene.IsActive(r.world, entity) {
 			t.Fatal("suspended HTML child remained active")
 		}
-		if visibility, ok := ecs.Get[scene.Visibility](r.world, entity); ok && visibility.Visible {
+		if visibility, ok := r.world.Get[scene.Visibility](entity); ok && visibility.Visible {
 			t.Fatal("suspended HTML child remained visible")
 		}
 	}
@@ -301,8 +301,8 @@ func TestModuleGlobalInputAndAnimationHonorSceneActivity(t *testing.T) {
 	})
 	var inputs int
 	registry := Registry{}
-	must(t, RegisterMod(&registry, "box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(_ *Context, _ *Signal, message Message) error {
-		event, ok := Value[Input](message)
+	must(t, registry.RegisterMod("box", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(_ *Context, _ *Signal, message Message) error {
+		event, ok := message.Value[Input]()
 		if !ok {
 			return nil
 		}
@@ -312,7 +312,7 @@ func TestModuleGlobalInputAndAnimationHonorSceneActivity(t *testing.T) {
 		inputs++
 		return nil
 	}}))
-	must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		if m.Topic != InputTopic {
 			return nil
 		}
@@ -335,10 +335,10 @@ func TestModuleGlobalInputAndAnimationHonorSceneActivity(t *testing.T) {
 	if inputs != 1 {
 		t.Fatal("global input reached disabled module")
 	}
-	ecs.InsertResource(r.world, &scene.Time{Delta: time.Second / 4})
+	r.world.InsertResource(&scene.Time{Delta: time.Second / 4})
 	must(t, scene.UpdateUIAnimatorSystem("").Run(r.world))
-	a, _ := Get[scene.Animator](&s.modules[0], s.modules[0].Root())
-	disabled, _ := Get[scene.Animator](&s.modules[1], s.modules[1].Root())
+	a, _ := s.modules[0].Get[scene.Animator](s.modules[0].Root())
+	disabled, _ := s.modules[1].Get[scene.Animator](s.modules[1].Root())
 	if a.Time() != .25 || disabled.Time() != 0 {
 		t.Fatal("animation ignored enabled state")
 	}
@@ -348,7 +348,7 @@ func TestModuleGlobalInputAndAnimationHonorSceneActivity(t *testing.T) {
 	must(t, r.Dispatch())
 	must(t, r.Dispatch())
 	must(t, scene.UpdateUIAnimatorSystem("").Run(r.world))
-	paused, _ := Get[scene.Animator](&s.modules[0], s.modules[0].Root())
+	paused, _ := s.modules[0].Get[scene.Animator](s.modules[0].Root())
 	if inputs != 1 || paused.Time() != a.Time() {
 		t.Fatal("suspended content still consumed input or advanced")
 	}

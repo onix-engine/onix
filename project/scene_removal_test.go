@@ -19,17 +19,17 @@ func TestSceneComponentClearersPreserveProfileAndMigrateOnce(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()
-			nodes := ecs.NewSpawner5[scene.Size2D, scene.Sprite2D, scene.Text2D, scene.Animator, scene.Name](world)
+			nodes := world.NewSpawner5[scene.Size2D, scene.Sprite2D, scene.Text2D, scene.Animator, scene.Name]()
 			nodes.Reserve(1)
 			cleanup := 0
-			ecs.OnComponentRemove[scene.Sprite2D](world, func(*ecs.World, ecs.Entity, *scene.Sprite2D) { cleanup++ })
+			world.OnComponentRemove[scene.Sprite2D](func(*ecs.World, ecs.Entity, *scene.Sprite2D) { cleanup++ })
 			run := func() {
 				entity := nodes.Spawn(scene.Size2D{}, scene.Sprite2D{}, scene.Text2D{}, scene.Animator{}, scene.Name{Value: "retained"})
-				before := ecs.ComponentStructureVersion[scene.Name](world)
+				before := world.ComponentStructureVersion[scene.Name]()
 				test.clear(world, entity)
-				if ecs.ComponentStructureVersion[scene.Name](world)-before != 2 || ecs.GetRef[scene.Name](world, entity).Value != "retained" ||
-					ecs.Has[scene.Sprite2D](world, entity) || ecs.Has[scene.Text2D](world, entity) || ecs.Has[scene.Size2D](world, entity) ||
-					ecs.Has[scene.Animator](world, entity) == test.removesAnimation {
+				if world.ComponentStructureVersion[scene.Name]()-before != 2 || world.GetRef[scene.Name](entity).Value != "retained" ||
+					world.Has[scene.Sprite2D](entity) || world.Has[scene.Text2D](entity) || world.Has[scene.Size2D](entity) ||
+					world.Has[scene.Animator](entity) == test.removesAnimation {
 					t.Fatal("scene clear did not preserve its profile or migrate once")
 				}
 				world.Despawn(entity)

@@ -394,9 +394,9 @@ func (d *webGPUDriver) RendererInfo() RendererInfo {
 func (d *webGPUDriver) trimScratch() {
 	trimJSUpload(&d.textureData, &d.textureDataRetention)
 	trimJSUpload(&d.uploadData, &d.uploadDataRetention)
-	d.deformationWords = trimScratch(d.deformationWords, &d.deformationWordsRetention, 1024)
-	d.deformationUniforms = trimScratch(d.deformationUniforms, &d.deformationUniformsRetention, 64)
-	d.spriteUniformOffsets = trimScratch(d.spriteUniformOffsets, &d.spriteUniformOffsetsRetention, 64)
+	d.deformationWords = (&d.deformationWordsRetention).trimScratch(d.deformationWords, 1024)
+	d.deformationUniforms = (&d.deformationUniformsRetention).trimScratch(d.deformationUniforms, 64)
+	d.spriteUniformOffsets = (&d.spriteUniformOffsetsRetention).trimScratch(d.spriteUniformOffsets, 64)
 }
 
 func (d *webGPUDriver) BeginFrame(clear Color) error {
@@ -947,7 +947,7 @@ func (d *webGPUDriver) DrawShapes(batch ShapeBatch) error {
 	if d.scissorEmpty || d.viewportEmpty {
 		return nil
 	}
-	instanceOffset, uniformOffset := upload2D(d, batch.Projection, batch.Instances)
+	instanceOffset, uniformOffset := d.upload2D(batch.Projection, batch.Instances)
 	frame := &d.frames[d.frameIndex]
 	program := d.programs[PipelineShape]
 	pipeline, err := d.pipeline(program, d.blendOrDefault())
@@ -1119,7 +1119,7 @@ func (d *webGPUDriver) drawMeshes(batch MeshBatch3D, gpuDeformation bool) error 
 	}
 	if gpuDeformation {
 		var err error
-		d.deformationWords = resetScratch(d.deformationWords, &d.deformationWordsRetention)
+		d.deformationWords = (&d.deformationWordsRetention).resetScratch(d.deformationWords)
 		d.deformationWords, err = packMeshDeformations(d.deformationWords, batch, d)
 		if err != nil {
 			return fmt.Errorf("render: invalid WebGPU deformation: %w", err)
@@ -1446,7 +1446,7 @@ func (d *webGPUDriver) ensureMultisample() {
 	d.multisample = webGPUColorBuffer{value: value, view: value.Call("createView"), width: d.width, height: d.height}
 }
 
-func upload2D[T any](d *webGPUDriver, projection [16]float32, instances []T) (int, int) {
+func (d *webGPUDriver) upload2D[T any](projection [16]float32, instances []T) (int, int) {
 	instanceBytes := sliceBytes(instances)
 	uniform := [32]float32{}
 	projection = d.transformProjection(projection)
@@ -1461,7 +1461,7 @@ func (d *webGPUDriver) uploadSprite2D(projection [16]float32, instanceBytes []by
 	instanceOffset := align(frame.offset, 4)
 	uniformOffset := align(instanceOffset+len(instanceBytes), 256)
 	projection = d.transformProjection(projection)
-	d.spriteUniformOffsets = growSlice(resetScratch(d.spriteUniformOffsets, &d.spriteUniformOffsetsRetention), len(draws))
+	d.spriteUniformOffsets = growSlice((&d.spriteUniformOffsetsRetention).resetScratch(d.spriteUniformOffsets), len(draws))
 	var offsets [16]int
 	var seen uint16
 	count := 0
@@ -1519,7 +1519,7 @@ func (d *webGPUDriver) uploadMesh(batch MeshBatch3D, gpuDeformation bool) (int, 
 	storageOffset := align(instanceOffset+len(sliceBytes(batch.Instances)), 256)
 	storageBytes := 0
 	if gpuDeformation && len(batch.Deformations) != 0 {
-		d.deformationUniforms = resetScratch(d.deformationUniforms, &d.deformationUniformsRetention)
+		d.deformationUniforms = (&d.deformationUniformsRetention).resetScratch(d.deformationUniforms)
 		storageBytes = len(sliceBytes(d.deformationWords))
 	}
 	d.deformationOffset = storageOffset

@@ -11,7 +11,6 @@ import (
 	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
 	"github.com/diiyw/onix/ui/html"
 	"github.com/diiyw/onix/window"
 )
@@ -24,6 +23,7 @@ type App struct {
 	renderMode                        RenderMode
 	renderRequested                   atomic.Bool
 	idle                              appIdleState
+	idleTaskCounts                    [7]func(*ecs.World) int
 	wakeContext                       atomic.Pointer[window.Context]
 	fixedTime                         *scene.FixedTime
 	now                               func() time.Time
@@ -61,6 +61,12 @@ type App struct {
 	moduleInputEvents                 ecs.MessageReader[scene.InputEvent]
 	moduleHTMLEvents                  ecs.MessageReader[html.Event]
 	moduleSystemsInstalled            bool
+	htmlDispose                       func(*ecs.World)
+	htmlNeedsFrame                    func(*ecs.World) bool
+	moduleHTMLInput                   ecs.System
+	uiLayoutPending                   func(*ecs.World) bool
+	uiCaretBlinkDelay                 func(*ecs.World) (time.Duration, bool)
+	render3DDispose                   func(*ecs.World)
 }
 
 // SetScriptRegistry installs generated scene script bindings. The registry is
@@ -142,7 +148,7 @@ func NewApp() *App {
 	}
 	// Loaders may start before the first frame. Give their workers a stable
 	// wake request immediately rather than creating it during the first Step.
-	ecs.InsertResource(app.World, scene.NewRenderRequest(app.wakeLoop))
+	app.World.InsertResource(scene.NewRenderRequest(app.wakeLoop))
 	app.renderRequested.Store(true)
 	return app
 }
@@ -202,10 +208,10 @@ func (app *App) installWebViewBackend(backend scene.WebViewBackend) {
 	if app.World == nil {
 		app.World = ecs.NewWorld()
 	}
-	if previous, ok := ecs.GetResource[*scene.WebViewRuntime](app.World); ok && previous != nil {
+	if previous, ok := app.World.GetResource[*scene.WebViewRuntime](); ok && previous != nil {
 		_ = previous.Close()
 	}
-	ecs.InsertResource(app.World, scene.NewWebViewRuntime(backend))
+	app.World.InsertResource(scene.NewWebViewRuntime(backend))
 	if app.webViewSystemInstalled {
 		return
 	}
@@ -332,12 +338,14 @@ func (app *App) Destroy() {
 		cleanup()
 	}
 	if app.World != nil {
-		html.Dispose(app.World)
-		if state, ok := ecs.GetResource[*scene.RenderWorld](app.World); ok {
+		if app.htmlDispose != nil {
+			app.htmlDispose(app.World)
+		}
+		if state, ok := app.World.GetResource[*scene.RenderWorld](); ok {
 			_ = state.Dispose()
 		}
-		if state, ok := ecs.GetResource[*render3d.World](app.World); ok {
-			_ = state.Dispose()
+		if app.render3DDispose != nil {
+			app.render3DDispose(app.World)
 		}
 	}
 	if app.Context != nil {

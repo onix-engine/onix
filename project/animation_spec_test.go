@@ -94,7 +94,7 @@ func TestAnimationTweenTakesPrecedenceAndRoundTripsJSON(t *testing.T) {
 			},
 		}},
 	}
-	if got := EffectiveAnimationTween(spec.FloatTracks[0].Keyframes[0], scene.AnimationLinear); got != scene.AnimationEaseIn {
+	if got := spec.FloatTracks[0].Keyframes[0].EffectiveAnimationTween(scene.AnimationLinear); got != scene.AnimationEaseIn {
 		t.Fatalf("effective tween = %q", got)
 	}
 	data, err := json.Marshal(spec)
@@ -113,7 +113,7 @@ func TestAnimationTweenTakesPrecedenceAndRoundTripsJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, _ := scene.SampleAnimationTrack(clip.FloatTracks[0], .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, _ := clip.FloatTracks[0].Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if value != 2.5 {
 		t.Fatalf("sampled tween = %v, want 2.5", value)
 	}
@@ -139,7 +139,7 @@ func TestInlineCubicSplineTangentsRoundTripAndSample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, ok := scene.SampleAnimationTrack(clip.FloatTracks[0], .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, ok := clip.FloatTracks[0].Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if !ok || math.Abs(float64(value-.75)) > 1e-6 {
 		t.Fatalf("cubic sample = %g, %v", value, ok)
 	}
@@ -181,7 +181,7 @@ func TestAnimationEasingPresetsValidateRoundTripAndCompile(t *testing.T) {
 			if clip.FloatTracks[0].Keyframes[0].Tween != tween {
 				t.Fatal("compilation lost the easing preset")
 			}
-			got, ok := scene.SampleAnimationTrack(clip.FloatTracks[0], .25, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+			got, ok := clip.FloatTracks[0].Sample(.25, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 			want := 10 + 20*scene.SampleAnimationProgress(tween, scene.AnimationCurve{}, .25)
 			if !ok || math.Abs(float64(got-want)) > 1e-6 {
 				t.Fatalf("compiled sample=%g, want %g", got, want)
@@ -220,7 +220,7 @@ func TestAnimationSequenceTimeCurveRoundTripsAndCompiles(t *testing.T) {
 		}
 		progress := min(max(scene.SampleAnimationProgress(tween, track.TimeCurve, .5), 0), 1)
 		index := int(progress * 4)
-		value, ok := scene.SampleAnimationTrack(track, .5, nil)
+		value, ok := track.Sample(.5, nil)
 		if !ok || value != track.Keyframes[index].Value {
 			t.Fatal("compiled frame sequence ignored the time curve")
 		}

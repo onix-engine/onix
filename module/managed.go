@@ -12,7 +12,7 @@ type ownedResource interface {
 	comparable
 }
 
-func Own[T ownedResource](c *Context, resource T) error {
+func (c *Context) Own[T ownedResource](resource T) error {
 	if !c.usable() {
 		return ErrDisposed
 	}
@@ -21,7 +21,7 @@ func Own[T ownedResource](c *Context, resource T) error {
 }
 
 // Disown removes an explicitly closed resource from lifecycle bookkeeping.
-func Disown[T ownedResource](c *Context, resource T) {
+func (c *Context) Disown[T ownedResource](resource T) {
 	if c == nil {
 		return
 	}

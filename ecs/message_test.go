@@ -9,10 +9,10 @@ func TestMessageReaderReturnAndPanicRetainUnreadMessages(t *testing.T) {
 	for _, stop := range []string{"return", "panic"} {
 		t.Run(stop, func(t *testing.T) {
 			world := NewWorld()
-			WriteMessage(world, 1)
-			WriteMessage(world, 2)
-			AdvanceMessages(world)
-			WriteMessage(world, 3)
+			world.WriteMessage(1)
+			world.WriteMessage(2)
+			world.AdvanceMessages()
+			world.WriteMessage(3)
 			var reader MessageReader[int]
 			consume := func() {
 				for message := range reader.All(world) {
@@ -45,9 +45,9 @@ func TestMessageReaderReturnAndPanicRetainUnreadMessages(t *testing.T) {
 
 func TestMessageReaderDiscardIsLocalAndPreservesLaterWrites(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	AdvanceMessages(world)
-	WriteMessage(world, 2)
+	world.WriteMessage(1)
+	world.AdvanceMessages()
+	world.WriteMessage(2)
 	var reader, observer MessageReader[int]
 	sequence := reader.All(world)
 	version := world.MutationVersion()
@@ -55,7 +55,7 @@ func TestMessageReaderDiscardIsLocalAndPreservesLaterWrites(t *testing.T) {
 	if world.MutationVersion() != version {
 		t.Fatal("discard changed the world")
 	}
-	WriteMessage(world, 3)
+	world.WriteMessage(3)
 	var messages []int
 	for message := range sequence {
 		messages = append(messages, *message)
@@ -66,11 +66,11 @@ func TestMessageReaderDiscardIsLocalAndPreservesLaterWrites(t *testing.T) {
 	if got := observer.Read(world); !slices.Equal(got, []int{1, 2, 3}) {
 		t.Fatalf("discard affected another reader: %v", got)
 	}
-	AdvanceMessages(world)
-	AdvanceMessages(world)
-	WriteMessage(world, 4)
+	world.AdvanceMessages()
+	world.AdvanceMessages()
+	world.WriteMessage(4)
 	reader.Discard(world)
-	WriteMessage(world, 5)
+	world.WriteMessage(5)
 	if got := reader.Read(world); !slices.Equal(got, []int{5}) {
 		t.Fatalf("messages after expiry and discard = %v", got)
 	}
@@ -78,9 +78,9 @@ func TestMessageReaderDiscardIsLocalAndPreservesLaterWrites(t *testing.T) {
 
 func TestMessageReaderAllBorrowsMessagesAcrossConsumers(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	AdvanceMessages(world)
-	WriteMessage(world, 2)
+	world.WriteMessage(1)
+	world.AdvanceMessages()
+	world.WriteMessage(2)
 	version := world.MutationVersion()
 	var first, second MessageReader[int]
 	for message := range first.All(world) {
@@ -96,11 +96,11 @@ func TestMessageReaderAllBorrowsMessagesAcrossConsumers(t *testing.T) {
 
 func TestMessageReaderAllSkipsExpiredFrames(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	AdvanceMessages(world)
-	WriteMessage(world, 2)
-	AdvanceMessages(world)
-	WriteMessage(world, 3)
+	world.WriteMessage(1)
+	world.AdvanceMessages()
+	world.WriteMessage(2)
+	world.AdvanceMessages()
+	world.WriteMessage(3)
 	var reader MessageReader[int]
 	var values []int
 	for value := range reader.All(world) {
@@ -109,8 +109,8 @@ func TestMessageReaderAllSkipsExpiredFrames(t *testing.T) {
 	if !slices.Equal(values, []int{2, 3}) {
 		t.Fatalf("expired reader messages = %v", values)
 	}
-	AdvanceMessages(world)
-	AdvanceMessages(world)
+	world.AdvanceMessages()
+	world.AdvanceMessages()
 	for value := range reader.All(world) {
 		t.Fatalf("expired message retained: %v", *value)
 	}
@@ -122,9 +122,9 @@ func TestMessageReaderAllSkipsExpiredFrames(t *testing.T) {
 func TestMessageReaderAllIncludesWritesDuringIteration(t *testing.T) {
 	for _, previousFrame := range []bool{false, true} {
 		world := NewWorld()
-		WriteMessage(world, 1)
+		world.WriteMessage(1)
 		if previousFrame {
-			AdvanceMessages(world)
+			world.AdvanceMessages()
 		}
 		var reader MessageReader[int]
 		var values []int
@@ -132,7 +132,7 @@ func TestMessageReaderAllIncludesWritesDuringIteration(t *testing.T) {
 			values = append(values, *value)
 			if *value == 1 {
 				for next := 2; next <= 100; next++ {
-					WriteMessage(world, next)
+					world.WriteMessage(next)
 				}
 			}
 		}
@@ -152,9 +152,9 @@ func TestMessageReaderAllIncludesWritesDuringIteration(t *testing.T) {
 
 func TestMessageReaderAllAndDiscardDoNotAllocateAfterWarmup(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	AdvanceMessages(world)
-	WriteMessage(world, 2)
+	world.WriteMessage(1)
+	world.AdvanceMessages()
+	world.WriteMessage(2)
 	consume := func() {
 		var reader MessageReader[int]
 		total := 0

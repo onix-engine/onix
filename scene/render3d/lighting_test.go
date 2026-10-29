@@ -17,7 +17,7 @@ func TestHDREnvironmentEncodingAndZeroAllocations(t *testing.T) {
 	state := NewWorld()
 	t.Cleanup(func() { _ = state.Dispose() })
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, Environment{Atlas: &graphics.Texture{Width: 128, Height: 512}, Encoding: render.EnvironmentRGBE, Intensity: .5, Exposure: 2, Background: true})
+	bundle.Put(Environment{Atlas: &graphics.Texture{Width: 128, Height: 512}, Encoding: render.EnvironmentRGBE, Intensity: .5, Exposure: 2, Background: true})
 	entity := world.Spawn(bundle)
 	view := state.viewFor(entity)
 	view.frame.Mode = render.RenderViewLit
@@ -33,7 +33,7 @@ func TestHDREnvironmentEncodingAndZeroAllocations(t *testing.T) {
 	if allocations := testing.AllocsPerRun(100, prepare); allocations != 0 {
 		t.Fatalf("HDR lighting setup allocated %g times", allocations)
 	}
-	if err := ecs.Insert(world, entity, Environment{Exposure: 1}); err != nil {
+	if err := world.Insert(entity, Environment{Exposure: 1}); err != nil {
 		t.Fatal(err)
 	}
 	prepare()
@@ -61,7 +61,7 @@ func TestEnvironmentPanoramaSkyBindingAndZeroAllocations(t *testing.T) {
 	Register(world)
 	bundle := ecs.NewBundle(1)
 	environment := Environment{Panorama: panorama, Rotation: .75, Background: true}
-	ecs.Put(&bundle, environment)
+	bundle.Put(environment)
 	entity := world.Spawn(bundle)
 	view := state.viewFor(entity)
 	view.frame.Mode = render.RenderViewLit
@@ -87,7 +87,7 @@ func TestEnvironmentPanoramaSkyBindingAndZeroAllocations(t *testing.T) {
 	}
 	sky := graphics.SkyRadiance{Zenith: mgl32.Vec3{0, 0, 1}}
 	environment.Sky = &sky
-	if err := ecs.Insert(world, entity, environment); err != nil {
+	if err := world.Insert(entity, environment); err != nil {
 		t.Fatal(err)
 	}
 	frame()
@@ -130,27 +130,27 @@ func TestShadowCastersOutsideCameraFrustumAndNoShadowExclusion(t *testing.T) {
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
 	camera := ecs.NewBundle(4)
-	ecs.Put(&camera, scene.NewCamera())
-	ecs.Put(&camera, Camera{})
-	ecs.Put(&camera, scene.PerspectiveProjection3D())
-	ecs.Put(&camera, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	camera.Put(scene.NewCamera())
+	camera.Put(Camera{})
+	camera.Put(scene.PerspectiveProjection3D())
+	camera.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	cameraEntity := world.Spawn(camera)
 	sun := ecs.NewBundle(2)
 	light := NewDirectionalLight()
 	light.Shadows = NewShadowSettings()
-	ecs.Put(&sun, light)
-	ecs.Put(&sun, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	sun.Put(light)
+	sun.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	sunEntity := world.Spawn(sun)
 	mesh := graphics.CubeMesh(1)
 	t.Cleanup(func() { _ = mesh.Dispose() })
 	material := graphics.NewStandardMaterial(graphics.White)
 	for i, z := range []float32{-4, 4, -3} {
 		b := ecs.NewBundle(4)
-		ecs.Put(&b, Mesh{Mesh: mesh})
-		ecs.Put(&b, Material[graphics.StandardMaterial]{Material: material})
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, z)})
+		b.Put(Mesh{Mesh: mesh})
+		b.Put(Material[graphics.StandardMaterial]{Material: material})
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, z)})
 		if i == 2 {
-			ecs.Put(&b, NoShadow{})
+			b.Put(NoShadow{})
 		}
 		world.Spawn(b)
 	}
@@ -159,7 +159,7 @@ func TestShadowCastersOutsideCameraFrustumAndNoShadowExclusion(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	view := renderWorld3D(world).views[cameraEntity]
+	view := WorldFor(world).views[cameraEntity]
 	shadowTarget := view.shadow.target
 	t.Cleanup(func() { _ = shadowTarget.Dispose() })
 	if len(view.extracted) != 2 || len(view.shadow.views[0].extracted) != 2 {
@@ -185,7 +185,7 @@ func TestShadowCastersOutsideCameraFrustumAndNoShadowExclusion(t *testing.T) {
 		for _, v := range [2]*renderView3D{view, view.shadow.views[0]} {
 			v.instances = v.instances[:0]
 			v.draws = v.draws[:0]
-			v.appendPhase(v.extracted, renderWorld3D(world).white, false)
+			v.appendPhase(v.extracted, WorldFor(world).white, false)
 		}
 	}
 	for range 5 {
@@ -196,7 +196,7 @@ func TestShadowCastersOutsideCameraFrustumAndNoShadowExclusion(t *testing.T) {
 	}
 	// Turning off shadows releases the view's target on the next extraction.
 	light.Shadows.Enabled = false
-	if err := ecs.Insert(world, sunEntity, light); err != nil {
+	if err := world.Insert(sunEntity, light); err != nil {
 		t.Fatal(err)
 	}
 	if err := extractRender3D(&ecs.SystemContext{World: world}); err != nil {
@@ -244,7 +244,7 @@ func TestViewLightingKeepsShadowsAcrossPickingAndIsolatesOverrides(t *testing.T)
 		t.Fatalf("lit/picking switch allocated %g times", allocations)
 	}
 	config := ViewLighting{Override: true, Ambient: AmbientLight{Color: graphics.White, Brightness: 0.5}, Sun: NewDirectionalLight(), Direction: mgl32.Vec3{1, -1, 0}}
-	if err := ecs.Insert(world, camera, config); err != nil {
+	if err := world.Insert(camera, config); err != nil {
 		t.Fatal(err)
 	}
 	if err := setupViewLighting3D(world, state, view, camera); err != nil {
@@ -263,8 +263,8 @@ func TestViewGroundAndGradientDoNotEnterPicking(t *testing.T) {
 	Register(world)
 	bundle := ecs.NewBundle(2)
 	sky := graphics.SkyRadiance{Zenith: mgl32.Vec3{0.1, 0.2, 0.3}}
-	ecs.Put(&bundle, Environment{Sky: &sky, Background: true})
-	ecs.Put(&bundle, GroundPlane{Size: 10, Color: graphics.White})
+	bundle.Put(Environment{Sky: &sky, Background: true})
+	bundle.Put(GroundPlane{Size: 10, Color: graphics.White})
 	camera := world.Spawn(bundle)
 	state := NewWorld()
 	view := state.viewFor(camera)

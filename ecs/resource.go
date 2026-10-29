@@ -8,7 +8,7 @@ type resourceSlot[T any] struct {
 	changed Tick
 }
 
-func InsertResource[T any](world *World, resource T) {
+func (world *World) InsertResource[T any](resource T) {
 	requireWorld(world)
 	world.mutationVersion++
 	typ := reflect.TypeFor[T]()
@@ -25,10 +25,10 @@ func InsertResource[T any](world *World, resource T) {
 	world.resources[typ] = &resourceSlot[T]{value: resource, added: tick, changed: tick}
 }
 
-func GetResource[T any](world *World) (T, bool) {
+func (world *World) GetResource[T any]() (T, bool) {
 	var zero T
 	requireWorld(world)
-	slot, ok := resourceSlotFor[T](world)
+	slot, ok := world.resourceSlotFor[T]()
 	if !ok {
 		return zero, false
 	}
@@ -36,17 +36,17 @@ func GetResource[T any](world *World) (T, bool) {
 }
 
 // ResourceChangeTick returns the last write tick, or zero for a missing resource.
-func ResourceChangeTick[T any](world *World) Tick {
+func (world *World) ResourceChangeTick[T any]() Tick {
 	requireWorld(world)
-	if slot, ok := resourceSlotFor[T](world); ok {
+	if slot, ok := world.resourceSlotFor[T](); ok {
 		return slot.changed
 	}
 	return 0
 }
 
-func GetResourceMut[T any](world *World) (*T, bool) {
+func (world *World) GetResourceMut[T any]() (*T, bool) {
 	requireWorld(world)
-	slot, ok := resourceSlotFor[T](world)
+	slot, ok := world.resourceSlotFor[T]()
 	if !ok {
 		return nil, false
 	}
@@ -55,7 +55,7 @@ func GetResourceMut[T any](world *World) (*T, bool) {
 	return &slot.value, true
 }
 
-func RemoveResource[T any](world *World) (T, bool) {
+func (world *World) RemoveResource[T any]() (T, bool) {
 	var zero T
 	requireWorld(world)
 	typ := reflect.TypeFor[T]()
@@ -72,17 +72,17 @@ func RemoveResource[T any](world *World) (T, bool) {
 	return slot.value, true
 }
 
-func ResourceAdded[T any](context *SystemContext) bool {
-	slot, ok := contextResourceSlot[T](context)
+func (context *SystemContext) ResourceAdded[T any]() bool {
+	slot, ok := context.contextResourceSlot[T]()
 	return ok && tickInRange(slot.added, context.lastRun, context.thisRun)
 }
 
-func ResourceChanged[T any](context *SystemContext) bool {
-	slot, ok := contextResourceSlot[T](context)
+func (context *SystemContext) ResourceChanged[T any]() bool {
+	slot, ok := context.contextResourceSlot[T]()
 	return ok && tickInRange(slot.changed, context.lastRun, context.thisRun)
 }
 
-func resourceSlotFor[T any](world *World) (*resourceSlot[T], bool) {
+func (world *World) resourceSlotFor[T any]() (*resourceSlot[T], bool) {
 	value, ok := world.resources[reflect.TypeFor[T]()]
 	if !ok {
 		return nil, false
@@ -94,9 +94,9 @@ func resourceSlotFor[T any](world *World) (*resourceSlot[T], bool) {
 	return slot, true
 }
 
-func contextResourceSlot[T any](context *SystemContext) (*resourceSlot[T], bool) {
+func (context *SystemContext) contextResourceSlot[T any]() (*resourceSlot[T], bool) {
 	if context == nil || context.World == nil {
 		return nil, false
 	}
-	return resourceSlotFor[T](context.World)
+	return context.World.resourceSlotFor[T]()
 }

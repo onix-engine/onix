@@ -244,7 +244,7 @@ func (world *World) RemoveBody(body Body) bool {
 	return true
 }
 
-func AddCollider[S Shape2D](world *World, body Body, def ColliderDef[S]) ColliderHandle[S] {
+func (world *World) AddCollider[S Shape2D](body Body, def ColliderDef[S]) ColliderHandle[S] {
 	if world == nil || body.world != world {
 		return ColliderHandle[S]{}
 	}
@@ -270,7 +270,7 @@ func AddCollider[S Shape2D](world *World, body Body, def ColliderDef[S]) Collide
 		friction: max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
 		sensor: def.Sensor, filter: def.Filter.normalized(), collisionType: def.CollisionType,
 	}
-	setColliderShape(state, def.Shape)
+	state.setColliderShape(def.Shape)
 	if bodyState.inertia <= 0 {
 		bodyState.inertia = shapeInertia(*state, bodyState.mass)
 		bodyState.updateInverseMass()
@@ -278,7 +278,7 @@ func AddCollider[S Shape2D](world *World, body Body, def ColliderDef[S]) Collide
 	return ColliderHandle[S]{world: world, id: makeColliderID(index, generation)}
 }
 
-func RemoveCollider[S Shape2D](world *World, collider ColliderHandle[S]) bool {
+func (world *World) RemoveCollider[S Shape2D](collider ColliderHandle[S]) bool {
 	if world == nil || collider.world != world {
 		return false
 	}
@@ -751,7 +751,7 @@ func pairKey(a, b int) uint64 {
 	return uint64(uint32(a))<<32 | uint64(uint32(b))
 }
 
-func setColliderShape[S Shape2D](state *colliderState, shape S) {
+func (state *colliderState) setColliderShape[S Shape2D](shape S) {
 	switch value := any(shape).(type) {
 	case Circle:
 		state.kind, state.a, state.radius = shapeCircle, value.Center, max(value.Radius, 0)
@@ -768,7 +768,7 @@ func setColliderShape[S Shape2D](state *colliderState, shape S) {
 	}
 }
 
-func shapeFromState[S Shape2D](state colliderState) S {
+func (state colliderState) shapeFromState[S Shape2D]() S {
 	var value any
 	switch state.kind {
 	case shapeCircle:

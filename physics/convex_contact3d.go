@@ -120,9 +120,9 @@ func collideConvex3D[A, B convexPolyhedron3D](a A, b B) (manifold3D, bool) {
 		_, alignmentA := convexFace3D(a, contact.normal)
 		_, alignmentB := convexFace3D(b, contact.normal.Mul(-1))
 		if alignmentA >= alignmentB {
-			convexFaceContacts3D(&contact, a, b, contact.normal)
+			(&contact).convexFaceContacts3D(a, b, contact.normal)
 		} else {
-			convexFaceContacts3D(&contact, b, a, contact.normal.Mul(-1))
+			(&contact).convexFaceContacts3D(b, a, contact.normal.Mul(-1))
 		}
 	}
 	contact.initializePoints()
@@ -158,7 +158,7 @@ func convexFace3D[P convexPolyhedron3D](shape P, direction Vector3D) (int, float
 
 // Intersection vertices lie on an edge of either polyhedron. Clipping edges
 // avoids variable-size polygon scratch even for hulls with many coplanar faces.
-func convexFaceContacts3D[A, B convexPolyhedron3D](contact *manifold3D, reference A, incident B, normal Vector3D) {
+func (contact *manifold3D) convexFaceContacts3D[A convexPolyhedron3D, B convexPolyhedron3D](reference A, incident B, normal Vector3D) {
 	face, _ := convexFace3D(incident, normal.Mul(-1))
 	origin, incidentNormal := incident.face(face)
 	_, plane := projectConvex3D(reference, normal)

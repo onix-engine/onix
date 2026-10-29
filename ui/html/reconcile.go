@@ -76,7 +76,7 @@ type htmlEntityWriter struct {
 }
 
 func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, context ecs.Entity, capacity int) htmlEntityWriter {
-	state := ecs.GetMut[htmlRenderState](world, owner)
+	state := world.GetMut[htmlRenderState](owner)
 	writer := htmlEntityWriter{world: world, state: state, node: node, role: role}
 	if state.EntityGroups == nil {
 		state.EntityGroups = make(map[htmlRenderIdentity]*htmlEntityGroup)
@@ -121,9 +121,9 @@ func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *dom.Node, role ht
 	} else {
 		// These links are added after the primitive is emitted and may change when
 		// its DOM ancestor becomes or ceases to be a control/editing host.
-		ecs.Remove[FocusOwner](world, writer.entity)
-		ecs.Remove[EditableText](world, writer.entity)
-		ecs.Remove[ScrollContent](world, writer.entity)
+		world.Remove[FocusOwner](writer.entity)
+		world.Remove[EditableText](writer.entity)
+		world.Remove[ScrollContent](writer.entity)
 	}
 	return writer
 }
@@ -162,29 +162,29 @@ func htmlOptionalBit[T any]() uint16 {
 
 // The generic writer uses ordinary bundles only for new entities. Updating a
 // retained primitive does not box every component in a freshly allocated bundle.
-func putHTML[T any](writer *htmlEntityWriter, value T) {
+func (writer *htmlEntityWriter) putHTML[T any](value T) {
 	writer.optional |= htmlOptionalBit[T]()
 	if writer.entity == 0 {
-		ecs.Put(&writer.bundle, value)
+		writer.bundle.Put(value)
 		return
 	}
 	world, entity := writer.world, writer.entity
 	switch next := any(value).(type) {
 	case scene.InputState2D:
-		if ecs.Has[scene.InputState2D](world, entity) {
+		if world.Has[scene.InputState2D](entity) {
 			return
 		}
 	case scene.UIGlobalTransform:
-		if ecs.Has[scene.UIGlobalTransform](world, entity) {
+		if world.Has[scene.UIGlobalTransform](entity) {
 			return
 		}
 	case Editable:
-		if old, ok := ecs.Get[Editable](world, entity); ok && old.Value == next.Value {
+		if old, ok := world.Get[Editable](entity); ok && old.Value == next.Value {
 			next.Anchor, next.Focus = old.Anchor, old.Focus
 			value = any(next).(T)
 		}
 	case scene.UIScroll:
-		if old, ok := ecs.Get[scene.UIScroll](world, entity); ok {
+		if old, ok := world.Get[scene.UIScroll](entity); ok {
 			old.ViewportSize, old.ContentSize = next.ViewportSize, next.ContentSize
 			old.Horizontal, old.Vertical = next.Horizontal, next.Vertical
 			old.ConsumeWheel = next.ConsumeWheel
@@ -194,7 +194,7 @@ func putHTML[T any](writer *htmlEntityWriter, value T) {
 			value = any(old).(T)
 		}
 	case htmlChild:
-		if old, ok := ecs.Get[htmlChild](world, entity); ok {
+		if old, ok := world.Get[htmlChild](entity); ok {
 			// The primitive is emitted at its authored layout position on every
 			// reconciliation. External offsets and scroll parents are replayed by
 			// applyHTMLNodeBindings after emission; only the CSS transform state
@@ -203,7 +203,7 @@ func putHTML[T any](writer *htmlEntityWriter, value T) {
 			value = any(next).(T)
 		}
 	case scene.Text2D:
-		if old, ok := ecs.Get[scene.Text2D](world, entity); ok {
+		if old, ok := world.Get[scene.Text2D](entity); ok {
 			// The authored fragment never carries WrapWidth, so keeping its
 			// WrapMode would drop the wrap a widget computes for its own text.
 			next.WrapMode, next.WrapWidth = old.WrapMode, old.WrapWidth
@@ -214,13 +214,13 @@ func putHTML[T any](writer *htmlEntityWriter, value T) {
 			value = any(old).(T)
 		}
 	}
-	_ = ecs.Insert(world, entity, value)
+	_ = world.Insert(entity, value)
 }
 
-func removeMissingHTML[T any](writer *htmlEntityWriter) {
+func (writer *htmlEntityWriter) removeMissingHTML[T any]() {
 	bit := htmlOptionalBit[T]()
 	if writer.oldOptional&bit != 0 && writer.optional&bit == 0 {
-		ecs.Remove[T](writer.world, writer.entity)
+		writer.world.Remove[T](writer.entity)
 	}
 }
 
@@ -230,19 +230,19 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		writer.entity = writer.world.Spawn(writer.bundle)
 		writer.state.SyncStats.Spawned++
 	} else {
-		removeMissingHTML[scene.Sprite2D](writer)
-		removeMissingHTML[scene.SpriteLayers2D](writer)
-		removeMissingHTML[scene.ClipRect2D](writer)
-		removeMissingHTML[scene.InputTarget2D](writer)
-		removeMissingHTML[scene.InputBlocker2D](writer)
-		removeMissingHTML[Focusable](writer)
-		removeMissingHTML[Editable](writer)
-		removeMissingHTML[htmlEditableNodeRef](writer)
-		removeMissingHTML[ControlText](writer)
-		removeMissingHTML[htmlControlTextNode](writer)
-		removeMissingHTML[scene.UIScroll](writer)
-		removeMissingHTML[ScrollbarPart](writer)
-		removeMissingHTML[scene.ClipExempt2D](writer)
+		writer.removeMissingHTML[scene.Sprite2D]()
+		writer.removeMissingHTML[scene.SpriteLayers2D]()
+		writer.removeMissingHTML[scene.ClipRect2D]()
+		writer.removeMissingHTML[scene.InputTarget2D]()
+		writer.removeMissingHTML[scene.InputBlocker2D]()
+		writer.removeMissingHTML[Focusable]()
+		writer.removeMissingHTML[Editable]()
+		writer.removeMissingHTML[htmlEditableNodeRef]()
+		writer.removeMissingHTML[ControlText]()
+		writer.removeMissingHTML[htmlControlTextNode]()
+		writer.removeMissingHTML[scene.UIScroll]()
+		writer.removeMissingHTML[ScrollbarPart]()
+		writer.removeMissingHTML[scene.ClipExempt2D]()
 		writer.state.SyncStats.Reused++
 	}
 	binding := htmlEntityBinding{writer.entity, writer.optional}
@@ -252,7 +252,7 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		writer.group.Bindings[writer.slot] = binding
 	}
 	state := writer.state
-	if sprite, ok := ecs.Get[scene.Sprite2D](writer.world, writer.entity); ok {
+	if sprite, ok := writer.world.Get[scene.Sprite2D](writer.entity); ok {
 		state.Textures.bind(writer.entity, sprite.Texture)
 	} else {
 		state.Textures.bind(writer.entity, nil)
@@ -278,7 +278,7 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 	if state.Reconciling || fresh {
 		rendered.Entities = append(rendered.Entities, writer.entity)
 	}
-	if child := ecs.GetMut[htmlChild](writer.world, writer.entity); child != nil {
+	if child := writer.world.GetMut[htmlChild](writer.entity); child != nil {
 		child.transformOffset = mgl32.Vec2{}
 		child.role = writer.role
 	}
@@ -287,7 +287,7 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 }
 
 func htmlEntityNode(world *ecs.World, entity ecs.Entity) *dom.Node {
-	child, _ := ecs.Get[htmlChild](world, entity)
+	child, _ := world.Get[htmlChild](entity)
 	return child.Node
 }
 

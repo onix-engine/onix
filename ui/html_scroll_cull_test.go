@@ -17,7 +17,7 @@ import (
 func TestHTMLScrollportCullsTextVisuals(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	const lines = 400
 	body := strings.Builder{}
 	for index := 1; index <= lines; index++ {
@@ -26,13 +26,13 @@ func TestHTMLScrollportCullsTextVisuals(t *testing.T) {
 	html := htmlui.New(`<div id="scroller" style="width:200px;height:120px;overflow:auto">` + body.String() + `</div>`)
 	html.Width, html.Height, html.Font = 300, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	mounted, area := htmlTextMounts(world)
-	if _, ok := ecs.Get[scene.UIScroll](world, area); !ok {
+	if _, ok := world.Get[scene.UIScroll](area); !ok {
 		t.Fatal("missing scroll viewport")
 	}
 	if mounted["L001"] == "" {
@@ -45,7 +45,7 @@ func TestHTMLScrollportCullsTextVisuals(t *testing.T) {
 		t.Fatal("offscreen tail mounted")
 	}
 
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	if scroll == nil {
 		t.Fatal("missing scroll viewport")
 	}
@@ -76,7 +76,7 @@ func TestHTMLScrollportCullsTextVisuals(t *testing.T) {
 func htmlTextMounts(world *ecs.World) (map[string]string, ecs.Entity) {
 	mounted := map[string]string{}
 	area := ecs.Entity(0)
-	for _, access := range ecs.Query2[scene.Text2D, htmlui.ScrollContent](world).All {
+	for _, access := range world.Query2[scene.Text2D, htmlui.ScrollContent]().All {
 		text := access.A.Get()
 		content := access.B.Get()
 
@@ -91,7 +91,7 @@ func htmlTextMounts(world *ecs.World) (map[string]string, ecs.Entity) {
 func TestHTMLScrollportCullSurvivesStaticAncestorClip(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	const lines = 400
 	body := strings.Builder{}
 	for index := 1; index <= lines; index++ {
@@ -100,13 +100,13 @@ func TestHTMLScrollportCullSurvivesStaticAncestorClip(t *testing.T) {
 	html := htmlui.New(`<div style="height:200px;overflow:hidden"><div id="scroller" style="width:200px;height:120px;overflow:auto">` + body.String() + `</div></div>`)
 	html.Width, html.Height, html.Font = 300, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	world.Spawn(bundle)
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	mounted, area := htmlTextMounts(world)
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	if scroll == nil {
 		t.Fatal("missing scroll viewport")
 	}

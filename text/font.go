@@ -9,6 +9,9 @@ import (
 
 type Font struct {
 	*font.Face
+	mu        sync.Mutex
+	caches    map[glyphCacheKey]*GlyphCache
+	cacheTick uint64
 	atlasPool *glyphAtlasPool
 }
 
@@ -25,15 +28,9 @@ var defaultFont = sync.OnceValue(func() *Font {
 // system has no usable font, so the caller must supply one.
 func DefaultFont() *Font { return defaultFont() }
 
-var glyphCaches = struct {
-	sync.Mutex
-	caches map[glyphCacheKey]*GlyphCache
-}{
-	caches: make(map[glyphCacheKey]*GlyphCache),
-}
+const glyphSizeCacheLimit = 32
 
 type glyphCacheKey struct {
-	font *Font
 	size float64
 	dpi  float64
 }
@@ -78,17 +75,34 @@ func (f *Font) MeasureString(face *font.ScaledFace, value string) (int, int, int
 }
 
 func (f *Font) GlyphCache(size, dpi float64) *GlyphCache {
-	key := glyphCacheKey{font: f, size: size, dpi: dpi}
-	glyphCaches.Lock()
-	defer glyphCaches.Unlock()
-	if cache, ok := glyphCaches.caches[key]; ok {
+	key := glyphCacheKey{size: size, dpi: dpi}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cacheTick++
+	if cache, ok := f.caches[key]; ok {
+		cache.lastUse = f.cacheTick
 		return cache
+	}
+	if f.caches == nil {
+		f.caches = make(map[glyphCacheKey]*GlyphCache)
+	}
+	if len(f.caches) >= glyphSizeCacheLimit {
+		var oldest glyphCacheKey
+		tick := ^uint64(0)
+		for key, cache := range f.caches {
+			if cache.lastUse < tick {
+				oldest, tick = key, cache.lastUse
+			}
+		}
+		// Existing text can still own this cache and its glyph geometry.
+		delete(f.caches, oldest)
 	}
 	if f.atlasPool == nil {
 		f.atlasPool = new(glyphAtlasPool)
 	}
 	cache := newGlyphCache(f, size, dpi, f.atlasPool, false)
-	glyphCaches.caches[key] = cache
+	cache.lastUse = f.cacheTick
+	f.caches[key] = cache
 	return cache
 }
 
@@ -96,18 +110,12 @@ func (f *Font) Dispose() error {
 	if f == nil {
 		return nil
 	}
-	glyphCaches.Lock()
-	caches := make([]*GlyphCache, 0)
-	for key, cache := range glyphCaches.caches {
-		if key.font != f {
-			continue
-		}
-		caches = append(caches, cache)
-		delete(glyphCaches.caches, key)
-	}
+	f.mu.Lock()
+	caches := f.caches
+	f.caches = nil
 	pool := f.atlasPool
 	f.atlasPool = nil
-	glyphCaches.Unlock()
+	f.mu.Unlock()
 
 	errList := make([]error, 0, len(caches))
 	for _, cache := range caches {

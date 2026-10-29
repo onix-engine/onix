@@ -57,16 +57,16 @@ func updateSpriteTrails2D(context *ecs.SystemContext) error {
 		return nil
 	}
 	dt := float32(1.0 / 60.0)
-	if clock, ok := ecs.GetResource[*Time](world); ok && clock != nil && clock.Delta > 0 {
+	if clock, ok := world.GetResource[*Time](); ok && clock != nil && clock.Delta > 0 {
 		dt = clock.DeltaSeconds()
 	}
-	for entity, access := range ecs.Query[SpriteTrail2D](world).All {
+	for entity, access := range world.Query[SpriteTrail2D]().All {
 		if !IsActive(world, entity) {
 			continue
 		}
 		trail := access.Mut()
 
-		sprite := ecs.GetRef[Sprite2D](world, entity)
+		sprite := world.GetRef[Sprite2D](entity)
 		ok := sprite != nil
 		if !ok || sprite == nil {
 			trail.Clear()
@@ -76,20 +76,20 @@ func updateSpriteTrails2D(context *ecs.SystemContext) error {
 		trail.normalize()
 		trail.advance(dt)
 		trail.elapsed += dt
-		visibility := ecs.GetRef[Visibility](world, entity)
+		visibility := world.GetRef[Visibility](entity)
 		if visibility == nil || !visibility.Visible {
 			continue
 		}
-		if sampleSpriteTrailForTransform[GlobalTransform](world, entity, trail, sprite) {
+		if trail.sampleForTransform[GlobalTransform](world, entity, sprite) {
 			continue
 		}
-		sampleSpriteTrailForTransform[UIGlobalTransform](world, entity, trail, sprite)
+		trail.sampleForTransform[UIGlobalTransform](world, entity, sprite)
 	}
 	return nil
 }
 
-func sampleSpriteTrailForTransform[T renderGlobalTransform2D](world *ecs.World, entity ecs.Entity, trail *SpriteTrail2D, sprite *Sprite2D) bool {
-	transform := ecs.GetRef[T](world, entity)
+func (trail *SpriteTrail2D) sampleForTransform[T renderGlobalTransform2D](world *ecs.World, entity ecs.Entity, sprite *Sprite2D) bool {
+	transform := world.GetRef[T](entity)
 	if transform == nil {
 		return false
 	}

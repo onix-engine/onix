@@ -277,7 +277,8 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 	foundMajor, foundMinor, foundOrigin := false, false, false
 	blue, _ := project.ParseColor("#3264d9", 1)
 	for _, shape := range driver.shapes {
-		if shape.Fill == ([4]float32{blue.R, blue.G, blue.B, blue.A}) && shape.Model[2] == 45 && shape.Model[5] == 67 {
+		model := shapeContourModel(shape)
+		if shape.Fill == ([4]float32{blue.R, blue.G, blue.B, blue.A}) && model[2] == 45 && model[5] == 67 {
 			foundSprite = true
 		}
 		if shape.Fill == ([4]float32{1, 0, 0, 1}) {
@@ -285,13 +286,13 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 		}
 		if shape.Fill == ([4]float32{editorTheme.axisX.R, editorTheme.axisX.G, editorTheme.axisX.B, editorTheme.axisX.A}) {
 			foundX = true
-			if abs(shape.Model[0]-a.canvasBounds().W) > .01 || abs(shape.Model[4]-2) > .01 {
+			if abs(model[0]-a.canvasBounds().W) > .01 || abs(model[4]-2) > .01 {
 				t.Fatal("X axis geometry does not span the canvas", shape.Model)
 			}
 		}
 		if shape.Fill == ([4]float32{editorTheme.axisY.R, editorTheme.axisY.G, editorTheme.axisY.B, editorTheme.axisY.A}) {
 			foundY = true
-			if abs(shape.Model[0]-2) > .01 || abs(shape.Model[4]-a.canvasBounds().H) > .01 {
+			if abs(model[0]-2) > .01 || abs(model[4]-a.canvasBounds().H) > .01 {
 				t.Fatal("Y axis geometry does not span the canvas", shape.Model)
 			}
 		}
@@ -335,7 +336,7 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 		t.Fatal(err)
 	}
 	foundCurrent := false
-	for _, access := range ecs.Query[scene.Sprite2D](context.World).All {
+	for _, access := range context.World.Query[scene.Sprite2D]().All {
 		if access.Ref().Texture == v.target.colorTexture {
 			foundCurrent = true
 			break
@@ -354,7 +355,7 @@ func TestWorkspace2DMiddleDragPansViewAndPreservesPicking(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := input.NewState()
-	ecs.InsertResource(context.World, in)
+	context.World.InsertResource(in)
 	bounds, frame := a.canvasBounds(), a.viewport2D.frame
 	x, y := float64(bounds.X+frame.X+60*a.canvasScale), float64(bounds.Y+frame.Y+80*a.canvasScale)
 	revision, selected, scale := a.Document.Revision, a.Selected, a.canvasScale
@@ -477,13 +478,14 @@ func TestWorkspace2DGridGeometryRemainsVisibleAcrossZoom(t *testing.T) {
 		var found [2][2]bool
 		bounds := a.canvasBounds()
 		for _, shape := range driver.shapes {
+			model := shapeContourModel(shape)
 			for level, color := range [...]graphics.ColorRGBA{editorTheme.gridMinor, editorTheme.gridMajor} {
 				if shape.Fill != ([4]float32{color.R, color.G, color.B, color.A}) {
 					continue
 				}
-				if abs(shape.Model[0]-1) < .01 && abs(shape.Model[4]-bounds.H) < .01 {
+				if abs(model[0]-1) < .01 && abs(model[4]-bounds.H) < .01 {
 					found[level][0] = true
-				} else if abs(shape.Model[0]-bounds.W) < .01 && abs(shape.Model[4]-1) < .01 {
+				} else if abs(model[0]-bounds.W) < .01 && abs(model[4]-1) < .01 {
 					found[level][1] = true
 				} else {
 					t.Fatalf("zoom %g: grid line shrank to a dot: %+v", zoom, shape.Model)
@@ -504,7 +506,7 @@ func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := input.NewState()
-	ecs.InsertResource(context.World, in)
+	context.World.InsertResource(in)
 	frame, bounds := a.viewport2D.frame, a.canvasBounds()
 	x, y := bounds.X+frame.X+60*a.canvasScale, bounds.Y+frame.Y+80*a.canvasScale
 	in.MoveMouse(float64(x), float64(y))
@@ -625,13 +627,13 @@ func TestWorkspace2DAnimationPrivateBindingAndHiddenHierarchy(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := &a.viewport2D
-	clock, _ := ecs.GetResource[*scene.Time](v.world)
+	clock, _ := v.world.GetResource[*scene.Time]()
 	clock.Set(500*time.Millisecond, 500*time.Millisecond, 1)
 	if err := v.syncVisuals(true); err != nil {
 		t.Fatal(err)
 	}
 	child := v.rows[0].parts[1]
-	global, _ := ecs.Get[scene.UIGlobalTransform](v.world, child)
+	global, _ := v.world.Get[scene.UIGlobalTransform](child)
 	if abs(global.Matrix[12]-95) > .01 {
 		t.Fatal("private animation did not update live hierarchy", global.Matrix[12])
 	}
@@ -648,7 +650,7 @@ func TestWorkspace2DAnimationPrivateBindingAndHiddenHierarchy(t *testing.T) {
 	if v.rows[0].root != root {
 		t.Fatal("selection reset animation entities")
 	}
-	global, _ = ecs.Get[scene.UIGlobalTransform](v.world, child)
+	global, _ = v.world.Get[scene.UIGlobalTransform](child)
 	if abs(global.Matrix[12]-95) > .01 {
 		t.Fatal("selection advanced animation twice", global.Matrix[12])
 	}

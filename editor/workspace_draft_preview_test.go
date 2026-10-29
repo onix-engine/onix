@@ -55,7 +55,7 @@ func TestWorkspaceDetailsVisibilityLivePreview(t *testing.T) {
 					}
 					if threeD {
 						for _, part := range a.viewport3D.rows[i].parts {
-							if part.entity != 0 && ecs.GetRef[scene.Visibility](a.viewport3D.world, part.entity).Visible != want {
+							if part.entity != 0 && a.viewport3D.world.GetRef[scene.Visibility](part.entity).Visible != want {
 								t.Fatal("3D canvas did not follow Details visibility")
 							}
 						}
@@ -108,7 +108,7 @@ func TestWorkspaceDetailsTransformsAndComponentsLivePreview(t *testing.T) {
 	a.handleEvent(htmlui.Event{ID: x, Kind: htmlui.EventInput, Value: "90"})
 	sync()
 	row := &a.viewport2D.rows[0]
-	if a.Preview.Items[0].Content[12] != 105 || ecs.GetRef[scene.UITransform](a.viewport2D.world, row.placement).Translation.X.Value != 90 {
+	if a.Preview.Items[0].Content[12] != 105 || a.viewport2D.world.GetRef[scene.UITransform](row.placement).Translation.X.Value != 90 {
 		t.Fatal("placement draft did not update canvas transform")
 	}
 	a.handleEvent(htmlui.Event{ID: x, Kind: htmlui.EventInput, Value: "-"})
@@ -126,7 +126,7 @@ func TestWorkspaceDetailsTransformsAndComponentsLivePreview(t *testing.T) {
 	sync()
 	for _, index := range []int{0, 1} {
 		root := a.viewport2D.rows[index].root
-		if ecs.GetRef[scene.Sprite2D](a.viewport2D.world, root).Tint.R != 1 {
+		if a.viewport2D.world.GetRef[scene.Sprite2D](root).Tint.R != 1 {
 			t.Fatal("shared component draft did not update every module instance")
 		}
 	}
@@ -138,7 +138,7 @@ func TestWorkspaceDetailsTransformsAndComponentsLivePreview(t *testing.T) {
 	}
 	a.changed()
 	sync()
-	if ecs.GetRef[scene.Sprite2D](a.viewport2D.world, a.viewport2D.rows[0].root) != nil {
+	if a.viewport2D.world.GetRef[scene.Sprite2D](a.viewport2D.rows[0].root) != nil {
 		t.Fatal("staged component removal did not update canvas")
 	}
 	if err := a.applyDrafts(); err != nil {
@@ -154,7 +154,7 @@ func TestWorkspaceDetailsTransformsAndComponentsLivePreview(t *testing.T) {
 	}
 	a.changed()
 	sync()
-	if a.Preview.Items[0].Content[12] != 45 || ecs.GetRef[scene.Sprite2D](a.viewport2D.world, a.viewport2D.rows[0].root) == nil {
+	if a.Preview.Items[0].Content[12] != 45 || a.viewport2D.world.GetRef[scene.Sprite2D](a.viewport2D.rows[0].root) == nil {
 		t.Fatal("undo did not restore canvas")
 	}
 }
@@ -172,7 +172,7 @@ func TestWorkspaceDetails3DDefinitionLivePreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	row := &a.viewport3D.rows[len(a.viewport3D.rows)-1]
-	if a.viewport3D.err != nil || ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, row.parts[2].entity).Matrix[12] != 10 {
+	if a.viewport3D.err != nil || a.viewport3D.world.GetRef[scene.GlobalTransform](row.parts[2].entity).Matrix[12] != 10 {
 		t.Fatalf("3D definition draft did not update canvas: %v", a.viewport3D.err)
 	}
 	if a.Document.Mods["model"].Spec.Elements[0].Transform.Position[0] != 0 {

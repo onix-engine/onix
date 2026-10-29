@@ -116,7 +116,7 @@ func cleanupHTMLTextures(_ *ecs.World, _ ecs.Entity, state *htmlRenderState) {
 }
 
 func cleanupHTMLSurface(world *ecs.World, entity ecs.Entity, _ *Surface) {
-	if state := ecs.GetRef[htmlRenderState](world, entity); state != nil {
+	if state := world.GetRef[htmlRenderState](entity); state != nil {
 		state.Textures.dispose()
 		state.Root = nil
 	}
@@ -130,17 +130,17 @@ func Release(world *ecs.World, owner ecs.Entity) {
 	if world == nil {
 		return
 	}
-	if owners, ok := ecs.GetResource[*htmlSurfaceOwners](world); ok {
+	if owners, ok := world.GetResource[*htmlSurfaceOwners](); ok {
 		for _, child := range owners.Children[owner] {
 			world.Despawn(child)
 		}
 		delete(owners.Children, owner)
 	}
-	ecs.Remove[htmlRenderState](world, owner)
+	world.Remove[htmlRenderState](owner)
 }
 
 func Dispose(world *ecs.World) {
-	for _, access := range ecs.Query[htmlRenderState](world).All {
+	for _, access := range world.Query[htmlRenderState]().All {
 		state := access.Ref()
 
 		state.Textures.dispose()

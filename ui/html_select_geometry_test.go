@@ -18,7 +18,7 @@ func TestHTMLSelectTextCenteredInToolbar(t *testing.T) {
 	surface := htmlui.New(`<style>*{box-sizing:border-box} .toolbar{display:flex;align-items:center;gap:6px} select{width:160px;font-size:13px;padding:5px 7px;border:1px solid gray} button{height:28px}</style><div class="toolbar"><select id="mode"><option>Position X</option></select><button>Play</button></div>`)
 	surface.Width, surface.Height, surface.Font = 320, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, surface)
+	bundle.Put(surface)
 	owner := world.Spawn(bundle)
 	for range 2 {
 		if err := SyncSystem("").Run(world); err != nil {
@@ -26,13 +26,13 @@ func TestHTMLSelectTextCenteredInToolbar(t *testing.T) {
 		}
 	}
 	control := htmlControlByID(t, world, owner, "mode")
-	size := ecs.GetRef[scene.Size2D](world, control)
-	for entity, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+	size := world.GetRef[scene.Size2D](control)
+	for entity, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 		if access.A.Ref().Control != control {
 			continue
 		}
 		text := access.B.Ref()
-		position := ecs.GetRef[scene.UITransform](world, entity)
+		position := world.GetRef[scene.UITransform](entity)
 		if delta := position.Translation.Y.Value + text.LineHeight/2 - size.Height/2; math.Abs(float64(delta)) > .01 {
 			t.Fatalf("select line box is not centered: y=%v line=%v control=%v", position.Translation.Y.Value, text.LineHeight, size.Height)
 		}
@@ -49,12 +49,12 @@ func TestHTMLSelectLongLabelClipsBeforeArrowAndFitsPopup(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			world := ecs.NewWorld()
 			RegisterRuntimeFeature[HTMLRenderer](world)
-			ecs.InsertResource(world, scene.ViewportSize{Width: 960, Height: 200})
+			world.InsertResource(scene.ViewportSize{Width: 960, Height: 200})
 			label := strings.TrimSpace(strings.Repeat("Language Server: Go (gopls) 中文 ", fixture.repeats))
 			surface := htmlui.New(`<style>select{position:absolute;left:650px;top:10px;box-sizing:border-box;width:240px;height:28px;padding:0 8px;font-size:13px}</style><select id="mode"><option selected>` + label + `</option>` + strings.Repeat(`<option>Other</option>`, fixture.count-1) + `</select>`)
 			surface.Width, surface.Height, surface.Font = 960, 200, notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, surface)
+			bundle.Put(surface)
 			owner := world.Spawn(bundle)
 			sync := SyncSystem("")
 			if err := sync.Run(world); err != nil {
@@ -64,23 +64,23 @@ func TestHTMLSelectLongLabelClipsBeforeArrowAndFitsPopup(t *testing.T) {
 			if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			ecs.GetMut[Selector](world, control).Open = true
+			world.GetMut[Selector](control).Open = true
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
 			arrowX := float32(-1)
-			for entity := range ecs.Query[scene.UIImage2D](world).All {
-				if parent := ecs.GetRef[scene.Parent](world, entity); parent != nil && parent.Entity == control {
-					arrowX = ecs.GetRef[scene.UITransform](world, entity).Translation.X.Value
+			for entity := range world.Query[scene.UIImage2D]().All {
+				if parent := world.GetRef[scene.Parent](entity); parent != nil && parent.Entity == control {
+					arrowX = world.GetRef[scene.UITransform](entity).Translation.X.Value
 				}
 			}
 			foundLabel := false
-			for entity, access := range ecs.Query2[htmlui.ControlText, scene.Text2D](world).All {
+			for entity, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 				if access.A.Ref().Control != control {
 					continue
 				}
-				clip := ecs.GetRef[scene.ClipRect2D](world, entity)
-				x := ecs.GetRef[scene.UITransform](world, entity).Translation.X.Value
+				clip := world.GetRef[scene.ClipRect2D](entity)
+				x := world.GetRef[scene.UITransform](entity).Translation.X.Value
 				if arrowX < 0 || clip == nil || clip.Width <= 0 || x+clip.Width > arrowX-4 {
 					t.Fatalf("select label overlaps arrow: x=%v clip=%+v arrow=%v", x, clip, arrowX)
 				}
@@ -92,18 +92,18 @@ func TestHTMLSelectLongLabelClipsBeforeArrowAndFitsPopup(t *testing.T) {
 			if !foundLabel {
 				t.Fatal("select label missing")
 			}
-			runtime := ecs.GetRef[htmlSelectorRuntime](world, control)
-			listSize := ecs.GetRef[scene.Size2D](world, runtime.List)
-			listX := ecs.GetRef[scene.UITransform](world, runtime.List).Translation.X.Value
+			runtime := world.GetRef[htmlSelectorRuntime](control)
+			listSize := world.GetRef[scene.Size2D](runtime.List)
+			listX := world.GetRef[scene.UITransform](runtime.List).Translation.X.Value
 			if listSize.Width <= 240 || listSize.Width > 960 || 650+listX < 0 || 650+listX+listSize.Width > 960 {
 				t.Fatalf("popup does not fit viewport: size=%+v x=%v", listSize, listX)
 			}
 			for _, part := range []ecs.Entity{findSurfacePart[SelectorPanelPart](world, runtime.List), findSurfacePart[SelectorPanelBorderPart](world, runtime.List)} {
-				if size := ecs.GetRef[scene.Size2D](world, part); size == nil || *size != *listSize {
+				if size := world.GetRef[scene.Size2D](part); size == nil || *size != *listSize {
 					t.Fatalf("popup surface size=%+v, want %+v", size, listSize)
 				}
 			}
-			for _, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+			for _, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 				if access.A.Ref().Owner != runtime.Items[0] {
 					continue
 				}
@@ -117,12 +117,12 @@ func TestHTMLSelectLongLabelClipsBeforeArrowAndFitsPopup(t *testing.T) {
 					t.Fatalf("popup width=%v, want %v", listSize.Width, min(wantWidth, 960))
 				}
 			}
-			if width := ecs.GetRef[scene.Size2D](world, control).Width; width != 240 {
+			if width := world.GetRef[scene.Size2D](control).Width; width != 240 {
 				t.Fatalf("popup changed control width: %v", width)
 			}
 			if fixture.count == 10 {
 				track := findSurfacePart[SelectorScrollTrackPart](world, runtime.List)
-				x := ecs.GetRef[scene.UITransform](world, track).Translation.X.Value
+				x := world.GetRef[scene.UITransform](track).Translation.X.Value
 				if x != listSize.Width-selectorScrollBarSize {
 					t.Fatalf("scrollbar x=%v, popup width=%v", x, listSize.Width)
 				}
@@ -138,32 +138,32 @@ func TestHTMLSelectAutoWidthFitsLongestOptionAndTransparentRoundedPopup(t *testi
 	surface := htmlui.New(`<style>*{box-sizing:border-box} .toolbar{display:flex} select{width:auto;height:22px;font-size:12px;padding:0 24px 0 6px;border:1px solid transparent;border-radius:6px;background:transparent}</style><div class="toolbar"><select id="mode"><option>文本编辑器</option><optgroup label="扩展"><option>` + label + `</option></optgroup></select></div>`)
 	surface.Width, surface.Height, surface.Font = 1000, 200, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, surface)
+	bundle.Put(surface)
 	owner := world.Spawn(bundle)
 	sync := SyncSystem("")
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
 	control := htmlControlByID(t, world, owner, "mode")
-	initialWidth := ecs.GetRef[scene.Size2D](world, control).Width
-	ecs.GetMut[Selector](world, control).Open = true
+	initialWidth := world.GetRef[scene.Size2D](control).Width
+	world.GetMut[Selector](control).Open = true
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	runtime := ecs.GetRef[htmlSelectorRuntime](world, control)
-	clip := ecs.GetRef[scene.RoundedClip2D](world, runtime.List)
+	runtime := world.GetRef[htmlSelectorRuntime](control)
+	clip := world.GetRef[scene.RoundedClip2D](runtime.List)
 	if clip == nil || clip.Radius != 6 || clip.Width != initialWidth {
 		t.Fatalf("transparent select popup lost its rounded bounds: %+v", clip)
 	}
 	panel := findSurfacePart[SelectorPanelPart](world, runtime.List)
-	background := ecs.GetRef[scene.UIBackground2D](world, panel)
+	background := world.GetRef[scene.UIBackground2D](panel)
 	border := findSurfacePart[SelectorPanelBorderPart](world, runtime.List)
-	outline := ecs.GetRef[scene.UIBorder2D](world, border)
+	outline := world.GetRef[scene.UIBorder2D](border)
 	if background == nil || outline == nil || background.Shape.Radius != 6 || outline.Shape.Radius != 6 {
 		t.Fatalf("popup surfaces lost their radius: background=%+v border=%+v", background, outline)
 	}
 	count := 0
-	for _, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for _, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		if access.A.Ref().Owner != runtime.Items[1] {
 			continue
 		}
@@ -183,7 +183,7 @@ func TestHTMLSelectAutoWidthFitsLongestOptionAndTransparentRoundedPopup(t *testi
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
-	if width := ecs.GetRef[scene.Size2D](world, control).Width; width != initialWidth {
+	if width := world.GetRef[scene.Size2D](control).Width; width != initialWidth {
 		t.Fatalf("selection changed intrinsic width: %v -> %v", initialWidth, width)
 	}
 }
@@ -193,11 +193,11 @@ func TestHTMLSelectPopupScrollbarOnlyWhenOverflowing(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-options-%d-height", fixture.count, fixture.viewportHeight), func(t *testing.T) {
 			world := ecs.NewWorld()
 			RegisterRuntimeFeature[HTMLRenderer](world)
-			ecs.InsertResource(world, scene.ViewportSize{Width: 320, Height: float32(fixture.viewportHeight)})
+			world.InsertResource(scene.ViewportSize{Width: 320, Height: float32(fixture.viewportHeight)})
 			surface := htmlui.New(`<select id="mode" style="box-sizing:border-box;width:160px;height:28px">` + strings.Repeat(`<option>Position X</option>`, fixture.count) + `</select>`)
 			surface.Width, surface.Height, surface.Font = 320, 400, notosanssc.NotoSansSCRegular
 			bundle := ecs.NewBundle(1)
-			ecs.Put(&bundle, surface)
+			bundle.Put(surface)
 			owner := world.Spawn(bundle)
 			if err := SyncSystem("").Run(world); err != nil {
 				t.Fatal(err)
@@ -206,28 +206,28 @@ func TestHTMLSelectPopupScrollbarOnlyWhenOverflowing(t *testing.T) {
 			if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			ecs.GetMut[Selector](world, control).Open = true
+			world.GetMut[Selector](control).Open = true
 			if err := SyncSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			runtime := ecs.GetRef[htmlSelectorRuntime](world, control)
+			runtime := world.GetRef[htmlSelectorRuntime](control)
 			track := findSurfacePart[SelectorScrollTrackPart](world, runtime.List)
 			thumb := findSurfacePart[SelectorScrollThumbPart](world, runtime.List)
 			if track == 0 || thumb == 0 {
 				t.Fatal("popup scrollbar parts missing")
 			}
-			scroll := ecs.GetRef[scene.UIScroll](world, runtime.List)
+			scroll := world.GetRef[scene.UIScroll](runtime.List)
 			overflow := scroll.ContentSize.Y() > scroll.ViewportSize.Y()
 			if overflow != (fixture.viewportHeight == 100) {
 				t.Fatalf("unexpected popup overflow: viewport=%v content=%v", scroll.ViewportSize, scroll.ContentSize)
 			}
 			for _, part := range []ecs.Entity{track, thumb} {
-				partSize := ecs.GetRef[scene.Size2D](world, part)
+				partSize := world.GetRef[scene.Size2D](part)
 				if (partSize.Width > 0 && partSize.Height > 0) != overflow {
 					t.Fatalf("scrollbar geometry=%+v overflow=%v", partSize, overflow)
 				}
 			}
-			item := ecs.GetRef[scene.Size2D](world, runtime.Items[0])
+			item := world.GetRef[scene.Size2D](runtime.Items[0])
 			wantWidth := float32(160)
 			if overflow {
 				wantWidth -= selectorScrollBarSize
@@ -242,7 +242,7 @@ func TestHTMLSelectPopupScrollbarOnlyWhenOverflowing(t *testing.T) {
 				if err := SyncAfterLayoutSystem("").Run(world); err != nil {
 					t.Fatal(err)
 				}
-				if position := ecs.GetRef[scene.UITransform](world, thumb); position.Translation.Y.Value <= 0 {
+				if position := world.GetRef[scene.UITransform](thumb); position.Translation.Y.Value <= 0 {
 					t.Fatal("scrollbar thumb did not follow popup scroll offset")
 				}
 			}

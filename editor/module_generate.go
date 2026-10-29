@@ -142,7 +142,7 @@ func generateModuleProject(directory string, write bool) (*project.ProjectPlan, 
 	var body strings.Builder
 	body.WriteString("func OnixRegistry() (module.Registry, error) {\nr := module.Registry{}\n")
 	for _, name := range sortedWorkspaceKeys(plan.Spec.Types) {
-		fmt.Fprintf(&body, "if err := module.RegisterValue(&r, %q, contracts.Decode%s); err != nil { return r, err }\n", name, name)
+		fmt.Fprintf(&body, "if err := r.RegisterValue(%q, contracts.Decode%s); err != nil { return r, err }\n", name, name)
 	}
 	for _, b := range behaviors {
 		if !b.used {
@@ -156,7 +156,7 @@ func generateModuleProject(directory string, write bool) (*project.ProjectPlan, 
 		if b.scene {
 			register = "RegisterScene"
 		}
-		fmt.Fprintf(&body, "if err := module.%s(&r, %q, func() %s { return %s{} }, module.Lifecycle[%s]{\n", register, b.id, typeName, typeName, typeName)
+		fmt.Fprintf(&body, "if err := r.%s(%q, func() %s { return %s{} }, module.Lifecycle[%s]{\n", register, b.id, typeName, typeName, typeName)
 		fmt.Fprintf(&body, "Install: func(c *module.Context, m *%s) error {\n", typeName)
 		if _, ok := b.pkg.methods[b.typeName]["Install"]; ok {
 			body.WriteString("return m.Install(c)\n")
@@ -185,9 +185,17 @@ func generateModuleProject(directory string, write bool) (*project.ProjectPlan, 
 	}
 	body.WriteString("return r, nil\n}\n\nfunc OnixInstallSystems(app *onix.App) error {\n")
 	features := plan.RuntimeFeatures()
+	contentProfile := "module.Render2D"
+	contentCapabilities := make(map[string]bool)
 	for _, f := range projectRuntimeFeatureDescriptors {
 		if !slices.Contains(features, f.ID) {
 			continue
+		}
+		for _, capability := range f.Content {
+			if !contentCapabilities[capability] {
+				contentProfile = fmt.Sprintf("module.WithContent[%s, module.%s]", contentProfile, capability)
+				contentCapabilities[capability] = true
+			}
 		}
 		if f.ImportPath != "" {
 			imports[f.ImportName] = f.ImportPath
@@ -196,10 +204,11 @@ func generateModuleProject(directory string, write bool) (*project.ProjectPlan, 
 			fmt.Fprintf(&body, "%s.Register()\n", f.ImportName)
 		}
 		if f.GoType != "" {
-			fmt.Fprintf(&body, "if err := onix.InstallSystems[onix.%s](app); err != nil { return err }\n", f.GoType)
+			fmt.Fprintf(&body, "if err := app.InstallSystems[onix.%s](); err != nil { return err }\n", f.GoType)
 		}
 	}
 	body.WriteString("return nil\n}\n")
+	fmt.Fprintf(&body, "\ntype OnixContentProfile = %s\n", contentProfile)
 	// Decoder types are selected at generation time. Unused formats do not enter
 	// the game's import graph; private content installers can use this decoder.
 	decoderIDs := slices.Clone(plan.Spec.Engine.ImageDecoders)

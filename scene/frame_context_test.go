@@ -40,15 +40,15 @@ func TestWorldFramesRenderIndependentlyOfImmediateContext(t *testing.T) {
 	camera := NewCamera()
 	camera.Viewport = CameraViewport{X: 80, Y: 50, Width: 160, Height: 100}
 	b := ecs.NewBundle(4)
-	ecs.Put(&b, camera)
-	ecs.Put(&b, Camera2D{})
-	ecs.Put(&b, OrthographicProjection2D())
-	ecs.Put(&b, GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(camera)
+	b.Put(Camera2D{})
+	b.Put(OrthographicProjection2D())
+	b.Put(GlobalTransform{Matrix: mgl32.Ident4()})
 	w1.Spawn(b)
 	if err := ExtractCamerasSystem("").Run(w1); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := renderWorld(w1).Cameras[0]
+	snapshot := RenderWorldFor(w1).Cameras[0]
 	before := snapshot.ClipFromWorld()
 	c1.Resize(900, 700)
 	graphics.SetCurrentContext(nil)

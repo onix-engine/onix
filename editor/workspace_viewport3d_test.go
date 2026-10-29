@@ -53,12 +53,12 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 	v := &a.viewport3D
 	row := &v.rows[len(v.rows)-1]
 	root, child := row.parts[0].entity, row.parts[2].entity
-	global, _ := ecs.Get[scene.GlobalTransform](v.world, child)
+	global, _ := v.world.Get[scene.GlobalTransform](child)
 	if got := global.Matrix.Col(3).Vec3(); got != (mgl32.Vec3{12, 23, 4}) {
 		t.Fatalf("private parent and scene/local transforms lost: %v", got)
 	}
 	cameras := 0
-	for range ecs.Query[scene.Camera](v.world).All {
+	for range v.world.Query[scene.Camera]().All {
 		cameras++
 	}
 	if cameras != 1 {
@@ -72,7 +72,7 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
-	global, _ = ecs.Get[scene.GlobalTransform](v.world, child)
+	global, _ = v.world.Get[scene.GlobalTransform](child)
 	if row.parts[0].entity != root || row.parts[2].entity != child || global.Matrix[12] != 17 {
 		t.Fatal("placement edit recreated model geometry or lost private transforms")
 	}
@@ -92,13 +92,13 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 	if err := a.sync(context); err != nil {
 		t.Fatal(err)
 	}
-	visible, _ := ecs.Get[scene.Visibility](context.World, a.canvas)
+	visible, _ := context.World.Get[scene.Visibility](a.canvas)
 	if !visible.Visible {
 		t.Fatal("2D canvas did not return after dimension switch")
 	}
 	a.action("toggle-dimension")
 	a.sync(context)
-	visible, _ = ecs.Get[scene.Visibility](context.World, a.canvas)
+	visible, _ = context.World.Get[scene.Visibility](a.canvas)
 	if visible.Visible || row.parts[0].entity != root {
 		t.Fatal("dimension switch overlaid 2D canvas or recreated 3D models")
 	}
@@ -172,9 +172,9 @@ func TestWorkspace3DRenderTargetModelsAndGuides(t *testing.T) {
 	if clip[2] != ([4]float32{bounds.X, bounds.Y, bounds.X + bounds.W, bounds.Y + bounds.H}) || clip[3][0] != editorPanelCornerRadius-1 || clip[3][1] != 1 {
 		t.Fatalf("3D preview lost rounded panel clipping: %+v", clip)
 	}
-	projection, _ := ecs.Get[scene.Projection](a.viewport3D.world, a.viewport3D.view.camera)
+	projection, _ := a.viewport3D.world.Get[scene.Projection](a.viewport3D.view.camera)
 	row := a.viewport3D.rows[len(a.viewport3D.rows)-1]
-	global, _ := ecs.Get[scene.GlobalTransform](a.viewport3D.world, row.parts[0].entity)
+	global, _ := a.viewport3D.world.Get[scene.GlobalTransform](row.parts[0].entity)
 	camera := preview3DCameraTransformAround(a.viewport3D.view.target, a.viewport3D.view.yaw, a.viewport3D.view.pitch, a.viewport3D.view.distance/a.zoom).LocalMatrix()
 	point := projection.Matrix(bounds.W, bounds.H).Mul4(camera.Inv()).Mul4x1(global.Matrix.Col(3))
 	x, y := bounds.X+(point.X()/point.W()+1)*bounds.W*.5, bounds.Y+(1-point.Y()/point.W())*bounds.H*.5
@@ -230,7 +230,7 @@ func TestWorkspace3DEmptyCanvasSkipsModuleResources(t *testing.T) {
 	if len(v.mods) != 0 {
 		t.Fatal("empty 3D canvas initialized 2D module resources")
 	}
-	for range ecs.Query[render3d.Mesh](v.world).All {
+	for range v.world.Query[render3d.Mesh]().All {
 		t.Fatal("guides became retained scene meshes")
 	}
 	if v.view.target != (mgl32.Vec3{4, 4, 0}) || v.view.distance != 14 || v.view.yaw != 0 || v.view.pitch != 0 {
@@ -270,7 +270,7 @@ func TestWorkspace3DOrientationAndProjectionStayPrivate(t *testing.T) {
 		axis := (action - 1) / 2
 		sign := float32(((action-1)%2)*2 - 1)
 		camera := preview3DCameraTransformAround(v.target, v.yaw, v.pitch, v.distance).LocalMatrix()
-		projection := ecs.GetRef[scene.Projection](a.viewport3D.world, v.camera)
+		projection := a.viewport3D.world.GetRef[scene.Projection](v.camera)
 		if abs(camera.Col(2)[axis]-sign) > .0001 || projection.Kind != scene.ProjectionOrthographic {
 			t.Fatal("axis did not snap to its orthographic face", action, camera.Col(2))
 		}
@@ -282,7 +282,7 @@ func TestWorkspace3DOrientationAndProjectionStayPrivate(t *testing.T) {
 		in.MoveMouse(float64(center.X+center.W/2), float64(center.Y+center.H/2))
 		in.PressKey(input.KeyO)
 		a.updateViewport3DInput(in)
-		if v.orthographic || ecs.GetRef[scene.Projection](a.viewport3D.world, v.camera).Kind != scene.ProjectionPerspective {
+		if v.orthographic || a.viewport3D.world.GetRef[scene.Projection](v.camera).Kind != scene.ProjectionPerspective {
 			t.Fatal("O did not restore perspective")
 		}
 	}
@@ -301,7 +301,7 @@ func TestWorkspace3DOrthographicDragAndFixedSnap(t *testing.T) {
 	}
 	original := a.canvasDrag.PlanePoint
 	a.updateViewport3DDrag(input.Pointer{X: x + 30, Y: y + 20, Down: true})
-	projection := ecs.GetRef[scene.Projection](a.viewport3D.world, a.viewport3D.view.camera)
+	projection := a.viewport3D.world.GetRef[scene.Projection](a.viewport3D.view.camera)
 	units := preview3DWorldPerPixel(projection, a.viewport3D.view.distance/a.zoom, a.canvasBounds())
 	if abs(a.canvasDrag.WorldDelta.X()-30*units) > .0001 || abs(a.canvasDrag.WorldDelta.Y()+20*units) > .0001 || abs(a.canvasDrag.WorldDelta.Z()) > .0001 {
 		t.Fatal("orthographic drag used perspective rays", a.canvasDrag.WorldDelta, original)
@@ -330,8 +330,8 @@ func TestWorkspace3DStudioAndSceneAppearanceIsolation(t *testing.T) {
 	if err := a.syncViewport3DEnvironment(); err != nil {
 		t.Fatal(err)
 	}
-	environment := ecs.GetRef[render3d.Environment](v.world, v.view.camera)
-	lighting := ecs.GetRef[render3d.ViewLighting](v.world, v.view.camera)
+	environment := v.world.GetRef[render3d.Environment](v.view.camera)
+	lighting := v.world.GetRef[render3d.ViewLighting](v.view.camera)
 	if environment.Atlas != v.view.studioTexture || environment.Sky != &v.view.sky || !lighting.Override || !lighting.DisableShadows {
 		t.Fatal("legacy studio appearance was not applied")
 	}
@@ -351,14 +351,14 @@ func TestWorkspace3DStudioAndSceneAppearanceIsolation(t *testing.T) {
 	if err := a.syncViewport3DEnvironment(); err != nil {
 		t.Fatal(err)
 	}
-	if lighting.Override || environment.Sky != nil || ecs.GetRef[scene.Camera](v.world, v.view.camera).ClearColor != graphics.ColorFromRGB(18, 52, 86) || !ecs.GetRef[render3d.Camera](v.world, v.view.camera).FXAA {
+	if lighting.Override || environment.Sky != nil || v.world.GetRef[scene.Camera](v.view.camera).ClearColor != graphics.ColorFromRGB(18, 52, 86) || !v.world.GetRef[render3d.Camera](v.view.camera).FXAA {
 		t.Fatal("scene camera appearance was not isolated and copied")
 	}
 	if a.Document.Revision != revision {
 		t.Fatal("preview lighting changed the authored camera")
 	}
 	count := 0
-	for range ecs.Query[scene.Camera](v.world).All {
+	for range v.world.Query[scene.Camera]().All {
 		count++
 	}
 	if count != 1 {

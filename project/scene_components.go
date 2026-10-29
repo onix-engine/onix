@@ -13,7 +13,7 @@ import (
 type sceneComponentClearer func(*ecs.World, ecs.Entity)
 
 func prepareAuthoredSceneRemoval(world *ecs.World) ecs.PreparedRemoval {
-	return ecs.PrepareRemoval(world,
+	return world.PrepareRemoval(
 		ecs.Type[scene.Size2D](),
 		ecs.Type[engineui.Layout](),
 		ecs.Type[engineui.Widget](),
@@ -53,7 +53,7 @@ func clearAuthoredSceneComponents(world *ecs.World, entity ecs.Entity) {
 }
 
 func prepareAuthored2DSceneRemoval(world *ecs.World) ecs.PreparedRemoval {
-	return ecs.PrepareRemoval(world,
+	return world.PrepareRemoval(
 		ecs.Type[scene.Size2D](),
 		ecs.Type[scene.Sprite2D](),
 		ecs.Type[scene.Text2D](),
@@ -65,7 +65,7 @@ func clear2DSceneComponents(world *ecs.World, entity ecs.Entity) {
 }
 
 func prepareAuthored2DAnimationSceneRemoval(world *ecs.World) ecs.PreparedRemoval {
-	return ecs.PrepareRemoval(world,
+	return world.PrepareRemoval(
 		ecs.Type[scene.Size2D](),
 		ecs.Type[scene.Sprite2D](),
 		ecs.Type[scene.Text2D](),
@@ -87,7 +87,7 @@ type sceneRemovalCache struct {
 }
 
 func sceneRemovalFor[Tag any](world *ecs.World, prepare func(*ecs.World) ecs.PreparedRemoval) ecs.PreparedRemoval {
-	cache := ecs.FrameValue[Tag, sceneRemovalCache](world)
+	cache := world.FrameValue[Tag, sceneRemovalCache]()
 	if !cache.initialized {
 		cache.removal = prepare(world)
 		cache.initialized = true

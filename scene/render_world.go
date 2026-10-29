@@ -103,8 +103,7 @@ type material2DReader struct {
 
 // RegisterMaterial2D enables extraction of MeshMaterial2D[T] components. It
 // mirrors Bevy's Material2dPlugin<T> registration boundary.
-func RegisterMaterial2D[T graphics.Material2D](world *ecs.World) {
-	state := renderWorld(world)
+func (state *RenderWorld) RegisterMaterial2D[T graphics.Material2D]() {
 	typ := reflect.TypeFor[T]()
 	if _, ok := state.registeredMaterials2D[typ]; ok {
 		return
@@ -112,15 +111,15 @@ func RegisterMaterial2D[T graphics.Material2D](world *ecs.World) {
 	state.registeredMaterials2D[typ] = struct{}{}
 	state.registry2D++
 	state.materials2D = append(state.materials2D, material2DReader{read: func(world *ecs.World, entity ecs.Entity) (graphics.Material2DData, bool) {
-		component, ok := ecs.Get[MeshMaterial2D[T]](world, entity)
+		component, ok := world.Get[MeshMaterial2D[T]](entity)
 		if !ok || component.Material == nil {
 			return graphics.Material2DData{}, false
 		}
 		return (*component.Material).Material2D(), true
-	}, structure: ecs.ComponentStructureVersion[MeshMaterial2D[T]], poll: func(world *ecs.World, cache *retainedRender2D) {
+	}, structure: (*ecs.World).ComponentStructureVersion[MeshMaterial2D[T]], poll: func(world *ecs.World, cache *retainedRender2D) {
 		// Material pointers may be edited without replacing their ECS component.
 		// Inspect only entities using this type, preserving the static scene cache.
-		for entity := range ecs.Query[MeshMaterial2D[T]](world).All {
+		for entity := range world.Query[MeshMaterial2D[T]]().All {
 			if node := cache.nodes[entity]; node != nil && !node.queued {
 				material := material2DForEntity(world, entity)
 				for position := range node.positions {
@@ -136,31 +135,32 @@ func RegisterMaterial2D[T graphics.Material2D](world *ecs.World) {
 
 func material2DForEntity(world *ecs.World, entity ecs.Entity) graphics.Material2DData {
 	var result graphics.Material2DData
-	readers := renderWorld(world).materials2D
+	readers := RenderWorldFor(world).materials2D
 	for index := len(readers) - 1; index >= 0; index-- {
 		if material, ok := readers[index].read(world, entity); ok {
 			result = material
 			break
 		}
 	}
-	if shader, ok := ecs.Get[Shader[graphics.Material2DShader]](world, entity); ok {
+	if shader, ok := world.Get[Shader[graphics.Material2DShader]](entity); ok {
 		result.Shader, result.Custom = shader.Program, shader.Custom
 	}
 	return result
 }
 
-func renderWorld(world *ecs.World) *RenderWorld {
-	state, ok := ecs.GetResource[*RenderWorld](world)
+// RenderWorldFor returns the world's render state, creating it on first use.
+func RenderWorldFor(world *ecs.World) *RenderWorld {
+	state, ok := world.GetResource[*RenderWorld]()
 	if ok && state != nil {
 		return state
 	}
 	state = NewRenderWorld()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	return state
 }
 
 func particleFallbackTexture2D(world *ecs.World) *graphics.Texture {
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	if state.whiteTexture2D == nil || !state.whiteTexture2D.ValidFor(graphics.DeviceFor(world)) {
 		state.whiteTexture2D = graphics.CreateTextureByColor(graphics.White)
 	}
@@ -178,7 +178,7 @@ func ExtractCamerasSystem(name string) ecs.SystemConfig {
 // Pipelines can call it directly without constructing a SystemConfig.
 func ExtractCameras(context *ecs.SystemContext) error {
 	world := context.World
-	state := renderWorld(world)
+	state := RenderWorldFor(world)
 	state.Cameras = state.Cameras[:0]
 	c := graphics.CanvasFor(world)
 	if c == nil {
@@ -187,8 +187,8 @@ func ExtractCameras(context *ecs.SystemContext) error {
 	canvasWidth, canvasHeight := c.Size()
 	var fallback ExtractedCamera
 	has2D := false
-	sceneCameras := ecs.FrameScratchMap[sceneCameraScratch, uint64, bool](world)
-	for entity, access := range ecs.Query[Camera](world).All {
+	sceneCameras := world.FrameScratchMap[sceneCameraScratch, uint64, bool]()
+	for entity, access := range world.Query[Camera]().All {
 		if !sceneCameraVisible(world, entity) {
 			continue
 		}
@@ -197,8 +197,8 @@ func ExtractCameras(context *ecs.SystemContext) error {
 		if !camera.Active {
 			continue
 		}
-		projection, projectionOK := ecs.Get[Projection](world, entity)
-		transform, transformOK := ecs.Get[GlobalTransform](world, entity)
+		projection, projectionOK := world.Get[Projection](entity)
+		transform, transformOK := world.Get[GlobalTransform](entity)
 		if !projectionOK || !transformOK {
 			continue
 		}
@@ -238,7 +238,7 @@ func ExtractCameras(context *ecs.SystemContext) error {
 		state.Cameras = append(state.Cameras, candidate)
 	}
 	if fallback.Entity != 0 {
-		for _, access := range ecs.Query[SceneLayer](world).All {
+		for _, access := range world.Query[SceneLayer]().All {
 			layer := access.Get()
 			if sceneCameras[layer.ID] {
 				continue
@@ -269,7 +269,7 @@ func cameraSettingsForEntity(state *RenderWorld, world *ecs.World, entity ecs.En
 			}
 		}
 	}
-	return CameraPipeline2D, CameraRenderOptions{ViewMode: render.RenderViewLit}, ecs.Has[Camera2D](world, entity)
+	return CameraPipeline2D, CameraRenderOptions{ViewMode: render.RenderViewLit}, world.Has[Camera2D](entity)
 }
 
 func compareExtractedCamera(a, b ExtractedCamera) int {
@@ -283,7 +283,7 @@ func compareExtractedCamera(a, b ExtractedCamera) int {
 }
 
 func activeCamera2DComponents(world *ecs.World) (Camera, Projection, GlobalTransform, bool) {
-	if state, ok := ecs.GetResource[*RenderWorld](world); ok && state != nil && state.activeCamera2DSet {
+	if state, ok := world.GetResource[*RenderWorld](); ok && state != nil && state.activeCamera2DSet {
 		return state.activeCamera2D.Camera, state.activeCamera2D.Projection, state.activeCamera2D.Transform, true
 	}
 	return primaryCamera2DComponents(world)
@@ -323,7 +323,7 @@ func (viewport CameraViewport) PlacementMatrix(width, height float32) mgl32.Mat4
 }
 
 func visibleRenderItems2D(world *ecs.World, items []renderItem2D, camera ExtractedCamera, defaultUICamera ecs.Entity) []renderItem2D {
-	visible := ecs.FrameScratch[visibleRenderItems2DScratch, renderItem2D](world)
+	visible := world.FrameScratch[visibleRenderItems2DScratch, renderItem2D]()
 	visible.Values = visible.Values[:0]
 	for _, item := range items {
 		if renderItemForCamera2D(&item, camera, defaultUICamera) {

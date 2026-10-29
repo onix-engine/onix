@@ -11,10 +11,10 @@ import (
 )
 
 func htmlCullRole(world *ecs.World, owner ecs.Entity, node Node, role htmlRenderRole) ecs.Entity {
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	if rendered := state.RenderNodes[node.node]; rendered != nil {
 		for _, entity := range rendered.Entities {
-			if child := ecs.GetRef[htmlChild](world, entity); child != nil && child.role == role {
+			if child := world.GetRef[htmlChild](entity); child != nil && child.role == role {
 				return entity
 			}
 		}
@@ -25,8 +25,8 @@ func htmlCullRole(world *ecs.World, owner ecs.Entity, node Node, role htmlRender
 func htmlCullScroll(t testing.TB, world *ecs.World, owner ecs.Entity, id string, x, y float32) {
 	t.Helper()
 	node := incrementalHTMLNode(t, world, owner, id)
-	state := ecs.GetRef[htmlRenderState](world, owner)
-	scroll := ecs.GetMut[scene.UIScroll](world, state.OverflowBindings[node.node].entity)
+	state := world.GetRef[htmlRenderState](owner)
+	scroll := world.GetMut[scene.UIScroll](state.OverflowBindings[node.node].entity)
 	if scroll == nil {
 		t.Fatal("missing scroll container")
 	}
@@ -44,7 +44,7 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 	// An unrelated branch must not be visited by the scroll cull walk.
 	source.WriteString(strings.Repeat(`<div>Unrelated</div>`, 1000))
 	world, owner := incrementalHTMLFixture(t, source.String())
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	root := state.Boxes
 	scrollNode := incrementalHTMLNode(t, world, owner, "scroll")
 	head := incrementalHTMLNode(t, world, owner, "row0")
@@ -58,18 +58,18 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 	}
 	initial := slices.Clone(state.Children)
 	htmlCullScroll(t, world, owner, "scroll", 0, -64)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if state.SyncStats.PaintCullBoxes != 0 || state.SyncStats.ReconciledBoxes != 0 || !slices.Equal(initial, state.Children) {
 		t.Fatalf("small scroll rebuilt the buffer: %+v", state.SyncStats)
 	}
 	clip := state.OverflowBindings[scrollNode.node].entity
 	if allocations := testing.AllocsPerRun(100, func() {
-		scroll := ecs.GetMut[scene.UIScroll](world, clip)
+		scroll := world.GetMut[scene.UIScroll](clip)
 		scroll.Position[1] = -32
 		if err := Sync(world); err != nil {
 			panic(err)
 		}
-		scroll = ecs.GetMut[scene.UIScroll](world, clip)
+		scroll = world.GetMut[scene.UIScroll](clip)
 		scroll.Position[1] = -64
 		if err := Sync(world); err != nil {
 			panic(err)
@@ -78,7 +78,7 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 		t.Fatalf("buffered scroll allocated %v objects", allocations)
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -8700)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if htmlCullRole(world, owner, head, htmlRoleSurface) != 0 || htmlCullRole(world, owner, tail, htmlRoleSurface) == 0 {
 		t.Fatal("scroll did not retire the head and mount the tail")
 	}
@@ -120,20 +120,20 @@ func TestHTMLPaintCullRetainsNestedClipScrollRoute(t *testing.T) {
 	for _, mode := range []string{"hidden", "clip", "auto"} {
 		t.Run(mode, func(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, `<div id="scroll" style="width:180px;height:100px;overflow:auto"><div style="height:1200px"></div><button id="row" style="display:flex;width:160px;height:28px;overflow:`+mode+`"><span id="label" style="overflow:hidden">File.go</span></button><div style="height:200px"></div></div>`)
-			state := ecs.GetRef[htmlRenderState](world, owner)
+			state := world.GetRef[htmlRenderState](owner)
 			scroll := incrementalHTMLNode(t, world, owner, "scroll")
 			row := incrementalHTMLNode(t, world, owner, "row")
 			label := incrementalHTMLNode(t, world, owner, "label")
 			text := Node{world: world, owner: owner, node: label.node.Children[0]}
 			area := state.OverflowBindings[scroll.node].entity
 			clip := state.OverflowBindings[row.node].entity
-			initial, ok := ecs.Get[ScrollContent](world, clip)
+			initial, ok := world.Get[ScrollContent](clip)
 			if !ok || initial.Area != area {
 				t.Fatal("nested clip has no initial scroll route")
 			}
 			for _, y := range []float32{-1200, -1100, 0, -1200} {
 				htmlCullScroll(t, world, owner, "scroll", 0, y)
-				content, ok := ecs.Get[ScrollContent](world, clip)
+				content, ok := world.Get[ScrollContent](clip)
 				if !ok || content != initial {
 					t.Fatalf("scroll %g lost the nested clip route: %+v, want %+v", y, content, initial)
 				}
@@ -170,18 +170,18 @@ func TestHTMLPaintCullDefersCompositeRasterAndRestoresLatestPaint(t *testing.T) 
 	world, owner := incrementalHTMLFixture(t, `<div id="scroll" style="width:120px;height:80px;overflow:auto"><div style="height:1000px"></div><div id="group" style="width:40px;height:20px;opacity:.5;background:red"><div id="child" style="width:20px;height:20px;background:blue"></div></div></div>`)
 	group := incrementalHTMLNode(t, world, owner, "group")
 	child := incrementalHTMLNode(t, world, owner, "child")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	if state.Textures.rasters[group.node] != nil || state.Textures.rasters[child.node] != nil || htmlCullRole(world, owner, group, htmlRoleSurface) != 0 {
 		t.Fatal("offscreen opacity group allocated a raster")
 	}
 	child.SetAttribute("style", "width:20px;height:20px;background:#00ff00")
 	incrementalSync(t, world)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if state.Textures.rasters[group.node] != nil {
 		t.Fatal("offscreen mutation rasterized the group")
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -1000)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	raster := state.Textures.rasters[group.node]
 	if raster == nil || htmlCullRole(world, owner, group, htmlRoleSurface) == 0 || htmlCullRole(world, owner, child, htmlRoleSurface) != 0 {
 		t.Fatal("visible opacity group was not restored as one composite")
@@ -217,7 +217,7 @@ func TestHTMLPaintCullRetainsControlsAndTransformedContent(t *testing.T) {
 		t.Fatal("offscreen control or transformed paint was discarded")
 	}
 	SetControlValue(world, control, "typed")
-	live := ecs.GetMut[Control](world, control)
+	live := world.GetMut[Control](control)
 	live.SelectionAnchor, live.SelectionFocus = 1, 3
 	if htmlCullRole(world, owner, nested, htmlRoleSurface) != 0 {
 		t.Fatal("initial dynamic subtree was not culled")
@@ -229,7 +229,7 @@ func TestHTMLPaintCullRetainsControlsAndTransformedContent(t *testing.T) {
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -1000)
 	htmlCullScroll(t, world, owner, "scroll", 0, 0)
-	live = ecs.GetMut[Control](world, control)
+	live = world.GetMut[Control](control)
 	if live == nil || htmlCullRole(world, owner, field, htmlRoleControl) != control || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
 		t.Fatal("scroll discarded live control state")
 	}
@@ -237,13 +237,13 @@ func TestHTMLPaintCullRetainsControlsAndTransformedContent(t *testing.T) {
 
 func TestHTMLPaintCullCoalescesNestedScrollRoots(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="outer" style="height:100px;overflow:auto"><div id="inner" style="height:80px;overflow:auto">`+strings.Repeat(`<div style="height:20px;background:red">Row</div>`, 100)+`</div><div style="height:2000px"></div></div>`)
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	outer := incrementalHTMLNode(t, world, owner, "outer")
 	inner := incrementalHTMLNode(t, world, owner, "inner")
-	ecs.GetMut[scene.UIScroll](world, state.OverflowBindings[outer.node].entity).Position[1] = -200
-	ecs.GetMut[scene.UIScroll](world, state.OverflowBindings[inner.node].entity).Position[1] = -600
+	world.GetMut[scene.UIScroll](state.OverflowBindings[outer.node].entity).Position[1] = -200
+	world.GetMut[scene.UIScroll](state.OverflowBindings[inner.node].entity).Position[1] = -600
 	incrementalSync(t, world)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if state.SyncStats.PaintCullBoxes != 103 || state.SyncStats.Layouts != 0 {
 		t.Fatalf("nested scroll roots were visited more than once: %+v", state.SyncStats)
 	}
@@ -287,12 +287,12 @@ func TestHTMLPaintCullLocalPaintPreservesScrollAnchor(t *testing.T) {
 	htmlCullScroll(t, world, owner, "scroll", 0, -64)
 	scroll.SetAttribute("style", "height:80px;overflow:auto;background:linear-gradient(red,blue)")
 	incrementalSync(t, world)
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	if state.PaintCullOffsets[scroll.node][1] != 0 {
 		t.Fatal("local paint reset the scroll anchor without re-windowing descendants")
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -200)
-	state = ecs.GetRef[htmlRenderState](world, owner)
+	state = world.GetRef[htmlRenderState](owner)
 	if state.SyncStats.PaintCullBoxes == 0 || state.PaintCullOffsets[scroll.node][1] != -200 {
 		t.Fatal("scroll failed to refresh the buffered window")
 	}
@@ -314,12 +314,12 @@ func TestHTMLPaintCullNewOffsetBindingRestoresPaint(t *testing.T) {
 func BenchmarkHTMLPaintCullBufferedScroll(b *testing.B) {
 	world, owner := incrementalHTMLFixture(b, `<div id="scroll" style="height:80px;overflow:auto">`+strings.Repeat(`<div style="height:20px;background:red">Row</div>`, 1000)+`</div>`)
 	node := incrementalHTMLNode(b, world, owner, "scroll")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	clip := state.OverflowBindings[node.node].entity
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ecs.GetMut[scene.UIScroll](world, clip).Position[1] = -float32(i % 100)
+		world.GetMut[scene.UIScroll](clip).Position[1] = -float32(i % 100)
 		if err := Sync(world); err != nil {
 			b.Fatal(err)
 		}
@@ -329,7 +329,7 @@ func BenchmarkHTMLPaintCullBufferedScroll(b *testing.B) {
 func TestHTMLPaintCullTransparentGroupRetainsFocus(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target" tabindex="0" style="width:30px;height:20px;opacity:0;background:red">Target</div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	if state.Textures.rasters[target.node] != nil || htmlCullRole(world, owner, target, htmlRoleSurface) != 0 || htmlCullRole(world, owner, target, htmlRoleFocusable) == 0 {
 		t.Fatal("transparent group rasterized or lost its focus target")
 	}
@@ -343,12 +343,12 @@ func TestHTMLPaintCullTransparentGroupRetainsFocus(t *testing.T) {
 func BenchmarkHTMLPaintCullMovedScroll(b *testing.B) {
 	world, owner := incrementalHTMLFixture(b, `<div id="scroll" style="height:80px;overflow:auto">`+strings.Repeat(`<div style="height:20px;background:red">Row</div>`, 1000)+`</div>`)
 	node := incrementalHTMLNode(b, world, owner, "scroll")
-	state := ecs.GetRef[htmlRenderState](world, owner)
+	state := world.GetRef[htmlRenderState](owner)
 	clip := state.OverflowBindings[node.node].entity
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ecs.GetMut[scene.UIScroll](world, clip).Position[1] = -float32(400 + i%2*400)
+		world.GetMut[scene.UIScroll](clip).Position[1] = -float32(400 + i%2*400)
 		if err := Sync(world); err != nil {
 			b.Fatal(err)
 		}

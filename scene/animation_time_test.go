@@ -26,8 +26,8 @@ func TestAnimationTrackTimeCurveChangesSequencePace(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			track.TimeTween, track.TimeCurve = test.tween, test.curve
 			cursor := 0
-			generic, genericOK := SampleAnimationTrack(track, 4, nil)
-			compiled, compiledOK := sampleAnimationDiscreteTrackAt(&track, 4, &cursor)
+			generic, genericOK := track.Sample(4, nil)
+			compiled, compiledOK := track.sampleDiscreteAt(4, &cursor)
 			if !genericOK || !compiledOK || generic != test.want || compiled != test.want {
 				t.Fatalf("halfway frame: generic=%d compiled=%d, want %d", generic, compiled, test.want)
 			}
@@ -35,13 +35,13 @@ func TestAnimationTrackTimeCurveChangesSequencePace(t *testing.T) {
 				time float32
 				want int
 			}{{0, 0}, {2, 0}, {6, 4}, {10, 4}} {
-				if value, _ := sampleAnimationDiscreteTrackAt(&track, edge.time, &cursor); value != edge.want {
+				if value, _ := track.sampleDiscreteAt(edge.time, &cursor); value != edge.want {
 					t.Fatalf("frame at %g=%d, want %d", edge.time, value, edge.want)
 				}
 			}
 			if allocations := testing.AllocsPerRun(100, func() {
-				SampleAnimationTrack(track, 4, nil)
-				sampleAnimationDiscreteTrackAt(&track, 4, &cursor)
+				track.Sample(4, nil)
+				track.sampleDiscreteAt(4, &cursor)
 			}); allocations != 0 {
 				t.Fatalf("time remapping allocated %g", allocations)
 			}
@@ -51,8 +51,8 @@ func TestAnimationTrackTimeCurveChangesSequencePace(t *testing.T) {
 	cursor := 0
 	for i := 0; i <= 100; i++ {
 		time := 2 + float32(i)/25
-		generic, _ := SampleAnimationTrack(track, time, nil)
-		compiled, _ := sampleAnimationDiscreteTrackAt(&track, time, &cursor)
+		generic, _ := track.Sample(time, nil)
+		compiled, _ := track.sampleDiscreteAt(time, &cursor)
 		if generic != compiled || compiled < 0 || compiled > 4 {
 			t.Fatalf("non-monotonic curve lost its cursor at %g: %d != %d", time, generic, compiled)
 		}
@@ -71,13 +71,13 @@ func TestAnimationTimeCurveRunsForOwnerAndBoundSequenceTracks(t *testing.T) {
 		if bound {
 			clip.TextureTracks[0].Binding.Path = "frames"
 		}
-		spawner := ecs.NewSpawner3[Animator, Sprite2D, Transform](world)
+		spawner := world.NewSpawner3[Animator, Sprite2D, Transform]()
 		owner := spawner.Spawn(NewAnimator(clip, false), Sprite2D{}, NewTransform())
 		target := owner
 		if bound {
 			target = spawner.Spawn(Animator{}, Sprite2D{}, NewTransform())
 		}
-		animator := ecs.GetMut[Animator](world, owner)
+		animator := world.GetMut[Animator](owner)
 		if bound {
 			animator.BindTargets(owner, nil, []ecs.Entity{target}, nil)
 		}
@@ -90,7 +90,7 @@ func TestAnimationTimeCurveRunsForOwnerAndBoundSequenceTracks(t *testing.T) {
 			if err := UpdateWorldAnimatorSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			if sprite := ecs.GetRef[Sprite2D](world, target); sprite.Texture != &frames[test.frame] {
+			if sprite := world.GetRef[Sprite2D](target); sprite.Texture != &frames[test.frame] {
 				t.Fatalf("bound=%v frame at %g does not follow the speed curve", bound, test.time)
 			}
 		}
@@ -101,7 +101,7 @@ func TestAnimationTimeCurveAlsoRemapsFloatSampling(t *testing.T) {
 	track := AnimationTrack[float32]{TimeTween: AnimationEaseIn, Keyframes: []AnimationKeyframe[float32]{{Time: 2, Value: 0}, {Time: 6, Value: 100}}}
 	interpolate := func(a, b, t float32) float32 { return a + (b-a)*t }
 	cursor := 0
-	generic, _ := SampleAnimationTrack(track, 4, interpolate)
+	generic, _ := track.Sample(4, interpolate)
 	compiled, _ := sampleAnimationFloatTrackAt(&track, 4, &cursor)
 	if generic != 25 || compiled != 25 {
 		t.Fatalf("remapped float samplers: %g, %g, want 25", generic, compiled)

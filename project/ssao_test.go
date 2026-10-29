@@ -26,7 +26,7 @@ func TestSSAOSceneLoadingCloningAndBinaryPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(scene.Dispose)
-	camera, ok := ecs.Get[render3d.Camera](scene.World, scene.MustEntity("camera"))
+	camera, ok := scene.World.Get[render3d.Camera](scene.MustEntity("camera"))
 	if !ok || !camera.SSAO.Enabled || camera.SSAO.Radius != .8 || camera.SSAO.Samples != 32 || camera.SSAO.Bias != .025 || camera.SSAO.ResolutionScale != .5 {
 		t.Fatalf("SSAO settings or defaults were lost: %+v", camera.SSAO)
 	}

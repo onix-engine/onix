@@ -26,7 +26,7 @@ func TestSSRSceneLoadingCloningAndBinaryPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(scene.Dispose)
-	camera, ok := ecs.Get[render3d.Camera](scene.World, scene.MustEntity("camera"))
+	camera, ok := scene.World.Get[render3d.Camera](scene.MustEntity("camera"))
 	if !ok || !camera.SSR.Enabled || camera.SSR.MaxDistance != 24 || camera.SSR.Steps != 128 || camera.SSR.Thickness != .1 || camera.SSR.MaxRoughness != .6 {
 		t.Fatalf("SSR settings or defaults were lost: %+v", camera.SSR)
 	}

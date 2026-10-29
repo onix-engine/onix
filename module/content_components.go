@@ -36,7 +36,7 @@ type ContentBehavior[P, S any] struct {
 	HandleEvent func(*ContentEventContext[P, S])
 }
 
-func ContentDefine[P, S any](c *Content, template html.Template, css string, b ContentBehavior[P, S]) (*html.Definition[P, S], error) {
+func (c *Content) Define[P, S any](template html.Template, css string, b ContentBehavior[P, S]) (*html.Definition[P, S], error) {
 	return html.Define(template, css, html.Behavior[P, S]{
 		Render: func(ctx html.RenderContext[P, S], v *html.View) {
 			if b.Render != nil {

@@ -12,7 +12,6 @@ import (
 	"github.com/diiyw/onix/physics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
 )
 
 type Options struct {
@@ -32,9 +31,6 @@ type Options struct {
 	Resources         project.ResourceFeature
 	Wake              func()
 	Host              *Host
-	// Content installs additional private rendering/animation capabilities.
-	// The built-in loader handles empty modules and color sprites.
-	Content func(*Context, project.ModComponents) error
 }
 
 // Runtime is single-threaded. Plans and registration are immutable for its life.
@@ -42,6 +38,8 @@ type Runtime struct {
 	world                     *ecs.World
 	plan                      *project.ProjectPlan
 	options                   Options
+	content                   contentSupport
+	transforms                *transformSpawners
 	registry                  Registry
 	typedStores               map[reflect.Type]valueStore
 	nextDelivery              uint64
@@ -108,7 +106,13 @@ type Scene struct {
 	entities          []ecs.Entity
 }
 
-func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options Options) (*Runtime, error) {
+// New creates a runtime with statically selected content capabilities.
+func New[P ContentProfile](world *ecs.World, plan *project.ProjectPlan, registry Registry, options Options) (*Runtime, error) {
+	var profile P
+	return newRuntime(world, plan, registry, options, profile.contentSupport())
+}
+
+func newRuntime(world *ecs.World, plan *project.ProjectPlan, registry Registry, options Options, content contentSupport) (*Runtime, error) {
 	if world == nil || plan == nil || int(plan.Entry) >= len(plan.Scenes) {
 		return nil, ErrInvalid
 	}
@@ -142,7 +146,7 @@ func New(world *ecs.World, plan *project.ProjectPlan, registry Registry, options
 	if options.EventCapacity < 1 || options.PayloadCapacity < 1 || options.PayloadCapacity > options.EventCapacity || options.RequestCapacity < 1 || options.CommandCapacity < 1 || options.OutputCapacity < 1 || options.TextCacheCapacity < 1 || options.StartupBatches < 1 || options.StartupEvents < 1 {
 		return nil, ErrInvalid
 	}
-	r := &Runtime{world: world, plan: plan, options: options, pendingFirst: -1, pendingLast: -1,
+	r := &Runtime{world: world, plan: plan, options: options, content: content, pendingFirst: -1, pendingLast: -1,
 		typedStores: make(map[reflect.Type]valueStore), pending: make([]pendingRequest, options.RequestCapacity),
 		freePending: make([]int, options.RequestCapacity), commands: make([]structuralCommand, 0, options.CommandCapacity)}
 	r.slotBuffers = make(map[project.ValueType]*slotBuffer)
@@ -287,8 +291,8 @@ func (r *Runtime) mount(id project.SceneID, state SceneState) (*Scene, error) {
 	r.scenes = append(r.scenes, s)
 	s.uiRoot = r.spawnTransform(p.Transform, true, 0, 0, true)
 	s.worldRoot = r.spawnTransform(p.Transform, false, 0, 0, true)
-	_ = ecs.Insert(r.world, s.uiRoot, s.layer)
-	_ = ecs.Insert(r.world, s.worldRoot, s.layer)
+	_ = r.world.Insert(s.uiRoot, s.layer)
+	_ = r.world.Insert(s.worldRoot, s.layer)
 	for i, instance := range p.Instances {
 		if int(instance.Mod) >= len(r.plan.Mods) || instance.Parent >= int32(i) || instance.Parent < -1 {
 			return fail(ErrInvalid)
@@ -316,21 +320,21 @@ func (r *Runtime) mount(id project.SceneID, state SceneState) (*Scene, error) {
 			return fail(fmt.Errorf("%s: content: %w", definition.ID, err))
 		}
 		c.entities = append(c.entities, c.root)
-		_ = ecs.Insert(r.world, c.root, entityOwner{context: c})
-		_ = ecs.Insert(r.world, c.root, scene.PainterGroup2D(c.identity))
+		_ = r.world.Insert(c.root, entityOwner{context: c})
+		_ = r.world.Insert(c.root, scene.PainterGroup2D(c.identity))
 		c.slots = make([]slotState, len(definition.Slots))
 		if len(instance.Slots) != len(c.slots) {
 			return fail(ErrInvalid)
 		}
 		for j, plan := range definition.Slots {
 			entity := r.spawnTransform(plan.Placement, c.ui, c.root, j+1, instance.Visible)
-			_ = ecs.Insert(r.world, entity, entityOwner{context: c})
+			_ = r.world.Insert(entity, entityOwner{context: c})
 			c.entities = append(c.entities, entity)
 			c.slots[j] = slotState{value: cloneValue(instance.Slots[j]), revision: 1, entity: entity}
 			if err := initVisualSlot(r.world, &c.slots[j]); err != nil {
 				return fail(err)
 			}
-			_ = ecs.Insert(r.world, entity, scene.Activity{Active: c.enabled})
+			_ = r.world.Insert(entity, scene.Activity{Active: c.enabled})
 		}
 		c.elements = make(map[string]ecs.Entity, len(definition.Elements)+len(definition.Slots))
 		for j, slot := range definition.Slots {
@@ -355,10 +359,10 @@ func (r *Runtime) mount(id project.SceneID, state SceneState) (*Scene, error) {
 			if err != nil {
 				return fail(fmt.Errorf("%s element %s: %w", definition.ID, element.Spec.ID, err))
 			}
-			_ = ecs.Insert(r.world, entity, entityOwner{context: c})
-			_ = ecs.Insert(r.world, entity, scene.Name{Value: element.Spec.ID})
+			_ = r.world.Insert(entity, entityOwner{context: c})
+			_ = r.world.Insert(entity, scene.Name{Value: element.Spec.ID})
 			if element.Spec.Visible != nil {
-				_ = ecs.Insert(r.world, entity, scene.Visibility{Visible: c.visible && *element.Spec.Visible})
+				_ = r.world.Insert(entity, scene.Visibility{Visible: c.visible && *element.Spec.Visible})
 			}
 			c.elements[element.Spec.ID] = entity
 			c.entities = append(c.entities, entity)
@@ -596,13 +600,13 @@ func (s *Scene) ID() project.SceneID { return s.plan.ID }
 func (s *Scene) Generation() uint64  { return s.context.identity }
 func (s *Scene) Alive() bool         { return s != nil && s.context.usable() }
 
-// SceneEmitter sends messages to a scene from the application orchestrator.
+// Emitter sends messages to a scene from the application orchestrator.
 // A module never receives this Scene object through Context.
-func SceneEmitter[T any](s *Scene, name string) (Emitter[T], error) {
+func (s *Scene) Emitter[T any](name string) (Emitter[T], error) {
 	if s == nil {
 		return Emitter[T]{}, ErrInvalid
 	}
-	return BindEmitter[T](&s.context, name)
+	return s.context.BindEmitter[T](name)
 }
 
 func joinError(a, b error) error {
@@ -636,7 +640,7 @@ func (r *Runtime) privateParent(entity ecs.Entity) ecs.Entity {
 	if spawn, ok := r.privateSpawns[entity]; ok {
 		return spawn.parent
 	}
-	parent, _ := ecs.Get[scene.Parent](r.world, entity)
+	parent, _ := r.world.Get[scene.Parent](entity)
 	return parent.Entity
 }
 
@@ -742,7 +746,7 @@ func (r *Runtime) despawnPrivate(c *Context, root ecs.Entity) {
 	for i := len(r.despawnEntities) - 1; i >= 0; i-- {
 		entity := r.despawnEntities[i]
 		if r.world.IsAlive(entity) {
-			htmlui.Release(r.world, entity)
+			r.releaseContent(entity)
 			r.world.Despawn(entity)
 		}
 	}
@@ -757,7 +761,7 @@ func (r *Runtime) reparentPrivate(command structuralCommand) error {
 	if !command.context.usable() || !r.world.IsAlive(command.entity) || !r.world.IsAlive(command.parent) {
 		return nil
 	}
-	if err := ecs.Insert(r.world, command.entity, scene.Parent{Entity: command.parent}); err != nil {
+	if err := r.world.Insert(command.entity, scene.Parent{Entity: command.parent}); err != nil {
 		return err
 	}
 	return nil
@@ -776,7 +780,7 @@ func (r *Runtime) syncDrawOrder() error {
 				continue
 			}
 			for index, entity := range c.entities {
-				if ecs.Has[explicitPainterOrder](r.world, entity) {
+				if r.world.Has[explicitPainterOrder](entity) {
 					continue
 				}
 				var err error
@@ -796,10 +800,10 @@ func (r *Runtime) syncDrawOrder() error {
 }
 
 func setPainterOrder[T comparable](world *ecs.World, entity ecs.Entity, order T) error {
-	if current, ok := ecs.Get[T](world, entity); ok && current == order {
+	if current, ok := world.Get[T](entity); ok && current == order {
 		return nil
 	}
-	return ecs.Insert(world, entity, order)
+	return world.Insert(entity, order)
 }
 
 func (r *Runtime) disposeContext(c *Context) error {
@@ -826,7 +830,7 @@ func (r *Runtime) disposeContext(c *Context) error {
 	for i := len(c.ownedEntities) - 1; i >= 0; i-- {
 		entity := c.ownedEntities[i]
 		if r.world.IsAlive(entity) {
-			htmlui.Release(r.world, entity)
+			r.releaseContent(entity)
 			r.world.Despawn(entity)
 		}
 	}
@@ -893,7 +897,7 @@ func (r *Runtime) disposeScene(s *Scene) error {
 	for i := len(s.entities) - 1; i >= 0; i-- {
 		e := s.entities[i]
 		if r.world.IsAlive(e) {
-			htmlui.Release(r.world, e)
+			r.releaseContent(e)
 			r.world.Despawn(e)
 		}
 	}

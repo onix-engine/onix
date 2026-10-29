@@ -87,7 +87,7 @@ func (r *MessageReader[T]) ReadInto(world *World, dst []T) []T {
 		panic("ecs: message reader is nil")
 	}
 	requireWorld(world)
-	return messageBufferFor[T](world).readInto(&r.cursor, dst)
+	return world.messageBufferFor[T]().readInto(&r.cursor, dst)
 }
 
 // All visits unread messages without copying them. The reader consumes each
@@ -101,7 +101,7 @@ func (r *MessageReader[T]) All(world *World) iter.Seq[*T] {
 			panic("ecs: message reader is nil")
 		}
 		requireWorld(world)
-		b := messageBufferFor[T](world)
+		b := world.messageBufferFor[T]()
 		cursor := &r.cursor
 		start := max(*cursor, b.oldestStart())
 		if len(b.older) > 0 && start < b.newerStart {
@@ -134,16 +134,16 @@ func (r *MessageReader[T]) Discard(world *World) {
 		panic("ecs: message reader is nil")
 	}
 	requireWorld(world)
-	r.cursor = messageBufferFor[T](world).count
+	r.cursor = world.messageBufferFor[T]().count
 }
 
-func WriteMessage[T any](world *World, message T) {
+func (world *World) WriteMessage[T any](message T) {
 	requireWorld(world)
 	world.mutationVersion++
-	messageBufferFor[T](world).write(message)
+	world.messageBufferFor[T]().write(message)
 }
 
-func AdvanceMessages(world *World) {
+func (world *World) AdvanceMessages() {
 	requireWorld(world)
 	for _, messages := range world.messages {
 		messages.advance()
@@ -168,7 +168,7 @@ func (s *messageScratch[T]) advance() {
 // Append to Values; AdvanceMessages retains it for the next message frame and
 // recycles the older buffer. Tags isolate arenas even when T is identical.
 // Do not overwrite borrowed values before two calls to AdvanceMessages.
-func MessageScratch[Tag, T any](world *World) *Scratch[T] {
+func (world *World) MessageScratch[Tag, T any]() *Scratch[T] {
 	requireWorld(world)
 	key := reflect.TypeFor[messageScratchKey[Tag, T]]()
 	if value, ok := world.messages[key]; ok {
@@ -179,7 +179,7 @@ func MessageScratch[Tag, T any](world *World) *Scratch[T] {
 	return &value.scratch
 }
 
-func messageBufferFor[T any](world *World) *messageBuffer[T] {
+func (world *World) messageBufferFor[T any]() *messageBuffer[T] {
 	typ := reflect.TypeFor[T]()
 	if store, ok := world.messages[typ]; ok {
 		return store.(*messageBuffer[T])

@@ -48,16 +48,16 @@ func TestAllBoxUIComponentsSupportCornerRadius(t *testing.T) {
 	}
 
 	count := 0
-	for entity, access := range ecs.Query[CornerRadius](world).All {
+	for entity, access := range world.Query[CornerRadius]().All {
 		current := access.Mut()
 
-		if ecs.Has[ProgressThumb](world, entity) {
+		if world.Has[ProgressThumb](entity) {
 			continue
 		}
-		if element, ok := ecs.Get[Relation[SurfaceStyle]](world, entity); ok && ecs.Has[Part[BodyPart]](world, entity) && ecs.Has[ProgressThumb](world, element.Owner) {
+		if element, ok := world.Get[Relation[SurfaceStyle]](entity); ok && world.Has[Part[BodyPart]](entity) && world.Has[ProgressThumb](element.Owner) {
 			continue
 		}
-		if ecs.Has[Control](world, entity) && !ecs.Has[scene.UIBackground2D](world, entity) {
+		if world.Has[Control](entity) && !world.Has[scene.UIBackground2D](entity) {
 			continue
 		}
 		surface := uiSurfaceSnapshot(world, entity)
@@ -97,16 +97,16 @@ func TestWindowTitleBarLaysOutControlsAndEmitsAction(t *testing.T) {
 	}) {
 		t.Fatal("expected title bar update to succeed")
 	}
-	titleBar, _ := ecs.Get[WindowTitleBar](world, bar)
+	titleBar, _ := world.Get[WindowTitleBar](bar)
 	if len(titleBar.Buttons) != 3 {
 		t.Fatalf("title bar button count = %d, want 3", len(titleBar.Buttons))
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, titleBar.Buttons[0])
+	transform, _ := world.Get[scene.UITransform](titleBar.Buttons[0])
 	if transform.Translation.X.Value != 42 {
 		t.Fatalf("first title bar button x = %v, want 42", transform.Translation.X.Value)
 	}
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 150, 36)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press title bar button: %v", err)
@@ -131,11 +131,11 @@ func TestDialogIsRoundedOutlinedPanel(t *testing.T) {
 		Theme: Theme{Background: graphics.ColorRGBA{R: 0.1, G: 0.2, B: 0.3, A: 1}},
 	})
 
-	if !ecs.Has[Panel](world, entity) || !ecs.Has[Dialog](world, entity) {
+	if !world.Has[Panel](entity) || !world.Has[Dialog](entity) {
 		t.Fatal("dialog must retain panel behavior and expose the dialog component")
 	}
-	background, backgroundOK := ecs.Get[scene.UIBackground2D](world, entity)
-	outline, outlineOK := ecs.Get[scene.UIBorder2D](world, entity)
+	background, backgroundOK := world.Get[scene.UIBackground2D](entity)
+	outline, outlineOK := world.Get[scene.UIBorder2D](entity)
 	if !backgroundOK || !outlineOK || background.Shape.Kind != render.ShapeRoundedRect || background.Shape.Radius != float32(radius) || outline.Shape.Border != border || outline.Shape.BorderWidth != 2 {
 		t.Fatalf("unexpected dialog layers: background=%+v border=%+v", background, outline)
 	}
@@ -148,7 +148,7 @@ func TestInputJoinedEdgeIsSquare(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for entity, access := range ecs.Query2[joinedEdge, scene.UITransform](world).All {
+	for entity, access := range world.Query2[joinedEdge, scene.UITransform]().All {
 		edge := access.A.Mut()
 		transform := access.B.Mut()
 
@@ -171,7 +171,7 @@ func TestSurfaceButtonUsesSurfaceColors(t *testing.T) {
 	world := newUIWorld(t)
 	theme := DefaultTheme()
 	button := SpawnButton(world, ButtonOptions{Width: 80, Height: 32, Label: "Up", Variant: ButtonSurface, Theme: theme})
-	pointer := ecs.GetMut[scene.InputState2D](world, button)
+	pointer := world.GetMut[scene.InputState2D](button)
 
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -215,11 +215,11 @@ func TestTabCornerRadiusKeepsJoinedEdgesSquare(t *testing.T) {
 	}
 
 	edgeCount := 0
-	for entity, access := range ecs.Query2[joinedEdge, scene.UITransform](world).All {
+	for entity, access := range world.Query2[joinedEdge, scene.UITransform]().All {
 		edge := access.A.Mut()
 		transform := access.B.Mut()
 
-		item, ok := ecs.Get[TabItem](world, edge.Owner)
+		item, ok := world.Get[TabItem](edge.Owner)
 		if !ok || item.Tabs != tabs {
 			continue
 		}
@@ -256,24 +256,24 @@ func TestTabFrameBorderWrapsHeaderAboveItems(t *testing.T) {
 	}
 
 	borderEntity := findSurfacePart[FrameBorderPart](world, tabs)
-	border, borderOK := ecs.Get[scene.UIBorder2D](world, borderEntity)
-	size, sizeOK := ecs.Get[scene.Size2D](world, borderEntity)
-	borderStack, stackOK := ecs.Get[scene.UIStackIndex](world, borderEntity)
+	border, borderOK := world.Get[scene.UIBorder2D](borderEntity)
+	size, sizeOK := world.Get[scene.Size2D](borderEntity)
+	borderStack, stackOK := world.Get[scene.UIStackIndex](borderEntity)
 	if borderEntity == 0 || !borderOK || border.Shape.Border != borderColor || border.Shape.BorderWidth != 1 || border.Shape.Radius != 6 {
 		t.Fatalf("tab frame border = entity:%d border:%#v", borderEntity, border)
 	}
 	if !sizeOK || size.Width != 120 || size.Height != 36 || !stackOK {
 		t.Fatalf("tab frame geometry = size:%#v stack:%d", size, borderStack)
 	}
-	rootBorder, _ := ecs.Get[scene.UIBorder2D](world, tabs)
+	rootBorder, _ := world.Get[scene.UIBorder2D](tabs)
 	if rootBorder.Shape.Kind != 0 {
 		t.Fatalf("tab card still has a border: %#v", rootBorder)
 	}
-	for entity, access := range ecs.Query[TabItem](world).All {
+	for entity, access := range world.Query[TabItem]().All {
 		item := access.Mut()
 
 		if item.Tabs == tabs {
-			itemStack, _ := ecs.Get[scene.UIStackIndex](world, entity)
+			itemStack, _ := world.Get[scene.UIStackIndex](entity)
 			if borderStack <= itemStack {
 				t.Fatalf("tab border stack %d does not cover item stack %d", borderStack, itemStack)
 			}
@@ -291,7 +291,7 @@ func TestTabUsesConfiguredHighlightColor(t *testing.T) {
 	}
 
 	selectedFound := false
-	for entity, access := range ecs.Query[TabItem](world).All {
+	for entity, access := range world.Query[TabItem]().All {
 		item := access.Mut()
 
 		if item.Tabs == tabs && item.Index == 0 {
@@ -310,7 +310,7 @@ func TestTabDefaultsToThemeAccentHighlight(t *testing.T) {
 	world := newUIWorld(t)
 	theme := DefaultTheme()
 	tabs := SpawnTab(world, TabOptions{Width: 120, Height: 40, Items: tabItems("A", "B"), Theme: theme})
-	tab, _ := ecs.Get[Tab](world, tabs)
+	tab, _ := world.Get[Tab](tabs)
 	if tab.Highlight != theme.Accent {
 		t.Fatalf("default tab highlight = %+v, want theme accent %+v", tab.Highlight, theme.Accent)
 	}
@@ -338,39 +338,39 @@ func TestButtonGroupJoinsButtonsAndSupportsOptionalDividers(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	group, ok := ecs.Get[ButtonGroup](world, groupEntity)
+	group, ok := world.Get[ButtonGroup](groupEntity)
 	if !ok || len(group.Buttons) != 3 || group.Width != 150 || group.Height != 32 {
 		t.Fatalf("button group layout = %#v", group)
 	}
 	frameEntity := findSurfacePart[FrameBorderPart](world, groupEntity)
-	frameSize, sizeOK := ecs.Get[scene.Size2D](world, frameEntity)
-	frame, frameOK := ecs.Get[scene.UIBorder2D](world, frameEntity)
-	frameStack, stackOK := ecs.Get[scene.UIStackIndex](world, frameEntity)
+	frameSize, sizeOK := world.Get[scene.Size2D](frameEntity)
+	frame, frameOK := world.Get[scene.UIBorder2D](frameEntity)
+	frameStack, stackOK := world.Get[scene.UIStackIndex](frameEntity)
 	if !sizeOK || frameSize.Width != 150 || frameSize.Height != 32 || !frameOK || frame.Shape.Border != frameColor || frame.Shape.BorderWidth != 1 || frame.Shape.Radius != 6 {
 		t.Fatalf("button group frame = size:%#v border:%#v", frameSize, frame)
 	}
 	values := []string{"save", "reload", "focus"}
 	for index, wantX := range []float32{0, 40, 90} {
 		button := group.Buttons[index]
-		transform, _ := ecs.Get[scene.UITransform](world, button)
-		value, _ := ecs.Get[ButtonGroupValue[string]](world, button)
+		transform, _ := world.Get[scene.UITransform](button)
+		value, _ := world.Get[ButtonGroupValue[string]](button)
 		if transform.Translation.X.Value != wantX || transform.Translation.Y.Value != 0 {
 			t.Fatalf("button %d position = %#v, want x=%v", index, transform, wantX)
 		}
 		if value.Group != groupEntity || value.Index != index || value.Value != values[index] {
 			t.Fatalf("button %d group value = %#v", index, value)
 		}
-		buttonStack, _ := ecs.Get[scene.UIStackIndex](world, button)
+		buttonStack, _ := world.Get[scene.UIStackIndex](button)
 		if !stackOK || frameStack <= buttonStack {
 			t.Fatalf("button group frame stack %d does not cover button stack %d", frameStack, buttonStack)
 		}
 	}
 
 	edgeCount := 0
-	for _, access := range ecs.Query[joinedEdge](world).All {
+	for _, access := range world.Query[joinedEdge]().All {
 		edge := access.Mut()
 
-		item, ok := ecs.Get[buttonGroupItem](world, edge.Owner)
+		item, ok := world.Get[buttonGroupItem](edge.Owner)
 		if ok && item.Group == groupEntity {
 			edgeCount++
 		}
@@ -380,7 +380,7 @@ func TestButtonGroupJoinsButtonsAndSupportsOptionalDividers(t *testing.T) {
 	}
 
 	dividerCount := 0
-	for entity, access := range ecs.Query2[buttonGroupDivider, scene.UITransform](world).All {
+	for entity, access := range world.Query2[buttonGroupDivider, scene.UITransform]().All {
 		divider := access.A.Mut()
 		transform := access.B.Mut()
 
@@ -402,7 +402,7 @@ func TestButtonGroupJoinsButtonsAndSupportsOptionalDividers(t *testing.T) {
 	}
 
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 60, 30)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press grouped button: %v", err)
@@ -421,11 +421,11 @@ func TestButtonGroupJoinsButtonsAndSupportsOptionalDividers(t *testing.T) {
 		Height: 24,
 		Items:  []ButtonGroupItem[int]{{Value: 1, Width: 30}, {Value: 2, Width: 30}},
 	})
-	plainFrame, plainFrameOK := ecs.Get[scene.UIBorder2D](world, findSurfacePart[FrameBorderPart](world, plainGroup))
+	plainFrame, plainFrameOK := world.Get[scene.UIBorder2D](findSurfacePart[FrameBorderPart](world, plainGroup))
 	if plainFrameOK && plainFrame.Shape.Kind != 0 {
 		t.Fatalf("default button group has a border: %#v", plainFrame)
 	}
-	for _, access := range ecs.Query[buttonGroupDivider](world).All {
+	for _, access := range world.Query[buttonGroupDivider]().All {
 		divider := access.Mut()
 
 		if divider.Group == plainGroup {
@@ -439,7 +439,7 @@ func TestButtonReceivesInputTapOnRelease(t *testing.T) {
 	button := SpawnButton(world, ButtonOptions{X: 10, Y: 20, Width: 120, Height: 36, Label: "Run"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 24, 30)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -465,15 +465,15 @@ func TestFocusedInputSystemRoutesAndConsumesTextFieldInput(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnInput(world, TextOptions{Width: 120, Height: 32})
 	handlerCalled := false
-	if err := ecs.Insert(world, field, scene.FocusedInputHandler{Handle: func(context *scene.FocusedInputContext) {
+	if err := world.Insert(field, scene.FocusedInputHandler{Handle: func(context *scene.FocusedInputContext) {
 		handlerCalled = context.Entity == field && context.Event.Kind == input.EventKeyDown
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	ecs.InsertResource(world, &scene.InputFocus{Keyboard: field})
-	state, _ := ecs.GetResource[*input.State](world)
+	world.InsertResource(&scene.InputFocus{Keyboard: field})
+	state, _ := world.GetResource[*input.State]()
 	event := input.Event{Seq: 7, Kind: input.EventKeyDown, Key: input.KeyA}
-	ecs.WriteMessage(world, event)
+	world.WriteMessage(event)
 
 	if err := FocusedInputSystem("").Run(world); err != nil {
 		t.Fatalf("dispatch focused input: %v", err)
@@ -493,34 +493,34 @@ func TestFocusedInputSystemRoutesAndConsumesTextFieldInput(t *testing.T) {
 func TestFocusedInputHonorsInheritedModuleActivity(t *testing.T) {
 	w := newUIWorld(t)
 	b := ecs.NewBundle(1)
-	ecs.Put(&b, scene.Activity{Active: false})
+	b.Put(scene.Activity{Active: false})
 	parent := w.Spawn(b)
 	field := SpawnInput(w, TextOptions{Width: 120, Height: 32})
-	if err := ecs.Insert(w, field, scene.Parent{Entity: parent}); err != nil {
+	if err := w.Insert(field, scene.Parent{Entity: parent}); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
-	if err := ecs.Insert(w, field, scene.FocusedInputHandler{Handle: func(*scene.FocusedInputContext) { calls++ }}); err != nil {
+	if err := w.Insert(field, scene.FocusedInputHandler{Handle: func(*scene.FocusedInputContext) { calls++ }}); err != nil {
 		t.Fatal(err)
 	}
-	ecs.InsertResource(w, &scene.InputFocus{Keyboard: field})
+	w.InsertResource(&scene.InputFocus{Keyboard: field})
 	system := FocusedInputSystem("")
-	ecs.WriteMessage(w, input.Event{Seq: 1, Kind: input.EventKeyDown, Key: input.KeyA})
+	w.WriteMessage(input.Event{Seq: 1, Kind: input.EventKeyDown, Key: input.KeyA})
 	if err := system.Run(w); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := ecs.GetResource[*input.State](w)
+	state, _ := w.GetResource[*input.State]()
 	if calls != 0 || state.EventConsumed(1) {
 		t.Fatal("inactive focused control consumed keyboard input")
 	}
-	ecs.GetMut[scene.Activity](w, parent).Active = true
+	w.GetMut[scene.Activity](parent).Active = true
 	if err := system.Run(w); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 0 {
 		t.Fatal("resume replayed keyboard input from suspension")
 	}
-	ecs.WriteMessage(w, input.Event{Seq: 2, Kind: input.EventKeyDown, Key: input.KeyA})
+	w.WriteMessage(input.Event{Seq: 2, Kind: input.EventKeyDown, Key: input.KeyA})
 	if err := system.Run(w); err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +534,7 @@ func TestClickingDifferentButtonsEmitsEachTapOnFirstClick(t *testing.T) {
 	first := SpawnButton(world, ButtonOptions{Width: 80, Height: 32, Label: "1"})
 	second := SpawnButton(world, ButtonOptions{X: 90, Width: 80, Height: 32, Label: "2"})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	reader := ecs.MessageReader[scene.InputEvent]{}
 	click := func(entity ecs.Entity, x float64) {
 		t.Helper()
@@ -565,12 +565,12 @@ func TestPanelBlocksButtonHoverUnlessConfiguredToPassThrough(t *testing.T) {
 			Theme: Theme{StackIndex: DefaultTheme().StackIndex + 1},
 		})
 		syncTransforms(t, world)
-		state, _ := ecs.GetResource[*input.State](world)
+		state, _ := world.GetResource[*input.State]()
 		state.PressMouse(input.MouseLeft, 10, 10)
 		if err := runUIUpdate(world); err != nil {
 			t.Fatal(err)
 		}
-		pointer := ecs.GetMut[scene.InputState2D](world, button)
+		pointer := world.GetMut[scene.InputState2D](button)
 		if pointer.Hovered != passThrough {
 			t.Fatalf("passThrough=%v produced hovered=%v", passThrough, pointer.Hovered)
 		}
@@ -584,7 +584,7 @@ func TestButtonWithoutWidthMeasuresItsContent(t *testing.T) {
 	if !ok || width <= 16+textIconX+textIconGap+14 {
 		t.Fatalf("expected content-sized button width, got %v", width)
 	}
-	target := ecs.GetMut[scene.InputTarget2D](world, button)
+	target := world.GetMut[scene.InputTarget2D](button)
 	if target == nil || target.Width != width {
 		t.Fatalf("expected input target to use measured width: width=%v target=%#v", width, target)
 	}
@@ -594,7 +594,7 @@ func TestButtonEmitsTapForPressAndReleaseInOneFrame(t *testing.T) {
 	world := newUIWorld(t)
 	button := SpawnButton(world, ButtonOptions{Width: 100, Height: 32, Label: "Run"})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 10, 10)
 	state.ReleaseMouse(input.MouseLeft, 10, 10)
 	if err := runUIUpdate(world); err != nil {
@@ -623,12 +623,12 @@ func TestButtonTextIsVerticallyCentered(t *testing.T) {
 	}
 
 	found := false
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner != button || !ecs.Has[Part[LabelPart]](world, entity) {
+		if visual.Owner != button || !world.Has[Part[LabelPart]](entity) {
 			continue
 		}
 		found = true
@@ -651,7 +651,7 @@ func TestInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 	world := newUIWorld(t)
 	const height = float32(28)
 	field := SpawnInput(world, TextOptions{Width: 160, Height: height, Value: "value"})
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
@@ -659,12 +659,12 @@ func TestInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 
 	var textY, lineHeight float32
 	foundText := false
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner != field || !ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner != field || !world.Has[Part[ValuePart]](entity) {
 			continue
 		}
 		_, lineHeight, _ = scene.MeasureTextValue2D(text, text.Value)
@@ -682,12 +682,12 @@ func TestInputTextAndCaretAreVerticallyCentered(t *testing.T) {
 
 	var caretY float32
 	foundCaret := false
-	for entity, access := range ecs.Query3[Relation[SurfaceStyle], scene.UITransform, scene.Size2D](world).All {
+	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.UITransform, scene.Size2D]().All {
 		visual := access.A.Mut()
 		transform := access.B.Mut()
 		size := access.C.Mut()
 
-		if visual.Owner != field || !ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner != field || !world.Has[Part[CaretPart]](entity) {
 			continue
 		}
 		caretY = transform.Translation.Y.Value
@@ -713,12 +713,12 @@ func TestButtonWithoutIconCentersTextHorizontally(t *testing.T) {
 	}
 
 	found := false
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner != button || !ecs.Has[Part[LabelPart]](world, entity) {
+		if visual.Owner != button || !world.Has[Part[LabelPart]](entity) {
 			continue
 		}
 		found = true
@@ -747,7 +747,7 @@ func TestButtonAndSelectorCanJoinOnlyTheirInnerEdges(t *testing.T) {
 
 	want := map[ecs.Entity]joinedEdgeSide{button: joinedEdgeLeft, selector: joinedEdgeRight}
 	got := map[ecs.Entity]joinedEdgeSide{}
-	for entity, access := range ecs.Query[joinedEdge](world).All {
+	for entity, access := range world.Query[joinedEdge]().All {
 		edge := access.Mut()
 
 		if side, ok := want[edge.Owner]; ok {
@@ -772,7 +772,7 @@ func TestButtonTextKeepsGapAfterIcon(t *testing.T) {
 
 	var iconRight float32
 	var labelX float32
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
@@ -781,13 +781,13 @@ func TestButtonTextKeepsGapAfterIcon(t *testing.T) {
 			continue
 		}
 		switch {
-		case ecs.Has[Part[IconPart]](world, entity):
+		case world.Has[Part[IconPart]](entity):
 			width, _, ok := scene.MeasureTextValue2D(text, text.Value)
 			if !ok {
 				t.Fatal("expected button icon to be measurable")
 			}
 			iconRight = transform.Translation.X.Value + width
-		case ecs.Has[Part[LabelPart]](world, entity):
+		case world.Has[Part[LabelPart]](entity):
 			labelX = transform.Translation.X.Value
 		}
 	}
@@ -804,12 +804,12 @@ func TestButtonTextUsesExplicitIconWidth(t *testing.T) {
 	}
 
 	var labelX float32
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner == button && ecs.Has[Part[LabelPart]](world, entity) {
+		if visual.Owner == button && world.Has[Part[LabelPart]](entity) {
 			labelX = transform.Translation.X.Value
 		}
 	}
@@ -830,16 +830,16 @@ func TestCenteredButtonContentCentersTextureIconAndLabel(t *testing.T) {
 	}
 
 	iconEntity := findSurfacePart[IconPart](world, button)
-	iconTransform, transformOK := ecs.Get[scene.UITransform](world, iconEntity)
-	iconSize, sizeOK := ecs.Get[scene.Size2D](world, iconEntity)
+	iconTransform, transformOK := world.Get[scene.UITransform](iconEntity)
+	iconSize, sizeOK := world.Get[scene.Size2D](iconEntity)
 	var labelTransform *scene.UITransform
 	var labelText *scene.Text2D
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		relation := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
 
-		if relation.Owner == button && ecs.Has[Part[LabelPart]](world, entity) {
+		if relation.Owner == button && world.Has[Part[LabelPart]](entity) {
 			labelTransform, labelText = transform, text
 			break
 		}
@@ -864,13 +864,13 @@ func TestLabelSyncsTextValue(t *testing.T) {
 	world := newUIWorld(t)
 	label := SpawnLabel(world, LabelOptions{X: 12, Y: 16, Value: "Ready"})
 
-	component := ecs.GetMut[Label](world, label)
+	component := world.GetMut[Label](label)
 	component.Value = "Running"
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
-	text := ecs.GetMut[scene.Text2D](world, label)
+	text := world.GetMut[scene.Text2D](label)
 	if text.Value != "Running" {
 		t.Fatalf("expected label text to sync, got %q", text.Value)
 	}
@@ -881,7 +881,7 @@ func TestInputFocusEditAndSubmit(t *testing.T) {
 	field := SpawnInput(world, TextOptions{X: 0, Y: 0, Width: 160, Height: 36, Placeholder: "Name"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -897,7 +897,7 @@ func TestInputFocusEditAndSubmit(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Value != "a" || !component.Submitted {
 		t.Fatalf("unexpected input state: %#v", component)
 	}
@@ -907,7 +907,7 @@ func TestDoubleClickingInputSelectsAllText(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnInput(world, TextOptions{Width: 180, Height: 36, Value: "select all"})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 
 	click := func() {
 		t.Helper()
@@ -928,7 +928,7 @@ func TestDoubleClickingInputSelectsAllText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("second press: %v", err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor != 0 || component.Caret != len([]rune(component.Value)) {
 		t.Fatalf("double-click selection = anchor %d caret %d, want all %q", component.Anchor, component.Caret, component.Value)
 	}
@@ -943,23 +943,23 @@ func TestSelectAllKeepsTextareaScrollPosition(t *testing.T) {
 	value := strings.Repeat("line\n", 100)
 	control := SpawnTextarea(world, TextOptions{Width: 220, Height: 80, Value: value})
 	eventState := &uiEventState{}
-	ecs.InsertResource(world, eventState)
+	world.InsertResource(eventState)
 	focus(world, eventState, control)
-	field := ecs.GetMut[TextField](world, control)
+	field := world.GetMut[TextField](control)
 	field.Caret, field.Anchor = 20, 20
 	if err := runUIFrame(world); err != nil {
 		t.Fatal(err)
 	}
-	textarea := ecs.GetMut[Textarea](world, control)
+	textarea := world.GetMut[Textarea](control)
 	textarea.ScrollY = 120
 	if err := runUIFrame(world); err != nil {
 		t.Fatal(err)
 	}
-	before := ecs.GetRef[Textarea](world, control).ScrollY
+	before := world.GetRef[Textarea](control).ScrollY
 	if before <= 0 {
 		t.Fatal("textarea did not retain the requested starting scroll position")
 	}
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressKey(input.KeyLeftControl)
 	state.PressKey(input.KeyA)
 	if err := runUIUpdate(world); err != nil {
@@ -968,8 +968,8 @@ func TestSelectAllKeepsTextareaScrollPosition(t *testing.T) {
 	if err := runUIFrame(world); err != nil {
 		t.Fatal(err)
 	}
-	field = ecs.GetMut[TextField](world, control)
-	textarea = ecs.GetMut[Textarea](world, control)
+	field = world.GetMut[TextField](control)
+	textarea = world.GetMut[Textarea](control)
 	if field.Anchor != 0 || field.Caret != len([]rune(value)) || textarea.ScrollY != before {
 		t.Fatalf("select all changed selection or view: selection=%d:%d scroll=%g, want 0:%d at %g", field.Anchor, field.Caret, textarea.ScrollY, len([]rune(value)), before)
 	}
@@ -980,7 +980,7 @@ func TestDoubleClickingNumberInputSelectsCopiesAndDeletesText(t *testing.T) {
 	field := SpawnNumberInput(world, NumberInputOptions{Width: 180, Height: 36, Value: "1234"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	copied := ""
 	state.SetClipboard(func(value string) bool { copied = value; return true }, func() (string, bool) { return "", false })
 	click := func() {
@@ -1001,7 +1001,7 @@ func TestDoubleClickingNumberInputSelectsCopiesAndDeletesText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("double-click number input: %v", err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor != 0 || component.Caret != 4 {
 		t.Fatalf("number input selection = %d..%d, want 0..4", component.Anchor, component.Caret)
 	}
@@ -1009,7 +1009,7 @@ func TestDoubleClickingNumberInputSelectsCopiesAndDeletesText(t *testing.T) {
 		t.Fatalf("sync number input selection: %v", err)
 	}
 	selected := false
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]]().All {
 		visual := access.A.Mut()
 		access.B.Mut()
 
@@ -1038,7 +1038,7 @@ func TestDoubleClickingNumberInputSelectsCopiesAndDeletesText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("delete number input selection: %v", err)
 	}
-	component, _ = ecs.Get[TextField](world, field)
+	component, _ = world.Get[TextField](field)
 	if component.Value != "" {
 		t.Fatalf("number input value after deleting selection = %q, want empty", component.Value)
 	}
@@ -1049,7 +1049,7 @@ func TestDraggingNumberInputSelectsText(t *testing.T) {
 	field := SpawnNumberInput(world, NumberInputOptions{Width: 180, Height: 36, Value: "1234"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 12, 12)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press number input: %v", err)
@@ -1059,7 +1059,7 @@ func TestDraggingNumberInputSelectsText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("drag number input selection: %v", err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor != 0 || component.Caret != 4 || !component.Selecting {
 		t.Fatalf("dragged number input selection = anchor %d caret %d selecting %v, want 0..4 while selecting", component.Anchor, component.Caret, component.Selecting)
 	}
@@ -1067,7 +1067,7 @@ func TestDraggingNumberInputSelectsText(t *testing.T) {
 		t.Fatalf("sync number input selection: %v", err)
 	}
 	selected := false
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]]().All {
 		visual := access.A.Mut()
 		access.B.Mut()
 
@@ -1087,7 +1087,7 @@ func TestDraggingNumberInputSelectsTextRightToLeft(t *testing.T) {
 	field := SpawnNumberInput(world, NumberInputOptions{Width: 180, Height: 36, Value: "1234"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 100, 12)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press number input: %v", err)
@@ -1097,7 +1097,7 @@ func TestDraggingNumberInputSelectsTextRightToLeft(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("drag number input selection right to left: %v", err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor != 4 || component.Caret != 0 || !component.Selecting {
 		t.Fatalf("right-to-left number input selection = anchor %d caret %d selecting %v, want 4..0 while selecting", component.Anchor, component.Caret, component.Selecting)
 	}
@@ -1108,7 +1108,7 @@ func TestDraggingInputIgnoresStalePlatformSelection(t *testing.T) {
 	field := SpawnInput(world, TextOptions{Width: 180, Height: 36, Value: "1234"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 100, 12)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press input: %v", err)
@@ -1121,7 +1121,7 @@ func TestDraggingInputIgnoresStalePlatformSelection(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("drag input with stale platform selection: %v", err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor != 4 || component.Caret != 0 || !component.Selecting {
 		t.Fatalf("dragged input selection = %d..%d selecting=%v, want 4..0 while selecting", component.Anchor, component.Caret, component.Selecting)
 	}
@@ -1130,7 +1130,7 @@ func TestDraggingInputIgnoresStalePlatformSelection(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("hold input with stale platform selection: %v", err)
 	}
-	component, _ = ecs.Get[TextField](world, field)
+	component, _ = world.Get[TextField](field)
 	if component.Anchor != 4 || component.Caret != 0 || !component.Selecting {
 		t.Fatalf("held input selection = %d..%d selecting=%v, want 4..0 while selecting", component.Anchor, component.Caret, component.Selecting)
 	}
@@ -1144,7 +1144,7 @@ func TestDraggingInputIgnoresStalePlatformSelection(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("release input with stale platform selection: %v", err)
 	}
-	component, _ = ecs.Get[TextField](world, field)
+	component, _ = world.Get[TextField](field)
 	if component.Anchor != 4 || component.Caret != 0 || component.Selecting {
 		t.Fatalf("released input selection = %d..%d selecting=%v, want retained 4..0", component.Anchor, component.Caret, component.Selecting)
 	}
@@ -1155,7 +1155,7 @@ func TestClickingAnotherControlBreaksInputDoubleClick(t *testing.T) {
 	field := SpawnInput(world, TextOptions{Width: 180, Height: 36, Value: "select all"})
 	SpawnButton(world, ButtonOptions{X: 200, Width: 80, Height: 36, Label: "Other"})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 
 	click := func(x float64) {
 		t.Helper()
@@ -1177,7 +1177,7 @@ func TestClickingAnotherControlBreaksInputDoubleClick(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatal(err)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Anchor == 0 && component.Caret == len([]rune(component.Value)) {
 		t.Fatal("input click after another control was treated as a double-click")
 	}
@@ -1188,7 +1188,7 @@ func TestNumberInputSubmitClearsFocus(t *testing.T) {
 	field := SpawnNumberInput(world, NumberInputOptions{X: 0, Y: 0, Width: 160, Height: 36, Value: "12", Step: 1})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -1199,8 +1199,8 @@ func TestNumberInputSubmitClearsFocus(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	component, _ := ecs.Get[TextField](world, field)
-	input, _ := ecs.GetResource[*uiEventState](world)
+	component, _ := world.Get[TextField](field)
+	input, _ := world.GetResource[*uiEventState]()
 	if component.Focused || input.Focused != 0 || state.TextInputConfig().Active {
 		t.Fatalf("number input remained focused after submit: field=%#v input=%#v", component, input)
 	}
@@ -1211,7 +1211,7 @@ func TestInputArrowKeysMoveCaretAndInsertText(t *testing.T) {
 	field := SpawnInput(world, TextOptions{X: 0, Y: 0, Width: 160, Height: 36, Value: "a界c"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 150, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -1229,7 +1229,7 @@ func TestInputArrowKeysMoveCaretAndInsertText(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Value != "a界你c" || component.Caret != 3 {
 		t.Fatalf("unexpected input caret state: %#v", component)
 	}
@@ -1263,7 +1263,7 @@ func TestAllTextInputsPlaceCaretFromMouseOrTouch(t *testing.T) {
 			world := newUIWorld(t)
 			field := test.spawn(world)
 			syncTransforms(t, world)
-			state, _ := ecs.GetResource[*input.State](world)
+			state, _ := world.GetResource[*input.State]()
 			if i%2 == 0 {
 				state.TouchStart(12, 8)
 			} else {
@@ -1316,12 +1316,12 @@ func TestTextareaInputChoosesLine(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnTextarea(world, TextOptions{Width: 180, Height: 80, Value: "first\nsecond"})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.TouchStart(12, 38)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("place caret: %v", err)
 	}
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Caret != 6 {
 		t.Fatalf("expected second-line caret, got %d", component.Caret)
 	}
@@ -1330,11 +1330,11 @@ func TestTextareaInputChoosesLine(t *testing.T) {
 func TestFocusedInputCaretBlinks(t *testing.T) {
 	world := newUIWorld(t)
 	clock := scene.NewTime()
-	ecs.InsertResource(world, clock)
+	world.InsertResource(clock)
 	request := &scene.RenderRequest{}
-	ecs.InsertResource(world, request)
+	world.InsertResource(request)
 	field := SpawnInput(world, TextOptions{Width: 160, Height: 36, Value: "stable"})
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Focused = true
 
 	for _, test := range []struct {
@@ -1385,7 +1385,7 @@ func TestInputAcceptsIMECommitAndShowsComposition(t *testing.T) {
 	field := SpawnInput(world, TextOptions{X: 0, Y: 0, Width: 160, Height: 36, Placeholder: "Name"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -1411,7 +1411,7 @@ func TestInputAcceptsIMECommitAndShowsComposition(t *testing.T) {
 		t.Fatalf("commit: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Value != "你" || component.Composition != "" {
 		t.Fatalf("unexpected input state: %#v", component)
 	}
@@ -1421,12 +1421,12 @@ func TestIMECommitReplacesSelectedText(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnInput(world, TextOptions{Width: 160, Height: 36, Value: "abc"})
 	uiState := &uiEventState{}
-	ecs.InsertResource(world, uiState)
+	world.InsertResource(uiState)
 	focus(world, uiState, field)
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Anchor, component.Caret = 0, 3
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.SetTextInputSelection(0, 3)
 	state.EndFrame()
 
@@ -1438,7 +1438,7 @@ func TestIMECommitReplacesSelectedText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("update composition: %v", err)
 	}
-	selected, _ := ecs.Get[TextField](world, field)
+	selected, _ := world.Get[TextField](field)
 	if selected.Anchor != 0 || selected.Caret != 3 {
 		t.Fatalf("composition collapsed selection to %d..%d", selected.Anchor, selected.Caret)
 	}
@@ -1447,7 +1447,7 @@ func TestIMECommitReplacesSelectedText(t *testing.T) {
 		t.Fatalf("commit composition: %v", err)
 	}
 
-	result, _ := ecs.Get[TextField](world, field)
+	result, _ := world.Get[TextField](field)
 	if result.Value != "你" {
 		t.Fatalf("IME commit value = %q, want selected text replaced with %q", result.Value, "你")
 	}
@@ -1456,14 +1456,14 @@ func TestIMECommitReplacesSelectedText(t *testing.T) {
 func TestTextInputConfigCaretTracksRenderedUICaret(t *testing.T) {
 	world := newUIWorld(t)
 	parent := spawnAnchor(world, 20, 30)
-	parentTransform := ecs.GetMut[scene.UITransform](world, parent)
+	parentTransform := world.GetMut[scene.UITransform](parent)
 	parentTransform.Scale = mgl32.Vec2{1.5, 1.25}
 	field := SpawnTextarea(world, TextOptions{X: 8, Y: 12, Width: 180, Height: 80, Value: "ab\ncd"})
-	if err := ecs.Insert(world, field, scene.Parent{Entity: parent}); err != nil {
+	if err := world.Insert(field, scene.Parent{Entity: parent}); err != nil {
 		t.Fatal(err)
 	}
 	uiState := &uiEventState{}
-	ecs.InsertResource(world, uiState)
+	world.InsertResource(uiState)
 	focus(world, uiState, field)
 
 	if err := SyncSystem("").Run(world); err != nil {
@@ -1476,12 +1476,12 @@ func TestTextInputConfigCaretTracksRenderedUICaret(t *testing.T) {
 
 	want := input.TextInputRect{}
 	found := false
-	for entity, access := range ecs.Query3[Relation[SurfaceStyle], scene.UIGlobalTransform, scene.Size2D](world).All {
+	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.UIGlobalTransform, scene.Size2D]().All {
 		visual := access.A.Ref()
 		transform := access.B.Ref()
 		size := access.C.Ref()
 
-		if visual.Owner != field || !ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner != field || !world.Has[Part[CaretPart]](entity) {
 			continue
 		}
 		minX, minY, maxX, maxY, ok := scene.BoundsInSpace2D(transform.Matrix, scene.AnchorTopLeft, size.Width, size.Height, true)
@@ -1494,7 +1494,7 @@ func TestTextInputConfigCaretTracksRenderedUICaret(t *testing.T) {
 	if !found {
 		t.Fatal("rendered caret was not found")
 	}
-	uiInputState, _ := ecs.GetResource[*input.State](world)
+	uiInputState, _ := world.GetResource[*input.State]()
 	config := uiInputState.TextInputConfig()
 	if config.Caret != want {
 		t.Fatalf("IME caret = %+v, want rendered caret %+v", config.Caret, want)
@@ -1510,7 +1510,7 @@ func TestCompositionSuppressesEditingAndClearsWhenFocusMoves(t *testing.T) {
 	second := SpawnInput(world, TextOptions{X: 0, Y: 48, Width: 160, Height: 36})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus first: %v", err)
@@ -1522,12 +1522,12 @@ func TestCompositionSuppressesEditingAndClearsWhenFocusMoves(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("compose: %v", err)
 	}
-	component := ecs.GetMut[TextField](world, first)
+	component := world.GetMut[TextField](first)
 	if component.Value != "a" || component.Submitted {
 		t.Fatalf("composition edited committed value: %#v", component)
 	}
 
-	input, _ := ecs.GetResource[*uiEventState](world)
+	input, _ := world.GetResource[*uiEventState]()
 	previousRevision := state.TextInputConfig().Revision
 	focus(world, input, second)
 	if state.Composing() || state.CompositionText() != "" {
@@ -1543,7 +1543,7 @@ func TestTextareaEnterSubmitsWithoutAddingNewline(t *testing.T) {
 	field := SpawnTextarea(world, TextOptions{X: 0, Y: 0, Width: 160, Height: 80})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -1555,7 +1555,7 @@ func TestTextareaEnterSubmitsWithoutAddingNewline(t *testing.T) {
 		t.Fatalf("edit: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Value != "x" || !component.Submitted {
 		t.Fatalf("unexpected textarea value: %q", component.Value)
 	}
@@ -1570,7 +1570,7 @@ func TestTextareaShiftEnterAddsNewlineWithoutSubmitting(t *testing.T) {
 	field := SpawnTextarea(world, TextOptions{X: 0, Y: 0, Width: 160, Height: 80, Value: "first"})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 8, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -1582,7 +1582,7 @@ func TestTextareaShiftEnterAddsNewlineWithoutSubmitting(t *testing.T) {
 		t.Fatalf("edit: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	if component.Value != "\nfirst" || component.Submitted {
 		t.Fatalf("unexpected textarea state: %#v", component)
 	}
@@ -1598,18 +1598,18 @@ func TestTextareaDisplaysMultipleLinesWithinItsClip(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	clip := ecs.GetMut[scene.ClipRect2D](world, field)
+	clip := world.GetMut[scene.ClipRect2D](field)
 	ok := clip != nil
 	if !ok || clip == nil || clip.X != 0 || clip.Y != 0 || clip.Width != 160 || clip.Height != 80 {
 		t.Fatalf("unexpected textarea clip: %#v", clip)
 	}
 
 	var value *scene.Text2D
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 
-		if visual.Owner == field && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == field && world.Has[Part[ValuePart]](entity) {
 			value = text
 			break
 		}
@@ -1629,7 +1629,7 @@ func TestTextareaClipTracksResizedControl(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("initial textarea sync: %v", err)
 	}
-	target := ecs.GetMut[scene.InputTarget2D](world, field)
+	target := world.GetMut[scene.InputTarget2D](field)
 	ok := target != nil
 	if !ok || target == nil {
 		t.Fatal("textarea has no input target")
@@ -1638,7 +1638,7 @@ func TestTextareaClipTracksResizedControl(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("resized textarea sync: %v", err)
 	}
-	clip, ok := ecs.Get[scene.ClipRect2D](world, field)
+	clip, ok := world.Get[scene.ClipRect2D](field)
 	if !ok || clip.X != 0 || clip.Y != 0 || clip.Width != 320 || clip.Height != 120 {
 		t.Fatalf("resized textarea clip: %#v", clip)
 	}
@@ -1647,24 +1647,24 @@ func TestTextareaClipTracksResizedControl(t *testing.T) {
 func TestTextareaLongLineScrollsToCaret(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnTextarea(world, TextOptions{Width: 100, Height: 40, Value: "a very long line that exceeds the textarea viewport"})
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
-	textarea, _ := ecs.Get[Textarea](world, field)
+	textarea, _ := world.Get[Textarea](field)
 	if textarea.Wrap || textarea.ScrollX <= 0 {
 		t.Fatalf("textarea state = %#v, want default horizontal scrolling", textarea)
 	}
 	var textTransform *scene.UITransform
 	var text *scene.Text2D
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		value := access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner == field && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == field && world.Has[Part[ValuePart]](entity) {
 			text, textTransform = value, transform
 			break
 		}
@@ -1673,11 +1673,11 @@ func TestTextareaLongLineScrollsToCaret(t *testing.T) {
 		t.Fatalf("textarea text layout = text=%#v transform=%#v", text, textTransform)
 	}
 	trackVisible := false
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], scene.Size2D](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], scene.Size2D]().All {
 		visual := access.A.Mut()
 		size := access.B.Mut()
 
-		if visual.Owner == field && ecs.Has[Part[ScrollTrackHorizontalPart]](world, entity) {
+		if visual.Owner == field && world.Has[Part[ScrollTrackHorizontalPart]](entity) {
 			trackVisible = size.Width > 0 && size.Height > 0
 			break
 		}
@@ -1690,28 +1690,28 @@ func TestTextareaLongLineScrollsToCaret(t *testing.T) {
 func TestInputLongLineScrollsToCaretAndClipsText(t *testing.T) {
 	world := newUIWorld(t)
 	fieldEntity := SpawnInput(world, TextOptions{Width: 100, Height: 36, Value: "resources/generated/background-1786032159368810.png"})
-	field := ecs.GetMut[TextField](world, fieldEntity)
+	field := world.GetMut[TextField](fieldEntity)
 	field.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
-	clip, ok := ecs.Get[scene.ClipRect2D](world, fieldEntity)
+	clip, ok := world.Get[scene.ClipRect2D](fieldEntity)
 	if !ok || clip.Width != 100 || clip.Height != 36 {
 		t.Fatalf("unexpected input clip: %#v", clip)
 	}
-	field = ecs.GetMut[TextField](world, fieldEntity)
+	field = world.GetMut[TextField](fieldEntity)
 	if field.ScrollX >= 0 {
 		t.Fatalf("input scroll = %.1f, want negative offset at end caret", field.ScrollX)
 	}
 	endScroll := field.ScrollX
 	var textTransform *scene.UITransform
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		access.B.Mut()
 		transform := access.C.Mut()
 
-		if visual.Owner == fieldEntity && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == fieldEntity && world.Has[Part[ValuePart]](entity) {
 			textTransform = transform
 			break
 		}
@@ -1724,7 +1724,7 @@ func TestInputLongLineScrollsToCaretAndClipsText(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync after moving caret: %v", err)
 	}
-	field = ecs.GetMut[TextField](world, fieldEntity)
+	field = world.GetMut[TextField](fieldEntity)
 	if field.ScrollX != 0 {
 		t.Fatalf("input scroll after moving caret to start = %.1f, want 0", field.ScrollX)
 	}
@@ -1739,7 +1739,7 @@ func TestInputLongLineScrollsToCaretAndClipsText(t *testing.T) {
 func TestInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {
 	world := newUIWorld(t)
 	fieldEntity := SpawnInput(world, TextOptions{Width: 90, Height: 36, Value: "12345678901234567890"})
-	field := ecs.GetMut[TextField](world, fieldEntity)
+	field := world.GetMut[TextField](fieldEntity)
 	field.Focused, field.Caret, field.Anchor = true, 10, 10
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync before insertion: %v", err)
@@ -1747,12 +1747,12 @@ func TestInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {
 
 	var text *scene.Text2D
 	var transform *scene.UITransform
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		value := access.B.Mut()
 		position := access.C.Mut()
 
-		if visual.Owner == fieldEntity && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == fieldEntity && world.Has[Part[ValuePart]](entity) {
 			text, transform = value, position
 			break
 		}
@@ -1784,21 +1784,21 @@ func TestInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {
 func TestTextareaScrollbarDragDoesNotSelectText(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnTextarea(world, TextOptions{Width: 100, Height: 40, Value: "a very long line that exceeds the textarea viewport"})
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("initial sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	textarea, _ := ecs.Get[Textarea](world, field)
+	textarea, _ := world.Get[Textarea](field)
 	before := textarea.ScrollX
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 80, 35)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("scrollbar press: %v", err)
 	}
-	current, _ := ecs.Get[TextField](world, field)
+	current, _ := world.Get[TextField](field)
 	if current.Selecting {
 		t.Fatal("pressing the textarea scrollbar started text selection")
 	}
@@ -1806,8 +1806,8 @@ func TestTextareaScrollbarDragDoesNotSelectText(t *testing.T) {
 		t.Fatalf("sync pressed scrollbar: %v", err)
 	}
 	body := findSurfacePart[BodyPart](world, field)
-	surface, _ := ecs.Get[scene.UIBackground2D](world, body)
-	theme, _ := ecs.GetResource[Theme](world)
+	surface, _ := world.Get[scene.UIBackground2D](body)
+	theme, _ := world.GetResource[Theme]()
 	if surface.Shape.Fill == theme.SurfaceActive {
 		t.Fatal("textarea body used the pressed color while dragging its scrollbar")
 	}
@@ -1816,8 +1816,8 @@ func TestTextareaScrollbarDragDoesNotSelectText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("scrollbar drag: %v", err)
 	}
-	textarea, _ = ecs.Get[Textarea](world, field)
-	current, _ = ecs.Get[TextField](world, field)
+	textarea, _ = world.Get[Textarea](field)
+	current, _ = world.Get[TextField](field)
 	if textarea.ScrollX >= before || current.Selecting {
 		t.Fatalf("textarea scrollbar drag = scroll %.1f -> %.1f selecting=%v", before, textarea.ScrollX, current.Selecting)
 	}
@@ -1831,21 +1831,21 @@ func TestTextareaScrollbarDragDoesNotSelectText(t *testing.T) {
 func TestTextareaVerticalScrollbarDragDoesNotSelectText(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnTextarea(world, TextOptions{Width: 100, Height: 80, Value: strings.Repeat("line\n", 20)})
-	component := ecs.GetMut[TextField](world, field)
+	component := world.GetMut[TextField](field)
 	component.Focused = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("initial sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	textarea, _ := ecs.Get[Textarea](world, field)
+	textarea, _ := world.Get[Textarea](field)
 	before := textarea.ScrollY
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 95, 60)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("vertical scrollbar press: %v", err)
 	}
-	current, _ := ecs.Get[TextField](world, field)
+	current, _ := world.Get[TextField](field)
 	if current.Selecting {
 		t.Fatal("pressing the vertical textarea scrollbar started text selection")
 	}
@@ -1854,8 +1854,8 @@ func TestTextareaVerticalScrollbarDragDoesNotSelectText(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("vertical scrollbar drag: %v", err)
 	}
-	textarea, _ = ecs.Get[Textarea](world, field)
-	current, _ = ecs.Get[TextField](world, field)
+	textarea, _ = world.Get[Textarea](field)
+	current, _ = world.Get[TextField](field)
 	if textarea.ScrollY >= before || current.Selecting {
 		t.Fatalf("vertical textarea scrollbar drag = scroll %.1f -> %.1f selecting=%v", before, textarea.ScrollY, current.Selecting)
 	}
@@ -1869,11 +1869,11 @@ func TestTextareaCanWrapLongLinesByCharacters(t *testing.T) {
 	}
 
 	var text *scene.Text2D
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		visual := access.A.Mut()
 		value := access.B.Mut()
 
-		if visual.Owner == field && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == field && world.Has[Part[ValuePart]](entity) {
 			text = value
 			break
 		}
@@ -1916,7 +1916,7 @@ func TestPasswordInputMasksDisplayedValue(t *testing.T) {
 	if got := valueText(world, field); got != "******" {
 		t.Fatalf("password display = %q, want masked value", got)
 	}
-	component, _ := ecs.Get[TextField](world, field)
+	component, _ := world.Get[TextField](field)
 	if component.Value != "s3cret" {
 		t.Fatalf("password value changed to %q", component.Value)
 	}
@@ -1953,7 +1953,7 @@ func TestTextInputSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 func TestComposedTextInputSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnInput(world, TextOptions{Width: 180, Height: 36, Value: "text"})
-	textField := ecs.GetMut[TextField](world, field)
+	textField := world.GetMut[TextField](field)
 	if textField == nil {
 		t.Fatal("expected text field")
 	}
@@ -1981,7 +1981,7 @@ func TestFocusedTextInputUpdateDoesNotAllocateWithoutEdits(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnInput(world, TextOptions{X: 20, Y: 20, Width: 180, Height: 36, Value: "text"})
 	input := &uiEventState{}
-	ecs.InsertResource(world, input)
+	world.InsertResource(input)
 	focus(world, input, field)
 	schedule := ecs.NewSchedule("focused_text_input_update_allocations")
 	if err := schedule.Add(UpdateSystem("")); err != nil {
@@ -2012,7 +2012,7 @@ func TestNumberInputStepButtonChangesValue(t *testing.T) {
 	field := SpawnNumberInput(world, NumberInputOptions{X: 0, Y: 0, Width: 160, Height: 36, Value: "1.5", Step: 0.25})
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 150, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -2023,8 +2023,8 @@ func TestNumberInputStepButtonChangesValue(t *testing.T) {
 		t.Fatalf("release: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
-	number := ecs.GetMut[NumberInput](world, field)
+	component := world.GetMut[TextField](field)
+	number := world.GetMut[NumberInput](field)
 	if component.Value != "1.75" || number == nil || !number.Changed {
 		t.Fatalf("unexpected number input state: field=%#v number=%#v", component, number)
 	}
@@ -2038,7 +2038,7 @@ func TestNumberInputEditingEmitsInputEvent(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnNumberInput(world, NumberInputOptions{X: 0, Y: 0, Width: 160, Height: 36, Step: 1})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	reader := &ecs.MessageReader[InputEvent[string]]{}
 
 	state.PressMouse(input.MouseLeft, 8, 8)
@@ -2092,14 +2092,14 @@ func TestNumberInputStepButtonsKeepTheirJoinedEdgeSquare(t *testing.T) {
 
 	want := map[int]joinedEdgeSide{1: joinedEdgeBottom, -1: joinedEdgeTop}
 	seen := map[int]bool{}
-	for stepEntity, access := range ecs.Query2[NumberInputStep, scene.InputTarget2D](world).All {
+	for stepEntity, access := range world.Query2[NumberInputStep, scene.InputTarget2D]().All {
 		step := access.A.Mut()
 		target := access.B.Mut()
 
 		if step.Input != field {
 			continue
 		}
-		for entity, access := range ecs.Query2[joinedEdge, scene.UITransform](world).All {
+		for entity, access := range world.Query2[joinedEdge, scene.UITransform]().All {
 			edge := access.A.Mut()
 			transform := access.B.Mut()
 
@@ -2138,10 +2138,10 @@ func TestNumberInputBorderRendersAboveStepButtons(t *testing.T) {
 	}
 
 	borderEntity := ecs.Entity(0)
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		relation := access.Mut()
 
-		if relation.Owner == field && ecs.Has[Part[NumberInputBorderPart]](world, entity) {
+		if relation.Owner == field && world.Has[Part[NumberInputBorderPart]](entity) {
 			borderEntity = entity
 			break
 		}
@@ -2149,10 +2149,10 @@ func TestNumberInputBorderRendersAboveStepButtons(t *testing.T) {
 	if borderEntity == 0 {
 		t.Fatal("number input is missing its border overlay")
 	}
-	background, backgroundOK := ecs.Get[scene.UIBackground2D](world, borderEntity)
-	border, borderOK := ecs.Get[scene.UIBorder2D](world, borderEntity)
-	size, sizeOK := ecs.Get[scene.Size2D](world, borderEntity)
-	borderStack, stackOK := ecs.Get[scene.UIStackIndex](world, borderEntity)
+	background, backgroundOK := world.Get[scene.UIBackground2D](borderEntity)
+	border, borderOK := world.Get[scene.UIBorder2D](borderEntity)
+	size, sizeOK := world.Get[scene.Size2D](borderEntity)
+	borderStack, stackOK := world.Get[scene.UIStackIndex](borderEntity)
 	if !backgroundOK || background.Shape.Kind != render.ShapeRoundedRect || background.Shape.Fill.A != 0 || !borderOK || border.Shape.Border != borderColor || border.Shape.BorderWidth != 2 || border.Shape.Radius != 6 {
 		t.Fatalf("number input border overlay = background:%#v border:%#v", background, border)
 	}
@@ -2161,14 +2161,14 @@ func TestNumberInputBorderRendersAboveStepButtons(t *testing.T) {
 	}
 
 	steps := 0
-	for entity, access := range ecs.Query[NumberInputStep](world).All {
+	for entity, access := range world.Query[NumberInputStep]().All {
 		step := access.Mut()
 
 		if step.Input != field {
 			continue
 		}
 		steps++
-		stepStack, ok := ecs.Get[scene.UIStackIndex](world, entity)
+		stepStack, ok := world.Get[scene.UIStackIndex](entity)
 		if !ok || borderStack <= stepStack {
 			t.Fatalf("border stack %d does not cover step stack %d", borderStack, stepStack)
 		}
@@ -2182,7 +2182,7 @@ func TestFocusedNumberInputWheelChangesValue(t *testing.T) {
 	world := newUIWorld(t)
 	field := SpawnNumberInput(world, NumberInputOptions{X: 0, Y: 0, Width: 160, Height: 36, Value: "1.5", Step: 0.25})
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 12, 8)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("focus: %v", err)
@@ -2193,8 +2193,8 @@ func TestFocusedNumberInputWheelChangesValue(t *testing.T) {
 		t.Fatalf("wheel: %v", err)
 	}
 
-	component := ecs.GetMut[TextField](world, field)
-	number := ecs.GetMut[NumberInput](world, field)
+	component := world.GetMut[TextField](field)
+	number := world.GetMut[NumberInput](field)
 	if component.Value != "1.75" || component.Caret != 4 || number == nil || !number.Changed {
 		t.Fatalf("unexpected number input wheel state: field=%#v number=%#v", component, number)
 	}
@@ -2233,7 +2233,7 @@ func TestNumberInputStepButtonsUseCustomSVGIcons(t *testing.T) {
 func assertNumberInputStepIcon(t *testing.T, world *ecs.World, inputEntity ecs.Entity, direction int, wantTexture *graphics.Texture, wantWidth, wantHeight, wantX, wantY float32) {
 	t.Helper()
 	var stepEntity ecs.Entity
-	for entity, access := range ecs.Query[NumberInputStep](world).All {
+	for entity, access := range world.Query[NumberInputStep]().All {
 		step := access.Mut()
 
 		if step.Input == inputEntity && step.Direction == direction {
@@ -2246,10 +2246,10 @@ func assertNumberInputStepIcon(t *testing.T, world *ecs.World, inputEntity ecs.E
 	}
 
 	var iconEntity ecs.Entity
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == stepEntity && ecs.Has[Part[NumberStepIconPart]](world, entity) {
+		if visual.Owner == stepEntity && world.Has[Part[NumberStepIconPart]](entity) {
 			iconEntity = entity
 			break
 		}
@@ -2261,15 +2261,15 @@ func assertNumberInputStepIcon(t *testing.T, world *ecs.World, inputEntity ecs.E
 	if surface == nil || surface.Texture != wantTexture || surface.Width != wantWidth || surface.Height != wantHeight {
 		t.Fatalf("unexpected step icon surface %d: %#v", direction, surface)
 	}
-	transform := ecs.GetMut[scene.UITransform](world, iconEntity)
+	transform := world.GetMut[scene.UITransform](iconEntity)
 	if transform.Translation.X.Value != wantX || transform.Translation.Y.Value != wantY {
 		t.Fatalf("unexpected step icon position %d: %#v", direction, transform)
 	}
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 
-		if visual.Owner == stepEntity && ecs.Has[Part[IconPart]](world, entity) && text.Value != "" {
+		if visual.Owner == stepEntity && world.Has[Part[IconPart]](entity) && text.Value != "" {
 			t.Fatalf("expected custom icon to replace step text, got %q", text.Value)
 		}
 	}
@@ -2280,14 +2280,14 @@ func TestSelectorSelectsItem(t *testing.T) {
 	selector := SpawnSelector(world, SelectorOptions{X: 0, Y: 0, Width: 140, Height: 32, Label: "Mode", Options: []string{"A", "B"}})
 	syncTransforms(t, world)
 
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 10, 70)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -2306,14 +2306,14 @@ func TestSelectorSelectsItem(t *testing.T) {
 func TestSelectorClosesWhenPointerPressMissesInputTargets(t *testing.T) {
 	world := newUIWorld(t)
 	selector := SpawnSelector(world, SelectorOptions{Width: 140, Height: 32, Options: []string{"A", "B"}})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 500, 500)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("outside press: %v", err)
@@ -2331,14 +2331,14 @@ func TestSelectorPopupAlwaysUsesTopmostStackRange(t *testing.T) {
 	SpawnButton(world, ButtonOptions{
 		Y: 32, Width: 140, Height: 32, Label: "Cover", Theme: Theme{StackIndex: 1_000_000},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
 	list := ecs.Entity(0)
-	for entity, access := range ecs.Query[SelectorList](world).All {
+	for entity, access := range world.Query[SelectorList]().All {
 		current := access.Get()
 
 		if current.Selector == selector {
@@ -2351,7 +2351,7 @@ func TestSelectorPopupAlwaysUsesTopmostStackRange(t *testing.T) {
 	}
 
 	popupCount, popupMin, otherMax := 0, math.MaxInt, math.MinInt
-	for entity, access := range ecs.Query[scene.UIStackIndex](world).All {
+	for entity, access := range world.Query[scene.UIStackIndex]().All {
 		stack := access.Get()
 
 		popup := false
@@ -2360,7 +2360,7 @@ func TestSelectorPopupAlwaysUsesTopmostStackRange(t *testing.T) {
 				popup = true
 				break
 			}
-			parent, ok := ecs.Get[scene.Parent](world, current)
+			parent, ok := world.Get[scene.Parent](current)
 			if !ok {
 				break
 			}
@@ -2386,14 +2386,14 @@ func TestBindSelectorBuildsHiddenRuntimeListOnExistingEntity(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, entity)
+	transform, _ := world.Get[scene.UITransform](entity)
 	width, height, _ := ControlBounds(world, entity)
 	if transform.Translation.X.Value != 24 || transform.Translation.Y.Value != 30 || width != 140 || height != 32 {
 		t.Fatalf("bound selector transform/bounds = %+v (%v,%v)", transform.Translation, width, height)
 	}
 	items := 0
 	lists := 0
-	for _, access := range ecs.Query2[SelectorItem, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.Visibility]().All {
 		visible := access.B.Get()
 
 		items++
@@ -2401,7 +2401,7 @@ func TestBindSelectorBuildsHiddenRuntimeListOnExistingEntity(t *testing.T) {
 			t.Fatal("bound selector option is visible while closed")
 		}
 	}
-	for _, access := range ecs.Query2[SelectorList, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorList, scene.Visibility]().All {
 		list := access.A.Get()
 		visible := access.B.Get()
 
@@ -2421,13 +2421,13 @@ func TestSelectorHighlightsFocusedOptionAndUsesCustomIcon(t *testing.T) {
 	world := newUIWorld(t)
 	icon := graphics.CreateTextureByColor(graphics.ColorFromRGBA(9, 8, 7, 255))
 	selector := SpawnSelector(world, SelectorOptions{X: 0, Y: 0, Width: 140, Height: 32, Options: []string{"A", "B"}, Icon: TextureIcon(icon, 12, 12)})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(10, 42)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("hover: %v", err)
@@ -2436,7 +2436,7 @@ func TestSelectorHighlightsFocusedOptionAndUsesCustomIcon(t *testing.T) {
 		t.Fatalf("sync hover: %v", err)
 	}
 	focused := false
-	for _, access := range ecs.Query2[SelectorItem, scene.InputState2D](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.InputState2D]().All {
 		item := access.A.Mut()
 		pointer := access.B.Mut()
 
@@ -2448,10 +2448,10 @@ func TestSelectorHighlightsFocusedOptionAndUsesCustomIcon(t *testing.T) {
 		t.Fatal("expected focused selector option to highlight")
 	}
 	foundIcon := false
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == selector && ecs.Has[Part[SelectorIconPart]](world, entity) {
+		if visual.Owner == selector && world.Has[Part[SelectorIconPart]](entity) {
 			surface := uiSurfaceSnapshot(world, entity)
 			foundIcon = surface != nil && surface.Texture == icon
 		}
@@ -2464,14 +2464,14 @@ func TestSelectorHighlightsFocusedOptionAndUsesCustomIcon(t *testing.T) {
 func TestSelectorHandlesSameFrameClick(t *testing.T) {
 	world := newUIWorld(t)
 	selector := SpawnSelector(world, SelectorOptions{Width: 140, Height: 32, Options: []string{"A", "B"}})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 10, 70)
 	state.ReleaseMouse(input.MouseLeft, 10, 70)
 	if err := runUIUpdate(world); err != nil {
@@ -2489,15 +2489,15 @@ func TestSelectorListHeightScrollAndAncestorVisibility(t *testing.T) {
 		X: 10, Y: 10, Width: 140, Height: 20, ItemHeight: 20, ListHeight: 40,
 		Options: []string{"A", "B", "C", "D"},
 	})
-	_ = ecs.Insert(world, selector, scene.Parent{Entity: parent})
-	component := ecs.GetMut[Selector](world, selector)
+	_ = world.Insert(selector, scene.Parent{Entity: parent})
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("initial layout: %v", err)
 	}
 
 	var clip *scene.ClipRect2D
-	for _, access := range ecs.Query2[SelectorList, scene.ClipRect2D](world).All {
+	for _, access := range world.Query2[SelectorList, scene.ClipRect2D]().All {
 		list := access.A.Mut()
 		value := access.B.Mut()
 
@@ -2510,7 +2510,7 @@ func TestSelectorListHeightScrollAndAncestorVisibility(t *testing.T) {
 		t.Fatalf("unexpected selector list clip: %#v", clip)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(20, 40)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -2520,7 +2520,7 @@ func TestSelectorListHeightScrollAndAncestorVisibility(t *testing.T) {
 		t.Fatalf("scroll layout: %v", err)
 	}
 	var selectorScroll float32
-	for _, access := range ecs.Query2[SelectorList, scene.UIScroll](world).All {
+	for _, access := range world.Query2[SelectorList, scene.UIScroll]().All {
 		list := access.A.Mut()
 		scroll := access.B.Mut()
 
@@ -2542,7 +2542,7 @@ func TestSelectorListHeightScrollAndAncestorVisibility(t *testing.T) {
 		t.Fatalf("hover scrolled item: %v", err)
 	}
 	hovered := -1
-	for _, access := range ecs.Query2[SelectorItem, scene.InputState2D](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.InputState2D]().All {
 		item := access.A.Mut()
 		pointer := access.B.Mut()
 
@@ -2554,12 +2554,12 @@ func TestSelectorListHeightScrollAndAncestorVisibility(t *testing.T) {
 		t.Fatalf("expected item 1 under pointer after scrolling, got %d", hovered)
 	}
 
-	parentVisibility := ecs.GetMut[scene.Visibility](world, parent)
+	parentVisibility := world.GetMut[scene.Visibility](parent)
 	parentVisibility.Visible = false
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync hidden parent: %v", err)
 	}
-	for _, access := range ecs.Query2[SelectorItem, scene.Visibility](world).All {
+	for _, access := range world.Query2[SelectorItem, scene.Visibility]().All {
 		item := access.A.Mut()
 		visibility := access.B.Mut()
 
@@ -2579,7 +2579,7 @@ func TestSetSelectorScrollOffsetUpdatesUIScroll(t *testing.T) {
 		t.Fatal("selector list scroll was not updated")
 	}
 	var position float32
-	for _, access := range ecs.Query2[SelectorList, scene.UIScroll](world).All {
+	for _, access := range world.Query2[SelectorList, scene.UIScroll]().All {
 		list := access.A.Mut()
 		scroll := access.B.Mut()
 
@@ -2595,12 +2595,12 @@ func TestSetSelectorScrollOffsetUpdatesUIScroll(t *testing.T) {
 
 func TestSelectorListOpensUpwardWhenViewportSpaceBelowIsInsufficient(t *testing.T) {
 	world := newUIWorld(t)
-	ecs.InsertResource(world, scene.ViewportSize{Width: 200, Height: 140, ScaleFactor: 1})
+	world.InsertResource(scene.ViewportSize{Width: 200, Height: 140, ScaleFactor: 1})
 	selector := SpawnSelector(world, SelectorOptions{
 		X: 20, Y: 100, Width: 140, Height: 20, ItemHeight: 20,
 		Options: []string{"A", "B", "C"},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	syncTransforms(t, world)
 	if err := SyncSystem("").Run(world); err != nil {
@@ -2608,7 +2608,7 @@ func TestSelectorListOpensUpwardWhenViewportSpaceBelowIsInsufficient(t *testing.
 	}
 
 	found := false
-	for _, access := range ecs.Query3[SelectorList, scene.UITransform, scene.ClipRect2D](world).All {
+	for _, access := range world.Query3[SelectorList, scene.UITransform, scene.ClipRect2D]().All {
 		list := access.A.Mut()
 		transform := access.B.Mut()
 		clip := access.C.Mut()
@@ -2629,12 +2629,12 @@ func TestSelectorListOpensUpwardWhenViewportSpaceBelowIsInsufficient(t *testing.
 
 func TestSelectorListDefaultsToDownward(t *testing.T) {
 	world := newUIWorld(t)
-	ecs.InsertResource(world, scene.ViewportSize{Width: 200, Height: 200, ScaleFactor: 1})
+	world.InsertResource(scene.ViewportSize{Width: 200, Height: 200, ScaleFactor: 1})
 	selector := SpawnSelector(world, SelectorOptions{
 		X: 20, Y: 20, Width: 140, Height: 20, ItemHeight: 20,
 		Options: []string{"A", "B", "C"},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	syncTransforms(t, world)
 	if err := SyncSystem("").Run(world); err != nil {
@@ -2642,7 +2642,7 @@ func TestSelectorListDefaultsToDownward(t *testing.T) {
 	}
 
 	found := false
-	for _, access := range ecs.Query3[SelectorList, scene.UITransform, scene.ClipRect2D](world).All {
+	for _, access := range world.Query3[SelectorList, scene.UITransform, scene.ClipRect2D]().All {
 		list := access.A.Mut()
 		transform := access.B.Mut()
 		clip := access.C.Mut()
@@ -2667,7 +2667,7 @@ func TestSelectorPopupHasDefaultBorder(t *testing.T) {
 		Width: 140, Height: 20, ItemHeight: 20, ListHeight: 40,
 		Options: []string{"A", "B"},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync selector: %v", err)
@@ -2675,7 +2675,7 @@ func TestSelectorPopupHasDefaultBorder(t *testing.T) {
 
 	panel := findSurfacePart[SelectorPanelPart](world, func() ecs.Entity {
 		var listEntity ecs.Entity
-		for entity, access := range ecs.Query[SelectorList](world).All {
+		for entity, access := range world.Query[SelectorList]().All {
 			list := access.Get()
 
 			if list.Selector == selector {
@@ -2688,13 +2688,13 @@ func TestSelectorPopupHasDefaultBorder(t *testing.T) {
 	if panel == 0 {
 		t.Fatal("selector popup panel not found")
 	}
-	border, ok := ecs.Get[scene.UIBorder2D](world, panel)
+	border, ok := world.Get[scene.UIBorder2D](panel)
 	if !ok || border.Shape.BorderWidth != 1 {
 		t.Fatalf("selector popup surface border = %#v, want 1px", border)
 	}
 	overlay := findSurfacePart[SelectorPanelBorderPart](world, func() ecs.Entity {
 		var listEntity ecs.Entity
-		for entity, access := range ecs.Query[SelectorList](world).All {
+		for entity, access := range world.Query[SelectorList]().All {
 			list := access.Get()
 
 			if list.Selector == selector {
@@ -2707,7 +2707,7 @@ func TestSelectorPopupHasDefaultBorder(t *testing.T) {
 	if overlay == 0 {
 		t.Fatal("selector popup border overlay not found")
 	}
-	overlayBorder, ok := ecs.Get[scene.UIBorder2D](world, overlay)
+	overlayBorder, ok := world.Get[scene.UIBorder2D](overlay)
 	if !ok || overlayBorder.Shape.BorderWidth != 1 {
 		t.Fatalf("selector popup overlay border = %#v, want 1px", overlayBorder)
 	}
@@ -2715,12 +2715,12 @@ func TestSelectorPopupHasDefaultBorder(t *testing.T) {
 
 func TestSelectorListFitsViewportAndShowsScrollbarWhenNeitherDirectionFits(t *testing.T) {
 	world := newUIWorld(t)
-	ecs.InsertResource(world, scene.ViewportSize{Width: 200, Height: 100, ScaleFactor: 1})
+	world.InsertResource(scene.ViewportSize{Width: 200, Height: 100, ScaleFactor: 1})
 	selector := SpawnSelector(world, SelectorOptions{
 		X: 20, Y: 40, Width: 140, Height: 20, ItemHeight: 20,
 		Options: []string{"A", "B", "C", "D", "E"},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	syncTransforms(t, world)
 	if err := SyncSystem("").Run(world); err != nil {
@@ -2728,7 +2728,7 @@ func TestSelectorListFitsViewportAndShowsScrollbarWhenNeitherDirectionFits(t *te
 	}
 
 	foundList, foundTrack, foundThumb := false, false, false
-	for _, access := range ecs.Query3[SelectorList, scene.UITransform, scene.ClipRect2D](world).All {
+	for _, access := range world.Query3[SelectorList, scene.UITransform, scene.ClipRect2D]().All {
 		list := access.A.Mut()
 		transform := access.B.Mut()
 		clip := access.C.Mut()
@@ -2742,18 +2742,18 @@ func TestSelectorListFitsViewportAndShowsScrollbarWhenNeitherDirectionFits(t *te
 		}
 		break
 	}
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], scene.Size2D](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], scene.Size2D]().All {
 		visual := access.A.Mut()
 		size := access.B.Mut()
 
-		list, ok := ecs.Get[SelectorList](world, visual.Owner)
+		list, ok := world.Get[SelectorList](visual.Owner)
 		if !ok || list.Selector != selector {
 			continue
 		}
 		switch {
-		case ecs.Has[Part[SelectorScrollTrackPart]](world, entity):
+		case world.Has[Part[SelectorScrollTrackPart]](entity):
 			foundTrack = size.Width == selectorScrollBarSize && size.Height == 40
-		case ecs.Has[Part[SelectorScrollThumbPart]](world, entity):
+		case world.Has[Part[SelectorScrollThumbPart]](entity):
 			foundThumb = size.Width == selectorScrollThumbSize && size.Height == 20
 		}
 	}
@@ -2772,7 +2772,7 @@ func TestSelectorListConsumesWheelBeforeUnderlyingScrollArea(t *testing.T) {
 		Width: 140, Height: 20, ItemHeight: 20, ListHeight: 40,
 		Options: []string{"A", "B", "C", "D"},
 	})
-	component := ecs.GetMut[Selector](world, selector)
+	component := world.GetMut[Selector](selector)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync open selector: %v", err)
@@ -2781,7 +2781,7 @@ func TestSelectorListConsumesWheelBeforeUnderlyingScrollArea(t *testing.T) {
 		t.Fatalf("initial layout: %v", err)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(10, 30)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -2793,7 +2793,7 @@ func TestSelectorListConsumesWheelBeforeUnderlyingScrollArea(t *testing.T) {
 
 	underlying, _ := GetScrollAreaOffset(world, area)
 	var selectorScroll float32
-	for _, access := range ecs.Query2[SelectorList, scene.UIScroll](world).All {
+	for _, access := range world.Query2[SelectorList, scene.UIScroll]().All {
 		list := access.A.Mut()
 		scroll := access.B.Mut()
 
@@ -2836,20 +2836,20 @@ func TestTabSwitchesPanelVisibility(t *testing.T) {
 	logPanel := SpawnTabPanel(world, tabs, TabPanelOptions{Index: 1})
 	infoLabel := SpawnLabel(world, LabelOptions{X: 12, Y: 12, Value: "Info body"})
 	logLabel := SpawnLabel(world, LabelOptions{X: 12, Y: 12, Value: "Log body"})
-	_ = ecs.Insert(world, infoLabel, scene.Parent{Entity: infoPanel})
-	_ = ecs.Insert(world, logLabel, scene.Parent{Entity: logPanel})
+	_ = world.Insert(infoLabel, scene.Parent{Entity: infoPanel})
+	_ = world.Insert(logLabel, scene.Parent{Entity: logPanel})
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
 
-	infoVisibility := ecs.GetMut[scene.Visibility](world, infoLabel)
-	logVisibility := ecs.GetMut[scene.Visibility](world, logLabel)
+	infoVisibility := world.GetMut[scene.Visibility](infoLabel)
+	logVisibility := world.GetMut[scene.Visibility](logLabel)
 	if infoVisibility == nil || !infoVisibility.Visible || logVisibility == nil || logVisibility.Visible {
 		t.Fatalf("unexpected initial visibility: info=%#v log=%#v", infoVisibility, logVisibility)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 140, 18)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -2863,7 +2863,7 @@ func TestTabSwitchesPanelVisibility(t *testing.T) {
 		t.Fatalf("sync after click: %v", err)
 	}
 
-	component := ecs.GetMut[Tab](world, tabs)
+	component := world.GetMut[Tab](tabs)
 	if component.Selected != 1 {
 		t.Fatalf("unexpected tab state: %#v", component)
 	}
@@ -2879,9 +2879,9 @@ func TestTabSwitchesPanelVisibility(t *testing.T) {
 func TestTabTextAndIconAreVerticallyCenteredWithoutOverlap(t *testing.T) {
 	world := newUIWorld(t)
 	tabs := SpawnTab(world, TabOptions{Width: 120, Height: 80, HeaderHeight: 40, Items: []TabItemSpec{{Label: "Info", Icon: TextIcon("#")}}})
-	tab := ecs.GetMut[Tab](world, tabs)
+	tab := world.GetMut[Tab](tabs)
 	tab.HeaderHeight = 52
-	for _, access := range ecs.Query[TabItem](world).All {
+	for _, access := range world.Query[TabItem]().All {
 		item := access.Mut()
 
 		if item.Tabs == tabs {
@@ -2896,12 +2896,12 @@ func TestTabTextAndIconAreVerticallyCenteredWithoutOverlap(t *testing.T) {
 	var labelX float32
 	foundIcon := false
 	foundLabel := false
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		transform := access.C.Mut()
 
-		item := ecs.GetMut[TabItem](world, visual.Owner)
+		item := world.GetMut[TabItem](visual.Owner)
 		if item == nil || item.Tabs != tabs {
 			continue
 		}
@@ -2914,10 +2914,10 @@ func TestTabTextAndIconAreVerticallyCenteredWithoutOverlap(t *testing.T) {
 			t.Fatalf("expected vertically centered tab text y=%v, got %v", wantY, transform.Translation.Y.Value)
 		}
 		switch {
-		case ecs.Has[Part[IconPart]](world, entity):
+		case world.Has[Part[IconPart]](entity):
 			foundIcon = true
 			iconRight = transform.Translation.X.Value + width
-		case ecs.Has[Part[ItemPart]](world, entity):
+		case world.Has[Part[ItemPart]](entity):
 			foundLabel = true
 			labelX = transform.Translation.X.Value
 		}
@@ -2933,7 +2933,7 @@ func TestTabTextAndIconAreVerticallyCenteredWithoutOverlap(t *testing.T) {
 func TestTabUsesCustomItemWidths(t *testing.T) {
 	world := newUIWorld(t)
 	tabs := SpawnTab(world, TabOptions{Width: 100, Height: 40, Items: tabItems("Short", "Long")})
-	for _, access := range ecs.Query[TabItem](world).All {
+	for _, access := range world.Query[TabItem]().All {
 		item := access.Mut()
 
 		if item.Tabs != tabs {
@@ -2945,7 +2945,7 @@ func TestTabUsesCustomItemWidths(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 	items := make([]ecs.Entity, 2)
-	for entity, access := range ecs.Query[TabItem](world).All {
+	for entity, access := range world.Query[TabItem]().All {
 		item := access.Mut()
 
 		if item.Tabs == tabs && item.Index >= 0 && item.Index < len(items) {
@@ -2957,7 +2957,7 @@ func TestTabUsesCustomItemWidths(t *testing.T) {
 		if !ok || width != 30+float32(index)*40 {
 			t.Fatalf("tab item %d width = %v, want %v", index, width, 30+float32(index)*40)
 		}
-		transform, ok := ecs.Get[scene.UITransform](world, entity)
+		transform, ok := world.Get[scene.UITransform](entity)
 		wantX := [...]float32{0, 30}[index]
 		if !ok || transform.Translation.X.Value != wantX {
 			t.Fatalf("tab item %d x = %v, want %v", index, transform.Translation.X.Value, wantX)
@@ -2974,12 +2974,12 @@ func TestTabReservesGapForTextureIcon(t *testing.T) {
 	}
 
 	labelX := float32(-1)
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.UITransform](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.UITransform]().All {
 		visual := access.A.Mut()
 		transform := access.B.Mut()
 
-		item := ecs.GetMut[TabItem](world, visual.Owner)
-		if item != nil && item.Tabs == tabs && ecs.Has[Part[ItemPart]](world, entity) {
+		item := world.GetMut[TabItem](visual.Owner)
+		if item != nil && item.Tabs == tabs && world.Has[Part[ItemPart]](entity) {
 			labelX = transform.Translation.X.Value
 		}
 	}
@@ -2999,7 +2999,7 @@ func TestCheckboxTogglesAsStandardBox(t *testing.T) {
 		t.Fatalf("initial layout: %v", err)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 12, 18)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -3013,7 +3013,7 @@ func TestCheckboxTogglesAsStandardBox(t *testing.T) {
 		t.Fatalf("sync after click: %v", err)
 	}
 
-	component := ecs.GetMut[Toggle[bool]](world, checkbox)
+	component := world.GetMut[Toggle[bool]](checkbox)
 	if !component.Value || !component.Changed {
 		t.Fatalf("unexpected checkbox state: %#v", component)
 	}
@@ -3032,10 +3032,10 @@ func TestCheckboxTogglesAsStandardBox(t *testing.T) {
 
 func checkboxMarkSurface(world *ecs.World, owner ecs.Entity) *uiSurface {
 	var result *uiSurface
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == owner && ecs.Has[Part[KnobPart]](world, entity) {
+		if visual.Owner == owner && world.Has[Part[KnobPart]](entity) {
 			result = uiSurfaceSnapshot(world, entity)
 			break
 		}
@@ -3051,7 +3051,7 @@ func TestContextMenuSelectsItemAndCloses(t *testing.T) {
 	}
 	syncTransforms(t, world)
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 16, 44)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press: %v", err)
@@ -3062,7 +3062,7 @@ func TestContextMenuSelectsItemAndCloses(t *testing.T) {
 		t.Fatalf("release: %v", err)
 	}
 
-	component := ecs.GetMut[ContextMenu](world, menu)
+	component := world.GetMut[ContextMenu](menu)
 	if component.Open || component.Selected != 1 {
 		t.Fatalf("unexpected context menu state: %#v", component)
 	}
@@ -3078,18 +3078,18 @@ func TestMenuPanelUsesPaddingAutoWidthAndCenteredItems(t *testing.T) {
 		Width: 40, Height: 30, Label: "File",
 		Items: []string{"Open", "A much wider menu item"}, Padding: 8,
 	})
-	component := ecs.GetMut[Menu](world, menu)
+	component := world.GetMut[Menu](menu)
 	component.Open = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
 	panelWidth := float32(0)
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], scene.UITransform](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], scene.UITransform]().All {
 		visual := access.A.Mut()
 		transform := access.B.Mut()
 
-		if visual.Owner == menu && ecs.Has[Part[MenuPanelPart]](world, entity) {
+		if visual.Owner == menu && world.Has[Part[MenuPanelPart]](entity) {
 			surface := uiSurfaceSnapshot(world, entity)
 			if surface == nil {
 				continue
@@ -3120,10 +3120,10 @@ func TestContextMenuPanelUsesPaddingAutoWidthAndCenteredItems(t *testing.T) {
 	}
 
 	panelWidth := float32(0)
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == menu && ecs.Has[Part[ContextMenuPanelPart]](world, entity) {
+		if visual.Owner == menu && world.Has[Part[ContextMenuPanelPart]](entity) {
 			surface := uiSurfaceSnapshot(world, entity)
 			if surface == nil {
 				continue
@@ -3143,7 +3143,7 @@ func TestContextMenuPanelUsesPaddingAutoWidthAndCenteredItems(t *testing.T) {
 func assertMenuItemLayout(t *testing.T, world *ecs.World, menu ecs.Entity, wantX, wantY, wantHeight, panelWidth float32) {
 	t.Helper()
 	found := false
-	for entity, access := range ecs.Query2[MenuItem, scene.UITransform](world).All {
+	for entity, access := range world.Query2[MenuItem, scene.UITransform]().All {
 		item := access.A.Mut()
 		transform := access.B.Mut()
 
@@ -3162,7 +3162,7 @@ func assertMenuItemLayout(t *testing.T, world *ecs.World, menu ecs.Entity, wantX
 func assertContextMenuItemLayout(t *testing.T, world *ecs.World, menu ecs.Entity, wantX, wantY, wantHeight, panelWidth float32) {
 	t.Helper()
 	found := false
-	for entity, access := range ecs.Query2[ContextMenuItem, scene.UITransform](world).All {
+	for entity, access := range world.Query2[ContextMenuItem, scene.UITransform]().All {
 		item := access.A.Mut()
 		transform := access.B.Mut()
 
@@ -3188,12 +3188,12 @@ func assertPaddedCenteredMenuItem(t *testing.T, world *ecs.World, item ecs.Entit
 		t.Fatalf("expected symmetric horizontal padding, panel=%v width=%v", panelWidth, width)
 	}
 	foundText := false
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 		textTransform := access.C.Mut()
 
-		if visual.Owner != item || !ecs.Has[Part[ItemPart]](world, entity) {
+		if visual.Owner != item || !world.Has[Part[ItemPart]](entity) {
 			continue
 		}
 		foundText = true
@@ -3205,8 +3205,8 @@ func assertPaddedCenteredMenuItem(t *testing.T, world *ecs.World, item ecs.Entit
 		if math.Abs(float64(textTransform.Translation.Y.Value-wantTextY)) > 0.001 {
 			t.Fatalf("expected centered menu text y=%v, got %v", wantTextY, textTransform.Translation.Y.Value)
 		}
-		stackIndex, _ := ecs.Get[scene.UIStackIndex](world, entity)
-		itemStackIndex, _ := ecs.Get[scene.UIStackIndex](world, item)
+		stackIndex, _ := world.Get[scene.UIStackIndex](entity)
+		itemStackIndex, _ := world.Get[scene.UIStackIndex](item)
 		if stackIndex <= itemStackIndex {
 			t.Fatalf("expected menu text stackIndex %d above item background stackIndex %d", stackIndex, itemStackIndex)
 		}
@@ -3225,8 +3225,8 @@ func TestProgressSyncsFillWidth(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	component := ecs.GetMut[Progress](world, progress)
-	fill, _ := ecs.Get[scene.Size2D](world, component.Fill)
+	component := world.GetMut[Progress](progress)
+	fill, _ := world.Get[scene.Size2D](component.Fill)
 	if fill.Width != 50 {
 		t.Fatalf("expected fill width 50, got %v", fill.Width)
 	}
@@ -3235,18 +3235,18 @@ func TestProgressSyncsFillWidth(t *testing.T) {
 func TestProgressSliderIsOptionalAndDraggable(t *testing.T) {
 	world := newUIWorld(t)
 	controlled := SpawnProgress(world, ProgressOptions{Width: 200, Height: 10, Min: 0, Max: 100, Value: 25})
-	controlledProgress, _ := ecs.Get[Progress](world, controlled)
-	thumbVisibility, _ := ecs.Get[scene.Visibility](world, controlledProgress.Thumb)
+	controlledProgress, _ := world.Get[Progress](controlled)
+	thumbVisibility, _ := world.Get[scene.Visibility](controlledProgress.Thumb)
 	if controlledProgress.Thumb == 0 || thumbVisibility.Visible {
 		t.Fatalf("program-controlled progress should hide its slider: progress=%#v visibility=%#v", controlledProgress, thumbVisibility)
 	}
-	controlledComponent := ecs.GetMut[Progress](world, controlled)
+	controlledComponent := world.GetMut[Progress](controlled)
 	controlledComponent.Slider = true
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("enable slider: %v", err)
 	}
-	thumbVisibility, _ = ecs.Get[scene.Visibility](world, controlledProgress.Thumb)
-	if !thumbVisibility.Visible || !ecs.Has[CornerRadius](world, controlledProgress.Thumb) {
+	thumbVisibility, _ = world.Get[scene.Visibility](controlledProgress.Thumb)
+	if !thumbVisibility.Visible || !world.Has[CornerRadius](controlledProgress.Thumb) {
 		t.Fatalf("enabling slider did not reveal its thumb: %#v", thumbVisibility)
 	}
 
@@ -3255,13 +3255,13 @@ func TestProgressSliderIsOptionalAndDraggable(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 	syncTransforms(t, world)
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 110, 25)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
-	progress, _ := ecs.Get[Progress](world, slider)
+	progress, _ := world.Get[Progress](slider)
 	if progress.Thumb == 0 || !progress.Changed || math.Abs(float64(progress.Value-50)) > .001 {
 		t.Fatalf("unexpected slider state: %#v", progress)
 	}
@@ -3281,7 +3281,7 @@ func TestScrollAreaAutoShowsBothScrollbars(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	component := ecs.GetMut[ScrollArea](world, area)
+	component := world.GetMut[ScrollArea](area)
 	if component == nil {
 		t.Fatalf("expected scroll area component")
 	}
@@ -3295,7 +3295,7 @@ func TestScrollAreaAutoShowsBothScrollbars(t *testing.T) {
 	if metrics.MaxScrollX != 80 || metrics.MaxScrollY != 80 {
 		t.Fatalf("unexpected max scroll: got %.0f/%.0f", metrics.MaxScrollX, metrics.MaxScrollY)
 	}
-	clip := ecs.GetMut[scene.ClipRect2D](world, area)
+	clip := world.GetMut[scene.ClipRect2D](area)
 	if clip == nil {
 		t.Fatalf("expected scroll area clip")
 	}
@@ -3303,7 +3303,7 @@ func TestScrollAreaAutoShowsBothScrollbars(t *testing.T) {
 		t.Fatalf("unexpected clip rect: %#v", clip)
 	}
 	var horizontalTrack, verticalTrack bool
-	for entity, access := range ecs.Query3[Relation[SurfaceStyle], scene.Size2D, scene.UITransform](world).All {
+	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.Size2D, scene.UITransform]().All {
 		visual := access.A.Mut()
 		size := access.B.Mut()
 		transform := access.C.Mut()
@@ -3312,9 +3312,9 @@ func TestScrollAreaAutoShowsBothScrollbars(t *testing.T) {
 			continue
 		}
 		switch {
-		case ecs.Has[Part[ScrollTrackHorizontalPart]](world, entity):
+		case world.Has[Part[ScrollTrackHorizontalPart]](entity):
 			horizontalTrack = size.Width == 120 && size.Height == 10 && transform.Translation.X.Value == 0 && transform.Translation.Y.Value == 70
-		case ecs.Has[Part[ScrollTrackVerticalPart]](world, entity):
+		case world.Has[Part[ScrollTrackVerticalPart]](entity):
 			verticalTrack = size.Width == 10 && size.Height == 80 && transform.Translation.X.Value == 110 && transform.Translation.Y.Value == 0
 		}
 	}
@@ -3322,10 +3322,10 @@ func TestScrollAreaAutoShowsBothScrollbars(t *testing.T) {
 		t.Fatalf("scrollbar tracks did not use independent full-axis geometry: horizontal=%v vertical=%v", horizontalTrack, verticalTrack)
 	}
 	exemptVisuals := 0
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == area && ecs.Has[scene.ClipExempt2D](world, entity) {
+		if visual.Owner == area && world.Has[scene.ClipExempt2D](entity) {
 			exemptVisuals++
 		}
 	}
@@ -3387,7 +3387,7 @@ func TestScrollAreaHidesScrollbarsWhenContentFits(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	component := ecs.GetMut[ScrollArea](world, area)
+	component := world.GetMut[ScrollArea](area)
 	if component == nil {
 		t.Fatalf("expected scroll area component")
 	}
@@ -3415,7 +3415,7 @@ func TestScrollAreaWheelMovesContent(t *testing.T) {
 		t.Fatalf("initial layout: %v", err)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(30, 40)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -3429,7 +3429,7 @@ func TestScrollAreaWheelMovesContent(t *testing.T) {
 	if areaOffset.Y() != 48 {
 		t.Fatalf("scroll y = %v, want 48", areaOffset.Y())
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, content)
+	transform, _ := world.Get[scene.UITransform](content)
 	if transform.Translation.X.Value != 4 || transform.Translation.Y.Value != -42 {
 		t.Fatalf("content transform = (%v, %v), want (4, -42)", transform.Translation.X.Value, transform.Translation.Y.Value)
 	}
@@ -3449,7 +3449,7 @@ func TestControlledScrollAreaLeavesWheelForOwner(t *testing.T) {
 		t.Fatalf("initial layout: %v", err)
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.MoveMouse(30, 40)
 	state.ScrollMouse(0, -1)
 	if err := runUIUpdate(world); err != nil {
@@ -3499,7 +3499,7 @@ func TestTreeTapSelectsNode(t *testing.T) {
 	syncTransforms(t, world)
 
 	var child ecs.Entity
-	for entity, access := range ecs.Query[TreeNode[string]](world).All {
+	for entity, access := range world.Query[TreeNode[string]]().All {
 		node := access.Mut()
 
 		if node.ID == "child" {
@@ -3507,12 +3507,12 @@ func TestTreeTapSelectsNode(t *testing.T) {
 			break
 		}
 	}
-	ecs.WriteMessage(world, scene.InputEvent{Entity: child, Kind: scene.InputEventTap})
+	world.WriteMessage(scene.InputEvent{Entity: child, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatalf("update tree: %v", err)
 	}
 
-	component := ecs.GetMut[Tree[string]](world, tree)
+	component := world.GetMut[Tree[string]](tree)
 	if !component.HasSelection || component.Selected != "child" {
 		t.Fatalf("unexpected tree selection: %#v", component)
 	}
@@ -3534,7 +3534,7 @@ func TestTreeCollapsedRowsReflow(t *testing.T) {
 
 	var childEntity ecs.Entity
 	var siblingEntity ecs.Entity
-	for entity, access := range ecs.Query[TreeNode[string]](world).All {
+	for entity, access := range world.Query[TreeNode[string]]().All {
 		node := access.Mut()
 
 		switch node.ID {
@@ -3545,15 +3545,15 @@ func TestTreeCollapsedRowsReflow(t *testing.T) {
 		}
 	}
 
-	childVisibility := ecs.GetMut[scene.Visibility](world, childEntity)
+	childVisibility := world.GetMut[scene.Visibility](childEntity)
 	if childVisibility == nil || childVisibility.Visible {
 		t.Fatalf("expected collapsed child to be hidden, got %#v", childVisibility)
 	}
-	siblingTransform := ecs.GetMut[scene.UITransform](world, siblingEntity)
+	siblingTransform := world.GetMut[scene.UITransform](siblingEntity)
 	if siblingTransform == nil || siblingTransform.Translation.Y.Value != 32 {
 		t.Fatalf("expected sibling row to reflow to y=32, got %#v", siblingTransform)
 	}
-	component := ecs.GetMut[Tree[string]](world, tree)
+	component := world.GetMut[Tree[string]](tree)
 	if component.RowHeight != 30 {
 		t.Fatalf("unexpected row height: %#v", component)
 	}
@@ -3602,11 +3602,11 @@ func TestTreeSyncRejectsParentCycles(t *testing.T) {
 
 func valueText(world *ecs.World, owner ecs.Entity) string {
 	value := ""
-	for entity, access := range ecs.Query2[Relation[scene.Text2D], scene.Text2D](world).All {
+	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
 		visual := access.A.Mut()
 		text := access.B.Mut()
 
-		if visual.Owner == owner && ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner == owner && world.Has[Part[ValuePart]](entity) {
 			value = text.Value
 			break
 		}
@@ -3615,16 +3615,16 @@ func valueText(world *ecs.World, owner ecs.Entity) string {
 }
 
 func textFieldValueAndCaret(world *ecs.World, entity ecs.Entity) (string, int) {
-	field, _ := ecs.Get[TextField](world, entity)
+	field, _ := world.Get[TextField](entity)
 	return field.Value, field.Caret
 }
 
 func caretSurface(world *ecs.World, owner ecs.Entity) *uiSurface {
 	var caret *uiSurface
-	for entity, access := range ecs.Query[Relation[SurfaceStyle]](world).All {
+	for entity, access := range world.Query[Relation[SurfaceStyle]]().All {
 		visual := access.Mut()
 
-		if visual.Owner == owner && ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner == owner && world.Has[Part[CaretPart]](entity) {
 			caret = uiSurfaceSnapshot(world, entity)
 			break
 		}
@@ -3634,11 +3634,11 @@ func caretSurface(world *ecs.World, owner ecs.Entity) *uiSurface {
 
 func caretVisibleState(world *ecs.World, owner ecs.Entity) bool {
 	visible := false
-	for entity, access := range ecs.Query2[Relation[SurfaceStyle], scene.Visibility](world).All {
+	for entity, access := range world.Query2[Relation[SurfaceStyle], scene.Visibility]().All {
 		visual := access.A.Mut()
 		visibility := access.B.Mut()
 
-		if visual.Owner == owner && ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner == owner && world.Has[Part[CaretPart]](entity) {
 			visible = visibility.Visible
 			break
 		}
@@ -3654,21 +3654,21 @@ type uiSurface struct {
 }
 
 func uiSurfaceSnapshot(world *ecs.World, entity ecs.Entity) *uiSurface {
-	if !ecs.Has[scene.UIBackground2D](world, entity) && !ecs.Has[scene.UIImage2D](world, entity) && !ecs.Has[scene.UIBorder2D](world, entity) {
+	if !world.Has[scene.UIBackground2D](entity) && !world.Has[scene.UIImage2D](entity) && !world.Has[scene.UIBorder2D](entity) {
 		entity = findSurfacePart[BodyPart](world, entity)
 		if entity == 0 {
 			return nil
 		}
 	}
-	size, sizeOK := ecs.Get[scene.Size2D](world, entity)
+	size, sizeOK := world.Get[scene.Size2D](entity)
 	if !sizeOK {
 		return nil
 	}
 	surface := &uiSurface{Width: size.Width, Height: size.Height}
-	if background, ok := ecs.Get[scene.UIBackground2D](world, entity); ok {
+	if background, ok := world.Get[scene.UIBackground2D](entity); ok {
 		surface.Shape = background.Shape
 	}
-	if image, ok := ecs.Get[scene.UIImage2D](world, entity); ok {
+	if image, ok := world.Get[scene.UIImage2D](entity); ok {
 		surface.Texture = image.Texture
 	}
 	return surface
@@ -3677,14 +3677,14 @@ func uiSurfaceSnapshot(world *ecs.World, entity ecs.Entity) *uiSurface {
 func TestInteractiveRootOwnsExplicitBodyElement(t *testing.T) {
 	world := newUIWorld(t)
 	button := SpawnButton(world, ButtonOptions{Width: 80, Height: 32, Label: "Run"})
-	if ecs.Has[scene.UIBackground2D](world, button) || ecs.Has[scene.UIImage2D](world, button) || ecs.Has[scene.UIBorder2D](world, button) {
+	if world.Has[scene.UIBackground2D](button) || world.Has[scene.UIImage2D](button) || world.Has[scene.UIBorder2D](button) {
 		t.Fatal("interactive root still owns implicit render components")
 	}
 	body := findSurfacePart[BodyPart](world, button)
 	if body == 0 {
 		t.Fatal("button is missing its explicit body child")
 	}
-	parent, ok := ecs.Get[scene.Parent](world, body)
+	parent, ok := world.Get[scene.Parent](body)
 	if !ok || parent.Entity != button {
 		t.Fatalf("body parent = %#v, want button %d", parent, button)
 	}
@@ -3702,16 +3702,16 @@ func newUIWorld(t *testing.T) *ecs.World {
 	t.Helper()
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[FullRuntime](world)
-	ecs.InsertResource(world, input.NewState())
+	world.InsertResource(input.NewState())
 	camera := scene.SpawnCamera2D(world)
-	component := ecs.GetMut[scene.Camera](world, camera)
+	component := world.GetMut[scene.Camera](camera)
 	component.UpdateViewport(1920, 1080)
 	if err := scene.SyncGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
 	theme := DefaultTheme()
 	theme.Font = notosanssc.NotoSansSCRegular
-	ecs.InsertResource(world, theme)
+	world.InsertResource(theme)
 	return world
 }
 

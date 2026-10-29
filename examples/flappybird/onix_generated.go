@@ -17,10 +17,10 @@ import (
 
 func OnixRegistry() (module.Registry, error) {
 	r := module.Registry{}
-	if err := module.RegisterValue(&r, "FlappyFrame", contracts.DecodeFlappyFrame); err != nil {
+	if err := r.RegisterValue("FlappyFrame", contracts.DecodeFlappyFrame); err != nil {
 		return r, err
 	}
-	if err := module.RegisterMod(&r, "input", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
+	if err := r.RegisterMod("input", func() mod0.Mod { return mod0.Mod{} }, module.Lifecycle[mod0.Mod]{
 		Install: func(c *module.Context, m *mod0.Mod) error {
 			return m.Install(c)
 		},
@@ -30,7 +30,7 @@ func OnixRegistry() (module.Registry, error) {
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterMod(&r, "resources/presentation", func() mod1.Mod { return mod1.Mod{} }, module.Lifecycle[mod1.Mod]{
+	if err := r.RegisterMod("resources/presentation", func() mod1.Mod { return mod1.Mod{} }, module.Lifecycle[mod1.Mod]{
 		Install: func(c *module.Context, m *mod1.Mod) error {
 			return m.Install(c)
 		},
@@ -38,7 +38,7 @@ func OnixRegistry() (module.Registry, error) {
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterScene(&r, "main.json", func() SceneMain { return SceneMain{} }, module.Lifecycle[SceneMain]{
+	if err := r.RegisterScene("main.json", func() SceneMain { return SceneMain{} }, module.Lifecycle[SceneMain]{
 		Install: func(c *module.Context, m *SceneMain) error {
 			return nil
 		},
@@ -47,7 +47,7 @@ func OnixRegistry() (module.Registry, error) {
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterScene(&r, "result.json", func() SceneResult { return SceneResult{} }, module.Lifecycle[SceneResult]{
+	if err := r.RegisterScene("result.json", func() SceneResult { return SceneResult{} }, module.Lifecycle[SceneResult]{
 		Install: func(c *module.Context, m *SceneResult) error {
 			return nil
 		},
@@ -55,7 +55,7 @@ func OnixRegistry() (module.Registry, error) {
 	}); err != nil {
 		return r, err
 	}
-	if err := module.RegisterMod(&r, "simulation", func() mod4.Mod { return mod4.Mod{} }, module.Lifecycle[mod4.Mod]{
+	if err := r.RegisterMod("simulation", func() mod4.Mod { return mod4.Mod{} }, module.Lifecycle[mod4.Mod]{
 		Install: func(c *module.Context, m *mod4.Mod) error {
 			return m.Install(c)
 		},
@@ -69,17 +69,19 @@ func OnixRegistry() (module.Registry, error) {
 }
 
 func OnixInstallSystems(app *onix.App) error {
-	if err := onix.InstallSystems[onix.Render2D](app); err != nil {
+	if err := app.InstallSystems[onix.Render2D](); err != nil {
 		return err
 	}
-	if err := onix.InstallSystems[onix.Input2D](app); err != nil {
+	if err := app.InstallSystems[onix.Input2D](); err != nil {
 		return err
 	}
-	if err := onix.InstallSystems[onix.Animations2D](app); err != nil {
+	if err := app.InstallSystems[onix.Animations2D](); err != nil {
 		return err
 	}
 	return nil
 }
+
+type OnixContentProfile = module.WithContent[module.Render2D, module.AnimationsContent]
 
 type OnixImageDecoder = graphics.ImageDecoderSet[graphics.NoImageDecoder, graphics.NoImageDecoder, graphicspng.Decoder, graphics.NoImageDecoder, ontex.Decoder]
 

@@ -10,10 +10,10 @@ import (
 )
 
 func viewportContentMatrix(world *ecs.World, entity ecs.Entity) (mgl32.Mat4, bool) {
-	if global := ecs.GetRef[scene.UIGlobalTransform](world, entity); global != nil {
+	if global := world.GetRef[scene.UIGlobalTransform](entity); global != nil {
 		return global.Matrix, true
 	}
-	if global := ecs.GetRef[scene.GlobalTransform](world, entity); global != nil {
+	if global := world.GetRef[scene.GlobalTransform](entity); global != nil {
 		return global.Matrix, false
 	}
 	return mgl32.Ident4(), false
@@ -21,10 +21,10 @@ func viewportContentMatrix(world *ecs.World, entity ecs.Entity) (mgl32.Mat4, boo
 
 func viewportContentVisible(world *ecs.World, entity ecs.Entity) bool {
 	for entity != 0 {
-		if visible := ecs.GetRef[scene.Visibility](world, entity); visible != nil && !visible.Visible {
+		if visible := world.GetRef[scene.Visibility](entity); visible != nil && !visible.Visible {
 			return false
 		}
-		parent := ecs.GetRef[scene.Parent](world, entity)
+		parent := world.GetRef[scene.Parent](entity)
 		if parent == nil {
 			break
 		}
@@ -36,27 +36,27 @@ func viewportContentVisible(world *ecs.World, entity ecs.Entity) bool {
 // The same live geometry is used for picking and selection overlays. Entities
 // without a drawn box report no bounds so callers fall back to their origin.
 func viewportContentBounds(world *ecs.World, entity ecs.Entity, matrix mgl32.Mat4, ui bool) (rect, bool) {
-	anchor, _ := ecs.Get[scene.Anchor](world, entity)
+	anchor, _ := world.Get[scene.Anchor](entity)
 	var lowX, lowY, highX, highY float32
 	ok := false
-	if sprite := ecs.GetRef[scene.Sprite2D](world, entity); sprite != nil {
+	if sprite := world.GetRef[scene.Sprite2D](entity); sprite != nil {
 		lowX, lowY, highX, highY, ok = scene.SpriteBounds2D(sprite, anchor, matrix, ui)
 	}
-	if text := ecs.GetRef[scene.Text2D](world, entity); text != nil {
+	if text := world.GetRef[scene.Text2D](entity); text != nil {
 		lowX, lowY, highX, highY, ok = scene.TextBounds2D(text, anchor, matrix, ui)
 	}
-	if skeleton := ecs.GetRef[scene.Spine2D](world, entity); skeleton != nil && skeleton.Player != nil {
+	if skeleton := world.GetRef[scene.Spine2D](entity); skeleton != nil && skeleton.Player != nil {
 		if minX, minY, maxX, maxY, valid := skeleton.Player.Bounds(); valid {
 			model := scene.SpineModelMatrix2D(matrix, ui).Mul4(mgl32.Translate3D(minX, minY, 0))
 			lowX, lowY, highX, highY, ok = scene.BoundsInSpace2D(model, scene.AnchorTopLeft, maxX-minX, maxY-minY, true)
 		}
 	}
 	if !ok {
-		if emitter := ecs.GetRef[scene.ParticleEmitter2D](world, entity); emitter != nil {
+		if emitter := world.GetRef[scene.ParticleEmitter2D](entity); emitter != nil {
 			lowX, lowY, highX, highY, ok = scene.ParticleEmitterBounds2D(emitter, matrix, ui)
-		} else if size := ecs.GetRef[scene.Size2D](world, entity); size != nil && (size.Width > 0 || size.Height > 0) {
+		} else if size := world.GetRef[scene.Size2D](entity); size != nil && (size.Width > 0 || size.Height > 0) {
 			lowX, lowY, highX, highY, ok = scene.BoundsInSpace2D(matrix, anchor, size.Width, size.Height, ui)
-		} else if surface := ecs.GetRef[htmlui.Surface](world, entity); surface != nil {
+		} else if surface := world.GetRef[htmlui.Surface](entity); surface != nil {
 			lowX, lowY, highX, highY, ok = scene.BoundsInSpace2D(matrix, anchor, surface.Width, surface.Height, ui)
 		}
 	}
@@ -102,7 +102,7 @@ func (a *ModuleEditor) viewport2DContentBounds(entity ecs.Entity, worldView mgl3
 		return rect{X: point[0] - 6, Y: point[1] - 6, W: 12, H: 12}, true
 	}
 	if ui {
-		if clip, clipped := ecs.GetRef[scene.UIGlobalTransform](v.world, entity).ClipRect(); clipped {
+		if clip, clipped := v.world.GetRef[scene.UIGlobalTransform](entity).ClipRect(); clipped {
 			right, bottom := min(native.X+native.W, clip.X+clip.Width), min(native.Y+native.H, clip.Y+clip.Height)
 			native.X, native.Y = max(native.X, clip.X), max(native.Y, clip.Y)
 			native.W, native.H = right-native.X, bottom-native.Y

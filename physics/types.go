@@ -314,7 +314,7 @@ func (collider ColliderHandle[S]) Shape() S {
 	if state == nil {
 		return zero
 	}
-	return shapeFromState[S](*state)
+	return (*state).shapeFromState[S]()
 }
 
 func (collider ColliderHandle[S]) SetShape(shape S) {
@@ -323,7 +323,7 @@ func (collider ColliderHandle[S]) SetShape(shape S) {
 	}
 	state := collider.world.colliderState(collider.id)
 	if state != nil {
-		setColliderShape(state, shape)
+		state.setColliderShape(shape)
 	}
 }
 

@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
-
-	"github.com/diiyw/onix/ecs"
 )
 
 func TestCodeTokenRange(t *testing.T) {
@@ -98,7 +96,7 @@ func TestCodeTokenRangeSelectsQuotedContents(t *testing.T) {
 func TestTokenDoubleClickRequiresNearbyConsecutiveClicks(t *testing.T) {
 	world := newUIWorld(t)
 	editor := SpawnTextarea(world, TextOptions{Width: 200, Height: 80, Value: "first second"})
-	ecs.GetMut[Textarea](world, editor).SelectTokens = true
+	world.GetMut[Textarea](editor).SelectTokens = true
 	ordinary := SpawnTextarea(world, TextOptions{Width: 200, Height: 80, Value: "ordinary"})
 	now := time.Now()
 	for _, test := range []struct {

@@ -10,10 +10,10 @@ import (
 func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {
 	w := ecs.NewWorld()
 	clock := &Time{Delta: 2 * time.Second}
-	ecs.InsertResource(w, clock)
-	parents := ecs.NewSpawner1[Activity](w)
+	w.InsertResource(clock)
+	parents := w.NewSpawner1[Activity]()
 	parent := parents.Spawn(Activity{Active: true})
-	animators := ecs.NewSpawner2[Animator, Parent](w)
+	animators := w.NewSpawner2[Animator, Parent]()
 	entity := animators.Spawn(NewAnimator(&AnimationClip{Duration: 1}, false), Parent{Entity: parent})
 	check := func(want int) {
 		t.Helper()
@@ -22,11 +22,11 @@ func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {
 		}
 	}
 	check(1)
-	if err := ecs.Insert(w, parent, Activity{}); err != nil {
+	if err := w.Insert(parent, Activity{}); err != nil {
 		t.Fatal(err)
 	}
 	check(0)
-	if err := ecs.Insert(w, parent, Activity{Active: true}); err != nil {
+	if err := w.Insert(parent, Activity{Active: true}); err != nil {
 		t.Fatal(err)
 	}
 	check(1)
@@ -34,7 +34,7 @@ func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(0)
-	ecs.GetMut[Animator](w, entity).Play()
+	w.GetMut[Animator](entity).Play()
 	check(1)
 	var scope ecs.QueryScope
 	scope.Reset(nil)
@@ -44,7 +44,7 @@ func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {
 	check(1)
 	w.SetQueryScope(nil)
 	check(1)
-	ecs.GetMut[Animator](w, entity).Pause()
+	w.GetMut[Animator](entity).Pause()
 	check(0)
 	if allocations := testing.AllocsPerRun(100, func() {
 		if AnimationTaskCount(w) != 0 {
@@ -58,10 +58,10 @@ func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {
 func TestEffectTaskCountsDrainAndRestart(t *testing.T) {
 	w := ecs.NewWorld()
 	clock := &Time{Delta: 50 * time.Millisecond}
-	ecs.InsertResource(w, clock)
+	w.InsertResource(clock)
 	emitter := NewParticleEmitter2D()
 	emitter.Loop, emitter.Count, emitter.Lifetime = false, 1, .1
-	emitters := ecs.NewSpawner1[ParticleEmitter2D](w)
+	emitters := w.NewSpawner1[ParticleEmitter2D]()
 	entity := emitters.Spawn(emitter)
 	if ParticleTaskCount(w) != 1 {
 		t.Fatal("new burst allowed suspension")
@@ -79,18 +79,18 @@ func TestEffectTaskCountsDrainAndRestart(t *testing.T) {
 	if ParticleTaskCount(w) != 0 {
 		t.Fatal("finished emitter prevented suspension")
 	}
-	ecs.GetMut[ParticleEmitter2D](w, entity).Restart()
+	w.GetMut[ParticleEmitter2D](entity).Restart()
 	if ParticleTaskCount(w) != 1 {
 		t.Fatal("restarted burst did not become active")
 	}
 	trail := NewSpriteTrail2D()
 	trail.samples = []spriteTrailSample2D{{}}
-	trails := ecs.NewSpawner1[SpriteTrail2D](w)
+	trails := w.NewSpawner1[SpriteTrail2D]()
 	trailEntity := trails.Spawn(trail)
 	if SpriteTrailTaskCount(w) != 1 {
 		t.Fatal("fading trail allowed suspension")
 	}
-	ecs.GetMut[SpriteTrail2D](w, trailEntity).advance(1)
+	w.GetMut[SpriteTrail2D](trailEntity).advance(1)
 	if SpriteTrailTaskCount(w) != 0 {
 		t.Fatal("empty trail prevented suspension")
 	}
@@ -99,7 +99,7 @@ func TestEffectTaskCountsDrainAndRestart(t *testing.T) {
 func TestTaskCountReusesSemanticCache(t *testing.T) {
 	type tag struct{}
 	w := ecs.NewWorld()
-	spawner := ecs.NewSpawner1[int](w)
+	spawner := w.NewSpawner1[int]()
 	e := spawner.Spawn(1)
 	calls := 0
 	count := func() int {
@@ -111,13 +111,13 @@ func TestTaskCountReusesSemanticCache(t *testing.T) {
 	if count() != 1 || count() != 1 || calls != 1 {
 		t.Fatal("unchanged tasks were scanned again")
 	}
-	if err := ecs.Insert(w, e, "unrelated component"); err != nil {
+	if err := w.Insert(e, "unrelated component"); err != nil {
 		t.Fatal(err)
 	}
 	if count() != 1 || calls != 1 {
 		t.Fatal("row migration invalidated task count")
 	}
-	*ecs.GetMut[int](w, e) = 0
+	*w.GetMut[int](e) = 0
 	if count() != 0 || calls != 2 {
 		t.Fatal("semantic write failed to invalidate task count")
 	}

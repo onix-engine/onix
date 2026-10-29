@@ -38,7 +38,7 @@ func (c *SystemContext) ThisRun() Tick {
 	return c.thisRun
 }
 
-func Local[Tag, T any](context *SystemContext) *T {
+func (context *SystemContext) Local[Tag, T any]() *T {
 	if context == nil {
 		panic("ecs: system context is nil")
 	}

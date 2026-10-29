@@ -11,11 +11,11 @@ import (
 func TestInputPickCacheRefresh(t *testing.T) {
 	world := ecs.NewWorld()
 	camera := spawnInputCameraForTest(t, world, 200, 100)
-	parents := ecs.NewSpawner1[Activity](world)
+	parents := world.NewSpawner1[Activity]()
 	parent := parents.Spawn(Activity{Active: true})
-	spawner := ecs.NewSpawner4[InputTarget2D, UIGlobalTransform, Visibility, Parent](world)
+	spawner := world.NewSpawner4[InputTarget2D, UIGlobalTransform, Visibility, Parent]()
 	entity := spawner.Spawn(InputTarget2D{Width: 20, Height: 20}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, Parent{Entity: parent})
-	cache := ecs.ScopeValue[inputPickCache2D, inputPickCache2D](world)
+	cache := world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 	if !cache.refresh(world, 0, 0) || len(cache.targets) != 1 {
 		t.Fatal("initial pick snapshot missing")
 	}
@@ -24,7 +24,7 @@ func TestInputPickCacheRefresh(t *testing.T) {
 		t.Fatal("capture lookup rebuilt unchanged geometry or missed the target")
 	}
 	// Access to unrelated state does not require another geometry snapshot.
-	states := ecs.NewSpawner1[InputState2D](world)
+	states := world.NewSpawner1[InputState2D]()
 	states.Spawn(InputState2D{})
 	if cache.refresh(world, entity, camera) {
 		t.Fatal("unrelated component invalidated geometry")
@@ -33,23 +33,23 @@ func TestInputPickCacheRefresh(t *testing.T) {
 		t.Fatalf("stable picking allocated %v times", allocations)
 	}
 	// All changes occur without advancing the ECS tick.
-	ecs.GetMut[UIGlobalTransform](world, entity).Matrix[12] = 50
+	world.GetMut[UIGlobalTransform](entity).Matrix[12] = 50
 	if !cache.refresh(world, entity, camera) || inputTargetContains2D(&cache.targets[0], 0, 0) || !inputTargetContains2D(&cache.targets[0], 50, 0) {
 		t.Fatal("same-tick target movement did not refresh geometry")
 	}
-	ecs.GetMut[GlobalTransform](world, camera).Matrix[12] = 100
+	world.GetMut[GlobalTransform](camera).Matrix[12] = 100
 	if !cache.refresh(world, entity, camera) || cache.cameras[0].transform.Matrix[12] != 100 {
 		t.Fatal("same-tick camera movement did not refresh geometry")
 	}
-	ecs.GetMut[Activity](world, parent).Active = false
+	world.GetMut[Activity](parent).Active = false
 	if !cache.refresh(world, entity, camera) || len(cache.targets) != 0 || cache.lookup.targetFound {
 		t.Fatal("inactive parent retained an input target")
 	}
-	ecs.GetMut[Activity](world, parent).Active = true
+	world.GetMut[Activity](parent).Active = true
 	if !cache.refresh(world, entity, camera) || len(cache.targets) != 1 {
 		t.Fatal("reactivated parent did not restore its input target")
 	}
-	ecs.Remove[InputTarget2D](world, entity)
+	world.Remove[InputTarget2D](entity)
 	if !cache.refresh(world, entity, camera) || len(cache.targets) != 0 {
 		t.Fatal("removed target retained")
 	}
@@ -63,7 +63,7 @@ func TestInputPickCacheRefresh(t *testing.T) {
 func TestInputPickCacheScopes(t *testing.T) {
 	world := ecs.NewWorld()
 	camera := spawnInputCameraForTest(t, world, 200, 100)
-	spawner := ecs.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility](world)
+	spawner := world.NewSpawner3[InputTarget2D, UIGlobalTransform, Visibility]()
 	first := spawner.Spawn(InputTarget2D{Width: 20, Height: 20}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 	second := spawner.Spawn(InputTarget2D{Width: 40, Height: 40}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 	var scopes [2]ecs.QueryScope
@@ -72,7 +72,7 @@ func TestInputPickCacheScopes(t *testing.T) {
 	var caches [2]*inputPickCache2D
 	for i := range scopes {
 		world.SetQueryScope(&scopes[i])
-		caches[i] = ecs.ScopeValue[inputPickCache2D, inputPickCache2D](world)
+		caches[i] = world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 		caches[i].refresh(world, 0, 0)
 		if len(caches[i].targets) != 1 {
 			t.Fatal("scope included another scope's target")

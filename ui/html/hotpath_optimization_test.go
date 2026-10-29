@@ -13,18 +13,18 @@ import (
 func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {
 	for _, axis := range []uint8{ScrollbarHorizontal, ScrollbarVertical} {
 		world, owner := incrementalHTMLFixture(t, `<div id="area" style="width:100px;height:100px;overflow:scroll;scrollbar-width:thin"><div style="width:300px;height:300px"></div></div>`)
-		state := ecs.GetRef[htmlRenderState](world, owner)
+		state := world.GetRef[htmlRenderState](owner)
 		node := state.NodeByID["area"]
 		binding := state.OverflowBindings[node]
 		pointer := input.NewState()
-		ecs.InsertResource(world, pointer)
+		world.InsertResource(pointer)
 		SyncScrollbars(world)
 		if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 			t.Fatal(err)
 		}
 		var thumb ecs.Entity
 		for _, entity := range binding.parts {
-			part, _ := ecs.Get[ScrollbarPart](world, entity)
+			part, _ := world.Get[ScrollbarPart](entity)
 			if part.Axis == axis && part.Kind == ScrollbarThumb {
 				thumb = entity
 			}
@@ -32,14 +32,14 @@ func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {
 		if thumb == 0 {
 			t.Fatal("overflow thumb missing")
 		}
-		if target, ok := ecs.Get[scene.InputTarget2D](world, thumb); !ok || target.Width <= 0 || target.Height <= 0 {
+		if target, ok := world.Get[scene.InputTarget2D](thumb); !ok || target.Width <= 0 || target.Height <= 0 {
 			t.Fatalf("overflow thumb input target = %+v, ok=%v", target, ok)
 		}
-		size, _ := ecs.Get[scene.Size2D](world, thumb)
-		origin, _ := ecs.Get[scene.UIGlobalTransform](world, thumb)
+		size, _ := world.Get[scene.Size2D](thumb)
+		origin, _ := world.Get[scene.UIGlobalTransform](thumb)
 		x, y := float64(origin.Matrix[12]+size.Width/2), float64(origin.Matrix[13]+size.Height/2)
 		thickness := func() float32 {
-			size, _ := ecs.Get[scene.Size2D](world, thumb)
+			size, _ := world.Get[scene.Size2D](thumb)
 			if axis == ScrollbarHorizontal {
 				return size.Height
 			}
@@ -68,7 +68,7 @@ func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {
 			t.Fatal(err)
 		}
 		SyncScrollbars(world)
-		scroll, _ := ecs.Get[scene.UIScroll](world, binding.entity)
+		scroll, _ := world.Get[scene.UIScroll](binding.entity)
 		if scroll.Position[axis] >= 0 || thickness() != 10 {
 			t.Fatalf("captured drag: position=%v thickness=%v", scroll.Position, thickness())
 		}
@@ -91,12 +91,12 @@ func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {
 
 func TestStableHTMLScrollbarSyncTracksScrollAndVisibility(t *testing.T) {
 	world := ecs.NewWorld()
-	areas := ecs.NewSpawner1[scene.UIScroll](world)
+	areas := world.NewSpawner1[scene.UIScroll]()
 	area := areas.Spawn(scene.UIScroll{
 		ViewportSize: mgl32.Vec2{100, 50}, ContentSize: mgl32.Vec2{200, 150},
 		Horizontal: true, Vertical: true, ScrollbarSize: 10, ScrollbarMinThumbSize: 5,
 	})
-	parts := ecs.NewSpawner4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D](world)
+	parts := world.NewSpawner4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D]()
 	var thumbs [2]ecs.Entity
 	for axis := range uint8(2) {
 		for kind := range uint8(2) {
@@ -115,19 +115,19 @@ func TestStableHTMLScrollbarSyncTracksScrollAndVisibility(t *testing.T) {
 	if allocs := testing.AllocsPerRun(100, func() { SyncScrollbars(world) }); allocs != 0 {
 		t.Fatalf("steady scrollbar sync allocations=%v", allocs)
 	}
-	scroll := ecs.GetMut[scene.UIScroll](world, area)
+	scroll := world.GetMut[scene.UIScroll](area)
 	scroll.Position = mgl32.Vec2{-100, -100}
 	SyncScrollbars(world)
-	horizontal, _ := ecs.Get[scene.UITransform](world, thumbs[0])
-	vertical, _ := ecs.Get[scene.UITransform](world, thumbs[1])
+	horizontal, _ := world.Get[scene.UITransform](thumbs[0])
+	vertical, _ := world.Get[scene.UITransform](thumbs[1])
 	if horizontal.Translation.X.Value != 50 || math.Abs(float64(vertical.Translation.Y.Value-100.0/3)) > 1e-4 {
 		t.Fatalf("thumb offsets=%v,%v", horizontal.Translation, vertical.Translation)
 	}
-	scroll = ecs.GetMut[scene.UIScroll](world, area)
+	scroll = world.GetMut[scene.UIScroll](area)
 	scroll.Horizontal, scroll.Vertical = false, false
 	SyncScrollbars(world)
 	for _, entity := range thumbs {
-		size, _ := ecs.Get[scene.Size2D](world, entity)
+		size, _ := world.Get[scene.Size2D](entity)
 		if size != (scene.Size2D{}) {
 			t.Fatal("disabled scrollbar still has geometry")
 		}

@@ -9,8 +9,8 @@ import (
 // Register enables 3D camera extraction and submission in this world.
 // Repeated registration reuses the renderer, material readers, and camera binding.
 func Register(world *ecs.World) {
-	renderWorld3D(world)
-	scene.RegisterCameraRenderer[Camera](world, scene.CameraPipeline3D, cameraOptions, drawCamera)
+	WorldFor(world)
+	scene.RenderWorldFor(world).RegisterCameraRenderer[Camera](scene.CameraPipeline3D, cameraOptions, drawCamera)
 }
 
 func cameraOptions(camera *Camera) scene.CameraRenderOptions {
@@ -18,6 +18,6 @@ func cameraOptions(camera *Camera) scene.CameraRenderOptions {
 }
 
 func drawCamera(canvas *graphics.Canvas2D, world *ecs.World, camera scene.ExtractedCamera) error {
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	return render3DView(canvas, state, state.views[camera.Entity])
 }

@@ -24,12 +24,12 @@ func TestHTMLComponentChildSlotReuseAndSnapshots(t *testing.T) {
 	}
 	view.template = template
 	reference := 42
-	saved := ComponentChild(1, definition, props{"saved", &reference}, "initial")
-	if AppendComponentChild[props, string](nil, "slot", 1, definition, props{}, "") || AppendComponentChild(view, "missing", 1, definition, props{}, "") || AppendComponentChild(view, "slot", 1, (*Definition[props, string])(nil), props{}, "") {
+	saved := definition.ComponentChild(1, props{"saved", &reference}, "initial")
+	if (*View)(nil).AppendComponentChild[props, string]("slot", 1, definition, props{}, "") || view.AppendComponentChild("missing", 1, definition, props{}, "") || view.AppendComponentChild("slot", 1, (*Definition[props, string])(nil), props{}, "") {
 		t.Fatal("invalid child accepted")
 	}
-	AppendComponentChild(view, "slot", 1, definition, props{"first", &reference}, "state")
-	AppendComponentChild(view, "slot", 2, definition, props{"removed", &reference}, "removed")
+	view.AppendComponentChild("slot", 1, definition, props{"first", &reference}, "state")
+	view.AppendComponentChild("slot", 2, definition, props{"removed", &reference}, "removed")
 	values := instance.Next.ComponentChildren["slot"]
 	first := values[0].values.(*htmlComponentChildValues[props, string])
 	second := values[1].values.(*htmlComponentChildValues[props, string])
@@ -44,13 +44,13 @@ func TestHTMLComponentChildSlotReuseAndSnapshots(t *testing.T) {
 			t.Fatal("reset retained child metadata")
 		}
 	}
-	AppendComponentChild(view, "slot", 3, definition, props{"reused", nil}, "new")
+	view.AppendComponentChild("slot", 3, definition, props{"reused", nil}, "new")
 	if instance.Next.ComponentChildren["slot"][0].values != first {
 		t.Fatal("slot did not reuse parameter storage")
 	}
 	// Replacing and then extending a slot must not mutate a caller's snapshot.
 	view.Components("slot", []ComponentVNode{saved})
-	AppendComponentChild(view, "slot", 4, definition, props{"after snapshot", nil}, "")
+	view.AppendComponentChild("slot", 4, definition, props{"after snapshot", nil}, "")
 	view.Components("other", []ComponentVNode{saved})
 	view.Components("slot", nil)
 	instance.Next.reset()
@@ -83,9 +83,9 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	parentDefinition, err := Define[struct{}, struct{}](NewTemplate(`<section data-ref="slot"></section>`), "", Behavior[struct{}, struct{}]{Render: func(_ RenderContext[struct{}, struct{}], v *View) {
 		for _, e := range entries {
 			if e.Kind == 2 {
-				AppendComponentChild(v, "slot", e.Key, other, e.Label, 999)
+				v.AppendComponentChild("slot", e.Key, other, e.Label, 999)
 			} else {
-				AppendComponentChild(v, "slot", e.Key, definitions[e.Kind], props{e.Label}, 999)
+				v.AppendComponentChild("slot", e.Key, definitions[e.Kind], props{e.Label}, 999)
 			}
 		}
 	}})
@@ -94,9 +94,9 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	}
 	world := ecs.NewWorld()
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, New(`<main></main>`))
+	bundle.Put(New(`<main></main>`))
 	owner := world.Spawn(bundle)
-	parent, err := MountComponent(world, owner, parentDefinition, struct{}{}, struct{}{}, 1)
+	parent, err := parentDefinition.MountComponent(world, owner, struct{}{}, struct{}{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,10 +106,10 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 		if err := Sync(world); err != nil {
 			t.Fatal(err)
 		}
-		instance, _ := ecs.Get[htmlComponentInstance](world, parent)
+		instance, _ := world.Get[htmlComponentInstance](parent)
 		items := instance.ComponentChildren["slot"].Items
 		for i, item := range items {
-			child, _ := ecs.Get[htmlComponentInstance](world, item.Entity)
+			child, _ := world.Get[htmlComponentInstance](item.Entity)
 			if instance.Refs["slot"].Children[i] != child.Roots[0] {
 				t.Fatal("child roots out of order")
 			}
@@ -125,7 +125,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 		if len(items) != 2 || items[0].Entity != second || items[1].Entity != first {
 			t.Fatal("keyed identity lost on reorder")
 		}
-		child, _ := ecs.Get[Component[props, int]](world, first)
+		child, _ := world.Get[Component[props, int]](first)
 		if child.State != 77 || child.Props.Label != "one updated" {
 			t.Fatalf("child state or props = %#v", child)
 		}
@@ -136,7 +136,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	if world.IsAlive(first) || world.IsAlive(second) || replacement == first {
 		t.Fatal("definition replacement failed to unmount old children")
 	}
-	shrunk, _ := ecs.Get[htmlComponentInstance](world, parent)
+	shrunk, _ := world.Get[htmlComponentInstance](parent)
 	for _, buffer := range []htmlComponentVNodeState{shrunk.Current, shrunk.Next} {
 		values := buffer.ComponentChildren["slot"]
 		for _, node := range values[:cap(values)][1:] {
@@ -148,7 +148,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	entries = []entry{{1, "different type", 2}}
 	items = sync()
 	typedReplacement := items[0].Entity
-	child, ok := ecs.Get[Component[string, int]](world, typedReplacement)
+	child, ok := world.Get[Component[string, int]](typedReplacement)
 	if !ok || child.Props != "different type" || child.State != 999 || world.IsAlive(replacement) {
 		t.Fatal("typed parameter storage was not replaced")
 	}
@@ -157,7 +157,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	if len(items) != 0 || world.IsAlive(typedReplacement) {
 		t.Fatal("omitted slot retained children")
 	}
-	instance, _ := ecs.Get[htmlComponentInstance](world, parent)
+	instance, _ := world.Get[htmlComponentInstance](parent)
 	for _, buffer := range []htmlComponentVNodeState{instance.Current, instance.Next} {
 		values := buffer.ComponentChildren["slot"]
 		for _, node := range values[:cap(values)] {
@@ -187,7 +187,7 @@ func TestHTMLAppendComponentChildrenWarmAllocations(t *testing.T) {
 	render := func() {
 		view.reset()
 		for index := uint64(0); index < 100; index++ {
-			AppendComponentChild(view, "slot", index, definition, htmlComponentChildProps{"updated"}, struct{}{})
+			view.AppendComponentChild("slot", index, definition, htmlComponentChildProps{"updated"}, struct{}{})
 		}
 		instance.Current, instance.Next = instance.Next, instance.Current
 		instance.Next.reset()

@@ -65,18 +65,18 @@ func main() {
 		panic(err)
 	}
 	app := onix.NewApp()
-	if err := onix.InstallSystems[onix.UIHTML](app); err != nil {
+	if err := app.InstallSystems[onix.UIHTML](); err != nil {
 		panic(err)
 	}
 	app.SetWindowSize(1200, 650)
 	app.SetWindowTitle("Onix HTML compatibility")
 	if filepath.Base(fixture) == "workbench.html" {
-		ecs.InsertResource[htmlui.ImageProvider](app.World, &fixtureImageProvider{base: filepath.Dir(fixture)})
+		app.World.InsertResource[htmlui.ImageProvider](&fixtureImageProvider{base: filepath.Dir(fixture)})
 	}
 	bundle := ecs.NewBundle(1)
 	html := htmlui.New(string(source))
 	html.Width, html.Height, html.Font = 1200, 650, notosanssc.NotoSansSCRegular
-	ecs.Put(&bundle, html)
+	bundle.Put(html)
 	app.World.Spawn(bundle)
 	frames := 0
 	if err := app.AddSystem(onix.StageUpdate, ecs.SystemConfig{Name: "compat_ready", System: func(*ecs.SystemContext) error {

@@ -20,7 +20,7 @@ func TestPayloadCapacityGrowsWithoutReducingQueueLimit(t *testing.T) {
 		r := newFixture(t, plan, Registry{}, Options{EventCapacity: 32, PayloadCapacity: capacity})
 		s, err := r.MountEntry()
 		must(t, err)
-		emitter, err := SceneEmitter[[1024]byte](s, "payload")
+		emitter, err := s.Emitter[[1024]byte]("payload")
 		must(t, err)
 		writer, err := s.SlotWriter("a", "value")
 		must(t, err)
@@ -57,7 +57,7 @@ func TestPayloadCapacityGrowsWithoutReducingQueueLimit(t *testing.T) {
 			t.Fatalf("warmed bursts allocated %g times", allocations)
 		}
 	}
-	if _, err := New(ecs.NewWorld(), plan, Registry{}, Options{EventCapacity: 8, PayloadCapacity: 9}); !errors.Is(err, ErrInvalid) {
+	if _, err := New[FullContent](ecs.NewWorld(), plan, Registry{}, Options{EventCapacity: 8, PayloadCapacity: 9}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("oversized initial capacity accepted")
 	}
 }
@@ -73,7 +73,7 @@ func BenchmarkPayloadBankReservation(b *testing.B) {
 			var reserved uintptr
 			for b.Loop() {
 				r := &Runtime{options: Options{EventCapacity: 256, PayloadCapacity: test.capacity}, typedStores: make(map[reflect.Type]valueStore), slotBuffers: make(map[project.ValueType]*slotBuffer)}
-				store := typedStore[[1024]byte](r)
+				store := r.typedStore[[1024]byte]()
 				slots := r.slotBuffer(shape)
 				reserved = 0
 				for i := range 2 {

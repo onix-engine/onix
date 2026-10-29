@@ -15,14 +15,16 @@ func OnixRegistry() (module.Registry, error) {
 }
 
 func OnixInstallSystems(app *onix.App) error {
-	if err := onix.InstallSystems[onix.Render2D](app); err != nil {
+	if err := app.InstallSystems[onix.Render2D](); err != nil {
 		return err
 	}
-	if err := onix.InstallSystems[onix.UIHTML](app); err != nil {
+	if err := app.InstallSystems[onix.UIHTML](); err != nil {
 		return err
 	}
 	return nil
 }
+
+type OnixContentProfile = module.WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]
 
 type OnixImageDecoder = graphics.ImageDecoderSet[graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder]
 

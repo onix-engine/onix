@@ -60,6 +60,7 @@ func setProjectImageDecoder(decoders []project.ImageDecoderID, id project.ImageD
 }
 
 type projectRuntimeFeatureDescriptor struct {
+	Content    []string
 	ID         project.RuntimeFeatureID
 	Label      string
 	GoType     string
@@ -72,21 +73,21 @@ type projectRuntimeFeatureDescriptor struct {
 // manifest IDs are stable data, while Go type names are compile-time API.
 var projectRuntimeFeatureDescriptors = [...]projectRuntimeFeatureDescriptor{
 	{ID: project.FeatureRender2D, Label: "Render 2D", GoType: "Render2D"},
-	{ID: project.FeatureRender3D, Label: "Render 3D", GoType: "Render3D"},
+	{ID: project.FeatureRender3D, Content: []string{"SpatialContent"}, Label: "Render 3D", GoType: "Render3D"},
 	{ID: project.FeatureInput2D, Label: "Input 2D", GoType: "Input2D"},
-	{ID: project.FeatureAnimations2D, Label: "Animations 2D", GoType: "Animations2D"},
-	{ID: project.FeatureSpriteTrails2D, Label: "Sprite Trails 2D", GoType: "SpriteTrails2D"},
-	{ID: project.FeatureParticles2D, Label: "Particles 2D", GoType: "Particles2D"},
-	{ID: project.FeatureTilemaps2D, Label: "Tilemaps 2D", GoType: "Tilemaps2D"},
-	{ID: project.FeatureSpine2D, Label: "Spine 2D", GoType: "Spine2D"},
-	{ID: project.FeaturePhysics2D, Label: "Physics 2D", GoType: "Physics2D"},
-	{ID: project.FeaturePhysics3D, Label: "Physics 3D", GoType: "Physics3D"},
-	{ID: project.FeatureUIControls, Label: "UI Controls", GoType: "UIControls"},
-	{ID: project.FeatureUIWidgets, Label: "UI Widgets", GoType: "UIWidgets"},
-	{ID: project.FeatureUITextInput, Label: "UI Text Input", GoType: "UITextInput"},
-	{ID: project.FeatureUIMarkdown, Label: "UI Markdown", GoType: "UIMarkdown[markdown.Feature]", ImportName: "markdown", ImportPath: "github.com/diiyw/onix/ui/markdown"},
-	{ID: project.FeatureUIHTML, Label: "UI HTML", GoType: "UIHTML"},
-	{ID: project.FeatureWebView, Label: "WebView", GoType: "WebView", ImportName: "onixwebview", ImportPath: "github.com/diiyw/onix/window/webview", Register: true},
+	{ID: project.FeatureAnimations2D, Content: []string{"AnimationsContent"}, Label: "Animations 2D", GoType: "Animations2D"},
+	{ID: project.FeatureSpriteTrails2D, Content: []string{"TrailsContent"}, Label: "Sprite Trails 2D", GoType: "SpriteTrails2D"},
+	{ID: project.FeatureParticles2D, Content: []string{"ParticlesContent"}, Label: "Particles 2D", GoType: "Particles2D"},
+	{ID: project.FeatureTilemaps2D, Content: []string{"TilemapsContent"}, Label: "Tilemaps 2D", GoType: "Tilemaps2D"},
+	{ID: project.FeatureSpine2D, Content: []string{"SpineContent"}, Label: "Spine 2D", GoType: "Spine2D"},
+	{ID: project.FeaturePhysics2D, Content: []string{"Physics2DContent"}, Label: "Physics 2D", GoType: "Physics2D"},
+	{ID: project.FeaturePhysics3D, Content: []string{"SpatialContent"}, Label: "Physics 3D", GoType: "Physics3D"},
+	{ID: project.FeatureUIControls, Content: []string{"LayoutContent"}, Label: "UI Controls", GoType: "UIControls"},
+	{ID: project.FeatureUIWidgets, Content: []string{"LayoutContent"}, Label: "UI Widgets", GoType: "UIWidgets"},
+	{ID: project.FeatureUITextInput, Content: []string{"LayoutContent"}, Label: "UI Text Input", GoType: "UITextInput"},
+	{ID: project.FeatureUIMarkdown, Content: []string{"LayoutContent"}, Label: "UI Markdown", GoType: "UIMarkdown[markdown.Feature]", ImportName: "markdown", ImportPath: "github.com/diiyw/onix/ui/markdown"},
+	{ID: project.FeatureUIHTML, Content: []string{"LayoutContent", "HTMLContent"}, Label: "UI HTML", GoType: "UIHTML"},
+	{ID: project.FeatureWebView, Content: []string{"LayoutContent"}, Label: "WebView", GoType: "WebView", ImportName: "onixwebview", ImportPath: "github.com/diiyw/onix/window/webview", Register: true},
 	{ID: project.FeatureFileDialogs, Label: "File Dialogs", ImportName: "filedialog", ImportPath: "github.com/diiyw/onix/window/filedialog", Register: true},
 }
 

@@ -70,7 +70,7 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 			v := &a.viewport3D
 			index := len(v.rows) - 1
 			entity := v.rows[index].parts[0].entity
-			if entity == 0 || ecs.Has[render3d.Mesh](v.world, entity) || ecs.Has[scene.Camera](v.world, entity) {
+			if entity == 0 || v.world.Has[render3d.Mesh](entity) || v.world.Has[scene.Camera](entity) {
 				t.Fatal("helper needs a transform entity without a mesh or a running camera")
 			}
 			if test.name == "camera" && len(v.mods) != 0 {
@@ -84,7 +84,7 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 			if v.view.target != target || v.view.distance != distance {
 				t.Fatal("repeated framing depended on the screen icon's size")
 			}
-			v.view.target = ecs.GetRef[scene.GlobalTransform](v.world, entity).Matrix.Col(3).Vec3()
+			v.view.target = v.world.GetRef[scene.GlobalTransform](entity).Matrix.Col(3).Vec3()
 			v.view.distance, v.view.yaw, v.view.pitch = 12, -.4, .2
 			for _, orthographic := range []bool{false, true} {
 				v.view.orthographic = orthographic
@@ -95,7 +95,7 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 					if id := a.pickViewport3D(x, y); id != "helpers" {
 						t.Fatal("source origin was not selectable", orthographic, zoom, id)
 					}
-					projection := ecs.GetRef[scene.Projection](v.world, v.view.camera)
+					projection := v.world.GetRef[scene.Projection](v.view.camera)
 					view := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
 					driver.shapes = driver.shapes[:0]
 					a.drawViewport3DHelpers(canvas, projection, view)
@@ -114,14 +114,14 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 				}
 			}
 			x, y := workspace3DCanvasPoint(t, a, entity)
-			original := ecs.GetRef[scene.GlobalTransform](v.world, entity).Matrix
+			original := v.world.GetRef[scene.GlobalTransform](entity).Matrix
 			revision, history, modRevision := a.Document.Revision, len(a.Document.undo), a.Document.Mods["helpers"].Revision
 			a.pressViewport3D(x, y)
 			a.updatePlacementDrag(input.Pointer{X: x + 30, Y: y + 20, Down: true})
 			if err := a.sync(context); err != nil {
 				t.Fatal(err)
 			}
-			if ecs.GetRef[scene.GlobalTransform](v.world, entity).Matrix == original || a.Document.Revision != revision {
+			if v.world.GetRef[scene.GlobalTransform](entity).Matrix == original || a.Document.Revision != revision {
 				t.Fatal("helper drag did not preview without editing the document")
 			}
 			a.updatePlacementDrag(input.Pointer{X: x + 30, Y: y + 20, Released: true})
@@ -135,14 +135,14 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 			if err := a.sync(context); err != nil {
 				t.Fatal(err)
 			}
-			if ecs.GetRef[scene.GlobalTransform](v.world, entity).Matrix != original {
+			if v.world.GetRef[scene.GlobalTransform](entity).Matrix != original {
 				t.Fatal("undo did not restore the helper transform")
 			}
-			ecs.GetMut[scene.Visibility](v.world, entity).Visible = false
+			v.world.GetMut[scene.Visibility](entity).Visible = false
 			if id := a.pickViewport3D(x, y); id != "" {
 				t.Fatal("hidden helper remained selectable", id)
 			}
-			projection := ecs.GetRef[scene.Projection](v.world, v.view.camera)
+			projection := v.world.GetRef[scene.Projection](v.view.camera)
 			view := preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/a.zoom).LocalMatrix()
 			driver.shapes = driver.shapes[:0]
 			a.drawViewport3DHelpers(canvas, projection, view)
@@ -170,9 +170,9 @@ func TestWorkspace3DHelperElementsDragWithTransformedParent(t *testing.T) {
 	for i, element := range []string{"camera", "light"} {
 		entity := a.viewport3D.rows[0].parts[i+2].entity
 		x, y := workspace3DCanvasPoint(t, a, entity)
-		original := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, entity).Matrix
+		original := a.viewport3D.world.GetRef[scene.GlobalTransform](entity).Matrix
 		sibling := a.viewport3D.rows[0].parts[3-i].entity
-		siblingMatrix := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, sibling).Matrix
+		siblingMatrix := a.viewport3D.world.GetRef[scene.GlobalTransform](sibling).Matrix
 		history, revision, sceneRevision := len(a.Document.undo), a.Document.Revision, a.Document.Scene().Revision
 		a.pressViewport3D(x, y)
 		if a.canvasDrag.Element != element || !a.canvasDrag.Definition {
@@ -182,8 +182,8 @@ func TestWorkspace3DHelperElementsDragWithTransformedParent(t *testing.T) {
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
-		got := ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, entity).Matrix.Col(3).Vec3().Sub(original.Col(3).Vec3())
-		if got.Sub(a.canvasDrag.WorldDelta).Len() > .001 || got.Len() == 0 || a.Document.Revision != revision || ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, sibling).Matrix != siblingMatrix {
+		got := a.viewport3D.world.GetRef[scene.GlobalTransform](entity).Matrix.Col(3).Vec3().Sub(original.Col(3).Vec3())
+		if got.Sub(a.canvasDrag.WorldDelta).Len() > .001 || got.Len() == 0 || a.Document.Revision != revision || a.viewport3D.world.GetRef[scene.GlobalTransform](sibling).Matrix != siblingMatrix {
 			t.Fatal("local helper movement lost parent transforms or moved its sibling")
 		}
 		a.updatePlacementDrag(input.Pointer{X: x + 25, Y: y + 15, Released: true})
@@ -198,7 +198,7 @@ func TestWorkspace3DHelperElementsDragWithTransformedParent(t *testing.T) {
 			t.Fatal(err)
 		}
 		entity = a.viewport3D.rows[0].parts[i+2].entity
-		if ecs.GetRef[scene.GlobalTransform](a.viewport3D.world, entity).Matrix != original {
+		if a.viewport3D.world.GetRef[scene.GlobalTransform](entity).Matrix != original {
 			t.Fatal("undo lost the element's original transform")
 		}
 	}
@@ -214,7 +214,7 @@ func TestWorkspace3DHelperElementsDragWithTransformedParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, part := range a.viewport3D.rows[0].parts[2:] {
-		if ecs.GetRef[scene.Visibility](a.viewport3D.world, part.entity).Visible {
+		if a.viewport3D.world.GetRef[scene.Visibility](part.entity).Visible {
 			t.Fatal("helper ignored its hidden parent")
 		}
 	}
@@ -260,7 +260,7 @@ func TestWorkspace3DHelperRenderingAndPickingDoNotAllocate(t *testing.T) {
 	a.focusViewport3D()
 	a.viewport3D.view.yaw, a.viewport3D.view.pitch = math.Pi/4, .3
 	x, y := workspace3DCanvasPoint(t, a, a.viewport3D.rows[len(a.viewport3D.rows)-1].parts[0].entity)
-	projection := ecs.GetRef[scene.Projection](a.viewport3D.world, a.viewport3D.view.camera)
+	projection := a.viewport3D.world.GetRef[scene.Projection](a.viewport3D.view.camera)
 	view := preview3DCameraTransformAround(a.viewport3D.view.target, a.viewport3D.view.yaw, a.viewport3D.view.pitch, a.viewport3D.view.distance/a.zoom).LocalMatrix()
 	frame := func() {
 		driver.shapes = driver.shapes[:0]

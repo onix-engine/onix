@@ -13,7 +13,7 @@ import (
 
 func htmlBindingArea(world *ecs.World, x, y float32) ecs.Entity {
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, scene.UIScroll{Position: mgl32.Vec2{x, y}, Horizontal: true, Vertical: true})
+	bundle.Put(scene.UIScroll{Position: mgl32.Vec2{x, y}, Horizontal: true, Vertical: true})
 	return world.Spawn(bundle)
 }
 
@@ -43,16 +43,16 @@ func TestHTMLBindingLocalMatchesFull(t *testing.T) {
 			}
 			target := incrementalHTMLNode(t, world, owner, "target")
 			other := incrementalControl(t, world, owner, "other")
-			before, _ := ecs.Get[Control](world, other)
+			before, _ := world.Get[Control](other)
 			for _, class := range []string{"", "wide", "", "wide"} {
 				target.SetAttribute("class", class)
 				incrementalHTMLNode(t, reference, referenceOwner, "target").SetAttribute("class", class)
-				refState := ecs.GetMut[htmlRenderState](reference, referenceOwner)
+				refState := reference.GetMut[htmlRenderState](referenceOwner)
 				refState.PartialValid = false
 				incrementalSync(t, world)
 				incrementalSync(t, reference)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
-				want, _ := ecs.Get[htmlRenderState](reference, referenceOwner)
+				state, _ := world.Get[htmlRenderState](owner)
+				want, _ := reference.Get[htmlRenderState](referenceOwner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatalf("fell back: %+v", state.SyncStats)
 				}
@@ -64,7 +64,7 @@ func TestHTMLBindingLocalMatchesFull(t *testing.T) {
 					}
 					t.Fatal("primitive membership differs")
 				}
-				after, _ := ecs.Get[Control](world, other)
+				after, _ := world.Get[Control](other)
 				if after.RenderRevision != before.RenderRevision {
 					t.Fatal("unrelated control rewritten")
 				}
@@ -76,16 +76,16 @@ func TestHTMLBindingLocalMatchesFull(t *testing.T) {
 func TestHTMLBindingRebaseAndRuntimeOffset(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div><input id="target"/></div>`)
 	entity := incrementalControl(t, world, owner, "target")
-	base, _ := ecs.Get[scene.UITransform](world, entity)
+	base, _ := world.Get[scene.UITransform](entity)
 	area := htmlBindingArea(world, -3, -7)
 	next := htmlBindingArea(world, -9, -15)
 	SetNodeOffset(world, owner, "target", 5, 11)
 	SetNodeScroll(world, owner, "target", area, 13, 17)
 	check := func(area ecs.Entity, origin, offset, position mgl32.Vec2) {
 		t.Helper()
-		content, _ := ecs.Get[ScrollContent](world, entity)
-		parent, _ := ecs.Get[scene.Parent](world, entity)
-		transform, _ := ecs.Get[scene.UITransform](world, entity)
+		content, _ := world.Get[ScrollContent](entity)
+		parent, _ := world.Get[scene.Parent](entity)
+		transform, _ := world.Get[scene.UITransform](entity)
 		x, y := base.Translation.X.Value+offset.X()-origin.X(), base.Translation.Y.Value+offset.Y()-origin.Y()
 		if content.Area != area || parent.Entity != area || content.X != x || content.Y != y || transform.Translation.X.Value != x+position.X() || transform.Translation.Y.Value != y+position.Y() {
 			t.Fatalf("incorrect rebase: content=%+v parent=%v transform=%+v; want (%v,%v)", content, parent, transform, x, y)
@@ -103,10 +103,10 @@ func TestHTMLBindingRebaseAndRuntimeOffset(t *testing.T) {
 		SetNodeScroll(world, owner, "target", area, 13, 17)
 	}
 	// Children generated for the input keep their control-local parent chain.
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	for _, childEntity := range state.Children {
-		parent, _ := ecs.Get[scene.Parent](world, childEntity)
-		if parent.Entity == entity && ecs.Has[ScrollContent](world, childEntity) {
+		parent, _ := world.Get[scene.Parent](childEntity)
+		if parent.Entity == entity && world.Has[ScrollContent](childEntity) {
 			t.Fatal("control child acquired independent scroll")
 		}
 	}
@@ -121,8 +121,8 @@ func TestHTMLBindingRegistrationOrder(t *testing.T) {
 	SetNodeOffset(world, owner, "outer", 13, 17)
 	SetNodeScroll(world, owner, "outer", first, 0, 0)
 	SetNodeScroll(world, owner, "target", second, 0, 0)
-	child, _ := ecs.Get[htmlChild](world, entity)
-	parent, _ := ecs.Get[scene.Parent](world, entity)
+	child, _ := world.Get[htmlChild](entity)
+	parent, _ := world.Get[scene.Parent](entity)
 	if child.offset != (mgl32.Vec2{5, 11}) || parent.Entity != first {
 		t.Fatal("registration precedence changed")
 	}
@@ -132,7 +132,7 @@ func TestHTMLBindingControlChildrenInheritOffsetOnce(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="track"><input id="target" value="Value"/></div>`)
 	control := incrementalControl(t, world, owner, "target")
 	var visual ecs.Entity
-	for entity, access := range ecs.Query2[scene.Parent, scene.Text2D](world).All {
+	for entity, access := range world.Query2[scene.Parent, scene.Text2D]().All {
 		if access.A.Get().Entity == control {
 			visual = entity
 			break
@@ -141,10 +141,10 @@ func TestHTMLBindingControlChildrenInheritOffsetOnce(t *testing.T) {
 	if visual == 0 {
 		t.Fatal("missing control text")
 	}
-	before, _ := ecs.Get[scene.UITransform](world, visual)
+	before, _ := world.Get[scene.UITransform](visual)
 	for _, offset := range []mgl32.Vec2{{0, -5000}, {3, -4990}, {0, 0}} {
 		SetNodeOffset(world, owner, "track", offset.X(), offset.Y())
-		after, _ := ecs.Get[scene.UITransform](world, visual)
+		after, _ := world.Get[scene.UITransform](visual)
 		if after.Translation != before.Translation {
 			t.Fatalf("control child applied inherited offset twice: before=%+v after=%+v", before, after)
 		}
@@ -189,26 +189,26 @@ func TestHTMLBindingsFollowIDsAndClearOnSourceReplacement(t *testing.T) {
 	target.SetAttribute("id", "retired")
 	other.SetAttribute("id", "target")
 	incrementalSync(t, world)
-	child, _ := ecs.Get[htmlChild](world, entity)
-	parent, _ := ecs.Get[scene.Parent](world, entity)
-	if child.offset != (mgl32.Vec2{}) || parent.Entity != owner || ecs.Has[ScrollContent](world, entity) {
+	child, _ := world.Get[htmlChild](entity)
+	parent, _ := world.Get[scene.Parent](entity)
+	if child.offset != (mgl32.Vec2{}) || parent.Entity != owner || world.Has[ScrollContent](entity) {
 		t.Fatal("old ID retained binding")
 	}
-	otherChild, _ := ecs.Get[htmlChild](world, otherEntity)
-	otherParent, _ := ecs.Get[scene.Parent](world, otherEntity)
+	otherChild, _ := world.Get[htmlChild](otherEntity)
+	otherParent, _ := world.Get[scene.Parent](otherEntity)
 	if otherChild.offset != (mgl32.Vec2{3, 11}) || otherParent.Entity != area {
 		t.Fatal("new ID did not receive binding")
 	}
-	html := ecs.GetMut[Surface](world, owner)
+	html := world.GetMut[Surface](owner)
 	html.Value = `<div><input id="target" value="Replacement"/></div>`
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if len(state.NodeOffsets) != 0 || len(state.NodeScrolls) != 0 {
 		t.Fatal("source replacement retained bindings")
 	}
 	entity = incrementalControl(t, world, owner, "target")
-	parent, _ = ecs.Get[scene.Parent](world, entity)
-	if parent.Entity != owner || ecs.Has[ScrollContent](world, entity) {
+	parent, _ = world.Get[scene.Parent](entity)
+	if parent.Entity != owner || world.Has[ScrollContent](entity) {
 		t.Fatal("replacement inherited old viewport")
 	}
 }
@@ -233,7 +233,7 @@ func TestHTMLWarmBindingResizeDoesNotAllocate(t *testing.T) {
 	if n := testing.AllocsPerRun(100, update); n > 2 {
 		t.Fatalf("warm binding update allocated %v times", n)
 	}
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.BindingEntities >= len(state.Children) || state.SyncStats.BindingEntities == 0 {
 		t.Fatalf("binding replay did not stay local: %+v, children=%d", state.SyncStats, len(state.Children))
 	}
@@ -248,12 +248,12 @@ func TestHTMLOffsetTextFragmentsMatchFull(t *testing.T) {
 	for _, value := range []string{"Several words wrap across multiple lines", "Short", "New text"} {
 		incrementalHTMLNode(t, world, owner, "target").SetText(value)
 		incrementalHTMLNode(t, reference, referenceOwner, "target").SetText(value)
-		ref := ecs.GetMut[htmlRenderState](reference, referenceOwner)
+		ref := reference.GetMut[htmlRenderState](referenceOwner)
 		ref.PartialValid = false
 		incrementalSync(t, world)
 		incrementalSync(t, reference)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
-		want, _ := ecs.Get[htmlRenderState](reference, referenceOwner)
+		state, _ := world.Get[htmlRenderState](owner)
+		want, _ := reference.Get[htmlRenderState](referenceOwner)
 		if state.SyncStats.PartialReconciles != 1 || !reflect.DeepEqual(htmlPrimitiveSnapshot(world, state), htmlPrimitiveSnapshot(reference, want)) {
 			t.Fatalf("offset text update differs: %+v", state.SyncStats)
 		}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
 )
@@ -21,7 +20,7 @@ func managerPlan(t testing.TB) (*project.ProjectPlan, Registry, *managerProbe) {
 	})
 	p := &managerProbe{}
 	r := Registry{}
-	must(t, RegisterMod(&r, "button", func() Signal { return Signal{} }, Lifecycle[Signal]{
+	must(t, r.RegisterMod("button", func() Signal { return Signal{} }, Lifecycle[Signal]{
 		Install: func(c *Context, _ *Signal) error { p.buttons = append(p.buttons, c); p.installs++; return nil },
 		Update: func(c *Context, _ *Signal, _ Tick) error {
 			if c.scene.ID() == "main.json" {
@@ -32,19 +31,19 @@ func managerPlan(t testing.TB) (*project.ProjectPlan, Registry, *managerProbe) {
 			return nil
 		},
 	}))
-	must(t, RegisterScene(&r, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
+	must(t, r.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{OnMessage: func(c *Context, _ *Signal, m Message) error {
 		switch m.Topic {
 		case InputTopic:
-			return Send(c, SceneTarget, "clicked", Signal{})
+			return c.Send(SceneTarget, "clicked", Signal{})
 		case "clicked":
 			return c.Switch(SceneSwitchRequest{Scene: "game.json", Startup: project.SlotValue{Type: project.StringValue, String: "hello"}})
 		case "scene.switch.result":
-			p.result, _ = Value[SceneSwitchResult](m)
+			p.result, _ = m.Value[SceneSwitchResult]()
 			p.results++
 		}
 		return nil
 	}}))
-	must(t, RegisterScene(&r, "game.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+	must(t, r.RegisterScene("game.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
 		if err := handleValue(c, "ack", func(_ *Context, value string) error { p.ack = value; return nil }); err != nil {
 			return err
 		}
@@ -55,9 +54,9 @@ func managerPlan(t testing.TB) (*project.ProjectPlan, Registry, *managerProbe) {
 			return nil
 		})
 	}}))
-	must(t, RegisterScene(&r, "broken.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(*Context, *Signal) error { return ErrInvalid }}))
-	must(t, RegisterScene(&r, "loop.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
-		emit, err := BindEmitter[Signal](c, "loop")
+	must(t, r.RegisterScene("broken.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(*Context, *Signal) error { return ErrInvalid }}))
+	must(t, r.RegisterScene("loop.json", func() Signal { return Signal{} }, Lifecycle[Signal]{Install: func(c *Context, _ *Signal) error {
+		emit, err := c.BindEmitter[Signal]("loop")
 		if err != nil {
 			return err
 		}
@@ -103,7 +102,7 @@ func TestSceneManagerDeclarativeClickBridgePreparesBeforeActivation(t *testing.T
 	if r.Pending() != 0 || r.tick != 2 {
 		t.Fatal("startup leaked requests or advanced the active clock")
 	}
-	if _, ok := ecs.Get[scene.Visibility](r.world, p.buttons[0].root); ok {
+	if _, ok := r.world.Get[scene.Visibility](p.buttons[0].root); ok {
 		t.Fatal("old scene entity leaked")
 	}
 }
@@ -146,7 +145,7 @@ func TestSceneManagerRetainsPausesAndResumesSameGeneration(t *testing.T) {
 	must(t, writer.Write(project.SlotValue{Type: project.StringValue, String: "retained"}))
 	must(t, r.Dispatch())
 	button := p.buttons[0]
-	clicked, err := BindEmitter[Signal](button, "clicked")
+	clicked, err := button.BindEmitter[Signal]("clicked")
 	must(t, err)
 	must(t, r.Manager().Switch(SceneSwitchRequest{Scene: "game.json", Retain: true}))
 	must(t, r.Dispatch())
@@ -154,7 +153,7 @@ func TestSceneManagerRetainsPausesAndResumesSameGeneration(t *testing.T) {
 	if main.State() != SceneSuspended || !main.Alive() {
 		t.Fatal("retained scene was disposed")
 	}
-	visibility, _ := ecs.Get[scene.Visibility](r.world, button.root)
+	visibility, _ := r.world.Get[scene.Visibility](button.root)
 	if visibility.Visible {
 		t.Fatal("suspended content remained visible")
 	}
@@ -175,12 +174,12 @@ func TestSceneManagerRetainsPausesAndResumesSameGeneration(t *testing.T) {
 	if r.Manager().Active() != main || main.State() != SceneActive || game.State() != SceneDisposed || p.installs != 2 {
 		t.Fatal("resume recreated behavior")
 	}
-	visibility, _ = ecs.Get[scene.Visibility](r.world, button.root)
+	visibility, _ = r.world.Get[scene.Visibility](button.root)
 	if !visibility.Visible {
 		t.Fatal("resume did not restore visibility")
 	}
 	text, _ := button.Slot("text")
-	value, _ := ReadSlot[string](text)
+	value, _ := text.Read[string]()
 	if value != "retained" {
 		t.Fatal("resume reset slot state")
 	}
@@ -207,7 +206,7 @@ func TestPreparationPreservesParkedPayloadsAndRequestDeadlines(t *testing.T) {
 	extra.Scenes[0].ID = "loop.json"
 	f.runtime.plan.Scenes = append(f.runtime.plan.Scenes, extra.Scenes[0])
 	f.runtime.registry.scenes["loop.json"] = func(c *Context) error {
-		emit, err := BindEmitter[int64](c, "loop")
+		emit, err := c.BindEmitter[int64]("loop")
 		if err != nil {
 			return err
 		}
@@ -225,7 +224,7 @@ func TestPreparationPreservesParkedPayloadsAndRequestDeadlines(t *testing.T) {
 		t.Fatal("preparation overwrote parked reply payload")
 	}
 	text, _ := f.contexts[0].Slot("text")
-	value, _ := ReadSlot[string](text)
+	value, _ := text.Read[string]()
 	if value != "held" {
 		t.Fatal("preparation cleared parked slot payload")
 	}

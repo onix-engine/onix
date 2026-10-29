@@ -26,7 +26,7 @@ func TestVerticalListVirtualizesLargeDataSet(t *testing.T) {
 	if got := world.EntityCount(); got >= len(items) {
 		t.Fatalf("virtual list spawned %d entities for %d items", got, len(items))
 	}
-	component, _ := ecs.Get[List[int]](world, list)
+	component, _ := world.Get[List[int]](list)
 	if component.First != 0 || component.Last != 10 || binds != 10 {
 		t.Fatalf("initial range = [%d,%d), binds = %d", component.First, component.Last, binds)
 	}
@@ -35,22 +35,22 @@ func TestVerticalListVirtualizesLargeDataSet(t *testing.T) {
 	if err := SyncListSystem[int]("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	component, _ = ecs.Get[List[int]](world, list)
+	component, _ = world.Get[List[int]](list)
 	if component.First != 23 || component.Last != 33 || binds != 10 {
 		t.Fatalf("scrolled range = [%d,%d), binds = %d", component.First, component.Last, binds)
 	}
 	for slot, itemEntity := range itemEntities {
-		item, ok := ecs.Get[ListItem[int]](world, itemEntity)
+		item, ok := world.Get[ListItem[int]](itemEntity)
 		if !ok || item.List != list || item.Index != 23+slot || item.Value != (23+slot)*10 {
 			t.Fatalf("item entity %d value = %#v", slot, item)
 		}
-		transform, _ := ecs.Get[scene.UITransform](world, itemEntity)
+		transform, _ := world.Get[scene.UITransform](itemEntity)
 		wantY := float32((23+slot)*20 - 501)
 		if transform.Translation.Y.Value != wantY {
 			t.Fatalf("item entity %d y = %v, want %v", slot, transform.Translation.Y.Value, wantY)
 		}
 	}
-	areaValue, _ := ecs.Get[ScrollArea](world, list)
+	areaValue, _ := world.Get[ScrollArea](list)
 	metrics, _ := GetScrollAreaMetrics(world, list)
 	if areaValue.ContentHeight != 2_000_000 || metrics.MaxScrollY != 1_999_900 || !metrics.VerticalVisible {
 		t.Fatalf("scroll area = %#v metrics = %#v", areaValue, metrics)
@@ -76,27 +76,27 @@ func TestHorizontalListVirtualizesAlongXAxis(t *testing.T) {
 	if got := world.EntityCount(); got >= len(items) {
 		t.Fatalf("virtual list spawned %d entities for %d items", got, len(items))
 	}
-	component, _ := ecs.Get[List[int]](world, list)
+	component, _ := world.Get[List[int]](list)
 	if component.Axis != ListHorizontal || component.First != 23 || component.Last != 33 || binds != 10 {
 		t.Fatalf("horizontal range = [%d,%d), axis = %v, binds = %d", component.First, component.Last, component.Axis, binds)
 	}
 	for slot, itemEntity := range itemEntities {
 		index := 23 + slot
-		item, ok := ecs.Get[ListItem[int]](world, itemEntity)
+		item, ok := world.Get[ListItem[int]](itemEntity)
 		if !ok || item.List != list || item.Index != index || item.Value != index*10 {
 			t.Fatalf("item entity %d item = %#v", slot, item)
 		}
-		transform, _ := ecs.Get[scene.UITransform](world, itemEntity)
+		transform, _ := world.Get[scene.UITransform](itemEntity)
 		wantX := float32(index*20 - 501)
 		if transform.Translation.X.Value != wantX || transform.Translation.Y.Value != 0 {
 			t.Fatalf("item entity %d position = (%v, %v), want (%v, 0)", slot, transform.Translation.X.Value, transform.Translation.Y.Value, wantX)
 		}
-		size, _ := ecs.Get[scene.Size2D](world, itemEntity)
+		size, _ := world.Get[scene.Size2D](itemEntity)
 		if size.Width != 20 || size.Height != 60 {
 			t.Fatalf("item entity %d size = (%v, %v), want (20, 60)", slot, size.Width, size.Height)
 		}
 	}
-	area, _ := ecs.Get[ScrollArea](world, list)
+	area, _ := world.Get[ScrollArea](list)
 	metrics, _ := GetScrollAreaMetrics(world, list)
 	if area.ContentWidth != 2_000_000 || area.ContentHeight != 0 || metrics.MaxScrollX != 1_999_900 || !metrics.HorizontalVisible || metrics.VerticalVisible {
 		t.Fatalf("scroll area = %#v metrics = %#v", area, metrics)
@@ -128,7 +128,7 @@ func TestListReusesItemEntitiesWhenItemsAreReplaced(t *testing.T) {
 		t.Fatalf("initial unbinds = %d, want %d", unbound, len(itemEntities))
 	}
 	for index, itemEntity := range itemEntities {
-		visibility, _ := ecs.Get[scene.Visibility](world, itemEntity)
+		visibility, _ := world.Get[scene.Visibility](itemEntity)
 		if visibility.Visible != (index < 2) {
 			t.Fatalf("item entity %d visibility = %v", index, visibility.Visible)
 		}
@@ -142,7 +142,7 @@ func TestListReusesItemEntitiesWhenItemsAreReplaced(t *testing.T) {
 	if err := SyncListSystem[string]("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	component, _ := ecs.Get[List[string]](world, list)
+	component, _ := world.Get[List[string]](list)
 	if built != 5 || component.Items[0] != "C" || component.First != 0 || component.Last != 5 {
 		t.Fatalf("reused list = %#v, built = %d", component, built)
 	}
@@ -153,7 +153,7 @@ func TestListReusesItemEntitiesWhenItemsAreReplaced(t *testing.T) {
 		t.Fatalf("growing the list unexpectedly unbound an item entity: %d", unbound)
 	}
 	for _, itemEntity := range itemEntities {
-		if visibility, _ := ecs.Get[scene.Visibility](world, itemEntity); !visibility.Visible {
+		if visibility, _ := world.Get[scene.Visibility](itemEntity); !visibility.Visible {
 			t.Fatal("a reusable item entity remained hidden after growing the item set")
 		}
 	}
@@ -177,7 +177,7 @@ func TestListClampsToLastItems(t *testing.T) {
 	if err := SyncListSystem[int]("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	component, _ := ecs.Get[List[int]](world, list)
+	component, _ := world.Get[List[int]](list)
 	if component.First != 13 || component.Last != 20 {
 		t.Fatalf("last range = [%d,%d), want [13,20)", component.First, component.Last)
 	}
@@ -191,18 +191,18 @@ func TestBindListUsesExistingScrollArea(t *testing.T) {
 	world := newUIWorld(t)
 	area := SpawnScrollArea(world, ScrollAreaOptions{Width: 120, Height: 40})
 	before := 0
-	for range ecs.Query[ScrollArea](world).All {
+	for range world.Query[ScrollArea]().All {
 		before++
 	}
 
 	if !BindList(world, area, ListOptions[int]{Items: []int{1, 2, 3}, ItemSize: 20}) {
 		t.Fatal("BindList rejected an existing scroll area")
 	}
-	if _, ok := ecs.Get[List[int]](world, area); !ok {
+	if _, ok := world.Get[List[int]](area); !ok {
 		t.Fatal("existing scroll area was not bound as a list")
 	}
 	after := 0
-	for range ecs.Query[ScrollArea](world).All {
+	for range world.Query[ScrollArea]().All {
 		after++
 	}
 	if after != before {
@@ -233,7 +233,7 @@ func TestListSyncWithItemLifecycleDoesNotAllocateAfterWarmup(t *testing.T) {
 
 			show := false
 			allocations := testing.AllocsPerRun(100, func() {
-				list := ecs.GetMut[List[int]](world, listEntity)
+				list := world.GetMut[List[int]](listEntity)
 				if show {
 					list.Items = items
 				} else {

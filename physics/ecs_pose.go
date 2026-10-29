@@ -48,7 +48,7 @@ func ValidateBodyTransform(matrix mgl32.Mat4, planar bool) error {
 
 func ecsWorldPose(world *ecs.World, entity ecs.Entity, local scene.Transform, planar bool) (scene.Transform, error) {
 	matrix := local.LocalMatrix()
-	if parent, ok := ecs.Get[scene.Parent](world, entity); ok {
+	if parent, ok := world.Get[scene.Parent](entity); ok {
 		matrix = ecsPhysicsParentMatrix(world, parent.Entity, false).Mul4(matrix)
 	}
 	if err := ValidateBodyTransform(matrix, planar); err != nil {
@@ -64,26 +64,26 @@ func ecsWorldPose(world *ecs.World, entity ecs.Entity, local scene.Transform, pl
 func ecsPhysicsParentMatrix(world *ecs.World, entity ecs.Entity, simulated bool) mgl32.Mat4 {
 	result := mgl32.Ident4()
 	for entity != 0 {
-		transform, ok := ecs.Get[scene.Transform](world, entity)
+		transform, ok := world.Get[scene.Transform](entity)
 		if !ok {
 			break
 		}
 		if simulated && scene.IsActive(world, entity) {
 			pose := transform
 			found := false
-			if body, ok := ecs.Get[RigidBody2D](world, entity); ok && body.body.Valid() {
+			if body, ok := world.Get[RigidBody2D](entity); ok && body.body.Valid() {
 				state := body.body.state()
 				pose.Translation[0], pose.Translation[1] = float32(state.position.X), float32(state.position.Y)
 				pose.Rotation = mgl32.QuatRotate(float32(state.rotation), mgl32.Vec3{0, 0, 1})
 				found = true
-			} else if body, ok := ecs.Get[RigidBody3D](world, entity); ok && body.body.Valid() {
+			} else if body, ok := world.Get[RigidBody3D](entity); ok && body.body.Valid() {
 				state := body.body.state()
 				pose.Translation = vectorToMGL(state.position)
 				pose.Rotation = quaternionToMGL(state.rotation)
 				found = true
 			}
 			if found {
-				if global, ok := ecs.Get[scene.GlobalTransform](world, entity); ok {
+				if global, ok := world.Get[scene.GlobalTransform](entity); ok {
 					for column := range 3 {
 						pose.Scale[column] = mgl32.Vec3{global.Matrix[column*4], global.Matrix[column*4+1], global.Matrix[column*4+2]}.Len()
 					}
@@ -92,7 +92,7 @@ func ecsPhysicsParentMatrix(world *ecs.World, entity ecs.Entity, simulated bool)
 			}
 		}
 		result = transform.LocalMatrix().Mul4(result)
-		parent, ok := ecs.Get[scene.Parent](world, entity)
+		parent, ok := world.Get[scene.Parent](entity)
 		if !ok {
 			break
 		}
@@ -103,10 +103,8 @@ func ecsPhysicsParentMatrix(world *ecs.World, entity ecs.Entity, simulated bool)
 
 func ecsLocalPhysicsPose(world *ecs.World, entity ecs.Entity, pose scene.Transform) (scene.Transform, scene.Transform) {
 	parent := mgl32.Ident4()
-	if link, ok := ecs.Get[scene.Parent](world, entity); ok {
+	if link, ok := world.Get[scene.Parent](entity); ok {
 		parent = ecsPhysicsParentMatrix(world, link.Entity, true)
-	} else {
-		return pose, pose
 	}
 	if parent != mgl32.Ident4() && parent.Det() != 0 {
 		position := parent.Inv().Mul4x1(pose.Translation.Vec4(1))

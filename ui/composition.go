@@ -105,29 +105,29 @@ func (control TextControl[T]) bindControl(world *ecs.World, entity ecs.Entity, o
 	_, multiline := any(*new(T)).(Textarea)
 	password := control.Password && !multiline
 	field := newTextField(control.Value, control.Placeholder, password, control.MaxRunes, control.FontSize, control.DPI)
-	if err := ecs.Insert(world, entity, field); err != nil {
+	if err := world.Insert(entity, field); err != nil {
 		return err
 	}
 	switch any(*new(T)).(type) {
 	case Input:
-		ecs.Remove[Textarea](world, entity)
-		if err := ecs.Insert(world, entity, Input{}); err != nil {
+		world.Remove[Textarea](entity)
+		if err := world.Insert(entity, Input{}); err != nil {
 			return err
 		}
-		if err := ecs.Insert(world, entity, scene.ClipRect2D{Width: opts.Width, Height: opts.Height}); err != nil {
+		if err := world.Insert(entity, scene.ClipRect2D{Width: opts.Width, Height: opts.Height}); err != nil {
 			return err
 		}
 		if password {
-			return ecs.Insert(world, entity, textFieldMaskCache{})
+			return world.Insert(entity, textFieldMaskCache{})
 		}
-		ecs.Remove[textFieldMaskCache](world, entity)
+		world.Remove[textFieldMaskCache](entity)
 	case Textarea:
-		ecs.Remove[Input](world, entity)
-		ecs.Remove[textFieldMaskCache](world, entity)
-		if err := ecs.Insert(world, entity, Textarea{Wrap: control.Wrap, Padding: control.Padding}); err != nil {
+		world.Remove[Input](entity)
+		world.Remove[textFieldMaskCache](entity)
+		if err := world.Insert(entity, Textarea{Wrap: control.Wrap, Padding: control.Padding}); err != nil {
 			return err
 		}
-		return ecs.Insert(world, entity, scene.ClipRect2D{Width: opts.Width, Height: opts.Height})
+		return world.Insert(entity, scene.ClipRect2D{Width: opts.Width, Height: opts.Height})
 	}
 	return nil
 }
@@ -136,7 +136,7 @@ func insertControlBinding[T any](world *ecs.World, entity ecs.Entity, opts Contr
 	if binding, ok := any(component).(controlBinding); ok {
 		return binding.bindControl(world, entity, opts)
 	}
-	return ecs.Insert(world, entity, component)
+	return world.Insert(entity, component)
 }
 
 // SpawnControl creates a behavior-only control root. Parts are ordinary
@@ -152,8 +152,8 @@ func BindControl[T any](world *ecs.World, entity ecs.Entity, opts ControlOptions
 	if world == nil || entity == 0 {
 		return fmt.Errorf("UI control target is invalid")
 	}
-	if !ecs.Has[Control](world, entity) {
-		if err := ecs.Insert(world, entity, Control{}); err != nil {
+	if !world.Has[Control](entity) {
+		if err := world.Insert(entity, Control{}); err != nil {
 			return err
 		}
 	}
@@ -161,15 +161,15 @@ func BindControl[T any](world *ecs.World, entity ecs.Entity, opts ControlOptions
 		Width: opts.Width, Height: opts.Height,
 		Disabled: opts.Disabled, PassThrough: opts.PassThrough,
 	}
-	if err := ecs.Insert(world, entity, target); err != nil {
+	if err := world.Insert(entity, target); err != nil {
 		return err
 	}
-	if !ecs.Has[scene.InputState2D](world, entity) {
-		if err := ecs.Insert(world, entity, scene.InputState2D{}); err != nil {
+	if !world.Has[scene.InputState2D](entity) {
+		if err := world.Insert(entity, scene.InputState2D{}); err != nil {
 			return err
 		}
 	}
-	if err := ecs.Insert(world, entity, scene.Size2D{Width: opts.Width, Height: opts.Height}); err != nil {
+	if err := world.Insert(entity, scene.Size2D{Width: opts.Width, Height: opts.Height}); err != nil {
 		return err
 	}
 	if err := insertControlBinding(world, entity, opts, component); err != nil {
@@ -183,7 +183,7 @@ func BindVariant[T comparable](world *ecs.World, owner ecs.Entity, variant Varia
 	if variant.Entity == 0 {
 		return fmt.Errorf("UI variant entity is zero")
 	}
-	if variants := ecs.GetMut[Variants[T]](world, owner); variants != nil {
+	if variants := world.GetMut[Variants[T]](owner); variants != nil {
 		for index := range variants.Items {
 			if variants.Items[index].Entity == variant.Entity {
 				variants.Items[index] = variant
@@ -193,11 +193,11 @@ func BindVariant[T comparable](world *ecs.World, owner ecs.Entity, variant Varia
 		variants.Items = append(variants.Items, variant)
 		return nil
 	}
-	return ecs.Insert(world, owner, Variants[T]{Items: []Variant[T]{variant}})
+	return world.Insert(owner, Variants[T]{Items: []Variant[T]{variant}})
 }
 
 func UnbindVariant[T comparable](world *ecs.World, owner, entity ecs.Entity) {
-	variants := ecs.GetMut[Variants[T]](world, owner)
+	variants := world.GetMut[Variants[T]](owner)
 	if variants == nil {
 		return
 	}
@@ -209,19 +209,19 @@ func UnbindVariant[T comparable](world *ecs.World, owner, entity ecs.Entity) {
 		break
 	}
 	if len(variants.Items) == 0 {
-		ecs.Remove[Variants[T]](world, owner)
+		world.Remove[Variants[T]](owner)
 	}
 }
 
 func BindRelation[T any](world *ecs.World, entity, owner ecs.Entity) error {
-	return ecs.Insert(world, entity, Relation[T]{Owner: owner})
+	return world.Insert(entity, Relation[T]{Owner: owner})
 }
 
 func BindPart[T any](world *ecs.World, entity ecs.Entity) error {
-	if ecs.Has[Part[T]](world, entity) {
+	if world.Has[Part[T]](entity) {
 		return nil
 	}
-	return ecs.Insert(world, entity, Part[T]{})
+	return world.Insert(entity, Part[T]{})
 }
 
 func FindPart[P, T any](world *ecs.World, owner ecs.Entity) (ecs.Entity, bool) {
@@ -238,8 +238,8 @@ type partIndex[P, T any] struct {
 // Cache entities, never component pointers. Column migration changes these
 // versions too, preserving the first match in the current query order.
 func partEntities[P, T any](world *ecs.World) map[ecs.Entity]ecs.Entity {
-	index := ecs.FrameValue[partIndex[P, T], partIndex[P, T]](world)
-	versions := [2]uint64{ecs.ComponentVersion[Relation[T]](world), ecs.ComponentVersion[Part[P]](world)}
+	index := world.FrameValue[partIndex[P, T], partIndex[P, T]]()
+	versions := [2]uint64{world.ComponentVersion[Relation[T]](), world.ComponentVersion[Part[P]]()}
 	if index.initialized && index.versions == versions {
 		return index.entities
 	}
@@ -247,7 +247,7 @@ func partEntities[P, T any](world *ecs.World) map[ecs.Entity]ecs.Entity {
 		index.entities = make(map[ecs.Entity]ecs.Entity)
 	}
 	clear(index.entities)
-	for entity, access := range ecs.Query[Relation[T]](world, ecs.With[Part[P]]()).All {
+	for entity, access := range world.Query[Relation[T]](ecs.With[Part[P]]()).All {
 		relation := access.Get()
 
 		if _, exists := index.entities[relation.Owner]; !exists {
@@ -259,7 +259,7 @@ func partEntities[P, T any](world *ecs.World) map[ecs.Entity]ecs.Entity {
 }
 
 func syncVariants[T comparable](world *ecs.World, matches func(*ecs.World, ecs.Entity, T) bool) {
-	for entity, access := range ecs.Query[Variants[T]](world).All {
+	for entity, access := range world.Query[Variants[T]]().All {
 		variants := access.Get()
 
 		ownerVisible := hierarchyVisible(world, entity)
@@ -274,12 +274,12 @@ func syncControlVariants(world *ecs.World) {
 }
 
 func controlVariantMatches(world *ecs.World, entity ecs.Entity, variant ControlVariant) bool {
-	pointer := ecs.GetRef[scene.InputState2D](world, entity)
-	target := ecs.GetRef[scene.InputTarget2D](world, entity)
-	field := ecs.GetRef[TextField](world, entity)
-	toggle := ecs.GetRef[Toggle[bool]](world, entity)
-	menu := ecs.GetRef[Menu](world, entity)
-	selector := ecs.GetRef[Selector](world, entity)
+	pointer := world.GetRef[scene.InputState2D](entity)
+	target := world.GetRef[scene.InputTarget2D](entity)
+	field := world.GetRef[TextField](entity)
+	toggle := world.GetRef[Toggle[bool]](entity)
+	menu := world.GetRef[Menu](entity)
+	selector := world.GetRef[Selector](entity)
 	hovered := pointer != nil && pointer.Hovered
 	pressed := pointer != nil && pointer.Pressed
 	disabled := target != nil && target.Disabled

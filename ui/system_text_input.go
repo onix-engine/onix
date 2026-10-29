@@ -29,25 +29,25 @@ func syncTextInput(context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	state, ok := ecs.GetResource[*uiEventState](world)
+	state, ok := world.GetResource[*uiEventState]()
 	if !ok || state == nil || state.Focused == 0 {
 		return nil
 	}
-	uiInputState, ok := ecs.GetResource[*input.State](world)
+	uiInputState, ok := world.GetResource[*input.State]()
 	if !ok || uiInputState == nil {
 		return nil
 	}
-	field, ok := ecs.Get[TextField](world, state.Focused)
+	field, ok := world.Get[TextField](state.Focused)
 	if !ok || !field.Focused {
 		return nil
 	}
 	found := false
-	for entity, access := range ecs.Query3[Relation[SurfaceStyle], scene.UIGlobalTransform, scene.Size2D](world).All {
+	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.UIGlobalTransform, scene.Size2D]().All {
 		visual := access.A.Ref()
 		transform := access.B.Ref()
 		size := access.C.Ref()
 
-		if visual.Owner != state.Focused || !ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner != state.Focused || !world.Has[Part[CaretPart]](entity) {
 			continue
 		}
 		found = setTextInputCaret(uiInputState, transform, scene.AnchorTopLeft, size.Width, size.Height)
@@ -58,15 +58,15 @@ func syncTextInput(context *ecs.SystemContext) error {
 	if found {
 		return nil
 	}
-	for entity, access := range ecs.Query3[Relation[Control], scene.UIGlobalTransform, scene.Sprite2D](world).All {
+	for entity, access := range world.Query3[Relation[Control], scene.UIGlobalTransform, scene.Sprite2D]().All {
 		visual := access.A.Ref()
 		transform := access.B.Ref()
 		sprite := access.C.Ref()
 
-		if visual.Owner != state.Focused || !ecs.Has[Part[CaretPart]](world, entity) {
+		if visual.Owner != state.Focused || !world.Has[Part[CaretPart]](entity) {
 			continue
 		}
-		anchor, ok := ecs.Get[scene.Anchor](world, entity)
+		anchor, ok := world.Get[scene.Anchor](entity)
 		if !ok {
 			anchor = scene.AnchorTopLeft
 		}
@@ -90,7 +90,7 @@ func selectOnInputDoubleClick(world *ecs.World, state *uiEventState, entity ecs.
 	if state == nil {
 		return false
 	}
-	textarea, _ := ecs.Get[Textarea](world, entity)
+	textarea, _ := world.Get[Textarea](entity)
 	if !isSingleLineTextInput(world, entity) && !textarea.SelectTokens {
 		resetInputClick(state)
 		return false
@@ -105,7 +105,7 @@ func selectOnInputDoubleClick(world *ecs.World, state *uiEventState, entity ecs.
 	if !double {
 		return false
 	}
-	if field := ecs.GetMut[TextField](world, entity); field != nil {
+	if field := world.GetMut[TextField](entity); field != nil {
 		if textarea.SelectTokens {
 			index, found := textIndexFromInput(world, entity, x, y, true)
 			if !found {
@@ -124,7 +124,7 @@ func selectOnInputDoubleClick(world *ecs.World, state *uiEventState, entity ecs.
 }
 
 func isSingleLineTextInput(world *ecs.World, entity ecs.Entity) bool {
-	return ecs.Has[Input](world, entity) || ecs.Has[NumberInput](world, entity)
+	return world.Has[Input](entity) || world.Has[NumberInput](entity)
 }
 
 func resetInputClick(state *uiEventState) {
@@ -141,35 +141,35 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 		return
 	}
 	if uiInputState.KeyPressed(input.KeyEscape) && !uiInputState.KeyPressedDuringComposition(input.KeyEscape) {
-		if state, ok := ecs.GetResource[*uiEventState](world); ok && state != nil {
+		if state, ok := world.GetResource[*uiEventState](); ok && state != nil {
 			focus(world, state, 0)
 		}
 		return
 	}
-	field := ecs.GetMut[TextField](world, entity)
+	field := world.GetMut[TextField](entity)
 	if field == nil {
 		return
 	}
-	if target, ok := ecs.Get[scene.InputTarget2D](world, entity); ok && target.Disabled {
+	if target, ok := world.Get[scene.InputTarget2D](entity); ok && target.Disabled {
 		// Disabled textareas may still be focused to scroll, but must remain
 		// read-only.
 		return
 	}
-	if control, ok := ecs.Get[html.Control](world, entity); ok && control.ReadOnly {
-		if textarea := ecs.GetMut[Textarea](world, entity); textarea != nil && uiInputState.KeyPressed(input.KeyA) &&
+	if control, ok := world.Get[html.Control](entity); ok && control.ReadOnly {
+		if textarea := world.GetMut[Textarea](entity); textarea != nil && uiInputState.KeyPressed(input.KeyA) &&
 			(uiInputState.KeyHeld(input.KeyLeftControl) || uiInputState.KeyHeld(input.KeyRightControl) || uiInputState.KeyHeld(input.KeyLeftSuper) || uiInputState.KeyHeld(input.KeyRightSuper)) {
 			textarea.preserveScroll = true
 		}
 		editReadOnlyField(field, uiInputState)
 		return
 	}
-	edits := ecs.FrameScratch[textEditsScratch, input.TextEdit](world)
+	edits := world.FrameScratch[textEditsScratch, input.TextEdit]()
 	edits.Values = uiInputState.AppendTextEdits(edits.Values)
 	defer edits.ReleaseUnused()
 	field.Composition = uiInputState.CompositionText()
 	shortcut := uiInputState.KeyHeld(input.KeyLeftControl) || uiInputState.KeyHeld(input.KeyRightControl) || uiInputState.KeyHeld(input.KeyLeftSuper) || uiInputState.KeyHeld(input.KeyRightSuper)
 	if shortcut && uiInputState.KeyPressed(input.KeyA) {
-		if textarea := ecs.GetMut[Textarea](world, entity); textarea != nil {
+		if textarea := world.GetMut[Textarea](entity); textarea != nil {
 			textarea.preserveScroll = true
 		}
 	}
@@ -178,11 +178,11 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	if mouseSelecting {
 		edits.Values = discardTextSelectionEdits(edits.Values)
 	}
-	_, editable := ecs.Get[html.Editable](world, entity)
-	multiline := ecs.Has[Textarea](world, entity) || editable
+	_, editable := world.Get[html.Editable](entity)
+	multiline := world.Has[Textarea](entity) || editable
 	shift := uiInputState.KeyHeld(input.KeyLeftShift) || uiInputState.KeyHeld(input.KeyRightShift)
 	textareaSubmits := 0
-	if ecs.Has[Textarea](world, entity) && !ecs.Has[html.Control](world, entity) && !shift {
+	if world.Has[Textarea](entity) && !world.Has[html.Control](entity) && !shift {
 		edits.Values, textareaSubmits = textareaSubmitEdits(edits.Values)
 	}
 	previous := *field
@@ -200,22 +200,22 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 			uiInputState.SetTextInputSelection(selectionStart, selectionEnd)
 			return
 		}
-		if state := ecs.GetMut[htmlEditableState](world, entity); state != nil {
+		if state := world.GetMut[htmlEditableState](entity); state != nil {
 			state.InputType, state.Data = inputType, data
 		}
 	}
 	*field = next
 	if field.Value != previous.Value {
-		if number := ecs.GetMut[NumberInput](world, entity); number != nil {
+		if number := world.GetMut[NumberInput](entity); number != nil {
 			number.Changed = true
 		}
-		ecs.WriteMessage(world, InputEvent[string]{Entity: entity, Value: field.Value})
+		world.WriteMessage(InputEvent[string]{Entity: entity, Value: field.Value})
 	}
 	if submits > 0 {
 		field.Submitted = true
-		ecs.WriteMessage(world, SubmittedEvent[string]{Entity: entity, Value: field.Value})
-		if ecs.Has[NumberInput](world, entity) {
-			if state, ok := ecs.GetResource[*uiEventState](world); ok && state != nil {
+		world.WriteMessage(SubmittedEvent[string]{Entity: entity, Value: field.Value})
+		if world.Has[NumberInput](entity) {
+			if state, ok := world.GetResource[*uiEventState](); ok && state != nil {
 				focus(world, state, 0)
 			}
 		}
@@ -446,19 +446,19 @@ func setCaretFromInput(world *ecs.World, owner ecs.Entity, screenX, screenY floa
 // Character hit testing uses the glyph under the pointer instead of rounding
 // its right half to the next caret (which may belong to a different token).
 func textIndexFromInput(world *ecs.World, owner ecs.Entity, screenX, screenY float32, character bool) (int, bool) {
-	for entity, access := range ecs.Query3[Relation[scene.Text2D], scene.Text2D, scene.UIGlobalTransform](world).All {
+	for entity, access := range world.Query3[Relation[scene.Text2D], scene.Text2D, scene.UIGlobalTransform]().All {
 		visualAccess := access.A
 		textAccess := access.B
 		transformAccess := access.C
 
 		visual, transform := visualAccess.Ref(), transformAccess.Ref()
-		if visual.Owner != owner || !ecs.Has[Part[ValuePart]](world, entity) {
+		if visual.Owner != owner || !world.Has[Part[ValuePart]](entity) {
 			continue
 		}
 		x, y := inputCoordsForUI(screenX, screenY)
 		local := transform.Matrix.Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 		value := textFieldValue(world, owner)
-		if field, ok := ecs.Get[TextField](world, owner); ok && field.Password {
+		if field, ok := world.Get[TextField](owner); ok && field.Password {
 			value = maskedTextFieldValue(world, owner, field)
 		}
 		text := textAccess.Mut()
@@ -592,14 +592,14 @@ func codeTokenClass(r rune) uint8 {
 }
 
 func textFieldValue(world *ecs.World, entity ecs.Entity) string {
-	if field, ok := ecs.Get[TextField](world, entity); ok {
+	if field, ok := world.Get[TextField](entity); ok {
 		return field.Value
 	}
 	return ""
 }
 
 func setCaret(world *ecs.World, entity ecs.Entity, caret int, extend bool) {
-	if field := ecs.GetMut[TextField](world, entity); field != nil {
+	if field := world.GetMut[TextField](entity); field != nil {
 		field.Caret = max(0, min(caret, runeCount(field.Value)))
 		if !extend {
 			field.Anchor = field.Caret
@@ -608,13 +608,13 @@ func setCaret(world *ecs.World, entity ecs.Entity, caret int, extend bool) {
 }
 
 func setSelecting(world *ecs.World, entity ecs.Entity, selecting bool) {
-	if field := ecs.GetMut[TextField](world, entity); field != nil {
+	if field := world.GetMut[TextField](entity); field != nil {
 		field.Selecting = selecting
 	}
 }
 
 func textFieldSelecting(world *ecs.World, entity ecs.Entity) bool {
-	if field, ok := ecs.Get[TextField](world, entity); ok {
+	if field, ok := world.Get[TextField](entity); ok {
 		return field.Selecting
 	}
 	return false
@@ -654,7 +654,7 @@ func beginTextareaScrollDrag(world *ecs.World, owner ecs.Entity, screenX, screen
 	if axis == 0 {
 		return false
 	}
-	textarea := ecs.GetMut[Textarea](world, owner)
+	textarea := world.GetMut[Textarea](owner)
 	if textarea == nil {
 		return false
 	}
@@ -684,14 +684,14 @@ func TextareaScrollBarAt(world *ecs.World, screenX, screenY float32) bool {
 		return false
 	}
 	found := false
-	for entity, access := range ecs.Query[Textarea](world).All {
+	for entity, access := range world.Query[Textarea]().All {
 		textarea := access.Ref()
 
 		if textarea == nil || !hierarchyVisible(world, entity) {
 			continue
 		}
 		control, ok := controlViewFor(world, entity)
-		target, targetOK := ecs.Get[scene.InputTarget2D](world, entity)
+		target, targetOK := world.Get[scene.InputTarget2D](entity)
 		if !ok || (control.Disabled && (!targetOK || !target.AllowDisabledInput)) {
 			continue
 		}
@@ -713,7 +713,7 @@ func updateTextareaScrollDrags(world *ecs.World, uiInputState *input.State) {
 		return
 	}
 	pointer := uiInputState.Pointer()
-	for entity, row := range ecs.Query[Textarea](world).All {
+	for entity, row := range world.Query[Textarea]().All {
 		if !func(entity ecs.Entity, access ecs.ComponentAccess[Textarea]) bool {
 			if !access.Ref().scrollDragging {
 				return true
@@ -757,7 +757,7 @@ func textareaScrollGeometryFor(world *ecs.World, owner ecs.Entity) (textareaScro
 	if !ok {
 		return textareaScrollGeometry{}, false
 	}
-	textarea, ok := ecs.Get[Textarea](world, owner)
+	textarea, ok := world.Get[Textarea](owner)
 	if !ok {
 		return textareaScrollGeometry{}, false
 	}
@@ -765,7 +765,7 @@ func textareaScrollGeometryFor(world *ecs.World, owner ecs.Entity) (textareaScro
 	if !ok {
 		return textareaScrollGeometry{}, false
 	}
-	text := ecs.GetRef[scene.Text2D](world, textEntity)
+	text := world.GetRef[scene.Text2D](textEntity)
 	if text == nil {
 		return textareaScrollGeometry{}, false
 	}
@@ -776,7 +776,7 @@ func textareaScrollGeometryFor(world *ecs.World, owner ecs.Entity) (textareaScro
 	_, _, viewportWidth, viewportHeight := textareaContentBox(world, textEntity, &textarea, control)
 	barSize := textareaScrollBarSize(&textarea)
 	box := scene.TextRangeRect2D{Width: control.Width, Height: control.Height}
-	if authored, ok := ecs.Get[html.Control](world, owner); ok {
+	if authored, ok := world.Get[html.Control](owner); ok {
 		box = authored.PaddingBox
 	}
 	horizontal, vertical := !textarea.DisableHorizontalScroll && contentWidth > viewportWidth, contentHeight > viewportHeight
@@ -798,7 +798,7 @@ func textareaScrollGeometryFor(world *ecs.World, owner ecs.Entity) (textareaScro
 }
 
 func textareaLocalPoint(world *ecs.World, owner ecs.Entity, screenX, screenY float32) (float32, float32, bool) {
-	transform, ok := ecs.Get[scene.UIGlobalTransform](world, owner)
+	transform, ok := world.Get[scene.UIGlobalTransform](owner)
 	if !ok {
 		return 0, 0, false
 	}

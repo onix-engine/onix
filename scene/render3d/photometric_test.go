@@ -63,8 +63,8 @@ func TestHDRPLightShapesAndUnits(t *testing.T) {
 
 func spawnPhotometricTestLight[T any](world *ecs.World, light T) ecs.Entity {
 	b := ecs.NewBundle(2)
-	ecs.Put(&b, light)
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(light)
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	return world.Spawn(b)
 }
 
@@ -88,15 +88,15 @@ func TestMixedPhotometricExtractionAndExposureNoAllocations(t *testing.T) {
 		spawnPhotometricTestLight(world, l)
 	}
 	hidden := spawnPhotometricTestLight(world, NewAreaLight())
-	_ = ecs.Insert(world, hidden, scene.Visibility{Visible: false})
+	_ = world.Insert(hidden, scene.Visibility{Visible: false})
 	invalid := NewPointLight()
 	invalid.Intensity = float32(math.NaN())
 	invalidEntity := spawnPhotometricTestLight(world, invalid)
 	extract := func() {
 		state.lights = state.lights[:0]
-		extractLocalLights[PointLight](world, state)
-		extractLocalLights[SpotLight](world, state)
-		extractLocalLights[AreaLight](world, state)
+		state.extractLocalLights[PointLight](world)
+		state.extractLocalLights[SpotLight](world)
+		state.extractLocalLights[AreaLight](world)
 	}
 	extract()
 	if len(state.lights) != 7 {
@@ -107,12 +107,12 @@ func TestMixedPhotometricExtractionAndExposureNoAllocations(t *testing.T) {
 			t.Fatal(state.lights)
 		}
 	}
-	_ = ecs.Insert(world, invalidEntity, scene.Visibility{Visible: false})
+	_ = world.Insert(invalidEntity, scene.Visibility{Visible: false})
 	if a := testing.AllocsPerRun(100, extract); a != 0 {
 		t.Fatalf("light extraction allocated %g", a)
 	}
 	camera := spawnPhotometricTestLight(world, Camera{Exposure: graphics.NewExposure()})
-	_ = ecs.Insert(world, camera, Environment{Exposure: 2})
+	_ = world.Insert(camera, Environment{Exposure: 2})
 	view := state.viewFor(camera)
 	view.frame.Mode = render.RenderViewLit
 	if err := setupViewLighting3D(world, state, view, camera); err != nil {

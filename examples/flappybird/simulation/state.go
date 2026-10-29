@@ -59,21 +59,21 @@ func newFlappyState(birdStart enginephysics.Vector) *flappyState {
 	s.bird = s.space.CreateBody(birdDef)
 	birdShape := enginephysics.NewColliderDef(enginephysics.Circle{Radius: flappyBirdRadius})
 	birdShape.CollisionType = 1
-	enginephysics.AddCollider(s.space, s.bird, birdShape)
+	s.space.AddCollider(s.bird, birdShape)
 
 	groundDef := enginephysics.NewBodyDef(enginephysics.BodyStatic)
 	groundDef.Position = enginephysics.V(0, flappyGroundY-20)
 	ground := s.space.CreateBody(groundDef)
 	groundShape := enginephysics.NewColliderDef(enginephysics.NewBox(2000, 40))
 	groundShape.CollisionType = 2
-	enginephysics.AddCollider(s.space, ground, groundShape)
+	s.space.AddCollider(ground, groundShape)
 
 	s.pipeTop = s.space.CreateBody(enginephysics.NewBodyDef(enginephysics.BodyKinematic))
 	s.pipeBottom = s.space.CreateBody(enginephysics.NewBodyDef(enginephysics.BodyKinematic))
 	pipeShape := enginephysics.NewColliderDef(enginephysics.NewBox(flappyPipeWidth, flappyPipeHeight))
 	pipeShape.CollisionType = 2
-	s.pipeShapes[0] = enginephysics.AddCollider(s.space, s.pipeTop, pipeShape)
-	s.pipeShapes[1] = enginephysics.AddCollider(s.space, s.pipeBottom, pipeShape)
+	s.pipeShapes[0] = s.space.AddCollider(s.pipeTop, pipeShape)
+	s.pipeShapes[1] = s.space.AddCollider(s.pipeBottom, pipeShape)
 	s.reset()
 	return s
 }

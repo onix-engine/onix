@@ -1,7 +1,9 @@
 package editor
 
 import (
+	"encoding/json"
 	"os"
+	"os/exec"
 	"testing"
 
 	engineui "github.com/diiyw/onix/ui"
@@ -9,6 +11,20 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Keep the Go caches outside the isolated editor settings directory.
+	output, err := exec.Command("go", "env", "-json", "GOMODCACHE", "GOCACHE").Output()
+	if err != nil {
+		panic(err)
+	}
+	var caches map[string]string
+	if err := json.Unmarshal(output, &caches); err != nil {
+		panic(err)
+	}
+	for name, value := range caches {
+		if err := os.Setenv(name, value); err != nil {
+			panic(err)
+		}
+	}
 	home, err := os.MkdirTemp("", "onix-editor-test-home-")
 	if err != nil {
 		panic(err)

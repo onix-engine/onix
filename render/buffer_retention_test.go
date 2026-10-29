@@ -38,7 +38,7 @@ func TestUploadBufferReleasesIdleStorage(t *testing.T) {
 	buffer := make([]byte, 0, 8<<20)
 	var retention bufferRetention
 	for range bufferTrimDelay {
-		buffer = trimUploadBuffer(buffer, &retention, 0, 64<<10)
+		buffer = (&retention).trimUploadBuffer(buffer, 0, 64<<10)
 	}
 	if buffer != nil {
 		t.Fatalf("idle buffer still retains %d bytes", cap(buffer))
@@ -49,14 +49,14 @@ func TestUploadBufferRetainsRecentPeakOnIdleFrame(t *testing.T) {
 	buffer := make([]uint32, 0, 8<<10)
 	var retention bufferRetention
 	for range bufferTrimDelay - 1 {
-		buffer = trimUploadBuffer(buffer, &retention, 1024, 64)
+		buffer = (&retention).trimUploadBuffer(buffer, 1024, 64)
 	}
-	buffer = trimUploadBuffer(buffer, &retention, 0, 64)
+	buffer = (&retention).trimUploadBuffer(buffer, 0, 64)
 	if len(buffer) != 0 || cap(buffer) != 2048 {
 		t.Fatalf("trimmed buffer len/cap = %d/%d, want 0/2048", len(buffer), cap(buffer))
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
-		buffer = trimUploadBuffer(buffer, &retention, 1024, 64)
+		buffer = (&retention).trimUploadBuffer(buffer, 1024, 64)
 	}); allocations != 0 {
 		t.Fatalf("steady upload buffer allocated: %g", allocations)
 	}
@@ -67,25 +67,25 @@ func TestScratchRetentionTracksEveryBatchAndRegrows(t *testing.T) {
 	var retention scratchRetention
 	for range bufferTrimDelay * 2 {
 		buffer = append(buffer, make([]uint32, 4096)...)
-		buffer = resetScratch(buffer, &retention)
+		buffer = (&retention).resetScratch(buffer)
 		buffer = append(buffer, 7)
-		buffer = trimScratch(buffer, &retention, 64)
+		buffer = (&retention).trimScratch(buffer, 64)
 		if cap(buffer) != 8192 {
 			t.Fatal("lost the first batch's demand")
 		}
 	}
 	for range bufferTrimDelay {
 		buffer = append(buffer, 9)
-		buffer = trimScratch(buffer, &retention, 64)
+		buffer = (&retention).trimScratch(buffer, 64)
 	}
 	if cap(buffer) != 64 {
 		t.Fatalf("low-load capacity = %d, want 64", cap(buffer))
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		buffer = append(buffer, 11)
-		buffer = resetScratch(buffer, &retention)
+		buffer = (&retention).resetScratch(buffer)
 		buffer = append(buffer, 12)
-		buffer = trimScratch(buffer, &retention, 64)
+		buffer = (&retention).trimScratch(buffer, 64)
 	}); allocations != 0 {
 		t.Fatalf("steady scratch allocated: %g", allocations)
 	}
@@ -95,9 +95,9 @@ func TestScratchRetentionTracksEveryBatchAndRegrows(t *testing.T) {
 	if buffer[9999] != 9999 {
 		t.Fatal("scratch failed to regrow")
 	}
-	buffer = trimScratch(buffer, &retention, 64)
+	buffer = (&retention).trimScratch(buffer, 64)
 	for range bufferTrimDelay {
-		buffer = trimScratch(buffer, &retention, 64)
+		buffer = (&retention).trimScratch(buffer, 64)
 	}
 	if buffer != nil {
 		t.Fatalf("idle scratch retained %d elements", cap(buffer))

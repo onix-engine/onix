@@ -7,21 +7,21 @@ import (
 func TestComponentRemovalCleanupPreservesMigration(t *testing.T) {
 	world := NewWorld()
 	calls := 0
-	OnComponentRemove[testPosition](world, func(_ *World, _ Entity, _ *testPosition) { calls++ })
-	spawner := NewSpawner1[testPosition](world)
+	world.OnComponentRemove[testPosition](func(_ *World, _ Entity, _ *testPosition) { calls++ })
+	spawner := world.NewSpawner1[testPosition]()
 	entity := spawner.Spawn(testPosition{})
-	if err := Insert(world, entity, testVelocity{}); err != nil {
+	if err := world.Insert(entity, testVelocity{}); err != nil {
 		t.Fatal(err)
 	}
-	Remove[testVelocity](world, entity)
+	world.Remove[testVelocity](entity)
 	if calls != 0 {
 		t.Fatalf("migration ran cleanup %d times", calls)
 	}
-	Remove[testPosition](world, entity)
+	world.Remove[testPosition](entity)
 	if calls != 1 {
 		t.Fatalf("removal ran cleanup %d times", calls)
 	}
-	if err := Insert(world, entity, testPosition{}); err != nil {
+	if err := world.Insert(entity, testPosition{}); err != nil {
 		t.Fatal(err)
 	}
 	world.Despawn(entity)
@@ -51,20 +51,20 @@ func TestTickRangeNeverSkipsMatchingRows(t *testing.T) {
 
 func TestChangedQuerySparseBlocksAfterSwapAndMigration(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	entities := make([]Entity, 256)
 	for index := range entities {
 		entities[index] = spawner.Spawn(testPosition{})
 	}
 	last := world.changeTick
 	for _, index := range []int{3, 130, 255} {
-		value := GetMut[testPosition](world, entities[index])
+		value := world.GetMut[testPosition](entities[index])
 		value.X = 1
 	}
 	context := &SystemContext{World: world, lastRun: last, thisRun: world.changeTick}
-	view := Query[testPosition](world, Changed[testPosition](context))
+	view := world.Query[testPosition](context.Changed[testPosition]())
 	world.Despawn(entities[0])
-	if err := Insert(world, entities[130], testVelocity{}); err != nil {
+	if err := world.Insert(entities[130], testVelocity{}); err != nil {
 		t.Fatal(err)
 	}
 	count := 0
@@ -81,7 +81,7 @@ func TestChangedQuerySparseBlocksAfterSwapAndMigration(t *testing.T) {
 	}
 	context.lastRun, context.thisRun = context.thisRun, world.nextChangeTick()
 	count = 0
-	for range Query[testPosition](world, Changed[testPosition](context)).All {
+	for range world.Query[testPosition](context.Changed[testPosition]()).All {
 		count++
 	}
 	if count != 0 {
@@ -91,17 +91,17 @@ func TestChangedQuerySparseBlocksAfterSwapAndMigration(t *testing.T) {
 
 func BenchmarkChangedQuerySparse(b *testing.B) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	spawner.Reserve(10000)
 	var entity Entity
 	for range 10000 {
 		entity = spawner.Spawn(testPosition{})
 	}
 	context := &SystemContext{World: world, lastRun: world.changeTick}
-	GetMut[testPosition](world, entity)
+	world.GetMut[testPosition](entity)
 	context.thisRun = world.changeTick
 	visit := func(Entity, testPosition) bool { return true }
-	for entity, access := range Query[testPosition](world, Changed[testPosition](context)).All {
+	for entity, access := range world.Query[testPosition](context.Changed[testPosition]()).All {
 		if !visit(entity, access.Get()) {
 			break
 		}
@@ -109,7 +109,7 @@ func BenchmarkChangedQuerySparse(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		for entity, access := range Query[testPosition](world, Changed[testPosition](context)).All {
+		for entity, access := range world.Query[testPosition](context.Changed[testPosition]()).All {
 			if !visit(entity, access.Get()) {
 				break
 			}

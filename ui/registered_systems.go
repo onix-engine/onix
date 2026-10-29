@@ -64,7 +64,7 @@ func (HTMLRenderer) registerRuntime(systems *runtimeSystems) {
 	Widgets{}.registerRuntime(systems)
 	systems.features |= runtimeFeatureHTML
 	addRuntimeSystem(&systems.update, updateHTMLRuntime)
-	addRuntimeSystem(&systems.sync, syncHTMLRuntime)
+	prependRuntimeSystem(&systems.sync, syncHTMLRuntime)
 }
 
 // FullRuntime selects HTML and widget systems for editor and tool worlds.
@@ -122,11 +122,11 @@ func RegisterRuntimeFeature[T RuntimeFeature](world *ecs.World) {
 }
 
 func runtimeSystemsFor(world *ecs.World) *runtimeSystems {
-	if systems, ok := ecs.GetResource[*runtimeSystems](world); ok && systems != nil {
+	if systems, ok := world.GetResource[*runtimeSystems](); ok && systems != nil {
 		return systems
 	}
 	systems := &runtimeSystems{}
-	ecs.InsertResource(world, systems)
+	world.InsertResource(systems)
 	return systems
 }
 
@@ -185,14 +185,14 @@ func runRuntimeSystems[S runtimeStage](context *ecs.SystemContext) error {
 	if context == nil || context.World == nil {
 		return nil
 	}
-	systems, ok := ecs.GetResource[*runtimeSystems](context.World)
+	systems, ok := context.World.GetResource[*runtimeSystems]()
 	if !ok || systems == nil {
 		return nil
 	}
-	return runRuntimeSystemSet[S](context, systems)
+	return systems.runRuntimeSystemSet[S](context)
 }
 
-func runRuntimeSystemSet[S runtimeStage](context *ecs.SystemContext, systems *runtimeSystems) error {
+func (systems *runtimeSystems) runRuntimeSystemSet[S runtimeStage](context *ecs.SystemContext) error {
 	var stage S
 	for _, system := range stage.systems(systems) {
 		if system == nil {
@@ -221,7 +221,7 @@ func runRuntimeStageWith[F RuntimeFeature, S runtimeStage](world *ecs.World) err
 		return nil
 	}
 	profile := runtimeProfileFor[F](world)
-	return runRuntimeSystemSet[S](&profile.context, &profile.systems)
+	return (&profile.systems).runRuntimeSystemSet[S](&profile.context)
 }
 
 type runtimeProfile[F RuntimeFeature] struct {
@@ -230,13 +230,13 @@ type runtimeProfile[F RuntimeFeature] struct {
 }
 
 func runtimeProfileFor[F RuntimeFeature](world *ecs.World) *runtimeProfile[F] {
-	if profile, ok := ecs.GetResource[*runtimeProfile[F]](world); ok && profile != nil {
+	if profile, ok := world.GetResource[*runtimeProfile[F]](); ok && profile != nil {
 		return profile
 	}
 	profile := &runtimeProfile[F]{context: ecs.SystemContext{World: world}}
 	var feature F
 	feature.registerRuntime(&profile.systems)
-	ecs.InsertResource(world, profile)
+	world.InsertResource(profile)
 	return profile
 }
 
@@ -250,8 +250,8 @@ func syncAuthoredControls(context *ecs.SystemContext) error {
 }
 
 func authoredControlVariantMatches(world *ecs.World, entity ecs.Entity, variant ControlVariant) bool {
-	pointer := ecs.GetRef[scene.InputState2D](world, entity)
-	target := ecs.GetRef[scene.InputTarget2D](world, entity)
+	pointer := world.GetRef[scene.InputState2D](entity)
+	target := world.GetRef[scene.InputTarget2D](entity)
 	hovered := pointer != nil && pointer.Hovered
 	pressed := pointer != nil && pointer.Pressed
 	disabled := target != nil && target.Disabled

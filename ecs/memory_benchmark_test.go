@@ -12,11 +12,11 @@ type memoryComponent[Tag any] struct {
 
 func putMemoryComponent[Tag any](bundle *Bundle, dynamic bool) {
 	if dynamic {
-		PutEntity(bundle, func(entity Entity) memoryComponent[Tag] {
+		bundle.PutEntity(func(entity Entity) memoryComponent[Tag] {
 			return memoryComponent[Tag]{Owner: entity, Value: 42}
 		})
 	} else {
-		Put(bundle, memoryComponent[Tag]{Value: 42})
+		bundle.Put(memoryComponent[Tag]{Value: 42})
 	}
 }
 
@@ -80,7 +80,7 @@ func BenchmarkSpawnScratch(b *testing.B) {
 func memoryQueryOptions(context *SystemContext, count int) []QueryOption {
 	options := make([]QueryOption, count)
 	for index := range options {
-		options[index] = Changed[testPosition](context)
+		options[index] = context.Changed[testPosition]()
 	}
 	return options
 }
@@ -89,10 +89,10 @@ func BenchmarkQueryBindingScratch(b *testing.B) {
 	for _, count := range []int{1, 8, 9, 16, 32} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := NewWorld()
-			spawner := NewSpawner1[testPosition](world)
+			spawner := world.NewSpawner1[testPosition]()
 			spawner.Spawn(testPosition{X: 1})
 			context := world.ChangesSince(0)
-			view := Query[testPosition](world, memoryQueryOptions(&context, count)...)
+			view := world.Query[testPosition](memoryQueryOptions(&context, count)...)
 			consume := func() {
 				for _, access := range view.All {
 					benchmarkTotal += access.Ref().X

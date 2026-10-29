@@ -12,12 +12,12 @@ world.Gravity = physics.V(0, -20)
 world.Reserve(128, 256)
 
 floor := world.CreateBody(physics.NewBodyDef(physics.BodyStatic))
-physics.AddCollider(world, floor, physics.NewColliderDef(physics.NewBox(20, 2)))
+world.AddCollider(floor, physics.NewColliderDef(physics.NewBox(20, 2)))
 
 def := physics.NewBodyDef(physics.BodyDynamic)
 def.Position = physics.V(0, 8)
 body := world.CreateBody(def)
-physics.AddCollider(world, body, physics.NewColliderDef(physics.Circle{Radius: 1}))
+world.AddCollider(body, physics.NewColliderDef(physics.Circle{Radius: 1}))
 
 world.Step(1.0 / 60)
 position := body.Position()
@@ -42,9 +42,9 @@ Install `onix.Physics2D`, or enable `"physics2d"` in
 
 ```go
 bundle := ecs.NewBundle(3)
-ecs.Put(&bundle, scene.TransformFromXYZ(0, 8, 0))
-ecs.Put(&bundle, physics.NewRigidBody2D(physics.BodyDynamic))
-ecs.Put(&bundle, physics.NewCollider2D(physics.Circle{Radius: 1}))
+bundle.Put(scene.TransformFromXYZ(0, 8, 0))
+bundle.Put(physics.NewRigidBody2D(physics.BodyDynamic))
+bundle.Put(physics.NewCollider2D(physics.Circle{Radius: 1}))
 entity := app.World.Spawn(bundle)
 ```
 

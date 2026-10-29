@@ -232,13 +232,13 @@ func (collider ColliderHandle3D[S]) Shape() S {
 	if state == nil {
 		return zero
 	}
-	return shapeFromState3D[S](*state)
+	return (*state).shapeFromState3D[S]()
 }
 
 func (collider ColliderHandle3D[S]) SetShape(shape S) {
 	if collider.world != nil {
 		if state := collider.world.colliderState3D(collider.id); state != nil {
-			setColliderShape3D(state, shape)
+			state.setColliderShape3D(shape)
 		}
 	}
 }

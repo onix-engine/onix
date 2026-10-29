@@ -22,11 +22,11 @@ func assertCircleRollsDownSlope[S Shape2D](t *testing.T, surface S, height float
 	tangent, normal := rotate(V(1, 0), angle), rotate(V(0, 1), angle)
 	floorDef := NewBodyDef(BodyStatic)
 	floorDef.Rotation = angle
-	AddCollider(world, world.CreateBody(floorDef), NewColliderDef(surface))
+	world.AddCollider(world.CreateBody(floorDef), NewColliderDef(surface))
 	def := NewBodyDef(BodyDynamic)
 	def.Position = normal.Mul(height + radius)
 	body := world.CreateBody(def)
-	AddCollider(world, body, NewColliderDef(Circle{Radius: radius}))
+	world.AddCollider(body, NewColliderDef(Circle{Radius: radius}))
 	for range 120 {
 		world.Step(1.0 / 120)
 	}
@@ -58,9 +58,9 @@ func TestCirclesExchangeMomentum(t *testing.T) {
 	second := world.CreateBody(secondDef)
 	collider := NewColliderDef(Circle{Radius: 1})
 	collider.Restitution, collider.Friction = 1, 0
-	AddCollider(world, first, collider)
+	world.AddCollider(first, collider)
 	collider.Shape.Radius = 1.5
-	AddCollider(world, second, collider)
+	world.AddCollider(second, collider)
 	world.Step(1.0 / 60)
 	if first.Velocity().Sub(V(-6, 0)).Length() > 1e-9 || second.Velocity().Sub(V(2, 0)).Length() > 1e-9 {
 		t.Fatalf("elastic impact lost momentum or energy: first=%v second=%v", first.Velocity(), second.Velocity())
@@ -76,13 +76,13 @@ func TestCirclesExchangeMomentum(t *testing.T) {
 func TestBouncyCircleComesToRest(t *testing.T) {
 	world := NewWorld()
 	world.Gravity = V(0, -520)
-	AddCollider(world, world.CreateBody(NewBodyDef(BodyStatic)), NewColliderDef(NewBox(560, 28)))
+	world.AddCollider(world.CreateBody(NewBodyDef(BodyStatic)), NewColliderDef(NewBox(560, 28)))
 	def := NewBodyDef(BodyDynamic)
 	def.Position = V(0, 100)
 	body := world.CreateBody(def)
 	collider := NewColliderDef(Circle{Radius: 12})
 	collider.Restitution = .75
-	AddCollider(world, body, collider)
+	world.AddCollider(body, collider)
 	bounced := false
 	for range 1200 {
 		world.Step(1.0 / 60)

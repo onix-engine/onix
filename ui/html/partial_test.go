@@ -13,8 +13,8 @@ import (
 func assertHTMLPartialMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Entity, source string) {
 	t.Helper()
 	fresh, freshOwner := incrementalHTMLFixture(t, source)
-	got, _ := ecs.Get[htmlRenderState](world, owner)
-	want, _ := ecs.Get[htmlRenderState](fresh, freshOwner)
+	got, _ := world.Get[htmlRenderState](owner)
+	want, _ := fresh.Get[htmlRenderState](freshOwner)
 	compareHTMLLayout(t, got.Boxes, want.Boxes)
 	if !equalHTMLPrimitiveSnapshots(htmlPrimitiveSnapshot(world, got), htmlPrimitiveSnapshot(fresh, want)) {
 		t.Fatalf("partial primitives differ from fresh render for %s\ngot: %#v\nwant: %#v", source, htmlPrimitiveSnapshot(world, got), htmlPrimitiveSnapshot(fresh, want))
@@ -47,11 +47,11 @@ func TestHTMLPartialTextTouchesOnlyAffectedBoxes(t *testing.T) {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, `<div id="target">Before</div>`+strings.Repeat(`<div>Unchanged</div>`, count))
 			target := incrementalHTMLNode(t, world, owner, "target")
-			before, _ := ecs.Get[htmlRenderState](world, owner)
+			before, _ := world.Get[htmlRenderState](owner)
 			children := slices.Clone(before.Children)
 			target.SetText("After")
 			incrementalSync(t, world)
-			after, _ := ecs.Get[htmlRenderState](world, owner)
+			after, _ := world.Get[htmlRenderState](owner)
 			if after.SyncStats.PartialReconciles != 1 || after.SyncStats.ReconciledBoxes != 1 || after.SyncStats.Reused != 1 || !slices.Equal(children, after.Children) {
 				t.Fatalf("unrelated primitives reconciled: %+v", after.SyncStats)
 			}
@@ -74,7 +74,7 @@ func TestHTMLPartialFragmentGrowthShrinkAndPaint(t *testing.T) {
 		target.SetAttribute("style", step.css)
 		target.SetText(step.text)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatalf("ordinary fragment mutation fell back: %+v", state.SyncStats)
 		}
@@ -93,7 +93,7 @@ func TestHTMLPartialTranslatedAndFlexPrimitives(t *testing.T) {
 			for _, width := range []int{30, 100, 40, 120} {
 				target.SetAttribute("style", fmt.Sprintf("width:%dpx", width))
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatal("ordinary geometry update did not reconcile locally")
 				}
@@ -107,7 +107,7 @@ func TestHTMLPartialPreservesUnrelatedControlState(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target">Before</div><div><input id="field" value="initial"/></div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
 	field := incrementalHTMLNode(t, world, owner, "field")
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	var control ecs.Entity
 	for key, group := range state.EntityGroups {
 		if key.Node == field.node && key.Role == htmlRoleControl {
@@ -119,13 +119,13 @@ func TestHTMLPartialPreservesUnrelatedControlState(t *testing.T) {
 		t.Fatal("missing control")
 	}
 	SetControlValue(world, control, "typed")
-	live := ecs.GetMut[Control](world, control)
+	live := world.GetMut[Control](control)
 	live.SelectionAnchor, live.SelectionFocus = 1, 3
 	revision := live.RenderRevision
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
-	live = ecs.GetMut[Control](world, control)
+	state, _ = world.Get[htmlRenderState](owner)
+	live = world.GetMut[Control](control)
 	if state.SyncStats.PartialReconciles != 1 || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || live.RenderRevision != revision {
 		t.Fatal("unrelated control was rewritten")
 	}
@@ -139,7 +139,7 @@ func TestHTMLPartialUpdatesStackingDependencies(t *testing.T) {
 			next := context + ";width:120px;z-index:2"
 			target.SetAttribute("style", next)
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			if state.SyncStats.PartialReconciles != 1 {
 				t.Fatal("stacking dependency fell back")
 			}
@@ -151,11 +151,11 @@ func TestHTMLPartialUpdatesStackingDependencies(t *testing.T) {
 func TestHTMLPartialEmptyTextRemovesAllFragments(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="target">Before</div><div>Unchanged</div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
-	before, _ := ecs.Get[htmlRenderState](world, owner)
+	before, _ := world.Get[htmlRenderState](owner)
 	removed := slices.Clone(before.RenderNodes[target.node.Children[0]].Entities)
 	target.SetText("")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.RenderNodes[target.node.Children[0]] != nil {
 		t.Fatal("empty text left a stale rendering index")
 	}
@@ -172,12 +172,12 @@ func TestHTMLPartialEventBindingAfterSkippedNode(t *testing.T) {
 	other := incrementalHTMLNode(t, world, owner, "other")
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	surface := state.EntityGroups[htmlRenderIdentity{Node: other.node, Role: htmlRoleSurface}].Bindings[0].Entity
 	clicks := 0
 	other.OnClick(func(*PointerEvent) { clicks++ })
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.EventTargets[other.node] != surface {
 		t.Fatal("event-only binding failed to reuse skipped surface")
 	}
@@ -189,13 +189,13 @@ func TestHTMLPartialEventBindingAfterSkippedNode(t *testing.T) {
 	incrementalSync(t, world)
 	target.SetText("Again")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 0 {
 		t.Fatal("event-only membership changes did not refresh box index")
 	}
 	target.SetText("After")
 	incrementalSync(t, world)
-	state, _ = ecs.Get[htmlRenderState](world, owner)
+	state, _ = world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 {
 		t.Fatal("partial updates did not resume")
 	}
@@ -216,7 +216,7 @@ func TestHTMLPartialAfterTopologyRefresh(t *testing.T) {
 		incrementalSync(t, world)
 		target.SetText("Before")
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 {
 			t.Fatal("partial updates did not resume after topology refresh")
 		}

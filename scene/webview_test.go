@@ -61,10 +61,10 @@ func TestWebViewRuntimeSynchronizesChangesAndDestroys(t *testing.T) {
 	world := ecs.NewWorld()
 	backend := &webViewTestBackend{}
 	runtime := NewWebViewRuntime(backend)
-	ecs.InsertResource(world, runtime)
+	world.InsertResource(runtime)
 	entity := world.Spawn(ecs.NewBundle(0))
 	reader := &ecs.MessageReader[WebViewEvent]{}
-	if err := ecs.Insert(world, entity, NewWebView("https://example.test")); err != nil {
+	if err := world.Insert(entity, NewWebView("https://example.test")); err != nil {
 		t.Fatal(err)
 	}
 	if err := SyncWebViews(world); err != nil {
@@ -93,7 +93,7 @@ func TestWebViewRuntimeSynchronizesChangesAndDestroys(t *testing.T) {
 	if len(backend.handle.navigate) != 0 {
 		t.Fatalf("unexpected initial navigation calls: %v", backend.handle.navigate)
 	}
-	value := ecs.GetMut[WebView](world, entity)
+	value := world.GetMut[WebView](entity)
 	value.URL = ""
 	value.HTML = "<strong>ready</strong>"
 	value.X, value.Y, value.Width, value.Height = 2, 3, 40, 20
@@ -133,14 +133,14 @@ func TestWebViewRuntimeSynchronizesChangesAndDestroys(t *testing.T) {
 func TestWebViewBindingUsesCurrentComponent(t *testing.T) {
 	world := ecs.NewWorld()
 	backend := &webViewTestBackend{}
-	ecs.InsertResource(world, NewWebViewRuntime(backend))
+	world.InsertResource(NewWebViewRuntime(backend))
 	entity := world.Spawn(ecs.NewBundle(0))
 	reader := &ecs.MessageReader[WebViewEvent]{}
 	value := NewWebViewHTML("<button></button>")
 	if !value.Bind("add", func(payload string) (string, error) { return payload + "!", nil }) {
 		t.Fatal("bind failed")
 	}
-	if err := ecs.Insert(world, entity, value); err != nil {
+	if err := world.Insert(entity, value); err != nil {
 		t.Fatal(err)
 	}
 	if err := SyncWebViews(world); err != nil {
@@ -164,9 +164,9 @@ func TestWebViewBindingUsesCurrentComponent(t *testing.T) {
 
 func TestWebViewRuntimeUnavailableEmitsError(t *testing.T) {
 	world := ecs.NewWorld()
-	ecs.InsertResource(world, NewWebViewRuntime(nil))
+	world.InsertResource(NewWebViewRuntime(nil))
 	entity := world.Spawn(ecs.NewBundle(0))
-	if err := ecs.Insert(world, entity, NewWebView("https://example.test")); err != nil {
+	if err := world.Insert(entity, NewWebView("https://example.test")); err != nil {
 		t.Fatal(err)
 	}
 	if err := SyncWebViews(world); err != nil {

@@ -46,8 +46,8 @@ func (s *valueCommandStream[T]) apply(world *World, entity Entity, index int) er
 	return s.values[index].apply(world, entity)
 }
 
-func queueCommandValue[T commandValue](commands *Commands, entity Entity, value T) {
-	stream := commandStreamFor(commands, func() *valueCommandStream[T] { return &valueCommandStream[T]{} })
+func (commands *Commands) queueCommandValue[T commandValue](entity Entity, value T) {
+	stream := commands.commandStreamFor(func() *valueCommandStream[T] { return &valueCommandStream[T]{} })
 	stream.queue(commands, entity, value)
 }
 
@@ -62,10 +62,10 @@ func (s *commandValues[T]) queue(commands *Commands, entity Entity, value T) {
 
 func (s *typedInsertCommandStream[T]) apply(world *World, entity Entity, index int) error {
 	if index < 0 {
-		Remove[T](world, entity)
+		world.Remove[T](entity)
 		return nil
 	}
-	return Insert(world, entity, s.values[index])
+	return world.Insert(entity, s.values[index])
 }
 
 func (s *commandValues[T]) retain(length int) {
@@ -176,19 +176,19 @@ func (w *World) Commands() *Commands {
 	return &w.commands
 }
 
-func CommandInsert[T any](commands *Commands, entity Entity, value T) {
+func (commands *Commands) Insert[T any](entity Entity, value T) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
-	stream := insertCommandStreamFor[T](commands)
+	stream := commands.insertCommandStreamFor[T]()
 	stream.queue(commands, entity, value)
 }
 
-func CommandRemove[T any](commands *Commands, entity Entity) {
+func (commands *Commands) Remove[T any](entity Entity) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
-	stream := insertCommandStreamFor[T](commands)
+	stream := commands.insertCommandStreamFor[T]()
 	commands.queue = append(commands.queue, queuedCommand{
 		kind:   commandRemove,
 		entity: entity,
@@ -196,8 +196,8 @@ func CommandRemove[T any](commands *Commands, entity Entity) {
 	})
 }
 
-// CommandRemovePrepared queues one batch migration for use during iteration.
-func CommandRemovePrepared(commands *Commands, entity Entity, removal PreparedRemoval) {
+// RemovePrepared queues one batch migration for use during iteration.
+func (commands *Commands) RemovePrepared(entity Entity, removal PreparedRemoval) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
@@ -210,14 +210,14 @@ func CommandRemovePrepared(commands *Commands, entity Entity, removal PreparedRe
 	commands.queue = append(commands.queue, queuedCommand{kind: commandRemovePrepared, entity: entity, valueIndex: index})
 }
 
-func CommandDespawn(commands *Commands, entity Entity) {
+func (commands *Commands) Despawn(entity Entity) {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
 	commands.queue = append(commands.queue, queuedCommand{kind: commandDespawn, entity: entity})
 }
 
-func CommandSpawn(commands *Commands, bundle Bundle) Entity {
+func (commands *Commands) Spawn(bundle Bundle) Entity {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
@@ -248,9 +248,9 @@ func CommandSpawn(commands *Commands, bundle Bundle) Entity {
 	return entity
 }
 
-// CommandSpawnPrepared reserves an entity and queues a previously prepared
+// SpawnPrepared reserves an entity and queues a previously prepared
 // bundle without rebuilding its component entry list.
-func CommandSpawnPrepared(commands *Commands, bundle PreparedBundle) Entity {
+func (commands *Commands) SpawnPrepared(bundle PreparedBundle) Entity {
 	if commands == nil {
 		panic("ecs: commands is nil")
 	}
@@ -282,11 +282,11 @@ func CommandSpawnPrepared(commands *Commands, bundle PreparedBundle) Entity {
 	return entity
 }
 
-func insertCommandStreamFor[T any](commands *Commands) *typedInsertCommandStream[T] {
-	return commandStreamFor(commands, func() *typedInsertCommandStream[T] { return &typedInsertCommandStream[T]{} })
+func (commands *Commands) insertCommandStreamFor[T any]() *typedInsertCommandStream[T] {
+	return commands.commandStreamFor(func() *typedInsertCommandStream[T] { return &typedInsertCommandStream[T]{} })
 }
 
-func commandStreamFor[S commandStream](commands *Commands, create func() S) S {
+func (commands *Commands) commandStreamFor[S commandStream](create func() S) S {
 	if commands.streams == nil {
 		commands.streams = make(map[reflect.Type]commandStream)
 	}

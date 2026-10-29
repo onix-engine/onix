@@ -31,7 +31,7 @@ func (Feature[D]) ConfigureResources(context project.ResourceLoadContext, entrie
 			return fmt.Errorf("audio %q: %w", entry.ID, err)
 		}
 		entry := entry
-		if err := project.RegisterNamedResource(context, resourceKind, entry.ID, project.ResourceRegistration[*audio.Clip]{
+		if err := context.RegisterNamedResource(resourceKind, entry.ID, project.ResourceRegistration[*audio.Clip]{
 			Load: func() (*audio.Clip, error) {
 				source, err := context.OpenBlob(entry.Path)
 				if err != nil {
@@ -49,5 +49,5 @@ func (Feature[D]) ConfigureResources(context project.ResourceLoadContext, entrie
 
 // Clip returns an audio resource installed by Feature.
 func Clip(resources *project.Resources, id string) (*audio.Clip, error) {
-	return project.LoadNamedResource[*audio.Clip](resources, resourceKind, id)
+	return resources.LoadNamedResource[*audio.Clip](resourceKind, id)
 }

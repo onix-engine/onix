@@ -33,7 +33,7 @@ func TestProjectOnDemandFrames(t *testing.T) {
 	if err := OnixInstallSystems(app); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.LoadModules(plan, registry, pelicanModuleOptions(source)); err != nil {
+	if _, err := app.LoadModules[OnixContentProfile](plan, registry, pelicanModuleOptions(source)); err != nil {
 		t.Fatal(err)
 	}
 	step := func() bool {
@@ -101,13 +101,13 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	world := ecs.NewWorld()
 	ui.RegisterRuntimeFeature[ui.HTMLRenderer](world)
 	state := input.NewState()
-	ecs.InsertResource(world, state)
+	world.InsertResource(state)
 	camera := scene.SpawnCamera2D(world)
-	ecs.GetMut[scene.Camera](world, camera).UpdateViewport(1280, 800)
+	world.GetMut[scene.Camera](camera).UpdateViewport(1280, 800)
 	renders := 0
 	options := pelicanModuleOptions(source)
 	options.Host = &module.Host{RequestRender: func() { renders++ }}
-	runtime, err := module.New(world, plan, registry, options)
+	runtime, err := module.New[OnixContentProfile](world, plan, registry, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,10 +124,10 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	}
 	var page, rider ecs.Entity
 	textures := map[any]bool{}
-	for e := range ecs.Query[htmlui.Surface](world).All {
+	for e := range world.Query[htmlui.Surface]().All {
 		page = e
 	}
-	pageSurface, ok := ecs.Get[htmlui.Surface](world, page)
+	pageSurface, ok := world.Get[htmlui.Surface](page)
 	if !ok || pageSurface.Font == nil || pageSurface.BoldFont == nil {
 		t.Fatal("HUD must load bundled regular and bold fonts without system fonts")
 	}
@@ -148,7 +148,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 			}
 		}
 	}
-	for e, a := range ecs.Query[scene.Sprite2D](world).All {
+	for e, a := range world.Query[scene.Sprite2D]().All {
 		sprite := a.Get()
 		if sprite.Texture != nil {
 			textures[sprite.Texture] = true
@@ -157,7 +157,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 			if sprite.Texture.Width != 460 || sprite.Texture.Height != 472 {
 				t.Fatal("rider lost its 2x raster resolution")
 			}
-			p, _ := ecs.Get[scene.Parent](world, e)
+			p, _ := world.Get[scene.Parent](e)
 			rider = p.Entity
 		}
 		if sprite.Width == 1280 && sprite.Texture != nil {
@@ -287,7 +287,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	if renders == 0 {
 		t.Fatal("riding did not request animation frames")
 	}
-	transform, _ := ecs.Get[scene.UITransform](world, rider)
+	transform, _ := world.Get[scene.UITransform](rider)
 	jumping := transform.Translation
 	if transform.Translation.Y.Value >= 580 {
 		t.Fatal("keyboard jump did not move the native rider", transform.Translation)
@@ -299,7 +299,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	if renders != 0 {
 		t.Fatal("paused game requested continuous rendering")
 	}
-	transform, _ = ecs.Get[scene.UITransform](world, rider)
+	transform, _ = world.Get[scene.UITransform](rider)
 	if transform.Translation != jumping || !strings.Contains(markup("sheet-title"), "鲜鱼可以等一下") {
 		t.Fatal("pause did not freeze the rider and display its overlay")
 	}
@@ -311,7 +311,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	state.TouchStart(x, y)
 	pointerFrame()
 	update(8)
-	transform, _ = ecs.Get[scene.UITransform](world, rider)
+	transform, _ = world.Get[scene.UITransform](rider)
 	if transform.Translation.Y.Value >= 580 {
 		t.Fatal("touch jump did not reach the game")
 	}
@@ -334,7 +334,7 @@ func TestProjectResourcesAndControls(t *testing.T) {
 	state.TouchStart(900, 400)
 	pointerFrame()
 	update(8)
-	transform, _ = ecs.Get[scene.UITransform](world, rider)
+	transform, _ = world.Get[scene.UITransform](rider)
 	if transform.Translation.Y.Value >= 580 {
 		t.Fatal("HUD blocked jumping from the riding area")
 	}

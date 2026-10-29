@@ -1,6 +1,10 @@
 package ecs
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"reflect"
+)
 
 type Entity uint64
 
@@ -31,6 +35,49 @@ func (s EntitySlot) Entity() Entity {
 // does not prove that the entity is still alive; resolve it through World.
 func (s EntitySlot) Valid() bool {
 	return s.world != nil && s.entity != 0
+}
+
+// Has reports whether the bound entity has the component. Empty and stale
+// slots return false.
+func (s EntitySlot) Has[T any]() bool {
+	return s.world != nil && s.world.Has[T](s.entity)
+}
+
+// Get reads a component from the bound world. Empty and stale slots return false.
+func (s EntitySlot) Get[T any]() (T, bool) {
+	if s.world == nil {
+		var zero T
+		return zero, false
+	}
+	return s.world.Get[T](s.entity)
+}
+
+// GetRef returns a component reference without marking it changed, or nil for
+// an empty or stale slot. The pointer must not outlive structural mutations.
+func (s EntitySlot) GetRef[T any]() *T {
+	if s.world == nil {
+		return nil
+	}
+	return s.world.GetRef[T](s.entity)
+}
+
+// GetMut returns a mutable component reference, or nil for an empty or stale
+// slot. The pointer must not outlive structural mutations.
+func (s EntitySlot) GetMut[T any]() *T {
+	if s.world == nil {
+		return nil
+	}
+	return s.world.GetMut[T](s.entity)
+}
+
+// MustMut requires a component on the bound entity. The pointer must not
+// outlive structural mutations.
+func (s EntitySlot) MustMut[T any]() *T {
+	value := s.GetMut[T]()
+	if value == nil {
+		panic(fmt.Sprintf("ecs: slot %d has no component %s in its world", s.entity, reflect.TypeFor[T]()))
+	}
+	return value
 }
 
 const invalidEntityIndex = math.MaxUint32

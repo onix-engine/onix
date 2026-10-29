@@ -38,27 +38,27 @@ func (r *ContentMessages[T]) All(c *Content) iter.Seq[*T] {
 
 type ContentSystemContext struct{ World *Content }
 
-func ContentHas[T any](c *Content, e ecs.Entity) bool { _, ok := ContentGet[T](c, e); return ok }
-func ContentRef[T any](c *Content, e ecs.Entity) *T {
+func (c *Content) Has[T any](e ecs.Entity) bool { _, ok := c.Get[T](e); return ok }
+func (c *Content) Ref[T any](e ecs.Entity) *T {
 	if !c.owns(e) {
 		return nil
 	}
-	return ecs.GetRef[T](c.context.runtime.world, e)
+	return c.context.runtime.world.GetRef[T](e)
 }
-func ContentSetIfChanged[T comparable](c *Content, e ecs.Entity, v T) bool {
+func (c *Content) SetIfChanged[T comparable](e ecs.Entity, v T) bool {
 	if !c.owns(e) || contentProtected[T]() {
 		return false
 	}
-	return ecs.SetIfChanged(c.context.runtime.world, e, v)
+	return c.context.runtime.world.SetIfChanged(e, v)
 }
-func ContentQuery2[A, B any](c *Content) iter.Seq2[ecs.Entity, ecs.Components2[A, B]] {
+func (c *Content) Query2[A, B any]() iter.Seq2[ecs.Entity, ecs.Components2[A, B]] {
 	return func(yield func(ecs.Entity, ecs.Components2[A, B]) bool) {
 		if c == nil || !c.context.live || contentProtected[A]() || contentProtected[B]() || !c.queryAvailable() {
 			return
 		}
 		boundary := c.beginQuery()
 		defer c.endQuery(boundary)
-		for e, a := range ecs.Query2[A, B](c.context.runtime.world).In(c.context.ownedEntities).All {
+		for e, a := range c.context.runtime.world.Query2[A, B]().In(c.context.ownedEntities).All {
 			if !yield(e, a) {
 				return
 			}
@@ -127,7 +127,7 @@ func (c *Content) FocusedControl() ecs.Entity {
 	if c == nil || !c.context.live {
 		return 0
 	}
-	focus, ok := ecs.GetResource[*scene.InputFocus](c.context.runtime.world)
+	focus, ok := c.context.runtime.world.GetResource[*scene.InputFocus]()
 	if !ok || focus == nil || !c.owns(focus.Keyboard) {
 		return 0
 	}
@@ -156,13 +156,13 @@ func (c *Content) ScrollOffset(e ecs.Entity) (mgl32.Vec2, bool) {
 func (c *Content) SetScrollOffset(e ecs.Entity, v mgl32.Vec2) bool {
 	return c.owns(e) && ui.SetScrollAreaOffset(c.context.runtime.world, e, v)
 }
-func ContentFindPart[P, T any](c *Content, e ecs.Entity) (ecs.Entity, bool) {
+func (c *Content) FindPart[P, T any](e ecs.Entity) (ecs.Entity, bool) {
 	if !c.owns(e) {
 		return 0, false
 	}
 	return ui.FindPart[P, T](c.context.runtime.world, e)
 }
-func ContentSpawnNode[T any](c *Content, o ui.NodeOptions, v T) ecs.Entity {
+func (c *Content) SpawnNode[T any](o ui.NodeOptions, v T) ecs.Entity {
 	checkNodeComponent[T]()
 	if !c.context.usable() {
 		panic(ErrDisposed)
@@ -175,12 +175,12 @@ func ContentSpawnNode[T any](c *Content, o ui.NodeOptions, v T) ecs.Entity {
 	}
 	if c.context.runtime.busy {
 		entity := c.queueNode(o, 1)
-		ecs.CommandInsert(c.context.runtime.world.Commands(), entity, v)
+		c.context.runtime.world.Commands().Insert(entity, v)
 		return entity
 	}
 	return c.adopt(ui.SpawnNode(c.context.runtime.world, o, v))
 }
-func ContentSpawnNode2[A, B any](c *Content, o ui.NodeOptions, a A, b B) ecs.Entity {
+func (c *Content) SpawnNode2[A, B any](o ui.NodeOptions, a A, b B) ecs.Entity {
 	checkNodeComponent[A]()
 	checkNodeComponent[B]()
 	if reflect.TypeFor[A]() == reflect.TypeFor[B]() {
@@ -197,8 +197,8 @@ func ContentSpawnNode2[A, B any](c *Content, o ui.NodeOptions, a A, b B) ecs.Ent
 	}
 	if c.context.runtime.busy {
 		entity := c.queueNode(o, 2)
-		ecs.CommandInsert(c.context.runtime.world.Commands(), entity, a)
-		ecs.CommandInsert(c.context.runtime.world.Commands(), entity, b)
+		c.context.runtime.world.Commands().Insert(entity, a)
+		c.context.runtime.world.Commands().Insert(entity, b)
 		return entity
 	}
 	return c.adopt(ui.SpawnNode2(c.context.runtime.world, o, a, b))
@@ -224,42 +224,42 @@ func (c *Content) queueNode(o ui.NodeOptions, additional int) ecs.Entity {
 	}
 	if !c.context.nodePrepared {
 		bundle := ecs.NewBundle(8)
-		ecs.Put(&bundle, scene.UITransformFromXY(0, 0))
-		ecs.Put(&bundle, scene.UIGlobalTransform{})
-		ecs.Put(&bundle, scene.Parent{Entity: c.context.root})
-		ecs.Put(&bundle, scene.AnchorTopLeft)
-		ecs.Put(&bundle, scene.Visibility{Visible: true})
-		ecs.Put(&bundle, scene.UIStackIndex(0))
-		ecs.Put(&bundle, explicitPainterOrder{})
-		ecs.Put(&bundle, entityOwner{context: c.context})
-		ecs.Put(&bundle, scene.Activity{Active: c.context.enabled})
+		bundle.Put(scene.UITransformFromXY(0, 0))
+		bundle.Put(scene.UIGlobalTransform{})
+		bundle.Put(scene.Parent{Entity: c.context.root})
+		bundle.Put(scene.AnchorTopLeft)
+		bundle.Put(scene.Visibility{Visible: true})
+		bundle.Put(scene.UIStackIndex(0))
+		bundle.Put(explicitPainterOrder{})
+		bundle.Put(entityOwner{context: c.context})
+		bundle.Put(scene.Activity{Active: c.context.enabled})
 		c.context.nodeBundle = r.world.PrepareBundle(bundle)
 		c.context.nodePrepared = true
 	}
 	r.privateCommands += count
 	commands := r.world.Commands()
-	entity := ecs.CommandSpawnPrepared(commands, c.context.nodeBundle)
+	entity := commands.SpawnPrepared(c.context.nodeBundle)
 	anchor := scene.AnchorTopLeft
 	if o.Anchor != nil {
 		anchor = *o.Anchor
 	}
-	ecs.CommandInsert(commands, entity, scene.UITransformFromXY(o.X, o.Y))
-	ecs.CommandInsert(commands, entity, scene.Parent{Entity: o.Parent})
-	ecs.CommandInsert(commands, entity, anchor)
-	ecs.CommandInsert(commands, entity, scene.Visibility{Visible: !o.Hidden})
-	ecs.CommandInsert(commands, entity, scene.UIStackIndex(o.StackIndex))
+	commands.Insert(entity, scene.UITransformFromXY(o.X, o.Y))
+	commands.Insert(entity, scene.Parent{Entity: o.Parent})
+	commands.Insert(entity, anchor)
+	commands.Insert(entity, scene.Visibility{Visible: !o.Hidden})
+	commands.Insert(entity, scene.UIStackIndex(o.StackIndex))
 	r.privateSpawns[entity] = privateSpawn{owner: c.context, parent: o.Parent}
 	c.context.entities = append(c.context.entities, entity)
 	c.context.dirtyDrawOrder()
 	return entity
 }
-func ContentBindControl[T any](c *Content, id string, v T) error {
+func (c *Content) BindControl[T any](id string, v T) error {
 	e, err := c.Element(id)
 	if err != nil {
 		return err
 	}
-	size, _ := ContentGet[scene.Size2D](c, e)
-	t, _ := ContentGet[scene.UITransform](c, e)
+	size, _ := c.Get[scene.Size2D](e)
+	t, _ := c.Get[scene.UITransform](e)
 	o := ui.ControlOptions{X: t.Translation.X.Value, Y: t.Translation.Y.Value, Width: size.Width, Height: size.Height}
 	if err := ui.BindControl(c.context.runtime.world, e, o, v); err != nil {
 		return err
@@ -272,7 +272,7 @@ func ContentBindControl[T any](c *Content, id string, v T) error {
 				inside = true
 				break
 			}
-			p, ok := ecs.Get[scene.Parent](c.context.runtime.world, ancestor)
+			p, ok := c.context.runtime.world.Get[scene.Parent](ancestor)
 			if !ok {
 				break
 			}
@@ -282,14 +282,14 @@ func ContentBindControl[T any](c *Content, id string, v T) error {
 			continue
 		}
 		kind := ui.CompositionGroup
-		size, _ := ContentGet[scene.Size2D](c, child)
-		t, _ := ContentGet[scene.UITransform](c, child)
+		size, _ := c.Get[scene.Size2D](child)
+		t, _ := c.Get[scene.UITransform](child)
 		label := ""
-		if sprite, ok := ContentGet[scene.Sprite2D](c, child); ok {
+		if sprite, ok := c.Get[scene.Sprite2D](child); ok {
 			kind = ui.CompositionSprite
 			size.Width, size.Height = sprite.Width, sprite.Height
 		}
-		if value, ok := ContentGet[scene.Text2D](c, child); ok {
+		if value, ok := c.Get[scene.Text2D](child); ok {
 			kind = ui.CompositionText
 			label = value.Value
 		}
@@ -300,17 +300,17 @@ func ContentBindControl[T any](c *Content, id string, v T) error {
 	})
 }
 
-func ContentMount[P, S any](c *Content, e ecs.Entity, d *html.Definition[P, S], p P, s S, key uint64) (ecs.Entity, error) {
+func (c *Content) Mount[P, S any](e ecs.Entity, d *html.Definition[P, S], p P, s S, key uint64) (ecs.Entity, error) {
 	if !c.owns(e) {
 		return 0, ErrOwnership
 	}
-	root, err := html.MountComponent(c.context.runtime.world, e, d, p, s, key)
+	root, err := d.MountComponent(c.context.runtime.world, e, p, s, key)
 	if err == nil {
 		c.adopt(root)
 	}
 	return root, err
 }
-func ContentUpdateState[P, S any](c *Content, e ecs.Entity, update func(*S)) bool {
+func (c *Content) UpdateState[P, S any](e ecs.Entity, update func(*S)) bool {
 	return c.owns(e) && html.UpdateComponentState[P, S](c.context.runtime.world, e, update)
 }
 func (c *Content) Unmount(e ecs.Entity) bool {
@@ -319,7 +319,7 @@ func (c *Content) Unmount(e ecs.Entity) bool {
 
 // ImageProvider and fonts are installed on owned surfaces rather than globally.
 func (c *Content) SurfaceFonts(e ecs.Entity, font, bold *text.Font) {
-	if surface := ContentMut[html.Surface](c, e); surface != nil {
+	if surface := c.Mut[html.Surface](e); surface != nil {
 		surface.Font, surface.BoldFont = font, bold
 	}
 }

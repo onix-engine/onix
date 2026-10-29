@@ -27,15 +27,15 @@ type testAccessG struct{ Value int }
 func TestWorldSpawnQueryAndDespawn(t *testing.T) {
 	world := NewWorld()
 	aBundle := NewBundle(2)
-	Put(&aBundle, testPosition{X: 10, Y: 20})
-	Put(&aBundle, testVelocity{X: 2, Y: 3})
+	aBundle.Put(testPosition{X: 10, Y: 20})
+	aBundle.Put(testVelocity{X: 2, Y: 3})
 	a := world.Spawn(aBundle)
 	bBundle := NewBundle(1)
-	Put(&bBundle, testPosition{X: -5, Y: 8})
+	bBundle.Put(testPosition{X: -5, Y: 8})
 	b := world.Spawn(bBundle)
 
 	var moved []Entity
-	for entity, access := range Query2[testPosition, testVelocity](world).All {
+	for entity, access := range world.Query2[testPosition, testVelocity]().All {
 		pos := access.A.Mut()
 		vel := access.B.Mut()
 
@@ -47,11 +47,11 @@ func TestWorldSpawnQueryAndDespawn(t *testing.T) {
 	if len(moved) != 1 || moved[0] != a {
 		t.Fatalf("expected only entity %d to match query, got %v", a, moved)
 	}
-	pos, ok := Get[testPosition](world, a)
+	pos, ok := world.Get[testPosition](a)
 	if !ok || pos.X != 12 || pos.Y != 23 {
 		t.Fatalf("unexpected updated position: %#v ok=%v", pos, ok)
 	}
-	if Has[testVelocity](world, b) {
+	if world.Has[testVelocity](b) {
 		t.Fatalf("expected entity %d to have no velocity", b)
 	}
 
@@ -59,7 +59,7 @@ func TestWorldSpawnQueryAndDespawn(t *testing.T) {
 	if world.IsAlive(a) {
 		t.Fatalf("expected entity %d to be despawned", a)
 	}
-	if _, ok := Get[testPosition](world, a); ok {
+	if _, ok := world.Get[testPosition](a); ok {
 		t.Fatalf("expected despawned entity %d to have no position", a)
 	}
 }
@@ -67,8 +67,8 @@ func TestWorldSpawnQueryAndDespawn(t *testing.T) {
 func TestPreparedBundleCanBeReusedAndIsWorldBound(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(2)
-	Put(&bundle, testVelocity{X: 3})
-	Put(&bundle, testPosition{X: 7})
+	bundle.Put(testVelocity{X: 3})
+	bundle.Put(testPosition{X: 7})
 	prepared := world.PrepareBundle(bundle)
 	first := world.SpawnPrepared(prepared)
 	second := world.SpawnPrepared(prepared)
@@ -76,7 +76,7 @@ func TestPreparedBundleCanBeReusedAndIsWorldBound(t *testing.T) {
 		t.Fatalf("prepared spawns changed entity count to %d", world.EntityCount())
 	}
 	for _, entity := range []Entity{first, second} {
-		if !Has[testPosition](world, entity) || !Has[testVelocity](world, entity) {
+		if !world.Has[testPosition](entity) || !world.Has[testVelocity](entity) {
 			t.Fatalf("prepared spawn %d is missing components", entity)
 		}
 	}
@@ -96,33 +96,29 @@ func TestWorldStateAPIsPanicForNilWorld(t *testing.T) {
 		"change tick":          func() { world.ChangeTick() },
 		"entity slots":         func() { world.EntitySlots() },
 		"changes since":        func() { world.ChangesSince(0) },
-		"resource change tick": func() { ResourceChangeTick[int](world) },
-		"component revision":   func() { ComponentRevision[testPosition](world) },
-		"message scratch":      func() { MessageScratch[testLocalTag, int](world) },
+		"resource change tick": func() { world.ResourceChangeTick[int]() },
+		"component revision":   func() { world.ComponentRevision[testPosition]() },
+		"message scratch":      func() { world.MessageScratch[testLocalTag, int]() },
 		"despawn":              func() { world.Despawn(0) },
 		"is alive":             func() { world.IsAlive(0) },
 		"entity count":         func() { world.EntityCount() },
 		"entity slot":          func() { world.Slot(0) },
 		"entity by slot":       func() { world.EntityBySlot(EntitySlot{}) },
-		"insert":               func() { _ = Insert(world, Entity(0), testPosition{}) },
-		"remove":               func() { Remove[testPosition](world, 0) },
-		"has":                  func() { Has[testPosition](world, 0) },
-		"has slot":             func() { HasSlot[testPosition](world, EntitySlot{}) },
-		"get":                  func() { Get[testPosition](world, 0) },
-		"get slot":             func() { GetSlot[testPosition](world, EntitySlot{}) },
-		"get ref":              func() { GetRef[testPosition](world, 0) },
-		"get ref slot":         func() { GetRefSlot[testPosition](world, EntitySlot{}) },
-		"get mut":              func() { GetMut[testPosition](world, 0) },
-		"get mut slot":         func() { GetMutSlot[testPosition](world, EntitySlot{}) },
-		"query":                func() { Query[testPosition](world) },
+		"insert":               func() { _ = world.Insert(Entity(0), testPosition{}) },
+		"remove":               func() { world.Remove[testPosition](0) },
+		"has":                  func() { world.Has[testPosition](0) },
+		"get":                  func() { world.Get[testPosition](0) },
+		"get ref":              func() { world.GetRef[testPosition](0) },
+		"get mut":              func() { world.GetMut[testPosition](0) },
+		"query":                func() { world.Query[testPosition]() },
 		"commands":             func() { world.Commands() },
 		"flush commands":       func() { _ = world.FlushCommands() },
-		"insert resource":      func() { InsertResource(world, 1) },
-		"get resource":         func() { GetResource[int](world) },
+		"insert resource":      func() { world.InsertResource(1) },
+		"get resource":         func() { world.GetResource[int]() },
 		"advance messages": func() {
-			AdvanceMessages(world)
+			world.AdvanceMessages()
 		},
-		"frame scratch": func() { FrameScratch[testLocalTag, int](world) },
+		"frame scratch": func() { world.FrameScratch[testLocalTag, int]() },
 	}
 	for name, check := range checks {
 		t.Run(name, func(t *testing.T) {
@@ -138,13 +134,13 @@ func TestWorldStateAPIsPanicForNilWorld(t *testing.T) {
 
 func TestResourcesAndMessages(t *testing.T) {
 	world := NewWorld()
-	InsertResource(world, "onix")
-	if name, ok := GetResource[string](world); !ok || name != "onix" {
+	world.InsertResource("onix")
+	if name, ok := world.GetResource[string](); !ok || name != "onix" {
 		t.Fatalf("unexpected resource: %q ok=%v", name, ok)
 	}
 
-	WriteMessage(world, 1)
-	WriteMessage(world, 2)
+	world.WriteMessage(1)
+	world.WriteMessage(2)
 	var first MessageReader[int]
 	var second MessageReader[int]
 	if got := first.Read(world); len(got) != 2 || got[0] != 1 || got[1] != 2 {
@@ -157,13 +153,13 @@ func TestResourcesAndMessages(t *testing.T) {
 		t.Fatalf("expected first reader to have no unread messages: %v", got)
 	}
 	buffer := make([]int, 0, 2)
-	WriteMessage(world, 3)
+	world.WriteMessage(3)
 	if got := first.ReadInto(world, buffer); len(got) != 1 || got[0] != 3 {
 		t.Fatalf("unexpected ReadInto messages: %v", got)
 	}
 
-	AdvanceMessages(world)
-	WriteMessage(world, 4)
+	world.AdvanceMessages()
+	world.WriteMessage(4)
 	if got := first.Read(world); len(got) != 1 || got[0] != 4 {
 		t.Fatalf("unexpected next-frame messages: %v", got)
 	}
@@ -171,9 +167,9 @@ func TestResourcesAndMessages(t *testing.T) {
 
 func TestMessageReaderAllStopsWithoutDiscardingUnreadMessages(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	WriteMessage(world, 2)
-	WriteMessage(world, 3)
+	world.WriteMessage(1)
+	world.WriteMessage(2)
+	world.WriteMessage(3)
 
 	var reader MessageReader[int]
 	var first []int
@@ -198,10 +194,10 @@ func TestMessageReaderAllStopsWithoutDiscardingUnreadMessages(t *testing.T) {
 
 func TestMessageReaderAllTraversesBothFrameBuffers(t *testing.T) {
 	world := NewWorld()
-	WriteMessage(world, 1)
-	WriteMessage(world, 2)
-	AdvanceMessages(world)
-	WriteMessage(world, 3)
+	world.WriteMessage(1)
+	world.WriteMessage(2)
+	world.AdvanceMessages()
+	world.WriteMessage(3)
 
 	var reader MessageReader[int]
 	var messages []int
@@ -215,11 +211,11 @@ func TestMessageReaderAllTraversesBothFrameBuffers(t *testing.T) {
 
 func TestSpawner2CreatesTypedComponents(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner2[testPosition, testVelocity](world)
+	spawner := world.NewSpawner2[testPosition, testVelocity]()
 	entity := spawner.Spawn(testPosition{X: 4}, testVelocity{Y: 7})
 
-	position, positionOK := Get[testPosition](world, entity)
-	velocity, velocityOK := Get[testVelocity](world, entity)
+	position, positionOK := world.Get[testPosition](entity)
+	velocity, velocityOK := world.Get[testVelocity](entity)
 	if !positionOK || !velocityOK || position.X != 4 || velocity.Y != 7 {
 		t.Fatalf("unexpected spawned components: position=%+v velocity=%+v", position, velocity)
 	}
@@ -231,25 +227,25 @@ func TestSpawnerRejectsDuplicateComponentTypes(t *testing.T) {
 			t.Fatal("expected duplicate spawner components to panic")
 		}
 	}()
-	NewSpawner2[testPosition, testPosition](NewWorld())
+	NewWorld().NewSpawner2[testPosition, testPosition]()
 }
 
 func TestReadReferencesDoNotMarkComponentsChanged(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	entity := spawner.Spawn(testPosition{X: 9})
 	_, meta, _ := world.entityMeta(entity)
-	column := componentColumn[testPosition](world.archetypes[meta.archetypeID], registerComponent[testPosition](world))
+	column := world.archetypes[meta.archetypeID].componentColumn[testPosition](world.registerComponent[testPosition]())
 	before := column.changed[int(meta.row)]
 
-	for _, access := range Query[testPosition](world).All {
+	for _, access := range world.Query[testPosition]().All {
 		position := access.Ref()
 
 		if position.X != 9 {
 			t.Fatalf("unexpected read reference: %+v", position)
 		}
 	}
-	if ok := GetRef[testPosition](world, entity); ok == nil {
+	if ok := world.GetRef[testPosition](entity); ok == nil {
 		t.Fatal("expected entity read reference")
 	}
 	if after := column.changed[int(meta.row)]; after != before {
@@ -260,14 +256,14 @@ func TestReadReferencesDoNotMarkComponentsChanged(t *testing.T) {
 func TestEntityGenerationRejectsStaleEntity(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	stale := world.Spawn(bundle)
 	if !world.Despawn(stale) {
 		t.Fatal("expected despawn to succeed")
 	}
 
 	replacementBundle := NewBundle(1)
-	Put(&replacementBundle, testPosition{X: 7})
+	replacementBundle.Put(testPosition{X: 7})
 	replacement := world.Spawn(replacementBundle)
 	if stale == replacement {
 		t.Fatal("expected reused entity index to have a new generation")
@@ -275,17 +271,30 @@ func TestEntityGenerationRejectsStaleEntity(t *testing.T) {
 	if world.IsAlive(stale) {
 		t.Fatal("stale entity must remain invalid")
 	}
-	if position, ok := Get[testPosition](world, replacement); !ok || position.X != 7 {
+	if position, ok := world.Get[testPosition](replacement); !ok || position.X != 7 {
 		t.Fatalf("unexpected replacement component: %#v ok=%v", position, ok)
 	}
 }
 
-func TestEntitySlotRejectsStaleAndForeignWorlds(t *testing.T) {
+func TestEntitySlotBindsWorldAndRejectsEmptyAndStaleEntities(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{X: 4})
+	bundle.Put(testPosition{X: 4})
 	entity := world.Spawn(bundle)
 	slot := world.Slot(entity)
+	assertMissing := func(slot EntitySlot) {
+		t.Helper()
+		if slot.Has[testPosition]() {
+			t.Fatal("empty or stale slot has a component")
+		}
+		if value, ok := slot.Get[testPosition](); ok || value != (testPosition{}) {
+			t.Fatalf("empty or stale slot read = %+v/%v", value, ok)
+		}
+		if slot.GetRef[testPosition]() != nil || slot.GetMut[testPosition]() != nil {
+			t.Fatal("empty or stale slot returned a component pointer")
+		}
+	}
+	assertMissing(EntitySlot{})
 
 	if !slot.Valid() {
 		t.Fatal("alive entity slot must be valid")
@@ -296,7 +305,7 @@ func TestEntitySlotRejectsStaleAndForeignWorlds(t *testing.T) {
 	if got, ok := world.EntityBySlot(slot); !ok || got != entity {
 		t.Fatalf("slot resolved to %d/%v, want %d/true", got, ok, entity)
 	}
-	if slot.Entity() != entity || !HasSlot[testPosition](world, slot) {
+	if slot.Entity() != entity || !slot.Has[testPosition]() {
 		t.Fatalf("slot does not expose entity %d with its component", entity)
 	}
 	if got, ok := NewWorld().EntityBySlot(slot); ok || got != 0 {
@@ -308,17 +317,26 @@ func TestEntitySlotRejectsStaleAndForeignWorlds(t *testing.T) {
 	if got, ok := world.EntityBySlot(foreignSlot); ok || got != 0 {
 		t.Fatalf("world accepted a foreign slot as %d/%v", got, ok)
 	}
-	if HasSlot[testPosition](foreign, slot) {
-		t.Fatal("foreign world found a slot component")
+	if foreignEntity != entity {
+		t.Fatal("test requires identical handles in different worlds")
 	}
-	if _, ok := GetSlot[testPosition](foreign, slot); ok {
-		t.Fatal("foreign world read a slot component")
+	foreignSlot.MustMut[testPosition]().X = 9
+	tick, version := world.ChangeTick(), world.ComponentVersion[testPosition]()
+	if value, ok := slot.Get[testPosition](); !ok || value.X != 4 {
+		t.Fatalf("slot read from wrong world: %+v/%v", value, ok)
 	}
-	if ok := GetRefSlot[testPosition](foreign, slot); ok != nil {
-		t.Fatal("foreign world read a slot component reference")
+	if value := slot.GetRef[testPosition](); value == nil || value.X != 4 {
+		t.Fatalf("slot reference came from wrong world: %+v", value)
 	}
-	if ok := GetMutSlot[testPosition](foreign, slot); ok != nil {
-		t.Fatal("foreign world read a mutable slot component reference")
+	if world.ChangeTick() != tick || world.ComponentVersion[testPosition]() != version {
+		t.Fatal("slot reads marked the component changed")
+	}
+	slot.GetMut[testPosition]().X = 5
+	if value := foreignSlot.GetRef[testPosition](); value.X != 9 {
+		t.Fatal("slot mutation affected a different world")
+	}
+	if world.ChangeTick() <= tick || world.ComponentVersion[testPosition]() <= version {
+		t.Fatal("slot mutation did not mark the component changed")
 	}
 
 	if !world.Despawn(entity) {
@@ -327,11 +345,13 @@ func TestEntitySlotRejectsStaleAndForeignWorlds(t *testing.T) {
 	if got, ok := world.EntityBySlot(slot); ok || got != 0 {
 		t.Fatalf("stale slot resolved after despawn to %d/%v", got, ok)
 	}
+	assertMissing(slot)
 
 	replacement := world.Spawn(bundle)
 	if got, ok := world.EntityBySlot(slot); ok || got != 0 {
 		t.Fatalf("stale slot resolved after index reuse to %d/%v (replacement %d)", got, ok, replacement)
 	}
+	assertMissing(slot)
 	if got, ok := world.EntityBySlot(world.Slot(replacement)); !ok || got != replacement {
 		t.Fatalf("replacement slot resolved to %d/%v, want %d/true", got, ok, replacement)
 	}
@@ -340,7 +360,7 @@ func TestEntitySlotRejectsStaleAndForeignWorlds(t *testing.T) {
 func TestEntitySlotLookupDoesNotAllocate(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 	slot := world.Slot(entity)
 	if allocations := testing.AllocsPerRun(100, func() {
@@ -350,11 +370,11 @@ func TestEntitySlotLookupDoesNotAllocate(t *testing.T) {
 	}); allocations != 0 {
 		t.Fatalf("slot lookup allocated %.0f objects, want 0", allocations)
 	}
-	if position, ok := GetSlot[testPosition](world, slot); !ok || position != (testPosition{}) {
+	if position, ok := slot.Get[testPosition](); !ok || position != (testPosition{}) {
 		t.Fatalf("slot component read = %+v/%v", position, ok)
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
-		position := GetMutSlot[testPosition](world, slot)
+		position := slot.GetMut[testPosition]()
 		if position == nil {
 			t.Fatal("slot mutable component read failed")
 		}
@@ -366,20 +386,20 @@ func TestEntitySlotLookupDoesNotAllocate(t *testing.T) {
 func TestInsertAndRemoveMoveEntityBetweenArchetypes(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{X: 1})
+	bundle.Put(testPosition{X: 1})
 	entity := world.Spawn(bundle)
 
-	if err := Insert(world, entity, testVelocity{X: 2}); err != nil {
+	if err := world.Insert(entity, testVelocity{X: 2}); err != nil {
 		t.Fatalf("insert velocity: %v", err)
 	}
-	if !Has[testVelocity](world, entity) {
+	if !world.Has[testVelocity](entity) {
 		t.Fatal("expected inserted velocity")
 	}
-	removed, ok := Remove[testPosition](world, entity)
+	removed, ok := world.Remove[testPosition](entity)
 	if !ok || removed.X != 1 {
 		t.Fatalf("unexpected removed position: %#v ok=%v", removed, ok)
 	}
-	if Has[testPosition](world, entity) {
+	if world.Has[testPosition](entity) {
 		t.Fatal("expected position to be removed")
 	}
 }
@@ -387,7 +407,7 @@ func TestInsertAndRemoveMoveEntityBetweenArchetypes(t *testing.T) {
 func TestStructuralMutationDuringQueryPanics(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 
 	defer func() {
@@ -395,31 +415,31 @@ func TestStructuralMutationDuringQueryPanics(t *testing.T) {
 			t.Fatal("expected structural mutation during query to panic")
 		}
 	}()
-	for _, access := range Query[testPosition](world).All {
+	for _, access := range world.Query[testPosition]().All {
 		access.Mut()
 
-		_ = Insert(world, entity, testVelocity{})
+		_ = world.Insert(entity, testVelocity{})
 	}
 }
 
 func TestCommandsApplyAfterQuery(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 
-	for _, access := range Query[testPosition](world).All {
+	for _, access := range world.Query[testPosition]().All {
 		access.Mut()
 
-		CommandInsert(world.Commands(), entity, testVelocity{X: 3})
+		world.Commands().Insert(entity, testVelocity{X: 3})
 	}
-	if Has[testVelocity](world, entity) {
+	if world.Has[testVelocity](entity) {
 		t.Fatal("deferred component should not exist before flush")
 	}
 	if err := world.FlushCommands(); err != nil {
 		t.Fatalf("flush commands: %v", err)
 	}
-	if velocity, ok := Get[testVelocity](world, entity); !ok || velocity.X != 3 {
+	if velocity, ok := world.Get[testVelocity](entity); !ok || velocity.X != 3 {
 		t.Fatalf("unexpected deferred component: %#v ok=%v", velocity, ok)
 	}
 }
@@ -427,33 +447,33 @@ func TestCommandsApplyAfterQuery(t *testing.T) {
 func TestCommandsRemoveAndReservedQueueAvoidStableFrameAllocations(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 	commands := world.Commands()
 	commands.Reserve(1)
 
-	CommandInsert(commands, entity, testVelocity{X: 3})
+	commands.Insert(entity, testVelocity{X: 3})
 	if err := world.FlushCommands(); err != nil {
 		t.Fatalf("flush insert command: %v", err)
 	}
-	if !Has[testVelocity](world, entity) {
+	if !world.Has[testVelocity](entity) {
 		t.Fatal("insert command did not add velocity")
 	}
 
-	CommandRemove[testVelocity](commands, entity)
+	commands.Remove[testVelocity](entity)
 	if err := world.FlushCommands(); err != nil {
 		t.Fatalf("flush remove command: %v", err)
 	}
-	if Has[testVelocity](world, entity) {
+	if world.Has[testVelocity](entity) {
 		t.Fatal("remove command did not remove velocity")
 	}
 
-	CommandInsert(commands, entity, testVelocity{X: 4})
+	commands.Insert(entity, testVelocity{X: 4})
 	if err := world.FlushCommands(); err != nil {
 		t.Fatalf("warm command flush: %v", err)
 	}
 	allocations := testing.AllocsPerRun(100, func() {
-		CommandInsert(commands, entity, testVelocity{X: 5})
+		commands.Insert(entity, testVelocity{X: 5})
 		if err := world.FlushCommands(); err != nil {
 			t.Fatalf("stable command flush: %v", err)
 		}
@@ -466,15 +486,15 @@ func TestCommandsRemoveAndReservedQueueAvoidStableFrameAllocations(t *testing.T)
 func TestQueryWithAndWithoutFilters(t *testing.T) {
 	world := NewWorld()
 	firstBundle := NewBundle(2)
-	Put(&firstBundle, testPosition{X: 1})
-	Put(&firstBundle, testVelocity{})
+	firstBundle.Put(testPosition{X: 1})
+	firstBundle.Put(testVelocity{})
 	first := world.Spawn(firstBundle)
 	secondBundle := NewBundle(1)
-	Put(&secondBundle, testPosition{X: 2})
+	secondBundle.Put(testPosition{X: 2})
 	world.Spawn(secondBundle)
 
 	var matched []Entity
-	for entity, access := range Query[testPosition](world, With[testVelocity]()).All {
+	for entity, access := range world.Query[testPosition](With[testVelocity]()).All {
 		access.Mut()
 
 		matched = append(matched, entity)
@@ -484,7 +504,7 @@ func TestQueryWithAndWithoutFilters(t *testing.T) {
 	}
 
 	matched = matched[:0]
-	for entity, access := range Query[testPosition](world, Without[testVelocity]()).All {
+	for entity, access := range world.Query[testPosition](Without[testVelocity]()).All {
 		access.Mut()
 
 		matched = append(matched, entity)
@@ -497,18 +517,18 @@ func TestQueryWithAndWithoutFilters(t *testing.T) {
 func TestSchedulePersistsSystemLocalsAndFlushesCommands(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 	var runs []int
 	schedule := NewSchedule("locals")
 	if err := schedule.Add(SystemConfig{
 		Name: "stateful",
 		System: func(context *SystemContext) error {
-			count := Local[testLocalTag, int](context)
+			count := context.Local[testLocalTag, int]()
 			*count++
 			runs = append(runs, *count)
 			if *count == 1 {
-				CommandInsert(context.Commands, entity, testVelocity{X: 4})
+				context.Commands.Insert(entity, testVelocity{X: 4})
 			}
 			return nil
 		},
@@ -524,7 +544,7 @@ func TestSchedulePersistsSystemLocalsAndFlushesCommands(t *testing.T) {
 	if len(runs) != 2 || runs[0] != 1 || runs[1] != 2 {
 		t.Fatalf("unexpected local state: %v", runs)
 	}
-	if velocity, ok := Get[testVelocity](world, entity); !ok || velocity.X != 4 {
+	if velocity, ok := world.Get[testVelocity](entity); !ok || velocity.X != 4 {
 		t.Fatalf("unexpected scheduled command result: %#v ok=%v", velocity, ok)
 	}
 }
@@ -535,7 +555,7 @@ func TestSystemConfigRunReusesContextWithoutAllocating(t *testing.T) {
 	system := SystemConfig{
 		Name: "direct_context",
 		System: func(context *SystemContext) error {
-			count := Local[testLocalTag, int](context)
+			count := context.Local[testLocalTag, int]()
 			*count++
 			runs = *count
 			return nil
@@ -563,9 +583,9 @@ func TestSystemConfigRunReusesContextWithoutAllocating(t *testing.T) {
 func TestCommandSpawnReservesEntityForFollowingCommands(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{X: 5})
-	entity := CommandSpawn(world.Commands(), bundle)
-	CommandInsert(world.Commands(), entity, testVelocity{X: 6})
+	bundle.Put(testPosition{X: 5})
+	entity := world.Commands().Spawn(bundle)
+	world.Commands().Insert(entity, testVelocity{X: 6})
 	if world.IsAlive(entity) {
 		t.Fatal("reserved entity must not be alive before flush")
 	}
@@ -575,7 +595,7 @@ func TestCommandSpawnReservesEntityForFollowingCommands(t *testing.T) {
 	if !world.IsAlive(entity) {
 		t.Fatal("spawned entity should be alive after flush")
 	}
-	if velocity, ok := Get[testVelocity](world, entity); !ok || velocity.X != 6 {
+	if velocity, ok := world.Get[testVelocity](entity); !ok || velocity.X != 6 {
 		t.Fatalf("unexpected component inserted after spawn: %#v ok=%v", velocity, ok)
 	}
 }
@@ -584,16 +604,16 @@ func TestPutEntityMaterializesBeforeArchetypeCommit(t *testing.T) {
 	world := NewWorld()
 	var nested Entity
 	bundle := NewBundle(1)
-	PutEntity(&bundle, func(Entity) testPosition {
+	bundle.PutEntity(func(Entity) testPosition {
 		inner := NewBundle(1)
-		Put(&inner, testPosition{X: 2})
+		inner.Put(testPosition{X: 2})
 		nested = world.Spawn(inner)
 		return testPosition{X: 1}
 	})
 	outer := world.Spawn(bundle)
 
-	outerPosition, outerOK := Get[testPosition](world, outer)
-	nestedPosition, nestedOK := Get[testPosition](world, nested)
+	outerPosition, outerOK := world.Get[testPosition](outer)
+	nestedPosition, nestedOK := world.Get[testPosition](nested)
 	if !outerOK || !nestedOK || outerPosition.X != 1 || nestedPosition.X != 2 {
 		t.Fatalf("reentrant spawn mismatched rows: outer=%+v/%v nested=%+v/%v", outerPosition, outerOK, nestedPosition, nestedOK)
 	}
@@ -602,7 +622,7 @@ func TestPutEntityMaterializesBeforeArchetypeCommit(t *testing.T) {
 func TestPutEntityPanicRollsBackReservation(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	PutEntity(&bundle, func(Entity) testPosition {
+	bundle.PutEntity(func(Entity) testPosition {
 		panic("build failed")
 	})
 
@@ -619,7 +639,7 @@ func TestPutEntityPanicRollsBackReservation(t *testing.T) {
 		t.Fatalf("failed spawn leaked reservation: count=%d entities=%+v free=%v", world.EntityCount(), world.entities, world.free)
 	}
 	matched := 0
-	for range Query[testPosition](world).All {
+	for range world.Query[testPosition]().All {
 		matched++
 	}
 	if matched != 0 {
@@ -637,8 +657,8 @@ func TestSystemErrorDiscardsCommandsAndReservation(t *testing.T) {
 		System: func(context *SystemContext) error {
 			if shouldFail {
 				bundle := NewBundle(1)
-				Put(&bundle, testPosition{X: 1})
-				reserved = CommandSpawn(context.Commands, bundle)
+				bundle.Put(testPosition{X: 1})
+				reserved = context.Commands.Spawn(bundle)
 				return errors.New("failed")
 			}
 			return nil
@@ -670,13 +690,13 @@ func TestSystemErrorDiscardsCommandsAndReservation(t *testing.T) {
 func TestCommandPanicDiscardsRemainingReservations(t *testing.T) {
 	world := NewWorld()
 	failed := NewBundle(1)
-	PutEntity(&failed, func(Entity) testPosition {
+	failed.PutEntity(func(Entity) testPosition {
 		panic("build failed")
 	})
-	failedEntity := CommandSpawn(world.Commands(), failed)
+	failedEntity := world.Commands().Spawn(failed)
 	valid := NewBundle(1)
-	Put(&valid, testPosition{X: 2})
-	validEntity := CommandSpawn(world.Commands(), valid)
+	valid.Put(testPosition{X: 2})
+	validEntity := world.Commands().Spawn(valid)
 
 	func() {
 		defer func() {
@@ -696,7 +716,7 @@ func TestScheduleRejectsDifferentWorld(t *testing.T) {
 	if err := schedule.Add(SystemConfig{
 		Name: "local",
 		System: func(context *SystemContext) error {
-			*Local[testLocalTag, int](context)++
+			*context.Local[testLocalTag, int]()++
 			return nil
 		},
 	}); err != nil {
@@ -722,8 +742,8 @@ func TestScheduleOrderReturnsCompileError(t *testing.T) {
 
 func TestScheduleOrderingAndConditions(t *testing.T) {
 	world := NewWorld()
-	InsertResource(world, &[]string{})
-	runLog, _ := GetResource[*[]string](world)
+	world.InsertResource(&[]string{})
+	runLog, _ := world.GetResource[*[]string]()
 
 	schedule := NewSchedule("update")
 	err := schedule.Add(SystemConfig{
@@ -776,7 +796,7 @@ func TestScheduleOrderingAndConditions(t *testing.T) {
 func TestAddedAndChangedFiltersTrackSystemRuns(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{X: 1})
+	bundle.Put(testPosition{X: 1})
 	entity := world.Spawn(bundle)
 
 	type changeSnapshot struct {
@@ -789,10 +809,10 @@ func TestAddedAndChangedFiltersTrackSystemRuns(t *testing.T) {
 		Name: "observe",
 		System: func(context *SystemContext) error {
 			var snapshot changeSnapshot
-			for range Query[testPosition](world, Added[testPosition](context)).All {
+			for range world.Query[testPosition](context.Added[testPosition]()).All {
 				snapshot.added++
 			}
-			for range Query[testPosition](world, Changed[testPosition](context)).All {
+			for range world.Query[testPosition](context.Changed[testPosition]()).All {
 				snapshot.changed++
 			}
 			snapshots = append(snapshots, snapshot)
@@ -808,7 +828,7 @@ func TestAddedAndChangedFiltersTrackSystemRuns(t *testing.T) {
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("unchanged run: %v", err)
 	}
-	position := GetMut[testPosition](world, entity)
+	position := world.GetMut[testPosition](entity)
 	if position == nil {
 		t.Fatal("expected mutable position")
 	}
@@ -816,7 +836,7 @@ func TestAddedAndChangedFiltersTrackSystemRuns(t *testing.T) {
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("mutated run: %v", err)
 	}
-	if err := Insert(world, entity, testPosition{X: 3}); err != nil {
+	if err := world.Insert(entity, testPosition{X: 3}); err != nil {
 		t.Fatalf("replace position: %v", err)
 	}
 	if err := schedule.Run(world); err != nil {
@@ -837,7 +857,7 @@ func TestAddedAndChangedFiltersTrackSystemRuns(t *testing.T) {
 func TestMutableQueryMarksChanged(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	world.Spawn(bundle)
 
 	var changed []int
@@ -846,7 +866,7 @@ func TestMutableQueryMarksChanged(t *testing.T) {
 		Name: "observe",
 		System: func(context *SystemContext) error {
 			count := 0
-			for range Query[testPosition](world, Changed[testPosition](context)).All {
+			for range world.Query[testPosition](context.Changed[testPosition]()).All {
 				count++
 			}
 			changed = append(changed, count)
@@ -862,7 +882,7 @@ func TestMutableQueryMarksChanged(t *testing.T) {
 		t.Fatalf("unchanged run: %v", err)
 	}
 
-	for _, access := range Query[testPosition](world).All {
+	for _, access := range world.Query[testPosition]().All {
 		access.Mut()
 	}
 	if err := schedule.Run(world); err != nil {
@@ -875,17 +895,17 @@ func TestMutableQueryMarksChanged(t *testing.T) {
 
 func TestQueryAccessMarksOnlyRequestedMutableComponents(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner2[testPosition, testVelocity](world)
+	spawner := world.NewSpawner2[testPosition, testVelocity]()
 	entity := spawner.Spawn(testPosition{X: 1}, testVelocity{X: 2})
 	_, meta, _ := world.entityMeta(entity)
 	archetype := world.archetypes[meta.archetypeID]
 	positionID := world.componentTypes[reflect.TypeFor[testPosition]()]
 	velocityID := world.componentTypes[reflect.TypeFor[testVelocity]()]
-	positionColumn := componentColumn[testPosition](archetype, positionID)
-	velocityColumn := componentColumn[testVelocity](archetype, velocityID)
+	positionColumn := archetype.componentColumn[testPosition](positionID)
+	velocityColumn := archetype.componentColumn[testVelocity](velocityID)
 	positionTick, velocityTick := positionColumn.changed[int(meta.row)], velocityColumn.changed[int(meta.row)]
 
-	for _, access := range Query2[testPosition, testVelocity](world).All {
+	for _, access := range world.Query2[testPosition, testVelocity]().All {
 		position := access.A
 		velocity := access.B
 
@@ -902,16 +922,16 @@ func TestQueryAccessMarksOnlyRequestedMutableComponents(t *testing.T) {
 func TestQueryAccessSupportsSevenComponents(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(7)
-	Put(&bundle, testPosition{})
-	Put(&bundle, testVelocity{})
-	Put(&bundle, testAccessC{})
-	Put(&bundle, testAccessD{})
-	Put(&bundle, testAccessE{})
-	Put(&bundle, testAccessF{})
-	Put(&bundle, testAccessG{})
+	bundle.Put(testPosition{})
+	bundle.Put(testVelocity{})
+	bundle.Put(testAccessC{})
+	bundle.Put(testAccessD{})
+	bundle.Put(testAccessE{})
+	bundle.Put(testAccessF{})
+	bundle.Put(testAccessG{})
 	world.Spawn(bundle)
 	matched := 0
-	for _, access := range Query7[testPosition, testVelocity, testAccessC, testAccessD, testAccessE, testAccessF, testAccessG](world).All {
+	for _, access := range world.Query7[testPosition, testVelocity, testAccessC, testAccessD, testAccessE, testAccessF, testAccessG]().All {
 		a := access.A
 		b := access.B
 		c := access.C
@@ -937,7 +957,7 @@ func TestQueryAccessSupportsSevenComponents(t *testing.T) {
 func TestArchetypeMovesPreserveComponentTicks(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	entity := world.Spawn(bundle)
 
 	var snapshots [][2]int
@@ -946,10 +966,10 @@ func TestArchetypeMovesPreserveComponentTicks(t *testing.T) {
 		Name: "observe",
 		System: func(context *SystemContext) error {
 			var added, changed int
-			for range Query[testPosition](world, Added[testPosition](context)).All {
+			for range world.Query[testPosition](context.Added[testPosition]()).All {
 				added++
 			}
-			for range Query[testPosition](world, Changed[testPosition](context)).All {
+			for range world.Query[testPosition](context.Changed[testPosition]()).All {
 				changed++
 			}
 			snapshots = append(snapshots, [2]int{added, changed})
@@ -964,13 +984,13 @@ func TestArchetypeMovesPreserveComponentTicks(t *testing.T) {
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("settle run: %v", err)
 	}
-	if err := Insert(world, entity, testVelocity{}); err != nil {
+	if err := world.Insert(entity, testVelocity{}); err != nil {
 		t.Fatalf("insert velocity: %v", err)
 	}
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("insert move run: %v", err)
 	}
-	if _, ok := Remove[testVelocity](world, entity); !ok {
+	if _, ok := world.Remove[testVelocity](entity); !ok {
 		t.Fatal("expected velocity removal")
 	}
 	if err := schedule.Run(world); err != nil {
@@ -990,13 +1010,13 @@ func TestArchetypeMovesPreserveComponentTicks(t *testing.T) {
 
 func TestArchetypeTransitionsAreCachedInBothDirections(t *testing.T) {
 	world := NewWorld()
-	spawner := NewSpawner1[testPosition](world)
+	spawner := world.NewSpawner1[testPosition]()
 	first := spawner.Spawn(testPosition{})
 	second := spawner.Spawn(testPosition{})
 	_, firstMeta, _ := world.entityMeta(first)
 	positionArchetype := world.archetypes[firstMeta.archetypeID]
 
-	if err := Insert(world, first, testVelocity{}); err != nil {
+	if err := world.Insert(first, testVelocity{}); err != nil {
 		t.Fatal(err)
 	}
 	velocityID := world.componentTypes[reflect.TypeFor[testVelocity]()]
@@ -1004,14 +1024,14 @@ func TestArchetypeTransitionsAreCachedInBothDirections(t *testing.T) {
 	if !ok {
 		t.Fatal("add transition was not cached")
 	}
-	if err := Insert(world, second, testVelocity{}); err != nil {
+	if err := world.Insert(second, testVelocity{}); err != nil {
 		t.Fatal(err)
 	}
 	_, secondMeta, _ := world.entityMeta(second)
 	if secondMeta.archetypeID != velocityArchetypeID {
 		t.Fatalf("cached add transition selected archetype %d, want %d", secondMeta.archetypeID, velocityArchetypeID)
 	}
-	if _, ok := Remove[testVelocity](world, first); !ok {
+	if _, ok := world.Remove[testVelocity](first); !ok {
 		t.Fatal("remove velocity")
 	}
 	velocityArchetype := world.archetypes[velocityArchetypeID]
@@ -1022,7 +1042,7 @@ func TestArchetypeTransitionsAreCachedInBothDirections(t *testing.T) {
 
 func TestResourceChangeDetection(t *testing.T) {
 	world := NewWorld()
-	InsertResource(world, 1)
+	world.InsertResource(1)
 
 	var snapshots [][2]bool
 	schedule := NewSchedule("resource_changes")
@@ -1030,8 +1050,8 @@ func TestResourceChangeDetection(t *testing.T) {
 		Name: "observe",
 		System: func(context *SystemContext) error {
 			snapshots = append(snapshots, [2]bool{
-				ResourceAdded[int](context),
-				ResourceChanged[int](context),
+				context.ResourceAdded[int](),
+				context.ResourceChanged[int](),
 			})
 			return nil
 		},
@@ -1041,17 +1061,17 @@ func TestResourceChangeDetection(t *testing.T) {
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("initial run: %v", err)
 	}
-	if value, ok := GetResource[int](world); !ok || value != 1 {
+	if value, ok := world.GetResource[int](); !ok || value != 1 {
 		t.Fatalf("unexpected resource: %d ok=%v", value, ok)
 	}
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("read-only run: %v", err)
 	}
-	InsertResource(world, 2)
+	world.InsertResource(2)
 	if err := schedule.Run(world); err != nil {
 		t.Fatalf("replacement run: %v", err)
 	}
-	value, ok := GetResourceMut[int](world)
+	value, ok := world.GetResourceMut[int]()
 	if !ok {
 		t.Fatal("expected mutable resource")
 	}
@@ -1074,7 +1094,7 @@ func TestResourceChangeDetection(t *testing.T) {
 func TestSkippedSystemRetainsLastRun(t *testing.T) {
 	world := NewWorld()
 	bundle := NewBundle(1)
-	Put(&bundle, testPosition{})
+	bundle.Put(testPosition{})
 	world.Spawn(bundle)
 
 	enabled := false
@@ -1084,7 +1104,7 @@ func TestSkippedSystemRetainsLastRun(t *testing.T) {
 		Name:  "observe",
 		RunIf: []Condition{func(*SystemContext) bool { return enabled }},
 		System: func(context *SystemContext) error {
-			for range Query[testPosition](world, Added[testPosition](context)).All {
+			for range world.Query[testPosition](context.Added[testPosition]()).All {
 				matched++
 			}
 			return nil

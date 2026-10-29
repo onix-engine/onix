@@ -92,7 +92,7 @@ func (c *ComponentEventContext[P, S]) UpdateState(update func(*S)) bool {
 	if c == nil || c.World == nil || update == nil {
 		return false
 	}
-	component := ecs.GetMut[Component[P, S]](c.World, c.Component)
+	component := c.World.GetMut[Component[P, S]](c.Component)
 	if component == nil {
 		return false
 	}
@@ -139,7 +139,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 	definition.runtime = &htmlDefinitionRuntime{template: compiled}
 	definition.runtime.mountChild = func(world *ecs.World, parent ecs.Entity, slot string, key uint64, values any) (ecs.Entity, error) {
 		child := values.(*htmlComponentChildValues[P, S])
-		return MountComponentInto(world, parent, slot, definition, child.Props, child.State, key)
+		return definition.MountComponentInto(world, parent, slot, child.Props, child.State, key)
 	}
 	definition.runtime.updateChild = func(world *ecs.World, entity ecs.Entity, values any) {
 		// Initial state is used only on mount; keyed updates preserve local state.
@@ -149,7 +149,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		*values.(*htmlComponentChildValues[P, S]) = htmlComponentChildValues[P, S]{}
 	}
 	definition.runtime.render = func(world *ecs.World, entity ecs.Entity, instance *htmlComponentInstance) {
-		component := ecs.GetMut[Component[P, S]](world, entity)
+		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return
 		}
@@ -164,11 +164,11 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		reconcileHTMLComponentView(world, entity, instance, view)
 	}
 	definition.runtime.event = func(world *ecs.World, entity ecs.Entity, ref string, event Event, pointer *PointerEvent, emit bool) (Event, bool) {
-		component := ecs.GetMut[Component[P, S]](world, entity)
+		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return event, false
 		}
-		instance := ecs.GetMut[htmlComponentInstance](world, entity)
+		instance := world.GetMut[htmlComponentInstance](entity)
 		if instance == nil {
 			return event, false
 		}
@@ -193,7 +193,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 			pointer.Consume()
 		}
 		if emit {
-			ecs.WriteMessage(world, context.Event)
+			world.WriteMessage(context.Event)
 		}
 		return context.Event, context.stopPropagation
 	}
@@ -201,7 +201,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		if behavior.Mount == nil {
 			return
 		}
-		component := ecs.GetMut[Component[P, S]](world, entity)
+		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return
 		}
@@ -211,7 +211,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		if behavior.Update == nil {
 			return
 		}
-		component := ecs.GetMut[Component[P, S]](world, entity)
+		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return
 		}
@@ -221,7 +221,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		if behavior.Unmount == nil {
 			return
 		}
-		component := ecs.GetMut[Component[P, S]](world, entity)
+		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return
 		}
@@ -251,7 +251,7 @@ func DefineScoped[P, S any](template Template, cssText string, behavior Behavior
 
 // DefineScopedChild compiles content in its parent's CSS scope. The parent
 // retains the stylesheet, so replacing child templates does not republish CSS.
-func DefineScopedChild[P, S, CP, CS any](parent *Definition[P, S], template Template, behavior Behavior[CP, CS]) (*Definition[CP, CS], error) {
+func (parent *Definition[P, S]) DefineScopedChild[CP, CS any](template Template, behavior Behavior[CP, CS]) (*Definition[CP, CS], error) {
 	if parent == nil || !parent.ScopedCSS || parent.runtime == nil {
 		return nil, fmt.Errorf("ecs: scoped HTML child requires a scoped parent")
 	}
@@ -316,7 +316,7 @@ type htmlComponentChildValues[P, S any] struct {
 }
 
 // ComponentChild creates a keyed child component VNode for a slot.
-func ComponentChild[P, S any](key uint64, definition *Definition[P, S], props P, state S) ComponentVNode {
+func (definition *Definition[P, S]) ComponentChild(key uint64, props P, state S) ComponentVNode {
 	child := ComponentVNode{Key: key}
 	if definition != nil && definition.runtime != nil {
 		child.definition = definition.runtime
@@ -328,7 +328,7 @@ func ComponentChild[P, S any](key uint64, definition *Definition[P, S], props P,
 // AppendComponentChild appends a typed child directly to a View slot for this
 // render. The slot owns its parameter buffers and reuses them on later renders.
 // Call order determines child order; omitting a child on a render unmounts it.
-func AppendComponentChild[P, S any](v *View, slot string, key uint64, definition *Definition[P, S], props P, state S) bool {
+func (v *View) AppendComponentChild[P, S any](slot string, key uint64, definition *Definition[P, S], props P, state S) bool {
 	if definition == nil || definition.runtime == nil || !v.componentSlot(slot) {
 		return false
 	}
@@ -639,25 +639,25 @@ func joinHTMLComponentCSS(cssText, embedded string) string {
 
 // MountComponent appends a component's template roots to a page HTML
 // document and creates the typed ECS component instance.
-func MountComponent[P, S any](world *ecs.World, page ecs.Entity, definition *Definition[P, S], props P, state S, key uint64) (ecs.Entity, error) {
-	return mountHTMLComponentAt(world, page, 0, nil, definition, props, state, key, nil)
+func (definition *Definition[P, S]) MountComponent(world *ecs.World, page ecs.Entity, props P, state S, key uint64) (ecs.Entity, error) {
+	return definition.mountHTMLComponentAt(world, page, 0, nil, props, state, key, nil)
 }
 
 // HydrateComponent adopts one matching component root sequence already
 // retained by the page DOM. The sequence must be unique among the page's
 // direct children; dynamic values are reconciled on the first Sync pass.
-func HydrateComponent[P, S any](world *ecs.World, page ecs.Entity, definition *Definition[P, S], props P, state S, key uint64) (ecs.Entity, error) {
-	return hydrateHTMLComponentAt(world, page, 0, nil, definition, props, state, key)
+func (definition *Definition[P, S]) HydrateComponent(world *ecs.World, page ecs.Entity, props P, state S, key uint64) (ecs.Entity, error) {
+	return definition.hydrateHTMLComponentAt(world, page, 0, nil, props, state, key)
 }
 
 // MountComponentInto mounts a child component into a data-ref element of
 // an existing component. The child remains an independent ECS entity while
 // its roots participate in the parent's DOM subtree.
-func MountComponentInto[P, S any](world *ecs.World, parent ecs.Entity, slot string, definition *Definition[P, S], props P, state S, key uint64) (ecs.Entity, error) {
+func (definition *Definition[P, S]) MountComponentInto(world *ecs.World, parent ecs.Entity, slot string, props P, state S, key uint64) (ecs.Entity, error) {
 	if world == nil || parent == 0 {
 		return 0, fmt.Errorf("ecs: HTML component parent is invalid")
 	}
-	parentInstance, ok := ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, ok := world.Get[htmlComponentInstance](parent)
 	if !ok || parentInstance.Page == 0 {
 		return 0, fmt.Errorf("ecs: entity %d is not an HTML component", parent)
 	}
@@ -665,16 +665,16 @@ func MountComponentInto[P, S any](world *ecs.World, parent ecs.Entity, slot stri
 	if slotNode == nil || slotNode.Type != dom.ElementNode {
 		return 0, fmt.Errorf("ecs: HTML component slot %q is missing", slot)
 	}
-	return mountHTMLComponentAt(world, parentInstance.Page, parent, slotNode, definition, props, state, key, nil)
+	return definition.mountHTMLComponentAt(world, parentInstance.Page, parent, slotNode, props, state, key, nil)
 }
 
 // HydrateComponentInto adopts one matching child root sequence already
 // present in a component slot. It preserves the existing DOM node identity.
-func HydrateComponentInto[P, S any](world *ecs.World, parent ecs.Entity, slot string, definition *Definition[P, S], props P, state S, key uint64) (ecs.Entity, error) {
+func (definition *Definition[P, S]) HydrateComponentInto(world *ecs.World, parent ecs.Entity, slot string, props P, state S, key uint64) (ecs.Entity, error) {
 	if world == nil || parent == 0 {
 		return 0, fmt.Errorf("ecs: HTML component parent is invalid")
 	}
-	parentInstance, ok := ecs.Get[htmlComponentInstance](world, parent)
+	parentInstance, ok := world.Get[htmlComponentInstance](parent)
 	if !ok || parentInstance.Page == 0 {
 		return 0, fmt.Errorf("ecs: entity %d is not an HTML component", parent)
 	}
@@ -682,17 +682,17 @@ func HydrateComponentInto[P, S any](world *ecs.World, parent ecs.Entity, slot st
 	if slotNode == nil || slotNode.Type != dom.ElementNode {
 		return 0, fmt.Errorf("ecs: HTML component slot %q is missing", slot)
 	}
-	return hydrateHTMLComponentAt(world, parentInstance.Page, parent, slotNode, definition, props, state, key)
+	return definition.hydrateHTMLComponentAt(world, parentInstance.Page, parent, slotNode, props, state, key)
 }
 
-func hydrateHTMLComponentAt[P, S any](world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, definition *Definition[P, S], props P, state S, key uint64) (ecs.Entity, error) {
+func (definition *Definition[P, S]) hydrateHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, props P, state S, key uint64) (ecs.Entity, error) {
 	if world == nil {
 		return 0, fmt.Errorf("ecs: HTML component world is nil")
 	}
 	if definition == nil || definition.runtime == nil || definition.runtime.template == nil {
 		return 0, fmt.Errorf("ecs: HTML component definition is nil")
 	}
-	if err := ensureHTMLDefinitionScope(definition); err != nil {
+	if err := definition.ensureHTMLDefinitionScope(); err != nil {
 		return 0, err
 	}
 	root, err := Root(world, page)
@@ -710,17 +710,17 @@ func hydrateHTMLComponentAt[P, S any](world *ecs.World, page, parent ecs.Entity,
 	if err != nil {
 		return 0, err
 	}
-	return mountHTMLComponentAt(world, page, parent, container, definition, props, state, key, roots)
+	return definition.mountHTMLComponentAt(world, page, parent, container, props, state, key, roots)
 }
 
-func mountHTMLComponentAt[P, S any](world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, definition *Definition[P, S], props P, state S, key uint64, adoptedRoots []*dom.Node) (ecs.Entity, error) {
+func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, props P, state S, key uint64, adoptedRoots []*dom.Node) (ecs.Entity, error) {
 	if world == nil {
 		return 0, fmt.Errorf("ecs: HTML component world is nil")
 	}
 	if definition == nil || definition.runtime == nil || definition.runtime.template == nil {
 		return 0, fmt.Errorf("ecs: HTML component definition is nil")
 	}
-	if err := ensureHTMLDefinitionScope(definition); err != nil {
+	if err := definition.ensureHTMLDefinitionScope(); err != nil {
 		return 0, err
 	}
 	root, err := Root(world, page)
@@ -759,20 +759,20 @@ func mountHTMLComponentAt[P, S any](world *ecs.World, page, parent ecs.Entity, s
 	if ancestor == 0 {
 		ancestor = page
 	}
-	ecs.Put(&bundle, scene.Parent{Entity: ancestor})
-	ecs.Put(&bundle, Component[P, S]{Definition: definition, Props: props, State: state, Page: page, Parent: parent, Key: key})
-	ecs.Put(&bundle, instance)
+	bundle.Put(scene.Parent{Entity: ancestor})
+	bundle.Put(Component[P, S]{Definition: definition, Props: props, State: state, Page: page, Parent: parent, Key: key})
+	bundle.Put(instance)
 	entity := world.Spawn(bundle)
 	if err := attachHTMLComponentCSS(world, page, definition.runtime, definition.CSS); err != nil {
 		world.Despawn(entity)
 		return 0, err
 	}
-	if pageState := ecs.GetMut[htmlRenderState](world, page); pageState != nil {
+	if pageState := world.GetMut[htmlRenderState](page); pageState != nil {
 		pageState.IndexDirty = true
 		pageState.Revision++
 	}
 	if parent != 0 {
-		if parentInstance := ecs.GetMut[htmlComponentInstance](world, parent); parentInstance != nil {
+		if parentInstance := world.GetMut[htmlComponentInstance](parent); parentInstance != nil {
 			parentInstance.Children = append(parentInstance.Children, entity)
 		}
 	}
@@ -828,7 +828,7 @@ func htmlComponentHydrationRootMatches(actual, template *dom.Node) bool {
 	return actualHasRef && actualRef == templateRef
 }
 
-func ensureHTMLDefinitionScope[P, S any](definition *Definition[P, S]) error {
+func (definition *Definition[P, S]) ensureHTMLDefinitionScope() error {
 	if definition == nil || !definition.ScopedCSS || definition.runtime == nil {
 		return nil
 	}
@@ -849,7 +849,7 @@ func ensureHTMLDefinitionScope[P, S any](definition *Definition[P, S]) error {
 
 // UpdateComponentProps replaces typed props and schedules a render.
 func UpdateComponentProps[P, S any](world *ecs.World, entity ecs.Entity, props P) bool {
-	component := ecs.GetMut[Component[P, S]](world, entity)
+	component := world.GetMut[Component[P, S]](entity)
 	if component == nil {
 		return false
 	}
@@ -863,7 +863,7 @@ func UpdateComponentState[P, S any](world *ecs.World, entity ecs.Entity, update 
 	if update == nil {
 		return false
 	}
-	component := ecs.GetMut[Component[P, S]](world, entity)
+	component := world.GetMut[Component[P, S]](entity)
 	if component == nil {
 		return false
 	}
@@ -877,7 +877,7 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 	if world == nil || entity == 0 {
 		return false
 	}
-	instance := ecs.GetMut[htmlComponentInstance](world, entity)
+	instance := world.GetMut[htmlComponentInstance](entity)
 	if instance == nil {
 		return false
 	}
@@ -909,7 +909,7 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 	removeHTMLComponentRoots(world, instance.Page, instance.Roots)
 	_ = detachHTMLComponentCSS(world, instance.Page, instance.Definition)
 	if instance.Parent != 0 {
-		if parent := ecs.GetMut[htmlComponentInstance](world, instance.Parent); parent != nil {
+		if parent := world.GetMut[htmlComponentInstance](instance.Parent); parent != nil {
 			for index, child := range parent.Children {
 				if child != entity {
 					continue
@@ -927,8 +927,8 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 // Root removal follows lifecycle callbacks. Filter each affected sibling list
 // once and synchronize its text and resource mutations after all removals.
 func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*dom.Node) {
-	removed := ecs.FrameScratchMap[htmlComponentRemovedRootsScratch, *dom.Node, struct{}](world)
-	parents := ecs.FrameScratchMap[htmlComponentRemovedParentsScratch, *dom.Node, struct{}](world)
+	removed := world.FrameScratchMap[htmlComponentRemovedRootsScratch, *dom.Node, struct{}]()
+	parents := world.FrameScratchMap[htmlComponentRemovedParentsScratch, *dom.Node, struct{}]()
 	defer clear(removed)
 	defer clear(parents)
 	for _, node := range roots {
@@ -964,7 +964,7 @@ func addHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, binding htm
 	if world == nil || page == 0 || node == nil {
 		return
 	}
-	state := ecs.GetMut[htmlRenderState](world, page)
+	state := world.GetMut[htmlRenderState](page)
 	if state == nil {
 		return
 	}
@@ -978,7 +978,7 @@ func removeHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, node *do
 	if world == nil || page == 0 || node == nil {
 		return
 	}
-	state := ecs.GetMut[htmlRenderState](world, page)
+	state := world.GetMut[htmlRenderState](page)
 	if state == nil {
 		return
 	}
@@ -1021,13 +1021,13 @@ func syncHTMLComponents(context *ecs.SystemContext) error {
 		return nil
 	}
 	world := context.World
-	reader := ecs.Local[htmlComponentEventReaderTag, ecs.MessageReader[Event]](context)
+	reader := context.Local[htmlComponentEventReaderTag, ecs.MessageReader[Event]]()
 	for event := range reader.All(world) {
 		dispatchHTMLComponentEvent(world, event)
 	}
-	pending := ecs.Local[htmlComponentPendingTag, htmlComponentPending](context)
+	pending := context.Local[htmlComponentPendingTag, htmlComponentPending]()
 	pending.Entities = pending.Entities[:0]
-	for entity, access := range ecs.Query[htmlComponentInstance](world).All {
+	for entity, access := range world.Query[htmlComponentInstance]().All {
 		instance := access.Ref()
 
 		if instance == nil || !instance.Dirty || instance.Definition == nil || !world.IsAlive(entity) || !scene.IsActive(world, entity) {
@@ -1042,7 +1042,7 @@ func syncHTMLComponents(context *ecs.SystemContext) error {
 }
 
 func renderDirtyHTMLComponent(world *ecs.World, entity ecs.Entity) {
-	instance := ecs.GetMut[htmlComponentInstance](world, entity)
+	instance := world.GetMut[htmlComponentInstance](entity)
 	if instance == nil || !instance.Dirty || instance.Definition == nil || !world.IsAlive(entity) || !scene.IsActive(world, entity) {
 		return
 	}
@@ -1092,7 +1092,7 @@ func dispatchHTMLComponentEvent(world *ecs.World, event *Event) {
 	if node == nil {
 		return
 	}
-	state, ok := ecs.Get[htmlRenderState](world, event.Entity)
+	state, ok := world.Get[htmlRenderState](event.Entity)
 	if !ok || state.ComponentEvents == nil {
 		return
 	}
@@ -1102,7 +1102,7 @@ func dispatchHTMLComponentEvent(world *ecs.World, event *Event) {
 			if binding.Kind != event.Kind || !world.IsAlive(binding.Component) {
 				continue
 			}
-			instance, instanceOK := ecs.Get[htmlComponentInstance](world, binding.Component)
+			instance, instanceOK := world.Get[htmlComponentInstance](binding.Component)
 			if !instanceOK || instance.Definition == nil || instance.Definition.event == nil {
 				continue
 			}
@@ -1136,7 +1136,7 @@ func dispatchHTMLComponentAction(world *ecs.World, event Event) Event {
 	if node == nil {
 		return event
 	}
-	state, ok := ecs.Get[htmlRenderState](world, event.Entity)
+	state, ok := world.Get[htmlRenderState](event.Entity)
 	if !ok || state.ComponentEvents == nil {
 		return event
 	}
@@ -1146,7 +1146,7 @@ func dispatchHTMLComponentAction(world *ecs.World, event Event) Event {
 			if binding.Kind != event.Kind || !world.IsAlive(binding.Component) {
 				continue
 			}
-			instance, instanceOK := ecs.Get[htmlComponentInstance](world, binding.Component)
+			instance, instanceOK := world.Get[htmlComponentInstance](binding.Component)
 			if !instanceOK || instance.Definition == nil || instance.Definition.event == nil {
 				continue
 			}
@@ -1166,12 +1166,12 @@ func dispatchHTMLComponentAction(world *ecs.World, event Event) Event {
 func htmlComponentEventNode(world *ecs.World, event *Event) *dom.Node {
 	var node *dom.Node
 	if event.Target != 0 {
-		if child, ok := ecs.Get[htmlChild](world, event.Target); ok {
+		if child, ok := world.Get[htmlChild](event.Target); ok {
 			node = child.Node
 		}
 	}
 	if node == nil && event.Entity != 0 && event.ID != "" {
-		if state := ecs.GetMut[htmlRenderState](world, event.Entity); state != nil {
+		if state := world.GetMut[htmlRenderState](event.Entity); state != nil {
 			node = lookupHTMLNode(state, event.ID)
 		}
 	}
@@ -1183,7 +1183,7 @@ func htmlComponentEventNode(world *ecs.World, event *Event) *dom.Node {
 }
 
 func markHTMLComponentDirty(world *ecs.World, entity ecs.Entity) {
-	if instance := ecs.GetMut[htmlComponentInstance](world, entity); instance != nil {
+	if instance := world.GetMut[htmlComponentInstance](entity); instance != nil {
 		instance.Dirty = true
 	}
 }
@@ -1447,7 +1447,7 @@ func reconcileHTMLComponentChildList(world *ecs.World, parentEntity ecs.Entity, 
 }
 
 func renderMountedHTMLComponent(world *ecs.World, entity ecs.Entity) {
-	instance := ecs.GetMut[htmlComponentInstance](world, entity)
+	instance := world.GetMut[htmlComponentInstance](entity)
 	if instance == nil || instance.Definition == nil {
 		return
 	}
@@ -1463,7 +1463,7 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 	}
 	clear(list.Nodes)
 	for _, item := range list.Items {
-		child, ok := ecs.Get[htmlComponentInstance](world, item.Entity)
+		child, ok := world.Get[htmlComponentInstance](item.Entity)
 		if !ok {
 			continue
 		}
@@ -1474,7 +1474,7 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 		}
 	}
 	for _, item := range items {
-		child, ok := ecs.Get[htmlComponentInstance](world, item.Entity)
+		child, ok := world.Get[htmlComponentInstance](item.Entity)
 		if !ok {
 			continue
 		}
@@ -1494,7 +1494,7 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 	baseLength := len(remaining)
 	rootCount := 0
 	for _, item := range items {
-		if child, ok := ecs.Get[htmlComponentInstance](world, item.Entity); ok {
+		if child, ok := world.Get[htmlComponentInstance](item.Entity); ok {
 			rootCount += len(child.Roots)
 		}
 	}
@@ -1508,7 +1508,7 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 	clear(list.Nodes)
 	write := baseLength
 	for _, item := range items {
-		child, ok := ecs.Get[htmlComponentInstance](world, item.Entity)
+		child, ok := world.Get[htmlComponentInstance](item.Entity)
 		if !ok {
 			continue
 		}
@@ -1736,7 +1736,7 @@ func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *dom.
 		}
 		return
 	}
-	names := ecs.FrameScratchMap[htmlComponentAttributeNamesScratch, string, struct{}](world)
+	names := world.FrameScratchMap[htmlComponentAttributeNamesScratch, string, struct{}]()
 	for _, attribute := range attributes {
 		names[strings.ToLower(strings.TrimSpace(attribute.Name))] = struct{}{}
 	}
@@ -1898,7 +1898,7 @@ func bindHTMLComponentClick(world *ecs.World, entity ecs.Entity, instance *htmlC
 	handler := instance.Handlers[ref]
 	if handler == nil {
 		handler = func(event *PointerEvent) {
-			runtime, ok := ecs.Get[htmlComponentInstance](world, entity)
+			runtime, ok := world.Get[htmlComponentInstance](entity)
 			if !ok || runtime.Definition == nil || runtime.Definition.event == nil {
 				return
 			}
@@ -1922,11 +1922,11 @@ type htmlComponentPageCSS struct {
 // SetBaseCSS replaces the page stylesheet while preserving mounted component
 // styles. Unchanged values reuse the retained stylesheet without allocation.
 func SetBaseCSS(world *ecs.World, page ecs.Entity, cssText string) bool {
-	surface := ecs.GetMut[Surface](world, page)
+	surface := world.GetMut[Surface](page)
 	if surface == nil {
 		return false
 	}
-	if state := ecs.GetMut[htmlComponentPageCSS](world, page); state != nil {
+	if state := world.GetMut[htmlComponentPageCSS](page); state != nil {
 		if state.Base == cssText {
 			return false
 		}
@@ -1945,17 +1945,17 @@ func attachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlD
 	if cssText == "" {
 		return nil
 	}
-	html, ok := ecs.Get[Surface](world, page)
+	html, ok := world.Get[Surface](page)
 	if !ok {
 		return fmt.Errorf("ecs: HTML page %d is missing", page)
 	}
-	state := ecs.GetMut[htmlComponentPageCSS](world, page)
+	state := world.GetMut[htmlComponentPageCSS](page)
 	if state == nil {
 		state = &htmlComponentPageCSS{Base: html.CSS, Values: make(map[*htmlDefinitionRuntime]string), Counts: make(map[*htmlDefinitionRuntime]int)}
-		if err := ecs.Insert(world, page, *state); err != nil {
+		if err := world.Insert(page, *state); err != nil {
 			return err
 		}
-		state = ecs.GetMut[htmlComponentPageCSS](world, page)
+		state = world.GetMut[htmlComponentPageCSS](page)
 	}
 	if state.Counts[definition] == 0 {
 		state.Order = append(state.Order, definition)
@@ -1966,7 +1966,7 @@ func attachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlD
 }
 
 func detachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlDefinitionRuntime) error {
-	state := ecs.GetMut[htmlComponentPageCSS](world, page)
+	state := world.GetMut[htmlComponentPageCSS](page)
 	if state == nil || definition == nil {
 		return nil
 	}
@@ -2002,7 +2002,7 @@ func rebuildHTMLComponentCSS(world *ecs.World, page ecs.Entity, state *htmlCompo
 			builder.WriteString(cssText)
 		}
 	}
-	html := ecs.GetMut[Surface](world, page)
+	html := world.GetMut[Surface](page)
 	if html == nil {
 		return fmt.Errorf("ecs: HTML page %d is missing", page)
 	}

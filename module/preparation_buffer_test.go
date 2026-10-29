@@ -22,16 +22,16 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 				registry := Registry{}
 				var target *Scene
 				var frontSum, preparedSum int64
-				must(t, RegisterScene(&registry, "main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+				must(t, registry.RegisterScene("main.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
 					OnMessage: func(_ *Context, _ *Signal, message Message) error {
 						if message.Topic == "number" {
-							value, _ := Value[int64](message)
+							value, _ := message.Value[int64]()
 							frontSum += value
 						}
 						return nil
 					},
 				}))
-				must(t, RegisterScene(&registry, "next.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
+				must(t, registry.RegisterScene("next.json", func() Signal { return Signal{} }, Lifecycle[Signal]{
 					Enter: func(c *Context, _ *Signal, _ SceneStartup) error {
 						if slots {
 							writer, err := target.SlotWriter("a", "value")
@@ -45,7 +45,7 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 							}
 						} else {
 							for _, value := range [...]int64{100, 200} {
-								if err := Send(c, SceneTarget, "number", value); err != nil {
+								if err := c.Send(SceneTarget, "number", value); err != nil {
 									return err
 								}
 							}
@@ -57,7 +57,7 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 					},
 					OnMessage: func(_ *Context, _ *Signal, message Message) error {
 						if message.Topic == "number" {
-							value, _ := Value[int64](message)
+							value, _ := message.Value[int64]()
 							preparedSum += value
 						}
 						return nil
@@ -70,7 +70,7 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 				must(t, err)
 				writer, err := front.SlotWriter("a", "value")
 				must(t, err)
-				emitter, err := SceneEmitter[int64](front, "number")
+				emitter, err := front.Emitter[int64]("number")
 				must(t, err)
 				for _, value := range [...]int64{10, 20} {
 					if slots {
@@ -99,7 +99,7 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 				}
 				if slots && !fail {
 					slot, _ := target.modules[0].Slot("value")
-					value, err := ReadSlot[int64](slot)
+					value, err := slot.Read[int64]()
 					must(t, err)
 					if value != 200 {
 						t.Fatal("startup slot traffic was overwritten")
@@ -114,7 +114,7 @@ func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {
 				must(t, r.Dispatch())
 				if slots {
 					slot, _ := front.modules[0].Slot("value")
-					value, err := ReadSlot[int64](slot)
+					value, err := slot.Read[int64]()
 					must(t, err)
 					if value != 20 {
 						t.Fatal("preparation corrupted parked slot data")
@@ -134,7 +134,7 @@ func TestSlotDecodersDoNotAllocateMessageStorageAndAliasesSharePayloads(t *testi
 		"box/mod.json":               `{"slots":{"label":{"type":"Label","default":{"text":"label"}},"text":{"type":"string","default":"plain"}}}`,
 	})
 	registry := Registry{}
-	must(t, RegisterValue(&registry, "Label", func(value project.SlotValue) (string, error) {
+	must(t, registry.RegisterValue("Label", func(value project.SlotValue) (string, error) {
 		return value.Fields[0].Value.String, nil
 	}))
 	r := newFixture(t, plan, registry, Options{})
@@ -144,15 +144,15 @@ func TestSlotDecodersDoNotAllocateMessageStorageAndAliasesSharePayloads(t *testi
 	label, _ := c.Slot("label")
 	plain, _ := c.Slot("text")
 	for _, slot := range [...]Slot{label, plain} {
-		_, err = ReadSlot[string](slot)
+		_, err = slot.Read[string]()
 		must(t, err)
 	}
 	if len(r.typedStores) != 0 {
 		t.Fatal("slot decoding eagerly allocated message payload buffers")
 	}
-	first, err := BindEmitter[string](c, "first")
+	first, err := c.BindEmitter[string]("first")
 	must(t, err)
-	second, err := BindEmitter[string](c, "second")
+	second, err := c.BindEmitter[string]("second")
 	must(t, err)
 	if first.store != second.store || len(r.typedStores) != 1 {
 		t.Fatal("the same Go type allocated multiple payload stores")
@@ -167,7 +167,7 @@ func TestSlotDecodersDoNotAllocateMessageStorageAndAliasesSharePayloads(t *testi
 	}
 	// Registration changes after creation cannot affect existing slot decoders.
 	registry.values["Label"] = func(project.SlotValue) (int64, error) { return 0, nil }
-	value, err := ReadSlot[string](label)
+	value, err := label.Read[string]()
 	must(t, err)
 	if value != "label" || r.typedStores[reflect.TypeFor[string]()] != first.store {
 		t.Fatal("runtime did not preserve independent decoding and typed storage")

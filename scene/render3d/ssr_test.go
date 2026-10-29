@@ -44,7 +44,7 @@ func TestSSRRenderingPhasesReuseAndLifecycle(t *testing.T) {
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.CurrentContext())
 	Register(world)
-	state := renderWorld3D(world)
+	state := WorldFor(world)
 	t.Cleanup(func() { _ = state.Dispose() })
 	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: 320, Height: 240, Depth: true})
 	if err != nil {
@@ -54,10 +54,10 @@ func TestSSRRenderingPhasesReuseAndLifecycle(t *testing.T) {
 	b := ecs.NewBundle(4)
 	camera := scene.NewCamera()
 	camera.Viewport = scene.CameraViewport{X: 24, Y: 16, Width: 160, Height: 120}
-	ecs.Put(&b, camera)
-	ecs.Put(&b, Camera{SSR: NewSSRSettings(), Target: target})
-	ecs.Put(&b, scene.PerspectiveProjection3D())
-	ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	b.Put(camera)
+	b.Put(Camera{SSR: NewSSRSettings(), Target: target})
+	b.Put(scene.PerspectiveProjection3D())
+	b.Put(scene.GlobalTransform{Matrix: mgl32.Ident4()})
 	entity := world.Spawn(b)
 	mesh := graphics.CubeMesh(.5)
 	t.Cleanup(func() { _ = mesh.Dispose() })
@@ -76,12 +76,12 @@ func TestSSRRenderingPhasesReuseAndLifecycle(t *testing.T) {
 			material.Shader = shader
 		}
 		b = ecs.NewBundle(5)
-		ecs.Put(&b, Mesh{Mesh: mesh})
-		ecs.Put(&b, Material[graphics.StandardMaterial]{Material: material})
-		ecs.Put(&b, scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(index)*.05, 0, -3)})
+		b.Put(Mesh{Mesh: mesh})
+		b.Put(Material[graphics.StandardMaterial]{Material: material})
+		b.Put(scene.GlobalTransform{Matrix: mgl32.Translate3D(float32(index)*.05, 0, -3)})
 		if index == 3 {
-			ecs.Put(&b, NoAmbientOcclusion{})
-			ecs.Put(&b, NoScreenReflection{})
+			b.Put(NoAmbientOcclusion{})
+			b.Put(NoScreenReflection{})
 		}
 		world.Spawn(b)
 	}
@@ -154,7 +154,7 @@ func TestSSRRenderingPhasesReuseAndLifecycle(t *testing.T) {
 	if view.reflection != s {
 		t.Fatal("SSR cache was recreated")
 	}
-	settings := ecs.GetMut[Camera](world, entity)
+	settings := world.GetMut[Camera](entity)
 	settings.SSAO = NewSSAOSettings()
 	driver.batches, driver.clears, driver.meshViewports = nil, nil, nil
 	frame()

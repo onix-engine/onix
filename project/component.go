@@ -9,7 +9,7 @@ import (
 
 // Component resolves a named scene node and acquires write access. Use
 // RequireComponent once at installation and slot access for repeated updates.
-func Component[T any](scene *SceneInstance, id string) (*T, error) {
+func (scene *SceneInstance) Component[T any](id string) (*T, error) {
 	if scene == nil || scene.World == nil {
 		return nil, fmt.Errorf("scene instance is nil")
 	}
@@ -17,7 +17,7 @@ func Component[T any](scene *SceneInstance, id string) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	value := ecs.GetMut[T](scene.World, entity)
+	value := scene.World.GetMut[T](entity)
 	if value == nil {
 		return nil, fmt.Errorf("scene node %q has no component %s", id, reflect.TypeFor[T]())
 	}
@@ -26,7 +26,7 @@ func Component[T any](scene *SceneInstance, id string) (*T, error) {
 
 // RequireComponent validates a named node without marking its component changed.
 // The returned slot rejects retired entities and slots used in another world.
-func RequireComponent[T any](scene *SceneInstance, id string) (ecs.EntitySlot, error) {
+func (scene *SceneInstance) RequireComponent[T any](id string) (ecs.EntitySlot, error) {
 	if scene == nil || scene.World == nil {
 		return ecs.EntitySlot{}, fmt.Errorf("scene instance is nil")
 	}
@@ -34,7 +34,7 @@ func RequireComponent[T any](scene *SceneInstance, id string) (ecs.EntitySlot, e
 	if err != nil {
 		return ecs.EntitySlot{}, err
 	}
-	if !ecs.Has[T](scene.World, entity) {
+	if !scene.World.Has[T](entity) {
 		return ecs.EntitySlot{}, fmt.Errorf("scene node %q has no component %s", id, reflect.TypeFor[T]())
 	}
 	return scene.World.Slot(entity), nil

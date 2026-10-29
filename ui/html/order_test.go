@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -19,24 +18,24 @@ func TestHTMLOrderChangesMatchFresh(t *testing.T) {
 			node := incrementalHTMLNode(t, world, owner, "target")
 			field := incrementalControl(t, world, owner, "field")
 			other := incrementalControl(t, world, owner, "other")
-			before, _ := ecs.Get[Control](world, other)
+			before, _ := world.Get[Control](other)
 			for _, step := range []struct{ order, extra string }{{"2", ""}, {"-1", ""}, {"0", ""}, {"2", "width:70px;color:blue"}, {"-2", "overflow:hidden"}, {"0", ""}} {
 				node.SetAttribute("style", "width:80px;height:60px;overflow:auto;order:"+step.order+";"+step.extra)
 				incrementalSync(t, world)
-				state, _ := ecs.Get[htmlRenderState](world, owner)
+				state, _ := world.Get[htmlRenderState](owner)
 				if state.SyncStats.PartialReconciles != 1 {
 					t.Fatalf("order fell back: %+v", state.SyncStats)
 				}
 				if incrementalControl(t, world, owner, "field") != field {
 					t.Fatal("input replaced")
 				}
-				after, _ := ecs.Get[Control](world, other)
+				after, _ := world.Get[Control](other)
 				if after.RenderRevision != before.RenderRevision {
 					t.Fatal("unrelated input rebuilt")
 				}
 				assertHTMLContextMatchesFresh(t, world, owner, source(step.order, step.extra))
 				for _, entity := range state.Children {
-					if focus, ok := ecs.Get[Focusable](world, entity); ok && focus.Order != htmlEntityNode(world, entity).Order {
+					if focus, ok := world.Get[Focusable](entity); ok && focus.Order != htmlEntityNode(world, entity).Order {
 						t.Fatal("CSS order changed DOM focus order")
 					}
 				}
@@ -53,7 +52,7 @@ func TestHTMLOrderWithStructureAndTreeFallbacks(t *testing.T) {
 			incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "order:2;"+extra)
 			incrementalHTMLNode(t, world, owner, "remove").Remove()
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			want := 0
 			if extra == "" {
 				want = 1
@@ -70,7 +69,7 @@ func TestHTMLOrderSkipsUnrelatedControls(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div style="height:100px;display:flex"><div id="target" style="order:0"><input value="Value"/></div><div><input value="Second"/></div></div>`+strings.Repeat(`<div><input value="Unchanged"/></div>`, 1000))
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "order:1")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls > 2 || state.SyncStats.SnapshottedControls > 2 || state.SyncStats.LayoutWork.TopologyVisited != 0 || state.SyncStats.LayoutWork.OrderContainers != 1 || state.SyncStats.LayoutWork.LocalFlexReflows != 1 || state.SyncStats.LayoutWork.Visited > 10 {
 		t.Fatalf("order updated unrelated inputs: %+v", state.SyncStats)
 	}
@@ -109,7 +108,7 @@ func TestHTMLOrderOnBlockAndTreeChanges(t *testing.T) {
 			world, owner := incrementalHTMLFixture(t, source("order:0"))
 			incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "order:2;"+extra)
 			incrementalSync(t, world)
-			state, _ := ecs.Get[htmlRenderState](world, owner)
+			state, _ := world.Get[htmlRenderState](owner)
 			want := 0
 			if extra == "" {
 				want = 1
@@ -127,18 +126,18 @@ func TestHTMLOrderKeepsInputAndScrollState(t *testing.T) {
 	node := incrementalHTMLNode(t, world, owner, "target")
 	field := incrementalControl(t, world, owner, "field")
 	SetControlValue(world, field, "Typed")
-	control := ecs.GetMut[Control](world, field)
+	control := world.GetMut[Control](field)
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	clip := state.OverflowBindings[node.node].entity
-	scroll := ecs.GetMut[scene.UIScroll](world, clip)
+	scroll := world.GetMut[scene.UIScroll](clip)
 	scroll.Position[1] = -10
 	for _, order := range []string{"1", "-1", "0"} {
 		node.SetAttribute("style", "height:40px;width:120px;overflow:auto;order:"+order)
 		incrementalSync(t, world)
-		state, _ = ecs.Get[htmlRenderState](world, owner)
-		got, _ := ecs.Get[Control](world, field)
-		position, _ := ecs.Get[scene.UIScroll](world, clip)
+		state, _ = world.Get[htmlRenderState](owner)
+		got, _ := world.Get[Control](field)
+		position, _ := world.Get[scene.UIScroll](clip)
 		if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || position.Position[1] != -10 || got.Value != "Typed" || got.SelectionAnchor != 1 || got.SelectionFocus != 3 {
 			t.Fatal("order change reset live state")
 		}
@@ -173,7 +172,7 @@ func TestHTMLNestedLocalOrderMatchesFresh(t *testing.T) {
 		outer.SetAttribute("style", "display:flex;order:"+order)
 		inner.SetAttribute("style", "order:"+order)
 		incrementalSync(t, world)
-		state, _ := ecs.Get[htmlRenderState](world, owner)
+		state, _ := world.Get[htmlRenderState](owner)
 		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.LayoutWork.TopologyVisited != 0 || state.SyncStats.LayoutWork.OrderContainers != 2 {
 			t.Fatalf("nested order fell back: %+v", state.SyncStats)
 		}
@@ -182,7 +181,7 @@ func TestHTMLNestedLocalOrderMatchesFresh(t *testing.T) {
 	// A later paint-only sync must not retain the previous reorder worklist.
 	inner.SetAttribute("style", "order:0;color:blue")
 	incrementalSync(t, world)
-	state, _ := ecs.Get[htmlRenderState](world, owner)
+	state, _ := world.Get[htmlRenderState](owner)
 	if len(state.LayoutCache.Reordered) != 0 || len(state.LayoutOrderNodes) != 0 {
 		t.Fatal("reorder scratch survived sync")
 	}

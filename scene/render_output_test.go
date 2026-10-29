@@ -88,15 +88,15 @@ func TestRenderOutputFreezesLayoutAndComposesConsumerTransform(t *testing.T) {
 	}
 	world := ecs.NewWorld()
 	b := ecs.NewBundle(3)
-	ecs.Put(&b, RenderOutput2D{Handle: h})
-	ecs.Put(&b, UIGlobalTransform{Matrix: mgl32.Translate3D(123, 45, 0)})
-	ecs.Put(&b, Visibility{Visible: true})
-	ecs.Put(&b, AnchorTopLeft)
+	b.Put(RenderOutput2D{Handle: h})
+	b.Put(UIGlobalTransform{Matrix: mgl32.Translate3D(123, 45, 0)})
+	b.Put(Visibility{Visible: true})
+	b.Put(AnchorTopLeft)
 	e := world.Spawn(b)
 	c := graphics.Canvas2DContext(320, 240)
 	snapshots := renderSnapshots2D{}
 	hierarchy := frameRenderHierarchy2DCache(world)
-	items := appendOutputRenderItems2D[UIGlobalTransform](c, world, &snapshots, &hierarchy, nil, false, true)
+	items := snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, &hierarchy, nil, false, true)
 	if len(items) == 0 || items[0].entity != e || items[0].transform[12] != 123 || items[0].transform[13] != 45 {
 		t.Fatalf("output did not use consumer coordinates: %+v", items)
 	}
@@ -105,7 +105,7 @@ func TestRenderOutputFreezesLayoutAndComposesConsumerTransform(t *testing.T) {
 	}
 	step := func() {
 		snapshots.reset()
-		items = appendOutputRenderItems2D[UIGlobalTransform](c, world, &snapshots, &hierarchy, items[:0], false, true)
+		items = snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, &hierarchy, items[:0], false, true)
 	}
 	for range 8 {
 		step()

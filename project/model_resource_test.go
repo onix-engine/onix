@@ -218,7 +218,7 @@ func TestGLTFEmbeddedImageDataURIAndCubicSplineFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, ok := scene.SampleAnimationTrack(clip.FloatTracks[0], .5, func(a, b, progress float32) float32 {
+	value, ok := clip.FloatTracks[0].Sample(.5, func(a, b, progress float32) float32 {
 		return a + (b-a)*progress
 	})
 	if !ok || math.Abs(float64(value-.75)) > 1e-6 {
@@ -302,7 +302,7 @@ func TestGLTFCubicSplineAnimationUsesMiddleValues(t *testing.T) {
 	if err != nil || len(clip.FloatTracks) != 3 || clip.FloatTracks[0].Keyframes[0].Tween != scene.AnimationCubicSpline {
 		t.Fatalf("compiled cubic spline clip = %+v, err=%v", clip, err)
 	}
-	value, ok := scene.SampleAnimationTrack(clip.FloatTracks[0], .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, ok := clip.FloatTracks[0].Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if !ok || math.Abs(float64(value-3.25)) > 1e-5 {
 		t.Fatalf("compiled cubic spline midpoint = %g, %v", value, ok)
 	}
@@ -323,7 +323,7 @@ func TestGLTFCubicSplineRotationNormalizesQuaternionBeforeEulerBinding(t *testin
 	if len(clip.FloatTracks) != 3 {
 		t.Fatalf("rotation tracks = %d", len(clip.FloatTracks))
 	}
-	value, ok := scene.SampleAnimationTrack(clip.FloatTracks[2], .5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
+	value, ok := clip.FloatTracks[2].Sample(.5, func(a, b, progress float32) float32 { return a + (b-a)*progress })
 	if !ok || math.Abs(float64(value-math.Pi/2)) > 1e-5 {
 		t.Fatalf("cubic quaternion midpoint Z = %g, %v", value, ok)
 	}

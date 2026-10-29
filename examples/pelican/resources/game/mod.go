@@ -23,12 +23,12 @@ func bind(c *module.Context, id string) (visual, error) {
 	if err != nil {
 		return visual{}, err
 	}
-	t, ok := module.Get[scene.UITransform](c, e)
+	t, ok := c.Get[scene.UITransform](e)
 	if !ok {
 		return visual{}, fmt.Errorf("pelican: %s has no transform", id)
 	}
-	s, _ := module.Get[scene.Sprite2D](c, e)
-	v, _ := module.Get[scene.Visibility](c, e)
+	s, _ := c.Get[scene.Sprite2D](e)
+	v, _ := c.Get[scene.Visibility](e)
 	return visual{entity: e, transform: t, sprite: s, visible: v.Visible}, nil
 }
 func (v *visual) show(c *module.Context, show bool) error {
@@ -36,14 +36,14 @@ func (v *visual) show(c *module.Context, show bool) error {
 		return nil
 	}
 	v.visible = show
-	return module.Set(c, v.entity, scene.Visibility{Visible: show})
+	return c.Set(v.entity, scene.Visibility{Visible: show})
 }
 func (v *visual) pose(c *module.Context, x, y, r, sx, sy float32) error {
 	v.transform.Translation = scene.Px2(x, y)
 	v.transform.Rotation = r
 	v.transform.Scale[0] = sx
 	v.transform.Scale[1] = sy
-	return module.Set(c, v.entity, v.transform)
+	return c.Set(v.entity, v.transform)
 }
 
 type Mod struct {
@@ -166,7 +166,7 @@ func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
 	if message.Topic != module.InputTopic {
 		return nil
 	}
-	e, ok := module.Value[module.Input](message)
+	e, ok := message.Value[module.Input]()
 	if !ok {
 		return module.ErrType
 	}
@@ -345,7 +345,7 @@ func (m *Mod) render(c *module.Context) error {
 		if template.Texture != v.sprite.Texture {
 			v.sprite = template
 			if err == nil {
-				err = module.Set(c, v.entity, template)
+				err = c.Set(v.entity, template)
 			}
 		}
 		show(v, true)

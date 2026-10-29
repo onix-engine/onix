@@ -1,14 +1,14 @@
 package presentation
 
 import (
-	"github.com/diiyw/onix/module"
 	"github.com/diiyw/onix/examples/flappybird/contracts"
+	"github.com/diiyw/onix/module"
 )
 
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {
 	switch message.Topic {
 	case "frame":
-		value, ok := module.Value[contracts.FlappyFrame](message)
+		value, ok := message.Value[contracts.FlappyFrame]()
 		if !ok {
 			return module.ErrType
 		}

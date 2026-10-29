@@ -142,9 +142,9 @@ type renderInput2D struct {
 
 func retainedInput2D[T any]() renderInput2D {
 	return renderInput2D{
-		revision: ecs.ComponentRevision[T],
+		revision: (*ecs.World).ComponentRevision[T],
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
-			for entity := range ecs.Query[T](world, ecs.Changed[T](changes)).All {
+			for entity := range world.Query[T](changes.Changed[T]()).All {
 				cache.mark(entity)
 			}
 		},
@@ -153,7 +153,7 @@ func retainedInput2D[T any]() renderInput2D {
 
 func inheritedRetainedInput2D[T any]() renderInput2D {
 	return renderInput2D{
-		revision: ecs.ComponentValueRevision[T],
+		revision: (*ecs.World).ComponentValueRevision[T],
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
 			hierarchy := HierarchyFor(world)
 			cache.hierarchyQueue = cache.hierarchyQueue[:0]
@@ -163,7 +163,7 @@ func inheritedRetainedInput2D[T any]() renderInput2D {
 				clear(cache.hierarchyMarks)
 				cache.hierarchyGeneration++
 			}
-			for entity := range ecs.Query[T](world, ecs.Unscoped(), ecs.Changed[T](changes)).All {
+			for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
 				cache.enqueueHierarchy(entity)
 			}
 			for i := 0; i < len(cache.hierarchyQueue); i++ {
@@ -203,9 +203,9 @@ func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T,
 	input := retainedInput2D[T]()
 	flag := uint8(1 << kind)
 	input.poll = func(world *ecs.World, cache *retainedRender2D) {
-		for entity, access := range ecs.Query2[T, Visibility](world).All {
+		for entity, access := range world.Query2[T, Visibility]().All {
 			node := cache.nodes[entity]
-			visible := access.B.Ref().Visible && drawable(access.A.Ref(), graphics.DeviceFor(world)) && (ecs.Has[GlobalTransform](world, entity) || ecs.Has[UIGlobalTransform](world, entity))
+			visible := access.B.Ref().Visible && drawable(access.A.Ref(), graphics.DeviceFor(world)) && (world.Has[GlobalTransform](entity) || world.Has[UIGlobalTransform](entity))
 			if visible || node != nil && node.dynamic&flag != 0 {
 				// A dynamic candidate can emit nothing (for example, clipped tiles
 				// or hidden sprite layers). Remember its empty result so polling it
@@ -328,20 +328,20 @@ type RenderPreparation2D struct {
 }
 
 func (node *retainedEntity2D) captureProperties(world *ecs.World, entity ecs.Entity, items []renderItem2D) {
-	node.properties = node.positionCount() != 0 && !ecs.Has[RenderOutput2D](world, entity)
+	node.properties = node.positionCount() != 0 && !world.Has[RenderOutput2D](entity)
 	if !node.properties {
 		return
 	}
 	node.ui = items[node.first].ui
 	if node.ui {
-		value := ecs.GetRef[UIGlobalTransform](world, entity)
+		value := world.GetRef[UIGlobalTransform](entity)
 		if value == nil {
 			node.properties = false
 			return
 		}
 		node.matrix, node.clip = value.Matrix, value.clip
 	} else {
-		value := ecs.GetRef[GlobalTransform](world, entity)
+		value := world.GetRef[GlobalTransform](entity)
 		if value == nil {
 			node.properties = false
 			return
@@ -362,13 +362,13 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 	}
 	matrix, clip := node.matrix, node.clip
 	if node.ui {
-		value := ecs.GetRef[UIGlobalTransform](world, entity)
+		value := world.GetRef[UIGlobalTransform](entity)
 		if value == nil {
 			return false
 		}
 		matrix, clip = value.Matrix, value.clip
 	} else {
-		value := ecs.GetRef[GlobalTransform](world, entity)
+		value := world.GetRef[GlobalTransform](entity)
 		if value == nil {
 			return false
 		}
@@ -389,7 +389,7 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 	}
 	if node.text != nil {
 		_, canvasHeight := c.Size()
-		text := ecs.GetRef[Text2D](world, entity)
+		text := world.GetRef[Text2D](entity)
 		if text == nil {
 			return false
 		}

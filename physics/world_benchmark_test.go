@@ -15,7 +15,7 @@ func benchmarkWorld2D(count int, sensors bool) *World {
 			collider.Shape.Radius = 2
 			collider.Sensor = true
 		}
-		AddCollider(world, body, collider)
+		world.AddCollider(body, collider)
 	}
 	for range 4 {
 		world.Step(1.0 / 60)

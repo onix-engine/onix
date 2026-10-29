@@ -15,12 +15,12 @@ func TestRuntimeSystemsRequireExplicitFeatures(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := ecs.GetResource[*runtimeSystems](world); ok {
+	if _, ok := world.GetResource[*runtimeSystems](); ok {
 		t.Fatal("UI sync installed an implicit runtime profile")
 	}
 
 	RegisterRuntimeFeature[Widgets](world)
-	systems, ok := ecs.GetResource[*runtimeSystems](world)
+	systems, ok := world.GetResource[*runtimeSystems]()
 	if !ok || systems == nil || systems.update[0] == nil || systems.sync[0] == nil || systems.afterLayout[0] == nil {
 		t.Fatal("widget runtime systems were not registered")
 	}
@@ -35,7 +35,7 @@ func TestFullRuntimeToolSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 	if err := SyncWith[FullRuntime](world); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := ecs.GetResource[*runtimeSystems](world); ok {
+	if _, ok := world.GetResource[*runtimeSystems](); ok {
 		t.Fatal("tool sync leaked its profile into scheduled runtime systems")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
@@ -53,7 +53,7 @@ func TestHTMLRendererSynchronizesHTMLComponents(t *testing.T) {
 	component.Width, component.Height = 160, 80
 	component.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
-	ecs.Put(&bundle, component)
+	bundle.Put(component)
 	owner := world.Spawn(bundle)
 
 	RegisterRuntimeFeature[HTMLRenderer](world)
@@ -61,10 +61,10 @@ func TestHTMLRendererSynchronizesHTMLComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for entity, access := range ecs.Query[scene.Text2D](world).All {
+	for entity, access := range world.Query[scene.Text2D]().All {
 		text := access.Get()
 
-		parent, ok := ecs.Get[scene.Parent](world, entity)
+		parent, ok := world.Get[scene.Parent](entity)
 		if ok && parent.Entity == owner && strings.Contains(text.Value, "runtime") {
 			found = true
 		}

@@ -18,31 +18,31 @@ func TestVirtualJoystickTracksPointerAndResets(t *testing.T) {
 		t.Fatalf("sync joystick: %v", err)
 	}
 
-	joystick, ok := ecs.Get[VirtualJoystick](world, entity)
+	joystick, ok := world.Get[VirtualJoystick](entity)
 	if !ok || joystick.Track == 0 || joystick.Knob == 0 {
 		t.Fatalf("generated joystick is incomplete: %#v", joystick)
 	}
-	track, trackOK := ecs.Get[scene.UIBackground2D](world, joystick.Track)
-	knob, knobOK := ecs.Get[scene.UIBackground2D](world, joystick.Knob)
+	track, trackOK := world.Get[scene.UIBackground2D](joystick.Track)
+	knob, knobOK := world.Get[scene.UIBackground2D](joystick.Knob)
 	if !trackOK || !knobOK || track.Shape.Radius != 60 || knob.Shape.Radius != 20 {
 		t.Fatalf("circle visuals = track %#v knob %#v", track, knob)
 	}
 
 	var changes ecs.MessageReader[ChangedEvent[mgl32.Vec2]]
 	var activeEvents ecs.MessageReader[VirtualJoystickActiveEvent]
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 220, 160)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press joystick: %v", err)
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if !joystick.Active || joystick.RawValue != (mgl32.Vec2{1, 0}) || joystick.Value != (mgl32.Vec2{1, 0}) {
 		t.Fatalf("pressed joystick = %#v", joystick)
 	}
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync pressed joystick: %v", err)
 	}
-	knobTransform, _ := ecs.Get[scene.UITransform](world, joystick.Knob)
+	knobTransform, _ := world.Get[scene.UITransform](joystick.Knob)
 	if knobTransform.Translation.X.Value != 80 || knobTransform.Translation.Y.Value != 40 {
 		t.Fatalf("knob position after press = %#v", knobTransform.Translation)
 	}
@@ -58,7 +58,7 @@ func TestVirtualJoystickTracksPointerAndResets(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("release joystick: %v", err)
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if joystick.Active || joystick.RawValue != (mgl32.Vec2{}) || joystick.Value != (mgl32.Vec2{}) {
 		t.Fatalf("released joystick = %#v", joystick)
 	}
@@ -78,12 +78,12 @@ func TestVirtualJoystickAppliesAxisAndDeadZone(t *testing.T) {
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync joystick: %v", err)
 	}
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 60, 75)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press joystick: %v", err)
 	}
-	joystick, _ := ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ := world.Get[VirtualJoystick](entity)
 	if joystick.RawValue != (mgl32.Vec2{.2, 0}) || joystick.Value != (mgl32.Vec2{}) {
 		t.Fatalf("dead-zone joystick = %#v", joystick)
 	}
@@ -93,7 +93,7 @@ func TestVirtualJoystickAppliesAxisAndDeadZone(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("move joystick: %v", err)
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if joystick.RawValue != (mgl32.Vec2{1, 0}) || joystick.Value != (mgl32.Vec2{1, 0}) {
 		t.Fatalf("axis-constrained joystick = %#v", joystick)
 	}
@@ -106,7 +106,7 @@ func TestSetVirtualJoystickRawValueClampsAndPublishes(t *testing.T) {
 	if !SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{3, 4}) {
 		t.Fatal("set raw value returned false")
 	}
-	joystick, _ := ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ := world.Get[VirtualJoystick](entity)
 	if joystick.RawValue != (mgl32.Vec2{.6, .8}) || joystick.Value != (mgl32.Vec2{.6, .8}) {
 		t.Fatalf("clamped joystick = %#v", joystick)
 	}
@@ -116,7 +116,7 @@ func TestSetVirtualJoystickRawValueClampsAndPublishes(t *testing.T) {
 	if !ResetVirtualJoystick(world, entity) {
 		t.Fatal("reset returned false")
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if joystick.Value != (mgl32.Vec2{}) || joystick.RawValue != (mgl32.Vec2{}) {
 		t.Fatalf("reset joystick = %#v", joystick)
 	}
@@ -135,19 +135,19 @@ func TestBindVirtualJoystickUsesAuthoredRoot(t *testing.T) {
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync bound joystick: %v", err)
 	}
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 100, 140)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press bound joystick: %v", err)
 	}
-	joystick, _ := ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ := world.Get[VirtualJoystick](entity)
 	if !joystick.Active || joystick.RawValue != (mgl32.Vec2{0, 1}) || joystick.Value != (mgl32.Vec2{0, 1}) {
 		t.Fatalf("bound joystick = %#v", joystick)
 	}
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync authored joystick: %v", err)
 	}
-	knobTransform, _ := ecs.Get[scene.UITransform](world, knob)
+	knobTransform, _ := world.Get[scene.UITransform](knob)
 	if knobTransform.Translation.X.Value != 30 || knobTransform.Translation.Y.Value != 60 {
 		t.Fatalf("authored knob position = %#v", knobTransform.Translation)
 	}
@@ -167,13 +167,13 @@ func TestFloatingVirtualJoystickShowsAtPressPosition(t *testing.T) {
 		t.Fatalf("sync floating joystick: %v", err)
 	}
 	for _, part := range [...]ecs.Entity{track, knob} {
-		visibility, _ := ecs.Get[scene.Visibility](world, part)
+		visibility, _ := world.Get[scene.Visibility](part)
 		if visibility.Visible {
 			t.Fatalf("floating joystick part %d is visible before press", part)
 		}
 	}
 
-	state, _ := ecs.GetResource[*input.State](world)
+	state, _ := world.GetResource[*input.State]()
 	state.PressMouse(input.MouseLeft, 200, 150)
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("press floating joystick: %v", err)
@@ -181,12 +181,12 @@ func TestFloatingVirtualJoystickShowsAtPressPosition(t *testing.T) {
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync pressed floating joystick: %v", err)
 	}
-	joystick, _ := ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ := world.Get[VirtualJoystick](entity)
 	if !joystick.Active || joystick.RawValue != (mgl32.Vec2{}) {
 		t.Fatalf("pressed floating joystick = %#v", joystick)
 	}
-	trackTransform, _ := ecs.Get[scene.UITransform](world, track)
-	knobTransform, _ := ecs.Get[scene.UITransform](world, knob)
+	trackTransform, _ := world.Get[scene.UITransform](track)
+	knobTransform, _ := world.Get[scene.UITransform](knob)
 	if trackTransform.Translation.X.Value != 140 || trackTransform.Translation.Y.Value != 90 {
 		t.Fatalf("floating track position = %#v", trackTransform.Translation)
 	}
@@ -202,11 +202,11 @@ func TestFloatingVirtualJoystickShowsAtPressPosition(t *testing.T) {
 	if err := runUIFrame(world); err != nil {
 		t.Fatalf("sync moved floating joystick: %v", err)
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if joystick.RawValue != (mgl32.Vec2{1, 0}) || joystick.Value != (mgl32.Vec2{1, 0}) {
 		t.Fatalf("moved floating joystick = %#v", joystick)
 	}
-	knobTransform, _ = ecs.Get[scene.UITransform](world, knob)
+	knobTransform, _ = world.Get[scene.UITransform](knob)
 	if knobTransform.Translation.X.Value != 220 || knobTransform.Translation.Y.Value != 130 {
 		t.Fatalf("moved floating knob position = %#v", knobTransform.Translation)
 	}
@@ -216,12 +216,12 @@ func TestFloatingVirtualJoystickShowsAtPressPosition(t *testing.T) {
 	if err := runUIUpdate(world); err != nil {
 		t.Fatalf("release floating joystick: %v", err)
 	}
-	joystick, _ = ecs.Get[VirtualJoystick](world, entity)
+	joystick, _ = world.Get[VirtualJoystick](entity)
 	if joystick.Active || joystick.Value != (mgl32.Vec2{}) {
 		t.Fatalf("released floating joystick = %#v", joystick)
 	}
 	for _, part := range [...]ecs.Entity{track, knob} {
-		visibility, _ := ecs.Get[scene.Visibility](world, part)
+		visibility, _ := world.Get[scene.Visibility](part)
 		if visibility.Visible {
 			t.Fatalf("floating joystick part %d is visible after release", part)
 		}
@@ -242,13 +242,13 @@ func TestFloatingVirtualJoystickMoveDoesNotAllocateAfterWarmup(t *testing.T) {
 		t.Fatalf("sync floating joystick: %v", err)
 	}
 	updateVirtualJoystickInput(world, &scene.InputEvent{Entity: entity, Kind: scene.InputEventPress, X: 200, Y: 150})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 
 	x := float32(260)
 	allocations := testing.AllocsPerRun(100, func() {
 		x = 400 - x
 		updateVirtualJoystickInput(world, &scene.InputEvent{Entity: entity, Kind: scene.InputEventMove, X: x, Y: 150})
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	})
 	if allocations != 0 {
 		t.Fatalf("floating joystick move allocated %.0f objects, want 0", allocations)
@@ -258,12 +258,12 @@ func TestFloatingVirtualJoystickMoveDoesNotAllocateAfterWarmup(t *testing.T) {
 func spawnAuthoredVirtualJoystickPart(world *ecs.World, parent ecs.Entity, x, y, width, height float32) ecs.Entity {
 	transform := scene.UITransformFromXY(x, y)
 	bundle := ecs.NewBundle(6)
-	ecs.Put(&bundle, transform)
-	ecs.Put(&bundle, scene.UIGlobalTransform{})
-	ecs.Put(&bundle, scene.Visibility{Visible: true})
-	ecs.Put(&bundle, scene.AnchorTopLeft)
-	ecs.Put(&bundle, scene.Parent{Entity: parent})
-	ecs.Put(&bundle, scene.Sprite2D{Width: width, Height: height, Alpha: 1})
+	bundle.Put(transform)
+	bundle.Put(scene.UIGlobalTransform{})
+	bundle.Put(scene.Visibility{Visible: true})
+	bundle.Put(scene.AnchorTopLeft)
+	bundle.Put(scene.Parent{Entity: parent})
+	bundle.Put(scene.Sprite2D{Width: width, Height: height, Alpha: 1})
 	return world.Spawn(bundle)
 }
 
@@ -271,15 +271,15 @@ func TestVirtualJoystickSetDoesNotAllocateAfterWarmup(t *testing.T) {
 	world := newUIWorld(t)
 	entity := SpawnVirtualJoystick(world, VirtualJoystickOptions{Size: 100})
 	SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{1, 0})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 	SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{-1, 0})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 
 	direction := float32(1)
 	allocations := testing.AllocsPerRun(100, func() {
 		direction = -direction
 		SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{direction, 0})
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	})
 	if allocations != 0 {
 		t.Fatalf("virtual joystick update allocated %.0f objects, want 0", allocations)
@@ -290,9 +290,9 @@ func BenchmarkSetVirtualJoystickRawValue(b *testing.B) {
 	world := ecs.NewWorld()
 	entity := SpawnVirtualJoystick(world, VirtualJoystickOptions{Size: 100})
 	SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{1, 0})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 	SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{-1, 0})
-	ecs.AdvanceMessages(world)
+	world.AdvanceMessages()
 
 	direction := float32(1)
 	b.ReportAllocs()
@@ -300,6 +300,6 @@ func BenchmarkSetVirtualJoystickRawValue(b *testing.B) {
 	for range b.N {
 		direction = -direction
 		SetVirtualJoystickRawValue(world, entity, mgl32.Vec2{direction, 0})
-		ecs.AdvanceMessages(world)
+		world.AdvanceMessages()
 	}
 }
