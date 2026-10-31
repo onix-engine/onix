@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strings"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/font"
@@ -12,6 +13,7 @@ import (
 	"github.com/diiyw/onix/html/layout"
 	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/internal/reuse"
+	"github.com/diiyw/onix/render"
 )
 
 type htmlTextureKey struct {
@@ -23,6 +25,7 @@ type htmlTextureKey struct {
 type htmlOwnedTexture struct {
 	key     htmlTextureKey
 	texture *graphics.Texture
+	target  *render.RenderTarget
 	refs    int
 	queued  bool
 }
@@ -35,6 +38,9 @@ type htmlTextureCache struct {
 	unused         []*htmlOwnedTexture
 	rasters        map[*dom.Node]*htmlOpacityRaster
 	paint          map[htmlTextureKey]*htmlPaintRaster
+	gpuBlur        map[htmlTextureKey]*htmlGPUBlur
+	blurShader     *graphics.Material2DShader
+	blurScratch    htmlGPUBlurScratch
 }
 
 func (cache *htmlTextureCache) add(key htmlTextureKey, texture *graphics.Texture) *htmlOwnedTexture {
@@ -69,10 +75,25 @@ func (cache *htmlTextureCache) bind(entity ecs.Entity, texture *graphics.Texture
 }
 
 func (cache *htmlTextureCache) sweep() {
+	retained := cache.unused[:0]
 	for _, entry := range cache.unused {
 		entry.queued = false
 		if entry.refs == 0 {
+			if effect := cache.gpuBlur[entry.key]; effect != nil && effect.source == entry && effect.output.refs > 0 {
+				entry.queued = true
+				retained = append(retained, entry)
+				continue
+			}
 			_ = entry.texture.Dispose()
+			if entry.target != nil {
+				_ = entry.target.Dispose()
+			}
+			if variant, ok := strings.CutPrefix(entry.key.variant, "gpu-"); ok {
+				key := htmlTextureKey{node: entry.key.node, variant: variant}
+				if effect := cache.gpuBlur[key]; effect != nil && effect.output == entry {
+					delete(cache.gpuBlur, key)
+				}
+			}
 			if cache.entries[entry.key] == entry {
 				delete(cache.entries, entry.key)
 			}
@@ -82,13 +103,24 @@ func (cache *htmlTextureCache) sweep() {
 			}
 		}
 	}
-	clear(cache.unused)
-	cache.unused = cache.unused[:0]
+	clear(cache.unused[len(retained):])
+	cache.unused = retained
+	if len(cache.gpuBlur) == 0 {
+		cache.blurScratch.dispose()
+	}
 }
 
 func (cache *htmlTextureCache) dispose() {
 	for _, entry := range cache.textures {
 		_ = entry.texture.Dispose()
+		if entry.target != nil {
+			_ = entry.target.Dispose()
+		}
+	}
+	cache.blurScratch.dispose()
+	if cache.blurShader != nil {
+		_ = cache.blurShader.Dispose()
+		cache.blurShader = nil
 	}
 	clear(cache.entries)
 	clear(cache.textures)
@@ -97,6 +129,7 @@ func (cache *htmlTextureCache) dispose() {
 	cache.unused = cache.unused[:0]
 	clear(cache.rasters)
 	clear(cache.paint)
+	clear(cache.gpuBlur)
 }
 
 type htmlPaintRaster struct {
@@ -108,7 +141,10 @@ type htmlPaintRaster struct {
 	texture                     *graphics.Texture
 	gradients                   []htmlRasterGradient
 	logicalWidth, logicalHeight float32
-	filterScratch               htmlFilterScratch
+	version                     uint64
+	shadow                      style.Shadow
+	radii                       style.Corners
+	padding                     float32
 }
 
 func cleanupHTMLTextures(_ *ecs.World, _ ecs.Entity, state *htmlRenderState) {
@@ -175,11 +211,16 @@ type htmlOpacityRaster struct {
 	style               *style.ComputedStyle
 	geometry, textPaint uint64
 	face, boldFace      *font.Face
-	paint               htmlPaintRaster
-	filterScratch       htmlFilterScratch
+	gradients           []htmlRasterGradient
+	cached              bool
+	gpuBlur             bool
 }
 
 func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacityRaster {
+	return updateHTMLOpacityRaster(cache, box, true, false, false)
+}
+
+func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
 	if cache.rasters == nil {
 		cache.rasters = make(map[*dom.Node]*htmlOpacityRaster)
 	}
@@ -191,12 +232,18 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 	r := box.BorderBox()
 	bounds := htmlOwnVisiblePaintBounds(box)
 	background, opacity := box.Style.BackgroundColor, box.Style.Opacity
-	if box.Style.AnimatedOpacity {
+	if root || box.Style.AnimatedOpacity {
 		opacity = style.Number(1)
 	}
+	group := root || len(box.Style.Filters) != 0 || (opacity.Kind == style.ValueNumber && opacity.Number < 1)
+	// Keep one layer of subtree caches under an effect group so changing its
+	// own paint does not rerasterize static descendants. Deeper ordinary
+	// wrappers need only invalidation metadata, not another full image each.
+	cached := group || cacheSubtree
 	radius := htmlOverflowClipRadius(box.Style, r.Width, r.Height)
 	geometry, textPaint := box.OwnGeometryHash(), htmlTextRasterHash(box)
-	dirty := raster.version == 0 || raster.style != box.Style || raster.background != background || raster.opacity != opacity || raster.radii != box.Style.BorderRadius || raster.geometry != geometry || raster.textPaint != textPaint || raster.face != cache.face || raster.boldFace != cache.boldFace
+	styleChanged := raster.style != box.Style && (!root || !style.EqualExceptOpacity(raster.style, box.Style))
+	dirty := raster.version == 0 || raster.cached != cached || raster.gpuBlur != gpuBlur || styleChanged || raster.background != background || raster.opacity != opacity || raster.radii != box.Style.BorderRadius || raster.geometry != geometry || raster.textPaint != textPaint || raster.face != cache.face || raster.boldFace != cache.boldFace
 	for index, background := range box.InlineBackgrounds {
 		dirty = reuse.UpdateAt(&raster.inline, index, htmlOpacityInline{background.Node, background.Style, background.Style.BackgroundColor, background.Style.BorderRadius, background.Rect}) || dirty
 	}
@@ -204,7 +251,7 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 	clear(raster.inline[len(box.InlineBackgrounds):])
 	raster.inline = raster.inline[:len(box.InlineBackgrounds)]
 	for index, child := range box.Children {
-		value := htmlOpacityRasterFor(cache, child)
+		value := updateHTMLOpacityRaster(cache, child, false, group, false)
 		bounds = htmlUnionPaintBounds(bounds, value.rect)
 		dirty = reuse.UpdateAt(&raster.children, index, htmlOpacityChild{child.Node, value.version}) || dirty
 	}
@@ -221,17 +268,22 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 	if !dirty {
 		return raster
 	}
-	if bounds.Width <= 0 || bounds.Height <= 0 {
-		raster.image.Pix = raster.image.Pix[:0]
-		raster.image.Rect, raster.image.Stride = image.Rectangle{}, 0
-		raster.rect, raster.style, raster.geometry, raster.textPaint = bounds, box.Style, geometry, textPaint
-		raster.boxRect, raster.background, raster.opacity, raster.radii = r, background, opacity, box.Style.BorderRadius
-		raster.face, raster.boldFace = cache.face, cache.boldFace
-		raster.version++
+	raster.rect, raster.background, raster.opacity, raster.radius, raster.radii = bounds, background, opacity, radius, box.Style.BorderRadius
+	raster.boxRect = r
+	raster.style, raster.geometry, raster.textPaint, raster.face, raster.boldFace = box.Style, geometry, textPaint, cache.face, cache.boldFace
+	raster.cached = cached
+	raster.gpuBlur = gpuBlur
+	raster.version++
+	if !cached || bounds.Width <= 0 || bounds.Height <= 0 {
+		raster.image = image.RGBA{}
+		raster.uploaded = 0
 		return raster
 	}
 	w, h := max(1, int(math.Ceil(bounds.Width))), max(1, int(math.Ceil(bounds.Height)))
 	length := w * h * 4
+	if entry := cache.entries[htmlTextureKey{node: box.Node}]; entry != nil && (entry.texture.Width != w || entry.texture.Height != h) {
+		raster.image.Pix = nil
+	}
 	if cap(raster.image.Pix) < length {
 		raster.image.Pix = make([]byte, length)
 	} else {
@@ -239,29 +291,13 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 		clear(raster.image.Pix)
 	}
 	raster.image.Stride, raster.image.Rect = w*4, image.Rect(0, 0, w, h)
-	raster.rect, raster.background, raster.opacity, raster.radius, raster.radii = bounds, background, opacity, radius, box.Style.BorderRadius
-	raster.boxRect = r
-	raster.style, raster.geometry, raster.textPaint, raster.face, raster.boldFace = box.Style, geometry, textPaint, cache.face, cache.boldFace
-	if htmlStyleVisible(box.Style) {
-		raster.paint.gradients = prepareHTMLRasterGradients(raster.paint.gradients, box.Style)
-		rasterHTMLBoxPaintPrepared(&raster.paint.image, box.Style, r.Width, r.Height, 1, raster.paint.gradients)
-		htmlCompositeRGBA(&raster.image, &raster.paint.image, int(math.Round(r.X-minX)), int(math.Round(r.Y-minY)))
+	// Nested effect groups have finished painting before borrowing scratch.
+	scratch := acquireHTMLRasterScratch()
+	defer releaseHTMLRasterScratch(scratch)
+	paintHTMLOpacityContents(cache, box, &raster.image, minX, minY, scratch)
+	if !gpuBlur {
+		applyHTMLFilters(&raster.image, box.Style.Filters, &scratch.htmlFilterScratch)
 	}
-	for _, background := range box.InlineBackgrounds {
-		if !htmlStyleVisible(background.Style) {
-			continue
-		}
-		r := background.Rect
-		raster.paint.gradients = prepareHTMLRasterGradients(raster.paint.gradients, background.Style)
-		rasterHTMLBoxPaintPrepared(&raster.paint.image, background.Style, r.Width, r.Height, 1, raster.paint.gradients)
-		htmlCompositeRGBA(&raster.image, &raster.paint.image, int(math.Round(r.X-minX)), int(math.Round(r.Y-minY)))
-	}
-	rasterHTMLText(&raster.image, box, cache.face, cache.boldFace, minX, minY)
-	for _, child := range box.Children {
-		value := cache.rasters[child.Node]
-		htmlCompositeRGBA(&raster.image, &value.image, int(math.Round(value.rect.X-minX)), int(math.Round(value.rect.Y-minY)))
-	}
-	applyHTMLFilters(&raster.image, box.Style.Filters, &raster.filterScratch)
 	alpha := float64(1)
 	if opacity.Kind == style.ValueNumber {
 		alpha = opacity.Number
@@ -271,8 +307,35 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 			raster.image.Pix[index] = uint8(math.Round(float64(raster.image.Pix[index]) * alpha))
 		}
 	}
-	raster.version++
 	return raster
+}
+
+func paintHTMLOpacityContents(cache *htmlTextureCache, box *layout.Box, dst *image.RGBA, originX, originY float64, scratch *htmlRasterScratch) {
+	raster := cache.rasters[box.Node]
+	r := box.BorderBox()
+	if htmlStyleVisible(box.Style) {
+		raster.gradients = prepareHTMLRasterGradients(raster.gradients, box.Style)
+		rasterHTMLBoxPaintPrepared(&scratch.paint, box.Style, r.Width, r.Height, 1, raster.gradients)
+		htmlCompositeRGBA(dst, &scratch.paint, int(math.Round(r.X-originX)), int(math.Round(r.Y-originY)))
+	}
+	for _, background := range box.InlineBackgrounds {
+		if !htmlStyleVisible(background.Style) {
+			continue
+		}
+		r := background.Rect
+		raster.gradients = prepareHTMLRasterGradients(raster.gradients, background.Style)
+		rasterHTMLBoxPaintPrepared(&scratch.paint, background.Style, r.Width, r.Height, 1, raster.gradients)
+		htmlCompositeRGBA(dst, &scratch.paint, int(math.Round(r.X-originX)), int(math.Round(r.Y-originY)))
+	}
+	rasterHTMLText(dst, box, cache.face, cache.boldFace, originX, originY)
+	for _, child := range box.Children {
+		value := cache.rasters[child.Node]
+		if value.cached {
+			htmlCompositeRGBA(dst, &value.image, int(math.Round(value.rect.X-originX)), int(math.Round(value.rect.Y-originY)))
+		} else {
+			paintHTMLOpacityContents(cache, child, dst, originX, originY, scratch)
+		}
+	}
 }
 
 func rasterHTMLBackground(dst *image.RGBA, box *layout.Box, originX, originY float64) {

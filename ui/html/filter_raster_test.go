@@ -6,6 +6,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 )
@@ -121,8 +122,27 @@ func TestHTMLCompositeOpacityAppliesAfterOverlappingChildren(t *testing.T) {
 	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "group")
 	pixel := state.Textures.rasters[node.node].image.RGBAAt(10, 10)
-	if pixel.A != 128 || math.Abs(float64(pixel.R)-127) > 1 || math.Abs(float64(pixel.B)-128) > 1 {
+	visual := htmlCullRole(world, owner, node, htmlRoleSurface)
+	sprite, _ := world.Get[scene.Sprite2D](visual)
+	if pixel.A != 255 || sprite.Alpha != .5 || math.Abs(float64(pixel.R)-127) > 1 || math.Abs(float64(pixel.B)-128) > 1 {
 		t.Fatalf("opacity was applied before subtree compositing: %v", pixel)
+	}
+}
+
+func TestHTMLStaticOpacityChangeKeepsCompositeTexture(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div id="group" style="width:40px;height:30px;opacity:.5"><div style="width:30px;height:20px;background:red"></div></div>`)
+	defer Dispose(world)
+	group := incrementalHTMLNode(t, world, owner, "group")
+	state := world.GetRef[htmlRenderState](owner)
+	raster := state.Textures.rasters[group.node]
+	visual := htmlCullRole(world, owner, group, htmlRoleSurface)
+	before, _ := world.Get[scene.Sprite2D](visual)
+	version := raster.version
+	group.SetAttribute("style", "width:40px;height:30px;opacity:.25")
+	incrementalSync(t, world)
+	after, _ := world.Get[scene.Sprite2D](visual)
+	if raster.version != version || after.Texture != before.Texture || after.Alpha != .25 {
+		t.Fatalf("opacity-only change rebuilt content: version %d -> %d, texture %p -> %p, alpha %v", version, raster.version, before.Texture, after.Texture, after.Alpha)
 	}
 }
 
@@ -203,6 +223,29 @@ func TestHTMLBoxShadowBlursMaskAndExcludesBoxInterior(t *testing.T) {
 	}
 	if allocations := testing.AllocsPerRun(50, paint); allocations != 0 {
 		t.Fatalf("warm shadow allocations = %g", allocations)
+	}
+}
+
+func TestHTMLBoxShadowCacheIgnoresUnrelatedStyle(t *testing.T) {
+	state := &htmlRenderState{}
+	defer state.Textures.dispose()
+	node := &dom.Node{}
+	computed := &style.ComputedStyle{BoxShadow: []style.Shadow{{BlurRadius: style.LengthPx(4), Color: style.Color{A: 255}}}}
+	for _, maskOnly := range []bool{false, true} {
+		texture, version := htmlBoxShadowTextureForMode(state, node, computed, 0, 38, 38, 20, 20, 9, maskOnly)
+		if texture == nil || version == 0 {
+			t.Fatal("missing shadow texture")
+		}
+		changed := *computed
+		changed.Opacity = style.Number(.5)
+		changed.BackgroundColor = style.Value{Kind: style.ValueColor, Color: style.Color{R: 255, A: 255}}
+		if next, nextVersion := htmlBoxShadowTextureForMode(state, node, &changed, 0, 38, 38, 20, 20, 9, maskOnly); next != texture || nextVersion != version {
+			t.Fatal("unrelated style change regenerated the shadow mask")
+		}
+		changed.BoxShadow = []style.Shadow{{BlurRadius: style.LengthPx(4), Color: style.Color{G: 255, A: 255}}}
+		if next, nextVersion := htmlBoxShadowTextureForMode(state, node, &changed, 0, 38, 38, 20, 20, 9, maskOnly); next != texture || nextVersion <= version {
+			t.Fatal("shadow color change did not invalidate the mask")
+		}
 	}
 }
 

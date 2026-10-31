@@ -1,0 +1,36 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/font
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkGlyphRasterization/A/gray-new-size         	    9254	     27058 ns/op	     325 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/A/gray-new-size         	   10000	     27282 ns/op	     288 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/A/gray-new-size         	   10000	     25439 ns/op	     288 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/A/lcd                   	    5612	     43691 ns/op	     960 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/A/lcd                   	    5672	     45101 ns/op	     960 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/A/lcd                   	    5829	     41385 ns/op	     960 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/A/decode-glyf           	 1000000	       264.8 ns/op	     228 B/op	       4 allocs/op
+BenchmarkGlyphRasterization/A/decode-glyf           	 1000000	       312.2 ns/op	     228 B/op	       4 allocs/op
+BenchmarkGlyphRasterization/A/decode-glyf           	  819217	       327.8 ns/op	     228 B/op	       4 allocs/op
+BenchmarkGlyphRasterization/渲/gray-new-size         	    2300	    104293 ns/op	     561 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/渲/gray-new-size         	    2431	     99647 ns/op	     480 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/渲/gray-new-size         	    2589	    102427 ns/op	     480 B/op	       3 allocs/op
+BenchmarkGlyphRasterization/渲/lcd                   	    1561	    131274 ns/op	    1600 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/渲/lcd                   	    1878	    131266 ns/op	    1600 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/渲/lcd                   	    1996	    124208 ns/op	    1600 B/op	       2 allocs/op
+BenchmarkGlyphRasterization/渲/decode-glyf           	  362251	       694.3 ns/op	     552 B/op	       4 allocs/op
+BenchmarkGlyphRasterization/渲/decode-glyf           	  408242	       777.9 ns/op	     552 B/op	       4 allocs/op
+BenchmarkGlyphRasterization/渲/decode-glyf           	  266793	       865.2 ns/op	     552 B/op	       4 allocs/op
+PASS
+ok  	github.com/diiyw/onix/font	4.644s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui/html
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLRasterPopulation/1         	     266	    776252 ns/op	   68555 B/op	      13 allocs/op
+BenchmarkHTMLRasterPopulation/1         	     367	    720167 ns/op	   67568 B/op	      13 allocs/op
+BenchmarkHTMLRasterPopulation/1         	     362	    661569 ns/op	   67568 B/op	      13 allocs/op
+BenchmarkHTMLRasterPopulation/16        	      22	  10911016 ns/op	 1066893 B/op	     107 allocs/op
+BenchmarkHTMLRasterPopulation/16        	      24	  10811257 ns/op	 1066891 B/op	     107 allocs/op
+BenchmarkHTMLRasterPopulation/16        	      22	  11512014 ns/op	 1066892 B/op	     107 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui/html	1.490s

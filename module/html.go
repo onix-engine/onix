@@ -5,6 +5,9 @@ import (
 	htmlui "github.com/diiyw/onix/ui/html"
 )
 
+// Rect is an element's border box in its HTML surface's coordinates.
+type Rect struct{ X, Y, Width, Height float32 }
+
 // HandleHTMLEvent gives semantic form/control input to the owning scene.
 // Surface and generated target identities never enter the behavior callback.
 func (r *Runtime) HandleHTMLEvent(event htmlui.Event) error {
@@ -75,6 +78,17 @@ func (n HTMLNode) SetSelectedIndex(selected int) bool {
 }
 func (n HTMLNode) Clear() bool  { return n.valid() && n.node.Clear() }
 func (n HTMLNode) Remove() bool { return n.valid() && n.node.Remove() }
+
+// Bounds returns the node's last synchronized layout border box in the HTML
+// surface's coordinates. Hidden or detached nodes have no box; runtime scroll
+// and animation offsets are not included.
+func (n HTMLNode) Bounds() (Rect, bool) {
+	if !n.valid() {
+		return Rect{}, false
+	}
+	rect, ok := n.node.Bounds()
+	return Rect{X: rect.X, Y: rect.Y, Width: rect.Width, Height: rect.Height}, ok
+}
 func (n HTMLNode) Clone() HTMLNode {
 	if !n.valid() {
 		return HTMLNode{}

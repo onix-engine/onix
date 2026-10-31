@@ -86,6 +86,20 @@ func (s *QueryScope) Reset(entities []Entity) {
 
 func (w *World) QueryScope() *QueryScope { return w.queryScope }
 
+// InQueryScope reports whether a live entity belongs to the current query
+// scope. It lets hierarchy traversals honor scopes without scanning them.
+func (w *World) InQueryScope(entity Entity) bool {
+	_, meta, alive := w.entityMeta(entity)
+	if !alive || w.queryScope == nil {
+		return alive
+	}
+	scope := w.queryScope
+	scope.bind(w)
+	table := &scope.tables[meta.archetypeID]
+	word := int(meta.row) / 64
+	return word < len(table.rows) && table.rows[word]&(uint64(1)<<(meta.row%64)) != 0
+}
+
 // SetQueryScope returns the previous scope. Nil restores unrestricted queries.
 // A scope cannot change while a query iterator is live.
 func (w *World) SetQueryScope(scope *QueryScope) *QueryScope {

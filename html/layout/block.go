@@ -118,7 +118,11 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 		contentY = resolveAbsoluteY(box, layoutContaining)
 	}
 
-	box.Content = Rect{X: contentX, Y: contentY, Width: contentWidth, Height: contentHeight}
+	box.ScrollbarGutter.Right = min(box.ScrollbarGutter.Right, max(contentWidth, 0))
+	if hasDefiniteScrollHeight(box) {
+		box.ScrollbarGutter.Bottom = min(box.ScrollbarGutter.Bottom, max(contentHeight, 0))
+	}
+	box.Content = Rect{X: contentX, Y: contentY, Width: max(contentWidth-box.ScrollbarGutter.Right, 0), Height: max(contentHeight-box.ScrollbarGutter.Bottom, 0)}
 	if box.Style.Display.Kind == style.ValueKeyword && box.Style.Display.Keyword == "table" {
 		layoutTableContainer(box, layoutContaining, absoluteContaining, face, styles, ctx)
 		return
@@ -256,7 +260,10 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			box.Content.Height = cursorY - box.Content.Y
 		}
 	}
-	box.Content.Height = clampContentDimension(box.Content.Height, box.Style.MinHeight, box.Style.MaxHeight, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+	if style.IsLength(box.Style.Height) || contentHeight > 0 || intrinsicHeight > 0 {
+		box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
+	}
+	box.Content.Height = clampScrollContentHeight(box, layoutContaining.Height)
 	alignBottomPositionedChildren(box, absoluteContaining, ctx)
 	if isControlElementNode(box.Node) {
 		box.ImageFragments = layoutControlImageFragments(box.Node, box.Content, 0, styles, ctx, box.TextFragments)
@@ -301,7 +308,7 @@ func appendListMarker(fragments []TextFragment, box *Box, face *font.Face, ctx *
 		if err == nil {
 			baseline := box.Content.Y + float64(markerFace.Hhea.Ascent)*fontSize/float64(markerFace.Head.UnitsPerEm)
 			for _, glyph := range glyphs {
-				fragment.Glyphs = append(fragment.Glyphs, GlyphFragment{Rune: glyph.Rune, X: x + glyph.X, Y: baseline, Advance: glyph.Advance})
+				fragment.Glyphs = append(fragment.Glyphs, GlyphFragment{Rune: glyph.Rune, X: x + glyph.X, Y: baseline, PenX: float32(x + float64(glyph.PenX)), Advance: glyph.Advance})
 			}
 		}
 	}
@@ -480,7 +487,7 @@ func isBottomAnchoredAbsolutePositioned(box *Box) bool {
 
 func descendantAbsoluteContaining(box *Box, absoluteContaining Rect) Rect {
 	if establishesAbsoluteContainingBlock(box) {
-		return box.PaddingBox()
+		return box.ScrollportBox()
 	}
 	return absoluteContaining
 }
@@ -591,6 +598,7 @@ func translateLayoutBox(box *Box, dx, dy float64, flow bool, ctx *layoutContext)
 		box.TextFragments[i].Rect.Y += dy
 		for j := range box.TextFragments[i].Glyphs {
 			box.TextFragments[i].Glyphs[j].X += dx
+			box.TextFragments[i].Glyphs[j].PenX += float32(dx)
 			box.TextFragments[i].Glyphs[j].Y += dy
 		}
 	}
@@ -608,6 +616,7 @@ func translateLayoutBox(box *Box, dx, dy float64, flow bool, ctx *layoutContext)
 			box.ControlFragments[i].TextFragments[j].Rect.Y += dy
 			for k := range box.ControlFragments[i].TextFragments[j].Glyphs {
 				box.ControlFragments[i].TextFragments[j].Glyphs[k].X += dx
+				box.ControlFragments[i].TextFragments[j].Glyphs[k].PenX += float32(dx)
 				box.ControlFragments[i].TextFragments[j].Glyphs[k].Y += dy
 			}
 		}
@@ -900,6 +909,7 @@ func scrollTextInputTextFragmentsIntoView(node *dom.Node, content Rect, fragment
 		fragments[i].Rect.X -= shift
 		for j := range fragments[i].Glyphs {
 			fragments[i].Glyphs[j].X -= shift
+			fragments[i].Glyphs[j].PenX -= float32(shift)
 		}
 	}
 	return fragments

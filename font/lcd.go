@@ -6,6 +6,7 @@ package font
 import (
 	"image"
 	"math"
+	"slices"
 )
 
 // GlyphLCD produces raw RGB coverage using Skia's four-sample LCD filter.
@@ -29,15 +30,15 @@ func (f *ScaledFace) GlyphLCD(r rune, phaseX uint8) (image.Rectangle, *image.RGB
 	if len(outline.Contours) == 0 || bounds.Empty() {
 		return image.Rectangle{}, nil, advance, true
 	}
-	contours := scaleOutlineAt(outline.Contours, scale, bounds, shift, 0)
-	for _, contour := range contours {
-		for i := range contour {
-			contour[i].X *= 4
-		}
-	}
-	mask := image.NewAlpha(image.Rect(0, 0, bounds.Dx()*4, bounds.Dy()))
-	paintCoverage(mask, contours)
-	bitmap := filterLCD(mask.Pix, mask.Rect.Dx(), bounds.Dy())
+	scratch := acquireGlyphRasterScratch()
+	contours := scratch.scaleOutline(outline.Contours, scale, bounds, shift, 0, 4)
+	stride := bounds.Dx() * 4
+	length := stride * bounds.Dy()
+	scratch.mask = slices.Grow(scratch.mask[:0], length)[:length]
+	mask := image.Alpha{Pix: scratch.mask, Stride: stride, Rect: image.Rect(0, 0, stride, bounds.Dy())}
+	paintCoverage(&mask, contours)
+	bitmap := filterLCD(mask.Pix, stride, bounds.Dy())
+	releaseGlyphRasterScratch(scratch)
 	bounds.Min.X--
 	bounds.Max.X++
 	return image.Rect(bounds.Min.X, -bounds.Max.Y, bounds.Max.X, -bounds.Min.Y), bitmap, advance, true

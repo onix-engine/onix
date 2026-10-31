@@ -180,19 +180,15 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 	case "transform-origin":
 		style.TransformOriginX, style.TransformOriginY = parent.TransformOriginX, parent.TransformOriginY
 	case "transition":
-		style.TransformTransition = parent.TransformTransition
-		style.OpacityTransition = parent.OpacityTransition
-		style.ColorTransitions = parent.ColorTransitions
-		style.TransitionRaw = parent.TransitionRaw
+		style.mutableMotion().transition = parent.transitionValues()
 	case "transition-property", "transition-duration", "transition-timing-function", "transition-delay":
 		index := slices.Index(transitionProperties[:], property)
-		style.TransitionRaw[index] = parent.TransitionRaw[index]
-		resolveTransitions(style)
+		style.mutableMotion().transition[index] = parent.transitionValues()[index]
 	case "animation":
-		style.AnimationRaw = parent.AnimationRaw
+		style.mutableMotion().animation = parent.animationValues()
 	case "animation-name", "animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state":
 		index := slices.Index(animationProperties[:], property)
-		style.AnimationRaw[index] = parent.AnimationRaw[index]
+		style.mutableMotion().animation[index] = parent.animationValues()[index]
 	case "z-index":
 		style.ZIndex = parent.ZIndex
 	case "overflow":

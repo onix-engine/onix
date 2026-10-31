@@ -2,6 +2,7 @@ package html
 
 import (
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
@@ -19,6 +20,8 @@ const (
 	htmlRoleBorderRight
 	htmlRoleBorderBottom
 	htmlRoleBorderLeft
+	htmlRoleBorderList
+	htmlRoleInlineBackgroundList
 	htmlRoleDecoration
 	htmlRoleInlineBackground
 	htmlRoleText
@@ -156,6 +159,8 @@ func htmlOptionalBit[T any]() uint16 {
 		return 1 << 11
 	case *scene.ClipExempt2D:
 		return 1 << 12
+	case *scene.Shader[graphics.Material2DShader]:
+		return 1 << 13
 	}
 	return 0
 }
@@ -187,6 +192,8 @@ func (writer *htmlEntityWriter) putHTML[T any](value T) {
 		if old, ok := world.Get[scene.UIScroll](entity); ok {
 			old.ViewportSize, old.ContentSize = next.ViewportSize, next.ContentSize
 			old.Horizontal, old.Vertical = next.Horizontal, next.Vertical
+			old.ScrollbarOverlay, old.ScrollbarSize = next.ScrollbarOverlay, next.ScrollbarSize
+			old.ScrollbarMinThumbSize, old.ScrollbarThin = next.ScrollbarMinThumbSize, next.ScrollbarThin
 			old.ConsumeWheel = next.ConsumeWheel
 			old.DisableInput = next.DisableInput
 			old.Position[0] = min(max(old.Position[0], -max(next.ContentSize[0]-next.ViewportSize[0], 0)), 0)
@@ -211,6 +218,7 @@ func (writer *htmlEntityWriter) putHTML[T any](value T) {
 			old.WrapMode, old.MaxWidth, old.LineHeight, old.Color = next.WrapMode, next.MaxWidth, next.LineHeight, next.Color
 			old.Alpha, old.LCD = next.Alpha, next.LCD
 			old.TabWidth = next.TabWidth
+			old.Prelayout = next.Prelayout
 			value = any(old).(T)
 		}
 	}
@@ -243,6 +251,7 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		writer.removeMissingHTML[scene.UIScroll]()
 		writer.removeMissingHTML[ScrollbarPart]()
 		writer.removeMissingHTML[scene.ClipExempt2D]()
+		writer.removeMissingHTML[scene.Shader[graphics.Material2DShader]]()
 		writer.state.SyncStats.Reused++
 	}
 	binding := htmlEntityBinding{writer.entity, writer.optional}

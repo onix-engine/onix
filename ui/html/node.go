@@ -35,12 +35,13 @@ func Root(world *ecs.World, owner ecs.Entity) (Node, error) {
 		}
 		state = world.GetMut[htmlRenderState](owner)
 	}
-	if state.Root == nil || state.Source != value.Value {
-		root, embeddedCSS, err := parseHTMLDocument(value.Value)
+	if state.Root == nil || state.Source != value.Value || state.SourceDocument != value.Document {
+		root, embeddedCSS, err := prepareHTMLDocument(value)
 		if err != nil {
 			return Node{}, fmt.Errorf("ecs: parse html: %w", err)
 		}
 		state.Source = value.Value
+		state.SourceDocument = value.Document
 		state.EmbeddedCSS = embeddedCSS
 		state.Root = root
 		state.StyleCache.InvalidateDefinitions()

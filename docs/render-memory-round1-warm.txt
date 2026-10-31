@@ -1,0 +1,44 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/graphics
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCanvasSpritePacket1000 	    4638	     46489 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/graphics	0.242s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkIncrementalRender2D/1000/stable         	  173025	      1469 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/color          	    7071	     29988 ns/op	        86.00 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/move           	    4677	     53237 ns/op	       146.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/scroll         	    1389	    178921 ns/op	        86.01 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/all            	     322	    760603 ns/op	      1000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/1000/covered        	   37117	      6984 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/stable        	  182750	      1392 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/color         	    3937	     58603 ns/op	       152.0 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/move          	    2266	    111902 ns/op	       284.5 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/scroll        	     100	   2293843 ns/op	       325.0 instances/op	     272 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/all           	      26	   8959861 ns/op	     10000 instances/op	       0 B/op	       0 allocs/op
+BenchmarkIncrementalRender2D/10000/covered       	   35060	      7127 ns/op	         1.000 instances/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	4.303s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene/render3d
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRender3DPreparedFrame/100         	    2347	     97735 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRender3DPreparedFrame/1000        	     247	    961302 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene/render3d	0.480s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui/html
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLCSSColorAnimationFrame    	     844	    283184 ns/op	      38 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/10      	   12324	     19993 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLLocalTextMutation/1000    	    2211	    113444 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLFullRenderStylesheetReuse 	   10000	     21742 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLHoverStyleReuse           	    8476	     30316 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui/html	1.546s

@@ -24,11 +24,7 @@ type compiledModelResource struct {
 	Animations   []compiledModelAnimation
 }
 
-type compiledModelSkinVertex struct {
-	Joints  [4]uint32
-	Weights [4]float32
-	Active  bool
-}
+type compiledModelSkinVertex = graphics.SkinVertex
 
 // ModelAnimation returns a compiled ECS clip exported by a glTF/FBX model.
 // The clip is immutable and can be shared by multiple Animator components.
@@ -184,12 +180,7 @@ type compiledMaterialSurface struct {
 	DoubleSided          bool
 }
 
-type compiledModelMorphTarget struct {
-	Name          string
-	PositionDelta [][3]float32
-	NormalDelta   [][3]float32
-	TangentDelta  [][3]float32
-}
+type compiledModelMorphTarget = graphics.MorphTarget
 
 type compiledModelJoint struct {
 	Name        string
@@ -456,14 +447,8 @@ func (r *Resources) loadModelAsset(value string) (compiledModelResource, *graphi
 		return compiledModelResource{}, nil, err
 	}
 	mesh.Submeshes = resource.Submeshes
-	mesh.Skin = make([]graphics.SkinVertex, len(resource.Skin))
-	for index, skin := range resource.Skin {
-		mesh.Skin[index] = graphics.SkinVertex{Joints: skin.Joints, Weights: skin.Weights, Active: skin.Active}
-	}
-	mesh.MorphTargets = make([]graphics.MorphTarget, len(resource.MorphTargets))
-	for index, target := range resource.MorphTargets {
-		mesh.MorphTargets[index] = graphics.MorphTarget{Name: target.Name, PositionDelta: target.PositionDelta, NormalDelta: target.NormalDelta, TangentDelta: target.TangentDelta}
-	}
+	mesh.Skin = resource.Skin
+	mesh.MorphTargets = resource.MorphTargets
 	return resource, mesh, nil
 }
 

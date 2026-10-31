@@ -186,8 +186,13 @@ func TestHTMLPaintCullDefersCompositeRasterAndRestoresLatestPaint(t *testing.T) 
 	if raster == nil || htmlCullRole(world, owner, group, htmlRoleSurface) == 0 || htmlCullRole(world, owner, child, htmlRoleSurface) != 0 {
 		t.Fatal("visible opacity group was not restored as one composite")
 	}
-	if pixel := raster.image.RGBAAt(1, 1); pixel.G != 255 || pixel.R != 0 || pixel.A != 128 {
+	if pixel := raster.image.RGBAAt(1, 1); pixel.G != 255 || pixel.R != 0 || pixel.A != 255 {
 		t.Fatalf("composite restored stale paint: %v", pixel)
+	}
+	visual := htmlCullRole(world, owner, group, htmlRoleSurface)
+	sprite, _ := world.Get[scene.Sprite2D](visual)
+	if sprite.Alpha != .5 {
+		t.Fatalf("restored composite alpha = %v, want .5", sprite.Alpha)
 	}
 }
 
@@ -358,11 +363,13 @@ func BenchmarkHTMLPaintCullMovedScroll(b *testing.B) {
 func TestHTMLPaintCullRestoresSeparateBorders(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="scroll" style="height:80px;overflow:auto"><div style="height:1000px"></div><div id="target" style="width:30px;height:20px;background:red;border-top:1px solid blue;border-left:2px solid black">Target</div></div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
-	if htmlCullRole(world, owner, target, htmlRoleBorderTop) != 0 || htmlCullRole(world, owner, target, htmlRoleBorderLeft) != 0 {
+	if htmlCullRole(world, owner, target, htmlRoleBorderList) != 0 {
 		t.Fatal("offscreen borders were mounted")
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -1000)
-	if htmlCullRole(world, owner, target, htmlRoleBorderTop) == 0 || htmlCullRole(world, owner, target, htmlRoleBorderLeft) == 0 {
-		t.Fatal("separate border surfaces were not restored")
+	entity := htmlCullRole(world, owner, target, htmlRoleBorderList)
+	layers := world.GetRef[scene.SpriteLayers2D](entity)
+	if entity == 0 || layers == nil || len(layers.Layers) != 2 {
+		t.Fatal("border paint list was not restored")
 	}
 }

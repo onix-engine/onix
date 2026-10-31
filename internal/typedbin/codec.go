@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"unsafe"
 
 	"github.com/diiyw/onix/internal/reuse"
 )
@@ -30,6 +31,11 @@ type schemaResult struct {
 }
 
 var schemaCache sync.Map
+
+var nativeLittleEndian = func() bool {
+	value := uint16(1)
+	return *(*byte)(unsafe.Pointer(&value)) == 1
+}()
 
 // IsEncoded reports whether data starts with the typed binary format marker.
 func IsEncoded(data []byte) bool {
@@ -170,6 +176,14 @@ func (e *valueEncoder) encode(value reflect.Value, typeOf reflect.Type) error {
 	case reflect.String:
 		e.appendBytes([]byte(value.String()))
 	case reflect.Array:
+		if typeOf.Elem().Kind() == reflect.Uint32 && typeOf.Len() != 0 && value.CanAddr() {
+			e.encodeUint32s(unsafe.Slice((*uint32)(value.Addr().UnsafePointer()), typeOf.Len()))
+			return nil
+		}
+		if nativeLittleEndian && typeOf.Elem().Kind() == reflect.Float32 && typeOf.Len() != 0 && value.CanAddr() {
+			e.data = append(e.data, unsafe.Slice((*byte)(value.Addr().UnsafePointer()), typeOf.Len()*4)...)
+			return nil
+		}
 		for index := range typeOf.Len() {
 			if err := e.encode(value.Index(index), typeOf.Elem()); err != nil {
 				return atIndex(index, err)
@@ -198,6 +212,20 @@ func (e *valueEncoder) encode(value reflect.Value, typeOf reflect.Type) error {
 			return nil
 		}
 		e.appendUvarint(uint64(value.Len()) + 1)
+		if typeOf.Elem().Kind() == reflect.Uint32 && value.Len() != 0 {
+			e.encodeUint32s(unsafe.Slice((*uint32)(value.UnsafePointer()), value.Len()))
+			return nil
+		}
+		if nativeLittleEndian && typeOf.Elem().Kind() == reflect.Float32 && value.Len() != 0 {
+			e.data = append(e.data, unsafe.Slice((*byte)(value.UnsafePointer()), value.Len()*4)...)
+			return nil
+		}
+		if nativeLittleEndian && value.Len() != 0 {
+			if layout, ok := numericStructLayout(typeOf.Elem()); ok {
+				e.encodeNumericStructs(value, layout)
+				return nil
+			}
+		}
 		for index := range value.Len() {
 			if err := e.encode(value.Index(index), typeOf.Elem()); err != nil {
 				return atIndex(index, err)
@@ -362,6 +390,17 @@ func (d *valueDecoder) decode(value reflect.Value, typeOf reflect.Type) error {
 		}
 		value.SetString(string(encoded))
 	case reflect.Array:
+		if typeOf.Elem().Kind() == reflect.Uint32 && typeOf.Len() != 0 {
+			return d.decodeUint32s(unsafe.Slice((*uint32)(value.Addr().UnsafePointer()), typeOf.Len()), typeOf.Elem())
+		}
+		if nativeLittleEndian && typeOf.Elem().Kind() == reflect.Float32 && typeOf.Len() != 0 {
+			encoded, err := d.take(typeOf.Len() * 4)
+			if err != nil {
+				return err
+			}
+			copy(unsafe.Slice((*byte)(value.Addr().UnsafePointer()), typeOf.Len()*4), encoded)
+			break
+		}
 		for index := range typeOf.Len() {
 			if err := d.decode(value.Index(index), typeOf.Elem()); err != nil {
 				return atIndex(index, err)
@@ -389,6 +428,22 @@ func (d *valueDecoder) decode(value reflect.Value, typeOf reflect.Type) error {
 				return err
 			}
 			value.Set(reflect.MakeSlice(typeOf, length, length))
+			if typeOf.Elem().Kind() == reflect.Uint32 && length != 0 {
+				return d.decodeUint32s(unsafe.Slice((*uint32)(value.UnsafePointer()), length), typeOf.Elem())
+			}
+			if nativeLittleEndian && typeOf.Elem().Kind() == reflect.Float32 && length != 0 {
+				encoded, err := d.take(length * 4)
+				if err != nil {
+					return err
+				}
+				copy(unsafe.Slice((*byte)(value.UnsafePointer()), length*4), encoded)
+				break
+			}
+			if nativeLittleEndian && length != 0 {
+				if layout, ok := numericStructLayout(typeOf.Elem()); ok {
+					return d.decodeNumericStructs(value, layout)
+				}
+			}
 			for index := range length {
 				if err := d.decode(value.Index(index), typeOf.Elem()); err != nil {
 					return atIndex(index, err)

@@ -3,6 +3,7 @@ package font
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 )
 
 const (
@@ -120,7 +121,14 @@ func parseSimpleGlyph(data []byte, numberOfContours int16) (*SimpleGlyph, error)
 	if contourCount > 0 {
 		pointCount = int(endPts[len(endPts)-1]) + 1
 	}
-	flags := make([]byte, 0, pointCount)
+	var localFlags [256]byte
+	flags := localFlags[:0]
+	if pointCount > cap(flags) {
+		scratch := acquireGlyphRasterScratch()
+		defer releaseGlyphRasterScratch(scratch)
+		scratch.mask = slices.Grow(scratch.mask[:0], pointCount)[:pointCount]
+		flags = scratch.mask[:0]
+	}
 	for len(flags) < pointCount {
 		if offset >= len(data) {
 			return nil, fmt.Errorf("simple glyph truncated flags")
@@ -134,13 +142,16 @@ func parseSimpleGlyph(data []byte, numberOfContours int16) (*SimpleGlyph, error)
 			}
 			repeat := int(data[offset])
 			offset++
+			if repeat > pointCount-len(flags) {
+				return nil, fmt.Errorf("simple glyph repeat exceeds point count")
+			}
 			for i := 0; i < repeat; i++ {
 				flags = append(flags, flag)
 			}
 		}
 	}
 
-	xCoords := make([]int16, pointCount)
+	points := make([]Point, pointCount)
 	var x int16
 	for i, flag := range flags {
 		delta, nextOffset, err := readGlyphCoordinate(data, offset, flag, flagXShortVector, flagXSameOrPositive)
@@ -149,10 +160,9 @@ func parseSimpleGlyph(data []byte, numberOfContours int16) (*SimpleGlyph, error)
 		}
 		offset = nextOffset
 		x += delta
-		xCoords[i] = x
+		points[i].X, points[i].OnCurve = x, flag&flagOnCurve != 0
 	}
 
-	yCoords := make([]int16, pointCount)
 	var y int16
 	for i, flag := range flags {
 		delta, nextOffset, err := readGlyphCoordinate(data, offset, flag, flagYShortVector, flagYSameOrPositive)
@@ -161,12 +171,7 @@ func parseSimpleGlyph(data []byte, numberOfContours int16) (*SimpleGlyph, error)
 		}
 		offset = nextOffset
 		y += delta
-		yCoords[i] = y
-	}
-
-	points := make([]Point, pointCount)
-	for i := 0; i < pointCount; i++ {
-		points[i] = Point{X: xCoords[i], Y: yCoords[i], OnCurve: flags[i]&flagOnCurve != 0}
+		points[i].Y = y
 	}
 
 	return &SimpleGlyph{EndPtsOfContours: endPts, Instructions: instructions, Points: points}, nil

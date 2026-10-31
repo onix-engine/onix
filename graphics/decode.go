@@ -12,6 +12,20 @@ func TextureFromImage(src image.Image, options TextureOptions) *Texture {
 	return decodedTexture(src, options)
 }
 
+// TextureFromOwnedDecodedImage takes ownership of a decoder's image buffer.
+// RGBA and NRGBA images use their pixels in place when tightly packed; other
+// image formats are converted into the texture's RGBA storage.
+func TextureFromOwnedDecodedImage(src image.Image, options TextureOptions) *Texture {
+	switch image := src.(type) {
+	case *image.RGBA:
+		return TextureFromOwnedImage(image, options)
+	case *image.NRGBA:
+		return TextureFromOwnedNRGBA(image, options)
+	default:
+		return decodedTexture(src, options)
+	}
+}
+
 // TextureFromOwnedImage transfers an RGBA image buffer into a texture.
 func TextureFromOwnedImage(src *image.RGBA, options TextureOptions) *Texture {
 	if src == nil {

@@ -433,7 +433,8 @@ func BenchmarkPaintCoverage(b *testing.B) {
 		int(math.Ceil(float64(outline.Bounds.XMax)*scale)),
 		int(math.Ceil(float64(outline.Bounds.YMax)*scale)),
 	)
-	contours := scaleOutline(outline.Contours, scale, bounds)
+	var scratch glyphRasterScratch
+	contours := scratch.scaleOutline(outline.Contours, scale, bounds, 0, 0, 1)
 	img := image.NewAlpha(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
 	b.ReportAllocs()
 	b.SetBytes(int64(len(img.Pix)))

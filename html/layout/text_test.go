@@ -3,6 +3,7 @@ package layout
 import (
 	"math"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestTokenizeStyledTextPreservesCSSWhitespaceModes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := tokenizeStyledTextInto(nil, test.input, test.mode, true, false)
+			got := slices.Collect(textTokens(test.input, test.mode, true, false))
 			if !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("tokens = %#v, want %#v", got, test.want)
 			}
@@ -213,6 +214,10 @@ func TestEllipsisReflowPreservesCachedGlyphsAndGeometry(t *testing.T) {
 			wantX := fragment.Rect.X + glyphRunWidth(cached[:len(fragment.Glyphs)-1]) + ellipsis[0].X
 			if math.Abs(last.X-wantX) > .01 || fragment.Rect.X+fragment.Rect.Width > 80.01 || fragment.Rect.X < -.01 {
 				t.Fatalf("ellipsis geometry overlaps or overflows: last=%+v wantX=%v rect=%+v", last, wantX, fragment.Rect)
+			}
+			wantPen := fragment.Rect.X + glyphRunWidth(cached[:len(fragment.Glyphs)-1]) + float64(ellipsis[0].PenX)
+			if math.Abs(float64(last.PenX)-wantPen) > .01 || math.Abs(float64(fragment.Glyphs[0].PenX)-fragment.Rect.X) > .01 {
+				t.Fatalf("positioned glyph pens lost alignment: first=%+v last=%+v wantLast=%v", fragment.Glyphs[0], last, wantPen)
 			}
 			if allocs := testing.AllocsPerRun(100, reflow); allocs != 0 {
 				t.Fatalf("warmed ellipsis reflow allocated %g times", allocs)

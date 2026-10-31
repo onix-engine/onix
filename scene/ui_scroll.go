@@ -422,6 +422,9 @@ func UIScrollScrollbarActive(world *ecs.World, entity ecs.Entity, axis uint8) bo
 	}
 	size, _ := world.Get[Size2D](entity)
 	pointer := state.Pointer()
+	if !pointInUIScrollContainer(world, entity, size.Width, size.Height, uiScrollScaleFactor(world), pointer.X, pointer.Y) {
+		return false
+	}
 	x, y, ok := uiScrollPointerLocal(world, entity, size.Width, size.Height, uiScrollScaleFactor(world), pointer.X, pointer.Y)
 	return ok && uiScrollScrollbarAxis(scroll, scroll.ViewportSize, scroll.ContentSize, size.Width, size.Height, x, y) == want
 }
@@ -465,7 +468,21 @@ func pointInUIScrollContainer(world *ecs.World, entity ecs.Entity, width, height
 		// Resolved clipping already accounts for ClipExempt2D popup surfaces.
 		clip := transform.renderClip2D()
 		if clip.valid && (x < clip.minX || x > clip.maxX || y < clip.minY || y > clip.maxY) {
-			return false
+			// Classic bars sit outside their own content clip. They still
+			// inherit the enclosing container's clip, just like their visuals.
+			scroll := world.GetRef[UIScroll](entity)
+			if scroll == nil || scroll.ScrollbarOverlay {
+				return false
+			}
+			localX, localY, local := uiScrollPointerLocal(world, entity, width, height, scale, x, y)
+			if !local || uiScrollScrollbarAxis(scroll, scroll.ViewportSize, scroll.ContentSize, width, height, localX, localY) == uiScrollDragContent {
+				return false
+			}
+			parent, _ := world.Get[Parent](entity)
+			if ancestor, exists := world.Get[UIGlobalTransform](parent.Entity); exists {
+				clip = ancestor.renderClip2D()
+				return !clip.valid || x >= clip.minX && x <= clip.maxX && y >= clip.minY && y <= clip.maxY
+			}
 		}
 	}
 	return true

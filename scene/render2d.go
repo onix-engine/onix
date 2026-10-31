@@ -13,6 +13,7 @@ import (
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/render"
 	onixtext "github.com/diiyw/onix/text"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -82,14 +83,16 @@ const (
 
 // TextIndex resolves rune offsets against a matching immutable snapshot.
 type TextIndex interface {
-	Matches(string) bool
+	MatchesSnapshot(piecetree.Snapshot) bool
 	ByteOffset(int) int
 }
 
 type Text2D struct {
 	// Index optionally shares a document's indexed text buffer for caret lookup.
-	Index         TextIndex
-	Value         string
+	Index TextIndex
+	Value string
+	// Source supplies immutable document text; Value is used when Source is empty.
+	Source        piecetree.Snapshot
 	Font          *onixtext.Font
 	FontSize      float64
 	DPI           float64
@@ -117,6 +120,9 @@ type Text2D struct {
 	InlineObjects []TextInlineObject2D
 	// LineLayout spaces visual lines without inserting characters into Value.
 	LineLayout *TextLineLayout2D
+	// Prelayout uses positions already computed by a layout engine for one line.
+	// Its producer increments Revision whenever those positions or Value change.
+	Prelayout TextPrelayout2D
 
 	cache               *onixtext.GlyphCache
 	face                *font.ScaledFace
@@ -130,10 +136,10 @@ type Text2D struct {
 	glyphlessLayout     bool
 	glyphBand           textGlyphBand
 	lastGlyphBand       textGlyphBand
-	layoutValue         string
+	layoutValue         piecetree.Snapshot
 	glyphLineHeight     float32
 
-	lastValue              string
+	lastValue              piecetree.Snapshot
 	lastFont               *onixtext.Font
 	lastFontSize           float64
 	lastDPI                float64
@@ -153,9 +159,17 @@ type Text2D struct {
 	measuredWidth          float32
 	measuredLineHeight     float32
 	measurementValid       bool
-	caretRune, caretByte   int
 	lastLineLayout         *TextLineLayout2D
 	lastLineLayoutRevision uint64
+	lastPrelayoutRevision  uint64
+	prelayoutActive        bool
+}
+
+type TextPrelayout2D struct {
+	Glyphs           []font.PositionedGlyph
+	OriginX, OriginY float64
+	Width, Height    float32
+	Revision         uint64
 }
 
 // TextLineLayout2D adds vertical gaps and a minimum scrollable extent. Owners
@@ -218,7 +232,10 @@ type Size2D struct {
 	Height float32
 }
 
-type ClipExempt2D struct{}
+type ClipExempt2D struct {
+	// ParentOnly skips the immediate parent's clip while retaining ancestor clips.
+	ParentOnly bool
+}
 
 // textGlyph2D keeps only raster-space bitmap metrics: logical placement divides
 // them by the raster scale, so storing both forms doubled every laid-out glyph.
@@ -244,6 +261,7 @@ type textLineLayout2D struct {
 	y        float32
 	width    float32
 	height   float32
+	advance  float32
 	start    int
 	end      int
 }
@@ -322,14 +340,18 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 	// A zero-width border is invisible even when its computed color is opaque.
 	// HTML controls retain that color with border:0 and still need the mask.
 	if item.clip.hasRounded && shape.Kind == render.ShapeRoundedRect && shape.Radius <= 0 && shape.BorderWidth <= 0 && shape.Fill.A > 0 {
-		texture := graphics.CreateTextureByColor(shape.Fill)
+		texture := graphics.CreateTextureByColor(graphics.White)
 		if texture != nil && texture.ValidFor(c.Device()) {
 			model, textureModel, ok := clippedQuad2D(item.quadTransform(), mgl32.Ident3(), item.width, item.height, item.clip)
 			if !ok {
 				return
 			}
 			c.BindTexture(texture)
-			c.DrawTintedMatricesCustom(model, textureModel, graphics.White, item.sprite.Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
+			// Match the former RGBA8 texel's quantization without retaining one
+			// global texture (and device residency) for each animated color.
+			fill := shape.Fill.GoColor()
+			tint := graphics.ColorFromRGBA(fill.R, fill.G, fill.B, fill.A)
+			c.DrawTintedMatricesCustom(model, textureModel, tint, item.sprite.Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
 			return
 		}
 	}
@@ -611,7 +633,7 @@ func (snapshots *renderSnapshots2D) appendSpriteLayerRenderItems2D[T renderGloba
 		for index := range layers.Layers {
 			layer := &layers.Layers[index]
 			width, height := layer.Sprite.Size()
-			if !layer.Visible || layer.Sprite.Alpha <= 0 || layer.Sprite.Tint.A <= 0 || layer.Sprite.Texture == nil || !layer.Sprite.Texture.ValidFor(graphics.DeviceFor(world)) || width <= 0 || height <= 0 {
+			if !layer.Visible || !spriteDrawable2D(&layer.Sprite, graphics.DeviceFor(world)) || width <= 0 || height <= 0 {
 				continue
 			}
 			matrix := rootMatrix.Mul4(layers.LayerMatrix(index))
@@ -720,7 +742,7 @@ func (snapshots *renderSnapshots2D) appendTextRenderItems2D[T renderGlobalTransf
 		// Window before the paint gate as well: an invisible input layer still has
 		// its caret and selection measured, and must not shape the whole document.
 		text.setGlyphBand(text.visibleGlyphWindow(matrix, anchor, ui, clip, canvasHeight))
-		if !visibility.Visible || stringsTrimSpace(text.Value) == "" || text.Font == nil || !text.paintsVisibleGlyphs() {
+		if !visibility.Visible || text.Text().TrimSpaceEmpty() || text.Font == nil || !text.paintsVisibleGlyphs() {
 			continue
 		}
 		text.rasterScale = textRasterScale(c)
@@ -755,7 +777,7 @@ func (snapshots *renderSnapshots2D) appendTextRenderItems2D[T renderGlobalTransf
 }
 
 func DrawScreenText2D(c *graphics.Canvas2D, text *Text2D, transform mgl32.Mat4, anchor Anchor) bool {
-	if c == nil || text == nil || stringsTrimSpace(text.Value) == "" || text.Font == nil {
+	if c == nil || text == nil || text.Text().TrimSpaceEmpty() || text.Font == nil {
 		return false
 	}
 	text.rasterScale = textRasterScale(c)
@@ -774,7 +796,7 @@ func DrawScreenText2D(c *graphics.Canvas2D, text *Text2D, transform mgl32.Mat4, 
 }
 
 func MeasureText2D(text *Text2D) (float32, float32, bool) {
-	if text == nil || text.Value == "" && text.LineLayout == nil || text.Font == nil {
+	if text == nil || text.Text().Len() == 0 && text.LineLayout == nil || text.Font == nil {
 		return 0, 0, false
 	}
 	if !text.ensureMeasuredLayout() || text.face == nil {
@@ -785,57 +807,58 @@ func MeasureText2D(text *Text2D) (float32, float32, bool) {
 }
 
 func MeasureTextMinimumWidth2D(text *Text2D) (float32, bool) {
-	if text == nil || stringsTrimSpace(text.Value) == "" || !text.ensureFace() {
+	if text == nil || text.Text().TrimSpaceEmpty() || !text.ensureFace() {
 		return 0, false
 	}
 	objects := text.validInlineObjects()
 	minimum := float32(0)
 	if text.WrapMode != TextWrapWords {
-		for start := 0; start <= len(text.Value); {
-			end := len(text.Value)
-			if offset := strings.IndexByte(text.Value[start:], '\n'); offset >= 0 {
-				end = start + offset
+		for start := 0; start <= text.Text().Len(); {
+			end := text.Text().Len()
+			if offset := text.Text().IndexByte(start, '\n'); offset >= 0 {
+				end = offset
 			}
-			minimum = max(minimum, textWidthWithInlineObjects(text.face, strings.TrimSuffix(text.Value[start:end], "\r"), start, objects, text.LetterSpacing, text.TabWidth))
-			if end == len(text.Value) {
+			minimum = max(minimum, textWidthWithInlineObjects(text.face, strings.TrimSuffix(text.Text().Slice(start, end), "\r"), start, objects, text.LetterSpacing, text.TabWidth))
+			if end == text.Text().Len() {
 				break
 			}
 			start = end + 1
 		}
 		return minimum, true
 	}
-	for start := 0; start < len(text.Value); {
-		for start < len(text.Value) && isTextWrapDelimiter(text.Value[start]) {
+	for start := 0; start < text.Text().Len(); {
+		for start < text.Text().Len() && isTextWrapDelimiter(text.Text().ByteAt(start)) {
 			start++
 		}
 		end := start
-		for end < len(text.Value) && !isTextWrapDelimiter(text.Value[end]) {
-			_, size := utf8.DecodeRuneInString(text.Value[end:])
+		for end < text.Text().Len() && !isTextWrapDelimiter(text.Text().ByteAt(end)) {
+			_, size := text.Text().DecodeRune(end)
 			end += size
 		}
 		if end > start {
-			minimum = max(minimum, textWidthWithInlineObjects(text.face, text.Value[start:end], start, objects, text.LetterSpacing, text.TabWidth))
+			minimum = max(minimum, textWidthWithInlineObjects(text.face, text.Text().Slice(start, end), start, objects, text.LetterSpacing, text.TabWidth))
 		}
 		start = end
 	}
 	return minimum, true
 }
 
-func MeasureTextValue2D(text *Text2D, value string) (float32, float32, bool) {
+func MeasureTextValue2D[V piecetree.Value](text *Text2D, inputValue V) (float32, float32, bool) {
+	value := piecetree.Text(inputValue)
 	if text == nil || !text.ensureMeasuredLayout() || text.face == nil {
 		return 0, 0, false
 	}
-	if value == text.Value && text.measurementValid {
+	if value.Equal(text.Text()) && text.measurementValid {
 		return text.measuredWidth, text.measuredLineHeight, true
 	}
 	measuredWidth := float32(0)
-	for start := 0; start <= len(value); {
-		end := len(value)
-		if offset := strings.IndexByte(value[start:], '\n'); offset >= 0 {
-			end = start + offset
+	for start := 0; start <= value.Len(); {
+		end := value.Len()
+		if offset := value.IndexByte(start, '\n'); offset >= 0 {
+			end = offset
 		}
-		measuredWidth = max(measuredWidth, textWidthWithInlineObjects(text.face, value[start:end], start, nil, text.LetterSpacing, text.TabWidth))
-		if end == len(value) {
+		measuredWidth = max(measuredWidth, textWidthWithInlineObjects(text.face, value.Slice(start, end), start, nil, text.LetterSpacing, text.TabWidth))
+		if end == value.Len() {
 			break
 		}
 		start = end + 1
@@ -844,7 +867,7 @@ func MeasureTextValue2D(text *Text2D, value string) (float32, float32, bool) {
 	if text.LineHeight > 0 {
 		measuredLineHeight = text.LineHeight
 	}
-	if value == text.Value {
+	if value.Equal(text.Text()) {
 		text.measuredWidth = measuredWidth
 		text.measuredLineHeight = measuredLineHeight
 		text.measurementValid = true
@@ -881,7 +904,7 @@ func MeasureTextLineOffsets2D(text *Text2D, value string, offsets []int, widths 
 }
 
 func MeasureTextRangeRects2D(text *Text2D, start, end int) ([]TextRangeRect2D, bool) {
-	if text == nil || start < 0 || start >= end || end > len(text.Value) || !text.ensureLayout() || text.face == nil {
+	if text == nil || start < 0 || start >= end || end > text.Text().Len() || !text.ensureLayout() || text.face == nil {
 		return nil, false
 	}
 	if len(text.lines) == 0 {
@@ -977,7 +1000,7 @@ func AppendTextUnderlineRects2D(dst []TextRangeRect2D, text *Text2D, lineIndex, 
 	y := line.baseline + text.InkOffsetY + thickness
 	pen, left, cursor := line.x, line.x, line.x
 	previous, hasItem := rune(-1), false
-	for index, character := range text.Value[line.start:end] {
+	for index, character := range text.Text().Slice(line.start, end) {
 		index += line.start
 		if character == '\r' {
 			continue
@@ -1027,80 +1050,43 @@ func TextLineRects2D(text *Text2D) ([]TextRangeRect2D, bool) {
 // TextCaretRect2D returns the local caret rectangle for a rune index. It uses
 // the text layout's actual line ranges, so wrapped lines and explicit newlines
 // share the same geometry as rendering and hit testing.
-func TextCaretRect2D(text *Text2D, value string, caret int) (x, y, width, height float32, ok bool) {
+func TextCaretRect2D[V piecetree.Value](text *Text2D, inputValue V, caret int) (x, y, width, height float32, ok bool) {
+	value := piecetree.Text(inputValue)
 	if text == nil || text.Font == nil || !text.ensureMeasuredLayout() || text.face == nil {
 		return 0, 0, 0, 0, false
 	}
 	caret = max(0, caret)
-	if value == text.Value && len(text.lines) > 0 {
+	if value.Equal(text.Text()) && len(text.lines) > 0 {
 		byteIndex := text.caretByteIndex(value, caret)
 		lineIndex := min(sort.Search(len(text.lines), func(index int) bool { return byteIndex <= text.lines[index].end }), len(text.lines)-1)
 		line := text.lines[lineIndex]
 		prefixEnd := min(max(byteIndex, line.start), line.end)
-		prefixWidth, _, measured := MeasureTextValue2D(text, value[line.start:prefixEnd])
+		prefixWidth, _, measured := MeasureTextValue2D(text, value.Slice(line.start, prefixEnd))
 		if !measured {
 			return 0, 0, 0, 0, false
 		}
 		return line.x + prefixWidth, line.y, 1, line.height, true
 	}
 
-	lineStart, line := 0, 0
-	byteIndex := textCaretByteIndex(value, caret)
-	for index := 0; index < byteIndex; {
-		r, size := utf8.DecodeRuneInString(value[index:])
-		if r == '\n' {
-			line++
-			lineStart = index + size
-		}
-		index += size
-	}
-	prefixWidth, lineHeight, measured := MeasureTextValue2D(text, value[lineStart:byteIndex])
+	byteIndex := value.ByteOffset(caret)
+	line, _ := value.Position(byteIndex)
+	lineStart := value.LineStart(line)
+	prefixWidth, lineHeight, measured := MeasureTextValue2D(text, value.Slice(lineStart, byteIndex))
 	if !measured {
 		return 0, 0, 0, 0, false
 	}
 	return prefixWidth, float32(line) * lineHeight, 1, lineHeight, true
 }
 
-func textCaretByteIndex(value string, caret int) int {
-	if caret <= 0 {
-		return 0
-	}
-	index := 0
-	for byteIndex := range value {
-		if index == caret {
-			return byteIndex
-		}
-		index++
-	}
-	return len(value)
-}
-
-// Layout invalidation resets these two offsets. Adjacent caret moves decode
-// only the intervening runes and retain no copy or index of the document.
-func (text *Text2D) caretByteIndex(value string, caret int) int {
-	if text.Index != nil && text.Index.Matches(value) {
+func (text *Text2D) caretByteIndex(value piecetree.Snapshot, caret int) int {
+	if text.Index != nil && text.Index.MatchesSnapshot(value) {
 		return text.Index.ByteOffset(caret)
 	}
-	if value != text.Value {
-		return textCaretByteIndex(value, caret)
-	}
-	if caret < text.caretRune/2 {
-		text.caretRune, text.caretByte = 0, 0
-	}
-	for text.caretRune > caret {
-		_, size := utf8.DecodeLastRuneInString(value[:text.caretByte])
-		text.caretByte -= size
-		text.caretRune--
-	}
-	for text.caretRune < caret && text.caretByte < len(value) {
-		_, size := utf8.DecodeRuneInString(value[text.caretByte:])
-		text.caretByte += size
-		text.caretRune++
-	}
-	return text.caretByte
+	return value.ByteOffset(caret)
 }
 
-func TextCaretIndex2D(text *Text2D, value string, x, y float32) int {
+func TextCaretIndex2D[V piecetree.Value](text *Text2D, inputValue V, x, y float32) int {
+	value := piecetree.Text(inputValue)
 	if text == nil || text.Font == nil || !text.ensureMeasuredLayout() || text.face == nil {
 		return 0
 	}
@@ -1109,43 +1095,39 @@ func TextCaretIndex2D(text *Text2D, value string, x, y float32) int {
 		lineHeight = 1
 	}
 	targetLine := max(0, int(y/float32(lineHeight)))
-	if value == text.Value && len(text.lines) > 0 {
+	layoutMatches := value.Equal(text.Text())
+	if layoutMatches && len(text.lines) > 0 {
 		targetLine = min(sort.Search(len(text.lines), func(index int) bool { return y < text.lines[index].y+text.lines[index].height }), len(text.lines)-1)
 	}
-	lineStartByte, lineEndByte := 0, len(value)
-	if value == text.Value && targetLine < len(text.lines) {
-		lineStartByte = min(text.lines[targetLine].start, len(value))
-		lineEndByte = min(text.lines[targetLine].end, len(value))
+	lineStartByte, lineEndByte := 0, value.Len()
+	if layoutMatches && targetLine < len(text.lines) {
+		lineStartByte = min(text.lines[targetLine].start, value.Len())
+		lineEndByte = min(text.lines[targetLine].end, value.Len())
 		x -= text.lines[targetLine].x
 	} else {
-		line := 0
-		for byteIndex, r := range value {
-			if r != '\n' {
-				continue
-			}
-			if line == targetLine {
-				lineEndByte = byteIndex
-				break
-			}
-			line++
-			lineStartByte = byteIndex + 1
+		lineStartByte = value.LineStart(targetLine)
+		if end := value.IndexByte(lineStartByte, '\n'); end >= 0 {
+			lineEndByte = end
 		}
 	}
 
 	advance := float32(0)
 	previous := rune(-1)
-	index := utf8.RuneCountInString(value[:lineStartByte])
+	index := value.RuneOffset(lineStartByte)
 	hasItem := false
 	objects := []TextInlineObject2D(nil)
-	if value == text.Value {
+	if layoutMatches {
 		objects = text.validInlineObjects()
 	}
 	objectIndex, skipUntil := 0, 0
 	for objectIndex < len(objects) && objects[objectIndex].End <= lineStartByte {
 		objectIndex++
 	}
-	for byteIndex, r := range value[lineStartByte:lineEndByte] {
-		globalIndex := lineStartByte + byteIndex
+	cursor := value.Cursor(lineStartByte, lineEndByte)
+	for cursor.Offset() < lineEndByte {
+		globalIndex := cursor.Offset()
+		r, size := cursor.DecodeRune()
+		cursor.Advance(size)
 		if globalIndex < skipUntil {
 			continue
 		}
@@ -1163,7 +1145,7 @@ func TextCaretIndex2D(text *Text2D, value string, x, y float32) int {
 			if x < (previousX+advance)*0.5 {
 				return index
 			}
-			index += utf8.RuneCountInString(value[object.Start:object.End])
+			index += value.RuneOffset(object.End) - value.RuneOffset(object.Start)
 			skipUntil = object.End
 			objectIndex++
 			previous = -1
@@ -1401,8 +1383,8 @@ func trimLayoutBuffer[T any](buffer []T) []T {
 
 // layoutLineSpan bounds the lines and wrap ranges the next layout produces.
 // Wrapped text can split any line, so its previous pass is the tighter bound.
-func (t *Text2D) layoutLineSpan(value string) int {
-	span := strings.Count(value, "\n") + 1
+func (t *Text2D) layoutLineSpan(value piecetree.Snapshot) int {
+	span := value.Lines()
 	if t.WrapMode != TextWrapNone {
 		span = max(span, t.lineCount)
 	}
@@ -1506,8 +1488,11 @@ func (t *Text2D) rebuildGlyphWindow() {
 		pen, previous := float32(0), rune(-1)
 		hasItem := false
 		skipUntil := 0
-		for byteIndex, character := range value[line.start:line.end] {
-			byteIndex += line.start
+		cursor := value.Cursor(line.start, line.end)
+		for cursor.Offset() < line.end {
+			byteIndex := cursor.Offset()
+			character, size := cursor.DecodeRune()
+			cursor.Advance(size)
 			if byteIndex < skipUntil || character == '\r' {
 				continue
 			}
@@ -1625,6 +1610,13 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	if t == nil {
 		return false
 	}
+	if t.canUsePrelayout() {
+		return t.buildPrelayout(withGlyphs)
+	}
+	if t.prelayoutActive {
+		t.changed = true
+		t.prelayoutActive = false
+	}
 	lineRevision := uint64(0)
 	if t.LineLayout != nil {
 		lineRevision = t.LineLayout.Revision
@@ -1636,17 +1628,14 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	if t.Font != t.lastFont || t.FontSize != t.lastFontSize || t.DPI != t.lastDPI || rasterScale != t.lastRasterScale {
 		t.invalidateFace()
 	}
-	if t.Value != t.lastValue || t.WrapMode != t.lastWrapMode || t.WrapWidth != t.lastWrapWidth ||
+	if t.Text() != t.lastValue || t.WrapMode != t.lastWrapMode || t.WrapWidth != t.lastWrapWidth ||
 		t.LetterSpacing != t.lastLetterSpacing || t.LineHeight != t.lastLineHeight || t.TabWidth != t.lastTabWidth || t.TextAlignment != t.lastTextAlignment ||
 		t.MaxWidth != t.lastMaxWidth || t.OutlineWidth != t.lastOutlineWidth ||
 		!slices.Equal(t.InlineObjects, t.lastInlineObjects) {
 		t.changed = true
 	}
-	if t.Value != t.lastValue || t.LetterSpacing != t.lastLetterSpacing || t.LineHeight != t.lastLineHeight || t.TabWidth != t.lastTabWidth {
+	if t.Text() != t.lastValue || t.LetterSpacing != t.lastLetterSpacing || t.LineHeight != t.lastLineHeight || t.TabWidth != t.lastTabWidth {
 		t.measurementValid = false
-	}
-	if t.Value != t.lastValue {
-		t.caretRune, t.caretByte = 0, 0
 	}
 	if !t.changed && t.cache != nil {
 		if withGlyphs && (t.glyphlessLayout || t.glyphBand != t.lastGlyphBand) {
@@ -1659,12 +1648,12 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	}
 	t.cache = t.Font.GlyphCache(t.FontSize*rasterScale, t.DPI)
 	objects := t.validInlineObjects()
-	layoutValue := t.ellipsizedValue()
+	layoutValue := t.ellipsizedText()
 	// A measure-only pass writes no glyph records, so it must not size a fresh
 	// buffer for them; clearing keeps the shaped window's capacity for the paint.
 	records := cap(t.glyphs)
 	if withGlyphs && !t.glyphBand.valid {
-		records = utf8.RuneCountInString(layoutValue)
+		records = layoutValue.Runes()
 	}
 	lineSpan := t.layoutLineSpan(layoutValue)
 	previousLines := t.lines
@@ -1712,7 +1701,7 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 		for index := lineObjectStart; index < len(t.inlineObjectLayouts); index++ {
 			t.inlineObjectLayouts[index].rect.Y += lineTop + lineAscent + verticalOffset
 		}
-		t.lines = append(t.lines, textLineLayout2D{baseline: lineTop + lineAscent + verticalOffset, y: lineTop, width: lineVisualWidth, height: height, start: lineStart, end: lineEnd})
+		t.lines = append(t.lines, textLineLayout2D{baseline: lineTop + lineAscent + verticalOffset, y: lineTop, width: lineVisualWidth, height: height, advance: pen, start: lineStart, end: lineEnd})
 		t.layoutWidth = max(t.layoutWidth, lineVisualWidth)
 		lineTop += height
 		line++
@@ -1743,13 +1732,16 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 		// before finishLine overwrites it when both slices share their storage.
 		if reuseWidths && !shapeGlyphs && line < len(previousLines) {
 			previous := previousLines[line]
-			if layoutValue[lineStart:lineEnd] == t.lastValue[previous.start:previous.end] {
-				lineVisualWidth = previous.width
+			if layoutValue.EqualRange(lineStart, lineEnd, t.lastValue, previous.start, previous.end) {
+				lineVisualWidth, pen = previous.width, previous.advance
 				return
 			}
 		}
-		for byteIndex, r := range layoutValue[textRange.start:textRange.end] {
-			byteIndex += textRange.start
+		cursor := layoutValue.Cursor(textRange.start, textRange.end)
+		for cursor.Offset() < textRange.end {
+			byteIndex := cursor.Offset()
+			r, size := cursor.DecodeRune()
+			cursor.Advance(size)
 			if byteIndex < skipUntil {
 				continue
 			}
@@ -1759,7 +1751,7 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 			for objectIndex < len(objects) && objects[objectIndex].Start < byteIndex {
 				objectIndex++
 			}
-			if objectIndex < len(objects) && objects[objectIndex].Start == byteIndex && objects[objectIndex].End <= len(layoutValue) && layoutValue[objects[objectIndex].Start:objects[objectIndex].End] == t.Value[objects[objectIndex].Start:objects[objectIndex].End] {
+			if objectIndex < len(objects) && objects[objectIndex].Start == byteIndex && objects[objectIndex].End <= layoutValue.Len() && layoutValue.EqualRange(objects[objectIndex].Start, objects[objectIndex].End, t.Text(), objects[objectIndex].Start, objects[objectIndex].End) {
 				object := objects[objectIndex]
 				if lineHasItem {
 					pen += t.LetterSpacing
@@ -1856,16 +1848,16 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 		layoutRanges(t.wrapPreservedRanges(layoutValue, objects, wrapWidth, reuseWidths))
 	} else {
 		lineStart := 0
-		for lineStart <= len(layoutValue) {
-			lineEnd := len(layoutValue)
-			if offset := strings.IndexByte(layoutValue[lineStart:], '\n'); offset >= 0 {
-				lineEnd = lineStart + offset
+		for lineStart <= layoutValue.Len() {
+			lineEnd := layoutValue.Len()
+			if offset := layoutValue.IndexByte(lineStart, '\n'); offset >= 0 {
+				lineEnd = offset
 			}
 			if lineStart > 0 {
 				finishLine()
 			}
 			layoutRange(textWrapRange2D{start: lineStart, end: lineEnd})
-			if lineEnd == len(layoutValue) {
+			if lineEnd == layoutValue.Len() {
 				break
 			}
 			lineStart = lineEnd + 1
@@ -1907,7 +1899,7 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 
 	t.changed = false
 	t.layoutValue = layoutValue
-	t.lastValue = t.Value
+	t.lastValue = t.Text()
 	t.lastFont = t.Font
 	t.lastFontSize = t.FontSize
 	t.lastDPI = t.DPI
@@ -1926,13 +1918,85 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	return true
 }
 
+func (t *Text2D) canUsePrelayout() bool {
+	if len(t.Prelayout.Glyphs) == 0 || t.Source != (piecetree.Snapshot{}) || t.WrapMode != TextWrapNone || t.WrapWidth != 0 || t.MaxWidth != 0 || t.LetterSpacing != 0 || t.TextAlignment != TextAlignLeft || len(t.InlineObjects) != 0 || t.LineLayout != nil {
+		return false
+	}
+	return !t.prelayoutActive || t.lastValue == t.Text() || t.lastPrelayoutRevision != t.Prelayout.Revision
+}
+
+func (t *Text2D) buildPrelayout(withGlyphs bool) bool {
+	rasterScale := normalizeTextRasterScale(t.rasterScale)
+	if t.Font != t.lastFont || t.FontSize != t.lastFontSize || t.DPI != t.lastDPI || rasterScale != t.lastRasterScale {
+		t.invalidateFace()
+	}
+	if t.prelayoutActive && !t.changed && t.cache != nil && t.lastPrelayoutRevision == t.Prelayout.Revision && t.lastValue == t.Text() && t.lastOutlineWidth == t.OutlineWidth && (!withGlyphs || !t.glyphlessLayout) {
+		return true
+	}
+	if !t.ensureFace() {
+		return false
+	}
+	t.cache = t.Font.GlyphCache(t.FontSize*rasterScale, t.DPI)
+	t.layoutWidth, t.measuredWidth = t.Prelayout.Width, t.Prelayout.Width
+	t.layoutHeight, t.measuredLineHeight = t.Prelayout.Height, t.Prelayout.Height
+	t.measurementValid = true
+	t.lineCount = 1
+	baseline := float32(t.Prelayout.Glyphs[0].Y - t.Prelayout.OriginY)
+	t.lines = append(resetLayoutBuffer(t.lines, 1), textLineLayout2D{
+		baseline: baseline, width: t.layoutWidth, height: t.layoutHeight, advance: t.layoutWidth, end: t.Text().Len(),
+	})
+	t.glyphLineHeight = t.layoutHeight
+	t.glyphs = resetLayoutBuffer(t.glyphs, len(t.Prelayout.Glyphs))
+	if validOutlineWidth(t.OutlineWidth) {
+		t.outlineGlyphs = resetLayoutBuffer(t.outlineGlyphs, len(t.Prelayout.Glyphs))
+	} else {
+		t.outlineGlyphs = nil
+	}
+	if withGlyphs {
+		logicalScale := float32(rasterScale)
+		byteIndex := 0
+		for _, positioned := range t.Prelayout.Glyphs {
+			currentByte := byteIndex
+			if byteIndex < len(t.Value) {
+				_, size := utf8.DecodeRuneInString(t.Value[byteIndex:])
+				byteIndex += size
+			}
+			raster := t.cache.Glyph(positioned.Rune)
+			logical := logicalTextGlyph(raster, rasterScale)
+			if !logical.Visible() {
+				continue
+			}
+			if validOutlineWidth(t.OutlineWidth) {
+				t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineGlyph(positioned.Rune, t.OutlineWidth*logicalScale))
+			}
+			t.glyphs = append(t.glyphs, textGlyph2D{
+				raster:        raster,
+				logicalWidth:  float32(raster.Width) / logicalScale,
+				logicalHeight: float32(raster.Height) / logicalScale,
+				x:             positioned.PenX - float32(t.Prelayout.OriginX) + logical.OffsetX,
+				y:             float32(positioned.Y-t.Prelayout.OriginY) + logical.OffsetY,
+				byteIndex:     int32(currentByte),
+			})
+		}
+		t.cache.FlushUploads()
+	}
+	t.glyphlessLayout = !withGlyphs
+	t.prelayoutActive = true
+	t.changed = false
+	t.layoutValue, t.lastValue = t.Text(), t.Text()
+	t.lastFont, t.lastFontSize, t.lastDPI, t.lastRasterScale = t.Font, t.FontSize, t.DPI, rasterScale
+	t.lastPrelayoutRevision = t.Prelayout.Revision
+	t.lastOutlineWidth = t.OutlineWidth
+	return true
+}
+
 type textWrapRange2D struct {
 	start int
 	end   int
 }
 
-func (t *Text2D) wrapRanges(value string, objects []TextInlineObject2D) []textWrapRange2D {
-	if value == "" {
+func (t *Text2D) wrapRanges(value piecetree.Snapshot, objects []TextInlineObject2D) []textWrapRange2D {
+	if value.Len() == 0 {
 		t.wrapRangeCache = append(resetLayoutBuffer(t.wrapRangeCache, 0), textWrapRange2D{})
 		return t.wrapRangeCache
 	}
@@ -1940,17 +2004,17 @@ func (t *Text2D) wrapRanges(value string, objects []TextInlineObject2D) []textWr
 	words := t.WrapMode == TextWrapWords && width > 0
 	result := resetLayoutBuffer(t.wrapRangeCache, t.layoutLineSpan(value))
 	lineStart := 0
-	for lineStart <= len(value) {
-		lineEnd := len(value)
-		if offset := strings.IndexByte(value[lineStart:], '\n'); offset >= 0 {
-			lineEnd = lineStart + offset
+	for lineStart <= value.Len() {
+		lineEnd := value.Len()
+		if offset := value.IndexByte(lineStart, '\n'); offset >= 0 {
+			lineEnd = offset
 		}
 		if !words {
 			result = append(result, textWrapRange2D{start: lineStart, end: lineEnd})
 		} else {
 			result = t.appendWordWrapRanges(result, value, lineStart, lineEnd, width, objects)
 		}
-		if lineEnd == len(value) {
+		if lineEnd == value.Len() {
 			break
 		}
 		lineStart = lineEnd + 1
@@ -1960,23 +2024,23 @@ func (t *Text2D) wrapRanges(value string, objects []TextInlineObject2D) []textWr
 }
 
 // Measure each character once, retaining whitespace and atomic inline objects.
-func (t *Text2D) wrapPreservedRanges(value string, objects []TextInlineObject2D, width float32, reuseMetrics bool) []textWrapRange2D {
+func (t *Text2D) wrapPreservedRanges(value piecetree.Snapshot, objects []TextInlineObject2D, width float32, reuseMetrics bool) []textWrapRange2D {
 	previousRanges := t.wrapRangeCache
 	result := resetLayoutBuffer(t.wrapRangeCache, t.layoutLineSpan(value))
 	objectIndex := 0
-	for start := 0; start <= len(value); {
-		end := len(value)
-		if offset := strings.IndexByte(value[start:], '\n'); offset >= 0 {
-			end = start + offset
+	for start := 0; start <= value.Len(); {
+		end := value.Len()
+		if offset := value.IndexByte(start, '\n'); offset >= 0 {
+			end = offset
 		}
 		if reuseMetrics && len(result) < len(previousRanges) {
 			previous := previousRanges[len(result)]
 			// A complete hard line that fitted before still fits at this width.
-			if (previous.start == 0 || t.lastValue[previous.start-1] == '\n') &&
-				(previous.end == len(t.lastValue) || t.lastValue[previous.end] == '\n') &&
-				value[start:end] == t.lastValue[previous.start:previous.end] {
+			if (previous.start == 0 || t.lastValue.ByteAt(previous.start-1) == '\n') &&
+				(previous.end == t.lastValue.Len() || t.lastValue.ByteAt(previous.end) == '\n') &&
+				value.EqualRange(start, end, t.lastValue, previous.start, previous.end) {
 				result = append(result, textWrapRange2D{start: start, end: end})
-				if end == len(value) {
+				if end == value.Len() {
 					break
 				}
 				start = end + 1
@@ -1986,34 +2050,38 @@ func (t *Text2D) wrapPreservedRanges(value string, objects []TextInlineObject2D,
 		rangeStart := len(result)
 		lineStart := start
 		advance := textAdvance2D{previous: -1}
-		for cursor := start; cursor < end; {
-			character, size := utf8.DecodeRuneInString(value[cursor:end])
-			next := cursor + size
-			for objectIndex < len(objects) && objects[objectIndex].Start < cursor {
+		cursor := value.Cursor(start, end)
+		for cursor.Offset() < end {
+			position := cursor.Offset()
+			character, size := cursor.DecodeRune()
+			next := position + size
+			for objectIndex < len(objects) && objects[objectIndex].Start < position {
 				objectIndex++
 			}
 			var object *TextInlineObject2D
-			if objectIndex < len(objects) && objects[objectIndex].Start == cursor && objects[objectIndex].End <= end {
+			if objectIndex < len(objects) && objects[objectIndex].Start == position && objects[objectIndex].End <= end {
 				object = &objects[objectIndex]
 				next = object.End
 			}
+			cursor.Advance(next - position)
 			candidate := advance
 			candidate.add(t.face, character, object, t.LetterSpacing, t.TabWidth)
 			token := t.WrapMode == TextWrapTokens && object == nil && isTextWrapTokenRune(character)
 			if token {
 				for next < end && (objectIndex >= len(objects) || next < objects[objectIndex].Start) {
-					following, size := utf8.DecodeRuneInString(value[next:end])
+					following, size := cursor.DecodeRune()
 					if !isTextWrapTokenRune(following) {
 						break
 					}
 					candidate.add(t.face, following, nil, t.LetterSpacing, t.TabWidth)
 					next += size
+					cursor.Advance(size)
 				}
 			}
-			canBreak := t.WrapMode != TextWrapTokens || !isTextWrapDelimiter(value[cursor])
-			if canBreak && cursor > lineStart && candidate.width > width {
-				result = append(result, textWrapRange2D{start: lineStart, end: cursor})
-				lineStart = cursor
+			canBreak := t.WrapMode != TextWrapTokens || character != ' ' && character != '\t' && character != '\r' && character != '\n'
+			if canBreak && position > lineStart && candidate.width > width {
+				result = append(result, textWrapRange2D{start: lineStart, end: position})
+				lineStart = position
 				if token {
 					// Remove only the prefix and inter-token spacing/kerning; the
 					// measured token can move intact without another traversal.
@@ -2030,14 +2098,13 @@ func (t *Text2D) wrapPreservedRanges(value string, objects []TextInlineObject2D,
 				}
 			}
 			advance = candidate
-			cursor = next
 		}
 		result = append(result, textWrapRange2D{start: lineStart, end: end})
 		// Multiple new ranges may overwrite unread old slots in shared storage.
 		if len(result)-rangeStart > 1 {
 			reuseMetrics = false
 		}
-		if end == len(value) {
+		if end == value.Len() {
 			break
 		}
 		start = end + 1
@@ -2084,41 +2151,87 @@ func (advance *textAdvance2D) add(face *font.ScaledFace, character rune, object 
 	advance.hasItem = true
 }
 
-func (t *Text2D) appendWordWrapRanges(result []textWrapRange2D, value string, start, end int, width float32, objects []TextInlineObject2D) []textWrapRange2D {
+func (t *Text2D) appendWordWrapRanges(result []textWrapRange2D, value piecetree.Snapshot, start, end int, width float32, objects []TextInlineObject2D) []textWrapRange2D {
 	if start == end {
 		return append(result, textWrapRange2D{start: start, end: end})
 	}
 	initialLength := len(result)
-	lineStart, cursor := start, start
-	for cursor < end {
-		for cursor < end && isTextWrapSpace(value[cursor]) {
-			cursor++
+	lineStart := start
+	advance := textAdvance2D{previous: -1}
+	cursor := value.Cursor(start, end)
+	objectIndex := 0
+	for objectIndex < len(objects) && objects[objectIndex].End <= start {
+		objectIndex++
+	}
+	for cursor.Offset() < end {
+		for cursor.Offset() < end && isTextWrapSpace(cursor.Byte()) {
+			advance.add(t.face, rune(cursor.Byte()), nil, t.LetterSpacing, t.TabWidth)
+			cursor.Advance(1)
 		}
-		wordStart := cursor
-		for cursor < end && !isTextWrapSpace(value[cursor]) {
-			_, size := utf8.DecodeRuneInString(value[cursor:])
-			cursor += size
-		}
-		if wordStart == cursor {
+		wordStart := cursor.Offset()
+		if wordStart == end {
 			break
 		}
-		wordEnd := cursor
-		for cursor < end && isTextWrapSpace(value[cursor]) {
-			cursor++
-		}
-		candidateEnd := cursor
-		if lineStart == wordStart {
-			if textWidthWithInlineObjects(t.face, value[wordStart:wordEnd], wordStart, objects, t.LetterSpacing, t.TabWidth) > width {
-				result = append(result, textWrapRange2D{start: wordStart, end: wordEnd})
-				lineStart = cursor
-			} else {
-				lineStart = wordStart
+		// Measure the word once in its current line. Moving it to the next
+		// line only removes the prefix and the first item's boundary spacing.
+		prefix := advance
+		boundary := float32(0)
+		wordHasItem := false
+		for cursor.Offset() < end && !isTextWrapSpace(cursor.Byte()) {
+			character, size := cursor.DecodeRune()
+			position := cursor.Offset()
+			for objectIndex < len(objects) && objects[objectIndex].Start < position {
+				objectIndex++
 			}
+			var object *TextInlineObject2D
+			if objectIndex < len(objects) && objects[objectIndex].Start == position && objects[objectIndex].End <= end {
+				object = &objects[objectIndex]
+				size = object.End - position
+			}
+			if !wordHasItem && (character != '\r' || object != nil) {
+				if prefix.hasItem {
+					boundary = t.LetterSpacing
+				}
+				if prefix.previous >= 0 && object == nil {
+					boundary += fixed26_6ToFloat32(t.face.Kern(prefix.previous, character))
+				}
+				wordHasItem = true
+			}
+			advance.add(t.face, character, object, t.LetterSpacing, t.TabWidth)
+			cursor.Advance(size)
+		}
+		wordEnd := cursor.Offset()
+		word := advance
+		word.width -= prefix.width + boundary
+		if !wordHasItem {
+			word = textAdvance2D{previous: -1}
+		}
+		// The first word may exceed the width and remains atomic. Its trailing
+		// whitespace does not participate in that first-word overflow check.
+		if lineStart == wordStart && word.width > width {
+			result = append(result, textWrapRange2D{start: wordStart, end: wordEnd})
+			for cursor.Offset() < end && isTextWrapSpace(cursor.Byte()) {
+				cursor.Advance(1)
+			}
+			lineStart = cursor.Offset()
+			advance = textAdvance2D{previous: -1}
 			continue
 		}
-		if textWidthWithInlineObjects(t.face, value[lineStart:candidateEnd], lineStart, objects, t.LetterSpacing, t.TabWidth) > width {
+		spaces := cursor
+		for cursor.Offset() < end && isTextWrapSpace(cursor.Byte()) {
+			advance.add(t.face, rune(cursor.Byte()), nil, t.LetterSpacing, t.TabWidth)
+			cursor.Advance(1)
+		}
+		if lineStart != wordStart && advance.width > width {
 			result = append(result, textWrapRange2D{start: lineStart, end: trimTextWrapSpace(value, wordStart)})
 			lineStart = wordStart
+			advance = word
+			// Tabs depend on the new line origin; only replay the trailing
+			// whitespace after moving a word, never the preceding line.
+			for spaces.Offset() < cursor.Offset() {
+				advance.add(t.face, rune(spaces.Byte()), nil, t.LetterSpacing, t.TabWidth)
+				spaces.Advance(1)
+			}
 		}
 	}
 	if lineStart < end {
@@ -2137,8 +2250,8 @@ func isTextWrapDelimiter(value byte) bool {
 	return isTextWrapSpace(value) || value == '\r' || value == '\n'
 }
 
-func trimTextWrapSpace(value string, end int) int {
-	for end > 0 && isTextWrapSpace(value[end-1]) {
+func trimTextWrapSpace(value piecetree.Snapshot, end int) int {
+	for end > 0 && isTextWrapSpace(value.ByteAt(end-1)) {
 		end--
 	}
 	return end
@@ -2151,7 +2264,7 @@ func (t *Text2D) validInlineObjects() []TextInlineObject2D {
 	result := make([]TextInlineObject2D, 0, len(t.InlineObjects))
 	previousEnd := 0
 	for _, object := range t.InlineObjects {
-		if object.Start < previousEnd || object.Start < 0 || object.Start >= object.End || object.End > len(t.Value) || object.Width <= 0 || object.Height <= 0 || object.Baseline < 0 || object.Baseline > object.Height || !utf8.ValidString(t.Value[:object.Start]) || !utf8.ValidString(t.Value[:object.End]) || strings.ContainsAny(t.Value[object.Start:object.End], "\r\n") {
+		if object.Start < previousEnd || object.Start < 0 || object.Start >= object.End || object.End > t.Text().Len() || object.Width <= 0 || object.Height <= 0 || object.Baseline < 0 || object.Baseline > object.Height || !utf8.RuneStart(t.Text().ByteAt(object.Start)) || !(object.End == t.Text().Len() || utf8.RuneStart(t.Text().ByteAt(object.End))) || strings.ContainsAny(t.Text().Slice(object.Start, object.End), "\r\n") {
 			continue
 		}
 		result = append(result, object)
@@ -2160,32 +2273,32 @@ func (t *Text2D) validInlineObjects() []TextInlineObject2D {
 	return result
 }
 
-func (t *Text2D) ellipsizedValue() string {
+func (t *Text2D) ellipsizedText() piecetree.Snapshot {
 	if t == nil {
-		return ""
+		return piecetree.Snapshot{}
 	}
 	if t.MaxWidth <= 0 || t.Font == nil || t.face == nil {
-		return t.Value
+		return t.Text()
 	}
 	objects := t.validInlineObjects()
 	needsEllipsis := false
-	for start := 0; start <= len(t.Value); {
-		end := len(t.Value)
-		if offset := strings.IndexByte(t.Value[start:], '\n'); offset >= 0 {
-			end = start + offset
+	for start := 0; start <= t.Text().Len(); {
+		end := t.Text().Len()
+		if offset := t.Text().IndexByte(start, '\n'); offset >= 0 {
+			end = offset
 		}
-		line := t.Value[start:end]
+		line := t.Text().Slice(start, end)
 		if strings.HasSuffix(line, "\r") || textWidthWithInlineObjects(t.face, line, start, objects, t.LetterSpacing, t.TabWidth) > t.MaxWidth {
 			needsEllipsis = true
 			break
 		}
-		if end == len(t.Value) {
+		if end == t.Text().Len() {
 			break
 		}
 		start = end + 1
 	}
 	if !needsEllipsis {
-		return t.Value
+		return t.Text()
 	}
 	ellipsis := "..."
 	for len(ellipsis) > 0 && textWidthWithInlineObjects(t.face, ellipsis, 0, nil, t.LetterSpacing, t.TabWidth) > t.MaxWidth {
@@ -2193,15 +2306,15 @@ func (t *Text2D) ellipsizedValue() string {
 	}
 
 	var result strings.Builder
-	result.Grow(len(t.Value))
-	for start := 0; start <= len(t.Value); {
-		end := len(t.Value)
+	result.Grow(t.Text().Len())
+	for start := 0; start <= t.Text().Len(); {
+		end := t.Text().Len()
 		hasNewline := false
-		if offset := strings.IndexByte(t.Value[start:], '\n'); offset >= 0 {
-			end = start + offset
+		if offset := t.Text().IndexByte(start, '\n'); offset >= 0 {
+			end = offset
 			hasNewline = true
 		}
-		line := t.Value[start:end]
+		line := t.Text().Slice(start, end)
 		line = strings.TrimSuffix(line, "\r")
 		if textWidthWithInlineObjects(t.face, line, start, objects, t.LetterSpacing, t.TabWidth) > t.MaxWidth {
 			prefixEnd := fittingTextPrefixWithInlineObjects(t.face, line, start, objects, ellipsis, t.MaxWidth, t.LetterSpacing, t.TabWidth)
@@ -2216,7 +2329,7 @@ func (t *Text2D) ellipsizedValue() string {
 		result.WriteByte('\n')
 		start = end + 1
 	}
-	return result.String()
+	return piecetree.FromString(result.String())
 }
 
 func textTabAdvance(position, interval float32) float32 {
@@ -2793,3 +2906,12 @@ trimEnd:
 	}
 	return value[start:end]
 }
+
+// Text returns the authoritative immutable text used for geometry and paint.
+func (t Text2D) Text() piecetree.Snapshot {
+	if t.Source != (piecetree.Snapshot{}) {
+		return t.Source
+	}
+	return piecetree.FromString(t.Value)
+}
+func (t *Text2D) ellipsizedValue() string { return t.ellipsizedText().String() }

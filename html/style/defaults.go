@@ -97,7 +97,6 @@ func defaultStyle(node *dom.Node) ComputedStyle {
 		TransformScaleY:          1,
 		TransformOriginX:         LengthPercent(.5),
 		TransformOriginY:         LengthPercent(.5),
-		TransformTransition:      TransformTransition{Easing: TransformEase},
 		OverflowX:                Keyword("visible"),
 		OverflowY:                Keyword("visible"),
 		ScrollbarWidth:           Keyword("auto"),

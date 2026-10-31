@@ -7,6 +7,7 @@ import (
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 )
 
 type CornerRadius float32
@@ -229,6 +230,7 @@ type Danger struct{}
 type TextField struct {
 	// Buffer optionally binds native input to a document-owned piece tree.
 	Buffer      *input.TextBuffer
+	Source      piecetree.Snapshot
 	Value       string
 	Placeholder string
 	Password    bool
@@ -245,7 +247,7 @@ type TextField struct {
 	FontSize  float64
 	DPI       float64
 
-	lastScrollValue       string
+	lastScrollValue       piecetree.Snapshot
 	lastScrollComposition string
 	lastScrollCaret       int
 	lastScrollFocused     bool
@@ -305,7 +307,7 @@ type Textarea struct {
 	scrollDragOffset  float32
 	preserveScroll    bool
 
-	lastValue            string
+	lastValue            piecetree.Snapshot
 	lastCaret            int
 	lastFocused          bool
 	lastViewportWidth    float32
@@ -472,22 +474,24 @@ type ProgressThumb struct {
 }
 
 type ScrollArea struct {
-	Width              float32
-	Height             float32
-	ContentWidth       float32
-	ContentHeight      float32
-	Controlled         bool
-	DisableDrag        bool
-	WheelStep          float32
-	BarSize            float32
-	MinThumbSize       float32
-	ThumbBarSize       float32
-	HoverBarSize       float32
-	HoverHorizontal    bool
-	HoverVertical      bool
-	DraggingHorizontal bool
-	DraggingVertical   bool
-	StackIndex         int
+	// ReserveScrollbarSpace subtracts visible scrollbar gutters from the content viewport.
+	ReserveScrollbarSpace bool
+	Width                 float32
+	Height                float32
+	ContentWidth          float32
+	ContentHeight         float32
+	Controlled            bool
+	DisableDrag           bool
+	WheelStep             float32
+	BarSize               float32
+	MinThumbSize          float32
+	ThumbBarSize          float32
+	HoverBarSize          float32
+	HoverHorizontal       bool
+	HoverVertical         bool
+	DraggingHorizontal    bool
+	DraggingVertical      bool
+	StackIndex            int
 	// ScrollBarStackIndex overrides the visual layer of scrollbar parts; zero follows StackIndex.
 	ScrollBarStackIndex int
 }
@@ -543,4 +547,11 @@ type uiEventState struct {
 
 type caretBlinkState struct {
 	phase uint64
+}
+
+func (f TextField) Text() piecetree.Snapshot {
+	if f.Buffer != nil {
+		return f.Source
+	}
+	return piecetree.FromString(f.Value)
 }

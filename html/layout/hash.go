@@ -57,6 +57,7 @@ func writeBoxOwnGeometryHash(h *geometryHash, box *Box) {
 	writeRectHash(h, box.Viewport)
 	writeRectHash(h, box.Content)
 	writeEdgesHash(h, box.Padding)
+	writeEdgesHash(h, box.ScrollbarGutter)
 	writeEdgesHash(h, box.Border)
 	writeEdgesHash(h, box.Margin)
 	writeRectHash(h, box.FlowMarginBox)

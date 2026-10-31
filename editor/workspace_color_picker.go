@@ -227,7 +227,7 @@ func (p *workspaceColorPicker) rebuildTextures() {
 				pixel[0], pixel[1], pixel[2], pixel[3] = r, g, b, 255
 			}
 		}
-		p.hues = graphics.CreateTextureByImageNoMipmap(pixels)
+		p.hues = graphics.CreateTextureBySharedImage(pixels, false, graphics.ResourceUsageDefault)
 	}
 }
 

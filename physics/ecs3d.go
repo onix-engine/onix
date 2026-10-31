@@ -10,6 +10,9 @@ type Runtime3D struct {
 	Simulation    *World3D
 	frame         uint64
 	syncedInputs  physicsInputs
+	syncedWorld   *World3D
+	syncedTick    ecs.Tick
+	changes       physicsBodyChanges
 	managedBodies int
 }
 
@@ -41,16 +44,41 @@ func stepECS3D(context *ecs.SystemContext) error {
 	if runtime.frame == 0 {
 		runtime.frame = 1
 	}
-	if err := runtime.syncBodies(world); err != nil {
-		return err
+	inputs := physicsInputs3D(world)
+	fullSync := runtime.syncedWorld != runtime.Simulation || inputs.bodyTopologyChanged(runtime.syncedInputs)
+	if !fullSync && inputs.bodyChanged(runtime.syncedInputs) {
+		entities := runtime.changes.collect[RigidBody3D](world, runtime.syncedTick, inputs, runtime.syncedInputs)
+		for _, entity := range entities {
+			body := world.GetRef[RigidBody3D](entity).body
+			state := body.state()
+			if state == nil || body.world != runtime.Simulation || state.userData != uint64(entity) {
+				fullSync = true
+				break
+			}
+		}
+		if !fullSync && len(entities) != 0 {
+			if err := runtime.syncBodies(world, entities); err != nil {
+				return err
+			}
+		}
 	}
-	runtime.syncECSColliders3D[Sphere](world)
-	runtime.syncECSColliders3D[Box3D](world)
-	runtime.syncECSColliders3D[Capsule](world)
-	runtime.syncECSColliders3D[TriangleMesh](world)
-	runtime.syncECSColliders3D[ConvexHull](world)
-	runtime.syncECSColliders3D[Compound](world)
-	runtime.sweepManaged()
+	if fullSync {
+		if err := runtime.syncBodies(world, nil); err != nil {
+			return err
+		}
+	}
+	if fullSync || inputs.collidersChanged(runtime.syncedInputs) {
+		runtime.syncECSColliders3D[Sphere](world)
+		runtime.syncECSColliders3D[Box3D](world)
+		runtime.syncECSColliders3D[Capsule](world)
+		runtime.syncECSColliders3D[TriangleMesh](world)
+		runtime.syncECSColliders3D[ConvexHull](world)
+		runtime.syncECSColliders3D[Compound](world)
+		runtime.sweepManagedColliders()
+		if fullSync {
+			runtime.sweepManagedBodies()
+		}
+	}
 	delta := 1.0 / 60
 	if time, ok := world.GetResource[*scene.Time](); ok && time != nil && time.Delta > 0 {
 		delta = time.Delta.Seconds()
@@ -59,16 +87,25 @@ func stepECS3D(context *ecs.SystemContext) error {
 	runtime.writeBodies(world)
 	runtime.writeEvents(world)
 	runtime.syncedInputs = physicsInputs3D(world)
+	runtime.syncedWorld = runtime.Simulation
+	runtime.syncedTick = world.ChangeTick()
 	return nil
 }
 
-func (runtime *Runtime3D) syncBodies(world *ecs.World) error {
-	runtime.managedBodies = 0
-	for entity, access := range world.Query2[RigidBody3D, scene.Transform]().All {
+func (runtime *Runtime3D) syncBodies(world *ecs.World, entities []ecs.Entity) error {
+	query := world.Query2[RigidBody3D, scene.Transform]()
+	if entities == nil {
+		runtime.managedBodies = 0
+	} else {
+		query = query.In(entities)
+	}
+	for entity, access := range query.All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
-		runtime.managedBodies++
+		if entities == nil {
+			runtime.managedBodies++
+		}
 		bodyAccess := access.A
 		transformAccess := access.B
 
@@ -81,7 +118,7 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World) error {
 		}
 		position := vectorFromMGL(pose.Translation)
 		rotation := quaternionFromMGL(pose.Rotation)
-		if !component.body.Valid() || component.body.world != runtime.Simulation {
+		if !component.body.Valid() || component.body.world != runtime.Simulation || component.body.state().userData != uint64(entity) {
 			def := NewBodyDef3D(component.Type)
 			def.Position, def.Rotation = position, rotation
 			def.Velocity, def.AngularVelocity = component.Velocity, component.AngularVelocity
@@ -152,13 +189,16 @@ func (runtime *Runtime3D) syncECSColliders3D[S Shape3D](world *ecs.World) {
 	}
 }
 
-func (runtime *Runtime3D) sweepManaged() {
+func (runtime *Runtime3D) sweepManagedColliders() {
 	for index := range runtime.Simulation.colliders {
 		state := &runtime.Simulation.colliders[index]
 		if state.alive && state.managed && state.touched != runtime.frame {
 			runtime.Simulation.removeColliderIndex(uint32(index))
 		}
 	}
+}
+
+func (runtime *Runtime3D) sweepManagedBodies() {
 	for index := range runtime.Simulation.bodies {
 		state := &runtime.Simulation.bodies[index]
 		if state.alive && state.managed && state.touched != runtime.frame {
@@ -180,6 +220,12 @@ func (runtime *Runtime3D) writeBodies(world *ecs.World) {
 		component, transform := &value, &pose
 		state := component.body.state()
 		if state == nil {
+			continue
+		}
+		if state.position == component.lastPosition && state.rotation == component.lastRotation &&
+			state.velocity == component.Velocity && state.angularVelocity == component.AngularVelocity &&
+			!world.Has[scene.Parent](entity) && pose.Translation == vectorToMGL(state.position) &&
+			pose.Rotation == quaternionToMGL(state.rotation) {
 			continue
 		}
 		component.Velocity, component.AngularVelocity = state.velocity, state.angularVelocity

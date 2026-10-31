@@ -243,7 +243,7 @@ var retainedInputs2D = [...]renderInput2D{
 		for i := range l.Layers {
 			layer := &l.Layers[i]
 			width, height := layer.Sprite.Size()
-			if layer.Visible && layer.Sprite.Alpha > 0 && layer.Sprite.Tint.A > 0 && layer.Sprite.Texture != nil && layer.Sprite.Texture.ValidFor(device) && width > 0 && height > 0 {
+			if layer.Visible && spriteDrawable2D(&layer.Sprite, device) && width > 0 && height > 0 {
 				return true
 			}
 		}

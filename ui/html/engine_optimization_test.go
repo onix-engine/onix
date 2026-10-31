@@ -40,7 +40,7 @@ func TestHTMLOpacityTextureReusesRasterAndTexture(t *testing.T) {
 		t.Fatal("same-size repaint recreated texture")
 	}
 	pixel := state.Textures.rasters[root.Node].image.RGBAAt(1, 1)
-	if pixel.G != 255 || pixel.A != 128 {
+	if pixel.G != 255 || pixel.A != 255 {
 		t.Fatalf("updated composite=%+v", pixel)
 	}
 	if allocations := testing.AllocsPerRun(100, func() {

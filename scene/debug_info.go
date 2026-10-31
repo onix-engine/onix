@@ -406,7 +406,7 @@ func newDebugGlyphAtlas() *graphics.Texture {
 			}
 		}
 	}
-	return graphics.CreateTextureByImageWithUsage(atlas, false, graphics.ResourceUsageDefault)
+	return graphics.CreateTextureBySharedImage(atlas, false, graphics.ResourceUsageDefault)
 }
 
 var debugGlyphPatterns = map[byte][debugGlyphHeight]byte{

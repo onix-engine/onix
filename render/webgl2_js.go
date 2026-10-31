@@ -166,6 +166,12 @@ type webGL2Driver struct {
 	frameIndex        int
 	instanceData      js.Value
 	textureData       js.Value
+	textureBatchCall  js.Value
+	textureCommandsJS js.Value
+	textureCommands   []uint32
+	textureBatchPix   []byte
+	textureBatchUsed  int
+	textureBatchKeep  bufferRetention
 	mipmapUpdates     map[TextureHandle]webGLTexture
 	currentProgram    js.Value
 	boundVAO          js.Value
@@ -188,8 +194,9 @@ type webGL2Driver struct {
 	surfaceMSAA       [3]js.Value // framebuffer, color renderbuffer, depth renderbuffer
 	surfaceProgram    webGLProgram
 
-	instanceDataRetention scratchRetention
-	textureDataRetention  scratchRetention
+	instanceDataRetention   scratchRetention
+	textureDataRetention    scratchRetention
+	textureCommandRetention scratchRetention
 }
 
 func NewWebGL2Driver(context js.Value) (Driver, error) {
@@ -391,6 +398,9 @@ void main() { color=texelFetch(tex,ivec2(gl_FragCoord.xy),0); }`)
 func (d *webGL2Driver) trimScratch() {
 	trimJSUpload(&d.textureData, &d.textureDataRetention)
 	trimJSUpload(&d.instanceData, &d.instanceDataRetention)
+	trimJSUpload(&d.textureCommandsJS, &d.textureCommandRetention)
+	d.textureBatchPix = (&d.textureBatchKeep).trimUploadBuffer(d.textureBatchPix, d.textureBatchUsed, 16<<10)
+	d.textureBatchUsed = 0
 }
 
 func (d *webGL2Driver) BeginFrame(clear Color) error {
@@ -525,6 +535,27 @@ func (d *webGL2Driver) UpdateTextures(updates []TextureUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
+	if len(updates) >= 8 && len(updates) <= 512 {
+		length := 0
+		batch := true
+		for _, update := range updates {
+			texture, ok := d.textures.Get(update.Texture)
+			region := update.Region
+			texelBytes := texture.format.TexelBytes()
+			if !ok || texelBytes == 0 || region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 ||
+				len(update.Pixels) != region.Width*region.Height*texelBytes {
+				return errors.New("render: invalid WebGL2 texture update")
+			}
+			length += len(update.Pixels)
+			if length > 256<<10 {
+				batch = false
+				break
+			}
+		}
+		if batch {
+			return d.updateTexturesBatch(updates, length)
+		}
+	}
 	defer func() {
 		// Release JS texture references on success and on partial failure.
 		if len(d.mipmapUpdates) > 4096 {
@@ -565,6 +596,57 @@ func (d *webGL2Driver) UpdateTextures(updates []TextureUpdate) error {
 	d.recordTextureUploadStatistics(len(updates), uploadBytes)
 	return nil
 }
+
+// Small region batches cross the Go/JS boundary once for their pixels and
+// once for the command list. WebGL still uploads each region in source order.
+func (d *webGL2Driver) updateTexturesBatch(updates []TextureUpdate, length int) error {
+	d.textureBatchPix = packTexturePixels(d.textureBatchPix, updates, length)
+	d.textureBatchUsed = max(d.textureBatchUsed, length)
+	d.textureCommands = d.textureCommands[:0]
+	offset := 0
+	for _, update := range updates {
+		texture, _ := d.textures.Get(update.Texture)
+		format := uint32(webGLRGBA)
+		if texture.format == TextureFormatR8 {
+			format = webGLRed
+		}
+		mipmap := uint32(0)
+		if texture.filter == TextureFilterLinearMipmapLinear {
+			mipmap = 1
+		}
+		d.textureCommands = append(d.textureCommands, update.Texture.ID(), uint32(update.Region.X), uint32(update.Region.Y),
+			uint32(update.Region.Width), uint32(update.Region.Height), format, uint32(offset), mipmap)
+		offset += len(update.Pixels)
+	}
+	if !d.textureBatchCall.Truthy() {
+		d.textureBatchCall = js.Global().Get("Function").New("gl", "textures", webGLTextureBatchHelper).Invoke(d.gl, d.meshTextureTable)
+	}
+	commands := copyBytesToJS(&d.textureCommandsJS, &d.textureCommandRetention, sliceBytes(d.textureCommands))
+	pixels := copyBytesToJS(&d.textureData, &d.textureDataRetention, d.textureBatchPix)
+	d.textureBatchCall.Invoke(commands, pixels, len(updates))
+	d.boundTexture = js.Undefined()
+	d.recordTextureUploadStatistics(len(updates), uint64(length))
+	return nil
+}
+
+const webGLTextureBatchHelper = `
+const mipmaps = new Set();
+return (commandBytes, pixels, count) => {
+ const commands = new Uint32Array(commandBytes.buffer, commandBytes.byteOffset, count*8);
+ let bound = null;
+ mipmaps.clear();
+ gl.activeTexture(0x84c0);
+ for (let i=0; i<count; i++) {
+  const at=i*8, texture=textures[commands[at]];
+  if (bound !== texture) { gl.bindTexture(0x0de1, texture); bound=texture; }
+  gl.texSubImage2D(0x0de1, 0, commands[at+1], commands[at+2], commands[at+3], commands[at+4], commands[at+5], 0x1401, pixels, commands[at+6]);
+  if (commands[at+7]) mipmaps.add(texture);
+ }
+ for (const texture of mipmaps) {
+  if (bound !== texture) { gl.bindTexture(0x0de1, texture); bound=texture; }
+  gl.generateMipmap(0x0de1);
+ }
+};`
 
 func (d *webGL2Driver) DestroyTexture(handle TextureHandle) error {
 	texture, ok := d.textures.Get(handle)
@@ -1329,6 +1411,10 @@ func (d *webGL2Driver) Destroy() {
 	d.material2DShaders.Clear()
 	d.instanceData = js.Undefined()
 	d.textureData = js.Undefined()
+	d.textureBatchCall = js.Undefined()
+	d.textureCommandsJS = js.Undefined()
+	d.textureCommands = nil
+	d.textureBatchPix = nil
 	d.meshUniformData = webGLUniformData{}
 	d.mipmapUpdates = nil
 	d.readbackPixels = js.Undefined()

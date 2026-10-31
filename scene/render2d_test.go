@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/render"
 	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
@@ -21,6 +22,89 @@ import (
 func TestTextGlyph2DStaysCompact(t *testing.T) {
 	if size := unsafe.Sizeof(textGlyph2D{}); size != 88 {
 		t.Fatalf("textGlyph2D size = %d bytes, want 88", size)
+	}
+}
+
+func TestTextPrelayoutUsesAuthoredGlyphPositions(t *testing.T) {
+	if size := unsafe.Sizeof(font.PositionedGlyph{}); size != 32 {
+		t.Fatalf("positioned glyph size = %d bytes, want 32", size)
+	}
+	text := NewText2D("AV")
+	text.Font = notosanssc.NotoSansSCRegular
+	text.WrapMode = TextWrapNone
+	text.Prelayout = TextPrelayout2D{
+		Glyphs: []font.PositionedGlyph{
+			{Rune: 'A', PenX: 111, Y: 28},
+			{Rune: 'V', PenX: 173, Y: 28},
+		},
+		OriginX: 100, OriginY: 10, Width: 91, Height: 24, Revision: 1,
+	}
+	width, height, ok := MeasureText2D(&text)
+	if !ok || width != 91 || height != 24 {
+		t.Fatalf("prelayout size = (%v, %v, %v)", width, height, ok)
+	}
+	if !text.ensureLayout() || len(text.glyphs) != 2 {
+		t.Fatalf("prelayout glyph count = %d", len(text.glyphs))
+	}
+	if got, want := text.glyphs[1].x-text.glyphs[1].raster.OffsetX, float32(73); got != want {
+		t.Fatalf("second glyph pen = %v, want %v", got, want)
+	}
+	text.Prelayout.Glyphs[1].PenX = 194
+	text.Prelayout.Revision++
+	if !text.ensureLayout() || text.glyphs[1].x-text.glyphs[1].raster.OffsetX != 94 {
+		t.Fatal("updated authored position was not used")
+	}
+	text.Value = "AB"
+	if !text.ensureLayout() || text.prelayoutActive {
+		t.Fatal("changed text reused stale authored glyphs")
+	}
+	text.Value = "AV"
+	text.Prelayout.Revision++
+	if !text.ensureLayout() || !text.prelayoutActive {
+		t.Fatal("fresh authored glyphs were not restored")
+	}
+	text.Prelayout = TextPrelayout2D{}
+	if !text.ensureLayout() || text.prelayoutActive || text.glyphs[1].x-text.glyphs[1].raster.OffsetX == 94 {
+		t.Fatal("removing authored positions did not restore native layout")
+	}
+}
+
+func BenchmarkText2DLayoutFromHTMLGlyphs(b *testing.B) {
+	value := strings.Repeat("AVjé", 50)
+	for _, prelayout := range []bool{false, true} {
+		name := "text-layout"
+		if prelayout {
+			name = "html-glyphs"
+		}
+		b.Run(name, func(b *testing.B) {
+			text := NewText2D(value)
+			text.Font = notosanssc.NotoSansSCRegular
+			text.WrapMode = TextWrapNone
+			if prelayout {
+				glyphs := make([]font.PositionedGlyph, 0, 200)
+				pen := float32(0)
+				for _, r := range value {
+					glyphs = append(glyphs, font.PositionedGlyph{Rune: r, PenX: pen, Y: 18})
+					pen += 12
+				}
+				text.Prelayout = TextPrelayout2D{Glyphs: glyphs, Width: pen, Height: 24, Revision: 1}
+			}
+			if !text.ensureLayout() {
+				b.Fatal("initial text layout failed")
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if prelayout {
+					text.Prelayout.Revision++
+				} else {
+					text.changed = true
+				}
+				if !text.ensureLayout() {
+					b.Fatal("text layout failed")
+				}
+			}
+		})
 	}
 }
 
@@ -905,6 +989,26 @@ func TestCollectRenderItemsExpandsUISpriteLayers(t *testing.T) {
 	items := collectRenderItems2D(graphics.Canvas2DContext(64, 64), world, false)
 	if len(items) != 1 || !items[0].ui || items[0].sortIndex != 11 || items[0].texture != texture {
 		t.Fatalf("UI layer render items = %+v", items)
+	}
+}
+
+func TestCollectRenderItemsExpandsShapeLayers(t *testing.T) {
+	world := ecs.NewWorld()
+	RegisterSpriteLayersRenderer2D(world)
+	first := NewSprite2D()
+	first.Shape = RoundedRectShape2D(graphics.ColorFromRGB(255, 0, 0), 0)
+	first.Width, first.Height = 20, 2
+	second := first
+	second.Shape = RoundedRectShape2D(graphics.ColorFromRGB(0, 0, 255), 0)
+	layers := SpriteLayers2D{Layers: []SpriteLayer2D{
+		{Sprite: first, Visible: true},
+		{Sprite: second, Transform: SpriteLayerTransform2D{Y: 8}, Visible: true},
+	}}
+	spawner := world.NewSpawner4[SpriteLayers2D, UIGlobalTransform, Visibility, UIStackIndex]()
+	spawner.Spawn(layers, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true}, 10)
+	items := collectRenderItems2D(graphics.Canvas2DContext(64, 64), world, false)
+	if len(items) != 2 || items[0].kind != renderItemShape2D || items[1].kind != renderItemShape2D || items[0].sortIndex != 10 || items[1].transform[13] != 8 {
+		t.Fatalf("shape paint list = %+v", items)
 	}
 }
 

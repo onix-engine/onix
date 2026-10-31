@@ -18,8 +18,24 @@ func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
 	prepareHTMLNodeAnimation(&state, node, styles[node])
 	b.ReportAllocs()
 	for b.Loop() {
-		delete(state.Animations, node)
+		delete(state.AnimationBaselines, node)
 		prepareHTMLNodeAnimation(&state, node, styles[node])
+	}
+}
+
+func BenchmarkHTMLStaticAnimationPopulation(b *testing.B) {
+	root, err := dom.Parse(`<section>` + strings.Repeat(`<div></div>`, 1000) + `</section>`)
+	if err != nil {
+		b.Fatal(err)
+	}
+	styles, err := style.Compute(root, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		state := htmlRenderState{htmlStyleState: htmlStyleState{Styles: styles}}
+		syncHTMLAnimations(&state)
 	}
 }
 

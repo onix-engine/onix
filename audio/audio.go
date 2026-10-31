@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -102,6 +101,7 @@ type Clip struct {
 	mu           sync.Mutex
 	format       Format
 	pcm          []byte
+	samples      []float32
 	length       int64
 	duration     time.Duration
 	streamSource string
@@ -143,20 +143,18 @@ type DecodedAudio struct {
 	Channels   int
 }
 
-// NewClip converts decoded format samples to the engine's fixed PCM format.
+// NewClip prepares decoded samples at the engine's fixed stereo sample rate.
 func NewClip(format Format, decoded DecodedAudio) (*Clip, error) {
-	samples, err := prepareSamples(decoded)
+	samples, owned, err := prepareSamples(decoded)
 	if err != nil {
 		return nil, fmt.Errorf("audio: decode %s: %w", format, err)
 	}
-	pcm := make([]byte, len(samples)*BytesPerSample)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint32(pcm[index*BytesPerSample:], math.Float32bits(sample))
-	}
+	pcm, webSamples := staticClipData(samples, owned)
 	return &Clip{
 		format:   format,
 		pcm:      pcm,
-		length:   int64(len(pcm)),
+		samples:  webSamples,
+		length:   int64(len(samples) * BytesPerSample),
 		duration: framesDuration(len(samples) / OutputChannels),
 	}, nil
 }
@@ -246,6 +244,7 @@ func (c *Clip) Close() error {
 	}
 	c.closed = true
 	c.pcm = nil
+	c.samples = nil
 	c.openStream = nil
 	if c.readers != 0 {
 		c.closePending = true
@@ -307,33 +306,32 @@ func closeSource(source Source) error {
 	return source.Close()
 }
 
-func prepareSamples(decoded DecodedAudio) ([]float32, error) {
+func prepareSamples(decoded DecodedAudio) ([]float32, bool, error) {
 	if decoded.SampleRate <= 0 {
-		return nil, fmt.Errorf("invalid sample rate %d", decoded.SampleRate)
+		return nil, false, fmt.Errorf("invalid sample rate %d", decoded.SampleRate)
 	}
 	if decoded.Channels < 1 || decoded.Channels > OutputChannels {
-		return nil, fmt.Errorf("unsupported channel count %d", decoded.Channels)
+		return nil, false, fmt.Errorf("unsupported channel count %d", decoded.Channels)
 	}
 	if len(decoded.Samples) == 0 || len(decoded.Samples)%decoded.Channels != 0 {
-		return nil, fmt.Errorf("invalid sample count %d for %d channels", len(decoded.Samples), decoded.Channels)
+		return nil, false, fmt.Errorf("invalid sample count %d for %d channels", len(decoded.Samples), decoded.Channels)
 	}
 
-	stereo := decoded.Samples
-	if decoded.Channels == 1 {
-		stereo = make([]float32, len(decoded.Samples)*OutputChannels)
-		for index, sample := range decoded.Samples {
-			stereo[index*OutputChannels] = sample
-			stereo[index*OutputChannels+1] = sample
+	if decoded.SampleRate == outputSampleRate {
+		if decoded.Channels == OutputChannels {
+			return decoded.Samples, false, nil
 		}
+		stereo := make([]float32, len(decoded.Samples)*OutputChannels)
+		for index, sample := range decoded.Samples {
+			stereo[index*OutputChannels], stereo[index*OutputChannels+1] = sample, sample
+		}
+		return stereo, true, nil
 	}
-	return resampleStereo(stereo, decoded.SampleRate), nil
+	return resampleSamples(decoded.Samples, decoded.SampleRate, decoded.Channels), true, nil
 }
 
-func resampleStereo(samples []float32, sourceRate int) []float32 {
-	if sourceRate == outputSampleRate {
-		return samples
-	}
-	sourceFrames := len(samples) / outputChannels
+func resampleSamples(samples []float32, sourceRate, channels int) []float32 {
+	sourceFrames := len(samples) / channels
 	targetFrames := max(1, int(math.Round(float64(sourceFrames)*outputSampleRate/float64(sourceRate))))
 	target := make([]float32, targetFrames*outputChannels)
 	for frame := range targetFrames {
@@ -342,8 +340,9 @@ func resampleStereo(samples []float32, sourceRate int) []float32 {
 		right := min(left+1, sourceFrames-1)
 		fraction := float32(position - float64(left))
 		for channel := range outputChannels {
-			from := samples[left*outputChannels+channel]
-			to := samples[right*outputChannels+channel]
+			index := min(channel, channels-1)
+			from := samples[left*channels+index]
+			to := samples[right*channels+index]
 			target[frame*outputChannels+channel] = from + (to-from)*fraction
 		}
 	}

@@ -13,8 +13,8 @@ func TestLayoutContextResetReleasesDocument(t *testing.T) {
 	node := dom.NewElement("div", nil)
 	ctx := newLayoutContext()
 	ctx.inlineSegments = []inlineSegment{{Node: node}}
-	ctx.textTokens = []textToken{{Text: "document"}}
-	ctx.textTokens = ctx.textTokens[:0]
+	ctx.controlTokens = []controlToken{{text: "document"}}
+	ctx.controlTokens = ctx.controlTokens[:0]
 	ctx.textScratch = []textLayoutScratch{{inlineSegments: []inlineSegment{{Node: node}}}}
 	ctx.retained = new(Cache)
 	ctx.floatContext = new(floatContext)
@@ -24,12 +24,14 @@ func TestLayoutContextResetReleasesDocument(t *testing.T) {
 	if ctx.retained != nil || ctx.floatContext != nil || ctx.err != nil || len(ctx.imageSizes) != 0 {
 		t.Fatal("pooled context retained document state")
 	}
-	if ctx.inlineSegments[:cap(ctx.inlineSegments)][0].Node != nil || ctx.textTokens[:cap(ctx.textTokens)][0].Text != "" || ctx.textScratch[0].inlineSegments[:1][0].Node != nil {
+	if ctx.inlineSegments[:cap(ctx.inlineSegments)][0].Node != nil || ctx.controlTokens[:cap(ctx.controlTokens)][0].text != "" || ctx.textScratch[0].inlineSegments[:1][0].Node != nil {
 		t.Fatal("pooled backing array retained document references")
 	}
 	ctx.inlineSegments = make([]inlineSegment, 4097)
+	ctx.shapeGlyphs = make([]shapedGlyph, 4097)
+	ctx.textScratch[0].shapeGlyphs = make([]shapedGlyph, 4097)
 	ctx.reset()
-	if ctx.inlineSegments != nil {
+	if ctx.inlineSegments != nil || ctx.shapeGlyphs != nil || ctx.textScratch[0].shapeGlyphs != nil {
 		t.Fatal("oversized layout workspace was retained")
 	}
 }

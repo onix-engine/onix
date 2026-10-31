@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -28,15 +29,19 @@ type Canvas2D struct {
 	frameActive bool
 	err         error
 
-	instances        []render.Instance2D
-	draws            []render.SpriteDraw
-	drawStart        int
-	texture          *Texture
-	material2DShader *Material2DShader
-	material2DCustom [4][4]float32
-	shapes           []render.ShapeInstance2D
-	retained         []any
-	scratch          scratchValues
+	instances         []render.Instance2D
+	draws             []render.SpriteDraw
+	drawStart         int
+	texture           *Texture
+	material2DShader  *Material2DShader
+	material2DCustom  [4][4]float32
+	shapes            []render.ShapeInstance2D
+	retained          []any
+	scratch           scratchValues
+	instanceRetention reuse.Retention
+	drawRetention     reuse.Retention
+	shapeRetention    reuse.Retention
+	retainedRetention reuse.Retention
 }
 
 // RetainUntilFlush keeps a resource owner alive while its draw commands are
@@ -370,6 +375,7 @@ func (c *Canvas2D) DrawFrame() {
 	}
 	c.finishSpriteDraw()
 	if len(c.draws) == 0 && len(c.shapes) == 0 {
+		c.retainedRetention.Record(len(c.retained))
 		clear(c.retained)
 		c.retained = c.retained[:0]
 		return
@@ -403,6 +409,10 @@ func (c *Canvas2D) DrawFrame() {
 }
 
 func (c *Canvas2D) resetDrawBatch() {
+	c.instanceRetention.Record(len(c.instances))
+	c.drawRetention.Record(len(c.draws))
+	c.shapeRetention.Record(len(c.shapes))
+	c.retainedRetention.Record(len(c.retained))
 	c.instances = c.instances[:0]
 	c.draws = c.draws[:0]
 	c.drawStart = 0
@@ -607,6 +617,10 @@ func (c *Canvas2D) FinishFrame() error {
 	}
 	c.DrawFrame()
 	c.frameActive = false
+	c.instances = c.instanceRetention.Trim(c.instances, initialBatchInstances)
+	c.draws = c.drawRetention.Trim(c.draws, 64)
+	c.shapes = c.shapeRetention.Trim(c.shapes, 256)
+	c.retained = c.retainedRetention.Trim(c.retained, 32)
 	err := c.err
 	c.err = nil
 	return err

@@ -657,9 +657,7 @@ type openGLESDriver struct {
 	meshDraws         []C.OnixGLESMeshDraw
 	pickingDraws      []C.OnixGLESPickingDraw
 	updates           []C.OnixGLESTextureUpdate
-	pixels            []byte
-	pixelBytes        int
-	pixelRetention    bufferRetention
+	textureUpload     nativeTextureUpload
 	lightUniforms     [meshLightUniformFloatCount]float32
 	uintClear         [4]C.GLuint
 
@@ -784,7 +782,8 @@ func (d *openGLESDriver) BufferMemoryStatistics() BufferMemoryStatistics {
 		memory.NativeScratchBytes += uint64(pool.snapshot_bytes) + uint64(pool.capacity)*uint64(unsafe.Sizeof(C.OnixGLUploadBuffer{})) +
 			uint64(pool.cache.capacity)*(uint64(unsafe.Sizeof(C.OnixNativeUpload{}))+8)
 	}
-	memory.ScratchBytes += sliceCapacityBytes(d.pixels) + sliceCapacityBytes(d.updates) +
+	memory.NativeScratchBytes += uint64(d.textureUpload.capacity)
+	memory.ScratchBytes += sliceCapacityBytes(d.updates) +
 		sliceCapacityBytes(d.spriteDraws) + sliceCapacityBytes(d.meshDraws) + sliceCapacityBytes(d.pickingDraws)
 	return memory
 }
@@ -857,8 +856,7 @@ func (d *openGLESDriver) BeginFrame(clear Color) error {
 	if restoreScissor {
 		d.scissorEnabled = d.scissorSet
 	}
-	d.pixels = (&d.pixelRetention).trimUploadBuffer(d.pixels, d.pixelBytes, 64<<10)
-	d.pixelBytes = 0
+	d.textureUpload.trim()
 	d.updates = (&d.updateRetention).trimScratch(d.updates, 32)
 	d.spriteDraws = (&d.spriteDrawsRetention).trimScratch(d.spriteDraws, 64)
 	d.meshDraws = (&d.meshDrawsRetention).trimScratch(d.meshDraws, 64)
@@ -961,7 +959,6 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 		return nil
 	}
 	d.updates = (&d.updateRetention).resetScratch(d.updates)
-	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
 	var length int
@@ -989,9 +986,15 @@ func (d *openGLESDriver) UpdateTextures(updates []TextureUpdate) error {
 		})
 	}
 	if len(updates) > 1 {
-		d.pixels = packTexturePixels(d.pixels, updates, length)
-		pixels = d.pixels
-		d.pixelBytes = max(d.pixelBytes, len(pixels))
+		var ok bool
+		pixels, ok = d.textureUpload.reserve(length)
+		if !ok {
+			return errors.New("render: OpenGL ES texture upload storage is unavailable")
+		}
+		for index, update := range updates {
+			offset := int(d.updates[index].data_offset)
+			copy(pixels[offset:offset+len(update.Pixels)], update.Pixels)
+		}
 	}
 	d.boundTexture = C.onix_gl_update_textures(&d.updates[0], C.size_t(len(d.updates)), (*C.uint8_t)(unsafe.Pointer(&pixels[0])), d.boundTexture)
 	if err := glError("update textures"); err != nil {
@@ -1659,6 +1662,7 @@ func (d *openGLESDriver) Destroy() {
 		return
 	}
 	d.destroyed = true
+	d.textureUpload.release()
 	var noDisplay C.EGLDisplay
 	var noSurface C.EGLSurface
 	var noContext C.EGLContext

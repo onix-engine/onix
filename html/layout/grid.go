@@ -129,7 +129,7 @@ func layoutGridContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 		rowGap = resolveLength(box.Style.RowGap, box.Content.Height)
 		resolveGridTracks(rows, box.Content.Height, rowGap, items, false, face, styles, ctx)
 	}
-	box.Content.Height = clampContentDimension(box.Content.Height, box.Style.MinHeight, box.Style.MaxHeight, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+	box.Content.Height = clampScrollContentHeight(box, layoutContaining.Height)
 
 	columnStart := gridContentOffset(box.Style.JustifyContent, box.Content.Width-positionGridTracks(columns, columnGap), len(columns), columnGap)
 	if box.Style.AlignContent.Kind == style.ValueKeyword && box.Style.AlignContent.Keyword == "stretch" {

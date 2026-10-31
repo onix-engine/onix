@@ -5,9 +5,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
 	engineui "github.com/diiyw/onix/ui"
@@ -23,12 +25,12 @@ func TestMarkdownConvertsAndRendersThroughHTML(t *testing.T) {
 	if !ok {
 		t.Fatal("Markdown entity has no HTML component")
 	}
-	for _, fragment := range []string{"<h1", "<strong>bold</strong>", "<a href=", "<pre><code", "<table>"} {
-		if !strings.Contains(html.Value, fragment) {
-			t.Fatalf("converted HTML does not contain %q: %s", fragment, html.Value)
+	for _, tag := range []string{"h1", "strong", "a", "pre", "code", "table"} {
+		if markdownDOMFirst(html.Document, tag, "") == nil {
+			t.Fatalf("converted DOM does not contain %q", tag)
 		}
 	}
-	if html.CSS == "" || html.Width != 320 || !html.PassThrough {
+	if html.Value != "" || html.CSS == "" || html.Width != 320 || !html.PassThrough {
 		t.Fatalf("HTML configuration = %#v", html)
 	}
 
@@ -62,6 +64,60 @@ func TestMarkdownConvertsAndRendersThroughHTML(t *testing.T) {
 	}
 }
 
+func TestMarkdownPresentationUpdatesReuseConvertedHTML(t *testing.T) {
+	world := newUIWorld(t)
+	style := DefaultMarkdownStyle(engineui.DefaultTheme())
+	entity := SpawnMarkdown(world, MarkdownOptions{Width: 240, Value: "**stable**", Style: &style})
+	before, _ := world.Get[htmlui.Surface](entity)
+	UpdateMarkdown(world, entity, MarkdownOptions{Width: 320, Value: "**stable**", Style: &style})
+	resized, _ := world.Get[htmlui.Surface](entity)
+	if resized.Width != 320 || resized.Document != before.Document || unsafe.StringData(resized.CSS) != unsafe.StringData(before.CSS) {
+		t.Fatal("width update rebuilt Markdown DOM or CSS")
+	}
+	style.Heading = graphics.ColorFromRGB(13, 44, 71)
+	UpdateMarkdown(world, entity, MarkdownOptions{Width: 320, Value: "**stable**", Style: &style})
+	styled, _ := world.Get[htmlui.Surface](entity)
+	if styled.Document != before.Document || styled.CSS == before.CSS {
+		t.Fatal("style update rebuilt Markdown DOM or retained old CSS")
+	}
+}
+
+func TestMarkdownDirectDOMMatchesHTMLTree(t *testing.T) {
+	for _, source := range []string{
+		"# Heading\n\n**bold** and [docs](https://example.com/a?b=1&c=2)",
+		"3. three\n4. four\n\n- [x] done\n- [ ] open",
+		"| Name | Value |\n| :--- | ---: |\n| A | 10 |",
+		"line  \nbreak\nsoft",
+		"`a\nb`\n\n```unknown\nraw <code>\n```",
+		"$x^2$\n\n$$\n\\frac{1}{2}\n$$",
+		"<table><tr><td>raw</td></tr></table>\n\n**after**",
+	} {
+		want, err := dom.Parse(markdownToHTML(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := markdownToDOM(source)
+		stripMarkdownHTMLFormatting(want, false)
+		stripMarkdownHTMLFormatting(got, false)
+		if got.String() != want.String() {
+			t.Errorf("DOM mismatch for %q\ngot:\n%s\nwant:\n%s", source, got, want)
+		}
+	}
+}
+
+func stripMarkdownHTMLFormatting(node *dom.Node, preserve bool) {
+	preserve = preserve || node.Type == dom.ElementNode && (node.Data == "pre" || node.Data == "code")
+	children := node.Children[:0]
+	for _, child := range node.Children {
+		if !preserve && child.Type == dom.TextNode && strings.Contains(child.Data, "\n") && strings.TrimSpace(child.Data) == "" {
+			continue
+		}
+		stripMarkdownHTMLFormatting(child, preserve)
+		children = append(children, child)
+	}
+	node.Children = children
+}
+
 func TestMarkdownCodeBlockRendersHighlightedText(t *testing.T) {
 	world := newUIWorld(t)
 	value := "```go\nentity := world.Spawn()\n```"
@@ -74,11 +130,14 @@ func TestMarkdownCodeBlockRendersHighlightedText(t *testing.T) {
 	if !ok {
 		t.Fatal("Markdown entity has no HTML component")
 	}
-	if strings.Count(html.Value, "<pre") != 1 || strings.Count(html.Value, "<code") != 1 {
-		t.Fatalf("highlighted code generated nested wrappers: %s", html.Value)
+	pre := markdownDOMFirst(html.Document, "pre", "")
+	code := markdownDOMFirst(html.Document, "code", "")
+	if pre == nil || code == nil || code.Parent != pre || markdownDOMCount(html.Document, "pre") != 1 || markdownDOMCount(html.Document, "code") != 1 {
+		t.Fatal("highlighted code generated nested wrappers")
 	}
-	if !strings.Contains(html.Value, `class="syntax language-go"`) || !strings.Contains(html.Value, `<span class="syntax-token" style="color:#a6e22e">Spawn</span>`) {
-		t.Fatalf("tree-sitter HTML output is missing colored functions: %s", html.Value)
+	spawn := markdownDOMText(html.Document, "span", "Spawn")
+	if class, _ := code.Attr("class"); class != "syntax language-go" || spawn == nil || spawn.Attributes["style"] != "color:#a6e22e" {
+		t.Fatalf("tree-sitter DOM is missing colored functions: %s", html.Document)
 	}
 	if !strings.Contains(html.CSS, ".syntax{color:#f8f8f2;background-color:#272822}") {
 		t.Fatalf("syntax CSS output is missing the theme colors: %s", html.CSS)
@@ -209,7 +268,7 @@ func TestMarkdownSyncConvertsDirectComponentChangesBeforeHTML(t *testing.T) {
 		t.Fatal(err)
 	}
 	html, ok := world.Get[htmlui.Surface](entity)
-	if !ok || !strings.Contains(html.Value, "<h1 id=\"after\">After</h1>") {
+	if !ok || markdownDOMFirst(html.Document, "h1", "") == nil {
 		t.Fatalf("direct Markdown update produced %#v", html)
 	}
 	found := false
@@ -382,8 +441,8 @@ func TestMarkdownRadicandMovesInsideRootWithoutMovingRadical(t *testing.T) {
 	world := newUIWorld(t)
 	owner := SpawnMarkdown(world, MarkdownOptions{Width: 240, Value: `$\sqrt{x^2+y^2}\leq 3$`})
 	html, _ := world.Get[htmlui.Surface](owner)
-	if !strings.Contains(html.Value, `class="math-radicand-body"`) || !strings.Contains(html.CSS, `.math-radicand-body{position:relative;left:-0.32em}`) {
-		t.Fatalf("radicand inner offset is missing: value=%s css=%s", html.Value, html.CSS)
+	if markdownDOMFirst(html.Document, "span", "math-radicand-body") == nil || !strings.Contains(html.CSS, `.math-radicand-body{position:relative;left:-0.32em}`) {
+		t.Fatalf("radicand inner offset is missing: css=%s", html.CSS)
 	}
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatal(err)
@@ -490,6 +549,50 @@ func TestMarkdownSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 	}); allocations != 0 {
 		t.Fatalf("stable Markdown sync allocated %.0f objects, want 0", allocations)
 	}
+}
+
+func markdownDOMFirst(root *dom.Node, tag, class string) *dom.Node {
+	if root == nil {
+		return nil
+	}
+	if root.Data == tag && (class == "" || strings.Contains(root.Attributes["class"], class)) {
+		return root
+	}
+	for _, child := range root.Children {
+		if found := markdownDOMFirst(child, tag, class); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func markdownDOMCount(root *dom.Node, tag string) int {
+	if root == nil {
+		return 0
+	}
+	count := 0
+	if root.Data == tag {
+		count++
+	}
+	for _, child := range root.Children {
+		count += markdownDOMCount(child, tag)
+	}
+	return count
+}
+
+func markdownDOMText(root *dom.Node, tag, text string) *dom.Node {
+	if root == nil {
+		return nil
+	}
+	if root.Data == tag && len(root.Children) == 1 && root.Children[0].Data == text {
+		return root
+	}
+	for _, child := range root.Children {
+		if found := markdownDOMText(child, tag, text); found != nil {
+			return found
+		}
+	}
+	return nil
 }
 
 func markdownHTMLChildren(world *ecs.World, owner ecs.Entity) []ecs.Entity {

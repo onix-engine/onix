@@ -51,9 +51,6 @@ func Animating(world *ecs.World) bool {
 
 func htmlAnimating(state *htmlRenderState) bool {
 	for _, node := range state.Animations {
-		if node.htmlNodeMotion == nil {
-			continue
-		}
 		if node.Active != 0 {
 			return true
 		}

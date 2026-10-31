@@ -310,7 +310,7 @@ func tableCellIntrinsicWidths(box *Box, face *font.Face, styles style.Map, ctx *
 			continue
 		}
 		textFace := fontForStyle(face, segment.Style, ctx)
-		for _, token := range tokenizeStyledTextInto(ctx, segment.Text, whiteSpaceMode(segment.Style, false), line == 0, segment.Style.WordBreak.Keyword == "break-all") {
+		for token := range textTokens(segment.Text, whiteSpaceMode(segment.Style, false), line == 0, segment.Style.WordBreak.Keyword == "break-all") {
 			if token.IsBreak {
 				preferred, line = max(preferred, line), 0
 				continue

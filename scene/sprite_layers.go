@@ -38,8 +38,8 @@ type SpriteLayer2D struct {
 	Visible   bool
 }
 
-// SpriteLayers2D is a generic, non-animated collection of independently
-// rendered sprites used by UI controls and other composite visuals.
+// SpriteLayers2D is a collection of independently rendered sprite or shape
+// fragments sharing one entity's transform, clip and paint order.
 type SpriteLayers2D struct {
 	Layers []SpriteLayer2D
 

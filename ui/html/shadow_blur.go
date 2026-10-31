@@ -22,7 +22,7 @@ func htmlBlurShadowMask(dst *image.RGBA, sigma float64, scratch *htmlFilterScrat
 	w, h := dst.Rect.Dx(), dst.Rect.Dy()
 	count := w * h
 	scratch.mask = slices.Grow(scratch.mask[:0], count)[:count]
-	scratch.maskTemp = slices.Grow(scratch.maskTemp[:0], count)[:count]
+	scratch.maskLine = slices.Grow(scratch.maskLine[:0], max(w, h))[:max(w, h)]
 	var red, green, blue byte
 	for y := range h {
 		for x := range w {
@@ -46,8 +46,8 @@ func htmlBlurShadowMask(dst *image.RGBA, sigma float64, scratch *htmlFilterScrat
 		if pass >= lowerCount {
 			radius++
 		}
-		htmlBoxBlurMask(scratch.maskTemp, scratch.mask, w, h, radius, false)
-		htmlBoxBlurMask(scratch.mask, scratch.maskTemp, w, h, radius, true)
+		htmlBoxBlurMask(scratch.mask, scratch.maskLine, w, h, radius, false)
+		htmlBoxBlurMask(scratch.mask, scratch.maskLine, w, h, radius, true)
 	}
 	for y := range h {
 		for x := range w {
@@ -58,7 +58,9 @@ func htmlBlurShadowMask(dst *image.RGBA, sigma float64, scratch *htmlFilterScrat
 	}
 }
 
-func htmlBoxBlurMask(dst, src []float64, w, h, radius int, vertical bool) {
+// Copy one line before overwriting it. This preserves the sliding sum's
+// operation order while avoiding a second full floating-point image.
+func htmlBoxBlurMask(mask, lineBuffer []float64, w, h, radius int, vertical bool) {
 	lines, length, step, lineStep := h, w, 1, w
 	if vertical {
 		lines, length, step, lineStep = w, h, w, 1
@@ -66,17 +68,20 @@ func htmlBoxBlurMask(dst, src []float64, w, h, radius int, vertical bool) {
 	weight := 1 / float64(2*radius+1)
 	for line := range lines {
 		base := line * lineStep
+		for index := range length {
+			lineBuffer[index] = mask[base+index*step]
+		}
 		sum := 0.0
 		for index := 0; index <= min(radius, length-1); index++ {
-			sum += src[base+index*step]
+			sum += lineBuffer[index]
 		}
 		for index := range length {
-			dst[base+index*step] = sum * weight
+			mask[base+index*step] = sum * weight
 			if leaving := index - radius; leaving >= 0 {
-				sum -= src[base+leaving*step]
+				sum -= lineBuffer[leaving]
 			}
 			if entering := index + radius + 1; entering < length {
-				sum += src[base+entering*step]
+				sum += lineBuffer[entering]
 			}
 		}
 	}

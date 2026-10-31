@@ -394,13 +394,16 @@ func appendHTMLBoxEntities(state *htmlRenderState, box *layout.Box) {
 // their ancestors, and the queue is processed deepest first.
 func updateHTMLOverflowExtent(state *htmlRenderState, rendered *htmlBoxRendering) {
 	box := rendered.Box
-	r := box.PaddingBox()
+	r := box.ScrollportBox()
 	extent := htmlOverflowExtent{width: r.Width, height: r.Height}
 	for _, child := range box.Children {
 		childExtent := htmlOverflowChildExtent(child, state.OverflowExtents[child])
 		childRect := child.BorderBox()
 		extent.width = max(extent.width, childRect.X-r.X+childExtent.width)
 		extent.height = max(extent.height, childRect.Y-r.Y+childExtent.height)
+	}
+	if state.LayoutCache.ReserveScrollbarSpace {
+		extent = htmlOverflowExtent{width: box.ScrollWidth, height: box.ScrollHeight}
 	}
 	border := box.BorderBox()
 	if box.Parent != nil && (state.OverflowExtents[box] != extent || rendered.ExtentRect != border) {

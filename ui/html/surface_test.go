@@ -407,6 +407,39 @@ func TestHTMLNodeOffsetMovesDescendantTextWithElementSurface(t *testing.T) {
 	}
 }
 
+func TestHTMLTextPassesLayoutGlyphsToPainter(t *testing.T) {
+	world := ecs.NewWorld()
+	component := New(`<p>AV</p><input value="editable">`)
+	component.Width = 320
+	component.Font = notosanssc.NotoSansSCRegular
+	bundle := ecs.NewBundle(1)
+	bundle.Put(component)
+	owner := world.Spawn(bundle)
+	if err := Sync(world); err != nil {
+		t.Fatal(err)
+	}
+	state := world.GetRef[htmlRenderState](owner)
+	if state == nil {
+		t.Fatal("missing HTML render state")
+	}
+	var plain, control *scene.Text2D
+	for _, access := range world.Query[scene.Text2D]().All {
+		text := access.Get()
+		switch text.Value {
+		case "AV":
+			plain = &text
+		case "editable":
+			control = &text
+		}
+	}
+	if plain == nil || len(plain.Prelayout.Glyphs) != 2 || plain.Prelayout.Revision != state.RenderGeneration {
+		t.Fatalf("ordinary text did not reuse layout glyphs: %#v", plain)
+	}
+	if control == nil || len(control.Prelayout.Glyphs) != 0 {
+		t.Fatalf("control text unexpectedly used static glyphs: %#v", control)
+	}
+}
+
 func TestHTMLBoldTextUsesBoldAdvanceForFollowingText(t *testing.T) {
 	world := ecs.NewWorld()
 	component := New(`<p>prefix <strong>bold</strong> suffix</p>`)

@@ -125,7 +125,7 @@ func applyAnimationProperty(computed *ComputedStyle, property, raw string) error
 				return err
 			}
 		}
-		computed.AnimationRaw[index] = raw
+		computed.mutableMotion().animation[index] = raw
 		return nil
 	}
 	var builders [8]strings.Builder
@@ -189,29 +189,31 @@ func applyAnimationProperty(computed *ComputedStyle, property, raw string) error
 			builders[i].WriteString(value)
 		}
 	}
+	motion := computed.mutableMotion()
 	for i := range builders {
-		computed.AnimationRaw[i] = builders[i].String()
+		motion.animation[i] = builders[i].String()
 	}
 	return nil
 }
 
-func resolveAnimations(computed *ComputedStyle) {
-	if computed.AnimationRaw == ([8]string{}) {
-		return
+func resolveAnimations(values [8]string) []CSSAnimation {
+	if values == ([8]string{}) {
+		return nil
 	}
 	var lists [8][]string
-	for i, raw := range computed.AnimationRaw {
+	for i, raw := range values {
 		if raw == "" {
 			raw = animationInitial[i]
 		}
 		lists[i] = splitCSSList(raw)
 	}
-	computed.Animations = make([]CSSAnimation, len(lists[animationName]))
-	for i := range computed.Animations {
+	animations := make([]CSSAnimation, len(lists[animationName]))
+	for i := range animations {
 		for field := range lists {
-			_ = parseAnimationField(field, lists[field][i%len(lists[field])], &computed.Animations[i])
+			_ = parseAnimationField(field, lists[field][i%len(lists[field])], &animations[i])
 		}
 	}
+	return animations
 }
 
 type AnimatedProperties uint8
@@ -264,7 +266,7 @@ type AnimationTrack struct {
 // CompileAnimationTracks resolves lengths once, outside the per-frame path.
 // Tracks contain separate endpoints per property; omitted endpoints use the underlying style.
 func CompileAnimationTracks(node *dom.Node, computed *ComputedStyle, stylesheet *css.Stylesheet, queries *QueryEnvironment) []AnimationTrack {
-	if stylesheet == nil || len(computed.Animations) == 0 {
+	if stylesheet == nil || len(computed.Animations()) == 0 {
 		return nil
 	}
 	compiled := compiledMatcher(stylesheet)
@@ -287,7 +289,7 @@ func CompileAnimationTracks(node *dom.Node, computed *ComputedStyle, stylesheet 
 		}
 	}
 	var tracks []AnimationTrack
-	for _, definition := range computed.Animations {
+	for _, definition := range computed.Animations() {
 		if definition.Name == "" {
 			continue
 		}

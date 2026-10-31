@@ -49,10 +49,10 @@ const (
 )
 
 func InitializeElementStates(root *Node) {
-	AssignDocumentOrder(root)
-	initializeElementStates(root)
-	initializeRadioStates(root, root)
-	initializeSelectStates(root)
+	var order uint32
+	if initializeElementStates(root, &order) {
+		initializeRadioStates(root, root)
+	}
 }
 
 // AssignDocumentOrder records preorder positions without allocating.
@@ -206,14 +206,17 @@ func IsEditingHost(node *Node) bool {
 	return !IsContentEditable(parent)
 }
 
-func initializeElementStates(node *Node) {
+func initializeElementStates(node *Node, order *uint32) (hasRadio bool) {
 	if node == nil {
-		return
+		return false
 	}
+	node.Order = *order
+	*order++
 	if node.Type == ElementNode {
 		switch node.Data {
 		case "input":
-			if HasInputType(node, "checkbox") || HasInputType(node, "radio") {
+			hasRadio = HasInputType(node, "radio")
+			if hasRadio || HasInputType(node, "checkbox") {
 				_, checked := node.Attr("checked")
 				node.States.Set(StateChecked, checked)
 			}
@@ -227,20 +230,12 @@ func initializeElementStates(node *Node) {
 		}
 	}
 	for _, child := range node.Children {
-		initializeElementStates(child)
-	}
-}
-
-func initializeSelectStates(node *Node) {
-	if node == nil {
-		return
+		hasRadio = initializeElementStates(child, order) || hasRadio
 	}
 	if node.Type == ElementNode && node.Data == "select" {
 		resetSelectStates(node)
 	}
-	for _, child := range node.Children {
-		initializeSelectStates(child)
-	}
+	return hasRadio
 }
 
 type selectResetState struct {

@@ -5,96 +5,122 @@ import (
 	"slices"
 )
 
-// styleSlot is one entry of the interning table; an empty entry holds no style.
-type styleSlot struct {
+type valueSlot[T any] struct {
 	hash  uint64
-	style *ComputedStyle
+	value *T
 }
 
-// styleIndex shares immutable resolved values within a pass or a bounded
-// document cache, instead of allocating one ~6KB block per node. The table is
-// open addressed; storing a new distinct style costs one allocation.
-type styleIndex struct {
+// valueIndex interns immutable values in a bounded document cache or a pooled
+// pass. Equal values share one allocation; reset keeps only table storage.
+type valueIndex[T any] struct {
 	seed  maphash.Seed
-	slots []styleSlot
+	slots []valueSlot[T]
 	used  int
 	limit int // Zero keeps pass-local interning unlimited.
 }
 
-// reset empties the table but keeps its capacity for the next pooled pass.
-func (index *styleIndex) reset() {
+func (index *valueIndex[T]) reset() {
 	clear(index.slots)
 	index.used = 0
 }
 
-// commit returns the instance a node should point at: its previous instance
-// when nothing changed, an equal interned instance, or a freshly stored one.
-func (index *styleIndex) commit(current, previous *ComputedStyle) *ComputedStyle {
-	if previous != nil && styleEqual(previous, current) {
-		return previous
-	}
+func (index *valueIndex[T]) init() {
 	if index.slots == nil {
-		index.slots = make([]styleSlot, 64)
+		index.slots = make([]valueSlot[T], 64)
 	}
-	hash := index.hash(current)
-	if found := index.find(hash, current); found != nil {
-		return found
+	if index.seed == (maphash.Seed{}) {
+		index.seed = maphash.MakeSeed()
 	}
-	stored := *current
+}
+
+func (index *valueIndex[T]) store(hash uint64, value *T) {
 	if index.limit > 0 && index.used >= index.limit {
-		return &stored
+		return
 	}
 	if (index.used+1)*10 >= len(index.slots)*7 {
-		index.grow()
+		previous := index.slots
+		index.slots = make([]valueSlot[T], len(previous)*2)
+		for _, slot := range previous {
+			if slot.value != nil {
+				index.insert(slot.hash, slot.value)
+			}
+		}
 	}
-	index.insert(hash, &stored)
+	index.insert(hash, value)
 	index.used++
-	return &stored
 }
 
-func (index *styleIndex) find(hash uint64, current *ComputedStyle) *ComputedStyle {
-	for offset := uint64(0); offset < uint64(len(index.slots)); offset++ {
-		slot := &index.slots[(hash+offset)&uint64(len(index.slots)-1)]
-		if slot.style == nil {
-			return nil
-		}
-		if slot.hash == hash && styleEqual(slot.style, current) {
-			return slot.style
-		}
-	}
-	return nil
-}
-
-func (index *styleIndex) insert(hash uint64, computed *ComputedStyle) {
+func (index *valueIndex[T]) insert(hash uint64, value *T) {
 	for offset := uint64(0); ; offset++ {
 		slot := &index.slots[(hash+offset)&uint64(len(index.slots)-1)]
-		if slot.style == nil {
-			*slot = styleSlot{hash: hash, style: computed}
+		if slot.value == nil {
+			*slot = valueSlot[T]{hash: hash, value: value}
 			return
 		}
 	}
 }
 
-// grow doubles the table and keeps every instance pointer, so nodes interned
-// earlier in the pass stay shared.
-func (index *styleIndex) grow() {
-	previous := index.slots
-	index.slots = make([]styleSlot, max(len(previous)*2, 64))
-	for _, slot := range previous {
-		if slot.style != nil {
-			index.insert(slot.hash, slot.style)
-		}
-	}
+type styleIndex struct {
+	valueIndex[ComputedStyle]
+	motions valueIndex[motionStyle]
 }
 
-func (index *styleIndex) hash(computed *ComputedStyle) uint64 {
-	if index.seed == (maphash.Seed{}) {
-		index.seed = maphash.MakeSeed()
+func (index *styleIndex) reset() {
+	index.valueIndex.reset()
+	index.motions.reset()
+}
+
+func (index *styleIndex) commit(current, previous *ComputedStyle) *ComputedStyle {
+	if previous != nil && styleEqual(previous, current) {
+		return previous
 	}
-	return maphash.Comparable(index.seed, computed.styleCore) ^
+	index.init()
+	hash := styleHash(index.seed, current)
+	for offset := uint64(0); ; offset++ {
+		slot := &index.slots[(hash+offset)&uint64(len(index.slots)-1)]
+		if slot.value == nil {
+			break
+		}
+		if slot.hash == hash && styleEqual(slot.value, current) {
+			return slot.value
+		}
+	}
+	stored := *current
+	index.store(hash, &stored)
+	return &stored
+}
+
+func (index *styleIndex) resolveMotion(current *motionStyle) *motionStyle {
+	if current.motionInputs == (motionInputs{}) {
+		return nil
+	}
+	index.motions.limit = index.limit
+	index.motions.init()
+	hash := motionHash(index.motions.seed, current)
+	for offset := uint64(0); ; offset++ {
+		slot := &index.motions.slots[(hash+offset)&uint64(len(index.motions.slots)-1)]
+		if slot.value == nil {
+			break
+		}
+		if slot.hash == hash && motionEqual(slot.value, current) {
+			return slot.value
+		}
+	}
+	stored := *current
+	resolveMotion(&stored)
+	index.motions.store(hash, &stored)
+	return &stored
+}
+
+func styleHash(seed maphash.Seed, computed *ComputedStyle) uint64 {
+	hash := maphash.Comparable(seed, computed.styleCore) ^
 		styleSliceCode(computed.BackgroundLayers)*0x9e3779b97f4a7c15 ^
 		styleSliceCode(computed.BoxShadow)*0xbf58476d1ce4e5b9 ^
-		styleSliceCode(computed.Filters)*0x94d049bb133111eb ^ styleSliceCode(computed.Animations)*0xd6e8feb86659fd93
+		styleSliceCode(computed.Filters)*0x94d049bb133111eb
+	if computed.motion != nil {
+		hash ^= motionHash(seed, computed.motion)
+	}
+	return hash
 }
 
 // styleSliceCode folds a slice's length together with its nil-ness, which the
@@ -106,16 +132,23 @@ func styleSliceCode[T comparable](values []T) uint64 {
 	return uint64(len(values)) + 1
 }
 
-// styleEqual reports whether two resolved styles hold identical values.
 func styleEqual(a, b *ComputedStyle) bool {
-	return a.styleCore == b.styleCore &&
+	return a.styleCore == b.styleCore && motionEqual(a.motion, b.motion) &&
 		styleSliceEqual(a.BackgroundLayers, b.BackgroundLayers) &&
-		styleSliceEqual(a.BoxShadow, b.BoxShadow) &&
-		styleSliceEqual(a.Filters, b.Filters) && styleSliceEqual(a.Animations, b.Animations)
+		styleSliceEqual(a.BoxShadow, b.BoxShadow) && styleSliceEqual(a.Filters, b.Filters)
 }
 
-// styleSliceEqual keeps nil and an empty slice distinct, so an interned
-// instance is only reused when it matches exactly what the parser produced.
+// EqualExceptOpacity identifies changes that can be applied to a composited
+// group at draw time without repainting its contents.
+func EqualExceptOpacity(a, b *ComputedStyle) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	left, right := *a, *b
+	left.Opacity, right.Opacity = Value{}, Value{}
+	return styleEqual(&left, &right)
+}
+
 func styleSliceEqual[T comparable](a, b []T) bool {
 	return styleSliceCode(a) == styleSliceCode(b) && slices.Equal(a, b)
 }

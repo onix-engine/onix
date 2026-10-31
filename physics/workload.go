@@ -11,9 +11,104 @@ type tasks3D struct{}
 // Input revisions include the execution scope: hiding the last managed body
 // still requires a fixed step to remove it from the simulation.
 type physicsInputs struct {
-	versions     [11]uint64
-	scope        *ecs.QueryScope
-	scopeVersion uint64
+	versions         [11]uint64
+	scope            *ecs.QueryScope
+	scopeVersion     uint64
+	bodyMembers      uint64
+	transformMembers uint64
+}
+
+func (inputs physicsInputs) bodyChanged(previous physicsInputs) bool {
+	if inputs.bodyTopologyChanged(previous) {
+		return true
+	}
+	for index := range 5 {
+		if inputs.versions[index] != previous.versions[index] {
+			return true
+		}
+	}
+	return false
+}
+
+// Structural changes still need an ownership sweep. Value edits can be
+// synchronized locally, including transforms on ancestors without rigid bodies.
+func (inputs physicsInputs) bodyTopologyChanged(previous physicsInputs) bool {
+	return inputs.scope != previous.scope || inputs.scopeVersion != previous.scopeVersion ||
+		inputs.bodyMembers != previous.bodyMembers || inputs.transformMembers != previous.transformMembers ||
+		inputs.versions[2] != previous.versions[2] || inputs.versions[3] != previous.versions[3] || inputs.versions[4] != previous.versions[4]
+}
+
+type physicsBodyChanges struct {
+	context         ecs.SystemContext
+	entities, queue []ecs.Entity
+	marks           []uint64
+	epoch           uint64
+}
+
+func (dirty *physicsBodyChanges) collect[T any](world *ecs.World, since ecs.Tick, current, previous physicsInputs) []ecs.Entity {
+	dirty.context = world.ChangesSince(since)
+	dirty.entities, dirty.queue = dirty.entities[:0], dirty.queue[:0]
+	dirty.epoch += 4
+	if dirty.epoch == 0 {
+		clear(dirty.marks)
+		dirty.epoch = 4
+	}
+	if slots := world.EntitySlots(); len(dirty.marks) < slots {
+		dirty.marks = append(dirty.marks, make([]uint64, slots-len(dirty.marks))...)
+	}
+	if current.versions[0] != previous.versions[0] {
+		for entity := range world.Query2[T, scene.Transform](dirty.context.Changed[T]()).All {
+			dirty.addBody[T](world, entity)
+		}
+	}
+	if current.versions[1] != previous.versions[1] {
+		hierarchy := scene.HierarchyFor(world)
+		for entity := range world.Query[scene.Transform](ecs.Unscoped(), dirty.context.Changed[scene.Transform]()).All {
+			dirty.enqueue(entity)
+		}
+		for index := 0; index < len(dirty.queue); index++ {
+			entity := dirty.queue[index]
+			dirty.addBody[T](world, entity)
+			for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
+				dirty.enqueue(child)
+			}
+		}
+	}
+	return dirty.entities
+}
+
+func (dirty *physicsBodyChanges) mark(entity ecs.Entity, bit uint64) bool {
+	index, _ := entity.Index()
+	mark := &dirty.marks[index]
+	if *mark&^3 != dirty.epoch {
+		*mark = dirty.epoch
+	}
+	if *mark&bit != 0 {
+		return false
+	}
+	*mark |= bit
+	return true
+}
+
+func (dirty *physicsBodyChanges) addBody[T any](world *ecs.World, entity ecs.Entity) {
+	if world.Has[T](entity) && world.Has[scene.Transform](entity) && world.InQueryScope(entity) && scene.IsActive(world, entity) && dirty.mark(entity, 1) {
+		dirty.entities = append(dirty.entities, entity)
+	}
+}
+
+func (dirty *physicsBodyChanges) enqueue(entity ecs.Entity) {
+	if dirty.mark(entity, 2) {
+		dirty.queue = append(dirty.queue, entity)
+	}
+}
+
+func (inputs physicsInputs) collidersChanged(previous physicsInputs) bool {
+	for index := 5; index < len(inputs.versions); index++ {
+		if inputs.versions[index] != previous.versions[index] {
+			return true
+		}
+	}
+	return false
 }
 
 func valueVersion[T any](world *ecs.World) uint64 {
@@ -23,8 +118,10 @@ func valueVersion[T any](world *ecs.World) uint64 {
 
 func bodyInputs[T any](world *ecs.World) physicsInputs {
 	scope, version := world.QueryScopeKey()
-	return physicsInputs{scope: scope, scopeVersion: version, versions: [11]uint64{
-		valueVersion[T](world), valueVersion[scene.Transform](world),
+	bodyValues, bodyMembers := world.ComponentValueRevision[T]()
+	_, transformMembers := world.ComponentValueRevision[scene.Transform]()
+	return physicsInputs{scope: scope, scopeVersion: version, bodyMembers: bodyMembers, transformMembers: transformMembers, versions: [11]uint64{
+		bodyValues, valueVersion[scene.Transform](world),
 		valueVersion[scene.Activity](world), valueVersion[scene.Parent](world), world.EntityVersion(),
 	}}
 }

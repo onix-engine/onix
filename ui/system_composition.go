@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 )
 
 func syncAuthoredTextPositions(world *ecs.World) {
@@ -84,28 +85,39 @@ func syncAuthoredSelectionLayers(world *ecs.World, entity, owner ecs.Entity, lay
 	}
 	value := textFieldValue(world, owner)
 	if field, exists := world.Get[TextField](owner); exists && field.Password {
-		value = maskedTextFieldValue(world, owner, field)
+		value = piecetree.FromString(maskedTextFieldValue(world, owner, field))
 	}
 	start, end, focused := textFieldSelection(world, owner)
 	viewportHeight := textFieldViewportHeight(world, owner)
 	visibleLayers := 0
 	layers := layersAccess.Ref()
 	changed := false
-	for slot := range layers.Layers {
-		r, exists := textSelectionRect(text, textTransform, value, start, end, slot, viewportHeight)
-		layer := layers.Layers[slot]
-		layer.Visible = focused && exists
-		if exists {
-			layer.Transform.X, layer.Transform.Y = r.X, r.Y
-			layer.Sprite.Width, layer.Sprite.Height = r.W, r.H
-			visibleLayers++
+	slot := 0
+	for r := range textSelectionRects(text, *textTransform, value, start, end, viewportHeight) {
+		if slot >= len(layers.Layers) {
+			break
 		}
+		layer := layers.Layers[slot]
+		layer.Visible = focused
+		layer.Transform.X, layer.Transform.Y = r.X, r.Y
+		layer.Sprite.Width, layer.Sprite.Height = r.W, r.H
+		visibleLayers++
 		if layer != layers.Layers[slot] {
 			if !changed {
 				layers = layersAccess.Mut()
 				changed = true
 			}
 			layers.Layers[slot] = layer
+		}
+		slot++
+	}
+	for ; slot < len(layers.Layers); slot++ {
+		if layers.Layers[slot].Visible {
+			if !changed {
+				layers = layersAccess.Mut()
+				changed = true
+			}
+			layers.Layers[slot].Visible = false
 		}
 	}
 	if changed {
@@ -124,17 +136,19 @@ func textCaretRect(world *ecs.World, owner ecs.Entity) (selectionRect, bool) {
 	}
 	value, composition, caret, focused := textFieldState(world, owner)
 	field, fieldExists := world.Get[TextField](owner)
-	caret = max(0, min(caret, runeCount(value)))
+	caret = max(0, min(caret, value.Runes()))
 	if !fieldExists {
-		field = TextField{Value: value, Composition: composition, Caret: caret, Focused: focused}
+		field = TextField{Value: value.String(), Composition: composition, Caret: caret, Focused: focused}
 	}
 	caretValue := value
+	caretIndex := caret
 	if field.Password {
-		caretValue = maskedTextFieldPrefix(world, owner, field, caret)
+		caretValue = piecetree.FromString(maskedTextFieldPrefix(world, owner, field, caret))
 	} else if composition != "" {
-		caretValue = textFieldCompositionPrefix(world, owner, field, caret)
+		caretValue = textFieldVisualSnapshot(world, owner, field)
+		caretIndex = caret + piecetree.FromString(composition).Runes()
 	}
-	x, y, width, height, measured := scene.TextCaretRect2D(text, caretValue, runeCount(caretValue))
+	x, y, width, height, measured := scene.TextCaretRect2D(text, caretValue, caretIndex)
 	if !measured {
 		return selectionRect{}, false
 	}
@@ -181,7 +195,7 @@ func syncAuthoredScrollElement(world *ecs.World, entity, owner ecs.Entity, trans
 	if area == nil {
 		return
 	}
-	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
+	metrics := area.Measure()
 	offset, _ := GetScrollAreaOffset(world, owner)
 	barSize := scrollBarSize(area.BarSize)
 	thumbBarSize := scrollThumbBarSize(area.ThumbBarSize, area.BarSize)

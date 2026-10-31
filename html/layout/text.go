@@ -3,6 +3,7 @@ package layout
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,25 +35,26 @@ type TextLayoutOptions struct {
 }
 
 type layoutContext struct {
-	floatContext   *floatContext
-	lineItems      []lineItem
-	retained       *Cache
-	uncached       int
-	boldFace       *font.Face
-	imageSizes     map[string]imageSizeResult
-	inlineSegments []inlineSegment
-	textTokens     []textToken
-	controlTokens  []controlToken
-	textScratch    []textLayoutScratch
-	textDepth      int
-	err            error
+	reserveScrollbarSpace bool
+	floatContext          *floatContext
+	lineItems             []lineItem
+	retained              *Cache
+	uncached              int
+	boldFace              *font.Face
+	imageSizes            map[string]imageSizeResult
+	inlineSegments        []inlineSegment
+	controlTokens         []controlToken
+	shapeGlyphs           []shapedGlyph
+	textScratch           []textLayoutScratch
+	textDepth             int
+	err                   error
 }
 
 type textLayoutScratch struct {
 	lineItems      []lineItem
 	inlineSegments []inlineSegment
-	textTokens     []textToken
 	controlTokens  []controlToken
+	shapeGlyphs    []shapedGlyph
 }
 
 type textShapeResult struct {
@@ -81,8 +83,8 @@ func releaseLayoutContext(ctx *layoutContext) {
 func (ctx *layoutContext) reset() {
 	ctx.lineItems = reuse.Reset(ctx.lineItems, 4096)
 	ctx.inlineSegments = reuse.Reset(ctx.inlineSegments, 4096)
-	ctx.textTokens = reuse.Reset(ctx.textTokens, 4096)
 	ctx.controlTokens = reuse.Reset(ctx.controlTokens, 4096)
+	ctx.shapeGlyphs = reuse.Reset(ctx.shapeGlyphs, 4096)
 	if cap(ctx.textScratch) > 32 {
 		ctx.textScratch = nil
 	} else {
@@ -97,6 +99,7 @@ func (ctx *layoutContext) reset() {
 	}
 	ctx.floatContext, ctx.retained, ctx.boldFace, ctx.err = nil, nil, nil, nil
 	ctx.uncached, ctx.textDepth = 0, 0
+	ctx.reserveScrollbarSpace = false
 }
 
 func (scratch *textLayoutScratch) reset() {
@@ -104,8 +107,8 @@ func (scratch *textLayoutScratch) reset() {
 	const maxCapacity = 4096
 	scratch.lineItems = reuse.Reset(scratch.lineItems, maxCapacity)
 	scratch.inlineSegments = reuse.Reset(scratch.inlineSegments, maxCapacity)
-	scratch.textTokens = reuse.Reset(scratch.textTokens, maxCapacity)
 	scratch.controlTokens = reuse.Reset(scratch.controlTokens, maxCapacity)
+	scratch.shapeGlyphs = reuse.Reset(scratch.shapeGlyphs, maxCapacity)
 }
 
 // UsedLineHeight resolves the used value of line-height for a shaped face.
@@ -156,8 +159,8 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		parent := textLayoutScratch{
 			lineItems:      ctx.lineItems,
 			inlineSegments: ctx.inlineSegments,
-			textTokens:     ctx.textTokens,
 			controlTokens:  ctx.controlTokens,
+			shapeGlyphs:    ctx.shapeGlyphs,
 		}
 		depth := ctx.textDepth
 		if depth == len(ctx.textScratch) {
@@ -166,21 +169,21 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		scratch := ctx.textScratch[depth]
 		ctx.lineItems = scratch.lineItems
 		ctx.inlineSegments = scratch.inlineSegments
-		ctx.textTokens = scratch.textTokens
 		ctx.controlTokens = scratch.controlTokens
+		ctx.shapeGlyphs = scratch.shapeGlyphs[:0]
 		ctx.textDepth++
 		defer func() {
 			ctx.textDepth--
 			ctx.textScratch[depth] = textLayoutScratch{
 				lineItems:      ctx.lineItems,
 				inlineSegments: ctx.inlineSegments,
-				textTokens:     ctx.textTokens,
 				controlTokens:  ctx.controlTokens,
+				shapeGlyphs:    ctx.shapeGlyphs[:0],
 			}
 			ctx.lineItems = parent.lineItems
 			ctx.inlineSegments = parent.inlineSegments
-			ctx.textTokens = parent.textTokens
 			ctx.controlTokens = parent.controlTokens
+			ctx.shapeGlyphs = parent.shapeGlyphs
 		}()
 	}
 
@@ -264,13 +267,13 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 					currentLine = currentLine[:index]
 					continue
 				}
-				fit := 0
+				fit, prefixWidth := 0, 0.0
 				if len(item.Glyphs) != 0 && (index == 0 || item.Glyphs[0].Advance <= available+0.01) {
-					fit = fittingGlyphCount(item.Glyphs, maxFloat(available, 0))
+					fit, prefixWidth = fitGlyphRun(item.Glyphs, maxFloat(available, 0))
 				}
 				item.Glyphs = item.Glyphs[:fit]
 				item.Ellipsis = ellipsis
-				item.EllipsisX = glyphRunWidth(item.Glyphs)
+				item.EllipsisX = prefixWidth
 				item.Width = item.EllipsisX + ellipsisWidth
 				currentWidth = start + item.Width
 				break
@@ -278,9 +281,24 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		}
 		baseline := 0.0
 		lineHeight := 0.0
+		newGlyphs := 0
+		nextFragment := len(fragments)
 		for _, item := range currentLine {
 			baseline = math.Max(baseline, item.Ascent)
 			lineHeight = math.Max(lineHeight, item.Ascent+item.Descent)
+			if item.Kind == inlineSegmentText {
+				needed := len(item.Glyphs) + len(item.Ellipsis)
+				if nextFragment >= cap(fragments) || cap(fragments[:cap(fragments)][nextFragment].Glyphs) < needed {
+					newGlyphs += needed
+				}
+				nextFragment++
+			}
+		}
+		// New fragments share one line allocation. Bound each view's capacity
+		// so appending to one fragment cannot overwrite its neighbor's glyphs.
+		var lineGlyphs []GlyphFragment
+		if newGlyphs > 0 {
+			lineGlyphs = make([]GlyphFragment, newGlyphs)
 		}
 		updateLineBounds(lineHeight)
 		startTrim, endTrim := 0.0, 0.0
@@ -333,11 +351,16 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				} else if len(item.Ellipsis) != 0 {
 					fragment.Text = ellipsisRunText(item.Glyphs, "")
 				}
+				if needed := len(item.Glyphs) + len(item.Ellipsis); cap(fragment.Glyphs) < needed {
+					fragment.Glyphs = lineGlyphs[:0:needed]
+					lineGlyphs = lineGlyphs[needed:]
+				}
 				for _, glyph := range item.Glyphs {
 					fragment.Glyphs = append(fragment.Glyphs, GlyphFragment{
 						Rune:    glyph.Rune,
-						X:       cursorX + glyph.X,
+						X:       cursorX + (glyph.X - item.GlyphOffset),
 						Y:       top + item.Ascent,
+						PenX:    float32(cursorX + (float64(glyph.PenX) - item.GlyphOffset)),
 						Advance: glyph.Advance,
 					})
 				}
@@ -345,7 +368,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 					for _, glyph := range item.Ellipsis {
 						fragment.Glyphs = append(fragment.Glyphs, GlyphFragment{
 							Rune: glyph.Rune, X: cursorX + item.EllipsisX + glyph.X,
-							Y: top + item.Ascent, Advance: glyph.Advance,
+							Y: top + item.Ascent, PenX: float32(cursorX + item.EllipsisX + float64(glyph.PenX)), Advance: glyph.Advance,
 						})
 					}
 				}
@@ -425,7 +448,11 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				flushLine()
 				fitFloatLine(bounds.Width, bounds.Height)
 			}
-			currentLine = append(currentLine, lineItem{Kind: inlineSegmentBox, Node: segment.Node, Style: segment.Style, Box: segment.Box, Width: bounds.Width, Height: bounds.Height, Ascent: bounds.Height})
+			ascent := bounds.Height
+			if segment.Style.Display.Keyword == "inline-flex" {
+				ascent = firstBoxBaseline(segment.Box) - bounds.Y
+			}
+			currentLine = append(currentLine, lineItem{Kind: inlineSegmentBox, Node: segment.Node, Style: segment.Style, Box: segment.Box, Width: bounds.Width, Height: bounds.Height, Ascent: ascent, Descent: bounds.Height - ascent})
 			currentWidth += bounds.Width
 			prevEndedWithSpace = false
 			continue
@@ -496,9 +523,9 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		mode := whiteSpaceMode(segment.Style, segment.PreserveWhitespace)
 		breakAll := segment.Style.WordBreak.Keyword == "break-all"
 		breakWord := segment.Style.OverflowWrap.Keyword == "break-word" || segment.Style.OverflowWrap.Keyword == "anywhere"
-		tokens := tokenizeStyledTextInto(options.Context, segment.Text, mode, prevEndedWithSpace, breakAll)
+		tokens := textTokens(segment.Text, mode, prevEndedWithSpace, breakAll)
 		allowsWrap := whiteSpaceAllowsWrap(mode)
-		for _, token := range tokens {
+		for token := range tokens {
 			if token.IsBreak {
 				if len(currentLine) == 0 {
 					penY += segmentLineHeight
@@ -552,24 +579,14 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			// overflow-wrap: break-word — hard-break tokens that cannot fit a
 			// line of their own (CSS Text §5.5).
 			if allowsWrap && breakWord && !token.IsSpace && width > lineWidth+0.01 && len(glyphs) > 1 {
+				remainingText := token.Text
 				for len(glyphs) > 0 {
-					if currentWidth > 0 && currentWidth+glyphRunWidth(glyphs) > lineWidth+0.01 {
-						flushLine()
-						continue
-					}
-					fit := fittingGlyphCount(glyphs, lineWidth-currentWidth)
-					if fit <= 0 {
-						fit = 1
-					}
+					fit, runWidth := fitGlyphRun(glyphs, lineWidth-currentWidth)
 					run := glyphs[:fit]
-					shift := run[0].X
-					runGlyphs := make([]shapedGlyph, len(run))
-					for index, glyph := range run {
-						runGlyphs[index] = glyph
-						runGlyphs[index].X -= shift
-					}
-					currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Text: glyphRunText(run), Glyphs: runGlyphs, Width: glyphRunWidth(run), Height: segmentLineHeight, Ascent: ascent, Descent: descent})
-					currentWidth += glyphRunWidth(run)
+					var text string
+					text, remainingText = splitGlyphRunText(remainingText, run)
+					currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Text: text, Glyphs: run, GlyphOffset: run[0].X, Width: runWidth, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
+					currentWidth += runWidth
 					glyphs = glyphs[fit:]
 					if len(glyphs) > 0 {
 						flushLine()
@@ -691,21 +708,22 @@ type inlineBoxFragment struct {
 }
 
 type lineItem struct {
-	Kind      inlineSegmentKind
-	Node      *dom.Node
-	Style     *style.ComputedStyle
-	Box       *Box
-	Text      string
-	Glyphs    []shapedGlyph
-	Ellipsis  []shapedGlyph // Read-only shaped cache entry, emitted after the prefix.
-	EllipsisX float64
-	Width     float64
-	Height    float64
-	Ascent    float64
-	Descent   float64
-	Margin    Edges
-	Padding   Edges
-	Border    Edges
+	Kind        inlineSegmentKind
+	Node        *dom.Node
+	Style       *style.ComputedStyle
+	Box         *Box
+	Text        string
+	Glyphs      []shapedGlyph
+	GlyphOffset float64       // Read-only subruns keep their original shaping coordinates.
+	Ellipsis    []shapedGlyph // Read-only shaped cache entry, emitted after the prefix.
+	EllipsisX   float64
+	Width       float64
+	Height      float64
+	Ascent      float64
+	Descent     float64
+	Margin      Edges
+	Padding     Edges
+	Border      Edges
 }
 
 type inlineSegmentKind int
@@ -1045,6 +1063,7 @@ func shiftTextFragments(fragments []TextFragment, dx float64) {
 		fragments[index].Rect.X += dx
 		for glyphIndex := range fragments[index].Glyphs {
 			fragments[index].Glyphs[glyphIndex].X += dx
+			fragments[index].Glyphs[glyphIndex].PenX += float32(dx)
 		}
 	}
 }
@@ -1208,10 +1227,10 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	} else {
 		mode := whiteSpaceMode(fragmentStyle, text.PreserveWhitespace)
 		breakAll := fragmentStyle.WordBreak.Keyword == "break-all"
-		tokens := tokenizeStyledTextInto(ctx, text.Text, mode, false, breakAll)
+		tokens := textTokens(text.Text, mode, false, breakAll)
 		allowsWrap := whiteSpaceAllowsWrap(mode)
 		lineWidth := 0.0
-		for _, token := range tokens {
+		for token := range tokens {
 			if token.IsBreak {
 				if !allowsWrap {
 					break
@@ -1276,6 +1295,7 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 				Rune:    glyph.Rune,
 				X:       cursorX + glyph.X,
 				Y:       textTop + ascent,
+				PenX:    float32(cursorX + float64(glyph.PenX)),
 				Advance: glyph.Advance,
 			})
 		}
@@ -1393,158 +1413,6 @@ func isInputTypeNode(node *dom.Node, inputType string) bool {
 	return dom.HasInputType(node, inputType)
 }
 
-type textToken struct {
-	Text    string
-	IsSpace bool
-	IsBreak bool
-	IsTab   bool
-}
-
-func tokenizeText(input string, suppressLeadingSpace bool) []textToken {
-	return appendNormalTextTokens(make([]textToken, 0, 4), input, 0, len(input), suppressLeadingSpace, false)
-}
-
-func tokenizePreformattedText(input string) []textToken {
-	return appendPreformattedTextTokens(make([]textToken, 0, 4), input)
-}
-
-func appendPreformattedTextTokens(tokens []textToken, input string) []textToken {
-	tokens = tokens[:0]
-	textStart := -1
-	flushText := func(end int) {
-		if textStart < 0 {
-			return
-		}
-		tokens = append(tokens, textToken{Text: input[textStart:end]})
-		textStart = -1
-	}
-	for offset, r := range input {
-		switch r {
-		case '\r':
-			flushText(offset)
-			continue
-		case '\n':
-			flushText(offset)
-			tokens = append(tokens, textToken{IsBreak: true})
-		case '\t':
-			flushText(offset)
-			tokens = append(tokens, textToken{IsTab: true})
-		case ' ':
-			flushText(offset)
-			tokens = append(tokens, textToken{Text: " ", IsSpace: true})
-		default:
-			if textStart < 0 {
-				textStart = offset
-			}
-		}
-	}
-	flushText(len(input))
-	return tokens
-}
-
-func tokenizePreLineText(input string, suppressLeadingSpace bool) []textToken {
-	return appendPreLineTextTokens(make([]textToken, 0, 4), input, suppressLeadingSpace, false)
-}
-
-func appendPreLineTextTokens(tokens []textToken, input string, suppressLeadingSpace bool, breakAll bool) []textToken {
-	tokens = tokens[:0]
-	lineStart := 0
-	for offset := 0; offset <= len(input); {
-		lineEnd := offset
-		for lineEnd < len(input) {
-			if input[lineEnd] == '\n' || (input[lineEnd] == '\r' && lineEnd+1 < len(input) && input[lineEnd+1] == '\n') {
-				break
-			}
-			lineEnd++
-		}
-		tokens = appendNormalTextTokens(tokens, input, lineStart, lineEnd, suppressLeadingSpace, breakAll)
-		if lineEnd == len(input) {
-			break
-		}
-		tokens = append(tokens, textToken{IsBreak: true})
-		suppressLeadingSpace = true
-		if input[lineEnd] == '\r' && lineEnd+1 < len(input) && input[lineEnd+1] == '\n' {
-			offset = lineEnd + 2
-		} else {
-			offset = lineEnd + 1
-		}
-		lineStart = offset
-	}
-	return tokens
-}
-
-func appendNormalTextTokens(tokens []textToken, input string, start, end int, suppressLeadingSpace bool, breakAll bool) []textToken {
-	spacePending := suppressLeadingSpace
-	tokenStart := len(tokens)
-	wordStart := -1
-	flushWord := func(offset int) {
-		if wordStart >= 0 {
-			tokens = append(tokens, textToken{Text: input[wordStart:offset]})
-			wordStart = -1
-		}
-	}
-	for offset := start; offset < end; {
-		r, size := utf8.DecodeRuneInString(input[offset:end])
-		next := offset + size
-		switch {
-		case unicode.IsSpace(r):
-			flushWord(offset)
-			spacePending = true
-		case breakAll || isCJK(r):
-			flushWord(offset)
-			if spacePending {
-				if len(tokens) > tokenStart {
-					tokens = append(tokens, textToken{Text: " ", IsSpace: true})
-				}
-				spacePending = false
-			}
-			tokens = append(tokens, textToken{Text: input[offset:next]})
-		default:
-			if spacePending {
-				flushWord(offset)
-				if len(tokens) > tokenStart {
-					tokens = append(tokens, textToken{Text: " ", IsSpace: true})
-				}
-				spacePending = false
-			}
-			if wordStart < 0 {
-				wordStart = offset
-			}
-		}
-		offset = next
-	}
-	flushWord(end)
-	return tokens
-}
-
-func tokenizeStyledTextInto(ctx *layoutContext, input, mode string, suppressLeadingSpace bool, breakAll bool) []textToken {
-	var tokens []textToken
-	if ctx != nil {
-		ctx.textTokens = ctx.textTokens[:0]
-		tokens = ctx.textTokens
-	}
-	switch mode {
-	case "pre", "pre-wrap":
-		result := appendPreformattedTextTokens(tokens, input)
-		if ctx != nil {
-			ctx.textTokens = result
-		}
-		return result
-	case "pre-line":
-		result := appendPreLineTextTokens(tokens, input, suppressLeadingSpace, breakAll)
-		if ctx != nil {
-			ctx.textTokens = result
-		}
-		return result
-	default:
-		result := appendNormalTextTokens(tokens, input, 0, len(input), suppressLeadingSpace, breakAll)
-		if ctx != nil {
-			ctx.textTokens = result
-		}
-		return result
-	}
-}
-
 func whiteSpaceMode(computed *style.ComputedStyle, preserveWhitespace bool) string {
 	if computed.WhiteSpace.Kind == style.ValueKeyword && computed.WhiteSpace.Keyword != "" {
 		if preserveWhitespace && (computed.WhiteSpace.Keyword == "normal" || computed.WhiteSpace.Keyword == "nowrap") {
@@ -1574,6 +1442,20 @@ func glyphRunText(glyphs []shapedGlyph) string {
 	return builder.String()
 }
 
+func splitGlyphRunText(text string, glyphs []shapedGlyph) (string, string) {
+	end := 0
+	valid := true
+	for range glyphs {
+		r, size := utf8.DecodeRuneInString(text[end:])
+		valid = valid && (r != utf8.RuneError || size != 1)
+		end += size
+	}
+	if valid {
+		return text[:end], text[end:]
+	}
+	return glyphRunText(glyphs), text[end:]
+}
+
 func ellipsisRunText(glyphs []shapedGlyph, previous string) string {
 	remaining := previous
 	bytes := len("…")
@@ -1598,9 +1480,9 @@ func ellipsisRunText(glyphs []shapedGlyph, previous string) string {
 	return builder.String()
 }
 
-// fittingGlyphCount returns how many leading glyphs fit within available
-// advance space; at least one glyph is always admitted.
-func fittingGlyphCount(glyphs []shapedGlyph, available float64) int {
+// fitGlyphRun returns a leading run's glyph count and advance in one pass;
+// at least one glyph is always admitted.
+func fitGlyphRun(glyphs []shapedGlyph, available float64) (int, float64) {
 	advance := 0.0
 	count := 0
 	for _, glyph := range glyphs {
@@ -1610,7 +1492,7 @@ func fittingGlyphCount(glyphs []shapedGlyph, available float64) int {
 		advance += glyph.Advance
 		count++
 	}
-	return count
+	return count, advance
 }
 
 func whiteSpaceAllowsWrap(mode string) bool {
@@ -1623,6 +1505,7 @@ func isCJK(r rune) bool {
 
 type shapedGlyph struct {
 	Rune    rune
+	PenX    float32
 	X       float64
 	Advance float64
 }
@@ -1670,7 +1553,17 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 		}
 	}
 	advance := 0.0
-	glyphs := make([]shapedGlyph, 0, utf8.RuneCountInString(token.Text))
+	count := utf8.RuneCountInString(token.Text)
+	var glyphs []shapedGlyph
+	if !cacheable && ctx != nil {
+		// Uncached runs live until this layout returns. Reserve disjoint views
+		// so later shaping and nested layout cannot overwrite a pending line.
+		start := len(ctx.shapeGlyphs)
+		ctx.shapeGlyphs = slices.Grow(ctx.shapeGlyphs, count)[:start+count]
+		glyphs = ctx.shapeGlyphs[start : start : start+count]
+	} else {
+		glyphs = make([]shapedGlyph, 0, count)
+	}
 	var previous uint16
 	var previousFace *font.Face
 	for _, r := range token.Text {
@@ -1688,7 +1581,7 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 			return nil, 0, fmt.Errorf("metrics for %q: %w", r, err)
 		}
 		glyphAdvance := float64(metrics.AdvanceWidth) * scale
-		glyphs = append(glyphs, shapedGlyph{Rune: r, X: advance + float64(metrics.LeftSideBearing)*scale, Advance: glyphAdvance})
+		glyphs = append(glyphs, shapedGlyph{Rune: r, X: advance + float64(metrics.LeftSideBearing)*scale, PenX: float32(advance), Advance: glyphAdvance})
 		advance += glyphAdvance + letterSpacing
 	}
 	if !cacheable {
@@ -1733,7 +1626,7 @@ func measureTextWidth(face *font.Face, text string, fontSize, letterSpacing floa
 		return width
 	}
 	width := 0.0
-	for _, token := range tokenizeStyledTextInto(ctx, text, "normal", false, false) {
+	for token := range textTokens(text, "normal", false, false) {
 		_, tokenWidth, err := shapeToken(face, token, fontSize, letterSpacing, ctx)
 		if err != nil {
 			return 0
@@ -1750,7 +1643,7 @@ func measureIntrinsicTextWidth(face *font.Face, text string, fontSize float64, l
 
 	maxWidth := 0.0
 	lineWidth := 0.0
-	for _, token := range tokenizeStyledTextInto(ctx, text, mode, false, false) {
+	for token := range textTokens(text, mode, false, false) {
 		if token.IsBreak {
 			if lineWidth > maxWidth {
 				maxWidth = lineWidth

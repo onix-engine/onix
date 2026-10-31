@@ -29,8 +29,8 @@ func TestCSSAnimationCascadeAndPropertyKeyframes(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := computed[node]
-	if len(value.Animations) != 2 || value.Animations[0].Duration != 1 || value.Animations[1].Duration != 1 || value.Animations[0].Iterations != 2.5 || value.Animations[0].Delay != -.5 {
-		t.Fatalf("animations = %+v", value.Animations)
+	if len(value.Animations()) != 2 || value.Animations()[0].Duration != 1 || value.Animations()[1].Duration != 1 || value.Animations()[0].Iterations != 2.5 || value.Animations()[0].Delay != -.5 {
+		t.Fatalf("animations = %+v", value.Animations())
 	}
 	tracks := CompileAnimationTracks(node, value, sheet, &QueryEnvironment{Styles: computed})
 	if len(tracks) != 2 || tracks[0].Properties != AnimatedTransform || tracks[1].Properties != 0 {
@@ -111,12 +111,12 @@ func TestCSSAnimationLonghandsAndTransitionLists(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	resolveAnimations(&value)
-	if value.OpacityTransition.Duration != 4 || value.TransformTransition.Duration != 3 || value.TransformTransition.Delay != -.25 || value.TransformTransition.Timing.Kind != TransformSteps {
-		t.Fatalf("transition lists = %+v/%+v", value.OpacityTransition, value.TransformTransition)
+	resolveMotion(value.mutableMotion())
+	if value.TransitionFor(1).Duration != 4 || value.TransitionFor(0).Duration != 3 || value.TransitionFor(0).Delay != -.25 || value.TransitionFor(0).Timing.Kind != TransformSteps {
+		t.Fatalf("transition lists = %+v/%+v", value.TransitionFor(1), value.TransitionFor(0))
 	}
-	if len(value.Animations) != 1 || value.Animations[0].Name != "spin name" || value.Animations[0].Paused {
-		t.Fatalf("quoted name / play state = %+v", value.Animations)
+	if len(value.Animations()) != 1 || value.Animations()[0].Name != "spin name" || value.Animations()[0].Paused {
+		t.Fatalf("quoted name / play state = %+v", value.Animations())
 	}
 }
 
@@ -215,14 +215,16 @@ func TestCSSAnimationColorTransitionShorthandMatching(t *testing.T) {
 	if err := applyTransitionProperty(&computed, "transition", "all 1s linear, border 2s ease-in, border-left-color 3s steps(2), background 4s"); err != nil {
 		t.Fatal(err)
 	}
+	resolveMotion(computed.mutableMotion())
 	for i, want := range [...]float64{1, 4, 2, 2, 2, 3} {
-		if transition := computed.ColorTransitions[i]; !transition.Enabled || transition.Duration != want {
+		if transition := computed.TransitionFor(i + 2); !transition.Enabled || transition.Duration != want {
 			t.Fatalf("transition %s = %+v; want duration %v", animatedColorNames[i], transition, want)
 		}
 	}
 	if err := applyTransitionProperty(&computed, "transition-property", "none"); err != nil {
 		t.Fatal(err)
 	}
+	resolveMotion(computed.mutableMotion())
 	for i := range AnimatedPropertyList {
 		if computed.TransitionFor(i).Enabled {
 			t.Fatalf("transition-property:none still matches %d", i)

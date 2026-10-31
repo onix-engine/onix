@@ -598,7 +598,10 @@ type Driver interface {
 	Viewport() Rect
 	SetBlend(BlendState) error
 	SetScissor(*Rect)
+	// CreateTexture consumes pixels before returning; it must copy any bytes
+	// needed by deferred work. The caller may immediately reuse the slice.
 	CreateTexture(TextureDescriptor, []byte) (TextureHandle, error)
+	// UpdateTextures consumes every update's pixels before returning.
 	UpdateTextures([]TextureUpdate) error
 	DestroyTexture(TextureHandle) error
 	DrawSprites(SpriteBatch) error

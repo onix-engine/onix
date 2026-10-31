@@ -22,6 +22,7 @@ type Node struct {
 	Children   []*Node
 	States     StateSet[ElementState]
 	Order      uint32
+	namespace  string
 }
 
 func NewDocument() *Node {

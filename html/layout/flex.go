@@ -38,6 +38,7 @@ type flexItem struct {
 	grow                                  float64
 	shrink                                float64
 	alignSelf                             string
+	baseline                              float64
 	measured                              bool
 	measureMain                           float64
 	measureCross                          float64
@@ -48,6 +49,7 @@ type flexLine struct {
 	items       []flexItem
 	mainUsed    float64
 	crossSize   float64
+	baseline    float64
 	autoMargins int
 }
 
@@ -58,6 +60,7 @@ type flexScratch struct {
 	lines     []flexLine
 	positions []float64
 	basis     []flexBasisMeasurement
+	baseline  float64
 }
 
 // Auto basis needs only the intrinsic height, not the subtree's final geometry.
@@ -76,6 +79,9 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 		if isBorderBox(box.Style) {
 			box.Content.Height -= verticalBoxExtras(box.Padding, box.Border)
 		}
+	}
+	if style.IsLength(box.Style.Height) {
+		box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
 	}
 	config := resolveFlexConfig(box)
 	if box.flex == nil {
@@ -141,6 +147,7 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 			if box.Style.Height.Kind == style.ValueAuto {
 				box.Content.Height = maxFloat(layoutContaining.Height-resolveLength(box.Style.Top, layoutContaining.Height)-resolveLength(box.Style.Bottom, layoutContaining.Height)-verticalBoxExtras(box.Padding, box.Border)-box.Margin.Top-box.Margin.Bottom, 0)
 			}
+			box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
 		} else {
 			box.Content.Height = crossExtent
 		}
@@ -151,12 +158,13 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 			if box.Style.Height.Kind == style.ValueAuto {
 				box.Content.Height = maxFloat(layoutContaining.Height-resolveLength(box.Style.Top, layoutContaining.Height)-resolveLength(box.Style.Bottom, layoutContaining.Height)-verticalBoxExtras(box.Padding, box.Border)-box.Margin.Top-box.Margin.Bottom, 0)
 			}
+			box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
 		} else {
 			box.Content.Height = mainExtent
 		}
 		config.mainSize = box.Content.Height
 	}
-	box.Content.Height = clampContentDimension(box.Content.Height, box.Style.MinHeight, box.Style.MaxHeight, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+	box.Content.Height = clampScrollContentHeight(box, layoutContaining.Height)
 	if config.isRow {
 		config.crossSize = box.Content.Height
 	} else {
@@ -165,8 +173,12 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 
 	linePositions := resolveFlexLinePositions(lines, box, config, scratch.positions[:0])
 	scratch.positions = linePositions
+	scratch.baseline = box.Content.Height + box.Padding.Bottom + box.Border.Bottom
 	for lineIndex := range lines {
-		layoutFlexLine(lines[lineIndex], linePositions[lineIndex], box, config, absoluteContaining, face, styles, ctx)
+		baseline := layoutFlexLine(lines[lineIndex], linePositions[lineIndex], box, config, absoluteContaining, face, styles, ctx)
+		if lineIndex == 0 {
+			scratch.baseline = baseline
+		}
 	}
 
 	absoluteContaining = descendantAbsoluteContaining(box, absoluteContaining)
@@ -342,13 +354,21 @@ func resolveFlexibleLine(line *flexLine, config flexConfig) {
 
 func measureFlexLine(line *flexLine, container *Box, config flexConfig, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	line.crossSize = 0
+	line.baseline = 0
+	descent := 0.0
 	for index := range line.items {
 		item := &line.items[index]
 		measureFlexItem(item, container, config, absoluteContaining, face, styles, ctx, math.NaN())
 		if item.outerCross > line.crossSize {
 			line.crossSize = item.outerCross
 		}
+		if config.isRow && flexBaselineAligned(item.box, item.alignSelf) {
+			item.baseline = firstBoxBaseline(item.box) - item.box.FlowMarginBox.Y
+			line.baseline = max(line.baseline, item.baseline)
+			descent = max(descent, item.outerCross-item.baseline)
+		}
 	}
+	line.crossSize = max(line.crossSize, line.baseline+descent)
 	updateFlexLineMainUsed(line, config)
 	if line.crossSize < 0 {
 		line.crossSize = 0
@@ -686,9 +706,9 @@ func resolveFlexLinePositions(lines []flexLine, box *Box, config flexConfig, pos
 	return positions
 }
 
-func layoutFlexLine(line flexLine, lineCrossStart float64, container *Box, config flexConfig, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutFlexLine(line flexLine, lineCrossStart float64, container *Box, config flexConfig, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) float64 {
 	if len(line.items) == 0 {
-		return
+		return 0
 	}
 	containerMain := config.mainSize
 	if !config.hasDefiniteMain {
@@ -704,6 +724,7 @@ func layoutFlexLine(line flexLine, lineCrossStart float64, container *Box, confi
 	mainOrigin := flexMainOrigin(container.Content, config)
 	crossOrigin := flexCrossOrigin(container.Content, config)
 	progress := 0.0
+	baseline := 0.0
 	for index := range line.items {
 		item := &line.items[index]
 		align := item.alignSelf
@@ -719,6 +740,9 @@ func layoutFlexLine(line flexLine, lineCrossStart float64, container *Box, confi
 		}
 		crossFree := maxFloat(line.crossSize-item.outerCross, 0)
 		crossOffset := alignedOffset(logicalFlexAlignment(align, false), crossFree)
+		if config.isRow && flexBaselineAligned(item.box, align) {
+			crossOffset = line.baseline - item.baseline
+		}
 		if config.reverseCross && (align == "flex-start" || align == "flex-end") {
 			crossOffset = crossFree - crossOffset
 		}
@@ -748,11 +772,17 @@ func layoutFlexLine(line flexLine, lineCrossStart float64, container *Box, confi
 		} else {
 			translateBox(item.box, outerCrossStart-item.box.FlowMarginBox.X, outerMainStart-item.box.FlowMarginBox.Y, ctx)
 		}
+		// Export the first line's alignment baseline while placing its items.
+		// Keep the offset relative to the content box so translations reuse it.
+		if index == 0 || config.isRow && flexBaselineAligned(item.box, align) {
+			baseline = firstBoxBaseline(item.box) - container.Content.Y
+		}
 		progress += item.outerMain + gap
 		if afterAuto {
 			progress += autoMargin
 		}
 	}
+	return baseline
 }
 
 func distributeSpace(mode string, freeSpace float64, count int, baseGap float64, allowStretch bool) (float64, float64, float64) {

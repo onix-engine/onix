@@ -16,7 +16,7 @@ type ScrollMetrics struct {
 }
 
 func MeasureScrollArea(width, height, contentWidth, contentHeight float32) ScrollMetrics {
-	return measureScrollArea(width, height, contentWidth, contentHeight, 0)
+	return (ScrollArea{Width: width, Height: height, ContentWidth: contentWidth, ContentHeight: contentHeight}).Measure()
 }
 
 func (area ScrollArea) bindControl(world *ecs.World, entity ecs.Entity, opts ControlOptions) error {
@@ -34,7 +34,7 @@ func (area ScrollArea) bindControl(world *ecs.World, entity ecs.Entity, opts Con
 }
 
 func installScrollAreaGeometry(world *ecs.World, entity ecs.Entity, area *ScrollArea) error {
-	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
+	metrics := area.Measure()
 	if err := world.Insert(entity, scene.Size2D{Width: area.Width, Height: area.Height}); err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func GetScrollAreaMetrics(world *ecs.World, entity ecs.Entity) (ScrollMetrics, b
 	if !ok {
 		return ScrollMetrics{}, false
 	}
-	return measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize), true
+	return area.Measure(), true
 }
 
 // GetScrollAreaOffset exposes positive content offsets while UIScroll
@@ -112,25 +112,33 @@ func SetSelectorScrollOffset(world *ecs.World, selector ecs.Entity, offset float
 	return updated
 }
 
-func measureScrollArea(width, height, contentWidth, contentHeight, _ float32) ScrollMetrics {
-	width = max(width, 0)
-	height = max(height, 0)
-	contentWidth = max(contentWidth, 0)
-	contentHeight = max(contentHeight, 0)
-
-	// Scrollbar visibility is measured against its own axis. A vertical bar
-	// does not reduce horizontal content space, and a horizontal bar does not
-	// reduce vertical content space.
-	horizontal := contentWidth > width
-	vertical := contentHeight > height
-
+// Measure derives the viewport and scroll range without allocating.
+func (area ScrollArea) Measure() ScrollMetrics {
+	width, height := max(area.Width, 0), max(area.Height, 0)
+	contentWidth, contentHeight := max(area.ContentWidth, 0), max(area.ContentHeight, 0)
+	horizontal, vertical := contentWidth > width, contentHeight > height
+	viewportWidth, viewportHeight := width, height
+	if area.ReserveScrollbarSpace {
+		bar := scrollBarSize(area.BarSize)
+		// A gutter may introduce overflow on the opposite axis. Each axis
+		// can become visible only once, so two updates reach the fixed point.
+		for range 2 {
+			viewportWidth, viewportHeight = width, height
+			if vertical {
+				viewportWidth = max(width-bar, 0)
+			}
+			if horizontal {
+				viewportHeight = max(height-bar, 0)
+			}
+			horizontal = contentWidth > viewportWidth
+			vertical = contentHeight > viewportHeight
+		}
+	}
 	return ScrollMetrics{
-		ViewportWidth:     width,
-		ViewportHeight:    height,
-		MaxScrollX:        max(contentWidth-width, 0),
-		MaxScrollY:        max(contentHeight-height, 0),
-		HorizontalVisible: horizontal,
-		VerticalVisible:   vertical,
+		ViewportWidth: viewportWidth, ViewportHeight: viewportHeight,
+		MaxScrollX:        max(contentWidth-viewportWidth, 0),
+		MaxScrollY:        max(contentHeight-viewportHeight, 0),
+		HorizontalVisible: horizontal, VerticalVisible: vertical,
 	}
 }
 

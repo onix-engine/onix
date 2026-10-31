@@ -1,0 +1,63 @@
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui/html
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkHTMLDropShadowWorkingSet/cold=true         	      19	  11669690 ns/op	  426144 B/op	       3 allocs/op
+BenchmarkHTMLDropShadowWorkingSet/cold=true         	      21	  10338019 ns/op	  426144 B/op	       3 allocs/op
+BenchmarkHTMLDropShadowWorkingSet/cold=true         	      22	  10857735 ns/op	  426144 B/op	       3 allocs/op
+BenchmarkHTMLDropShadowWorkingSet/cold=false        	      22	  10363338 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLDropShadowWorkingSet/cold=false        	      21	  11162199 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLDropShadowWorkingSet/cold=false        	      19	  12978996 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=true         	     445	    461233 ns/op	  132096 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=true         	     583	    416811 ns/op	  132096 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=true         	     619	    401923 ns/op	  132096 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=false        	     595	    387426 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=false        	     573	    402961 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/128/cold=false        	     669	    360079 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=true        	       7	  37291405 ns/op	 8396800 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=true        	       7	  35199089 ns/op	 8396800 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=true        	       7	  34807160 ns/op	 8396800 B/op	       2 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=false       	       7	  30619426 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=false       	       7	  30882000 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLShadowWorkingSet/1024/cold=false       	       7	  31302761 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/cold               	     177	   1319731 ns/op	    131072 retained-image-B	  132816 B/op	       7 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/cold               	     186	   1332040 ns/op	    131072 retained-image-B	  132816 B/op	       7 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/cold               	     183	   1280270 ns/op	    131072 retained-image-B	  132816 B/op	       7 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/repaint            	     373	    627575 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/repaint            	     386	    635187 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/repaint            	     379	    631512 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/unchanged          	 1358318	       176.4 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/unchanged          	 1300610	       182.6 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/1/unchanged          	 1294098	       183.8 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/cold              	      22	   9857978 ns/op	    131072 retained-image-B	  145512 B/op	      42 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/cold              	      25	   9629700 ns/op	    131072 retained-image-B	  145512 B/op	      42 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/cold              	      25	  10224278 ns/op	    131072 retained-image-B	  145512 B/op	      42 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/repaint           	     366	    639179 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/repaint           	     330	    663343 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/repaint           	     361	    639906 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/unchanged         	  141748	      1706 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/unchanged         	  144559	      1880 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+BenchmarkHTMLOpacityWorkingSet/16/unchanged         	  143468	      1739 ns/op	    131072 retained-image-B	       0 B/op	       0 allocs/op
+PASS
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/graphics
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkCompactTextureUpload/r8         	    2673	     96546 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompactTextureUpload/r8         	    2894	     90564 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompactTextureUpload/r8         	    2847	     86411 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompactTextureUpload/rgba8      	     488	    417232 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompactTextureUpload/rgba8      	     648	    385406 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompactTextureUpload/rgba8      	     644	    371628 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkRoundedClipChangingColor 	    1000	       601.4 ns/op	         0 textures/op	       0 B/op	       0 allocs/op
+BenchmarkRoundedClipChangingColor 	    1000	       528.6 ns/op	         0 textures/op	       0 B/op	       0 allocs/op
+BenchmarkRoundedClipChangingColor 	    1000	       544.3 ns/op	         0 textures/op	       0 B/op	       0 allocs/op
+PASS
+

@@ -23,20 +23,20 @@ type htmlCSSTransition struct {
 	Elapsed, Factor float64
 }
 
-type htmlNodeAnimation struct {
-	Computed    *style.ComputedStyle
-	Stylesheet  *css.Stylesheet
-	Viewport    style.Viewport
-	Current     style.AnimationValue
-	Foreground  style.AnimationColor
-	PaintSource *style.ComputedStyle
-	PaintStyle  *style.ComputedStyle
-	*htmlNodeMotion
+// Static nodes retain only their immutable style and last displayed color.
+// Store these inline in the map instead of allocating an animation per node.
+type htmlAnimationBaseline struct {
+	Computed   *style.ComputedStyle
+	Foreground style.AnimationColor
 }
 
-// Static elements retain their last value for transitions introduced later,
-// without owning transition workspaces or keyframe tracks.
-type htmlNodeMotion struct {
+type htmlNodeAnimation struct {
+	Computed                   *style.ComputedStyle
+	Stylesheet                 *css.Stylesheet
+	Viewport                   style.Viewport
+	Current                    style.AnimationValue
+	PaintSource                *style.ComputedStyle
+	PaintStyle                 *style.ComputedStyle
 	Tracks                     []htmlCSSAnimation
 	TrackScratch               []htmlCSSAnimation
 	From, Target, ReverseStart style.AnimationValue
@@ -45,37 +45,40 @@ type htmlNodeMotion struct {
 }
 
 func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle) *htmlNodeAnimation {
-	if state.Animations == nil {
-		state.Animations = make(map[*dom.Node]*htmlNodeAnimation)
-	}
+	baseline := state.AnimationBaselines[node]
 	animation := state.Animations[node]
-	if animation != nil && animation.Computed == computed && animation.Stylesheet == state.Stylesheet && animation.Viewport == state.Viewport {
+	if baseline.Computed == computed && (animation == nil || animation.Stylesheet == state.Stylesheet && animation.Viewport == state.Viewport) {
 		return animation
 	}
-	value := style.BaseAnimationValue(computed)
-	target := value
+	needsMotion := computed.HasMotion()
+	if state.AnimationBaselines == nil {
+		state.AnimationBaselines = make(map[*dom.Node]htmlAnimationBaseline)
+	}
+	if baseline.Computed == nil {
+		baseline.Foreground = style.ColorForAnimation(computed.Color)
+	}
+	previousStyle := baseline.Computed
+	baseline.Computed = computed
+	state.AnimationBaselines[node] = baseline
+	if !needsMotion {
+		delete(state.Animations, node)
+		return nil
+	}
+	target := style.BaseAnimationValue(computed)
 	target.Colors[style.AnimationForeground] = style.ColorForAnimation(computed.Color)
 	if animation == nil {
-		animation = &htmlNodeAnimation{Current: target, Foreground: target.Colors[style.AnimationForeground]}
-		state.Animations[node] = animation
-	}
-	needsMotion := len(computed.Animations) != 0
-	for i := range style.AnimatedPropertyList {
-		needsMotion = needsMotion || computed.TransitionFor(i).Enabled
-	}
-	if !needsMotion {
-		animation.Current = value
-		animation.htmlNodeMotion = nil
-		animation.Computed, animation.Stylesheet, animation.Viewport = computed, state.Stylesheet, state.Viewport
-		return animation
-	}
-	if animation.htmlNodeMotion == nil {
-		previous := target
-		if animation.Computed != nil {
-			previous = style.BaseAnimationValue(animation.Computed)
-			previous.Colors[style.AnimationForeground] = style.ColorForAnimation(animation.Computed.Color)
+		if state.Animations == nil {
+			state.Animations = make(map[*dom.Node]*htmlNodeAnimation)
 		}
-		animation.htmlNodeMotion = &htmlNodeMotion{Target: previous}
+		previous := target
+		current := target
+		if previousStyle != nil {
+			current = style.BaseAnimationValue(previousStyle)
+			previous = current
+			previous.Colors[style.AnimationForeground] = style.ColorForAnimation(previousStyle.Color)
+		}
+		animation = &htmlNodeAnimation{Computed: previousStyle, Current: current, Target: previous}
+		state.Animations[node] = animation
 	}
 	if animation.Computed != nil {
 		for i, property := range style.AnimatedPropertyList {
@@ -89,7 +92,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 			}
 			from := animation.Current
 			if property == style.AnimatedColor && from.Colors[style.AnimationForeground].Current != 0 {
-				from.Colors[style.AnimationForeground] = animation.Foreground
+				from.Colors[style.AnimationForeground] = baseline.Foreground
 			}
 			transition := &animation.Transitions[i]
 			factor := float64(1)
@@ -164,13 +167,15 @@ func syncHTMLAnimations(state *htmlRenderState) {
 		}
 		if state.NodeFlags.resolve(node, htmlNodeParent, hiddenByAncestor) {
 			delete(state.Animations, node)
+			delete(state.AnimationBaselines, node)
 			continue
 		}
 		prepareHTMLNodeAnimation(state, node, computed)
 	}
-	for node := range state.Animations {
+	for node := range state.AnimationBaselines {
 		if state.Styles[node] == nil {
 			delete(state.Animations, node)
+			delete(state.AnimationBaselines, node)
 		}
 	}
 }
@@ -215,7 +220,7 @@ func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float
 	}
 	changed := false
 	for _, animation := range state.Animations {
-		if animation.htmlNodeMotion == nil || animation.Active == 0 && len(animation.Tracks) == 0 {
+		if animation.Active == 0 && len(animation.Tracks) == 0 {
 			continue
 		}
 		previous := animation.Current
@@ -301,15 +306,8 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			foreground.A += weight * color.A
 			foreground.Current *= color.Current
 		}
-		// Opacity is composited into flattened sprites. Their root opacity is
-		// deliberately left out of the raster when an animation controls it.
-		if current == node && world.Has[htmlOpacitySurface](entity) {
-			if computed.AnimatedOpacity {
-				opacity *= value.Opacity
-			}
-		} else {
-			opacity *= value.Opacity
-		}
+		// Composite roots carry their own opacity on the final sprite.
+		opacity *= value.Opacity
 		if current == stop {
 			stopped = true
 		}
@@ -352,6 +350,8 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 		value := style.AnimationValue{ScaleX: 1, ScaleY: 1}
 		if animation := state.Animations[current]; animation != nil {
 			value = animation.Current
+		} else if computed := state.Styles[current]; computed != nil {
+			value = style.BaseAnimationValue(computed)
 		}
 		if box := state.BoxesByNode[current]; ownOnly && current != stop && box != nil {
 			rect := box.BorderBox()
@@ -359,7 +359,7 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			rotation, scale = float32(value.Rotation*math.Pi/180), mgl32.Vec2{float32(value.ScaleX), float32(value.ScaleY)}
 			skew[0] = float32(value.SkewX * math.Pi / 180)
 			animation := state.Animations[current]
-			if rotation != 0 || skew[0] != 0 || scale != (mgl32.Vec2{1, 1}) || animation != nil && animation.htmlNodeMotion != nil && animation.Active&style.AnimatedTransform != 0 {
+			if rotation != 0 || skew[0] != 0 || scale != (mgl32.Vec2{1, 1}) || animation != nil && animation.Active&style.AnimatedTransform != 0 {
 				pivot = mgl32.Vec2{float32(rect.X+style.ResolveLength(computed.TransformOriginX, rect.Width)) - originOffset.X() + child.offset.X() - translation.X(), float32(rect.Y+style.ResolveLength(computed.TransformOriginY, rect.Height)) - originOffset.Y() + child.offset.Y() - translation.Y()}
 			}
 			tx, ty := style.ResolveAnimatedTranslation(value, rect.Width, rect.Height)
@@ -393,8 +393,9 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	}
 	foreground.A += foreground.Current
 	foreground.Current = 0
-	if animation := state.Animations[ownNode]; animation != nil {
-		animation.Foreground = foreground
+	if baseline, ok := state.AnimationBaselines[ownNode]; ok && baseline.Foreground != foreground {
+		baseline.Foreground = foreground
+		state.AnimationBaselines[ownNode] = baseline
 	}
 	applyHTMLAnimatedPaint(world, state, entity, ownNode, child, foreground)
 }

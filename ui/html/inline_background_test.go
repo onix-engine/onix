@@ -75,6 +75,40 @@ func TestHTMLInlineBackgroundWrapsAndRetainsPaint(t *testing.T) {
 	}
 }
 
+func TestHTMLWrappedInlineBackgroundUsesPaintList(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div style="width:72px;line-height:20px"><span id="match" style="background:#cc2200">one two three four five six</span></div>`)
+	defer Dispose(world)
+	node := incrementalHTMLNode(t, world, owner, "match")
+	group := world.GetRef[htmlRenderState](owner).EntityGroups[htmlRenderIdentity{Node: node.node, Role: htmlRoleInlineBackgroundList}]
+	if group == nil || len(group.Bindings) != 1 {
+		t.Fatal("wrapped background did not produce one paint list")
+	}
+	entity := group.Bindings[0].Entity
+	layers, ok := world.Get[scene.SpriteLayers2D](entity)
+	if !ok || len(layers.Layers) < 2 {
+		t.Fatalf("paint list has %d fragments", len(layers.Layers))
+	}
+	for _, layer := range layers.Layers {
+		if layer.Sprite.Shape.Fill != graphics.ColorFromRGB(204, 34, 0) {
+			t.Fatalf("wrong inline paint: %+v", layer.Sprite.Shape.Fill)
+		}
+	}
+	node.SetAttribute("style", "background:#00aa33")
+	incrementalSync(t, world)
+	updated, ok := world.Get[scene.SpriteLayers2D](entity)
+	if !ok || len(updated.Layers) != len(layers.Layers) || updated.Layers[0].Sprite.Shape.Fill != graphics.ColorFromRGB(0, 170, 51) {
+		t.Fatalf("local paint update did not reuse and refresh the list: present=%v count=%d previous=%d color=%v", ok, len(updated.Layers), len(layers.Layers), updated.Layers[0].Sprite.Shape.Fill)
+	}
+	if allocations := testing.AllocsPerRun(50, func() { incrementalSync(t, world) }); allocations != 0 {
+		t.Fatalf("idle paint list allocated %g times", allocations)
+	}
+	node.SetAttribute("style", "background:linear-gradient(red,blue)")
+	incrementalSync(t, world)
+	if world.IsAlive(entity) && world.Has[scene.SpriteLayers2D](entity) {
+		t.Fatal("paint list survived an unsupported gradient style")
+	}
+}
+
 func TestHTMLInlineBackgroundSurvivesOpacityComposite(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="group" style="width:160px;opacity:.5"><span id="match" style="background:#ff0000;color:#000000">target</span></div>`)
 	defer Dispose(world)
@@ -84,11 +118,16 @@ func TestHTMLInlineBackgroundSurvivesOpacityComposite(t *testing.T) {
 	if raster == nil {
 		t.Fatal("missing opacity raster")
 	}
+	visual := htmlCullRole(world, owner, group, htmlRoleSurface)
+	sprite, _ := world.Get[scene.Sprite2D](visual)
+	if sprite.Alpha != .5 {
+		t.Fatalf("group alpha = %v, want .5", sprite.Alpha)
+	}
 	check := func(red, green uint8) {
 		t.Helper()
 		found := false
 		for i := 0; i < len(raster.image.Pix); i += 4 {
-			if raster.image.Pix[i] == red && raster.image.Pix[i+1] == green && raster.image.Pix[i+3] == 128 {
+			if raster.image.Pix[i] == red && raster.image.Pix[i+1] == green && raster.image.Pix[i+3] == 255 {
 				found = true
 				break
 			}

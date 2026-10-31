@@ -23,15 +23,17 @@ type Work struct {
 // Styles and DOM mutations are explicit inputs; callers must supply all nodes
 // whose content or geometry changed, including inherited style changes.
 type Cache struct {
-	Root           *Box
-	nodes          map[*dom.Node]*Box
-	document       *dom.Node
-	generation     uint64
-	pass           uint64
-	face, boldFace *font.Face
-	viewport       Rect
-	context        layoutContext
-	Work           Work
+	// ReserveScrollbarSpace selects classic scrollbars for this document.
+	ReserveScrollbarSpace bool
+	Root                  *Box
+	nodes                 map[*dom.Node]*Box
+	document              *dom.Node
+	generation            uint64
+	pass                  uint64
+	face, boldFace        *font.Face
+	viewport              Rect
+	context               layoutContext
+	Work                  Work
 	// Changed contains boxes needing render synchronization: reflowed or
 	// translated boxes, plus ancestors whose descendant bounds may have changed.
 	// Each box appears once per pass; callers can sort by current tree depth.
@@ -83,14 +85,14 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 		clear(cache.localFlexRoots)
 		cache.localFlexRoots = cache.localFlexRoots[:0]
 		clear(cache.context.inlineSegments[:cap(cache.context.inlineSegments)])
-		clear(cache.context.textTokens[:cap(cache.context.textTokens)])
 		clear(cache.context.controlTokens[:cap(cache.context.controlTokens)])
+		cache.context.shapeGlyphs = cache.context.shapeGlyphs[:0]
 		for index := range cache.context.textScratch {
 			scratch := &cache.context.textScratch[index]
 			clear(scratch.lineItems[:cap(scratch.lineItems)])
 			clear(scratch.inlineSegments[:cap(scratch.inlineSegments)])
-			clear(scratch.textTokens[:cap(scratch.textTokens)])
 			clear(scratch.controlTokens[:cap(scratch.controlTokens)])
+			scratch.shapeGlyphs = scratch.shapeGlyphs[:0]
 		}
 	}()
 	viewport := Rect{Width: width, Height: height}
@@ -101,11 +103,12 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 		cache.context = layoutContext{}
 		topology, force = true, true
 	}
-	if cache.face != face || cache.boldFace != boldFace || cache.viewport != viewport {
+	if cache.face != face || cache.boldFace != boldFace || cache.viewport != viewport || cache.context.reserveScrollbarSpace != cache.ReserveScrollbarSpace {
 		force = true
 	}
 	cache.face, cache.boldFace, cache.viewport = face, boldFace, viewport
 	cache.context.boldFace, cache.context.err, cache.context.retained = boldFace, nil, cache
+	cache.context.reserveScrollbarSpace = cache.ReserveScrollbarSpace
 	// Resource dimensions may have changed in an environment-wide update.
 	if force {
 		clear(cache.context.imageSizes)
@@ -306,7 +309,7 @@ func (cache *Cache) markLayoutDirty(box *Box) {
 
 func layoutBlock(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if ctx == nil || ctx.retained == nil {
-		layoutBlockContents(box, containing, absolute, face, styles, ctx)
+		layoutBlockScrollbars(box, containing, absolute, face, styles, ctx)
 		return
 	}
 	cache := ctx.retained
@@ -348,7 +351,7 @@ func layoutBlock(box *Box, containing, absolute Rect, face *font.Face, styles st
 	}
 	box.reflow.valid = false
 	box.InvalidatePaintHash()
-	layoutBlockContents(box, containing, absolute, face, styles, ctx)
+	layoutBlockScrollbars(box, containing, absolute, face, styles, ctx)
 	box.reflow.containing, box.reflow.absolute = containing, absolute
 	box.reflow.dirty = false
 	box.reflow.width, box.reflow.height = box.Style.Width, box.Style.Height
@@ -397,7 +400,7 @@ func (cache *Cache) reorderFlexContainers(nodes []*dom.Node) {
 // Coalesce nested changes, then preflight every independent context before
 // laying out any of them. Ancestors stay dirty until all outer geometries agree.
 func (cache *Cache) layoutLocalFlexOrder(dirty []*dom.Node, styles style.Map, face *font.Face) bool {
-	if len(cache.Reordered) == 0 || !cache.Root.reflow.valid {
+	if cache.ReserveScrollbarSpace || len(cache.Reordered) == 0 || !cache.Root.reflow.valid {
 		return false
 	}
 	for _, box := range cache.Reordered {

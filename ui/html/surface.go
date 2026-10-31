@@ -18,6 +18,7 @@ import (
 	"github.com/diiyw/onix/html/style"
 	"github.com/diiyw/onix/scene"
 	onixtext "github.com/diiyw/onix/text"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -25,12 +26,17 @@ import (
 // <style> elements. CSS contains an optional stylesheet applied to the value.
 // Width and Height use UI pixels; zero resolves to the current viewport size.
 type Surface struct {
-	Value  string
-	CSS    string
-	Width  float32
-	Height float32
-	Font   *onixtext.Font
-	Images *Images
+	// ReserveScrollbarSpace selects classic scrollbars, reducing the content viewport.
+	ReserveScrollbarSpace bool
+	Value                 string
+	// Document transfers an independently owned DOM to the surface. Replacing
+	// the pointer replaces the document; mutate retained nodes through Root.
+	Document *dom.Node
+	CSS      string
+	Width    float32
+	Height   float32
+	Font     *onixtext.Font
+	Images   *Images
 	// BoldFont is used for text whose computed font weight is 600 or heavier.
 	BoldFont    *onixtext.Font
 	FontSize    float64
@@ -391,6 +397,8 @@ const (
 // Event is emitted for generated interactive HTML elements. Entity is the
 // HTML surface, while Target is the generated input entity when present.
 type Event struct {
+	Snapshot piecetree.Snapshot
+	Document bool
 	Entity   ecs.Entity
 	Target   ecs.Entity
 	ID       string
@@ -1157,7 +1165,19 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 		nodeVisible := visible && htmlStyleVisible(computed)
 		sprite := world.GetMut[scene.Sprite2D](entity)
 		if sprite != nil && nodeVisible {
-			if world.Has[htmlCanvasSurface](entity) {
+			if child.role == htmlRoleInlineBackgroundList {
+				if htmlInlineBackgroundListStyleEligible(computed) {
+					sprite.Alpha = float32(computed.Opacity.Number)
+					if layers := world.GetMut[scene.SpriteLayers2D](entity); layers != nil {
+						for index := range layers.Layers {
+							layer := &layers.Layers[index]
+							layer.Sprite.Shape = scene.RoundedRectShape2D(htmlColor(computed.BackgroundColor), htmlOverflowClipRadius(computed, float64(layer.Sprite.Width), float64(layer.Sprite.Height)))
+						}
+					}
+				} else {
+					state.requestVisual()
+				}
+			} else if world.Has[htmlCanvasSurface](entity) {
 				sprite.Shape.Fill = htmlColor(computed.BackgroundColor)
 				if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
 					sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
@@ -1314,10 +1334,12 @@ type htmlNodeEventHandler struct {
 // ScrollContent links a generated HTML subtree to a UIScroll viewport.
 // X and Y preserve the subtree's unscrolled local origin while the UI runtime
 // applies the current UIScroll offset after input handling.
+// Sticky content can use Area == 0 when only its sticky offset is needed.
 type ScrollContent struct {
-	Area ecs.Entity
-	X    float32
-	Y    float32
+	Area                 ecs.Entity
+	X                    float32
+	Y                    float32
+	sticky, parentSticky *htmlStickyBinding
 }
 
 type htmlNodeOffset struct {
@@ -1582,20 +1604,22 @@ func htmlNodeWithin(node, ancestor *dom.Node) bool {
 }
 
 type htmlRenderKey struct {
-	Value         string
-	CSS           string
-	Width         float32
-	Height        float32
-	Font          *onixtext.Font
-	BoldFont      *onixtext.Font
-	Images        *Images
-	FontSize      float64
-	DPI           float64
-	RasterScale   float64
-	StackIndex    int
-	PassThrough   bool
-	Revision      uint64
-	EventRevision uint64
+	ReserveScrollbarSpace bool
+	Value                 string
+	Document              *dom.Node
+	CSS                   string
+	Width                 float32
+	Height                float32
+	Font                  *onixtext.Font
+	BoldFont              *onixtext.Font
+	Images                *Images
+	FontSize              float64
+	DPI                   float64
+	RasterScale           float64
+	StackIndex            int
+	PassThrough           bool
+	Revision              uint64
+	EventRevision         uint64
 }
 
 type htmlStylesheetKey struct {
@@ -1681,7 +1705,10 @@ func syncHTML(context *ecs.SystemContext) error {
 		if _, err := renderHTML(world, entry.Entity, entry.Value); err != nil {
 			return err
 		}
-		if state := world.GetRef[htmlRenderState](entry.Entity); state != nil {
+		if state := world.GetMut[htmlRenderState](entry.Entity); state != nil {
+			if state.StickyDirty || state.Diagnostics.Path != SyncCached {
+				bindHTMLStickyContent(world, state)
+			}
 			state.Textures.sweep()
 		}
 	}
@@ -1706,7 +1733,7 @@ func htmlSurfaceRenderKey(world *ecs.World, value Surface, state *htmlRenderStat
 		dpi = 72
 	}
 	return htmlRenderKey{
-		Value: value.Value, CSS: value.CSS, Width: width, Height: height,
+		ReserveScrollbarSpace: value.ReserveScrollbarSpace, Value: value.Value, Document: value.Document, CSS: value.CSS, Width: width, Height: height,
 		Font: fontValue, BoldFont: value.BoldFont, Images: value.Images, FontSize: fontSize, DPI: dpi,
 		RasterScale: htmlPaintRasterScale(world),
 		StackIndex:  value.StackIndex, PassThrough: value.PassThrough, Revision: state.Revision,
@@ -1722,16 +1749,18 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		}
 		state = world.GetMut[htmlRenderState](owner)
 	}
-	if state.Root == nil || state.Source != value.Value {
-		root, embeddedCSS, err := parseHTMLDocument(value.Value)
+	if state.Root == nil || state.Source != value.Value || state.SourceDocument != value.Document {
+		root, embeddedCSS, err := prepareHTMLDocument(value)
 		if err != nil {
 			return Layout{}, fmt.Errorf("ecs: parse html: %w", err)
 		}
 		state.Textures.dispose()
 		state.Source = value.Value
+		state.SourceDocument = value.Document
 		state.EmbeddedCSS = embeddedCSS
 		state.Root = root
 		clear(state.Animations)
+		clear(state.AnimationBaselines)
 		state.TransformFrameSet = false
 		state.StyleCache.InvalidateDefinitions()
 		syncHTMLDocumentIndex(state)
@@ -1752,7 +1781,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		syncHTMLDocumentIndex(state)
 	}
 	if clock, ok := world.GetResource[*scene.Time](); ok && clock != nil {
-		if state.TransformFrameSet && state.TransformFrame != clock.Frame && state.Rendered && state.Key.Value == value.Value {
+		if state.TransformFrameSet && state.TransformFrame != clock.Frame && state.Rendered && state.Key.Value == value.Value && state.Key.Document == value.Document {
 			advanceHTMLAnimations(world, state, clock.Delta.Seconds())
 		}
 		state.TransformFrame, state.TransformFrameSet = clock.Frame, true
@@ -1881,6 +1910,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 			if !state.NodeFlags.resolve(node, htmlNodeParent, withinDocument) {
 				delete(styles, node)
 				delete(state.Animations, node)
+				delete(state.AnimationBaselines, node)
 				delete(state.OverflowRoutes, node)
 			}
 		}
@@ -1900,6 +1930,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 	}
 	box := state.Boxes
 	if needsLayout {
+		state.LayoutCache.ReserveScrollbarSpace = value.ReserveScrollbarSpace
 		box, err = state.LayoutCache.Update(state.Root, styles, face, boldFace, float64(width), float64(height), state.LayoutNodes, state.LayoutOrderNodes, state.LayoutTopology, !mutationSync)
 		// Retired boxes are consumed below; do not keep removed DOM subtrees
 		// alive in scratch storage while the document remains unchanged.
@@ -2238,6 +2269,20 @@ func parseHTMLDocument(value string) (*dom.Node, string, error) {
 	return root, builder.String(), nil
 }
 
+func prepareHTMLDocument(value Surface) (*dom.Node, string, error) {
+	if value.Document == nil {
+		return parseHTMLDocument(value.Value)
+	}
+	root := value.Document
+	if root.Type != dom.DocumentNode {
+		return nil, "", fmt.Errorf("html: supplied document root must be a document node")
+	}
+	var builder strings.Builder
+	collectHTMLStylesAndStripMetadata(&builder, root, true)
+	dom.InitializeElementStates(root)
+	return root, builder.String(), nil
+}
+
 func htmlStylesheet(cssText, embeddedCSS string, fontSize float64) (*css.Stylesheet, error) {
 	var builder strings.Builder
 	builder.WriteString(":root { font-size:")
@@ -2341,6 +2386,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	rendered.CompositeRoot = false
 	entityStart := len(state.Children)
 	state.BoxesByNode[box.Node] = box
+	trackHTMLStickyBox(state, box)
 	baseStack := htmlBoxStackIndex(box, stackIndex)
 	paintVisible := htmlStyleVisible(box.Style)
 	flattened := false
@@ -3127,7 +3173,13 @@ func htmlOverflowClipsStyle(computed *style.ComputedStyle) bool {
 }
 
 func htmlBoxCreatesStackContext(box *layout.Box) bool {
-	if box == nil || box.Style == nil || box.Style.ZIndex.Kind != style.ValueNumber {
+	if box == nil || box.Style == nil {
+		return false
+	}
+	if box.Style.Position == style.Keyword("sticky") {
+		return true
+	}
+	if box.Style.ZIndex.Kind != style.ValueNumber {
 		return false
 	}
 	if box.Style.Position.Kind == style.ValueKeyword && box.Style.Position.Keyword != "static" {
@@ -3192,7 +3244,14 @@ func htmlOverflowContentExtents(root *layout.Box, extents map[*layout.Box]htmlOv
 		if box == nil {
 			return
 		}
-		r := box.PaddingBox()
+		if box.ScrollWidth > 0 || box.ScrollHeight > 0 {
+			for _, child := range box.Children {
+				visit(child)
+			}
+			extents[box] = htmlOverflowExtent{width: box.ScrollWidth, height: box.ScrollHeight}
+			return
+		}
+		r := box.ScrollportBox()
 		extent := htmlOverflowExtent{width: r.Width, height: r.Height}
 		for _, child := range box.Children {
 			visit(child)
@@ -3296,8 +3355,10 @@ func applyHTMLOverflowClips(world *ecs.World, owner ecs.Entity, state *htmlRende
 
 func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, parent htmlOverflowClipBinding, stackIndex int, visible bool) htmlOverflowClipBinding {
 	rect := box.PaddingBox()
+	port := box.ScrollportBox()
+	overlay := !state.LayoutCache.ReserveScrollbarSpace
 	clipX, clipY := float32(0), float32(0)
-	clipWidth, clipHeight := float32(rect.Width), float32(rect.Height)
+	clipWidth, clipHeight := float32(port.Width), float32(port.Height)
 	if !htmlOverflowClipsAxis(box.Style.OverflowX) {
 		clipX = -htmlOverflowVisibleExtent
 		clipWidth += htmlOverflowVisibleExtent * 2
@@ -3322,11 +3383,9 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	barSize := float32(0)
 	if htmlOverflowScrollsAxis(box.Style.OverflowX) || htmlOverflowScrollsAxis(box.Style.OverflowY) {
 		extent := state.OverflowExtents[box]
-		contentWidth, contentHeight := max(rect.Width, extent.width), max(rect.Height, extent.height)
+		contentWidth, contentHeight := max(port.Width, extent.width), max(port.Height, extent.height)
 		barSize = htmlOverflowScrollbarSize(box.Style)
-		// HTML uses overlay scrollbars: the scrollport and layout retain the
-		// full padding box, with the bars painted inside its edges.
-		showHorizontal, showVertical = htmlOverflowScrollbarVisibility(box.Style, rect.Width, rect.Height, contentWidth, contentHeight)
+		showHorizontal, showVertical = htmlOverflowScrollbarVisibility(box.Style, port.Width, port.Height, contentWidth, contentHeight)
 		if !htmlOverflowClipsAxis(box.Style.OverflowX) {
 			clipX = -htmlOverflowVisibleExtent
 			clipWidth += htmlOverflowVisibleExtent * 2
@@ -3350,7 +3409,7 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	}
 	if htmlOverflowScrollsAxis(box.Style.OverflowX) || htmlOverflowScrollsAxis(box.Style.OverflowY) {
 		extent := state.OverflowExtents[box]
-		contentWidth, contentHeight := max(rect.Width, extent.width), max(rect.Height, extent.height)
+		contentWidth, contentHeight := max(port.Width, extent.width), max(port.Height, extent.height)
 		(&bundle).putHTML(scene.UIScroll{
 			ViewportSize:          mgl32.Vec2{clipWidth, clipHeight},
 			ContentSize:           mgl32.Vec2{float32(contentWidth), float32(contentHeight)},
@@ -3358,7 +3417,7 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			ScrollbarSize:         barSize,
 			ScrollbarMinThumbSize: htmlOverflowScrollbarMinThumbSize(box.Style),
 			ScrollbarThin:         box.Style.ScrollbarWidth.Kind == style.ValueKeyword && box.Style.ScrollbarWidth.Keyword == "thin",
-			ScrollbarOverlay:      true,
+			ScrollbarOverlay:      overlay,
 			Horizontal:            showHorizontal,
 			Vertical:              showVertical,
 			ConsumeWheel:          true,
@@ -3373,22 +3432,26 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		style := htmlOverflowScrollbarColors(box.Style)
 		barStack := state.BoxRenderings[box.Node].PaintEnd - 1
 		trackWidth, trackHeight := clipWidth, clipHeight
-		if showVertical {
-			trackWidth = max(trackWidth-barSize, 0)
-		}
-		if showHorizontal {
-			trackHeight = max(trackHeight-barSize, 0)
+		barX, barY := clipWidth, clipHeight
+		if overlay {
+			barX, barY = max(barX-barSize, 0), max(barY-barSize, 0)
+			if showVertical {
+				trackWidth = max(trackWidth-barSize, 0)
+			}
+			if showHorizontal {
+				trackHeight = max(trackHeight-barSize, 0)
+			}
 		}
 		if showHorizontal {
 			binding.parts = appendHTMLScrollbarParts(binding.parts,
-				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarTrack, ScrollbarHorizontal, ScrollbarTrack, 0, max(clipHeight-barSize, 0), trackWidth, barSize, style.TrackColor, barStack, visible),
-				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarThumb, ScrollbarHorizontal, ScrollbarThumb, 0, max(clipHeight-barSize, 0), trackWidth, barSize, style.ThumbColor, barStack+1, visible),
+				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarTrack, ScrollbarHorizontal, ScrollbarTrack, 0, barY, trackWidth, barSize, style.TrackColor, barStack, visible),
+				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarThumb, ScrollbarHorizontal, ScrollbarThumb, 0, barY, trackWidth, barSize, style.ThumbColor, barStack+1, visible),
 			)
 		}
 		if showVertical {
 			binding.parts = appendHTMLScrollbarParts(binding.parts,
-				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarTrack, ScrollbarVertical, ScrollbarTrack, max(clipWidth-barSize, 0), 0, trackHeight, barSize, style.TrackColor, barStack, visible),
-				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarThumb, ScrollbarVertical, ScrollbarThumb, max(clipWidth-barSize, 0), 0, trackHeight, barSize, style.ThumbColor, barStack+1, visible),
+				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarTrack, ScrollbarVertical, ScrollbarTrack, barX, 0, trackHeight, barSize, style.TrackColor, barStack, visible),
+				emitHTMLScrollbarPart(world, owner, box.Node, entity, htmlRoleScrollbarThumb, ScrollbarVertical, ScrollbarThumb, barX, 0, trackHeight, barSize, style.ThumbColor, barStack+1, visible),
 			)
 		}
 	}
@@ -3417,22 +3480,10 @@ type htmlScrollbarColors struct {
 }
 
 func htmlOverflowScrollbarSize(computed *style.ComputedStyle) float32 {
-	if computed != nil {
-		switch computed.ScrollbarWidth.Kind {
-		case style.ValueLengthPx:
-			if computed.ScrollbarWidth.LengthPx > 0 {
-				return float32(computed.ScrollbarWidth.LengthPx)
-			}
-		case style.ValueKeyword:
-			switch computed.ScrollbarWidth.Keyword {
-			case "thin":
-				return 10
-			case "none":
-				return 0
-			}
-		}
+	if computed == nil {
+		return 15
 	}
-	return 15
+	return float32(layout.ScrollbarSize(computed))
 }
 
 func htmlOverflowClipRadius(computed *style.ComputedStyle, width, height float64) float32 {
@@ -3517,6 +3568,15 @@ func emitHTMLScrollbarPart(world *ecs.World, owner ecs.Entity, node *dom.Node, a
 	// textarea and start text selection while the scroll position changes.
 	(&bundle).putHTML(scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
 	(&bundle).putHTML(ScrollbarPart{Area: area, Axis: axis, Kind: kind})
+	if scroll := world.GetRef[scene.UIScroll](area); scroll != nil && !scroll.ScrollbarOverlay {
+		(&bundle).putHTML(scene.ClipExempt2D{ParentOnly: true})
+		frame, _ := world.Get[scene.Size2D](area)
+		(&bundle).putHTML(scene.ClipRect2D{X: -x, Y: -y, Width: frame.Width, Height: frame.Height})
+		if rounded, ok := world.Get[scene.RoundedClip2D](area); ok {
+			rounded.X, rounded.Y, rounded.Width, rounded.Height = -x, -y, frame.Width, frame.Height
+			(&bundle).putHTML(rounded)
+		}
+	}
 	(&bundle).putHTML(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
 	return entity
@@ -3556,6 +3616,16 @@ func SyncScrollbars(world *ecs.World) {
 				if nextSprite != spriteAccess.Get() {
 					*spriteAccess.Mut() = nextSprite
 				}
+				if world.Has[scene.ClipExempt2D](entity) {
+					frame, _ := world.Get[scene.Size2D](part.Area)
+					x, y := -transform.Translation.X.Value, -transform.Translation.Y.Value
+					world.SetIfChanged(entity, scene.ClipRect2D{X: x, Y: y, Width: frame.Width, Height: frame.Height})
+					if rounded, ok := world.Get[scene.RoundedClip2D](entity); ok {
+						rounded.X, rounded.Y = x, y
+						rounded.Width, rounded.Height = frame.Width, frame.Height
+						world.SetIfChanged(entity, rounded)
+					}
+				}
 			}()
 			scroll, ok := world.Get[scene.UIScroll](part.Area)
 			if !ok {
@@ -3585,12 +3655,6 @@ func SyncScrollbars(world *ecs.World) {
 			}
 			if part.Kind == ScrollbarTrack {
 				trackWidth, trackHeight := track.X(), track.Y()
-				if !scroll.ScrollbarOverlay && axis == int(ScrollbarHorizontal) && scroll.Vertical {
-					trackWidth += bar
-				}
-				if !scroll.ScrollbarOverlay && axis == int(ScrollbarVertical) && scroll.Horizontal {
-					trackHeight += bar
-				}
 				if axis == 0 {
 					transform.Translation.X.Value, transform.Translation.Y.Value = 0, barY
 					size.Width, size.Height = trackWidth, bar
@@ -3827,7 +3891,29 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		if width <= 0 || height <= 0 {
 			continue
 		}
-		texture := htmlBoxShadowTextureFor(state, box.Node, box.Style, index, float32(width), float32(height), float32(rect.Width), float32(rect.Height), float32(padding))
+		sigma := max(style.ResolveLength(shadow.BlurRadius, min(rect.Width, rect.Height)), 0) * .5
+		gpu := htmlGPUBlurAvailable(world, owner, &state.Textures, box, sigma)
+		var texture *graphics.Texture
+		if gpu {
+			var version uint64
+			texture, version = htmlBoxShadowTextureForMode(state, box.Node, box.Style, index, float32(width), float32(height), float32(rect.Width), float32(rect.Height), float32(padding), true)
+			if texture != nil {
+				radii := prepareHTMLRasterCorners(box.Style, rect.Width, rect.Height)
+				offsetX := style.ResolveLength(shadow.OffsetX, rect.Width)
+				offsetY := style.ResolveLength(shadow.OffsetY, rect.Height)
+				parameters := [4][4]float32{
+					{0, 0, float32(sigma), 2},
+					{float32(padding - offsetX), float32(padding - offsetY), float32(rect.Width), float32(rect.Height)},
+					{float32(radii[0].x), float32(radii[1].x), float32(radii[2].x), float32(radii[3].x)},
+					{float32(radii[0].y), float32(radii[1].y), float32(radii[2].y), float32(radii[3].y)},
+				}
+				texture = state.Textures.blurTexture(graphics.CanvasFor(world), htmlTextureKey{node: box.Node, variant: "shadow-mask-" + strconv.Itoa(index)}, texture, version, parameters)
+			}
+			gpu = texture != nil
+		}
+		if !gpu {
+			texture = htmlBoxShadowTextureFor(state, box.Node, box.Style, index, float32(width), float32(height), float32(rect.Width), float32(rect.Height), float32(padding))
+		}
 		if texture == nil {
 			continue
 		}
@@ -3838,6 +3924,14 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
 			sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 			state.Textures.bind(entity, texture)
+		}
+		if gpu {
+			_ = world.Insert(entity, scene.Shader[graphics.Material2DShader]{
+				Program: state.Textures.blurShader,
+				Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world)),
+			})
+		} else {
+			world.Remove[scene.Shader[graphics.Material2DShader]](entity)
 		}
 		markHTMLChildNode(world, entity, box.Node)
 		state.Children = append(state.Children, entity)
@@ -3862,7 +3956,7 @@ func htmlOverflowBackgroundCovered(box *layout.Box) bool {
 		if child == nil || !htmlStyleVisible(child.Style) {
 			continue
 		}
-		if child.Style.Opacity.Kind == style.ValueNumber && child.Style.Opacity.Number < 1 || child.Style.AnimatedOpacity || child.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 || len(child.Style.Animations) != 0 || child.Style.TransformTransition.Enabled {
+		if child.Style.Position == style.Keyword("sticky") || child.Style.Opacity.Kind == style.ValueNumber && child.Style.Opacity.Number < 1 || child.Style.AnimatedOpacity || child.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 || len(child.Style.Animations()) != 0 || child.Style.TransitionFor(0).Enabled {
 			continue
 		}
 		background := child.Style.BackgroundColor
@@ -3914,7 +4008,7 @@ func htmlCompositePaintBounds(state *htmlRenderState, box *layout.Box, face *fon
 				return layout.Rect{}, false
 			}
 		}
-		if current != box && (len(current.Style.Animations) != 0 || current.Style.AnimatedOpacity || current.Style.TransformTransition.Duration+current.Style.TransformTransition.Delay > 0 || current.Style.TransformScaleX != 1 || current.Style.TransformScaleY != 1 || current.Style.TransformRotation != 0 || current.Style.TransformTranslateX != style.LengthPx(0) || current.Style.TransformTranslateY != style.LengthPx(0) || current.Style.ZIndex != style.Keyword("auto")) {
+		if current != box && (current.Style.Position == style.Keyword("sticky") || len(current.Style.Animations()) != 0 || current.Style.AnimatedOpacity || current.Style.TransitionFor(0).Duration+current.Style.TransitionFor(0).Delay > 0 || current.Style.TransformScaleX != 1 || current.Style.TransformScaleY != 1 || current.Style.TransformRotation != 0 || current.Style.TransformTranslateX != style.LengthPx(0) || current.Style.TransformTranslateY != style.LengthPx(0) || current.Style.ZIndex != style.Keyword("auto")) {
 			return layout.Rect{}, false
 		}
 		bounds := htmlOwnVisiblePaintBounds(current)
@@ -3938,11 +4032,25 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	if world == nil || owner == 0 || box == nil {
 		return 0
 	}
-	texture := htmlOpacityTexture(state, box)
+	sigma, gpu := htmlGPUBlurSigma(world, owner, &state.Textures, box)
+	texture := htmlOpacityTextureMode(state, box, gpu)
 	if texture == nil {
 		return 0
 	}
-	bounds := state.Textures.rasters[box.Node].rect
+	raster := state.Textures.rasters[box.Node]
+	if gpu {
+		blurred := state.Textures.blurTexture(graphics.CanvasFor(world), htmlTextureKey{node: box.Node}, texture, raster.version, [4][4]float32{{0, 0, sigma, 1}})
+		if blurred != nil {
+			texture = blurred
+		} else {
+			texture = htmlOpacityTextureMode(state, box, false)
+			gpu = false
+		}
+	}
+	if texture == nil {
+		return 0
+	}
+	bounds := raster.rect
 	if bounds.Width <= 0 || bounds.Height <= 0 {
 		return 0
 	}
@@ -3950,6 +4058,9 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	sprite.Texture = texture
 	sprite.Width, sprite.Height = float32(bounds.Width), float32(bounds.Height)
 	sprite.Tint, sprite.Alpha = graphics.White, 1
+	if !box.Style.AnimatedOpacity && box.Style.Opacity.Kind == style.ValueNumber {
+		sprite.Alpha = float32(box.Style.Opacity.Number)
+	}
 	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleSurface, "", 0, 10)
 	(&bundle).putHTML(scene.UITransformFromXY(float32(bounds.X), float32(bounds.Y)))
 	(&bundle).putHTML(scene.UIGlobalTransform{})
@@ -3958,6 +4069,12 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
 	(&bundle).putHTML(scene.Parent{Entity: owner})
 	(&bundle).putHTML(sprite)
+	if gpu {
+		(&bundle).putHTML(scene.Shader[graphics.Material2DShader]{
+			Program: state.Textures.blurShader,
+			Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world)),
+		})
+	}
 	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
 	(&bundle).putHTML(htmlOpacitySurface{})
 	(&bundle).putHTML(htmlChild{Owner: owner, Node: box.Node})
@@ -3965,21 +4082,27 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 }
 
 func htmlOpacityTexture(state *htmlRenderState, root *layout.Box) *graphics.Texture {
+	return htmlOpacityTextureMode(state, root, false)
+}
+
+func htmlOpacityTextureMode(state *htmlRenderState, root *layout.Box, gpuBlur bool) *graphics.Texture {
 	if state == nil || root == nil {
 		return nil
 	}
-	raster := htmlOpacityRasterFor(&state.Textures, root)
+	raster := updateHTMLOpacityRaster(&state.Textures, root, true, false, gpuBlur)
 	key := htmlTextureKey{node: root.Node}
 	entry := state.Textures.entries[key]
 	w, h := raster.image.Rect.Dx(), raster.image.Rect.Dy()
-	if entry != nil && entry.texture.Width == w && entry.texture.Height == h {
+	// Flattening a former root releases its raster and resets uploaded. Its
+	// old texture cannot share a newly allocated image, even at the same size.
+	if entry != nil && raster.uploaded != 0 && entry.texture.Width == w && entry.texture.Height == h {
 		if raster.uploaded != raster.version {
 			entry.texture.UpdateRegions([]graphics.TextureRegionUpdate{{Width: w, Height: h, Pixels: raster.image.Pix}})
 			raster.uploaded = raster.version
 		}
 		return entry.texture
 	}
-	texture := graphics.CreateTextureByImageNoMipmap(&raster.image)
+	texture := graphics.CreateTextureBySharedImage(&raster.image, false, graphics.ResourceUsageDefault)
 	if texture == nil {
 		return nil
 	}
@@ -4103,6 +4226,10 @@ func spawnHTMLBorderSurfaces(world *ecs.World, owner ecs.Entity, state *htmlRend
 	if _, _, uniform := htmlUniformBorder(box.Style, rect.Width); uniform {
 		return
 	}
+	if box.Style.AnimatedPaint&style.AnimatedBorders == 0 {
+		spawnHTMLBorderList(world, owner, box, rect, stackIndex+1, visible)
+		return
+	}
 	spawnHTMLBorderSurface(
 		world, owner, state, rect.X, rect.Y, rect.Width, box.Border.Top, box.Border.Top,
 		box.Style.BorderStyle.Top, box.Style.BorderColor.Top, stackIndex+1, box.Node, htmlRoleBorderTop, visible,
@@ -4119,6 +4246,61 @@ func spawnHTMLBorderSurfaces(world *ecs.World, owner ecs.Entity, state *htmlRend
 		world, owner, state, rect.X, rect.Y, box.Border.Left, rect.Height, box.Border.Left,
 		box.Style.BorderStyle.Left, box.Style.BorderColor.Left, stackIndex+1, box.Node, htmlRoleBorderLeft, visible,
 	)
+}
+
+func spawnHTMLBorderList(world *ecs.World, owner ecs.Entity, box *layout.Box, rect layout.Rect, stackIndex int, visible bool) {
+	var fragments [4]scene.SpriteLayer2D
+	count := 0
+	appendBorder := func(x, y, width, height float64, borderStyle, borderColor style.Value) {
+		if width <= 0 || height <= 0 || !isHTMLSolidBorder(borderStyle) {
+			return
+		}
+		color := htmlColor(borderColor)
+		if color.A == 0 {
+			return
+		}
+		sprite := scene.NewSprite2D()
+		sprite.Shape = scene.RoundedRectShape2D(color, 0)
+		sprite.Width, sprite.Height = float32(width), float32(height)
+		fragments[count] = scene.SpriteLayer2D{
+			Sprite: sprite, Transform: scene.SpriteLayerTransform2D{X: float32(x - rect.X), Y: float32(y - rect.Y)},
+			Anchor: scene.AnchorTopLeft, Visible: true,
+		}
+		count++
+	}
+	appendBorder(rect.X, rect.Y, rect.Width, box.Border.Top, box.Style.BorderStyle.Top, box.Style.BorderColor.Top)
+	appendBorder(rect.X+rect.Width-box.Border.Right, rect.Y, box.Border.Right, rect.Height, box.Style.BorderStyle.Right, box.Style.BorderColor.Right)
+	appendBorder(rect.X, rect.Y+rect.Height-box.Border.Bottom, rect.Width, box.Border.Bottom, box.Style.BorderStyle.Bottom, box.Style.BorderColor.Bottom)
+	appendBorder(rect.X, rect.Y, box.Border.Left, rect.Height, box.Style.BorderStyle.Left, box.Style.BorderColor.Left)
+	if count == 0 {
+		return
+	}
+	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleBorderList, "", 0, 10)
+	layers := scene.SpriteLayers2D{}
+	if bundle.entity != 0 {
+		if previous := world.GetRef[scene.SpriteLayers2D](bundle.entity); previous != nil {
+			layers = *previous
+			layers.Layers = layers.Layers[:0]
+		}
+	}
+	layers.Layers = append(layers.Layers, fragments[:count]...)
+	layers.InvalidateMatrices()
+	sprite := scene.NewSprite2D()
+	sprite.Alpha = float32(box.Style.Opacity.Number)
+	(&bundle).putHTML(scene.UITransformFromXY(float32(rect.X), float32(rect.Y)))
+	(&bundle).putHTML(scene.UIGlobalTransform{})
+	(&bundle).putHTML(scene.Visibility{Visible: visible})
+	(&bundle).putHTML(scene.AnchorTopLeft)
+	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
+	(&bundle).putHTML(scene.Parent{Entity: owner})
+	(&bundle).putHTML(sprite)
+	(&bundle).putHTML(layers)
+	(&bundle).putHTML(scene.Size2D{Width: float32(rect.Width), Height: float32(rect.Height)})
+	(&bundle).putHTML(htmlChild{Owner: owner, Node: box.Node})
+	entity := bundle.finish()
+	markHTMLChildNode(world, entity, box.Node)
+	state := world.GetMut[htmlRenderState](owner)
+	state.Children = append(state.Children, entity)
 }
 
 func spawnHTMLBorderSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderState, x, y, width, height, borderWidth float64, borderStyle, borderColor style.Value, stackIndex int, node *dom.Node, role htmlRenderRole, visible bool) {
@@ -4200,7 +4382,7 @@ func htmlGradientTexture(source string, width, height float32) *graphics.Texture
 			raster.SetRGBA(x, y, imageRGBAInterpolate(left.Color, right.Color, local))
 		}
 	}
-	return graphics.CreateTextureByImageNoMipmap(raster)
+	return graphics.CreateTextureBySharedImage(raster, false, graphics.ResourceUsageDefault)
 }
 
 func htmlGradientTextureFor(state *htmlRenderState, source string, width, height float32) *graphics.Texture {
@@ -4707,7 +4889,7 @@ func ControlByID(world *ecs.World, owner ecs.Entity, id string) (ecs.Entity, boo
 	}
 	state := world.GetRef[htmlRenderState](owner)
 	source := world.GetRef[Surface](owner)
-	if state == nil || source == nil || state.Root == nil || state.Source != source.Value {
+	if state == nil || source == nil || state.Root == nil || state.Source != source.Value || state.SourceDocument != source.Document {
 		return 0, false
 	}
 	if state.IndexDirty || state.NodeByID == nil {
@@ -4981,6 +5163,14 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 		return 0
 	}
 	text := scene.NewText2D(fragment.Text)
+	if control == 0 && len(fragment.Glyphs) != 0 {
+		if state := world.GetRef[htmlRenderState](owner); state != nil {
+			text.Prelayout = scene.TextPrelayout2D{
+				Glyphs: fragment.Glyphs, OriginX: fragment.Rect.X, OriginY: fragment.Rect.Y,
+				Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), Revision: state.RenderGeneration,
+			}
+		}
+	}
 	if state, ok := world.Get[htmlRenderState](owner); ok {
 		text.LCD, text.Alpha = htmlTextPaint(state.Styles, fragment.Node)
 	}

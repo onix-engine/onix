@@ -10,6 +10,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -44,7 +45,7 @@ func TestCharacterWrapPreservesMetricsAndInlineObjects(t *testing.T) {
 				}
 				start = end + 1
 			}
-			if got := text.wrapPreservedRanges(value, nil, width, false); !slices.Equal(got, expected) {
+			if got := text.wrapPreservedRanges(piecetree.FromString(value), nil, width, false); !slices.Equal(got, expected) {
 				t.Fatalf("%q width=%v: got %v want %v", value, width, got, expected)
 			}
 		}
@@ -123,7 +124,7 @@ func TestTextMeasuredLayoutBuildsAndInvalidatesGlyphWindow(t *testing.T) {
 	text.MaxWidth = 0
 	text.rasterScale = 2
 	text.glyphBand = textGlyphBand{}
-	if !text.ensureLayout() || text.layoutValue != text.Value || text.lineCount != 1 || text.lastRasterScale != 2 {
+	if !text.ensureLayout() || text.layoutValue != text.Text() || text.lineCount != 1 || text.lastRasterScale != 2 {
 		t.Fatal("text/scale change reused obsolete line geometry")
 	}
 }

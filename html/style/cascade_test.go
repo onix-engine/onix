@@ -669,8 +669,8 @@ func TestComputeTransformRotationAndTransition(t *testing.T) {
 	if computed.TransformRotation != 90 {
 		t.Fatalf("transform rotation = %v, want 90 degrees", computed.TransformRotation)
 	}
-	if computed.TransformTransition.Duration != 0.16 || computed.TransformTransition.Easing != TransformEase {
-		t.Fatalf("transform transition = %#v, want 160ms ease", computed.TransformTransition)
+	if computed.TransitionFor(0).Duration != 0.16 || computed.TransitionFor(0).Easing != TransformEase {
+		t.Fatalf("transform transition = %#v, want 160ms ease", computed.TransitionFor(0))
 	}
 	previous := *computed
 	current := *computed

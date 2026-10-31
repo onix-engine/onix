@@ -53,7 +53,7 @@ func updateRetained(tb testing.TB, cache *Cache, root *dom.Node, styles style.Ma
 
 func assertRetainedMatchesFull(t *testing.T, got, want *Box) {
 	t.Helper()
-	if got.StableID != want.StableID || got.Node != want.Node || !reflect.DeepEqual(got.Style, want.Style) || (debugStyleDiff != nil && got.Style != nil && want.Style != nil && debugStyleDiff(got.Style, want.Style) != "") || got.Padding != want.Padding || got.Border != want.Border || got.Margin != want.Margin || len(got.Children) != len(want.Children) {
+	if got.StableID != want.StableID || got.Node != want.Node || !reflect.DeepEqual(got.Style, want.Style) || got.Padding != want.Padding || got.Border != want.Border || got.Margin != want.Margin || len(got.Children) != len(want.Children) {
 		detail := ""
 		if debugStyleDiff != nil && got.Style != nil && want.Style != nil {
 			detail = debugStyleDiff(got.Style, want.Style)

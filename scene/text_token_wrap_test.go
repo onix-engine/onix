@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/diiyw/onix/text/piecetree"
 )
 
 func TestTokenWrapPreservesWordsWhitespaceAndNewlines(t *testing.T) {
@@ -64,7 +65,7 @@ func TestTokenWrapMetricsCaretAndCache(t *testing.T) {
 		}
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
-		text.wrapPreservedRanges(text.Value, nil, text.WrapWidth, false)
+		text.wrapPreservedRanges(piecetree.FromString(text.Value), nil, text.WrapWidth, false)
 	}); allocs != 0 {
 		t.Fatalf("token wrapping allocated %g times after warmup", allocs)
 	}

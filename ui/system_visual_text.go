@@ -1,12 +1,14 @@
 package ui
 
 import (
+	"iter"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/diiyw/onix/ui/html"
 )
 
@@ -232,14 +234,14 @@ func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, t
 	caretValue := value
 	caretIndex := caret
 	if fieldExists && field.Password {
-		caretValue = maskedTextFieldPrefix(world, owner, field, caret)
-		caretIndex = runeCount(caretValue)
+		caretValue = piecetree.FromString(maskedTextFieldPrefix(world, owner, field, caret))
+		caretIndex = caretValue.Runes()
 	} else if composition != "" {
 		if !fieldExists {
-			field = TextField{Value: value, Composition: composition, Caret: caret, Focused: focused}
+			field = TextField{Value: value.String(), Composition: composition, Caret: caret, Focused: focused}
 		}
-		caretValue = textFieldCompositionPrefix(world, owner, field, caret)
-		caretIndex = runeCount(caretValue)
+		caretValue = textFieldVisualSnapshot(world, owner, field)
+		caretIndex = caret + utf8.RuneCountInString(composition)
 	}
 	caretX, caretY, caretWidth, caretHeight, ok := scene.TextCaretRect2D(valueText, caretValue, caretIndex)
 	if !ok {
@@ -258,7 +260,7 @@ func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, t
 
 type selectionRect struct{ X, Y, W, H float32 }
 
-func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin Skin, scratch *textSelectionScratch) {
 	value, _, _, _ := textFieldState(world, owner)
 	start, end, _ := textFieldSelection(world, owner)
 	valueText := world.GetRef[scene.Text2D](valueEntity)
@@ -268,14 +270,23 @@ func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entit
 		return
 	}
 	if field, ok := world.Get[TextField](owner); ok && field.Password {
-		value = maskedTextFieldValue(world, owner, field)
+		value = piecetree.FromString(maskedTextFieldValue(world, owner, field))
 	}
-	r, ok := textSelectionRect(valueText, &valueTransform, value, start, end, index, textFieldViewportHeight(world, owner))
-	if !ok {
+	span, exists := scratch.owners[owner]
+	if !exists {
+		span.start = len(scratch.rows)
+		for rect := range textSelectionRects(valueText, valueTransform, value, start, end, textFieldViewportHeight(world, owner)) {
+			scratch.rows = append(scratch.rows, rect)
+		}
+		span.end = len(scratch.rows)
+		scratch.owners[owner] = span
+	}
+	if index < 0 || index >= span.end-span.start {
 		size.Width, size.Height = 0, 0
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
 		return
 	}
+	r := scratch.rows[span.start+index]
 	transform.Translation.X.Value, transform.Translation.Y.Value = r.X, r.Y
 	size.Width, size.Height = r.W, r.H
 	applySurface(world, entity, size.Width, size.Height, textFieldStyleFor(world, owner, skin).Selection)
@@ -284,56 +295,27 @@ func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entit
 	}
 }
 
-// textSelectionRect returns the rectangle of the slot-th painted row of a
-// selection. Rows come from the text layout, so soft-wrapped lines and hard
-// newlines share the caret's geometry, and rows outside the scroll window are
-// skipped without consuming a selection surface.
-func textSelectionRect(text *scene.Text2D, transform *scene.UITransform, value string, start, end, slot int, viewportHeight float32) (selectionRect, bool) {
-	if start == end || slot < 0 {
-		return selectionRect{}, false
+type textSelectionSpan struct{ start, end int }
+
+type textSelectionScratch struct {
+	rows   []selectionRect
+	owners map[ecs.Entity]textSelectionSpan
+}
+
+func textSelectionRects[V piecetree.Value](text *scene.Text2D, transform scene.UITransform, value V, start, end int, viewportHeight float32) iter.Seq[selectionRect] {
+	x, y := transform.Translation.X.Value, transform.Translation.Y.Value
+	return func(yield func(selectionRect) bool) {
+		top, bottom := float32(0), float32(0)
+		if viewportHeight > 0 {
+			top = -y
+			bottom = top + viewportHeight
+		}
+		for rect := range scene.TextSelectionRects2D(text, value, start, end, top, bottom) {
+			if !yield(selectionRect{X: x + rect.X, Y: y + rect.Y, W: rect.Width, H: rect.Height}) {
+				return
+			}
+		}
 	}
-	start, end = orderedSelection(start, end)
-	runeCount := utf8.RuneCountInString(value)
-	start, end = max(0, min(start, runeCount)), max(0, min(end, runeCount))
-	if start == end {
-		return selectionRect{}, false
-	}
-	top := -transform.Translation.Y.Value
-	cull, bottom := viewportHeight > 0, top+viewportHeight
-	lineCount := scene.TextLineCount2D(text)
-	matched, byteCursor, runeCursor := 0, 0, 0
-	for index := range lineCount {
-		lineStartByte, lineEndByte, rect, ok := scene.TextLineRange2D(text, index)
-		if !ok || lineStartByte < byteCursor || lineEndByte > len(value) {
-			return selectionRect{}, false
-		}
-		runeCursor += utf8.RuneCountInString(value[byteCursor:lineStartByte])
-		byteCursor = lineStartByte
-		lineStart, lineEnd := runeCursor, runeCursor+utf8.RuneCountInString(value[lineStartByte:lineEndByte])
-		if lineStart >= end {
-			return selectionRect{}, false
-		}
-		selectionStart, selectionEnd := max(start, lineStart), min(end, lineEnd)
-		if selectionStart >= selectionEnd || cull && (rect.Y+rect.Height <= top || rect.Y >= bottom) {
-			continue
-		}
-		if matched != slot {
-			matched++
-			continue
-		}
-		selectionStartByte, selectionEndByte := lineStartByte, lineEndByte
-		if selectionStart > lineStart {
-			selectionStartByte = runeByteIndex(value, selectionStart)
-		}
-		if selectionEnd < lineEnd {
-			selectionEndByte = runeByteIndex(value, selectionEnd)
-		}
-		prefixWidth, _, _ := scene.MeasureTextValue2D(text, value[lineStartByte:selectionStartByte])
-		selectionWidth, _, _ := scene.MeasureTextValue2D(text, value[selectionStartByte:selectionEndByte])
-		return selectionRect{X: transform.Translation.X.Value + rect.X + prefixWidth, Y: transform.Translation.Y.Value + rect.Y,
-			W: max(selectionWidth, 1), H: rect.Height}, true
-	}
-	return selectionRect{}, false
 }
 
 // textFieldViewportHeight is the scroll window a selection can paint inside.
@@ -355,11 +337,11 @@ func textFieldSelection(world *ecs.World, owner ecs.Entity) (int, int, bool) {
 	return 0, 0, false
 }
 
-func textFieldState(world *ecs.World, owner ecs.Entity) (value, composition string, caret int, focused bool) {
+func textFieldState(world *ecs.World, owner ecs.Entity) (value piecetree.Snapshot, composition string, caret int, focused bool) {
 	if field, ok := world.Get[TextField](owner); ok {
-		return field.Value, field.Composition, field.Caret, field.Focused
+		return field.Text(), field.Composition, field.Caret, field.Focused
 	}
-	return "", "", 0, false
+	return piecetree.Snapshot{}, "", 0, false
 }
 
 type textFieldMaskCache struct {
@@ -370,6 +352,8 @@ type textFieldMaskCache struct {
 
 type textFieldDisplayCache struct {
 	value, placeholder, composition  string
+	source, visual                   piecetree.Snapshot
+	anchor                           int
 	caret                            int
 	focused                          bool
 	display, prefix                  string
@@ -563,4 +547,42 @@ func numberInputStepIcon(world *ecs.World, step *NumberInputStep) IconStyle {
 		return input.UpIcon
 	}
 	return input.DownIcon
+}
+
+// The display version is independent of the committed document while IME
+// composition is active. Unchanged pieces remain shared with the document.
+func textFieldVisualSnapshot(world *ecs.World, owner ecs.Entity, field TextField) piecetree.Snapshot {
+	if field.Buffer == nil {
+		return piecetree.FromString(textFieldDisplay(world, owner, field))
+	}
+	source := field.Source
+	if field.Password {
+		return piecetree.FromString(textFieldDisplay(world, owner, field))
+	}
+	if field.Composition == "" {
+		if source.Len() == 0 && !field.Focused {
+			return piecetree.FromString(field.Placeholder)
+		}
+		return source
+	}
+	if cache := world.GetMut[textFieldDisplayCache](owner); cache != nil {
+		if cache.source == source && cache.composition == field.Composition && cache.caret == field.Caret && cache.anchor == field.Anchor && cache.displayValid {
+			return cache.visual
+		}
+		start, end := orderedSelection(field.Caret, field.Anchor)
+		visual := source.Replace(source.ByteOffset(start), source.ByteOffset(end), field.Composition)
+		*cache = textFieldDisplayCache{source: source, visual: visual, composition: field.Composition, caret: field.Caret, anchor: field.Anchor, displayValid: true}
+		return visual
+	}
+	start, end := orderedSelection(field.Caret, field.Anchor)
+	return source.Replace(source.ByteOffset(start), source.ByteOffset(end), field.Composition)
+}
+func setTextFieldVisual(world *ecs.World, owner ecs.Entity, field TextField, text *scene.Text2D) {
+	if field.Buffer != nil {
+		text.Value = ""
+		text.Source = textFieldVisualSnapshot(world, owner, field)
+	} else {
+		text.Source = piecetree.Snapshot{}
+		text.Value = textFieldDisplay(world, owner, field)
+	}
 }

@@ -105,8 +105,10 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 	}
 
 	img := image.NewAlpha(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	scaledContours := scaleOutlineAt(outline.Contours, scale, bounds, shiftX, shiftY)
+	scratch := acquireGlyphRasterScratch()
+	scaledContours := scratch.scaleOutline(outline.Contours, scale, bounds, shiftX, shiftY, 1)
 	paintCoverage(img, scaledContours)
+	releaseGlyphRasterScratch(scratch)
 
 	bitmap := &GlyphBitmap{Image: img, Bounds: bounds, Advance: float64(metrics.AdvanceWidth) * scale, Scale: scale}
 	f.cacheMu.Lock()
@@ -114,24 +116,6 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 	bitmap = f.cacheBitmap(key, bitmap)
 	f.cacheMu.Unlock()
 	return bitmap, nil
-}
-
-func scaleOutline(contours []OutlineContour, scale float64, bounds image.Rectangle) []OutlineContour {
-	return scaleOutlineAt(contours, scale, bounds, 0, 0)
-}
-func scaleOutlineAt(contours []OutlineContour, scale float64, bounds image.Rectangle, shiftX, shiftY float64) []OutlineContour {
-	scaled := make([]OutlineContour, 0, len(contours))
-	for _, contour := range contours {
-		mapped := make(OutlineContour, len(contour))
-		for i, point := range contour {
-			mapped[i] = OutlinePoint{
-				X: point.X*scale + shiftX - float64(bounds.Min.X),
-				Y: float64(bounds.Max.Y) - point.Y*scale + shiftY,
-			}
-		}
-		scaled = append(scaled, mapped)
-	}
-	return scaled
 }
 
 func paintCoverage(img *image.Alpha, contours []OutlineContour) {

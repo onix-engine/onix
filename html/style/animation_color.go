@@ -193,12 +193,8 @@ func InterpolateAnimatedProperty(dst *AnimationValue, a, b AnimationValue, prope
 }
 
 func (computed *ComputedStyle) TransitionFor(index int) TransformTransition {
-	switch index {
-	case 0:
-		return computed.TransformTransition
-	case 1:
-		return computed.OpacityTransition
-	default:
-		return computed.ColorTransitions[index-2]
+	if computed.motion == nil {
+		return TransformTransition{}
 	}
+	return computed.motion.transitions[index]
 }

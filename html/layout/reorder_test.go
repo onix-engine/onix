@@ -55,13 +55,13 @@ func init() {
 			f, g := x.Field(i), y.Field(i)
 			if f.Kind() == reflect.Struct {
 				for j := 0; j < f.NumField(); j++ {
-					if !reflect.DeepEqual(f.Field(j).Interface(), g.Field(j).Interface()) {
+					if f.Field(j).CanInterface() && !reflect.DeepEqual(f.Field(j).Interface(), g.Field(j).Interface()) {
 						out += " " + f.Type().Field(j).Name
 					}
 				}
 				continue
 			}
-			if !reflect.DeepEqual(f.Interface(), g.Interface()) {
+			if f.CanInterface() && !reflect.DeepEqual(f.Interface(), g.Interface()) {
 				out += " " + x.Type().Field(i).Name
 			}
 		}

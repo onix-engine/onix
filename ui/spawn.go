@@ -250,24 +250,25 @@ type ProgressOptions struct {
 }
 
 type ScrollAreaOptions struct {
-	X, Y                float32
-	Width, Height       float32
-	ContentWidth        float32
-	ContentHeight       float32
-	Controlled          bool
-	DisableDrag         bool
-	WheelStep           float32
-	ScrollX             float32
-	ScrollY             float32
-	BarSize             float32
-	MinThumbSize        float32
-	ThumbBarSize        float32
-	HoverBarSize        float32
-	ScrollBarStackIndex int
-	Radius              CornerRadius
-	PassThrough         bool
-	Theme               Theme
-	Style               *ScrollStyle
+	ReserveScrollbarSpace bool
+	X, Y                  float32
+	Width, Height         float32
+	ContentWidth          float32
+	ContentHeight         float32
+	Controlled            bool
+	DisableDrag           bool
+	WheelStep             float32
+	ScrollX               float32
+	ScrollY               float32
+	BarSize               float32
+	MinThumbSize          float32
+	ThumbBarSize          float32
+	HoverBarSize          float32
+	ScrollBarStackIndex   int
+	Radius                CornerRadius
+	PassThrough           bool
+	Theme                 Theme
+	Style                 *ScrollStyle
 }
 
 func SpawnPanel(world *ecs.World, opts PanelOptions) ecs.Entity {
@@ -940,19 +941,20 @@ func SpawnScrollArea(world *ecs.World, opts ScrollAreaOptions) ecs.Entity {
 	theme := themeForWorld(world, opts.Theme)
 	entity := spawnInteractiveAnchor(world, opts.X, opts.Y, opts.Width, opts.Height, theme.StackIndex, false, opts.PassThrough)
 	area := ScrollArea{
-		Width:               opts.Width,
-		Height:              opts.Height,
-		ContentWidth:        opts.ContentWidth,
-		ContentHeight:       opts.ContentHeight,
-		Controlled:          opts.Controlled,
-		DisableDrag:         opts.DisableDrag,
-		WheelStep:           opts.WheelStep,
-		BarSize:             opts.BarSize,
-		MinThumbSize:        opts.MinThumbSize,
-		ThumbBarSize:        opts.ThumbBarSize,
-		HoverBarSize:        opts.HoverBarSize,
-		StackIndex:          theme.StackIndex,
-		ScrollBarStackIndex: opts.ScrollBarStackIndex,
+		ReserveScrollbarSpace: opts.ReserveScrollbarSpace,
+		Width:                 opts.Width,
+		Height:                opts.Height,
+		ContentWidth:          opts.ContentWidth,
+		ContentHeight:         opts.ContentHeight,
+		Controlled:            opts.Controlled,
+		DisableDrag:           opts.DisableDrag,
+		WheelStep:             opts.WheelStep,
+		BarSize:               opts.BarSize,
+		MinThumbSize:          opts.MinThumbSize,
+		ThumbBarSize:          opts.ThumbBarSize,
+		HoverBarSize:          opts.HoverBarSize,
+		StackIndex:            theme.StackIndex,
+		ScrollBarStackIndex:   opts.ScrollBarStackIndex,
 	}
 	_ = world.Insert(entity, area)
 	_ = installScrollAreaGeometry(world, entity, &area)
@@ -965,7 +967,7 @@ func SpawnScrollArea(world *ecs.World, opts ScrollAreaOptions) ecs.Entity {
 		spawnSurfacePart[ScrollThumbVerticalPart](world, entity, 0, 0, 0, 0, graphics.ColorRGBA{}, theme.StackIndex+1),
 	} {
 		setCornerRadius(world, child, opts.Radius)
-		_ = world.Insert(child, scene.ClipExempt2D{})
+		_ = world.Insert(child, scene.ClipExempt2D{ParentOnly: true})
 	}
 	return entity
 }

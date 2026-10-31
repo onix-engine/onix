@@ -1,0 +1,82 @@
+CPU benchmarks: linux/amd64; Go 1.27.3; GOMAXPROCS=2; -cpu=1; -benchtime=200ms; -count=3
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/scene
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkReviewSnapshotScan/DecodeRune         	      28	   7355844 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewSnapshotScan/DecodeRune         	      33	   7041579 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewSnapshotScan/DecodeRune         	      34	   9444455 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewSnapshotScan/Chunks             	     217	   1165279 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewSnapshotScan/Chunks             	     178	   1386532 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewSnapshotScan/Chunks             	     194	   1149204 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/256/false                  	       9	  29800008 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/256/false                  	       7	  29443222 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/256/false                  	       7	  29386761 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/256/true                   	       7	  30166118 ns/op	  130688 B/op	     128 allocs/op
+BenchmarkReviewWrap/256/true                   	       8	  27052326 ns/op	  130688 B/op	     128 allocs/op
+BenchmarkReviewWrap/256/true                   	       9	  27092901 ns/op	  130688 B/op	     128 allocs/op
+BenchmarkReviewWrap/1024/false                 	       1	 460377253 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/1024/false                 	       1	 462241681 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/1024/false                 	       1	 454477377 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewWrap/1024/true                  	       1	 487897093 ns/op	 2639744 B/op	     768 allocs/op
+BenchmarkReviewWrap/1024/true                  	       1	 360729194 ns/op	 2639744 B/op	     768 allocs/op
+BenchmarkReviewWrap/1024/true                  	       1	 367972167 ns/op	 2639744 B/op	     768 allocs/op
+BenchmarkTextParagraphWordWrap                 	      36	   6361568 ns/op	     880 B/op	      14 allocs/op
+BenchmarkTextParagraphWordWrap                 	      34	   6794505 ns/op	     880 B/op	      14 allocs/op
+BenchmarkTextParagraphWordWrap                 	      42	   6924196 ns/op	     880 B/op	      14 allocs/op
+PASS
+ok  	github.com/diiyw/onix/scene	9.012s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/ui
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkReviewSelection/100         	    1250	    176463 ns/op	     640 B/op	      40 allocs/op
+BenchmarkReviewSelection/100         	    1440	    173432 ns/op	     640 B/op	      40 allocs/op
+BenchmarkReviewSelection/100         	    1418	    174136 ns/op	     640 B/op	      40 allocs/op
+BenchmarkReviewSelection/10000       	      15	  17352956 ns/op	    2560 B/op	     160 allocs/op
+BenchmarkReviewSelection/10000       	      13	  16424526 ns/op	    2560 B/op	     160 allocs/op
+BenchmarkReviewSelection/10000       	      13	  15891300 ns/op	    2560 B/op	     160 allocs/op
+BenchmarkReviewSelection/edited-long-line         	   26214	      8325 ns/op	   16384 B/op	       2 allocs/op
+BenchmarkReviewSelection/edited-long-line         	   22096	      9854 ns/op	   16384 B/op	       2 allocs/op
+BenchmarkReviewSelection/edited-long-line         	   32193	      7616 ns/op	   16384 B/op	       2 allocs/op
+PASS
+ok  	github.com/diiyw/onix/ui	2.277s
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/physics
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkReviewPhysicsSync/unchanged         	     368	    635704 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unchanged         	     380	    632962 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unchanged         	     339	    787422 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	     278	    857934 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	     279	    771547 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	     357	    643774 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	      55	   4019918 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	      56	   4717957 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	      38	   6034365 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	      57	   5293303 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	      45	   5113845 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	      46	   4673877 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/diiyw/onix/physics	3.117s
+
+Physics extended run: prebuilt binary; taskset -c 4; GOMAXPROCS=1; -cpu=1; -benchtime=750ms; -count=3
+
+goos: linux
+goarch: amd64
+pkg: github.com/diiyw/onix/physics
+cpu: 11th Gen Intel(R) Core(TM) i5-11500 @ 2.70GHz
+BenchmarkReviewPhysicsSync/unchanged         	    1354	    747680 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unchanged         	    1311	    670010 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unchanged         	    1410	    671444 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	    1456	    719014 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	    1376	    626888 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-value        	    1461	    624124 ns/op	      32 B/op	       1 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	     224	   3975072 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	     224	   3984217 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/body-transform    	     223	   3994106 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	     228	   3941499 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	     225	   4070641 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReviewPhysicsSync/unrelated-transform         	     224	   4005303 ns/op	       0 B/op	       0 allocs/op
+PASS

@@ -5,6 +5,7 @@ import "strings"
 type preparedValue struct {
 	property string
 	value    Value
+	motion   *motionInputs
 }
 
 func preparePropertyValue(property, raw string) *preparedValue {
@@ -12,6 +13,13 @@ func preparePropertyValue(property, raw string) *preparedValue {
 		return nil
 	}
 	computed := defaultStyle(nil)
+	if strings.HasPrefix(property, "transition") || strings.HasPrefix(property, "animation") {
+		if err := applyProperty(&computed, property, raw, nil, parseContext{}); err != nil || computed.motion == nil {
+			return nil
+		}
+		inputs := computed.motion.motionInputs
+		return &preparedValue{property: property, motion: &inputs}
+	}
 	field := compiledValueField(&computed, property)
 	if field == nil {
 		return nil

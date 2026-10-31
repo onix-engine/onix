@@ -15,7 +15,7 @@ import (
 
 func TestHTMLAnimationTrackMatchingPreservesDuplicateTimes(t *testing.T) {
 	state := htmlRenderState{}
-	animation := htmlNodeAnimation{htmlNodeMotion: &htmlNodeMotion{}}
+	animation := htmlNodeAnimation{}
 	track := func(name string) style.AnimationTrack {
 		return style.AnimationTrack{Definition: style.CSSAnimation{Name: name}}
 	}

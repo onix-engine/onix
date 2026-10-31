@@ -162,7 +162,10 @@ func TestHTMLCSSColorTransitionReversesAndCancels(t *testing.T) {
 	value, _ = world.Get[scene.Sprite2D](visual)
 	transform, _ := world.Get[scene.UITransform](visual)
 	state, _ = world.Get[htmlRenderState](owner)
-	current := state.Animations[node.node].Current
+	current := style.BaseAnimationValue(state.Styles[node.node])
+	if state.Animations[node.node] != nil {
+		t.Fatal("removed transition retained its animation")
+	}
 	if Animating(world) || current.Colors[style.AnimationBackground].Color() != (style.Color{B: 255, A: 255}) || current.Opacity != .5 || transform.Translation.X.Value != 100 {
 		t.Fatalf("removed transition property did not cancel: current=%+v active=%v", current, Animating(world))
 	}

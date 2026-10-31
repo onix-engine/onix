@@ -41,11 +41,11 @@ func htmlPaintOverscan(size float64) float64 { return max(size, htmlPaintCullMin
 func htmlPaintStyleMoves(value *style.ComputedStyle) bool {
 	return value != nil && (value.TransformRotation != 0 || value.TransformScaleX != 1 || value.TransformScaleY != 1 || value.TransformSkewX != 0 ||
 		value.TransformTranslateX != style.LengthPx(0) || value.TransformTranslateY != style.LengthPx(0) ||
-		value.TransformTranslateCrossX != 0 || value.TransformTranslateCrossY != 0 || value.TransformTransition.Enabled || len(value.Animations) != 0)
+		value.TransformTranslateCrossX != 0 || value.TransformTranslateCrossY != 0 || value.TransitionFor(0).Enabled || len(value.Animations()) != 0)
 }
 
 func htmlPaintWindowForBox(state *htmlRenderState, box *layout.Box, window htmlPaintWindow) htmlPaintWindow {
-	if htmlPaintStyleMoves(box.Style) || len(state.NodeOffsets) != 0 || len(state.NodeScrolls) != 0 {
+	if box.Style.Position == style.Keyword("sticky") || htmlPaintStyleMoves(box.Style) || len(state.NodeOffsets) != 0 || len(state.NodeScrolls) != 0 {
 		window.unbounded = true
 	}
 	return window
@@ -57,7 +57,7 @@ func htmlPaintFragmentVisible(window htmlPaintWindow, rect layout.Rect, value *s
 
 func htmlPaintWindowChanged(state *htmlRenderState, rendered *htmlBoxRendering) bool {
 	clipped := htmlBoxNeedsOverflowClip(state, rendered.Box)
-	if clipped && rendered.CullRect != rendered.Box.PaddingBox() {
+	if clipped && rendered.CullRect != rendered.Box.ScrollportBox() {
 		return true
 	}
 	if !clipped && !rendered.Window.clipX && !rendered.Window.clipY && !rendered.OuterWindow.clipX && !rendered.OuterWindow.clipY {
@@ -82,7 +82,7 @@ func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layou
 		delete(state.PaintCullOffsets, box.Node)
 		return window
 	}
-	rect := box.PaddingBox()
+	rect := box.ScrollportBox()
 	offset := mgl32.Vec2{}
 	if binding, ok := state.OverflowBindings[box.Node]; ok && htmlOverflowBindingIs(world, box.Node, binding.entity) {
 		if scroll, exists := world.Get[scene.UIScroll](binding.entity); exists {
@@ -153,7 +153,7 @@ func htmlPaintCullChangedRoot(world *ecs.World, state *htmlRenderState, node *do
 		return nil
 	}
 	offset, exists := scene.GetUIScrollOffset(world, binding.entity)
-	rect := rendered.Box.PaddingBox()
+	rect := rendered.Box.ScrollportBox()
 	if exists && (math.Abs(float64(offset.X()-recorded.X())) >= htmlPaintOverscan(rect.Width)*.5 ||
 		math.Abs(float64(offset.Y()-recorded.Y())) >= htmlPaintOverscan(rect.Height)*.5) {
 		return rendered

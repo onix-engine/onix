@@ -54,12 +54,15 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 	}
 	colors := [5]style.Color{computed.BackgroundColor.Color, computed.BorderColor.Top.Color, computed.BorderColor.Right.Color, computed.BorderColor.Bottom.Color, computed.BorderColor.Left.Color}
 	if raster.style != computed || raster.colors != colors || raster.logicalWidth != width || raster.logicalHeight != height || raster.width != w || raster.height != h {
+		if raster.texture != nil && (raster.width != w || raster.height != h) {
+			raster.image.Pix = nil
+		}
 		raster.gradients = prepareHTMLRasterGradients(raster.gradients, computed)
 		rasterHTMLBoxPaintPrepared(&raster.image, computed, float64(width), float64(height), scale, raster.gradients)
 		raster.style, raster.width, raster.height, raster.colors = computed, w, h, colors
 		raster.logicalWidth, raster.logicalHeight = width, height
 		if raster.texture == nil || !raster.texture.ValidFor(nil) || raster.texture.Width != w || raster.texture.Height != h {
-			raster.texture = graphics.CreateTextureByImageNoMipmap(&raster.image)
+			raster.texture = graphics.CreateTextureBySharedImage(&raster.image, false, graphics.ResourceUsageDefault)
 			if raster.texture == nil {
 				return nil
 			}
@@ -302,11 +305,20 @@ func (border *htmlRasterBorder) colorAt(x, y, width, height float64) color.RGBA 
 }
 
 func htmlBoxShadowTextureFor(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32) *graphics.Texture {
+	texture, _ := htmlBoxShadowTextureForMode(state, node, computed, shadowIndex, width, height, boxWidth, boxHeight, padding, false)
+	return texture
+}
+
+func htmlBoxShadowTextureForMode(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32, maskOnly bool) (*graphics.Texture, uint64) {
 	if state == nil || node == nil || computed == nil || shadowIndex < 0 || shadowIndex >= len(computed.BoxShadow) {
-		return nil
+		return nil, 0
 	}
 	w, h := max(1, int(math.Ceil(float64(width)))), max(1, int(math.Ceil(float64(height))))
-	key := htmlTextureKey{node: node, variant: "shadow-" + strconv.Itoa(shadowIndex)}
+	variant := "shadow-" + strconv.Itoa(shadowIndex)
+	if maskOnly {
+		variant = "shadow-mask-" + strconv.Itoa(shadowIndex)
+	}
+	key := htmlTextureKey{node: node, variant: variant}
 	raster := state.Textures.paint[key]
 	if raster == nil {
 		if state.Textures.paint == nil {
@@ -315,24 +327,51 @@ func htmlBoxShadowTextureFor(state *htmlRenderState, node *dom.Node, computed *s
 		raster = &htmlPaintRaster{}
 		state.Textures.paint[key] = raster
 	}
-	if raster.style != computed || raster.width != w || raster.height != h || raster.logicalWidth != boxWidth || raster.logicalHeight != boxHeight {
-		rasterHTMLBoxShadow(&raster.image, computed, computed.BoxShadow[shadowIndex], float64(boxWidth), float64(boxHeight), float64(padding), &raster.filterScratch)
+	shadow := computed.BoxShadow[shadowIndex]
+	if raster.version == 0 || raster.shadow != shadow || raster.radii != computed.BorderRadius || raster.padding != padding || raster.width != w || raster.height != h || raster.logicalWidth != boxWidth || raster.logicalHeight != boxHeight {
+		if raster.texture != nil && (raster.width != w || raster.height != h) {
+			raster.image.Pix = nil
+		}
+		if maskOnly {
+			rasterHTMLBoxShadowMask(&raster.image, computed, shadow, float64(boxWidth), float64(boxHeight), float64(padding))
+		} else {
+			scratch := acquireHTMLRasterScratch()
+			rasterHTMLBoxShadow(&raster.image, computed, shadow, float64(boxWidth), float64(boxHeight), float64(padding), &scratch.htmlFilterScratch)
+			releaseHTMLRasterScratch(scratch)
+		}
 		raster.style, raster.width, raster.height = computed, w, h
 		raster.logicalWidth, raster.logicalHeight = boxWidth, boxHeight
+		raster.shadow, raster.radii, raster.padding = shadow, computed.BorderRadius, padding
+		raster.version++
 		if raster.texture == nil || !raster.texture.ValidFor(nil) || raster.texture.Width != w || raster.texture.Height != h {
-			raster.texture = graphics.CreateTextureByImageNoMipmap(&raster.image)
+			raster.texture = graphics.CreateTextureBySharedImage(&raster.image, false, graphics.ResourceUsageDefault)
 			if raster.texture == nil {
-				return nil
+				return nil, 0
 			}
 			state.Textures.add(key, raster.texture)
 		} else {
 			raster.texture.UpdateRegions([]graphics.TextureRegionUpdate{{Width: w, Height: h, Pixels: raster.image.Pix}})
 		}
 	}
-	return raster.texture
+	return raster.texture, raster.version
 }
 
 func rasterHTMLBoxShadow(dst *image.RGBA, computed *style.ComputedStyle, shadow style.Shadow, width, height, padding float64, scratch *htmlFilterScratch) {
+	rasterHTMLBoxShadowMask(dst, computed, shadow, width, height, padding)
+	blur := max(style.ResolveLength(shadow.BlurRadius, min(width, height)), 0)
+	htmlBlurShadowMask(dst, blur*.5, scratch)
+	radii := prepareHTMLRasterCorners(computed, width, height)
+	offsetX, offsetY := style.ResolveLength(shadow.OffsetX, width), style.ResolveLength(shadow.OffsetY, height)
+	for y := 0; y < dst.Rect.Dy(); y++ {
+		for x := 0; x < dst.Rect.Dx(); x++ {
+			if htmlRoundedRasterPixel(radii, float64(x)+.5-padding+offsetX, float64(y)+.5-padding+offsetY, width, height) {
+				dst.Pix[dst.PixOffset(x, y)+3] = 0
+			}
+		}
+	}
+}
+
+func rasterHTMLBoxShadowMask(dst *image.RGBA, computed *style.ComputedStyle, shadow style.Shadow, width, height, padding float64) {
 	w, h := max(1, int(math.Ceil(width+padding*2))), max(1, int(math.Ceil(height+padding*2)))
 	length := w * h * 4
 	if cap(dst.Pix) < length {
@@ -343,7 +382,6 @@ func rasterHTMLBoxShadow(dst *image.RGBA, computed *style.ComputedStyle, shadow 
 	}
 	dst.Stride, dst.Rect = w*4, image.Rect(0, 0, w, h)
 	spread := style.ResolveLength(shadow.SpreadRadius, min(width, height))
-	blur := max(style.ResolveLength(shadow.BlurRadius, min(width, height)), 0)
 	innerWidth, innerHeight := width+2*spread, height+2*spread
 	radii := prepareHTMLRasterCorners(computed, width, height)
 	expanded := radii
@@ -357,15 +395,6 @@ func rasterHTMLBoxShadow(dst *image.RGBA, computed *style.ComputedStyle, shadow 
 			px, py := float64(x)+.5-padding+spread, float64(y)+.5-padding+spread
 			if htmlRoundedRasterPixel(expanded, px, py, innerWidth, innerHeight) {
 				dst.SetRGBA(x, y, color.RGBA(shadow.Color))
-			}
-		}
-	}
-	htmlBlurShadowMask(dst, blur*.5, scratch)
-	offsetX, offsetY := style.ResolveLength(shadow.OffsetX, width), style.ResolveLength(shadow.OffsetY, height)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			if htmlRoundedRasterPixel(radii, float64(x)+.5-padding+offsetX, float64(y)+.5-padding+offsetY, width, height) {
-				dst.Pix[dst.PixOffset(x, y)+3] = 0
 			}
 		}
 	}

@@ -61,3 +61,36 @@ func TestSolidShapeRoundedClipIgnoresInvisibleBorder(t *testing.T) {
 		})
 	}
 }
+
+func TestRoundedClipColorsReuseWhiteTextureAndPreserveRGBA8(t *testing.T) {
+	driver := &roundedClipDrawDriver{}
+	if err := render.Install(driver); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(render.Uninstall)
+	canvas := graphics.Canvas2DContext(100, 80)
+	rounded := roundedClip2D{minX: 1, minY: 1, maxX: 99, maxY: 79, radius: 8}
+	sprite := Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Width: 98, Height: 78, Alpha: .7}
+	item := newSpriteRenderItem2D(0, 0, &sprite, graphics.Material2DData{}, AnchorTopLeft,
+		mgl32.Translate3D(1, 1, 0),
+		clipRect2D{minX: 1, minY: 1, maxX: 99, maxY: 79, valid: true, hasRounded: true, rounded: rounded},
+		98, 78, true, 0)
+	viewport := renderViewport2D{clipFromLayer: canvas.ProjectionMatrix(), active: true}
+	for index := range 256 {
+		fill := graphics.ColorRGBA{R: float32(index) / 256, G: .372, B: .831, A: .681}
+		item.sprite.Shape.Fill = fill
+		drawShapeRenderItem2D(canvas, &item, viewport)
+		if err := canvas.FinishFrame(); err != nil {
+			t.Fatal(err)
+		}
+		rgba := fill.GoColor()
+		tint := graphics.ColorFromRGBA(rgba.R, rgba.G, rgba.B, rgba.A)
+		want := [4]float32{tint.R, tint.G, tint.B, tint.A * sprite.Alpha}
+		if driver.instance.Color != want || driver.instance.Custom != roundedClipMaterial2D([4][4]float32{}, rounded) {
+			t.Fatal("changing tint lost RGBA8 quantization, alpha or rounded mask")
+		}
+	}
+	if driver.nextID != 1 {
+		t.Fatalf("animated colors created %d GPU textures, want one white texture", driver.nextID)
+	}
+}

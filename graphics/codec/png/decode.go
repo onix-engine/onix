@@ -20,5 +20,5 @@ func Decode(data []byte, options graphics.TextureOptions) (*graphics.Texture, er
 	if err != nil {
 		return nil, err
 	}
-	return graphics.TextureFromImage(image, options), nil
+	return graphics.TextureFromOwnedDecodedImage(image, options), nil
 }

@@ -396,10 +396,12 @@ func TestHTMLTextOpacityAndLCDMutation(t *testing.T) {
 		state, _ := world.Get[htmlRenderState](owner)
 		if !lcd {
 			var composite *htmlOpacityRaster
+			var compositeNode Node
 			for _, id := range []string{"backdrop", "target"} {
-				node := incrementalHTMLNode(t, world, owner, id).node
-				if rendered := state.BoxRenderings[node]; rendered != nil && rendered.Composite && state.Textures.rasters[node] != nil {
-					composite = state.Textures.rasters[node]
+				node := incrementalHTMLNode(t, world, owner, id)
+				if rendered := state.BoxRenderings[node.node]; rendered != nil && rendered.Composite && state.Textures.rasters[node.node] != nil {
+					composite = state.Textures.rasters[node.node]
+					compositeNode = node
 					break
 				}
 			}
@@ -410,7 +412,9 @@ func TestHTMLTextOpacityAndLCDMutation(t *testing.T) {
 					maxAlpha = max(maxAlpha, composite.image.Pix[index+3])
 					ink = ink || composite.image.Pix[index+3] > 0 && composite.image.Pix[index] < 128
 				}
-				if !ink || math.Abs(float64(maxAlpha)/255-float64(alpha)) > 1.0/255 {
+				visual := htmlCullRole(world, owner, compositeNode, htmlRoleSurface)
+				sprite, _ := world.Get[scene.Sprite2D](visual)
+				if !ink || math.Abs(float64(maxAlpha)/255*float64(sprite.Alpha)-float64(alpha)) > 1.0/255 {
 					t.Fatalf("composited text: ink=%v alpha=%d, want %g", ink, maxAlpha, alpha)
 				}
 				return

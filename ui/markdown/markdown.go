@@ -8,6 +8,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/syntax"
 	onixtext "github.com/diiyw/onix/text"
@@ -77,6 +78,8 @@ type MarkdownLayout = htmlui.Layout
 
 type markdownRenderState struct {
 	Key Markdown
+	CSS string
+	DOM *dom.Node
 }
 
 type markdownSyncEntry struct {
@@ -176,7 +179,7 @@ func SpawnMarkdown(world *ecs.World, opts MarkdownOptions) ecs.Entity {
 		html,
 	)
 	_ = world.Insert(entity, scene.Size2D{Width: opts.Width})
-	_ = world.Insert(entity, markdownRenderState{Key: component})
+	_ = world.Insert(entity, markdownRenderState{Key: component, CSS: html.CSS, DOM: html.Document})
 	return entity
 }
 
@@ -276,28 +279,54 @@ func syncMarkdownComponents(world *ecs.World) {
 }
 
 func renderMarkdown(world *ecs.World, entity ecs.Entity, value Markdown) {
-	state := world.GetMut[markdownRenderState](entity)
-	if state != nil && state.Key == value {
+	state := world.GetRef[markdownRenderState](entity)
+	if state != nil && state.Key == value && world.Has[htmlui.Surface](entity) {
 		return
 	}
-	html := Convert(value)
-	if current := world.GetMut[htmlui.Surface](entity); current != nil {
+	current := world.GetMut[htmlui.Surface](entity)
+	var html htmlui.Surface
+	if current != nil {
+		html = *current
+	}
+	if state == nil || state.Key.Value != value.Value || current == nil {
+		html.Value = ""
+		html.Document = markdownToDOM(value.Value)
+	} else {
+		html.Document = state.DOM
+	}
+	if state == nil || state.Key.Style != value.Style || current == nil {
+		html.CSS = markdownStylesheet(value.Style, markdownRuntimeFor())
+	} else {
+		html.CSS = state.CSS
+	}
+	html.Width = value.Width
+	html.Font = value.Style.Font
+	html.BoldFont = value.Style.BoldFont
+	html.FontSize = value.Style.FontSize
+	html.DPI = value.Style.DPI
+	html.StackIndex = value.Style.StackIndex
+	html.PassThrough = value.PassThrough
+	if current != nil {
 		*current = html
 	} else {
 		_ = world.Insert(entity, html)
 	}
 	if state == nil {
-		_ = world.Insert(entity, markdownRenderState{Key: value})
+		_ = world.Insert(entity, markdownRenderState{Key: value, CSS: html.CSS, DOM: html.Document})
 		return
 	}
-	state.Key = value
+	updated := world.GetMut[markdownRenderState](entity)
+	updated.Key = value
+	updated.CSS = html.CSS
+	updated.DOM = html.Document
 }
 
-// Convert renders Markdown and its stylesheet for an owned HTML surface.
+// Convert builds Markdown's DOM and stylesheet for an owned HTML surface.
 // Call it when the source/style changes; retained HTML handles stable frames.
 func Convert(value Markdown) htmlui.Surface {
 	runtime := markdownRuntimeFor()
-	html := htmlui.New(markdownToHTML(value.Value))
+	html := htmlui.New("")
+	html.Document = markdownToDOM(value.Value)
 	html.CSS = markdownStylesheet(value.Style, runtime)
 	html.Width = value.Width
 	html.Font = value.Style.Font

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/diiyw/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -112,11 +112,11 @@ func selectOnInputDoubleClick(world *ecs.World, state *uiEventState, entity ecs.
 				resetInputClick(state)
 				return false
 			}
-			token := CodeTokenAt(field.Value, index)
+			token := CodeTokenAt(field.Text(), index)
 			field.Anchor, field.Caret = token.RuneStart, token.RuneEnd
 		} else {
 			field.Anchor = 0
-			field.Caret = runeCount(field.Value)
+			field.Caret = field.Text().Runes()
 		}
 	}
 	resetInputClick(state)
@@ -188,13 +188,17 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	previous := *field
 	next := previous
 	var submits int
-	next.Value, next.Caret, next.Anchor, submits = editTextValue(next.Value, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, next.Buffer)
+	if next.Buffer != nil {
+		next.Source, next.Caret, next.Anchor, submits = editTextValue(next.Source, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, next.Buffer)
+	} else {
+		next.Value, next.Caret, next.Anchor, submits = editTextValue(next.Value, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, nil)
+	}
 	submits += textareaSubmits
-	if editable && next.Value != previous.Value {
+	if editable && next.Text() != previous.Text() {
 		inputType, data := htmlInputEditMetadata(edits.Values)
 		if dispatchHTMLEditableBeforeInput(world, entity, inputType, data) {
 			if next.Buffer != nil {
-				next.Buffer.Sync(previous.Value)
+				next.Buffer.SyncSnapshot(previous.Text())
 			}
 			selectionStart, selectionEnd := orderedSelection(previous.Anchor, previous.Caret)
 			uiInputState.SetTextInputSelection(selectionStart, selectionEnd)
@@ -205,11 +209,15 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 		}
 	}
 	*field = next
-	if field.Value != previous.Value {
+	if field.Text() != previous.Text() {
 		if number := world.GetMut[NumberInput](entity); number != nil {
 			number.Changed = true
 		}
-		world.WriteMessage(InputEvent[string]{Entity: entity, Value: field.Value})
+		if field.Buffer != nil {
+			world.WriteMessage(InputEvent[piecetree.Snapshot]{Entity: entity, Value: field.Source})
+		} else {
+			world.WriteMessage(InputEvent[string]{Entity: entity, Value: field.Value})
+		}
 	}
 	if submits > 0 {
 		field.Submitted = true
@@ -227,13 +235,13 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 func editReadOnlyField(field *TextField, state *input.State) {
 	shortcut := state.KeyHeld(input.KeyLeftControl) || state.KeyHeld(input.KeyRightControl) || state.KeyHeld(input.KeyLeftSuper) || state.KeyHeld(input.KeyRightSuper)
 	if shortcut && state.KeyPressed(input.KeyA) {
-		field.Anchor, field.Caret = 0, runeCount(field.Value)
+		field.Anchor, field.Caret = 0, field.Text().Runes()
 		return
 	}
 	if shortcut && (state.KeyPressed(input.KeyC) || state.KeyPressed(input.KeyX)) {
 		start, end := orderedSelection(field.Anchor, field.Caret)
 		if start != end {
-			state.SetClipboardText(runeSlice(field.Value, start, end))
+			state.SetClipboardText(field.Text().Slice(field.Text().ByteOffset(start), field.Text().ByteOffset(end)))
 		}
 		return
 	}
@@ -249,7 +257,7 @@ func editReadOnlyField(field *TextField, state *input.State) {
 		if start != end && !extend {
 			field.Caret = end
 		} else {
-			field.Caret = min(runeCount(field.Value), field.Caret+1)
+			field.Caret = min(field.Text().Runes(), field.Caret+1)
 		}
 	} else {
 		return
@@ -307,17 +315,31 @@ func textareaSubmitEdits(edits []input.TextEdit) ([]input.TextEdit, int) {
 	return kept, submits
 }
 
-func editTextValue(value string, caret, anchor, maxRunes int, multiline bool, edits []input.TextEdit, state *input.State, mouseSelecting bool, buffer *input.TextBuffer) (string, int, int, int) {
-	apply := state.ApplyTextEditsInRange
-	if buffer != nil {
-		apply = buffer.ApplyTextEditsInRange
+func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, multiline bool, edits []input.TextEdit, state *input.State, mouseSelecting bool, buffer *input.TextBuffer) (V, int, int, int) {
+	apply := func(value V, start, end, limit int, multiline bool, edits []input.TextEdit) (V, int, int) {
+		switch v := any(value).(type) {
+		case string:
+			var next string
+			var caret, submits int
+			if buffer != nil {
+				next, caret, submits = buffer.ApplyTextEditsInRange(v, start, end, limit, multiline, edits)
+			} else {
+				next, caret, submits = state.ApplyTextEditsInRange(v, start, end, limit, multiline, edits)
+			}
+			return any(next).(V), caret, submits
+		case piecetree.Snapshot:
+			next, caret, submits := buffer.ApplyEdits(v, start, end, limit, multiline, edits)
+			return any(next).(V), caret, submits
+		}
+		panic("unreachable")
 	}
+	source := piecetree.Text(value)
 	length := 0
 	if buffer != nil {
-		buffer.Sync(value)
+		buffer.SyncSnapshot(source)
 		length = buffer.Runes()
 	} else {
-		length = runeCount(value)
+		length = source.Runes()
 	}
 	if !mouseSelecting {
 		if selection, ok := state.TextSelection(); ok {
@@ -333,12 +355,12 @@ func editTextValue(value string, caret, anchor, maxRunes int, multiline bool, ed
 	}
 	if shortcut && state.KeyPressed(input.KeyC) {
 		if start != end {
-			state.SetClipboardText(runeSlice(value, start, end))
+			state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end)))
 		}
 		return value, caret, anchor, 0
 	}
 	if shortcut && state.KeyPressed(input.KeyX) {
-		if start != end && state.SetClipboardText(runeSlice(value, start, end)) {
+		if start != end && state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end))) {
 			edits = prependTextEdit(edits, input.TextEdit{Command: input.TextCommandBackspace})
 		}
 	}
@@ -459,7 +481,7 @@ func textIndexFromInput(world *ecs.World, owner ecs.Entity, screenX, screenY flo
 		local := transform.Matrix.Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 		value := textFieldValue(world, owner)
 		if field, ok := world.Get[TextField](owner); ok && field.Password {
-			value = maskedTextFieldValue(world, owner, field)
+			value = piecetree.FromString(maskedTextFieldValue(world, owner, field))
 		}
 		text := textAccess.Mut()
 		caret := TextCaretIndex(text, value, local.X(), local.Y())
@@ -485,16 +507,17 @@ type CodeToken struct {
 // CodeTokenAt finds the token at a rune index in one allocation-free scan. Words
 // include Unicode letters, digits and combining marks. Quoted contents stay
 // together, excluding their delimiters; other delimiters stay separate.
-func CodeTokenAt(value string, index int) (token CodeToken) {
+func CodeTokenAt[V piecetree.Value](inputValue V, index int) (token CodeToken) {
+	value := piecetree.Text(inputValue)
 	index = max(0, index)
 	var previous uint8
 	var quote rune
 	var comment uint8 // 1: line, 2: block, 3: closing block slash
 	var escaped bool
 	quoteStart, quoteByteStart := 0, 0
-	for next := 0; next < len(value); {
+	for next := 0; next < value.Len(); {
 		offset := next
-		r, size := utf8.DecodeRuneInString(value[offset:])
+		r, size := value.DecodeRune(offset)
 		next += size
 		if token.RuneEnd == index {
 			token.Offset = offset
@@ -538,14 +561,14 @@ func CodeTokenAt(value string, index int) (token CodeToken) {
 				comment = 0
 			}
 		case 2:
-			if r == '*' && offset+1 < len(value) && value[offset+1] == '/' {
+			if r == '*' && offset+1 < value.Len() && value.ByteAt(offset+1) == '/' {
 				comment = 3
 			}
 		case 3:
 			comment = 0
 		default:
-			if r == '/' && offset+1 < len(value) {
-				switch value[offset+1] {
+			if r == '/' && offset+1 < value.Len() {
+				switch value.ByteAt(offset + 1) {
 				case '/':
 					comment = 1
 				case '*':
@@ -591,16 +614,16 @@ func codeTokenClass(r rune) uint8 {
 	}
 }
 
-func textFieldValue(world *ecs.World, entity ecs.Entity) string {
+func textFieldValue(world *ecs.World, entity ecs.Entity) piecetree.Snapshot {
 	if field, ok := world.Get[TextField](entity); ok {
-		return field.Value
+		return field.Text()
 	}
-	return ""
+	return piecetree.Snapshot{}
 }
 
 func setCaret(world *ecs.World, entity ecs.Entity, caret int, extend bool) {
 	if field := world.GetMut[TextField](entity); field != nil {
-		field.Caret = max(0, min(caret, runeCount(field.Value)))
+		field.Caret = max(0, min(caret, field.Text().Runes()))
 		if !extend {
 			field.Anchor = field.Caret
 		}
@@ -837,7 +860,7 @@ func textareaScrollAtPointer(trackSize, viewportSize, contentSize, pointer float
 	return min(max((pointer-thumbSize*.5)*maximum/available, 0), maximum)
 }
 
-func TextCaretIndex(text *scene.Text2D, value string, x, y float32) int {
+func TextCaretIndex[V piecetree.Value](text *scene.Text2D, value V, x, y float32) int {
 	return scene.TextCaretIndex2D(text, value, x, y)
 }
 

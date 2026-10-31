@@ -70,9 +70,10 @@ func (t UITransform) LocalMatrix(context UIResolveContext) mgl32.Mat4 {
 }
 
 type resolvedUITransform struct {
-	matrix   mgl32.Mat4
-	clip     clipRect2D
-	revision uint64
+	inheritedClip clipRect2D
+	matrix        mgl32.Mat4
+	clip          clipRect2D
+	revision      uint64
 }
 
 type uiTransformNode struct {
@@ -84,6 +85,7 @@ type uiTransformNode struct {
 	localRoundedClip RoundedClip2D
 	hasRoundedClip   bool
 	clipExempt       bool
+	parentClipExempt bool
 	state            uint8
 	resolved         resolvedUITransform
 	local            mgl32.Mat4
@@ -338,15 +340,18 @@ func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Enti
 	parent, _ := b.parent.Get(row)
 	clip, hasClip := b.clip.Get(row)
 	rounded, hasRounded := b.rounded.Get(row)
-	exempt := b.exempt.Access(row).Ref() != nil
+	exemption := b.exempt.Access(row).Ref()
+	exempt := exemption != nil
+	parentExempt := exempt && exemption.ParentOnly
 	baseSize := b.baseSize(row)
 	global, hasGlobal := b.global.Get(row)
 	topologyChanged := node.entity != entity || node.parent != parent.Entity
 	dirty := force || topologyChanged || !hasGlobal || global.Matrix != node.resolved.matrix || global.clip != node.resolved.clip || node.transform != transform || node.baseSize != baseSize ||
-		node.localClip != clip || node.hasClip != hasClip || node.localRoundedClip != rounded || node.hasRoundedClip != hasRounded || node.clipExempt != exempt
+		node.localClip != clip || node.hasClip != hasClip || node.localRoundedClip != rounded || node.hasRoundedClip != hasRounded || node.clipExempt != exempt || node.parentClipExempt != parentExempt
 	node.entity, node.seen = entity, workspace.generation
 	node.transform, node.parent, node.baseSize = transform, parent.Entity, baseSize
 	node.localClip, node.hasClip, node.localRoundedClip, node.hasRoundedClip, node.clipExempt = clip, hasClip, rounded, hasRounded, exempt
+	node.parentClipExempt = parentExempt
 	if dirty {
 		node.local = transform.LocalMatrix(UIResolveContext{ScaleFactor: scaleFactor, BaseSize: baseSize, Viewport: viewport})
 		workspace.mark(entity)
@@ -380,7 +385,11 @@ func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (res
 	resolved := resolvedUITransform{matrix: parentTransform.matrix.Mul4(node.local), clip: parentTransform.clip, revision: node.resolved.revision + 1}
 	if node.clipExempt {
 		resolved.clip = clipRect2D{}
+		if node.parentClipExempt {
+			resolved.clip = parentTransform.inheritedClip
+		}
 	}
+	resolved.inheritedClip = resolved.clip
 	if node.hasClip {
 		resolved.clip = intersectClipRect2D(resolved.clip, clipRectFromLocal2D(resolved.matrix, node.localClip))
 	}

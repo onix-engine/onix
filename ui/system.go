@@ -10,6 +10,7 @@ import (
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/internal/smallsort"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 	"github.com/diiyw/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -536,7 +537,7 @@ func focusWithVisibility(world *ecs.World, state *uiEventState, entity ecs.Entit
 		notified := false
 		if field := world.GetMut[TextField](entity); field != nil {
 			field.Focused = true
-			field.Caret = runeCount(field.Value)
+			field.Caret = field.Text().Runes()
 			field.Anchor = field.Caret
 			world.WriteMessage(FocusChangedEvent{Entity: entity, Focused: true, FocusVisible: focusVisible})
 			notified = true
@@ -655,11 +656,11 @@ func syncTextInputFocus(world *ecs.World, entity ecs.Entity) {
 		return
 	}
 	if world.Has[html.Editable](entity) {
-		uiInputState.FocusTextInput(input.TextInputText, true, field.Value)
+		uiInputState.FocusTextInput(input.TextInputText, true, field.Text().String())
 		return
 	}
 	if world.Has[Textarea](entity) {
-		uiInputState.FocusTextInput(input.TextInputText, true, field.Value)
+		uiInputState.FocusTextInput(input.TextInputText, true, field.Text().String())
 		return
 	}
 	if number, ok := world.Get[NumberInput](entity); ok {
@@ -1049,7 +1050,7 @@ func collectTextWidths(world *ecs.World, theme Theme) (map[ecs.Entity]float32, m
 		width, measured := float32(0), false
 		measureText := func() float32 {
 			if !measured {
-				width, _, _ = scene.MeasureTextValue2D(text, text.Value)
+				width, _, _ = scene.MeasureTextValue2D(text, text.Text())
 				measured = true
 			}
 			return width
@@ -1225,13 +1226,13 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	}()
 	keepInsertionOrigin := false
 	if fieldOK && !field.Password && field.scrollInitialized &&
-		field.lastScrollValue != field.Value && field.lastScrollComposition == "" && field.Composition == "" &&
+		field.lastScrollValue != field.Text() && field.lastScrollComposition == "" && field.Composition == "" &&
 		field.Caret > field.lastScrollCaret {
-		oldCaretByte := runeByteIndex(field.lastScrollValue, field.lastScrollCaret)
-		previousPrefix := field.lastScrollValue[:oldCaretByte]
-		currentPrefix := field.Value[:runeByteIndex(field.Value, field.lastScrollCaret)]
-		previousSuffix := field.lastScrollValue[oldCaretByte:]
-		currentSuffix := field.Value[runeByteIndex(field.Value, field.Caret):]
+		oldCaretByte := field.lastScrollValue.ByteOffset(field.lastScrollCaret)
+		previousPrefix := field.lastScrollValue.Slice(0, oldCaretByte)
+		currentPrefix := field.Text().Slice(0, field.Text().ByteOffset(field.lastScrollCaret))
+		previousSuffix := field.lastScrollValue.Slice(oldCaretByte, field.lastScrollValue.Len())
+		currentSuffix := field.Text().Slice(field.Text().ByteOffset(field.Caret), field.Text().Len())
 		keepInsertionOrigin = previousPrefix == currentPrefix && previousSuffix == currentSuffix
 	}
 	if htmlLayout && fieldOK {
@@ -1243,7 +1244,7 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	if !measured {
 		if fieldOK {
 			field.ScrollX = 0
-			field.lastScrollValue = field.Value
+			field.lastScrollValue = field.Text()
 			field.lastScrollComposition = field.Composition
 			field.lastScrollCaret = field.Caret
 			field.lastScrollFocused = field.Focused
@@ -1265,17 +1266,17 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	if fieldOK {
 		minScrollX := -max(contentWidth-viewportWidth, 0)
 		field.ScrollX = max(min(field.ScrollX, 0), minScrollX)
-		autoScroll := !field.scrollInitialized || field.lastScrollValue != field.Value ||
+		autoScroll := !field.scrollInitialized || field.lastScrollValue != field.Text() ||
 			field.lastScrollComposition != field.Composition || field.lastScrollCaret != field.Caret ||
 			field.lastScrollFocused != field.Focused || field.lastScrollViewport != viewportWidth
 		if autoScroll && !keepInsertionOrigin {
-			caretValue, caretIndex := field.Value, field.Caret
+			caretValue, caretIndex := field.Text(), field.Caret
 			if field.Password {
-				caretValue = maskedTextFieldPrefix(world, owner, *field, field.Caret)
-				caretIndex = runeCount(caretValue)
+				caretValue = piecetree.FromString(maskedTextFieldPrefix(world, owner, *field, field.Caret))
+				caretIndex = caretValue.Runes()
 			} else if field.Composition != "" {
-				caretValue = textFieldCompositionPrefix(world, owner, *field, field.Caret)
-				caretIndex = runeCount(caretValue)
+				caretValue = textFieldVisualSnapshot(world, owner, *field)
+				caretIndex = caretValue.Runes()
 			}
 			if caretX, _, _, _, caretOK := scene.TextCaretRect2D(text, caretValue, caretIndex); caretOK {
 				if caretX+field.ScrollX < 0 {
@@ -1286,7 +1287,7 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 			}
 		}
 		field.ScrollX = max(min(field.ScrollX, 0), minScrollX)
-		field.lastScrollValue = field.Value
+		field.lastScrollValue = field.Text()
 		field.lastScrollComposition = field.Composition
 		field.lastScrollCaret = field.Caret
 		field.lastScrollFocused = field.Focused
@@ -1318,7 +1319,7 @@ func centerSingleLineTextVisual(text *scene.Text2D, transform *scene.UITransform
 	if text == nil || transform == nil {
 		return
 	}
-	_, lineHeight, measured := scene.MeasureTextValue2D(text, text.Value)
+	_, lineHeight, measured := scene.MeasureTextValue2D(text, text.Text())
 	if measured {
 		transform.Translation.Y.Value = (height - lineHeight) * 0.5
 	}
@@ -1347,7 +1348,7 @@ func syncTextareaVisual(world *ecs.World, entity, owner ecs.Entity, textarea *Te
 		transform.Translation.X.Value = paddingX
 		transform.Translation.Y.Value = paddingY
 		if field, ok := world.Get[TextField](owner); ok {
-			textarea.lastValue, textarea.lastCaret, textarea.lastFocused = field.Value, field.Caret, field.Focused
+			textarea.lastValue, textarea.lastCaret, textarea.lastFocused = field.Text(), field.Caret, field.Focused
 		}
 		textarea.lastViewportWidth, textarea.lastViewportHeight = viewportWidth, viewportHeight
 		textarea.lastWrapWidthPercent, textarea.lastWrapTokens = textarea.WrapWidthPercent, textarea.WrapTokens
@@ -1368,14 +1369,14 @@ func syncTextareaVisual(world *ecs.World, entity, owner ecs.Entity, textarea *Te
 		if field.Buffer != nil {
 			text.Index = field.Buffer
 		}
-		contentChanged := !textarea.scrollInitialized || textarea.FollowTail && !textarea.lastFollowTail || textarea.lastValue != field.Value ||
+		contentChanged := !textarea.scrollInitialized || textarea.FollowTail && !textarea.lastFollowTail || textarea.lastValue != field.Text() ||
 			textarea.lastViewportWidth != viewportWidth || textarea.lastViewportHeight != viewportHeight || textarea.lastWrap != textarea.Wrap ||
 			textarea.lastWrapWidthPercent != textarea.WrapWidthPercent || textarea.lastWrapTokens != textarea.WrapTokens
 		autoScroll := contentChanged || textarea.lastCaret != field.Caret || textarea.lastFocused != field.Focused
 		if textarea.FollowTail && contentChanged {
 			textarea.ScrollY = maxScrollY
 		} else if autoScroll && field.Focused && !textarea.scrollDragging && !textarea.preserveScroll {
-			caretX, caretY, _, caretHeight, caretOK := scene.TextCaretRect2D(text, field.Value, field.Caret)
+			caretX, caretY, _, caretHeight, caretOK := scene.TextCaretRect2D(text, textFieldVisualSnapshot(world, owner, field), field.Caret)
 			if caretOK {
 				if caretX < textarea.ScrollX {
 					textarea.ScrollX = caretX
@@ -1389,7 +1390,7 @@ func syncTextareaVisual(world *ecs.World, entity, owner ecs.Entity, textarea *Te
 				}
 			}
 		}
-		textarea.lastValue, textarea.lastCaret, textarea.lastFocused = field.Value, field.Caret, field.Focused
+		textarea.lastValue, textarea.lastCaret, textarea.lastFocused = field.Text(), field.Caret, field.Focused
 	}
 	textarea.preserveScroll = false
 	textarea.ScrollX = min(max(textarea.ScrollX, 0), maxScrollX)
@@ -1408,7 +1409,7 @@ func syncAuthoredValueText(world *ecs.World, owner ecs.Entity, text *scene.Text2
 	if !ok {
 		return
 	}
-	text.Value = textFieldDisplay(world, owner, field)
+	setTextFieldVisual(world, owner, field, text)
 }
 
 func syncIconText(world *ecs.World, owner ecs.Entity, text *scene.Text2D, theme Theme) {
@@ -1460,7 +1461,7 @@ func syncValueText(world *ecs.World, owner ecs.Entity, text *scene.Text2D, theme
 	if !ok {
 		return
 	}
-	text.Value = textFieldDisplay(world, owner, field)
+	setTextFieldVisual(world, owner, field, text)
 	text.FontSize = sizeOr(field.FontSize, theme.FontSize)
 	text.DPI = sizeOr(field.DPI, theme.DPI)
 	if field.Value == "" && field.Composition == "" && !field.Focused {
@@ -2091,6 +2092,7 @@ func syncSurfaceElementVisibility(world *ecs.World) {
 
 func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
 	var valueTexts map[ecs.Entity]ecs.Entity
+	var selections *textSelectionScratch
 	var scrollTexts map[ecs.Entity]textareaScrollMetrics
 	for entity, access := range world.Query3[Relation[SurfaceStyle], scene.UITransform, scene.Size2D]().All {
 		if !func(entity ecs.Entity, visualAccess ecs.ComponentAccess[Relation[SurfaceStyle]], transformAccess ecs.ComponentAccess[scene.UITransform], sizeAccess ecs.ComponentAccess[scene.Size2D]) bool {
@@ -2154,8 +2156,16 @@ func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
 				if valueTexts == nil {
 					valueTexts = partEntities[ValuePart, scene.Text2D](world)
 				}
+				if selections == nil {
+					selections = world.FrameValue[textSelectionScratch, textSelectionScratch]()
+					selections.rows = selections.rows[:0]
+					clear(selections.owners)
+					if selections.owners == nil {
+						selections.owners = make(map[ecs.Entity]textSelectionSpan)
+					}
+				}
 				indexed, _ := world.Get[Indexed[SelectionPart]](entity)
-				syncSelectionElement(world, entity, visual.Owner, valueTexts[visual.Owner], indexed.Value, transform, size, skin)
+				syncSelectionElement(world, entity, visual.Owner, valueTexts[visual.Owner], indexed.Value, transform, size, skin, selections)
 			}
 			return true
 		}(entity, access.A, access.B, access.C) {
@@ -2176,7 +2186,7 @@ func prepareScrollAreas(world *ecs.World) {
 }
 
 func prepareScrollArea(world *ecs.World, entity ecs.Entity, area *ScrollArea, clip *scene.ClipRect2D) {
-	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
+	metrics := area.Measure()
 	if clip != nil {
 		clip.X, clip.Y = 0, 0
 		clip.Width, clip.Height = metrics.ViewportWidth, metrics.ViewportHeight
@@ -2217,23 +2227,7 @@ func finalizeScrollAreas(world *ecs.World) {
 			break
 		}
 	}
-	for entity, access := range world.Query2[html.ScrollContent, scene.UITransform]().All {
-		if !func(_ ecs.Entity, contentAccess ecs.ComponentAccess[html.ScrollContent], transformAccess ecs.ComponentAccess[scene.UITransform]) bool {
-			content := contentAccess.Ref()
-			nextTransform := *transformAccess.Ref()
-			transform := &nextTransform
-			defer func() { ecs.CommitComponent(transformAccess, nextTransform) }()
-			offset, ok := scene.GetUIScrollOffset(world, content.Area)
-			if !ok {
-				return true
-			}
-			transform.Translation.X.Value = content.X + offset.X()
-			transform.Translation.Y.Value = content.Y + offset.Y()
-			return true
-		}(entity, access.A, access.B) {
-			break
-		}
-	}
+	html.SyncScrollContent(world)
 	html.SyncScrollbars(world)
 }
 
@@ -2337,7 +2331,7 @@ func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform
 	if area == nil {
 		return
 	}
-	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
+	metrics := area.Measure()
 	offset, _ := GetScrollAreaOffset(world, owner)
 	barSize := scrollBarSize(area.BarSize)
 	thumbBarSize := scrollThumbBarSize(area.ThumbBarSize, area.BarSize)
@@ -2530,7 +2524,7 @@ func collectSyncMetrics(world *ecs.World) syncMetrics {
 		selectorOwner := itemMetricOwner[Selector](world, entity, visual.Owner, itemPart, false, metrics.selectors)
 		if menuOwner != 0 || contextOwner != 0 || selectorOwner != 0 {
 			// Measurement may refresh Text2D's internal cache; it is not a semantic edit.
-			if width, _, ok := scene.MeasureTextValue2D(text, text.Value); ok {
+			if width, _, ok := scene.MeasureTextValue2D(text, text.Text()); ok {
 				updateItemMetricWidth(metrics.menus, menuOwner, width)
 				updateItemMetricWidth(metrics.contextMenus, contextOwner, width)
 				updateItemMetricWidth(metrics.selectors, selectorOwner, width)

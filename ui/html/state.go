@@ -17,6 +17,7 @@ type htmlDocumentState struct {
 	NodeAncestors   htmlAncestorCache[*dom.Node, *dom.Node]
 	IndexDirty      bool
 	Source          string
+	SourceDocument  *dom.Node
 	EmbeddedCSS     string
 	Root            *dom.Node
 	Revision        uint64
@@ -28,6 +29,7 @@ type htmlStyleState struct {
 	RestyleNodes            []*dom.Node
 	StyleCache              style.MutationCache
 	StyleChanges            []style.NodeChange
+	AnimationBaselines      map[*dom.Node]htmlAnimationBaseline
 	Animations              map[*dom.Node]*htmlNodeAnimation
 	AnimationTrackHeads     map[string]int
 	TransformFrame          uint64
@@ -50,6 +52,9 @@ type htmlLayoutState struct {
 }
 
 type htmlPaintState struct {
+	StickyBindings    map[*dom.Node]*htmlStickyBinding
+	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
+	StickyDirty       bool
 	BoxRenderings     map[*dom.Node]*htmlBoxRendering
 	EmittingBox       *htmlBoxRendering
 	RenderQueue       []*htmlBoxRendering
@@ -161,7 +166,7 @@ func (state *htmlRenderState) beginSync(key htmlRenderKey, imageTick ecs.Tick) {
 	switch {
 	case !state.Rendered:
 		state.Diagnostics.Fallback = FallbackInitial
-	case state.Key.Value != key.Value:
+	case state.Key.Value != key.Value || state.Key.Document != key.Document:
 		state.Diagnostics.Fallback = FallbackDocument
 	case state.ImageProviderChanged != imageTick:
 		state.Diagnostics.Fallback = FallbackImages

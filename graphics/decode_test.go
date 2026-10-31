@@ -57,6 +57,26 @@ func TestOwnedImagePixelsAreTransferredToTexture(t *testing.T) {
 	}
 }
 
+func TestOwnedDecodedImageReusesTightlyPackedPixels(t *testing.T) {
+	for _, source := range []image.Image{
+		image.NewRGBA(image.Rect(0, 0, 2, 1)),
+		image.NewNRGBA(image.Rect(0, 0, 2, 1)),
+	} {
+		texture := TextureFromOwnedDecodedImage(source, TextureOptions{Usage: ResourceUsageCPU})
+		var pixels []byte
+		switch image := source.(type) {
+		case *image.RGBA:
+			pixels = image.Pix
+		case *image.NRGBA:
+			pixels = image.Pix
+		}
+		if &texture.pix[0] != &pixels[0] {
+			t.Fatalf("decoded %T pixels were copied", source)
+		}
+		_ = texture.Dispose()
+	}
+}
+
 func TestOwnedNRGBAPixelsAreTransferredWithoutChangingStraightAlpha(t *testing.T) {
 	im := image.NewNRGBA(image.Rect(0, 0, 1, 1))
 	im.SetNRGBA(0, 0, color.NRGBA{R: 200, G: 100, B: 50, A: 128})

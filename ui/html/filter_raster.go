@@ -15,9 +15,8 @@ type htmlFilterScratch struct {
 	sigma    float64
 	matrices [][20]float64
 	shadow   image.RGBA
-	source   []byte
 	mask     []float64
-	maskTemp []float64
+	maskLine []float64
 }
 
 func htmlFilterBounds(filters []style.Filter, minX, minY, maxX, maxY float64) (float64, float64, float64, float64) {
@@ -132,33 +131,48 @@ func htmlGaussianBlur(dst *image.RGBA, sigma float64, scratch *htmlFilterScratch
 		scratch.sigma = sigma
 	}
 	w, h := dst.Rect.Dx(), dst.Rect.Dy()
-	scratch.rows = slices.Grow(scratch.rows[:0], w*h)[:w*h]
+	rowCount := min(h, length)
+	scratch.rows = slices.Grow(scratch.rows[:0], w*(rowCount+1))[:w*(rowCount+1)]
+	output := scratch.rows[w*rowCount:]
 	// Convolve premultiplied color to keep transparent texels from creating
-	// dark fringes, then return to the texture pipeline's straight alpha.
+	// dark fringes. Keep only the horizontal rows needed by the vertical
+	// kernel, reading each source row before the in-place output reaches it.
+	nextRow := 0
 	for y := range h {
-		for x := range w {
-			var value [4]float64
-			for sx := max(0, x-radius); sx <= min(w-1, x+radius); sx++ {
-				pixel := dst.PixOffset(sx+dst.Rect.Min.X, y+dst.Rect.Min.Y)
-				alpha := float64(dst.Pix[pixel+3]) / 255
-				weight := scratch.kernel[sx-x+radius]
-				for channel := 0; channel < 3; channel++ {
-					value[channel] += float64(dst.Pix[pixel+channel]) * alpha * weight
+		lastRow := min(h-1, y+radius)
+		for nextRow <= lastRow {
+			row := scratch.rows[nextRow%rowCount*w:][:w]
+			for x := range w {
+				var value [4]float64
+				for sx := max(0, x-radius); sx <= min(w-1, x+radius); sx++ {
+					pixel := dst.PixOffset(sx+dst.Rect.Min.X, nextRow+dst.Rect.Min.Y)
+					alpha := float64(dst.Pix[pixel+3]) / 255
+					weight := scratch.kernel[sx-x+radius]
+					for channel := 0; channel < 3; channel++ {
+						value[channel] += float64(dst.Pix[pixel+channel]) * alpha * weight
+					}
+					value[3] += alpha * weight
 				}
-				value[3] += alpha * weight
+				row[x] = value
 			}
-			scratch.rows[y*w+x] = value
+			nextRow++
 		}
-	}
-	for y := range h {
-		for x := range w {
-			var value [4]float64
-			for sy := max(0, y-radius); sy <= min(h-1, y+radius); sy++ {
-				weight := scratch.kernel[sy-y+radius]
-				for channel, component := range scratch.rows[sy*w+x] {
-					value[channel] += component * weight
-				}
+		firstRow := max(0, y-radius)
+		clear(output)
+		// Accumulate contiguous rows so both the input and output stay local,
+		// preserving each pixel's original order of floating-point operations.
+		for sy := firstRow; sy <= lastRow; sy++ {
+			weight := scratch.kernel[sy-y+radius]
+			row := scratch.rows[sy%rowCount*w:][:w]
+			for x, value := range row {
+				pixel := &output[x]
+				pixel[0] += value[0] * weight
+				pixel[1] += value[1] * weight
+				pixel[2] += value[2] * weight
+				pixel[3] += value[3] * weight
 			}
+		}
+		for x, value := range output {
 			pixel := dst.PixOffset(x+dst.Rect.Min.X, y+dst.Rect.Min.Y)
 			if value[3] > 0 {
 				for channel := 0; channel < 3; channel++ {
@@ -174,8 +188,6 @@ func htmlGaussianBlur(dst *image.RGBA, sigma float64, scratch *htmlFilterScratch
 
 func htmlRasterDropShadow(dst *image.RGBA, shadow style.Shadow, scratch *htmlFilterScratch) {
 	length := len(dst.Pix)
-	scratch.source = slices.Grow(scratch.source[:0], length)[:length]
-	copy(scratch.source, dst.Pix)
 	scratch.shadow.Pix = slices.Grow(scratch.shadow.Pix[:0], length)[:length]
 	scratch.shadow.Stride, scratch.shadow.Rect = dst.Stride, dst.Rect
 	for offset := 0; offset < length; offset += 4 {
@@ -208,7 +220,9 @@ func htmlRasterDropShadow(dst *image.RGBA, shadow style.Shadow, scratch *htmlFil
 				}
 			}
 			pixel := dst.PixOffset(dx, dy)
-			source := color.RGBA{R: scratch.source[pixel], G: scratch.source[pixel+1], B: scratch.source[pixel+2], A: scratch.source[pixel+3]}
+			// The shifted mask is independent of dst. Each source pixel is
+			// consumed once, so compositing needs no full source snapshot.
+			source := color.RGBA{R: dst.Pix[pixel], G: dst.Pix[pixel+1], B: dst.Pix[pixel+2], A: dst.Pix[pixel+3]}
 			background := color.RGBA{R: shadow.Color.R, G: shadow.Color.G, B: shadow.Color.B, A: uint8(math.Round(alpha))}
 			dst.SetRGBA(dx, dy, htmlRGBAOver(source, background))
 		}

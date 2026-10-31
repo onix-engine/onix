@@ -14,7 +14,6 @@ require (
 	github.com/mewkiz/flac v1.0.14
 	github.com/odvcencio/gotreesitter v0.56.0
 	github.com/yuin/goldmark v1.8.6
-	golang.org/x/net v0.61.0
 	golang.org/x/sys v0.49.0
 )
 

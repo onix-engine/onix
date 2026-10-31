@@ -12,7 +12,7 @@ func TestTextBufferTailCompactionPublishesDetachedSnapshot(t *testing.T) {
 	var buffer TextBuffer
 	initial := strings.Repeat("a", 1<<20)
 	value, _, _ := buffer.ApplyTextEditsInRange(initial, 1024, len(initial), 0, true, []TextEdit{{Command: TextCommandBackspace}})
-	if value != initial[:1024] || unsafe.StringData(value) == unsafe.StringData(initial) || unsafe.StringData(buffer.value) != unsafe.StringData(value) {
+	if value != initial[:1024] || unsafe.StringData(value) == unsafe.StringData(initial) || unsafe.StringData(buffer.value.String()) != unsafe.StringData(value) {
 		t.Fatal("input published the oversized snapshot after compaction")
 	}
 	start, end, next, _, ok := buffer.ChangedRange(initial, value)
@@ -21,7 +21,7 @@ func TestTextBufferTailCompactionPublishesDetachedSnapshot(t *testing.T) {
 	}
 	previous := value
 	value, _, _ = buffer.ApplyTextEditsInRange(value, len(value), len(value), 0, true, []TextEdit{{Text: "x"}})
-	if value != previous+"x" || buffer.before != previous || initial != strings.Repeat("a", 1<<20) {
+	if value != previous+"x" || buffer.before.String() != previous || initial != strings.Repeat("a", 1<<20) {
 		t.Fatal("subsequent edit lost or mutated a snapshot")
 	}
 }

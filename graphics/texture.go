@@ -175,6 +175,14 @@ func CreateTextureByImageWithUsage(im *image.RGBA, mipmap bool, usage ResourceUs
 	return createTextureByImageWithUsage(im, mipmap, usage, false)
 }
 
+// CreateTextureBySharedImage shares a tightly packed image's pixels with the
+// texture's CPU shadow. Other image layouts are copied. The caller must
+// synchronize image writes with texture use and call UpdateRegions after edits.
+// Resizing requires a new texture and a separate pixel buffer for the old one.
+func CreateTextureBySharedImage(im *image.RGBA, mipmap bool, usage ResourceUsage) *Texture {
+	return createTextureByOwnedImageWithUsage(im, mipmap, usage)
+}
+
 // CreateTextureR8 creates a single-channel unorm texture. The pixel slice is
 // retained for device recreation when usage includes ResourceUsageCPU.
 func CreateTextureR8(width, height int, pixels []byte, mipmap bool, usage ResourceUsage) *Texture {
@@ -347,6 +355,11 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 			base.pix = base.pix[:pixelCount]
 		}
 		for _, update := range updates {
+			// Generated rasters already write the shared CPU shadow. Only the
+			// driver upload is needed when source and destination rows coincide.
+			if update.Width == base.Width && &base.pix[update.Y*base.Width*texelBytes] == &update.Pixels[0] {
+				continue
+			}
 			rowSize := update.Width * texelBytes
 			for row := range update.Height {
 				dstOffset := ((update.Y+row)*base.Width + update.X) * texelBytes
@@ -640,8 +653,11 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 	}
 	pixels := t.pix
 	if t.zeroInitialized && len(pixels) < t.payloadBytes() {
-		pixels = make([]byte, t.payloadBytes())
+		scratch := acquireTextureUploadScratch(t.payloadBytes())
+		defer releaseTextureUploadScratch(scratch)
+		pixels = scratch.pixels
 		copy(pixels, t.pix)
+		clear(pixels[len(t.pix):])
 	}
 	t.handle, t.err = driver.CreateTexture(render.TextureDescriptor{
 		WrapU: t.wrapU, WrapV: t.wrapV,

@@ -2,6 +2,7 @@ package font
 
 import (
 	"fmt"
+	"slices"
 	"weak"
 )
 
@@ -126,11 +127,14 @@ func flattenContour(points []Point, tolerance float64) (OutlineContour, error) {
 	// TrueType omits on-curve points between consecutive off-curve points.
 	// Materialize those implied midpoints before flattening so a long run of
 	// control points remains a smooth sequence of quadratic segments.
-	type contourPoint struct {
-		point   OutlinePoint
-		onCurve bool
+	var local [256]contourPoint
+	expanded := local[:0]
+	if count := len(points) * 2; count > cap(expanded) {
+		scratch := acquireGlyphRasterScratch()
+		defer releaseGlyphRasterScratch(scratch)
+		scratch.expanded = slices.Grow(scratch.expanded[:0], count)[:count]
+		expanded = scratch.expanded[:0]
 	}
-	expanded := make([]contourPoint, 0, len(points)*2)
 	for index, point := range points {
 		expanded = append(expanded, contourPoint{point: toOutlinePoint(point), onCurve: point.OnCurve})
 		next := points[(index+1)%len(points)]
@@ -162,8 +166,7 @@ func flattenContour(points []Point, tolerance float64) (OutlineContour, error) {
 			return nil, fmt.Errorf("contour contains consecutive off-curve points")
 		}
 		end := next.point
-		curve := flattenQuadratic(current, point.point, end, tolerance)
-		contour = append(contour, curve[1:]...)
+		contour = appendQuadratic(contour, current, point.point, end, tolerance)
 		current = end
 		offset += 2
 	}
@@ -185,16 +188,15 @@ func midpoint(a, b OutlinePoint) OutlinePoint {
 	return OutlinePoint{X: (a.X + b.X) * 0.5, Y: (a.Y + b.Y) * 0.5}
 }
 
-func flattenQuadratic(p0, p1, p2 OutlinePoint, tolerance float64) []OutlinePoint {
+func appendQuadratic(dst OutlineContour, p0, p1, p2 OutlinePoint, tolerance float64) OutlineContour {
 	if quadraticFlatEnough(p0, p1, p2, tolerance) {
-		return []OutlinePoint{p0, p2}
+		return append(dst, p2)
 	}
 	p01 := midpoint(p0, p1)
 	p12 := midpoint(p1, p2)
 	p012 := midpoint(p01, p12)
-	left := flattenQuadratic(p0, p01, p012, tolerance)
-	right := flattenQuadratic(p012, p12, p2, tolerance)
-	return append(left[:len(left)-1], right...)
+	dst = appendQuadratic(dst, p0, p01, p012, tolerance)
+	return appendQuadratic(dst, p012, p12, p2, tolerance)
 }
 
 func quadraticFlatEnough(p0, p1, p2 OutlinePoint, tolerance float64) bool {

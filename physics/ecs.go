@@ -12,6 +12,9 @@ type Runtime2D struct {
 	Simulation    *World
 	frame         uint64
 	syncedInputs  physicsInputs
+	syncedWorld   *World
+	syncedTick    ecs.Tick
+	changes       physicsBodyChanges
 	managedBodies int
 }
 
@@ -43,13 +46,38 @@ func stepECS2D(context *ecs.SystemContext) error {
 	if runtime.frame == 0 {
 		runtime.frame = 1
 	}
-	if err := runtime.syncBodies(world); err != nil {
-		return err
+	inputs := physicsInputs2D(world)
+	fullSync := runtime.syncedWorld != runtime.Simulation || inputs.bodyTopologyChanged(runtime.syncedInputs)
+	if !fullSync && inputs.bodyChanged(runtime.syncedInputs) {
+		entities := runtime.changes.collect[RigidBody2D](world, runtime.syncedTick, inputs, runtime.syncedInputs)
+		for _, entity := range entities {
+			body := world.GetRef[RigidBody2D](entity).body
+			state := body.state()
+			if state == nil || body.world != runtime.Simulation || state.userData != uint64(entity) {
+				fullSync = true
+				break
+			}
+		}
+		if !fullSync && len(entities) != 0 {
+			if err := runtime.syncBodies(world, entities); err != nil {
+				return err
+			}
+		}
 	}
-	runtime.syncECSColliders[Circle](world)
-	runtime.syncECSColliders[Box](world)
-	runtime.syncECSColliders[Segment](world)
-	runtime.sweepManaged()
+	if fullSync {
+		if err := runtime.syncBodies(world, nil); err != nil {
+			return err
+		}
+	}
+	if fullSync || inputs.collidersChanged(runtime.syncedInputs) {
+		runtime.syncECSColliders[Circle](world)
+		runtime.syncECSColliders[Box](world)
+		runtime.syncECSColliders[Segment](world)
+		runtime.sweepManagedColliders()
+		if fullSync {
+			runtime.sweepManagedBodies()
+		}
+	}
 	delta := 1.0 / 60
 	if time, ok := world.GetResource[*scene.Time](); ok && time != nil && time.Delta > 0 {
 		delta = time.Delta.Seconds()
@@ -58,16 +86,25 @@ func stepECS2D(context *ecs.SystemContext) error {
 	runtime.writeBodies(world)
 	runtime.writeEvents(world)
 	runtime.syncedInputs = physicsInputs2D(world)
+	runtime.syncedWorld = runtime.Simulation
+	runtime.syncedTick = world.ChangeTick()
 	return nil
 }
 
-func (runtime *Runtime2D) syncBodies(world *ecs.World) error {
-	runtime.managedBodies = 0
-	for entity, access := range world.Query2[RigidBody2D, scene.Transform]().All {
+func (runtime *Runtime2D) syncBodies(world *ecs.World, entities []ecs.Entity) error {
+	query := world.Query2[RigidBody2D, scene.Transform]()
+	if entities == nil {
+		runtime.managedBodies = 0
+	} else {
+		query = query.In(entities)
+	}
+	for entity, access := range query.All {
 		if !scene.IsActive(world, entity) {
 			continue
 		}
-		runtime.managedBodies++
+		if entities == nil {
+			runtime.managedBodies++
+		}
 		bodyAccess := access.A
 		transformAccess := access.B
 
@@ -80,7 +117,7 @@ func (runtime *Runtime2D) syncBodies(world *ecs.World) error {
 		}
 		position := Vector{X: float64(pose.Translation.X()), Y: float64(pose.Translation.Y())}
 		rotation := transformRotationZ(pose)
-		if !component.body.Valid() || component.body.world != runtime.Simulation {
+		if !component.body.Valid() || component.body.world != runtime.Simulation || component.body.state().userData != uint64(entity) {
 			def := NewBodyDef(component.Type)
 			def.Position, def.Rotation = position, rotation
 			def.Velocity, def.AngularVelocity = component.Velocity, component.AngularVelocity
@@ -131,7 +168,7 @@ func (runtime *Runtime2D) syncECSColliders[S Shape2D](world *ecs.World) {
 
 		body, collider := bodyAccess.Ref(), colliderAccess.Ref()
 		state := body.body.state()
-		if state == nil || body.body.world != runtime.Simulation || state.touched != runtime.frame {
+		if state == nil || body.body.world != runtime.Simulation {
 			continue
 		}
 		if !collider.handle.Valid() || collider.handle.world != runtime.Simulation {
@@ -153,13 +190,16 @@ func (runtime *Runtime2D) syncECSColliders[S Shape2D](world *ecs.World) {
 	}
 }
 
-func (runtime *Runtime2D) sweepManaged() {
+func (runtime *Runtime2D) sweepManagedColliders() {
 	for index := range runtime.Simulation.colliders {
 		state := &runtime.Simulation.colliders[index]
 		if state.alive && state.managed && state.touched != runtime.frame {
 			runtime.Simulation.removeColliderIndex(uint32(index))
 		}
 	}
+}
+
+func (runtime *Runtime2D) sweepManagedBodies() {
 	for index := range runtime.Simulation.bodies {
 		state := &runtime.Simulation.bodies[index]
 		if state.alive && state.managed && state.touched != runtime.frame {
@@ -181,6 +221,13 @@ func (runtime *Runtime2D) writeBodies(world *ecs.World) {
 		component, transform := &value, &pose
 		state := component.body.state()
 		if state == nil {
+			continue
+		}
+		if state.position == component.lastPosition && state.rotation == component.lastRotation &&
+			state.velocity == component.Velocity && state.angularVelocity == component.AngularVelocity &&
+			!world.Has[scene.Parent](entity) &&
+			pose.Translation[0] == float32(state.position.X) && pose.Translation[1] == float32(state.position.Y) &&
+			pose.Rotation == mgl32.QuatRotate(float32(state.rotation), mgl32.Vec3{0, 0, 1}) {
 			continue
 		}
 		component.Velocity, component.AngularVelocity = state.velocity, state.angularVelocity

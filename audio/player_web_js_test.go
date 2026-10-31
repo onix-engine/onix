@@ -5,10 +5,29 @@ package audio
 import (
 	"io"
 	"runtime"
+	"slices"
 	"syscall/js"
 	"testing"
 	"time"
 )
+
+func TestWebClipKeepsOwnedFloatSamples(t *testing.T) {
+	source := []float32{0.25, -0.5, 0.75, -1}
+	clip, err := NewClip(FormatWAV, DecodedAudio{Samples: source, SampleRate: OutputSampleRate, Channels: OutputChannels})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(clip.pcm) != 0 || !slices.Equal(clip.samples, source) {
+		t.Fatal("Web clip was converted to PCM bytes")
+	}
+	if clip.length != int64(len(source)*BytesPerSample) {
+		t.Fatalf("Web clip length = %d, want %d", clip.length, len(source)*BytesPerSample)
+	}
+	source[0] = 0
+	if clip.samples[0] != 0.25 {
+		t.Fatal("Web clip retained caller-owned sample buffer")
+	}
+}
 
 func TestWebPlayerDefersAudioContextUntilUserGesture(t *testing.T) {
 	js.Global().Call("eval", `
@@ -17,6 +36,7 @@ func TestWebPlayerDefersAudioContextUntilUserGesture(t *testing.T) {
 			resumes: 0,
 			starts: 0,
 			mediaPlays: 0,
+			channels: [],
 			listeners: {},
 			dispatch(type) {
 				const listener = this.listeners[type];
@@ -49,7 +69,9 @@ func TestWebPlayerDefersAudioContextUntilUserGesture(t *testing.T) {
 				return Promise.resolve();
 			}
 			createBuffer() {
-				return {copyToChannel() {}};
+				return {copyToChannel(values, channel) {
+					globalThis.__onixAudioTest.channels[channel] = Array.from(values);
+				}};
 			}
 			createGain() {
 				const gain = {gain: {value: 1}, connect() {}, disconnect() {}};
@@ -96,12 +118,15 @@ func TestWebPlayerDefersAudioContextUntilUserGesture(t *testing.T) {
 		}
 	})
 
-	clip := &Clip{pcm: make([]byte, bytesPerFrame), duration: time.Second}
-	platform, err := newPlatformPlayer(clip)
+	clip, err := NewClip(FormatWAV, DecodedAudio{Samples: []float32{0.25, -0.5, 0.75, -1}, SampleRate: OutputSampleRate, Channels: OutputChannels})
+	if err != nil {
+		t.Fatalf("decode web clip: %v", err)
+	}
+	playback, err := clip.NewPlayer()
 	if err != nil {
 		t.Fatalf("create web player: %v", err)
 	}
-	player := platform.(*webPlayer)
+	player := playback.platform.(*webPlayer)
 	if err := player.SetVolume(.25); err != nil {
 		t.Fatalf("set deferred volume: %v", err)
 	}
@@ -151,6 +176,9 @@ func TestWebPlayerDefersAudioContextUntilUserGesture(t *testing.T) {
 	}
 	if got := state.Get("starts").Int(); got != 1 {
 		t.Fatalf("audio source starts after gesture = %d, want 1", got)
+	}
+	if channels := state.Get("channels"); channels.Index(0).Index(0).Float() != 0.25 || channels.Index(0).Index(1).Float() != 0.75 || channels.Index(1).Index(0).Float() != -0.5 || channels.Index(1).Index(1).Float() != -1 {
+		t.Fatalf("WebAudio channels were not deinterleaved from float samples")
 	}
 	if got := state.Get("mediaPlays").Int(); got != 1 {
 		t.Fatalf("stream plays after gesture = %d, want 1", got)

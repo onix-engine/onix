@@ -46,23 +46,24 @@ type ListItem[T any] struct {
 }
 
 type ListOptions[T any] struct {
-	X, Y          float32
-	Width, Height float32
-	Items         []T
-	Axis          ListAxis
-	ItemSize      float32
-	Overscan      int
-	Controlled    bool
-	ScrollX       float32
-	ScrollY       float32
-	BarSize       float32
-	MinThumbSize  float32
-	ThumbBarSize  float32
-	HoverBarSize  float32
-	Radius        CornerRadius
-	PassThrough   bool
-	Theme         Theme
-	Style         *ScrollStyle
+	ReserveScrollbarSpace bool
+	X, Y                  float32
+	Width, Height         float32
+	Items                 []T
+	Axis                  ListAxis
+	ItemSize              float32
+	Overscan              int
+	Controlled            bool
+	ScrollX               float32
+	ScrollY               float32
+	BarSize               float32
+	MinThumbSize          float32
+	ThumbBarSize          float32
+	HoverBarSize          float32
+	Radius                CornerRadius
+	PassThrough           bool
+	Theme                 Theme
+	Style                 *ScrollStyle
 
 	// BuildItem initializes each pooled entity once. Add custom visuals as its
 	// children; BindItem then updates them whenever it represents an item.
@@ -82,7 +83,8 @@ func SpawnList[T any](world *ecs.World, opts ListOptions[T]) ecs.Entity {
 	itemSize := normalizeListItemSize(opts.ItemSize)
 	contentWidth, contentHeight := listContentSize(axis, itemSize, len(opts.Items))
 	list := SpawnScrollArea(world, ScrollAreaOptions{
-		X: opts.X, Y: opts.Y, Width: opts.Width, Height: opts.Height,
+		ReserveScrollbarSpace: opts.ReserveScrollbarSpace,
+		X:                     opts.X, Y: opts.Y, Width: opts.Width, Height: opts.Height,
 		ContentWidth: contentWidth, ContentHeight: contentHeight,
 		Controlled: opts.Controlled, ScrollX: opts.ScrollX, ScrollY: opts.ScrollY,
 		BarSize: opts.BarSize, MinThumbSize: opts.MinThumbSize,
@@ -191,7 +193,7 @@ func syncListEntity[T any](world *ecs.World, entity ecs.Entity) {
 	prepareScrollArea(world, entity, area, clip)
 
 	offset, _ := GetScrollAreaOffset(world, entity)
-	metrics := measureScrollArea(area.Width, area.Height, area.ContentWidth, area.ContentHeight, area.BarSize)
+	metrics := area.Measure()
 	layout := newListLayout(list.Axis, list.ItemSize, metrics, offset.X(), offset.Y())
 	first := listFirstIndex(layout.scroll, list.ItemSize, list.Overscan, len(list.Items), len(list.itemEntities))
 	last := min(first+len(list.itemEntities), len(list.Items))

@@ -8,6 +8,7 @@ import (
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/scene"
+	"github.com/diiyw/onix/text/piecetree"
 	htmlui "github.com/diiyw/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -26,10 +27,11 @@ type htmlEditableState struct {
 }
 
 type htmlEventReaders struct {
-	Events  ecs.MessageReader[scene.InputEvent]
-	Inputs  ecs.MessageReader[InputEvent[string]]
-	Submits ecs.MessageReader[SubmittedEvent[string]]
-	Focus   ecs.MessageReader[FocusChangedEvent]
+	Events    ecs.MessageReader[scene.InputEvent]
+	Inputs    ecs.MessageReader[InputEvent[string]]
+	Documents ecs.MessageReader[InputEvent[piecetree.Snapshot]]
+	Submits   ecs.MessageReader[SubmittedEvent[string]]
+	Focus     ecs.MessageReader[FocusChangedEvent]
 }
 
 type htmlEventReadersTag struct{}
@@ -260,7 +262,7 @@ func restoreHTMLFocusRebuildState(world *ecs.World, state htmlFocusRebuildState)
 		*field = state.Field
 		field.Value, field.Placeholder, field.Password = value, placeholder, password
 		field.MaxRunes, field.FontSize, field.DPI = maxRunes, fontSize, dpi
-		length := runeCount(field.Value)
+		length := field.Text().Runes()
 		field.Caret = max(0, min(field.Caret, length))
 		field.Anchor = max(0, min(field.Anchor, length))
 		if editable := world.GetMut[htmlui.Editable](entity); editable != nil {
@@ -452,6 +454,11 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 		}
 	}
 	syncHTMLControlStates(world)
+	for event := range readers.Documents.All(world) {
+		if control, ok := world.Get[htmlui.Control](event.Entity); ok {
+			world.WriteMessage(htmlui.Event{Entity: control.Owner, Target: event.Entity, ID: control.ID, FormID: control.FormID, Name: control.Name, Kind: htmlui.EventInput, Snapshot: event.Value, Document: true, Bubbles: true})
+		}
+	}
 	for event := range readers.Inputs.All(world) {
 		if editable, ok := world.Get[htmlui.Editable](event.Entity); ok {
 			if !htmlui.SetEditableValue(world, event.Entity, event.Value) {
@@ -1380,8 +1387,11 @@ func updateHTMLKeyboard(world *ecs.World, entity ecs.Entity, inputState *input.S
 // geometry changes; the select itself keeps its identity and keyboard state.
 func refreshRetainedHTMLControl(world *ecs.World, entity ecs.Entity, control htmlui.Control) {
 	if field := world.GetMut[TextField](entity); field != nil {
-		field.Value, field.Placeholder, field.MaxRunes = control.Value, control.Placeholder, control.MaxLength
-		length := runeCount(field.Value)
+		if field.Buffer == nil {
+			field.Value = control.Value
+		}
+		field.Placeholder, field.MaxRunes = control.Placeholder, control.MaxLength
+		length := field.Text().Runes()
 		field.Caret, field.Anchor = max(0, min(field.Caret, length)), max(0, min(field.Anchor, length))
 	}
 	if toggle := world.GetMut[Toggle[bool]](entity); toggle != nil {

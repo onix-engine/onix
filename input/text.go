@@ -91,11 +91,11 @@ func (s *State) ApplyTextEditsInRange(value string, selectionStart, selectionEnd
 // Keep one per editor document; String snapshots are immutable. Do not copy it.
 type TextBuffer struct {
 	piecetree.Tree
-	value                                   string
+	value                                   piecetree.Snapshot
 	scratch                                 []byte
-	cursor                                  int
 	initialized, valid                      bool
-	before                                  string
+	segmented                               bool
+	before                                  piecetree.Snapshot
 	changeStart, changeOldEnd, changeNewEnd int
 	changed                                 bool
 }
@@ -110,13 +110,23 @@ func (b *TextBuffer) ApplyTextEditsInRange(value string, start, end, maxRunes in
 }
 
 func (b *TextBuffer) apply(value string, selectionStart, selectionEnd, maxRunes int, multiline bool, edits []TextEdit, reserve int) (string, int, int) {
+	next, caret, submits := b.applyEdits(piecetree.FromString(value), selectionStart, selectionEnd, maxRunes, multiline, edits, reserve, false)
+	return next.String(), caret, submits
+}
+
+// ApplyEdits publishes immutable pieces without materializing the document.
+func (b *TextBuffer) ApplyEdits(value piecetree.Snapshot, start, end, maxRunes int, multiline bool, edits []TextEdit) (piecetree.Snapshot, int, int) {
+	return b.applyEdits(value, start, end, maxRunes, multiline, edits, 64, true)
+}
+func (b *TextBuffer) applyEdits(value piecetree.Snapshot, selectionStart, selectionEnd, maxRunes int, multiline bool, edits []TextEdit, reserve int, segmented bool) (piecetree.Snapshot, int, int) {
+	b.segmented = segmented
 	if len(edits) == 0 {
 		length := 0
 		valid := false
 		if b.initialized && b.valid && b.value == value {
 			length, valid = b.Runes(), true
-		} else if utf8.ValidString(value) {
-			length, valid = utf8.RuneCountInString(value), true
+		} else if validSnapshot(value) {
+			length, valid = value.Runes(), true
 		}
 		if valid {
 			selectionStart = max(0, min(selectionStart, length))
@@ -127,16 +137,19 @@ func (b *TextBuffer) apply(value string, selectionStart, selectionEnd, maxRunes 
 			return value, selectionEnd, 0
 		}
 	}
-	b.sync(value, reserve)
+	b.syncSnapshot(value, reserve)
 	b.before, b.changed = value, false
 	if !b.valid {
 		b.scratch = b.scratch[:0]
-		for _, r := range value {
-			b.scratch = utf8.AppendRune(b.scratch, r)
+		for part := range value.Chunks(0, value.Len()) {
+			for _, r := range part {
+				b.scratch = utf8.AppendRune(b.scratch, r)
+			}
 		}
-		b.Tree.Reset(string(b.scratch))
+		b.value = piecetree.FromString(string(b.scratch))
+		b.Tree.Reset(b.value.String())
 		b.changed = true
-		b.changeStart, b.changeOldEnd, b.changeNewEnd = 0, len(value), b.Len()
+		b.changeStart, b.changeOldEnd, b.changeNewEnd = 0, value.Len(), b.Len()
 	}
 	length := b.Runes()
 	selectionStart = max(0, min(selectionStart, length))
@@ -163,8 +176,7 @@ func (b *TextBuffer) apply(value string, selectionStart, selectionEnd, maxRunes 
 				limit = max(maxRunes-b.Runes()+(selectionEnd-selectionStart), 0)
 			}
 			removed := selectionEnd - selectionStart
-			b.delete(selectionStart, selectionEnd)
-			inserted := b.insertSanitized(edit.Text, multiline, limit)
+			inserted := b.replaceSanitized(selectionStart, selectionEnd, edit.Text, multiline, limit)
 			if inserted > 0 || removed > 0 {
 				changed = true
 				caret = selectionStart + inserted
@@ -191,8 +203,7 @@ func (b *TextBuffer) apply(value string, selectionStart, selectionEnd, maxRunes 
 		case TextCommandEnter:
 			if multiline {
 				if maxRunes <= 0 || b.Runes()-(selectionEnd-selectionStart) < maxRunes {
-					b.delete(selectionStart, selectionEnd)
-					b.insertRune('\n')
+					b.replace(b.ByteOffset(selectionStart), b.ByteOffset(selectionEnd), "\n")
 					changed = true
 					caret = selectionStart + 1
 					selectionStart, selectionEnd = caret, caret
@@ -206,16 +217,36 @@ func (b *TextBuffer) apply(value string, selectionStart, selectionEnd, maxRunes 
 		b.value = value
 		return value, caret, submits
 	}
-	return b.string(), caret, submits
+	b.finish()
+	return b.value, caret, submits
 }
 
 func (b *TextBuffer) sync(value string, reserve int) {
-	if b.initialized && b.value == value {
+	b.segmented = false
+	b.syncSnapshot(piecetree.FromString(value), reserve)
+}
+
+func validSnapshot(value piecetree.Snapshot) bool {
+	for part := range value.Chunks(0, value.Len()) {
+		if !utf8.ValidString(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *TextBuffer) SyncSnapshot(value piecetree.Snapshot) {
+	b.segmented = true
+	b.syncSnapshot(value, 64)
+}
+
+func (b *TextBuffer) syncSnapshot(value piecetree.Snapshot, reserve int) {
+	if b.initialized && b.value.Equal(value) {
 		return
 	}
-	b.valid = utf8.ValidString(value)
-	b.Tree.Reset(value)
-	b.before, b.changed = "", false
+	b.valid = validSnapshot(value)
+	b.Tree.Reset(value.String())
+	b.before, b.changed = piecetree.Snapshot{}, false
 	if reserve > 0 {
 		b.Tree.Reserve(reserve*utf8.UTFMax, 64)
 	}
@@ -223,18 +254,10 @@ func (b *TextBuffer) sync(value string, reserve int) {
 }
 
 func (b *TextBuffer) delete(start, end int) {
-	b.cursor = b.ByteOffset(start)
-	b.replace(b.cursor, b.ByteOffset(end), "")
+	b.replace(b.ByteOffset(start), b.ByteOffset(end), "")
 }
 
-func (b *TextBuffer) insertRune(value rune) {
-	var encoded [utf8.UTFMax]byte
-	size := utf8.EncodeRune(encoded[:], value)
-	b.replace(b.cursor, b.cursor, string(encoded[:size]))
-	b.cursor += size
-}
-
-func (b *TextBuffer) insertSanitized(text string, multiline bool, limit int) int {
+func (b *TextBuffer) replaceSanitized(start, end int, text string, multiline bool, limit int) int {
 	b.scratch = b.scratch[:0]
 	inserted := 0
 	for offset := 0; offset < len(text) && (limit < 0 || inserted < limit); {
@@ -265,25 +288,26 @@ func (b *TextBuffer) insertSanitized(text string, multiline bool, limit int) int
 		b.scratch = utf8.AppendRune(b.scratch, current)
 		inserted++
 	}
-	b.replace(b.cursor, b.cursor, string(b.scratch))
-	b.cursor += len(b.scratch)
+	b.replace(b.ByteOffset(start), b.ByteOffset(end), string(b.scratch))
 	return inserted
 }
 
-func (b *TextBuffer) string() string {
+func (b *TextBuffer) finish() {
 	// Deltas in history own their bytes, so compaction can reclaim deleted text.
 	if b.RetainedBytes() > max(64<<10, b.Len()*3) {
 		b.Tree.Compact()
 		b.Tree.Reserve(256, 64)
+		b.value = piecetree.FromString(b.Tree.String())
 	}
-	b.value = b.Tree.String()
+	if !b.segmented {
+		b.value = piecetree.FromString(b.Tree.String())
+	}
 	b.valid = true
 	// A large paste must not leave its temporary sanitization buffer attached
 	// to the document. Ordinary typing keeps its warmed capacity.
 	if cap(b.scratch) > 64<<10 {
 		b.scratch = nil
 	}
-	return b.value
 }
 
 // ReplaceBytes applies an external byte-range edit and caches its snapshot.
@@ -291,10 +315,10 @@ func (b *TextBuffer) ReplaceBytes(start, end int, text string) {
 	valid := b.valid && utf8.ValidString(text)
 	b.before, b.changed = b.value, false
 	b.replace(start, end, text)
-	b.value = b.string()
+	b.finish()
 	b.initialized = true
 	if !valid {
-		b.valid = utf8.ValidString(b.value)
+		b.valid = validSnapshot(b.value)
 	}
 }
 
@@ -304,14 +328,14 @@ func (b *TextBuffer) ApplySnapshot(value string, start, oldEnd, newEnd int) {
 	b.before, b.changed = b.value, true
 	b.changeStart, b.changeOldEnd, b.changeNewEnd = start, oldEnd, newEnd
 	b.Tree.ApplySnapshot(value, start, oldEnd, newEnd)
-	b.value, b.initialized, b.valid = value, true, utf8.ValidString(value)
-	b.string()
+	b.value, b.initialized, b.valid = piecetree.FromString(value), true, utf8.ValidString(value)
+	b.finish()
 }
 
 // ChangedRange reports the batch's byte delta without comparing document-sized
 // snapshots. It is valid only for the exact before/after pair of the last edit.
 func (b *TextBuffer) ChangedRange(before, after string) (start, oldEnd, newEnd, prefixRunes int, ok bool) {
-	if !b.changed || b.before != before || b.value != after || !b.Matches(after) {
+	if !b.changed || !b.before.Equal(piecetree.FromString(before)) || !b.value.Equal(piecetree.FromString(after)) {
 		return
 	}
 	start, oldEnd, newEnd = b.changeStart, b.changeOldEnd, b.changeNewEnd
@@ -333,6 +357,9 @@ func (b *TextBuffer) replace(start, end int, text string) {
 		b.changeNewEnd = max(b.changeNewEnd, end) + len(text) - (end - start)
 	}
 	b.Tree.Replace(start, end, text)
+	if b.segmented {
+		b.value = b.value.Replace(start, end, text)
+	}
 }
 
 func normalizeText(text string) string {
@@ -355,4 +382,20 @@ func sanitizeText(text string, multiline bool) string {
 		}
 		return r
 	}, text)
+}
+
+// Snapshot returns the current immutable version, independent of future edits.
+func (b *TextBuffer) Snapshot() piecetree.Snapshot { return b.value }
+func (b *TextBuffer) String() string               { return b.value.String() }
+func (b *TextBuffer) Matches(value string) bool {
+	return b.initialized && b.value.Equal(piecetree.FromString(value))
+}
+func (b *TextBuffer) MatchesSnapshot(value piecetree.Snapshot) bool {
+	return b.initialized && b.value == value
+}
+func (b *TextBuffer) SnapshotChangedRange(before, after piecetree.Snapshot) (start, oldEnd, newEnd, prefixRunes int, ok bool) {
+	if !b.changed || b.before != before || b.value != after {
+		return
+	}
+	return b.changeStart, b.changeOldEnd, b.changeNewEnd, b.RuneOffset(b.changeStart), true
 }

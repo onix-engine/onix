@@ -121,7 +121,7 @@ func TestPersistentStyleIndexBound(t *testing.T) {
 		t.Fatal("full index was not retired at the next pass")
 	}
 	for _, slot := range cache.styles.slots {
-		if slot.style != nil {
+		if slot.value != nil {
 			t.Fatal("retired index retained a style")
 		}
 	}

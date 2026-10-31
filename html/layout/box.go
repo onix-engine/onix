@@ -3,6 +3,7 @@ package layout
 import (
 	"unicode/utf8"
 
+	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/style"
 )
@@ -45,6 +46,10 @@ type Box struct {
 	Viewport          Rect
 	Style             *style.ComputedStyle
 	Content           Rect
+	// ScrollbarGutter is reserved between the padding edge and border.
+	ScrollbarGutter   Edges
+	ScrollWidth       float64
+	ScrollHeight      float64
 	Padding           Edges
 	Border            Edges
 	Margin            Edges
@@ -76,12 +81,7 @@ type TextFragment struct {
 	Glyphs []GlyphFragment
 }
 
-type GlyphFragment struct {
-	Rune    rune
-	X       float64
-	Y       float64
-	Advance float64
-}
+type GlyphFragment = font.PositionedGlyph
 
 type ImageFragment struct {
 	Node  *dom.Node
@@ -103,6 +103,12 @@ type ControlFragment struct {
 }
 
 func (b *Box) PaddingBox() Rect {
+	rect := b.ScrollportBox()
+	return expandRect(rect, b.ScrollbarGutter)
+}
+
+// ScrollportBox excludes classic scrollbar gutters from the padding box.
+func (b *Box) ScrollportBox() Rect {
 	return expandRect(b.Content, b.Padding)
 }
 

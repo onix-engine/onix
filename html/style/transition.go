@@ -10,7 +10,7 @@ var transitionProperties = [...]string{"transition-property", "transition-durati
 var transitionInitial = [...]string{"all", "0s", "ease", "0s"}
 
 func applyTransitionProperty(computed *ComputedStyle, property, raw string) error {
-	values := computed.TransitionRaw
+	values := computed.transitionValues()
 	if property == "transition" {
 		var builders [4]strings.Builder
 		entries := splitCSSList(raw)
@@ -70,8 +70,7 @@ func applyTransitionProperty(computed *ComputedStyle, property, raw string) erro
 		}
 		values[index] = raw
 	}
-	computed.TransitionRaw = values
-	resolveTransitions(computed)
+	computed.mutableMotion().transition = values
 	return nil
 }
 
@@ -126,13 +125,5 @@ func resolveTransition(values [4]string, property string) TransformTransition {
 func parseTransformTransition(input string) (TransformTransition, error) {
 	value := ComputedStyle{}
 	err := applyTransitionProperty(&value, "transition", input)
-	return value.TransformTransition, err
-}
-
-func resolveTransitions(computed *ComputedStyle) {
-	computed.TransformTransition = resolveTransition(computed.TransitionRaw, "transform")
-	computed.OpacityTransition = resolveTransition(computed.TransitionRaw, "opacity")
-	for i, property := range animatedColorNames {
-		computed.ColorTransitions[i] = resolveTransition(computed.TransitionRaw, property)
-	}
+	return resolveTransition(value.transitionValues(), "transform"), err
 }

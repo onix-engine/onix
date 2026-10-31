@@ -18,13 +18,13 @@ func (a *ModuleEditor) setupPreview3DGuides() {
 	// Linear sampling supplies a one-pixel coverage ramp on both sides of a
 	// two-pixel axis. The rows interpolate distance fade; keep RGB white because
 	// the unlit mesh shader premultiplies alpha.
-	a.viewport3D.view.axisTexture = graphics.CreateTextureByImageNoMipmap(&image.RGBA{
+	a.viewport3D.view.axisTexture = graphics.CreateTextureBySharedImage(&image.RGBA{
 		Pix: []byte{
 			255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0,
 			255, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0,
 		},
 		Stride: 16, Rect: image.Rect(0, 0, 4, 2),
-	})
+	}, false, graphics.ResourceUsageDefault)
 }
 
 func preview3DAxisColor(color graphics.ColorRGBA) graphics.ColorRGBA {

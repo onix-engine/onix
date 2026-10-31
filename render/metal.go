@@ -50,9 +50,7 @@ type metalDriver struct {
 	nativeDrawState
 	spriteUniforms C.OnixMetalSpriteUniforms
 	updates        []C.OnixMetalTextureUpdate
-	pixels         []byte
-	pixelBytes     int
-	pixelRetention bufferRetention
+	textureUpload  nativeTextureUpload
 	width          int
 	height         int
 	viewport       Rect
@@ -98,9 +96,9 @@ func (d *metalDriver) BufferMemoryStatistics() BufferMemoryStatistics {
 		InstanceBytes:      uint64(memory.instances),
 		StagingBytes:       uint64(memory.staging),
 		ReadbackBytes:      uint64(memory.readback),
-		NativeScratchBytes: uint64(memory.scratch),
+		NativeScratchBytes: uint64(memory.scratch) + uint64(d.textureUpload.capacity),
 		ScratchBytes: sliceCapacityBytes(d.draws) + sliceCapacityBytes(d.draws3D) +
-			sliceCapacityBytes(d.deformationWords) + sliceCapacityBytes(d.updates) + sliceCapacityBytes(d.pixels),
+			sliceCapacityBytes(d.deformationWords) + sliceCapacityBytes(d.updates),
 	}
 }
 
@@ -113,8 +111,7 @@ func (d *metalDriver) BeginFrame(clear Color) error {
 	if C.onix_metal_begin_frame(d.native, &values[0]) == 0 {
 		return metalError("begin frame")
 	}
-	d.pixels = (&d.pixelRetention).trimUploadBuffer(d.pixels, d.pixelBytes, 64<<10)
-	d.pixelBytes = 0
+	d.textureUpload.trim()
 	d.updates = (&d.updateRetention).trimScratch(d.updates, 32)
 	d.trimScratch()
 	d.beginFrameStatistics(d.width, d.height)
@@ -238,7 +235,6 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 		return nil
 	}
 	d.updates = (&d.updateRetention).resetScratch(d.updates)
-	d.pixels = d.pixels[:0]
 	pixels := updates[0].Pixels
 	var uploadBytes uint64
 	var length int
@@ -266,9 +262,15 @@ func (d *metalDriver) UpdateTextures(updates []TextureUpdate) error {
 		})
 	}
 	if len(updates) > 1 {
-		d.pixels = packTexturePixels(d.pixels, updates, length)
-		pixels = d.pixels
-		d.pixelBytes = max(d.pixelBytes, len(pixels))
+		var ok bool
+		pixels, ok = d.textureUpload.reserve(length)
+		if !ok {
+			return errors.New("render: Metal texture upload storage is unavailable")
+		}
+		for index, update := range updates {
+			offset := int(d.updates[index].data_offset)
+			copy(pixels[offset:offset+len(update.Pixels)], update.Pixels)
+		}
 	}
 	if C.onix_metal_update_textures(
 		d.native,
@@ -616,6 +618,7 @@ func (d *metalDriver) SetVSync(enabled bool) {
 }
 
 func (d *metalDriver) Destroy() {
+	d.textureUpload.release()
 	if d.native != nil {
 		C.onix_metal_destroy(d.native)
 		d.native = nil

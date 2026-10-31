@@ -178,11 +178,16 @@ func TestHTMLVisibilityCompositeOnlyPaintsVisibleContent(t *testing.T) {
 				t.Fatalf("hidden ancestor enlarged composite bounds: %+v", raster)
 			}
 			pixel := raster.image.RGBAAt(10, 10)
-			if effect == "opacity:.5" && (pixel.B != 255 || pixel.R != 0 || pixel.A != 128) || effect == "filter:invert(1)" && (pixel.R != 255 || pixel.G != 255 || pixel.B != 0 || pixel.A != 255) {
+			if effect == "opacity:.5" && (pixel.B != 255 || pixel.R != 0 || pixel.A != 255) || effect == "filter:invert(1)" && (pixel.R != 255 || pixel.G != 255 || pixel.B != 0 || pixel.A != 255) {
 				t.Fatalf("visible child lost its ancestor effect: %v", pixel)
 			}
 			if entity := htmlCullRole(world, owner, group, htmlRoleSurface); entity == 0 || !scene.IsVisible(world, entity) {
 				t.Fatal("hidden ancestor suppressed its visible composite content")
+			} else if effect == "opacity:.5" {
+				sprite, _ := world.Get[scene.Sprite2D](entity)
+				if sprite.Alpha != .5 {
+					t.Fatalf("composited alpha = %v, want .5", sprite.Alpha)
+				}
 			}
 			child.SetAttribute("style", "width:20px;height:20px;background:blue")
 			incrementalSync(t, world)

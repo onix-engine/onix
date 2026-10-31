@@ -198,26 +198,44 @@ type renderView3D struct {
 	meshKeys           map[*graphics.Mesh]uint32
 	dynamicGeometry    map[meshGeometryKey3D]uint32
 	deformationIndices map[meshGeometryKey3D]uint32
+	extractedRetention reuse.Retention
+	instanceRetention  reuse.Retention
+	drawRetention      reuse.Retention
+	vertexRetention    reuse.Retention
+	indexRetention     reuse.Retention
+	deformRetention    reuse.Retention
 }
 
 func (view *renderView3D) resetExtracted() {
+	view.trimDrawBuffers()
 	view.previousExtracted = max(view.previousExtracted, len(view.extracted))
 	view.extracted = view.extracted[:0]
 	view.opaque.items, view.transparent.items = nil, nil
 	if view.occlusion != nil {
+		view.occlusion.trimDrawBuffers()
 		view.occlusion.opaque.items = nil
 	}
 	if s := view.reflection; s != nil {
 		for _, pass := range [...]*renderView3D{&s.depth, &s.radiance, &s.occlusion, &s.resolve} {
+			pass.trimDrawBuffers()
 			pass.opaque.items = nil
 		}
 	}
+}
+
+func (view *renderView3D) trimDrawBuffers() {
+	view.instances = view.instanceRetention.Trim(view.instances, 64)
+	view.draws = view.drawRetention.Trim(view.draws, 64)
+	view.vertices = view.vertexRetention.Trim(view.vertices, 256)
+	view.indices = view.indexRetention.Trim(view.indices, 384)
+	view.deformations = view.deformRetention.Trim(view.deformations, 16)
 }
 
 func (view *renderView3D) releaseUnusedExtracted() {
 	if view.previousExtracted > len(view.extracted) {
 		clear(view.extracted[len(view.extracted):view.previousExtracted])
 	}
+	view.extracted = view.extractedRetention.Trim(view.extracted, 64)
 	view.previousExtracted = len(view.extracted)
 	if view.shadow != nil {
 		for _, shadow := range view.shadow.views[:view.shadow.count] {
@@ -850,6 +868,11 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 	previousDeformations := len(view.deformations)
 	view.deformations = view.deformations[:0]
 	defer func() {
+		view.instanceRetention.Record(len(view.instances))
+		view.drawRetention.Record(len(view.draws))
+		view.vertexRetention.Record(len(view.vertices))
+		view.indexRetention.Record(len(view.indices))
+		view.deformRetention.Record(len(view.deformations))
 		if len(view.deformations) < previousDeformations {
 			clear(view.deformations[len(view.deformations):previousDeformations])
 		}

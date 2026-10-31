@@ -215,11 +215,6 @@ type styleCore struct {
 	TransformTranslateCrossY float64
 	TransformOriginX         Value
 	TransformOriginY         Value
-	TransformTransition      TransformTransition
-	OpacityTransition        TransformTransition
-	ColorTransitions         [AnimatedColorCount]TransformTransition
-	TransitionRaw            [4]string
-	AnimationRaw             [8]string
 	AnimationImportant       AnimatedProperties
 	AnimatedOpacity          bool
 	AnimatedPaint            AnimatedProperties
@@ -246,10 +241,10 @@ type ComputedStyle struct {
 	BackgroundLayers []BackgroundLayer
 	BoxShadow        []Shadow
 	Filters          []Filter
-	Animations       []CSSAnimation
+	motion           *motionStyle
 }
 
-// Map stores one computed style per node. ComputedStyle is a large (~6KB)
+// Map stores one computed style per node. ComputedStyle is a large (~5.5KB)
 // struct, so it is shared by pointer: layout boxes and paint fragments
 // reference the same instance instead of copying it per node. The cascade
 // interns equal instances, so many nodes point at one allocation.

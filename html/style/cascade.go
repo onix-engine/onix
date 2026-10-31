@@ -38,6 +38,7 @@ type cascadeScratch struct {
 	matcher    *css.MatchContext
 	compiled   *compiledStylesheet
 	styles     styleIndex
+	motion     motionStyle
 	persistent *styleIndex
 }
 
@@ -102,6 +103,7 @@ func releaseCascadeScratch(scratch *cascadeScratch) {
 	scratch.changes = nil
 	scratch.persistent = nil
 	scratch.styles.reset()
+	scratch.motion = motionStyle{}
 	cascadeScratchPool.Put(scratch)
 }
 
@@ -266,6 +268,8 @@ func computeStyleChildren(node *dom.Node, computed *ComputedStyle, rootFontSize 
 }
 
 func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, definitions filterDefinitions, scratch *cascadeScratch) error {
+	scratch.motion = motionStyle{}
+	computed.motion = &scratch.motion
 	specified, err := collectSpecifiedValuesInto(node, stylesheet, input, queries, scratch)
 	if err != nil {
 		return err
@@ -309,16 +313,17 @@ func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *Compu
 		return err
 	}
 	resolvePaintColors(computed, parent, hasParent, node, specified)
-	resolveAnimations(computed)
+	computed.motion = scratch.internIndex().resolveMotion(computed.motion)
 	// A matching zero-duration declaration may replace the configuration of
 	// a still-running transition. Keep paint topology until the property stops matching.
-	computed.AnimatedOpacity = computed.OpacityTransition.Enabled
-	for i, transition := range computed.ColorTransitions {
+	computed.AnimatedOpacity = computed.TransitionFor(1).Enabled
+	for i := range AnimatedColorCount {
+		transition := computed.TransitionFor(i + 2)
 		if transition.Enabled {
 			computed.AnimatedPaint |= AnimatedColor << i
 		}
 	}
-	for _, animation := range computed.Animations {
+	for _, animation := range computed.Animations() {
 		if animation.Name == "" || stylesheet == nil {
 			continue
 		}
@@ -444,7 +449,7 @@ func computedStyleChangeForNode(node *dom.Node, previous, current *ComputedStyle
 		previous.TransformScaleX != current.TransformScaleX || previous.TransformScaleY != current.TransformScaleY ||
 		previous.TransformSkewX != current.TransformSkewX || previous.TransformTranslateCrossX != current.TransformTranslateCrossX || previous.TransformTranslateCrossY != current.TransformTranslateCrossY ||
 		previous.TransformOriginX != current.TransformOriginX || previous.TransformOriginY != current.TransformOriginY ||
-		previous.TransformTransition != current.TransformTransition || previous.OpacityTransition != current.OpacityTransition || previous.TransitionRaw != current.TransitionRaw || previous.AnimationRaw != current.AnimationRaw || previous.AnimationImportant != current.AnimationImportant ||
+		!motionEqual(previous.motion, current.motion) || previous.AnimationImportant != current.AnimationImportant ||
 		previous.BackgroundColor != current.BackgroundColor ||
 		previous.BorderRadius != current.BorderRadius ||
 		// A uniform border is part of the existing rounded-rectangle surface;
@@ -942,7 +947,11 @@ func applySpecifiedValues(node *dom.Node, computed, parent *ComputedStyle, speci
 			continue
 		}
 		if parsed := entry.value.parsed; parsed != nil {
-			*compiledValueField(computed, parsed.property) = parsed.value
+			if parsed.motion != nil {
+				applyPreparedMotion(computed, parsed)
+			} else {
+				*compiledValueField(computed, parsed.property) = parsed.value
+			}
 			markAnimationImportance(computed, entry)
 			continue
 		}
@@ -1197,13 +1206,13 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		style.JustifySelf = value
 	case "align-items":
-		value, err := parseKeyword(raw, "stretch", "flex-start", "flex-end", "start", "end", "center")
+		value, err := parseKeyword(raw, "stretch", "flex-start", "flex-end", "start", "end", "center", "baseline")
 		if err != nil {
 			return err
 		}
 		style.AlignItems = value
 	case "align-self":
-		value, err := parseKeyword(raw, "auto", "stretch", "flex-start", "flex-end", "start", "end", "center")
+		value, err := parseKeyword(raw, "auto", "stretch", "flex-start", "flex-end", "start", "end", "center", "baseline")
 		if err != nil {
 			return err
 		}

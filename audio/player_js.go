@@ -3,11 +3,10 @@
 package audio
 
 import (
-	"encoding/binary"
-	"math"
 	"sync"
 	"syscall/js"
 	"time"
+	"unsafe"
 )
 
 var webDevice struct {
@@ -25,7 +24,7 @@ type deferredWebPlayer interface {
 
 type webPlayer struct {
 	mu            sync.Mutex
-	pcm           []byte
+	samples       []float32
 	context       js.Value
 	buffer        js.Value
 	gain          js.Value
@@ -55,7 +54,7 @@ func newPlatformPlayer(clip *Clip) (platformPlayer, error) {
 		return newStreamingWebPlayer(clip)
 	}
 	return &webPlayer{
-		pcm:      clip.pcm,
+		samples:  clip.samples,
 		duration: clip.duration.Seconds(),
 		volume:   1,
 	}, nil
@@ -179,20 +178,24 @@ func (p *webPlayer) initializeLocked(context js.Value) {
 		return
 	}
 	p.context = context
-	frames := len(p.pcm) / bytesPerFrame
+	frames := len(p.samples) / outputChannels
 	p.buffer = context.Call("createBuffer", outputChannels, frames, outputSampleRate)
+	channelSamples := make([]float32, frames)
+	bytes := js.Global().Get("Uint8Array").New(frames * bytesPerSample)
+	array := js.Global().Get("Float32Array").New(bytes.Get("buffer"), bytes.Get("byteOffset"), frames)
 	for channel := range outputChannels {
-		samples := make([]float32, frames)
 		for frame := range frames {
-			offset := (frame*outputChannels + channel) * bytesPerSample
-			samples[frame] = math.Float32frombits(binary.LittleEndian.Uint32(p.pcm[offset:]))
+			channelSamples[frame] = p.samples[frame*outputChannels+channel]
 		}
-		p.buffer.Call("copyToChannel", float32Array(samples), channel, 0)
+		if frames != 0 {
+			js.CopyBytesToJS(bytes, unsafe.Slice((*byte)(unsafe.Pointer(&channelSamples[0])), frames*bytesPerSample))
+		}
+		p.buffer.Call("copyToChannel", array, channel, 0)
 	}
 	p.gain = context.Call("createGain")
 	p.gain.Get("gain").Set("value", p.volume)
 	p.gain.Call("connect", context.Get("destination"))
-	p.pcm = nil
+	p.samples = nil
 }
 
 func (p *webPlayer) Volume() float64 {
@@ -241,7 +244,7 @@ func (p *webPlayer) Close() error {
 	}
 	p.playing = false
 	p.closed = true
-	p.pcm = nil
+	p.samples = nil
 	p.buffer = js.Undefined()
 	p.gain = js.Undefined()
 	return nil
@@ -333,16 +336,6 @@ func removeWaitingWebPlayer(player deferredWebPlayer) {
 	webDevice.mu.Lock()
 	delete(webDevice.waiting, player)
 	webDevice.mu.Unlock()
-}
-
-func float32Array(samples []float32) js.Value {
-	data := make([]byte, len(samples)*bytesPerSample)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint32(data[index*bytesPerSample:], math.Float32bits(sample))
-	}
-	bytes := js.Global().Get("Uint8Array").New(len(data))
-	js.CopyBytesToJS(bytes, data)
-	return js.Global().Get("Float32Array").New(bytes.Get("buffer"), bytes.Get("byteOffset"), len(samples))
 }
 
 func suspendPlatform() error {
