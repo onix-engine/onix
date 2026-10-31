@@ -16,11 +16,7 @@ Font sizes share a page pool with an 8 MiB LRU budget for cached atlas texels: R
 
 Glyph records hold weak page references; returned glyphs pin their pages. After GC identifies a cold unreferenced page, the next glyph allocation or `GlyphCache.FlushUploads` releases its texture on the owning render thread and reuses its slot. Cached metadata regenerates a collected glyph on demand. `text.Font.Dispose` releases all remaining pages and closes the owned font; call it only after all text users and pending draws finish. Low-level canvas consumers must call `Glyph.KeepAlive(canvas)` after queuing glyph geometry so the page survives until submission.
 
-Cache lifecycle validation passed Linux font/text/graphics/scene/HTML package tests, text race checks, and text/graphics/scene vet. Android x86_64 text package tests passed on `10.0.0.174:16384` with NDK API 24. The 1000-glyph LCD benchmark retains one draw and zero warm allocations; scene glyph records remain 88 bytes on amd64. These checks exercise resource lifetime through test drivers, not Android GPU surface pixels or visual acceptance.
-
-See [implementation validation](ecs-api-implementation.md) for recorded mobile scope. Darwin compilation of shared Apple code is not equivalent to iOS SDK compilation or device validation.
-
-## Examples and commands
+## Examples
 
 ```go
 label := scene.NewText2D("Hello")

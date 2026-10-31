@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Count working-tree source with cloc; see docs/code-count-and-ecs-review.md."""
+"""Count working-tree source with cloc; see docs/README.md for documentation."""
 
 import argparse
 from collections import defaultdict
@@ -24,7 +24,7 @@ EXCLUDED_DIRS = {
     "vendor", "node_modules", "dist", ".git", ".gocache", ".gradle",
 }
 TEST_NAME = re.compile(r"^(?:test_|benchmark_)|(?:_test|_bench|_benchmark|[.]test|[.]spec)[.]")
-# Explicit inventory, not a copyright/license inference. See the report for scope.
+# Explicit inventory, not a copyright/license inference.
 BUNDLED = (
     "internal/brotli/*", "images/webp/*", "images/png/stdlib*.go",
     "render/vulkan/*", "render/vk_video/*",

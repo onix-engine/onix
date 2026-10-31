@@ -327,7 +327,7 @@ naga and glslangValidator or glslc on PATH, updating GLES/WebGL2, Vulkan GLSL/SP
 and Metal includes. WebGPU embeds WGSL. Custom shaders compile separately during
 resource builds. Use bounded serial package checks on small machines. Pixel tests
 use small offscreen targets; editor visual acceptance and Metal behavior are manual.
-See [custom shader ABI](custom-shaders.md) and [performance](render-performance.md).
+See [custom shader ABI](custom-shaders.md) and the [performance guide](performance.md).
 
 ## Configuration and command examples
 

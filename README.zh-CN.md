@@ -95,17 +95,8 @@ my-game/
 
 ## 开发文档
 
-| 主题 | 文档 |
-| --- | --- |
-| 项目结构、模块行为、消息与场景 | [模块开发](docs/module-system-authoring.md) |
-| 桌面打包与交叉编译 | [桌面构建](docs/desktop-builds.md) |
-| Android 工具链、APK 与移动端入口 | [Android 构建](docs/android-builds.md) |
-| 资源收集、预处理与资源包归属 | [资源打包](docs/resource-packages.md) |
-| ECS 存储与查询设计 | [ECS API](docs/ecs-api-design.md) |
-| 物理组件与运行机制 | [2D 物理](docs/physics2d.md)、[3D 物理](docs/physics3d.md) |
-| 渲染与自定义材质 | [光照](docs/render-lighting.md)、[自定义着色器](docs/custom-shaders.md) |
-| HTML/CSS 行为与 Chromium 对照用例 | [兼容性检查](tests/htmlcompat/README.md) |
-| 原生浏览器集成 | [WebView](docs/webview.md) |
+从[文档索引](docs/README.zh-CN.md)进入使用、设计和性能总览；每类总览都有
+英文和简体中文版本。API 与平台专题参考集中列在[使用指南](docs/usage.zh-CN.md)。
 
 ## 引擎开发约定
 

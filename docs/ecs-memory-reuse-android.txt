@@ -1,5 +1,0 @@
-Android ECS tests, 2026-10-17. Go 1.26.0; NDK API 24; GOMAXPROCS=2.
-12
-x86_64
-PASS
-Temporary directory removed: /data/local/tmp/onix-ecs-memory-XOO7M4

@@ -5,7 +5,7 @@ The Build Project panel supports Linux, Windows and macOS. Output lives under
 Every format includes binary `catalog.bin` and `.dat` resource packages. Staging,
 generated Go source and `overlay.json` are removed after building. Release uses
 `onix_release`; manifests, ordinary atlases and Spine require preprocessed binary
-resources. See [release binary size](release-binary-size.md) for linking boundaries.
+resources.
 
 Set App Icon in Project Settings. PNG, JPEG, GIF, WebP and SVG are supported;
 paths are relative to the project's `resources/`. The default is the editor's

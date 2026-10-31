@@ -1,11 +1,8 @@
-# ECS API design review
+# ECS API and ownership
 
-This historical review led to the eight completed phases documented in the
-[implementation record](ecs-api-implementation.md). It describes design intent;
-use the implementation record for final names, measurements and migration outcomes.
-
-Go 1.27 method names and slot ownership are documented in the
-[generic-method migration](ecs-generic-methods.md).
+This guide describes the current ECS access, iteration, structural-change and
+package-boundary contracts. Performance expectations are summarized in the
+[performance guide](performance.md).
 
 ## Access and iteration
 
@@ -100,29 +97,17 @@ flowchart TD
     Rendering --> ECS
 ```
 
-ECS owns entities/storage/queries/commands/schedule/resources/messages. Scene owns
-Parent/Transform/Visibility/SiblingOrder, cameras, shared 2D geometry, input and animation.
-UI owns container layout, widget constraints, controls, semantic parts and text interaction.
-HTML owns DOM integration/reconciliation; render3d owns optional 3D extraction/materials/
-systems over graphics/render. Project loads scene/prefab/module data; onix composes features.
-Use generic resources, removal hooks and registration boundaries without import cycles
-or UI calls embedded in ECS. Migrate APIs first, then packages, removing aliases directly.
-
-An initial proposal moved all 2D drawing into scene/render2d and UITransform into ui.
-Drawing/input/animation/layout share sizes/anchors/clips/text metrics, so the final design
-retains basic 2D runtime in scene and moves only upper-level Layout/Widget to ui. Splitting
-packages is architectural work; binary-size/build/runtime benefits require measurements.
-Original source classification counted about 26,498 top-level ECS lines, including 9,926
-HTML-prefixed and 4,914 render-prefixed, plus 10,815 in the former ecs/ui. The remainder
-was not necessarily pure ECS; file prefixes were only an approximate classification.
+ECS owns entities, storage, queries, commands, schedules, resources and messages.
+Scene owns hierarchy, transforms, visibility, cameras, shared 2D geometry, input
+and animation. UI owns container layout, widget constraints, controls and text
+interaction. HTML owns DOM integration and reconciliation. `scene/render3d` owns
+optional 3D extraction, materials and systems over `graphics`/`render`. Project
+loads scene, prefab and module data; `onix` composes engine features. Keep these
+boundaries free of import cycles and UI-specific calls inside ECS.
 
 ## Delivery and acceptance
 
-Implement access/query/script/UI/index APIs, then node factories and structural plans,
-then split packages against stable interfaces. Cover early/error/panic iteration,
-Changed/Added windows, nesting, Commands, multi-scene scripts, deterministic order,
-installation failure/replacement, cleanup, generation reuse and swapped rows. Record
-ns/op, B/op and allocs/op, separating initialization from warm steady paths. World/index
-creation, growth, dynamic strings and business callback allocations remain separate.
-Use bounded explicit package checks; no whole-repository test command, editor screenshot
-testing or subagents. See the implementation record for measured gains and regressions.
+Tests for ECS changes should cover early exit and panic cleanup, change-filter
+windows, nested iteration, queued structural changes, entity generation reuse and
+swapped rows. Measure initialization separately from warmed steady paths. Use
+focused package checks for the packages affected by a change.

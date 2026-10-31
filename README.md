@@ -105,17 +105,9 @@ use `onix_` and `ONIX_` respectively.
 
 ## Documentation
 
-| Topic | Guide |
-| --- | --- |
-| Project structure, module behavior, messages, and scenes | [Module authoring](docs/module-system-authoring.md) |
-| Desktop packaging and cross-compilation | [Desktop builds](docs/desktop-builds.md) |
-| Android toolchains, APKs, and mobile entry points | [Android builds](docs/android-builds.md) |
-| Resource collection, preprocessing, and package ownership | [Resource packages](docs/resource-packages.md) |
-| ECS storage and query design | [ECS API](docs/ecs-api-design.md) |
-| Physics components and runtime behavior | [2D physics](docs/physics2d.md), [3D physics](docs/physics3d.md) |
-| Rendering and custom materials | [Lighting](docs/render-lighting.md), [custom shaders](docs/custom-shaders.md) |
-| HTML/CSS behavior and Chromium comparison fixtures | [Compatibility checks](tests/htmlcompat/README.md) |
-| Native browser integration | [WebView](docs/webview.md) |
+Start at the [documentation index](docs/README.md) for usage, design and
+performance guides, each with a Simplified Chinese version. Focused API and
+platform references are listed in the [usage guide](docs/usage.md).
 
 ## Engine development
 
