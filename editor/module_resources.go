@@ -17,6 +17,7 @@ import (
 
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/project"
+	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/resource"
 )
 
@@ -584,7 +585,11 @@ func preprocessModuleContent(context resourcePreprocessContext, plan *project.Pr
 	if compiler == nil {
 		compiler = NagaShaderCompiler{}
 	}
-	options := project.PreprocessOptions{ShaderTarget: shaderTargetForBuildPlatform(context.Options.Platform), ShaderCompiler: compiler}
+	backend, err := render.ResolveBackend(string(context.Options.Platform), context.Options.Backend)
+	if err != nil && context.Options.Platform != "" {
+		return err
+	}
+	options := project.PreprocessOptions{ShaderTarget: shaderTargetForBackend(backend), ShaderCompiler: compiler}
 	if context.Options.Progress != nil {
 		options.Progress = func(module, asset string, completed, total int) {
 			context.Options.Progress(BuildProgress{Message: fmt.Sprintf("Compiling module %s / %s (%d/%d)", module, asset, completed, total), Value: .2 + .3*float32(completed)/float32(max(1, total)), Indeterminate: asset != "ready"})

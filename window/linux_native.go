@@ -99,7 +99,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		C.int(height),
 		ctitle,
 		C.int(boolInt(options.Decorations == DecorationNone)),
-		C.int(boolInt(webViewBackendRequiresX11)),
+		C.int(boolInt(webViewBackendRequiresX11 || render.CompiledBackend == render.BackendOpenGL)),
 	)
 	if nativeWindow == nil {
 		panic(errors.New(C.GoString(C.onix_last_error())))
@@ -121,11 +121,11 @@ func NewContext(width, height int, title string, options Options) *Context {
 		resizable:    options.Resizable,
 	}
 	ctx.closeRequestSupport.close = func() { ctx.shouldClose = true }
-	surfaceKind := render.VulkanSurfaceXlib
+	surfaceKind := render.NativeSurfaceXlib
 	if C.onix_window_backend(nativeWindow) == C.int(C.ONIX_BACKEND_WAYLAND) {
-		surfaceKind = render.VulkanSurfaceWayland
+		surfaceKind = render.NativeSurfaceWayland
 	}
-	driver, err := render.NewVulkanDriver(render.VulkanSurface{
+	driver, err := newDesktopRenderDriver(render.NativeSurface{
 		Kind:        surfaceKind,
 		Display:     C.onix_window_native_display(nativeWindow),
 		Window:      uintptr(C.onix_window_native_surface(nativeWindow)),

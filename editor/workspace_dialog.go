@@ -126,7 +126,7 @@ func (a *ModuleEditor) syncWorkspaceDialogs(world *ecs.World) error {
 		case "progress":
 			panel = a.dialogPanel(760, 460)
 		case "build":
-			panel = a.dialogPanel(800, 650)
+			panel = a.dialogPanel(800, 722)
 		case "project", "preferences":
 			panel = newSettingsDialogLayout[uint8](a.layout().Root, "Save").panel
 		case "build-error", "run-failure":

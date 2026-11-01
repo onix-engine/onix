@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diiyw/onix/internal/shaderhlsl"
 	"github.com/diiyw/onix/project"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/glsl"
@@ -55,6 +56,13 @@ func (NagaShaderCompiler) CompileShader(request project.ShaderCompileRequest) (p
 	}
 
 	switch request.Target {
+	case project.ShaderTargetDirectX:
+		if result.HasVertexEntry {
+			result.Vertex, err = shaderhlsl.Compile(module, entrypoints.vertex)
+		}
+		if err == nil && result.HasFragmentEntry {
+			result.Fragment, err = shaderhlsl.Compile(module, entrypoints.fragment)
+		}
 	case project.ShaderTargetVulkan:
 		if result.HasVertexEntry {
 			result.Vertex, err = compileNagaSPIRV(module, entrypoints.vertex)
@@ -198,7 +206,10 @@ func compileNagaMSL(module *ir.Module, entrypoints nagaShaderEntrypoints) ([]byt
 		MipFilter: &mipFilter,
 	}}
 	source, _, err := msl.Compile(native, options)
-	return []byte(source), err
+	if err != nil {
+		return nil, err
+	}
+	return []byte(source), nil
 }
 
 func compileNagaGLSL(module *ir.Module, entrypoint int) ([]byte, error) {

@@ -15,17 +15,17 @@ import (
 
 // Read an offscreen target using a hidden native window; no editor or visual
 // acceptance session is needed to exercise the actual shape shader.
-func TestShapeCoverageVulkanPixels(t *testing.T) {
+func TestShapeCoverageNativePixels(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		density   int
 		projected bool
 	}{{"normal", 1, false}, {"hidpi", 2, false}, {"camera", 1, true}} {
-		t.Run(test.name, func(t *testing.T) { testShapeCoverageVulkanPixels(t, test.density, test.projected) })
+		t.Run(test.name, func(t *testing.T) { testShapeCoverageNativePixels(t, test.density, test.projected) })
 	}
 }
 
-func testShapeCoverageVulkanPixels(t *testing.T, density int, projected bool) {
+func testShapeCoverageNativePixels(t *testing.T, density int, projected bool) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	user32 := windows.NewLazySystemDLL("user32.dll")
@@ -35,9 +35,9 @@ func testShapeCoverageVulkanPixels(t *testing.T, density int, projected bool) {
 		t.Fatal("create hidden window:", err)
 	}
 	defer user32.NewProc("DestroyWindow").Call(hwnd)
-	driver, err := render.NewVulkanDriver(render.VulkanSurface{Kind: render.VulkanSurfaceWin32, Window: hwnd, Width: 64, Height: 64})
+	driver, err := newShapeCoverageDriver(render.NativeSurface{Kind: render.NativeSurfaceWin32, Window: hwnd, Width: 64, Height: 64})
 	if err != nil {
-		t.Skip("Vulkan unavailable:", err)
+		t.Fatal(render.CompiledBackend, " unavailable:", err)
 	}
 	defer driver.Destroy()
 	device, err := render.NewDevice(driver)

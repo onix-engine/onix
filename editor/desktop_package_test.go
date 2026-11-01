@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -96,7 +97,7 @@ func TestBuildMacOSUniversalExecutableBuildsAndCombinesBothArchitectures(t *test
 	if err != nil {
 		t.Fatalf("stat universal executable: %v", err)
 	}
-	if info.Mode().Perm()&0o111 == 0 {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("universal executable mode = %o, want an executable file", info.Mode().Perm())
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(executable), ".onix-universal")); !os.IsNotExist(err) {

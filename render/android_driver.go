@@ -1,9 +1,7 @@
-//go:build android && cgo
+//go:build android && cgo && !onix_opengl
 
 package render
 
-func NewAndroidDriver(surface VulkanSurface) (Driver, error) {
-	return newDriverWithFallback(surface, "Vulkan", NewVulkanDriver, "OpenGL ES", func(surface VulkanSurface) (Driver, error) {
-		return NewOpenGLESDriver(surface.Window, surface.Width, surface.Height)
-	})
+func NewAndroidDriver(surface NativeSurface) (Driver, error) {
+	return NewVulkanDriver(surface)
 }

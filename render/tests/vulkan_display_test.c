@@ -174,30 +174,30 @@ static void test_destroy_instance(VkInstance instance, const VkAllocationCallbac
 #define vkDestroyInstance test_destroy_instance
 #include "../vulkan_native.c"
 
-static OnixVkDriver *new_driver(void) {
+static OnixGPUDriver *new_driver(void) {
     missing_extension = wrong_device = deny_acquire = no_modes = no_present = fail_surface = 0;
     reject_routed_plane = reject_all_planes = 0;
     acquired = released = destroyed_surface = destroyed_instance = 0;
     memset(&created_surface, 0, sizeof(created_surface));
-    OnixVkDriver *driver = calloc(1, sizeof(*driver));
+    OnixGPUDriver *driver = calloc(1, sizeof(*driver));
     assert(driver != NULL);
-    driver->native_surface = (OnixVkSurface){.kind = ONIX_VK_SURFACE_DRM, .drm_fd = 0, .drm_connector_id = 43,
+    driver->native_surface = (OnixGPUSurface){.kind = ONIX_GPU_SURFACE_DRM, .drm_fd = 0, .drm_connector_id = 43,
         .width = 1920, .height = 1080, .drm_refresh_rate = 59941};
     assert(onix_vk_create_instance(driver));
     return driver;
 }
 
 int main(void) {
-    OnixVkDriver *driver = new_driver();
+    OnixGPUDriver *driver = new_driver();
     assert(onix_vk_create_surface(driver));
     assert(created_surface.planeIndex == 2);
     assert(onix_vk_select_device(driver));
     assert(driver->physical_device == GPU);
-    onix_vk_destroy(driver);
+    onix_gpu_destroy(driver);
     assert(released == 1 && destroyed_surface == 1 && destroyed_instance == 1);
 
     driver = new_driver();
-    OnixVkSurface surface = driver->native_surface;
+    OnixGPUSurface surface = driver->native_surface;
     surface.drm_refresh_rate = 0;
     assert(onix_vk_display_mode(modes, 4, surface) == modes[3].displayMode);
     surface.width = 800;
@@ -205,7 +205,7 @@ int main(void) {
     reject_routed_plane = 1;
     assert(onix_vk_create_surface(driver));
     assert(created_surface.planeIndex == 1 && created_surface.alphaMode == VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR);
-    onix_vk_destroy(driver);
+    onix_gpu_destroy(driver);
 
     for (int failure = 0; failure < 6; failure++) {
         driver = new_driver();
@@ -218,8 +218,8 @@ int main(void) {
             case 5: fail_surface = 1; break;
         }
         assert(!onix_vk_create_surface(driver));
-        assert(onix_vk_last_error()[0] != '\0');
-        onix_vk_destroy(driver);
+        assert(onix_gpu_last_error()[0] != '\0');
+        onix_gpu_destroy(driver);
         assert(released == (failure >= 3));
         assert(destroyed_surface == 0 && destroyed_instance == 1);
     }
@@ -227,7 +227,7 @@ int main(void) {
     assert(onix_vk_create_surface(driver));
     no_present = 1;
     assert(!onix_vk_select_device(driver));
-    onix_vk_destroy(driver);
+    onix_gpu_destroy(driver);
     assert(released == 1);
     return 0;
 }

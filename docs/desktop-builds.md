@@ -7,6 +7,45 @@ generated Go source and `overlay.json` are removed after building. Release uses
 `onix_release`; manifests, ordinary atlases and Spine require preprocessed binary
 resources.
 
+The Renderer row selects exactly one backend for the build. Defaults also apply
+to direct `go build` commands without a renderer tag:
+
+| Platform | Default | Other choices |
+| --- | --- | --- |
+| macOS | Metal | Vulkan, OpenGL |
+| Linux | Vulkan | OpenGL |
+| Windows | DirectX 11 | Vulkan, OpenGL |
+| Web | WebGPU | WebGL 2 |
+| WeChat | WebGL 2 | — |
+
+For direct builds, select one of `onix_metal`, `onix_vulkan`, `onix_directx`,
+`onix_opengl`, `onix_webgpu`, or `onix_webgl`. For example:
+
+```sh
+go build -tags onix_vulkan ./path/to/app
+go build -tags onix_opengl ./path/to/app
+GOOS=js GOARCH=wasm go build -tags onix_webgl ./path/to/app
+GOOS=js GOARCH=wasm go build -tags wechat,onix_webgl ./path/to/app
+```
+
+`editor.BuildOptions.Backend` accepts the corresponding `render.Backend` constant;
+an empty value uses the platform default. `render.CompiledBackend` identifies the
+compiled renderer. Conflicting or unsupported renderer tags fail compilation.
+Only the selected implementation, native link libraries and builtin shaders are
+compiled; custom shader packages and resource caches also use the selected
+backend. Initialization errors are reported without loading another backend.
+WebGL output excludes the WebGPU JavaScript bridge.
+
+Vulkan on macOS requires MoltenVK; OpenGL uses the system OpenGL framework.
+Linux OpenGL uses GLX through X11/XWayland and requires OpenGL development
+libraries. Windows OpenGL uses WGL. Android defaults to Vulkan and can select
+OpenGL ES with `onix_opengl`; iOS uses Metal.
+
+DirectX builtin shaders embed precompiled DXBC. After editing their WGSL sources,
+regenerate HLSL with `go run ./render/internal/hlslgen`, then compile the bytecode
+on Windows with `go run ./render/internal/dxbcgen`. Custom shaders compile from
+their packaged HLSL when loaded.
+
 Set App Icon in Project Settings. PNG, JPEG, GIF, WebP and SVG are supported;
 paths are relative to the project's `resources/`. The default is the editor's
 `resources/images/logo.svg`. SVG is rasterized directly at each target size for

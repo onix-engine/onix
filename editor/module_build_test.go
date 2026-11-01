@@ -3,6 +3,7 @@ package editor
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -433,12 +434,45 @@ func TestModuleBuildGeneratedFileOwnershipAndReadOnlyCheck(t *testing.T) {
 	}
 }
 
+func TestModuleBuildGeneratedFileLineEndings(t *testing.T) {
+	for _, newline := range []string{"\n", "\r\n"} {
+		t.Run(fmt.Sprintf("%q", newline), func(t *testing.T) {
+			d := moduleBuildFixture(t)
+			if _, err := GenerateModuleProject(d); err != nil {
+				t.Fatal(err)
+			}
+			files := []string{"onix_generated.go", "contracts/onix_generated.go"}
+			before := make([][]byte, len(files))
+			for i, file := range files {
+				data, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(file)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				before[i] = bytes.ReplaceAll(data, []byte{'\n'}, []byte(newline))
+				moduleBuildFile(t, d, file, string(before[i]))
+			}
+			if _, err := CheckModuleProject(d); err != nil {
+				t.Fatal(err)
+			}
+			for i, file := range files {
+				data, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(file)))
+				if err != nil || !bytes.Equal(data, before[i]) {
+					t.Fatalf("check changed %s: %v", file, err)
+				}
+			}
+			if _, err := GenerateModuleProject(d); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestModuleBuildAndroidStagingSupportsIndependentProject(t *testing.T) {
 	d := moduleBuildFixture(t)
 	if _, err := GenerateModuleProject(d); err != nil {
 		t.Fatal(err)
 	}
-	layout, err := stageAndroidProject(d, d, BuildModeRelease, nil)
+	layout, err := stageAndroidProject(d, d, BuildModeRelease, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

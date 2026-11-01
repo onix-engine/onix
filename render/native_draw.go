@@ -17,10 +17,11 @@ type nativeBackend uint8
 const (
 	nativeMetal nativeBackend = iota
 	nativeVulkan
+	nativeDirectX
 )
 
 func (backend nativeBackend) name() string {
-	return [...]string{"Metal", "Vulkan"}[backend]
+	return [...]string{"Metal", "Vulkan", "DirectX"}[backend]
 }
 
 type nativeMeshUniforms = C.OnixNativeMeshUniforms

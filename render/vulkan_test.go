@@ -1,4 +1,4 @@
-//go:build (windows || linux || android) && cgo && (!(linux && onix_drm) || onix_drm_vulkan)
+//go:build cgo && (onix_vulkan || linux || android) && (windows || linux || android || (darwin && !ios)) && !onix_directx && !onix_metal && !onix_opengl && !onix_webgpu && !onix_webgl
 
 package render
 
@@ -17,7 +17,7 @@ func TestVulkanMeshPushPreservesCameraProjection(t *testing.T) {
 		LightDirection:   [4]float32{25, 26, 27, 28},
 		DirectionalLight: [4]float32{29, 30, 31, 32},
 	}
-	push := vulkanMeshPush(&batch)
+	push := nativeGPUMeshPush(&batch)
 	for i, want := range batch.ViewProjection {
 		if got := float32(push.view_projection[i]); got != want {
 			t.Fatalf("projection[%d] = %g, want %g; the shader owns the Vulkan Y flip", i, got, want)
@@ -36,14 +36,14 @@ func TestVulkanMeshPushPreservesCameraProjection(t *testing.T) {
 func TestVulkanMeshPushDoesNotAllocate(t *testing.T) {
 	batch := MeshBatch3D{ViewProjection: [16]float32{0: 1, 5: 1, 10: 1, 15: 1}}
 	if allocations := testing.AllocsPerRun(100, func() {
-		_ = vulkanMeshPush(&batch)
+		_ = nativeGPUMeshPush(&batch)
 	}); allocations != 0 {
 		t.Fatalf("mesh push allocations = %v, want 0", allocations)
 	}
 }
 
 func TestVulkanInlineResourcesReuseStorageWithoutAllocating(t *testing.T) {
-	var d vulkanDriver
+	var d nativeGPUDriver
 	mesh := d.meshes.Insert(nativeMesh{native: 1})
 	target := d.targets.Insert(nativeRenderTarget{native: 1})
 	d.meshes.Remove(mesh)

@@ -9,7 +9,6 @@ import (
 	"syscall/js"
 
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
 )
 
 const textInputSentinel = "\u200B"
@@ -69,9 +68,9 @@ func NewContext(width, height int, title string, options Options) *Context {
 	c.initMouseCapture()
 	c.textInput = c.document.Call("createElement", "textarea")
 	c.initTextInputElement()
-	// Initialize the WebGPU surface after the canvas has its drawing-buffer size.
+	// Initialize the selected renderer after sizing the canvas drawing buffer.
 	c.Init()
-	driver, err := render.NewWebGPUDriver(c.canvas, c.options.Transparent, c.options.Antialias)
+	driver, err := newBrowserRenderDriver(c.canvas, c.options.Transparent, c.options.Antialias)
 	if err != nil {
 		panic(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/diiyw/onix/project"
+	"github.com/diiyw/onix/render"
 )
 
 func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save string, categories []settingsCategoryItem[C], category C) settingsDialogLayout[C] {
@@ -218,6 +219,18 @@ func (a *ModuleEditor) layoutWorkspaceBuild(p rect) {
 		a.dialogButton(dialog, "build-mode-"+string(mode), buildModeLabel(mode), 24+float32(i)*(p.W-48)/2, 176, (p.W-48)/2, 32, a.buildOptions.Mode == mode)
 	}
 	y := float32(228)
+	backends := render.Backends(string(a.buildOptions.Platform))
+	backend, _ := render.ResolveBackend(string(a.buildOptions.Platform), a.buildOptions.Backend)
+	a.dialogLabel(dialog, "build-backend-label", "Renderer", 24, y-6, p.W-48, 24)
+	for i, value := range backends {
+		w := (p.W - 48) / float32(len(backends))
+		label := value.String()
+		if i == 0 {
+			label += " (default)"
+		}
+		a.dialogButton(dialog, "build-backend-"+string(value), label, 24+float32(i)*w, y+24, w, 30, backend == value)
+	}
+	y += 72
 	architectures := buildArchitectures(a.buildOptions.Platform)
 	if len(architectures) != 0 {
 		a.dialogLabel(dialog, "build-architecture-label", "Architecture", 24, y-6, p.W-48, 24)
@@ -275,11 +288,18 @@ func (a *ModuleEditor) handleWorkspaceBuildAction(id string) {
 		for _, value := range buildPlatforms() {
 			if value == platform {
 				a.buildOptions.Platform = platform
+				a.buildOptions.Backend = ""
 				a.buildOptions.PackageFormat, _ = normalizedBuildPackageFormat(platform, "")
 				a.buildOptions.Architecture = defaultBuildArchitecture()
 				a.changed()
 				break
 			}
+		}
+	case strings.HasPrefix(id, "build-backend-"):
+		backend := render.Backend(strings.TrimPrefix(id, "build-backend-"))
+		if _, err := render.ResolveBackend(string(a.buildOptions.Platform), backend); err == nil {
+			a.buildOptions.Backend = backend
+			a.changed()
 		}
 	case strings.HasPrefix(id, "build-mode-"):
 		a.buildOptions.Mode = BuildMode(strings.TrimPrefix(id, "build-mode-"))

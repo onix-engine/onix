@@ -795,6 +795,27 @@ func TestHTMLInputTextScrollDoesNotAccumulate(t *testing.T) {
 	if after := textX(); absFloat32(after-before) > 0.001 {
 		t.Fatalf("HTML input text origin drifted during stable sync: before=%v after=%v", before, after)
 	}
+	// A layout rebuild resets the text transform while the field retains its
+	// scroll. Returning to the start must still use the CSS content origin.
+	node, ok := htmlui.NodeByID(world, owner, "field")
+	if !ok || !node.SetAttribute("style", "height:34px") {
+		t.Fatal("mark HTML input dirty")
+	}
+	if err := sync.Run(world); err != nil {
+		t.Fatal(err)
+	}
+	state = *world.GetMut[TextField](field)
+	state.Focused, state.Caret, state.Anchor = true, 0, 0
+	world.SetIfChanged(field, state)
+	for range 3 {
+		if err := sync.Run(world); err != nil {
+			t.Fatal(err)
+		}
+		state, _ = world.Get[TextField](field)
+		if state.ScrollX != 0 || absFloat32(textX()-8) > 0.001 {
+			t.Fatalf("HTML input start drifted from CSS content origin: scroll=%v x=%v, want 0 and 8", state.ScrollX, textX())
+		}
+	}
 }
 
 func TestHTMLInputInsertionKeepsTextBeforeCaretAnchored(t *testing.T) {

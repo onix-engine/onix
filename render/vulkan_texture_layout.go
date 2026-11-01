@@ -1,9 +1,9 @@
-//go:build (windows || linux || android) && cgo && (!(linux && onix_drm) || onix_drm_vulkan)
+//go:build cgo && (onix_vulkan || linux || android) && (windows || linux || android || (darwin && !ios)) && !onix_directx && !onix_metal && !onix_opengl && !onix_webgpu && !onix_webgl
 
 package render
 
 /*
-#include "vulkan_native.h"
+#include "native_gpu.h"
 */
 import "C"
 
@@ -18,10 +18,10 @@ import "C"
 // called on any production path; the driver passes the level count down and
 // lets the native side lay out the payload.
 func nativeTextureChainSize(format TextureFormat, width, height, levels int) int {
-	return int(C.onix_vk_texture_chain_size(
+	return int(C.onix_gpu_texture_chain_size(
 		C.uint32_t(format), C.uint32_t(width), C.uint32_t(height), C.uint32_t(levels)))
 }
 
 func nativeTextureMipLevels(width, height int) int {
-	return int(C.onix_vk_texture_mip_level_count(C.uint32_t(width), C.uint32_t(height)))
+	return int(C.onix_gpu_texture_mip_level_count(C.uint32_t(width), C.uint32_t(height)))
 }

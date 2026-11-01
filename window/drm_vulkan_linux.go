@@ -1,4 +1,4 @@
-//go:build linux && cgo && onix_drm && onix_drm_vulkan
+//go:build linux && cgo && onix_drm && !onix_opengl
 
 package window
 
@@ -13,8 +13,8 @@ func newDRMDriver(display *C.OnixDRMDisplay, width, height int) (render.Driver, 
 	if C.onix_drm_save_outputs(display) == 0 {
 		return nil, drmError("save outputs")
 	}
-	driver, err := render.NewVulkanDriver(render.VulkanSurface{
-		Kind:           render.VulkanSurfaceDRM,
+	driver, err := render.NewVulkanDriver(render.NativeSurface{
+		Kind:           render.NativeSurfaceDRM,
 		Width:          width,
 		Height:         height,
 		DRMFD:          int(C.onix_drm_fd(display)),

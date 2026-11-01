@@ -68,6 +68,7 @@ void onix_macos_cancel_close(OnixMacWindow *window);
 int onix_macos_width(OnixMacWindow *window);
 int onix_macos_height(OnixMacWindow *window);
 double onix_macos_scale(OnixMacWindow *window);
+void *onix_macos_view(OnixMacWindow *window);
 void *onix_macos_layer(OnixMacWindow *window);
 void *onix_macos_native_window(OnixMacWindow *window);
 void onix_macos_set_title(OnixMacWindow *window, const char *title);

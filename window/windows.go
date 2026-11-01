@@ -549,8 +549,8 @@ func newContext(width, height int, title string, options Options) *Context {
 		}
 	}
 
-	driver, err := render.NewVulkanDriver(render.VulkanSurface{
-		Kind:        render.VulkanSurfaceWin32,
+	driver, err := newDesktopRenderDriver(render.NativeSurface{
+		Kind:        render.NativeSurfaceWin32,
 		Window:      uintptr(c.window),
 		Width:       c.Width,
 		Height:      c.Height,

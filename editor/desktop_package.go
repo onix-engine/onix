@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/diiyw/onix/render"
 )
 
 func buildLinuxPackage(root string, options BuildOptions) (string, error) {
@@ -28,6 +30,10 @@ func buildLinuxPackage(root string, options BuildOptions) (string, error) {
 		return "", fmt.Errorf("Linux builds require a Linux host")
 	}
 	layout, err := newProjectBuildLayout(root, options.ProjectDir, BuildPlatformLinux, "")
+	if err != nil {
+		return "", err
+	}
+	layout.Backend, err = render.ResolveBackend(string(options.Platform), options.Backend)
 	if err != nil {
 		return "", err
 	}
@@ -56,7 +62,7 @@ func buildLinuxPackage(root string, options BuildOptions) (string, error) {
 			if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 				return "", fmt.Errorf("create Linux package directory: %w", err)
 			}
-			args := appendReleaseFlags([]string{"build", "-buildvcs=false", "-trimpath", "-overlay", layout.OverlayPath}, options.Mode)
+			args := appendBuildFlags([]string{"build", "-buildvcs=false", "-trimpath", "-overlay", layout.OverlayPath}, options.Mode, layout.Backend.BuildTag())
 			args = append(args, "-o", executable, layout.ProjectImportPath)
 			env, err := linuxBuildEnvironment()
 			if err != nil {
@@ -86,6 +92,10 @@ func buildWindowsPackage(root string, options BuildOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	layout.Backend, err = render.ResolveBackend(string(options.Platform), options.Backend)
+	if err != nil {
+		return "", err
+	}
 	name := artifactName(options.AppName, layout.PackageName)
 	stageDir := filepath.Join(layout.BaseDir, ".windows-stage")
 	bundleDir := filepath.Join(stageDir, name)
@@ -111,7 +121,7 @@ func buildWindowsPackage(root string, options BuildOptions) (string, error) {
 			if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 				return "", fmt.Errorf("create Windows package directory: %w", err)
 			}
-			args := windowsBuildArgs(options.Mode, resourceFile)
+			args := windowsBuildArgs(options.Mode, resourceFile, layout.Backend.BuildTag())
 			args = append(args, "-overlay", layout.OverlayPath, "-o", executable, layout.ProjectImportPath)
 			if err := runCommandWithProgress(options.Progress, root, env, "go", args...); err != nil {
 				return "", err
@@ -173,6 +183,10 @@ func buildMacOSPackage(root string, options BuildOptions) (string, error) {
 		return "", fmt.Errorf("macOS DMG packaging requires macOS and hdiutil")
 	}
 	layout, err := newProjectBuildLayout(root, options.ProjectDir, BuildPlatformMacOS, "")
+	if err != nil {
+		return "", err
+	}
+	layout.Backend, err = render.ResolveBackend(string(options.Platform), options.Backend)
 	if err != nil {
 		return "", err
 	}
@@ -248,6 +262,10 @@ func buildMacOSExecutableWith(
 	lookPath func(string) (string, error),
 	run func(string, []string, string, ...string) error,
 ) error {
+	backend, err := render.ResolveBackend("macos", options.Backend)
+	if err != nil {
+		return err
+	}
 	architectures, err := macOSTargetArchitectures(options.Architecture)
 	if err != nil {
 		return err
@@ -258,7 +276,7 @@ func buildMacOSExecutableWith(
 			return err
 		}
 		reportBuildActivity(options.Progress, "Compiling macOS "+string(architecture)+"...", .65)
-		args := macOSBuildArgs(options.Mode)
+		args := macOSBuildArgs(options.Mode, backend.BuildTag())
 		args = append(args, "-overlay", layout.OverlayPath, "-o", output, layout.ProjectImportPath)
 		return run(root, env, "go", args...)
 	}

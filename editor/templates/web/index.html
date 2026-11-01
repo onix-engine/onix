@@ -8,7 +8,7 @@
 	<link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
-	<script src="runtime/webgpu.js"></script>
+	__WEB_RENDERER_SCRIPT__
 	<script src="runtime/wasm_exec.js"></script>
 	<script>
 	    const go = new Go();
@@ -87,12 +87,7 @@
 		globalThis.__onixPackageData = data;
 	};
 	const start = async () => {
-		if (!globalThis.isSecureContext) {
-			throw new Error("WebGPU requires a secure context. Open this page over HTTPS or http://localhost. For a remote server, forward its port to localhost.");
-		}
-		if (!navigator.gpu) {
-			throw new Error("WebGPU is unavailable. Use a browser and device with WebGPU enabled.");
-		}
+		__WEB_RENDERER_CHECK__
 		const [, wasm] = await Promise.all([
 			loadResources(),
 			WebAssembly.instantiateStreaming(fetch("resources/__WASM_FILENAME__"), go.importObject),

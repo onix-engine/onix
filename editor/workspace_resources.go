@@ -3,9 +3,9 @@ package editor
 import (
 	"io/fs"
 	"path"
-	"runtime"
 
 	"github.com/diiyw/onix/project"
+	"github.com/diiyw/onix/render"
 )
 
 // Preview resources use native shaders without changing authoring plans or files.
@@ -23,7 +23,7 @@ func openWorkspaceModResources(w *WorkspaceDocument, mod *project.ModPlan, featu
 	}
 	compiled := *mod
 	files, err := project.PreprocessModShaders(private, &compiled, project.PreprocessOptions{
-		Root: ".", ShaderTarget: shaderTargetForBuildPlatform(hostBuildPlatform(runtime.GOOS)), ShaderCompiler: NagaShaderCompiler{},
+		Root: ".", ShaderTarget: shaderTargetForBackend(render.CompiledBackend), ShaderCompiler: NagaShaderCompiler{},
 	})
 	if err != nil {
 		return workspaceModResources{}, err

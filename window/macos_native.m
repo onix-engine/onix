@@ -4,7 +4,6 @@
 
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
-#import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <stdio.h>
@@ -98,8 +97,10 @@ static void onix_macos_update_size(OnixMacWindow *window) {
     if (window->scale <= 0) window->scale = 1;
     window->width = (int)(points.width * window->scale + 0.5);
     window->height = (int)(points.height * window->scale + 0.5);
+#if !defined(ONIX_MAC_OPENGL)
     window->layer.contentsScale = window->scale;
     window->layer.drawableSize = CGSizeMake(window->width, window->height);
+#endif
 }
 
 static void onix_macos_update_input_passthrough(OnixMacWindow *state) {
@@ -502,14 +503,14 @@ OnixMacWindow *onix_macos_create(int width, int height, const char *title, int t
         onix_macos_apply_style(state);
         state->view = [[OnixMacView alloc] initWithFrame:rect];
         state->view.state = state;
+#if !defined(ONIX_MAC_OPENGL)
         state->view.wantsLayer = YES;
         state->layer = [CAMetalLayer layer];
-        id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-        state->layer.device = device;
-        [device release];
-        state->layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
         state->layer.opaque = transparent ? NO : YES;
         state->view.layer = state->layer;
+#else
+        state->view.wantsBestResolutionOpenGLSurface = YES;
+#endif
         state->delegate = [[OnixMacWindowDelegate alloc] init];
         state->delegate.state = state;
         state->window.delegate = state->delegate;
@@ -807,3 +808,5 @@ int onix_macos_get_clipboard_text(char *buffer, int capacity) {
     }
     return length;
 }
+
+void *onix_macos_view(OnixMacWindow *state) { return state ? state->view : NULL; }

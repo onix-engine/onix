@@ -244,6 +244,8 @@ type TextureUpdate struct {
 type ShaderDescriptor struct {
 	VulkanVertexSPIRV    []byte
 	VulkanFragmentSPIRV  []byte
+	DirectXVertexHLSL    []byte
+	DirectXFragmentHLSL  []byte
 	MetalSource          string
 	WebGL2VertexSource   string
 	WebGL2FragmentSource string
@@ -259,7 +261,7 @@ func (d ShaderDescriptor) Validate() error {
 	if len(d.VulkanVertexSPIRV)%4 != 0 || len(d.VulkanFragmentSPIRV)%4 != 0 {
 		return errors.New("render: Vulkan shader SPIR-V must be 4-byte aligned")
 	}
-	if !vulkan && d.MetalSource == "" && !webGL2 && !webGPU {
+	if !vulkan && len(d.DirectXVertexHLSL) == 0 && len(d.DirectXFragmentHLSL) == 0 && d.MetalSource == "" && !webGL2 && !webGPU {
 		return errors.New("render: shader has no platform source")
 	}
 	return nil
@@ -647,8 +649,15 @@ func (device *Device) Driver() Driver {
 	return driver
 }
 
-func (device *Device) Activate() { activeDevice.Store(device) }
-func ActiveDevice() *Device      { return activeDevice.Load() }
+func (device *Device) Activate() {
+	if device != nil {
+		if driver, ok := device.driver.(interface{ Activate() }); ok {
+			driver.Activate()
+		}
+	}
+	activeDevice.Store(device)
+}
+func ActiveDevice() *Device { return activeDevice.Load() }
 
 func (device *Device) Destroy() {
 	if device == nil {

@@ -457,20 +457,6 @@ type wgslCompiledSource struct {
 }
 
 func compileWGSLShader(source iofs.FS, root string, original ShaderSpec, target ShaderTarget, compiler ShaderCompiler) (ShaderSpec, []PreprocessedFile, []string, error) {
-	if target == ShaderTargetAndroid {
-		vulkan, vulkanFiles, paths, err := compileWGSLShader(source, root, original, ShaderTargetVulkan, compiler)
-		if err != nil {
-			return ShaderSpec{}, nil, nil, err
-		}
-		gles, glesFiles, _, err := compileWGSLShader(source, root, original, ShaderTargetWebGL2, compiler)
-		if err != nil {
-			return ShaderSpec{}, nil, nil, err
-		}
-		vulkan.WebGL2Vertex = gles.WebGL2Vertex
-		vulkan.WebGL2Fragment = gles.WebGL2Fragment
-		vulkan.WebGL2Generated = gles.WebGL2Generated
-		return vulkan, append(vulkanFiles, glesFiles...), paths, nil
-	}
 	paths := make([]string, 0, 2)
 	for _, name := range []string{original.WGSLVertex, original.WGSLFragment} {
 		name = strings.TrimSpace(name)
@@ -494,6 +480,7 @@ func compileWGSLShader(source iofs.FS, root string, original ShaderSpec, target 
 	compiled.WebGL2Vertex, compiled.WebGL2Fragment = "", ""
 	compiled.WebGPUVertex, compiled.WebGPUFragment = "", ""
 	compiled.WebGL2Generated = false
+	compiled.DirectXVertex, compiled.DirectXFragment = "", ""
 
 	results := make([]wgslCompiledSource, 0, len(paths))
 	for _, path := range paths {
@@ -534,6 +521,8 @@ func compileWGSLShader(source iofs.FS, root string, original ShaderSpec, target 
 			return ShaderSpec{}, nil, nil, fmt.Errorf("WGSL source has no vertex entrypoint")
 		}
 		switch target {
+		case ShaderTargetDirectX:
+			compiled.DirectXVertex = addStage("vertex", "hlsl", original.WGSLVertex, item.path, item.result.Vertex)
 		case ShaderTargetVulkan:
 			compiled.VulkanVertex = addStage("vertex", "spv", original.WGSLVertex, item.path, item.result.Vertex)
 		case ShaderTargetWebGL2:
@@ -551,6 +540,8 @@ func compileWGSLShader(source iofs.FS, root string, original ShaderSpec, target 
 			return ShaderSpec{}, nil, nil, fmt.Errorf("WGSL source has no fragment entrypoint")
 		}
 		switch target {
+		case ShaderTargetDirectX:
+			compiled.DirectXFragment = addStage("fragment", "hlsl", original.WGSLFragment, item.path, item.result.Fragment)
 		case ShaderTargetVulkan:
 			compiled.VulkanFragment = addStage("fragment", "spv", original.WGSLFragment, item.path, item.result.Fragment)
 		case ShaderTargetWebGL2:

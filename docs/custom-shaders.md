@@ -27,8 +27,9 @@ An empty component uses builtin stages; overriding one stage keeps the other bui
 ```
 
 Preview compiles WGSL in memory and caches it without rewriting configuration.
-Builds use pure-Go github.com/gogpu/naga for Vulkan SPIR-V, Metal MSL and WebGL2
-GLSL ES 3.00; WebGPU consumes WGSL. Android includes SPIR-V and GLSL ES. Compiled
+Builds use pure-Go github.com/gogpu/naga for DirectX HLSL, Vulkan SPIR-V, Metal MSL
+and OpenGL/WebGL2 GLSL ES 3.00; desktop OpenGL converts GLSL to 3.30 core.
+WebGPU consumes WGSL. Only the selected backend's shaders are packaged. Compiled
 stages and element configuration enter platform resource packages. Generated
 backend paths/flags live only in internal binary build plans.
 
@@ -126,7 +127,7 @@ bundle.Put(scene.Shader[graphics.MeshShader]{
 The component overrides program/Custom without mutating materials; removal restores
 material rendering. render3d.Material[T] still defines surface materials; element
 shaders require no material-type registration. Both programs use ShaderDescriptor.
-Browser Web uses WebGPU; WeChat uses WebGL2.
+Browser Web defaults to WebGPU and can select WebGL2. WeChat uses WebGL2.
 
 ### Vertex and instance ABI
 

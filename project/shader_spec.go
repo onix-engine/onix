@@ -15,6 +15,8 @@ type ShaderSpec struct {
 
 // ShaderSources holds the source paths used by shader compilation and loading.
 type ShaderSources struct {
+	DirectXVertex   string `json:"directXVertex,omitempty"`
+	DirectXFragment string `json:"directXFragment,omitempty"`
 	WGSLVertex      string `json:"wgslVertex,omitempty"`
 	WGSLFragment    string `json:"wgslFragment,omitempty"`
 	VulkanVertex    string `json:"vulkanVertex,omitempty"`
@@ -56,11 +58,11 @@ const (
 	ShaderTargetMetal
 	ShaderTargetWebGL2
 	ShaderTargetWebGPU
-	ShaderTargetAndroid
+	ShaderTargetDirectX
 )
 
 func (target ShaderTarget) valid() bool {
-	return target <= ShaderTargetAndroid
+	return target <= ShaderTargetDirectX
 }
 
 func (target ShaderTarget) String() string {
@@ -75,8 +77,8 @@ func (target ShaderTarget) String() string {
 		return "WebGL2"
 	case ShaderTargetWebGPU:
 		return "WebGPU"
-	case ShaderTargetAndroid:
-		return "Android"
+	case ShaderTargetDirectX:
+		return "DirectX"
 	default:
 		return fmt.Sprintf("ShaderTarget(%d)", target)
 	}
@@ -84,6 +86,11 @@ func (target ShaderTarget) String() string {
 
 func (s ShaderSpec) forTarget(target ShaderTarget) (ShaderSpec, error) {
 	result := s
+	result.DirectXVertex = strings.TrimSpace(result.DirectXVertex)
+	result.DirectXFragment = strings.TrimSpace(result.DirectXFragment)
+	if target != ShaderTargetAll && target != ShaderTargetDirectX {
+		result.DirectXVertex, result.DirectXFragment = "", ""
+	}
 	result.WGSLVertex = strings.TrimSpace(result.WGSLVertex)
 	result.WGSLFragment = strings.TrimSpace(result.WGSLFragment)
 	result.VulkanVertex = strings.TrimSpace(result.VulkanVertex)
@@ -99,6 +106,11 @@ func (s ShaderSpec) forTarget(target ShaderTarget) (ShaderSpec, error) {
 	switch target {
 	case ShaderTargetAll:
 		return result, nil
+	case ShaderTargetDirectX:
+		result.WGSLVertex, result.WGSLFragment, result.VulkanVertex, result.VulkanFragment, result.Metal, result.WebGL2Vertex, result.WebGL2Fragment, result.WebGPUVertex, result.WebGPUFragment = "", "", "", "", "", "", "", "", ""
+		if result.DirectXVertex == "" && result.DirectXFragment == "" {
+			return ShaderSpec{}, fmt.Errorf("shader %q has no DirectX source", s.ID)
+		}
 	case ShaderTargetVulkan:
 		result.WGSLVertex, result.WGSLFragment, result.Metal, result.WebGL2Vertex, result.WebGL2Fragment, result.WebGPUVertex, result.WebGPUFragment = "", "", "", "", "", "", ""
 		if result.VulkanVertex == "" && result.VulkanFragment == "" {
@@ -119,22 +131,14 @@ func (s ShaderSpec) forTarget(target ShaderTarget) (ShaderSpec, error) {
 		if result.WebGPUVertex == "" && result.WebGPUFragment == "" {
 			return ShaderSpec{}, fmt.Errorf("shader %q has no WebGPU source", strings.TrimSpace(s.ID))
 		}
-	case ShaderTargetAndroid:
-		result.WGSLVertex, result.WGSLFragment, result.Metal, result.WebGPUVertex, result.WebGPUFragment = "", "", "", "", ""
-		if result.VulkanVertex == "" && result.VulkanFragment == "" {
-			return ShaderSpec{}, fmt.Errorf("shader %q has no Vulkan source for Android", strings.TrimSpace(s.ID))
-		}
-		if result.WebGL2Vertex == "" && result.WebGL2Fragment == "" {
-			return ShaderSpec{}, fmt.Errorf("shader %q has no GLSL ES source for Android", strings.TrimSpace(s.ID))
-		}
 	default:
 		return ShaderSpec{}, fmt.Errorf("unsupported shader target %d", target)
 	}
 	return result, nil
 }
 
-func (s ShaderSources) SourcePaths() [9]string {
-	return [...]string{s.WGSLVertex, s.WGSLFragment, s.VulkanVertex, s.VulkanFragment, s.Metal, s.WebGL2Vertex, s.WebGL2Fragment, s.WebGPUVertex, s.WebGPUFragment}
+func (s ShaderSources) SourcePaths() [11]string {
+	return [...]string{s.WGSLVertex, s.WGSLFragment, s.VulkanVertex, s.VulkanFragment, s.Metal, s.WebGL2Vertex, s.WebGL2Fragment, s.WebGPUVertex, s.WebGPUFragment, s.DirectXVertex, s.DirectXFragment}
 }
 
 func (s ShaderSpec) Validate() error {
@@ -207,6 +211,12 @@ func (s ShaderSpec) load(source fs.FS, baseDir string) (result shaderResource, r
 		return data, nil
 	}
 	var err error
+	if descriptor.DirectXVertexHLSL, err = load(s.DirectXVertex); err != nil {
+		return result, err
+	}
+	if descriptor.DirectXFragmentHLSL, err = load(s.DirectXFragment); err != nil {
+		return result, err
+	}
 	if descriptor.VulkanVertexSPIRV, err = load(s.VulkanVertex); err != nil {
 		return result, err
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 func (a *ModuleEditor) renderWindowBorder(context *ecs.SystemContext) error {
-	if runtime.GOOS != "linux" {
+	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		return nil
 	}
 	c := graphics.CanvasFor(context.World)

@@ -171,12 +171,12 @@ static void tracked_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoi
 
 static void require(int success, const char *operation) {
 	if (!success) {
-		fprintf(stderr, "%s: %s\n", operation, onix_vk_last_error());
+		fprintf(stderr, "%s: %s\n", operation, onix_gpu_last_error());
 		exit(1);
 	}
 }
 
-static OnixVkShader load_shader(const char *path) {
+static OnixGPUShader load_shader(const char *path) {
 	FILE *file = fopen(path, "rb");
 	require(file != NULL, path);
 	require(fseek(file, 0, SEEK_END) == 0, "seek shader");
@@ -187,7 +187,7 @@ static OnixVkShader load_shader(const char *path) {
 	require(code != NULL, "allocate shader");
 	require(fread(code, 1, (size_t)length, file) == (size_t)length, "read shader");
 	fclose(file);
-	return (OnixVkShader){.code = code, .size = (size_t)length};
+	return (OnixGPUShader){.code = code, .size = (size_t)length};
 }
 
 static void fill_pixels(uint8_t *pixels, size_t length, uint8_t red, uint8_t green) {
@@ -199,41 +199,41 @@ static void fill_pixels(uint8_t *pixels, size_t length, uint8_t red, uint8_t gre
 	}
 }
 
-static void draw_target(OnixVkDriver *driver, uint32_t target, uint32_t texture) {
+static void draw_target(OnixGPUDriver *driver, uint32_t target, uint32_t texture) {
 	const float clear[] = {0, 0, 0, 1};
-	require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin target");
-	onix_vk_set_viewport(driver, 0, 0, 16, 16);
-	OnixVkSpritePush push = {.projection = {[0] = 0.125f, [5] = 0.125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance instance = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+	require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin target");
+	onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+	OnixGPUSpritePush push = {.projection = {[0] = 0.125f, [5] = 0.125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance instance = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
 	OnixNativeSpriteDraw draw = {.texture = texture, .instance_count = 1};
-	require(onix_vk_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw sprite");
-	require(onix_vk_end_render_target(driver), "end target");
+	require(onix_gpu_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw sprite");
+	require(onix_gpu_end_render_target(driver), "end target");
 }
 
-static void test_target_upload_resume(OnixVkDriver *driver, int depth) {
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, depth, &color);
+static void test_target_upload_resume(OnixGPUDriver *driver, int depth) {
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, depth, &color);
 	const uint8_t red[] = {255, 0, 0, 255}, green[] = {0, 255, 0, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, red, sizeof(red), 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, red, sizeof(red), 0, 0);
 	require(target && texture, "create upload resume resources");
 	const float clear[] = {0, 0, 0, 1};
-	OnixVkSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance instance = {.model = {8, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+	OnixGPUSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance instance = {.model = {8, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
 	OnixNativeSpriteDraw draw = {.texture = texture, .instance_count = 1};
-	require(onix_vk_begin_frame(driver, clear), "begin upload resume frame");
-	require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin upload resume target");
-	onix_vk_set_viewport(driver, 0, 0, 16, 16);
-	require(onix_vk_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw before target upload");
-	uint32_t uploaded = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, green, sizeof(green), 0, 0);
+	require(onix_gpu_begin_frame(driver, clear), "begin upload resume frame");
+	require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin upload resume target");
+	onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+	require(onix_gpu_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw before target upload");
+	uint32_t uploaded = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, green, sizeof(green), 0, 0);
 	require(uploaded != 0, "create texture during target pass");
 	draw.texture = uploaded;
 	instance.model[2] = 8;
-	require(onix_vk_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw after target upload");
+	require(onix_gpu_draw_sprites(driver, &push, &instance, 1, &draw, 1), "draw after target upload");
 	require(!driver->frame_cleared, "target upload does not mark window cleared");
-	require(onix_vk_end_render_target(driver), "end upload resume target");
-	require(onix_vk_present(driver), "present upload resume frame");
+	require(onix_gpu_end_render_target(driver), "end upload resume target");
+	require(onix_gpu_present(driver), "present upload resume frame");
 	uint8_t pixel[4];
 	for (int side = 0; side < 2; side++) {
-		require(onix_vk_read_render_target(driver, target, 4 + side * 8, 8, 1, 1, pixel, sizeof(pixel)), "read resumed target");
+		require(onix_gpu_read_render_target(driver, target, 4 + side * 8, 8, 1, 1, pixel, sizeof(pixel)), "read resumed target");
 		if (driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB) {
 			uint8_t blue = pixel[0]; pixel[0] = pixel[2]; pixel[2] = blue;
 		}
@@ -243,39 +243,39 @@ static void test_target_upload_resume(OnixVkDriver *driver, int depth) {
 			exit(1);
 		}
 	}
-	require(onix_vk_destroy_texture(driver, texture), "destroy upload resume source");
-	require(onix_vk_destroy_texture(driver, uploaded), "destroy uploaded texture");
-	require(onix_vk_destroy_render_target(driver, target), "destroy upload resume target");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy upload resume source");
+	require(onix_gpu_destroy_texture(driver, uploaded), "destroy uploaded texture");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy upload resume target");
 }
 
-static void test_mesh_lighting(OnixVkDriver *driver) {
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+static void test_mesh_lighting(OnixGPUDriver *driver) {
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	const uint8_t gray[] = {64, 64, 64, 64};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_SRGBA8, 0, gray, sizeof(gray), 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_SRGBA8, 0, gray, sizeof(gray), 0, 0);
 	const uint8_t radiance[] = {64, 64, 64, 255};
-	uint32_t environment = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, radiance, sizeof(radiance), 0, 0);
+	uint32_t environment = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, radiance, sizeof(radiance), 0, 0);
 	uint8_t rgbe[16*64*4];
     for(int y=0;y<64;y++) for(int x=0;x<16;x++) {
         int i=(y*16+x)*4;
         rgbe[i]=rgbe[i+1]=rgbe[i+2]=255;rgbe[i+3]=x<8?133:126;
     }
-    uint32_t hdr=onix_vk_create_texture_with_format(driver,16,64,1,ONIX_TEXTURE_FORMAT_RGBA8,0,rgbe,sizeof(rgbe),0,0);
+    uint32_t hdr=onix_gpu_create_texture_with_format(driver,16,64,1,ONIX_TEXTURE_FORMAT_RGBA8,0,rgbe,sizeof(rgbe),0,0);
     uint8_t panorama[64*32*4];
     for(int y=0;y<32;y++) for(int x=0;x<64;x++) {
         int i=(y*64+x)*4;panorama[i]=x%2?255:0;panorama[i+1]=0;panorama[i+2]=x%2?0:255;panorama[i+3]=128;
     }
-    uint32_t sky=onix_vk_create_texture_with_format(driver,64,32,1,ONIX_TEXTURE_FORMAT_RGBA8,0,panorama,sizeof(panorama),0,0);
+    uint32_t sky=onix_gpu_create_texture_with_format(driver,64,32,1,ONIX_TEXTURE_FORMAT_RGBA8,0,panorama,sizeof(panorama),0,0);
     require(target && texture && environment && hdr && sky, "create lighting test resources");
-	OnixVkMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkVertex3D vertices[] = {
+	OnixGPUMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUVertex3D vertices[] = {
 		{.position = {-1, -1, .5f}, .normal = {0, 0, 1}},
 		{.position = {1, -1, .5f}, .normal = {0, 0, 1}},
 		{.position = {0, 1, .5f}, .normal = {0, 0, 1}},
 	};
 	uint32_t indices[] = {0, 1, 2}, deformation[16] = {0};
-	OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {.8f, 1.5f, .5f, 256}, .uv_transform = {1, 1, 0, 0}};
+	OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {.8f, 1.5f, .5f, 256}, .uv_transform = {1, 1, 0, 0}};
 	OnixNativeMeshDraw3D draw = {.texture = texture, .extra_textures = {[4] = environment}, .index_count = 3, .instance_count = 1};
-	float lighting[ONIX_VK_MESH_LIGHTING_BYTES / sizeof(float)] = {[18] = 2, [19] = 1, [292] = 1, [296] = 1};
+	float lighting[ONIX_GPU_MESH_LIGHTING_BYTES / sizeof(float)] = {[18] = 2, [19] = 1, [292] = 1, [296] = 1};
 	const float clear[] = {0, 0, 0, 1};
 	for (int test = 0; test < 8; test++) {
 		// CCW unlit, rejected back face, double-sided back face, inward-facing sky.
@@ -291,49 +291,49 @@ static void test_mesh_lighting(OnixVkDriver *driver) {
             float angle=-3.14159265359f/64;
             instance.custom[3][0]=test==7?-1:cosf(angle);instance.custom[3][1]=0;instance.custom[3][2]=test==7?0:sinf(angle);instance.custom[3][3]=1;
         }
-		require(onix_vk_begin_frame(driver, clear), "begin lighting frame");
-		require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin lighting target");
-		onix_vk_set_viewport(driver, 0, 0, 16, 16);
-		require(onix_vk_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, lighting), "draw lighting test");
-		require(onix_vk_end_render_target(driver), "end lighting target");
-		require(onix_vk_present(driver), "present lighting frame");
+		require(onix_gpu_begin_frame(driver, clear), "begin lighting frame");
+		require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin lighting target");
+		onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+		require(onix_gpu_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, lighting), "draw lighting test");
+		require(onix_gpu_end_render_target(driver), "end lighting target");
+		require(onix_gpu_present(driver), "present lighting frame");
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read lighting pixel");
+		require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read lighting pixel");
 		int expected = test == 1 ? 0 : test == 3 ? 231 : test == 4 || test == 5 ? 188 : test == 6 ? 0 : test == 7 ? 156 : 64;
 		if (abs((int)pixel[driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format==VK_FORMAT_B8G8R8A8_SRGB?2:0] - expected) > 1 || pixel[3] != 255) {
 			fprintf(stderr, "lighting case %d: pixel=(%d,%d,%d,%d), expected red=%d\n", test, pixel[0], pixel[1], pixel[2], pixel[3], expected);
 			exit(1);
 		}
 	}
-    require(onix_vk_destroy_texture(driver,sky),"destroy original panorama");
-	require(onix_vk_destroy_render_target(driver, target), "destroy lighting target");
-	require(onix_vk_destroy_texture(driver, texture), "destroy lighting texture");
-	require(onix_vk_destroy_texture(driver, environment), "destroy environment texture");
-	require(onix_vk_destroy_texture(driver,hdr), "destroy RGBE texture");
+    require(onix_gpu_destroy_texture(driver,sky),"destroy original panorama");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy lighting target");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy lighting texture");
+	require(onix_gpu_destroy_texture(driver, environment), "destroy environment texture");
+	require(onix_gpu_destroy_texture(driver,hdr), "destroy RGBE texture");
 	printf("Vulkan original panorama detail/rotation/seam, RGBE interpolation, sRGB, opaque alpha, back-face coverage and sky pixels passed\n");
 }
 
-static void test_mesh_pipeline_laziness(OnixVkDriver *driver) {
+static void test_mesh_pipeline_laziness(OnixGPUDriver *driver) {
 	const uint8_t white[] = {255, 255, 255, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	require(texture && target, "create guide resources");
-	OnixVkMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkVertex3D vertices[] = {{.position = {-1, -1, .5f}}, {.position = {1, -1, .5f}}, {.position = {0, 1, .5f}}};
+	OnixGPUMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUVertex3D vertices[] = {{.position = {-1, -1, .5f}}, {.position = {1, -1, .5f}}, {.position = {0, 1, .5f}}};
 	uint32_t indices[] = {0, 1, 2}, deformation[16] = {0};
-	OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {.25f, .5f, 1, 1}, .material = {-1}, .uv_transform = {1, 1}};
+	OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {.25f, .5f, 1, 1}, .material = {-1}, .uv_transform = {1, 1}};
 	OnixNativeMeshDraw3D draw = {.texture = texture, .index_count = 3, .instance_count = 1, .alpha_mode = 2};
 	const float clear[] = {0, 0, 0, 1};
-	float lighting[ONIX_VK_MESH_LIGHTING_BYTES / sizeof(float)] = {0};
+	float lighting[ONIX_GPU_MESH_LIGHTING_BYTES / sizeof(float)] = {0};
 	struct timespec start, end;
 	timespec_get(&start, TIME_UTC);
-	require(onix_vk_begin_frame(driver, clear), "begin first guide frame");
-	require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin guide target");
-	onix_vk_set_viewport(driver, 0, 0, 16, 16);
-	require(onix_vk_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, lighting), "draw first guide");
+	require(onix_gpu_begin_frame(driver, clear), "begin first guide frame");
+	require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin guide target");
+	onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+	require(onix_gpu_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, lighting), "draw first guide");
 	timespec_get(&end, TIME_UTC);
-	require(onix_vk_end_render_target(driver), "end guide target");
-	require(onix_vk_present(driver), "present guide");
+	require(onix_gpu_end_render_target(driver), "end guide target");
+	require(onix_gpu_present(driver), "present guide");
 	for (uint32_t index=0;index<driver->image_count;index++) require(driver->depth_images[index]==VK_NULL_HANDLE, "offscreen mesh leaves surface depth unallocated");
 	require(driver->mesh_builtin[1].transparent[0] != VK_NULL_HANDLE, "guide uses unlit pipeline");
 	for (uint32_t variant = 0; variant < ONIX_MESH_VARIANT_COUNT; variant++) {
@@ -343,36 +343,36 @@ static void test_mesh_pipeline_laziness(OnixVkDriver *driver) {
 		}
 	}
 	uint8_t pixel[4];
-	require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read unlit pixel");
+	require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read unlit pixel");
 	int red = (driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB) ? 2 : 0;
 	require(abs(pixel[red] - 64) <= 1 && abs(pixel[1] - 128) <= 1 && pixel[2 - red] == 255, "unlit pipeline preserves color");
-	require(onix_vk_destroy_render_target(driver, target), "destroy guide target");
-	require(onix_vk_destroy_texture(driver, texture), "destroy guide texture");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy guide target");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy guide texture");
 	printf("First unlit Vulkan draw: %.2f ms; only one pipeline compiled\n", (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_nsec - start.tv_nsec)/1000000.0);
 }
 
-static void test_material_fresnel(OnixVkDriver *driver) {
-	uint32_t color,target=onix_vk_create_render_target(driver,16,16,0,1,&color);
+static void test_material_fresnel(OnixGPUDriver *driver) {
+	uint32_t color,target=onix_gpu_create_render_target(driver,16,16,0,1,&color);
 	const uint8_t white[]={255,255,255,255};
-	uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
+	uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
 	uint8_t atlas[8*4];
 	for(int i=0;i<8;i++){atlas[i*4]=atlas[i*4+1]=atlas[i*4+2]=128;atlas[i*4+3]=129;}
 	atlas[28]=255;atlas[29]=atlas[30]=0;atlas[31]=255;
-	uint32_t environment=onix_vk_create_texture_with_format(driver,1,8,1,ONIX_TEXTURE_FORMAT_RGBA8,0,atlas,32,0,0);
+	uint32_t environment=onix_gpu_create_texture_with_format(driver,1,8,1,ONIX_TEXTURE_FORMAT_RGBA8,0,atlas,32,0,0);
 	require(target && texture && environment,"create Fresnel resources");
-	OnixVkMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
-	OnixVkVertex3D vertices[]={
+	OnixGPUMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
+	OnixGPUVertex3D vertices[]={
 		{.position={-1,-1,.5f},.normal={0,0,1}},
 		{.position={1,-1,.5f},.normal={0,0,1}},
 		{.position={0,1,.5f},.normal={0,0,1}},
 	};
 	uint32_t indices[]={0,1,2},deformation[16]={0};
-	OnixVkInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={0,0,0,1},.material={1,1.5f,.5f,4096},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,0},{0,0,0,0},{0,1,0,1}}};
+	OnixGPUInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={0,0,0,1},.material={1,1.5f,.5f,4096},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,0},{0,0,0,0},{0,1,0,1}}};
 	OnixNativeMeshDraw3D draw={.texture=texture,.index_count=3,.instance_count=1};
 	const float clear[]={0,0,0,1},iors[]={1,1.33f,1.5f,2.42f,32,FLT_MAX,0};
 	int values[7];
 	for(int test=0;test<18;test++) {
-		float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.0625f,[17]=-.0625f,[18]=1.5f,[19]=1,[26]=-1,[289]=1,[296]=1};
+		float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.0625f,[17]=-.0625f,[18]=1.5f,[19]=1,[26]=-1,[289]=1,[296]=1};
 		instance.material[1]=iors[test%7];
 		if(test<7 || test>=14) lighting[28]=lighting[29]=lighting[30]=4*3.14159265359f;
 		if(test>=7 && test<14) {lighting[851]=1;lighting[292]=255.0f/256;lighting[294]=lighting[295]=.5f;draw.extra_textures[4]=environment;}
@@ -390,11 +390,11 @@ static void test_material_fresnel(OnixVkDriver *driver) {
 			instance.emissive_metallic[0]=16;instance.emissive_metallic[1]=32;instance.emissive_metallic[2]=64;
 			lighting[28]=lighting[29]=lighting[30]=0;lighting[297]=3;lighting[296]=.001f;
 		}
-		require(onix_vk_begin_frame(driver,clear),"begin Fresnel frame");
-		require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin Fresnel target");onix_vk_set_viewport(driver,0,0,16,16);
-		require(onix_vk_draw_meshes(driver,&push,vertices,3,indices,3,&instance,1,deformation,16,&draw,1,lighting),"draw Fresnel mesh");
-		require(onix_vk_end_render_target(driver),"end Fresnel target");require(onix_vk_present(driver),"present Fresnel frame");
-		uint8_t pixel[4];require(onix_vk_read_render_target(driver,target,8,8,1,1,pixel,4),"read Fresnel pixel");
+		require(onix_gpu_begin_frame(driver,clear),"begin Fresnel frame");
+		require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin Fresnel target");onix_gpu_set_viewport(driver,0,0,16,16);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,3,indices,3,&instance,1,deformation,16,&draw,1,lighting),"draw Fresnel mesh");
+		require(onix_gpu_end_render_target(driver),"end Fresnel target");require(onix_gpu_present(driver),"present Fresnel frame");
+		uint8_t pixel[4];require(onix_gpu_read_render_target(driver,target,8,8,1,1,pixel,4),"read Fresnel pixel");
 		int redIndex=(driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format==VK_FORMAT_B8G8R8A8_SRGB)?2:0;
 		if(test==17) {require(abs(pixel[redIndex]-64)<=1 && abs(pixel[1]-128)<=1 && pixel[2-redIndex]==255 && pixel[3]==134,"preserve HDR emission in RGBE capture");continue;}
 		int value=pixel[redIndex];
@@ -407,28 +407,28 @@ static void test_material_fresnel(OnixVkDriver *driver) {
 		if(test==16) expected=2.5f;
 		if(fabsf(radiance-expected)>(test==16?.06f:.018f)) {fprintf(stderr,"Vulkan Fresnel case %d: %g expected %g\n",test,radiance,expected);exit(1);}
 	}
-	require(onix_vk_destroy_render_target(driver,target),"destroy Fresnel target");
-	require(onix_vk_destroy_texture(driver,texture),"destroy Fresnel texture");require(onix_vk_destroy_texture(driver,environment),"destroy Fresnel environment");
+	require(onix_gpu_destroy_render_target(driver,target),"destroy Fresnel target");
+	require(onix_gpu_destroy_texture(driver,texture),"destroy Fresnel texture");require(onix_gpu_destroy_texture(driver,environment),"destroy Fresnel environment");
 	printf("Vulkan IOR direct/IBL: air=%d water=%d default=%d diamond=%d large=%d max=%d infinite=%d; tinted F0, fractional metalness and HDR emission passed\n",values[0],values[1],values[2],values[3],values[4],values[5],values[6]);
 }
 
-static void test_material_layers(OnixVkDriver *driver) {
-	uint32_t color, target=onix_vk_create_render_target(driver,16,16,0,1,&color);
+static void test_material_layers(OnixGPUDriver *driver) {
+	uint32_t color, target=onix_gpu_create_render_target(driver,16,16,0,1,&color);
 	const uint8_t white[]={255,255,255,255}, zero_coat[]={0,255,255,255}, zero_anisotropy[]={255,128,0,255};
-	uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
-	uint32_t coat_map=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,zero_coat,4,0,0);
-	uint32_t anisotropy_map=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,zero_anisotropy,4,0,0);
+	uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
+	uint32_t coat_map=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,zero_coat,4,0,0);
+	uint32_t anisotropy_map=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,zero_anisotropy,4,0,0);
 	require(target && texture && coat_map && anisotropy_map,"create material layer resources");
-	OnixVkMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
-	OnixVkVertex3D vertices[]={
+	OnixGPUMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
+	OnixGPUVertex3D vertices[]={
 		{.position={-1,-1,.5f},.normal={0,0,1},.uv={.5f,.5f},.tangent={1,0,0,1}},
 		{.position={1,-1,.5f},.normal={0,0,1},.uv={.5f,.5f},.tangent={1,0,0,1}},
 		{.position={0,1,.5f},.normal={0,0,1},.uv={.5f,.5f},.tangent={1,0,0,1}},
 	};
 	uint32_t indices[]={0,1,2},deformation[96]={0};
-	OnixVkInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.emissive_metallic={0,0,0,1},.material={.45f,1.5f,.5f,4096},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,.6f},{0,0,0,0},{0,1,0,1}}};
+	OnixGPUInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.emissive_metallic={0,0,0,1},.material={.45f,1.5f,.5f,4096},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,.6f},{0,0,0,0},{0,1,0,1}}};
 	OnixNativeMeshDraw3D draw={.texture=texture,.extra_textures={[7]=coat_map,[12]=anisotropy_map},.index_count=3,.instance_count=1};
-	float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.6625f,[17]=-.0625f,[18]=1.3f,[19]=1,[26]=-1,[28]=1,[29]=1,[30]=1,[296]=1};
+	float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.6625f,[17]=-.0625f,[18]=1.3f,[19]=1,[26]=-1,[28]=1,[29]=1,[30]=1,[296]=1};
 	const float clear[]={0,0,0,1};
 	// Two tangent morph cases and a joint rotation exercise the actual storage
 	// buffer ABI, rather than supplying already deformed vertex directions.
@@ -456,44 +456,44 @@ static void test_material_layers(OnixVkDriver *driver) {
 		}
 		draw.mesh = 0;
 		if (draw.deformation_index != 0) {
-			draw.mesh = onix_vk_create_mesh(driver,vertices,3,indices,3);
+			draw.mesh = onix_gpu_create_mesh(driver,vertices,3,indices,3);
 			require(draw.mesh != 0,"create deformation geometry");
-			require(onix_vk_set_mesh_deformation(driver,draw.mesh,deformation,96,3),"upload static deformation");
+			require(onix_gpu_set_mesh_deformation(driver,draw.mesh,deformation,96,3),"upload static deformation");
 		}
-		require(onix_vk_begin_frame(driver,clear),"begin material frame");
-		require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin material target");
-		onix_vk_set_viewport(driver,0,0,16,16);
-		require(onix_vk_draw_meshes(driver,&push,vertices,3,indices,3,&instance,1,deformation,96,&draw,1,lighting),"draw material layers");
-		require(onix_vk_end_render_target(driver),"end material target");require(onix_vk_present(driver),"present material frame");
-		uint8_t pixel[4];require(onix_vk_read_render_target(driver,target,8,8,1,1,pixel,4),"read material layers");values[test]=pixel[0];
-		if(draw.mesh != 0) require(onix_vk_destroy_mesh(driver,draw.mesh),"destroy deformation mesh");
+		require(onix_gpu_begin_frame(driver,clear),"begin material frame");
+		require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin material target");
+		onix_gpu_set_viewport(driver,0,0,16,16);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,3,indices,3,&instance,1,deformation,96,&draw,1,lighting),"draw material layers");
+		require(onix_gpu_end_render_target(driver),"end material target");require(onix_gpu_present(driver),"present material frame");
+		uint8_t pixel[4];require(onix_gpu_read_render_target(driver,target,8,8,1,1,pixel,4),"read material layers");values[test]=pixel[0];
+		if(draw.mesh != 0) require(onix_gpu_destroy_mesh(driver,draw.mesh),"destroy deformation mesh");
 	}
 	if(abs(values[1]-values[2])<10 || abs(values[2]-values[3])>1 || abs(values[3]-values[4])>1 || abs(values[3]-values[5])>1 || abs(values[6]-values[0])>1 || values[8]>=values[7] || abs(values[9]-values[7])>1) {
 		fprintf(stderr,"Vulkan material layers: iso=%d X=%d rotation=%d Y=%d morph=%d skin=%d B=%d emission=%d coat=%d R=%d\n",values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],values[8],values[9]);exit(1);
 	}
-	require(onix_vk_destroy_render_target(driver,target),"destroy material target");
-	require(onix_vk_destroy_texture(driver,texture),"destroy material texture");
-	require(onix_vk_destroy_texture(driver,coat_map),"destroy coat map");
-	require(onix_vk_destroy_texture(driver,anisotropy_map),"destroy anisotropy map");
+	require(onix_gpu_destroy_render_target(driver,target),"destroy material target");
+	require(onix_gpu_destroy_texture(driver,texture),"destroy material texture");
+	require(onix_gpu_destroy_texture(driver,coat_map),"destroy coat map");
+	require(onix_gpu_destroy_texture(driver,anisotropy_map),"destroy anisotropy map");
 	printf("Vulkan anisotropic highlights, authored tangent rotation, GPU tangent morph/skin and clearcoat emission/texture passed\n");
 }
 
-static void test_mesh_occlusion(OnixVkDriver *driver) {
+static void test_mesh_occlusion(OnixGPUDriver *driver) {
 	uint32_t depth_color, color;
-	uint32_t depth_target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &depth_color);
-	uint32_t target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+	uint32_t depth_target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &depth_color);
+	uint32_t target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	const uint8_t white[] = {255, 255, 255, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
 	require(depth_target && target && texture, "create SSAO resources");
-	OnixVkMeshPush push = {.view_projection = {[0]=1,[5]=1,[10]=1,[15]=1}};
-	OnixVkVertex3D vertices[] = {
+	OnixGPUMeshPush push = {.view_projection = {[0]=1,[5]=1,[10]=1,[15]=1}};
+	OnixGPUVertex3D vertices[] = {
 		{.position={-1,-1,.75f},.normal={0,0,1}}, {.position={1,-1,.75f},.normal={0,0,1}},
 		{.position={1,1,.75f},.normal={0,0,1}}, {.position={-1,1,.75f},.normal={0,0,1}},
 	};
 	uint32_t indices[] = {0,1,2,0,2,3}, deformation[16] = {0};
-	OnixVkInstance3D instance = {.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={.8f,1.0f,.5f,0},.uv_transform={1,1,0,0},.custom={{1,1,0,0}}};
+	OnixGPUInstance3D instance = {.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={.8f,1.0f,.5f,0},.uv_transform={1,1,0,0},.custom={{1,1,0,0}}};
 	OnixNativeMeshDraw3D draw = {.texture=texture,.index_count=6,.instance_count=1};
-	float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)] = {[18]=2,[19]=1,[20]=1,[21]=1,[22]=1,[290]=1,[291]=.025f,[296]=1,[303]=16,[880]=1,[885]=1,[890]=1,[895]=1};
+	float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)] = {[18]=2,[19]=1,[20]=1,[21]=1,[22]=1,[290]=1,[291]=.025f,[296]=1,[303]=16,[880]=1,[885]=1,[890]=1,[895]=1};
 	const float clear[] = {0,0,0,0};
 	int values[5], bottom=0;
 	for (int test=0;test<5;test++) {
@@ -503,27 +503,27 @@ static void test_mesh_occlusion(OnixVkDriver *driver) {
 		instance.material[3]=0;
 		draw.extra_textures[6]=0;
 		lighting[297]=2;lighting[298]=0;
-		require(onix_vk_begin_frame(driver,clear), "begin SSAO frame");
-		require(onix_vk_begin_render_target(driver,depth_target,clear,0,1,1), "begin SSAO depth");
-		onix_vk_set_viewport(driver,0,0,16,16);
-		require(onix_vk_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting), "draw SSAO depth");
-		require(onix_vk_end_render_target(driver), "end SSAO depth");
+		require(onix_gpu_begin_frame(driver,clear), "begin SSAO frame");
+		require(onix_gpu_begin_render_target(driver,depth_target,clear,0,1,1), "begin SSAO depth");
+		onix_gpu_set_viewport(driver,0,0,16,16);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting), "draw SSAO depth");
+		require(onix_gpu_end_render_target(driver), "end SSAO depth");
 		for (int i=0;i<4;i++) vertices[i].position[2]=.5f;
 		vertices[0].position[1]=vertices[1].position[1]=-1;
 		draw.extra_textures[6]=depth_color;
 		instance.material[3]=test==2?32768:0;
 		lighting[297]=0;lighting[298]=test==0?0:1;
-		require(onix_vk_begin_render_target(driver,target,clear,0,1,1), "begin SSAO receiver");
-		onix_vk_set_viewport(driver,0,0,16,16);
-		require(onix_vk_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting), "draw SSAO receiver");
-		require(onix_vk_end_render_target(driver), "end SSAO receiver");
-		require(onix_vk_present(driver), "present SSAO frame");
+		require(onix_gpu_begin_render_target(driver,target,clear,0,1,1), "begin SSAO receiver");
+		onix_gpu_set_viewport(driver,0,0,16,16);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting), "draw SSAO receiver");
+		require(onix_gpu_end_render_target(driver), "end SSAO receiver");
+		require(onix_gpu_present(driver), "present SSAO frame");
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver,target,8,test==4?4:8,1,1,pixel,sizeof(pixel)), "read SSAO receiver");
+		require(onix_gpu_read_render_target(driver,target,8,test==4?4:8,1,1,pixel,sizeof(pixel)), "read SSAO receiver");
 		values[test]=pixel[0];
-		if(draw.mesh != 0) require(onix_vk_destroy_mesh(driver,draw.mesh),"destroy deformation mesh");
+		if(draw.mesh != 0) require(onix_gpu_destroy_mesh(driver,draw.mesh),"destroy deformation mesh");
 		if (test==4) {
-			require(onix_vk_read_render_target(driver,target,8,12,1,1,pixel,sizeof(pixel)), "read unoccluded bottom");
+			require(onix_gpu_read_render_target(driver,target,8,12,1,1,pixel,sizeof(pixel)), "read unoccluded bottom");
 			bottom=pixel[0];
 		}
 	}
@@ -533,29 +533,29 @@ static void test_mesh_occlusion(OnixVkDriver *driver) {
 	if (values[4]>=values[0]-10 || abs(bottom-values[0])>1) {
 		fprintf(stderr,"Vulkan SSAO screen direction: reference=%d top=%d bottom=%d\n",values[0],values[4],bottom);exit(1);
 	}
-	require(onix_vk_destroy_render_target(driver,depth_target), "destroy SSAO depth");
-	require(onix_vk_destroy_render_target(driver,target), "destroy SSAO receiver");
-	require(onix_vk_destroy_texture(driver,texture), "destroy SSAO texture");
+	require(onix_gpu_destroy_render_target(driver,depth_target), "destroy SSAO depth");
+	require(onix_gpu_destroy_render_target(driver,target), "destroy SSAO receiver");
+	require(onix_gpu_destroy_texture(driver,texture), "destroy SSAO texture");
 	printf("Vulkan SSAO depth prepass, contact occlusion, exclusions, flat surface and screen direction passed\n");
 }
 
-static void test_screen_reflections(OnixVkDriver *driver) {
+static void test_screen_reflections(OnixGPUDriver *driver) {
 	uint32_t depth_color,scene_color,out_color;
-	uint32_t depth=onix_vk_create_render_target(driver,64,64,0,1,&depth_color);
-	uint32_t scene=onix_vk_create_render_target(driver,128,64,0,1,&scene_color);
-	uint32_t target=onix_vk_create_render_target(driver,128,96,0,1,&out_color);
+	uint32_t depth=onix_gpu_create_render_target(driver,64,64,0,1,&depth_color);
+	uint32_t scene=onix_gpu_create_render_target(driver,128,64,0,1,&scene_color);
+	uint32_t target=onix_gpu_create_render_target(driver,128,96,0,1,&out_color);
 	const uint8_t white[]={255,255,255,255},black[]={0,0,0,255};
-	uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
-	uint32_t ao_map=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,black,4,0,0);
+	uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
+	uint32_t ao_map=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,black,4,0,0);
 	require(depth && scene && target && texture && ao_map,"create SSR resources");
-	OnixVkVertex3D vertices[]={
+	OnixGPUVertex3D vertices[]={
 		{.position={-1,-1,-2},.normal={.8f,0,.6f}}, {.position={.4f,-1,-2},.normal={.8f,0,.6f}},
 		{.position={.4f,1,-2},.normal={.8f,0,.6f}}, {.position={-1,1,-2},.normal={.8f,0,.6f}},
 		{.position={.5f,-.5f,-2.2f},.normal={0,0,1}}, {.position={1.5f,-.5f,-2.2f},.normal={0,0,1}},
 		{.position={1.5f,.5f,-2.2f},.normal={0,0,1}}, {.position={.5f,.5f,-2.2f},.normal={0,0,1}},
 	};
 	uint32_t indices[]={0,1,2,0,2,3,4,5,6,4,6,7},deformation[16]={0};
-	OnixVkInstance3D instances[]={
+	OnixGPUInstance3D instances[]={
 		{.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.emissive_metallic={.05f,.05f,.05f,1},.material={.045f,1.5f,.5f,0},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,.045f},{0,0,0,0},{0,1,0,1}}},
 		{.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.emissive_metallic={4,0,0,0},.material={.8f,1.5f,.5f,0},.uv_transform={1,1,0,0},.custom={{1,1,1,0},{1,1,1,0},{0,0,0,0},{0,1,0,1}}},
 	};
@@ -572,8 +572,8 @@ static void test_screen_reflections(OnixVkDriver *driver) {
 	const float iors[]={1,1.33f,1.5f,2.42f,0};
 	for(int test=0;test<25;test++) {
 		int scenario=test<8?test:1;
-		OnixVkMeshPush push={0};memcpy(push.view_projection,scenario==6?orthographic:perspective,64);
-		float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={[19]=1,[26]=-1,[296]=1,[302]=-1};
+		OnixGPUMeshPush push={0};memcpy(push.view_projection,scenario==6?orthographic:perspective,64);
+		float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={[19]=1,[26]=-1,[296]=1,[302]=-1};
 		memcpy(lighting+432,push.view_projection,64);memcpy(lighting+880,scenario==6?inverse_ortho:inverse,64);
 		lighting[688]=64;lighting[689]=.1f;lighting[690]=1;
 		lighting[752]=4;lighting[753]=.1f;lighting[754]=scenario==0?0:1;lighting[755]=.6f;
@@ -597,23 +597,23 @@ static void test_screen_reflections(OnixVkDriver *driver) {
 			lighting[300]=-1;lighting[302]=0;
 		}
 		if(scenario==6) lighting[19]=-1;
-		require(onix_vk_begin_frame(driver,clear),"begin SSR frame");
+		require(onix_gpu_begin_frame(driver,clear),"begin SSR frame");
 		lighting[297]=5;
-		require(onix_vk_begin_render_target(driver,depth,clear,0,1,1),"begin SSR depth");onix_vk_set_viewport(driver,0,0,64,64);
-		require(onix_vk_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR depth");require(onix_vk_end_render_target(driver),"end SSR depth");
+		require(onix_gpu_begin_render_target(driver,depth,clear,0,1,1),"begin SSR depth");onix_gpu_set_viewport(driver,0,0,64,64);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR depth");require(onix_gpu_end_render_target(driver),"end SSR depth");
 		lighting[297]=3;
-		require(onix_vk_begin_render_target(driver,scene,clear,0,1,1),"begin SSR capture");onix_vk_set_viewport(driver,0,0,64,64);
-		require(onix_vk_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR capture");require(onix_vk_end_render_target(driver),"end SSR capture");
+		require(onix_gpu_begin_render_target(driver,scene,clear,0,1,1),"begin SSR capture");onix_gpu_set_viewport(driver,0,0,64,64);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR capture");require(onix_gpu_end_render_target(driver),"end SSR capture");
 		lighting[297]=6;
-		require(onix_vk_begin_render_target(driver,scene,clear,0,0,1),"begin SSR AO tile");onix_vk_set_viewport(driver,64,0,64,64);
-		require(onix_vk_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR AO tile");require(onix_vk_end_render_target(driver),"end SSR AO tile");
+		require(onix_gpu_begin_render_target(driver,scene,clear,0,0,1),"begin SSR AO tile");onix_gpu_set_viewport(driver,64,0,64,64);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR AO tile");require(onix_gpu_end_render_target(driver),"end SSR AO tile");
 		lighting[297]=4;
 		for(int i=0;i<2;i++) {draws[i].extra_textures[5]=scene_color;draws[i].extra_textures[6]=depth_color;}
 		int offset_x=scenario==7?16:0,offset_y=scenario==7?8:0;
-		require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin SSR resolve");onix_vk_set_viewport(driver,offset_x,offset_y,64,64);
-		require(onix_vk_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR resolve");require(onix_vk_end_render_target(driver),"end SSR resolve");
-		require(onix_vk_present(driver),"present SSR frame");
-		uint8_t pixel[4];require(onix_vk_read_render_target(driver,target,32+offset_x,32+offset_y,1,1,pixel,4),"read SSR pixel");
+		require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin SSR resolve");onix_gpu_set_viewport(driver,offset_x,offset_y,64,64);
+		require(onix_gpu_draw_meshes(driver,&push,vertices,8,indices,12,instances,2,deformation,16,draws,2,lighting),"draw SSR resolve");require(onix_gpu_end_render_target(driver),"end SSR resolve");
+		require(onix_gpu_present(driver),"present SSR frame");
+		uint8_t pixel[4];require(onix_gpu_read_render_target(driver,target,32+offset_x,32+offset_y,1,1,pixel,4),"read SSR pixel");
 		int red=(driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format==VK_FORMAT_B8G8R8A8_SRGB) ? pixel[2] : pixel[0];
 		if(test<13) values[test]=red;
 		// Warm every in-flight frame before measuring all four passes.
@@ -624,37 +624,37 @@ static void test_screen_reflections(OnixVkDriver *driver) {
 	}
 	for(int i=8;i<12;i++) require(values[i]<values[i+1],"SSR responds to dielectric IOR");
 	require(abs(values[12]-values[1])<=1,"infinite-IOR SSR matches white metal");
-	require(onix_vk_destroy_render_target(driver,depth),"destroy SSR depth");require(onix_vk_destroy_render_target(driver,scene),"destroy SSR scene");require(onix_vk_destroy_render_target(driver,target),"destroy SSR output");
-	require(onix_vk_destroy_texture(driver,texture),"destroy SSR texture");require(onix_vk_destroy_texture(driver,ao_map),"destroy SSR AO map");
+	require(onix_gpu_destroy_render_target(driver,depth),"destroy SSR depth");require(onix_gpu_destroy_render_target(driver,scene),"destroy SSR scene");require(onix_gpu_destroy_render_target(driver,target),"destroy SSR output");
+	require(onix_gpu_destroy_texture(driver,texture),"destroy SSR texture");require(onix_gpu_destroy_texture(driver,ao_map),"destroy SSR AO map");
 	printf("Vulkan SSR: base=%d hit=%d coat=%d AO=%d rotated=%d ortho=%d; capture/AO preservation and 4 stable frames heap=0 resources=0 passed\n",values[0],values[1],values[3],values[4],values[5],values[6]);
 	printf("Vulkan SSR IOR: air=%d water=%d default=%d diamond=%d infinite=%d\n",values[8],values[9],values[10],values[11],values[12]);
 }
 
-static void draw_mesh(OnixVkDriver *driver, uint32_t texture, uint32_t picking_target) {
-	OnixVkMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkVertex3D vertices[] = {
+static void draw_mesh(OnixGPUDriver *driver, uint32_t texture, uint32_t picking_target) {
+	OnixGPUMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUVertex3D vertices[] = {
 		{.position = {-1, -1, 0.5f}, .normal = {0, 0, 1}},
 		{.position = {1, -1, 0.5f}, .normal = {0, 0, 1}},
 		{.position = {0, 1, 0.5f}, .normal = {0, 0, 1}},
 	};
 	uint32_t indices[] = {0, 1, 2};
-	OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}};
+	OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}};
 	uint32_t deformation[16] = {0};
 	OnixNativeMeshDraw3D draw = {.texture = texture, .index_count = 3, .instance_count = 1};
 	if (picking_target == 0) {
-		require(onix_vk_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw mesh");
+		require(onix_gpu_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw mesh");
 	} else {
 		const float clear[] = {0, 0, 0, 0};
 		uint32_t identifier = 1234567;
 		memcpy(&instance.custom[3][3], &identifier, sizeof(identifier));
-		require(onix_vk_begin_render_target(driver, picking_target, clear, 0, 1, 1), "begin picking");
-		onix_vk_set_viewport(driver, 0, 0, 16, 16);
-		require(onix_vk_draw_mesh_picking(driver, &push, vertices, 3, indices, 3, &instance, 1, &draw, 1), "draw picking");
-		require(onix_vk_end_render_target(driver), "end picking");
+		require(onix_gpu_begin_render_target(driver, picking_target, clear, 0, 1, 1), "begin picking");
+		onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+		require(onix_gpu_draw_mesh_picking(driver, &push, vertices, 3, indices, 3, &instance, 1, &draw, 1), "draw picking");
+		require(onix_gpu_end_render_target(driver), "end picking");
 	}
 }
 
-static float read_surface_depth(OnixVkDriver *driver) {
+static float read_surface_depth(OnixGPUDriver *driver) {
 	require(vkDeviceWaitIdle(driver->device) == VK_SUCCESS, "wait for surface depth");
 	VkBuffer buffer;
 	VkDeviceMemory memory;
@@ -706,97 +706,97 @@ static float read_surface_depth(OnixVkDriver *driver) {
 	return depth;
 }
 
-static void test_surface_2d_laziness(OnixVkDriver *driver) {
+static void test_surface_2d_laziness(OnixGPUDriver *driver) {
 	const uint8_t white[] = {255, 255, 255, 255};
 	const float clear[] = {0, 0, 0, 1};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
-	OnixVkSpritePush push = {.projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkInstance instance = {.model = {2, 0, -1, 0, 2, -1}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
+	OnixGPUSpritePush push = {.projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUInstance instance = {.model = {2, 0, -1, 0, 2, -1}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
 	OnixNativeSpriteDraw draw = {.texture = texture, .instance_count = 1};
-	onix_vk_set_corner_radius(driver, 8);
+	onix_gpu_set_corner_radius(driver, 8);
 	for (int frame = 0; frame < 6; frame++) {
-		require(onix_vk_begin_frame(driver, clear) && onix_vk_draw_sprites(driver, &push, &instance, 1, &draw, 1) && onix_vk_present(driver), "pure 2D surface frame");
+		require(onix_gpu_begin_frame(driver, clear) && onix_gpu_draw_sprites(driver, &push, &instance, 1, &draw, 1) && onix_gpu_present(driver), "pure 2D surface frame");
 	}
 	require(driver->color_only_pipelines[3] != VK_NULL_HANDLE && driver->corner_mask_pipeline == VK_NULL_HANDLE,
 		"rounded 2D surface uses the color-only corner mask pipeline");
-	onix_vk_set_corner_radius(driver, 0);
-	require(onix_vk_resize(driver, 64, 64), "resize pure 2D surface");
+	onix_gpu_set_corner_radius(driver, 0);
+	require(onix_gpu_resize(driver, 64, 64), "resize pure 2D surface");
 	for (uint32_t index = 0; index < driver->image_count; index++) {
 		require(!driver->depth_images[index] && !driver->depth_views[index] && !driver->depth_memories[index] && !driver->depth_framebuffers[index], "2D frames and resize allocate no surface depth");
 	}
 	require(!driver->mesh_picking_pipeline && !driver->mesh_builtin[0].opaque_surface && !driver->mesh_builtin[1].opaque_surface, "2D creates no mesh pipelines");
-	require(onix_vk_destroy_texture(driver, texture), "destroy pure 2D texture");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy pure 2D texture");
 	puts("Pure 2D startup/frames/resize: no swapchain depth allocation or mesh pipeline");
 }
 
-static void test_surface_depth(OnixVkDriver *driver) {
+static void test_surface_depth(OnixGPUDriver *driver) {
 	const uint8_t white[] = {255, 255, 255, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 0, &color);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 0, &color);
 	require(texture && target, "create surface depth resources");
 	const float clear[] = {0, 0, 0, 1};
 	for (int frame = 0; frame < 6; frame++) {
 		float expected = frame % 2 == 0 ? .5f : .25f;
-		require(onix_vk_begin_frame(driver, clear), "begin surface depth frame");
-		onix_vk_set_viewport(driver, 0, 0, (int32_t)driver->extent.width, (int32_t)driver->extent.height);
-		OnixVkSpritePush sprite_push = {.projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-		OnixVkInstance sprite = {.model = {2, 0, -1, 0, 2, -1}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {0, 1, 0, 1}};
+		require(onix_gpu_begin_frame(driver, clear), "begin surface depth frame");
+		onix_gpu_set_viewport(driver, 0, 0, (int32_t)driver->extent.width, (int32_t)driver->extent.height);
+		OnixGPUSpritePush sprite_push = {.projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+		OnixGPUInstance sprite = {.model = {2, 0, -1, 0, 2, -1}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {0, 1, 0, 1}};
 		OnixNativeSpriteDraw sprite_draw = {.texture = texture, .instance_count = 1};
-		require(onix_vk_draw_sprites(driver, &sprite_push, &sprite, 1, &sprite_draw, 1), "draw 2D before upgrading surface depth");
-		OnixVkMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-		OnixVkVertex3D vertices[] = {
+		require(onix_gpu_draw_sprites(driver, &sprite_push, &sprite, 1, &sprite_draw, 1), "draw 2D before upgrading surface depth");
+		OnixGPUMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+		OnixGPUVertex3D vertices[] = {
 			{.position = {-1, -1, expected}, .normal = {0, 0, 1}},
 			{.position = {1, -1, expected}, .normal = {0, 0, 1}},
 			{.position = {0, 1, expected}, .normal = {0, 0, 1}},
 		};
 		uint32_t indices[] = {0, 1, 2}, deformation[16] = {0};
-		OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {[3] = 256}};
+		OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {[3] = 256}};
 		OnixNativeMeshDraw3D draw = {.texture = texture, .index_count = 3, .instance_count = 1};
-		require(onix_vk_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw near surface mesh");
+		require(onix_gpu_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw near surface mesh");
 		// Interrupt the surface pass, then draw behind the first mesh.
 		draw_target(driver, target, texture);
-		onix_vk_set_viewport(driver, 0, 0, (int32_t)driver->extent.width, (int32_t)driver->extent.height);
+		onix_gpu_set_viewport(driver, 0, 0, (int32_t)driver->extent.width, (int32_t)driver->extent.height);
 		for (uint32_t index = 0; index < 3; index++) vertices[index].position[2] = expected / 2;
-		require(onix_vk_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw far surface mesh");
-		require(onix_vk_present(driver), "present surface depth frame");
+		require(onix_gpu_draw_meshes(driver, &push, vertices, 3, indices, 3, &instance, 1, deformation, 16, &draw, 1, NULL), "draw far surface mesh");
+		require(onix_gpu_present(driver), "present surface depth frame");
 		float depth = read_surface_depth(driver);
 		if (depth != expected) {
 			fprintf(stderr, "surface depth frame %d: got %g, expected %g\n", frame, depth, expected);
 			exit(1);
 		}
 	}
-	require(onix_vk_destroy_render_target(driver, target), "destroy surface depth target");
-	require(onix_vk_destroy_texture(driver, texture), "destroy surface depth texture");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy surface depth target");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy surface depth texture");
 	printf("Surface depth clears on each 3D frame and survives offscreen passes\n");
 }
 
-static void draw_multi_texture(OnixVkDriver *driver, uint32_t target, const uint32_t textures[4], uint32_t shader, int frame) {
+static void draw_multi_texture(OnixGPUDriver *driver, uint32_t target, const uint32_t textures[4], uint32_t shader, int frame) {
 	const float clear[] = {0, 0, 0, 0};
-	require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin multi-texture target");
-	onix_vk_set_viewport(driver, 0, 0, 16, 16);
-	OnixVkSpritePush push = {.projection = {[0] = 0.125f, [5] = 0.125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance instances[8] = {0};
+	require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin multi-texture target");
+	onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+	OnixGPUSpritePush push = {.projection = {[0] = 0.125f, [5] = 0.125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance instances[8] = {0};
 	OnixNativeSpriteDraw draws[3] = {{.instance_count = 6}, {.shader = shader, .texture = textures[2], .first_instance = 6, .instance_count = 1}, {.texture = textures[0], .first_instance = 7, .instance_count = 1}};
 	// Change the binding order every frame, including after the allocation reset.
 	uint32_t rotation = (uint32_t)frame % 4;
 	draws[0].texture = textures[rotation];
 	for (uint32_t slot = 1; slot < 4; slot++) draws[0].additional_textures[slot - 1] = textures[(slot + rotation) % 4];
 	for (uint32_t index = 0; index < 8; index++) {
-		instances[index] = (OnixVkInstance){.model = {4, 0, (float)(index % 4) * 4, 0, 8, index < 4 ? 0 : 8}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+		instances[index] = (OnixGPUInstance){.model = {4, 0, (float)(index % 4) * 4, 0, 8, index < 4 ? 0 : 8}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
 		if (index < 6) instances[index].texture_slot = (float)((index % 4 + 4 - rotation) % 4);
 	}
 	instances[3].color[1] = 0;
 	instances[5].model[2] = 0; // Half-alpha green over red tests painter order.
-	require(onix_vk_draw_sprites(driver, &push, instances, 8, draws, 3), "draw multi-texture and custom sprites");
-	require(onix_vk_end_render_target(driver), "end multi-texture target");
+	require(onix_gpu_draw_sprites(driver, &push, instances, 8, draws, 3), "draw multi-texture and custom sprites");
+	require(onix_gpu_end_render_target(driver), "end multi-texture target");
 }
 
-static void check_multi_texture(OnixVkDriver *driver, uint32_t target) {
+static void check_multi_texture(OnixGPUDriver *driver, uint32_t target) {
 	const uint8_t expected[8][4] = {{255, 0, 0, 255}, {0, 128, 0, 128}, {0, 0, 255, 255}, {128, 0, 128, 128}, {127, 128, 0, 255}, {0, 0, 0, 0}, {0, 0, 255, 255}, {255, 0, 0, 255}};
 	for (int index = 0; index < 8; index++) {
 		uint8_t pixel[4];
 		// Vulkan's built-in vertex shader flips Y; target coordinates are top-down.
-		require(onix_vk_read_render_target(driver, target, (uint32_t)(index % 4) * 4 + 2, index < 4 ? 12 : 4, 1, 1, pixel, sizeof(pixel)), "read multi-texture pixel");
+		require(onix_gpu_read_render_target(driver, target, (uint32_t)(index % 4) * 4 + 2, index < 4 ? 12 : 4, 1, 1, pixel, sizeof(pixel)), "read multi-texture pixel");
 		if (driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB) {
 			uint8_t blue = pixel[0]; pixel[0] = pixel[2]; pixel[2] = blue;
 		}
@@ -809,9 +809,9 @@ static void check_multi_texture(OnixVkDriver *driver, uint32_t target) {
 	}
 }
 
-static void check_pixel(OnixVkDriver *driver, uint32_t target, uint8_t red, uint8_t green, int frame) {
+static void check_pixel(OnixGPUDriver *driver, uint32_t target, uint8_t red, uint8_t green, int frame) {
 	uint8_t pixel[4];
-	require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read target");
+	require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read target");
 	if (driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB) {
 		uint8_t blue = pixel[0];
 		pixel[0] = pixel[2];
@@ -823,7 +823,7 @@ static void check_pixel(OnixVkDriver *driver, uint32_t target, uint8_t red, uint
 	}
 }
 
-static void test_external_queue(OnixVkDriver *driver, uint32_t texture) {
+static void test_external_queue(OnixGPUDriver *driver, uint32_t texture) {
 	OnixVkTexture *value = &driver->textures[texture - 1];
 	int external = value->external;
 	value->external = 1;
@@ -838,41 +838,41 @@ static void test_external_queue(OnixVkDriver *driver, uint32_t texture) {
 	value->external_initialized = 0;
 }
 
-static void test_texture_addressing(OnixVkDriver *driver) {
+static void test_texture_addressing(OnixGPUDriver *driver) {
  const uint8_t pixels[]={255,0,0,255,0,255,0,255};
  const float clear[]={0,0,0,1};
- uint32_t color,target=onix_vk_create_render_target(driver,16,16,0,0,&color);
+ uint32_t color,target=onix_gpu_create_render_target(driver,16,16,0,0,&color);
  require(target!=0,"create sampler target");
  for(uint32_t mode=0;mode<3;mode++) {
-  uint32_t texture=onix_vk_create_texture_with_format(driver,2,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,pixels,sizeof(pixels),mode,0);
+  uint32_t texture=onix_gpu_create_texture_with_format(driver,2,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,pixels,sizeof(pixels),mode,0);
   require(texture!=0,"create addressed texture");
   for(int point=0;point<2;point++) {
-   require(onix_vk_begin_frame(driver,clear),"begin sampler frame");
-   require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin sampler target");
-   onix_vk_set_viewport(driver,0,0,16,16);
-   OnixVkSpritePush push={.projection={[0]=.125f,[5]=.125f,[10]=1,[12]=-1,[13]=-1,[15]=1}};
-   OnixVkInstance instance={.model={16,0,0,0,16,0},.texture_model={0,0,1.25f+point*.5f,0,0,.5f},.color={1,1,1,1}};
+   require(onix_gpu_begin_frame(driver,clear),"begin sampler frame");
+   require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin sampler target");
+   onix_gpu_set_viewport(driver,0,0,16,16);
+   OnixGPUSpritePush push={.projection={[0]=.125f,[5]=.125f,[10]=1,[12]=-1,[13]=-1,[15]=1}};
+   OnixGPUInstance instance={.model={16,0,0,0,16,0},.texture_model={0,0,1.25f+point*.5f,0,0,.5f},.color={1,1,1,1}};
    OnixNativeSpriteDraw draw={.texture=texture,.instance_count=1};
-   require(onix_vk_draw_sprites(driver,&push,&instance,1,&draw,1),"draw addressed texture");
-   require(onix_vk_end_render_target(driver),"end sampler target");
-   require(onix_vk_present(driver),"present sampler frame");
+   require(onix_gpu_draw_sprites(driver,&push,&instance,1,&draw,1),"draw addressed texture");
+   require(onix_gpu_end_render_target(driver),"end sampler target");
+   require(onix_gpu_present(driver),"present sampler frame");
    int red=(mode==1 && point==0)||(mode==2 && point==1);
    check_pixel(driver,target,red?255:0,red?0:255,point);
   }
-  require(onix_vk_destroy_texture(driver,texture),"destroy addressed texture");
+  require(onix_gpu_destroy_texture(driver,texture),"destroy addressed texture");
  }
- require(onix_vk_destroy_render_target(driver,target),"destroy sampler target");
+ require(onix_gpu_destroy_render_target(driver,target),"destroy sampler target");
 }
 
-static void test_texture_update_batch(OnixVkDriver *driver) {
+static void test_texture_update_batch(OnixGPUDriver *driver) {
 	uint8_t rgba[12], mask[3] = {255, 255, 255};
 	fill_pixels(rgba, sizeof(rgba), 255, 0);
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 3, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, rgba, sizeof(rgba), 0, 0);
-	uint32_t r8 = onix_vk_create_texture_with_format(driver, 3, 1, 1, ONIX_TEXTURE_FORMAT_R8, 0, mask, sizeof(mask), 0, 0);
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 0, &color);
-	uint32_t mask_target = onix_vk_create_render_target(driver, 16, 16, 0, 0, &color);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 3, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, rgba, sizeof(rgba), 0, 0);
+	uint32_t r8 = onix_gpu_create_texture_with_format(driver, 3, 1, 1, ONIX_TEXTURE_FORMAT_R8, 0, mask, sizeof(mask), 0, 0);
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 0, &color);
+	uint32_t mask_target = onix_gpu_create_render_target(driver, 16, 16, 0, 0, &color);
 	require(texture && r8 && target && mask_target, "create batch update resources");
-	OnixVkTextureUpdate updates[] = {
+	OnixGPUTextureUpdate updates[] = {
 		{.texture = r8, .width = 3, .height = 1, .data_length = 3},
 		{.texture = texture, .width = 3, .height = 1, .data_offset = 4, .data_length = 12},
 	};
@@ -883,65 +883,65 @@ static void test_texture_update_batch(OnixVkDriver *driver) {
 			warm_host = host_allocations;
 			warm_resources = resource_allocations;
 		}
-		if (frame % 2 != 0) require(onix_vk_begin_frame(driver, clear), "begin batch frame before upload");
+		if (frame % 2 != 0) require(onix_gpu_begin_frame(driver, clear), "begin batch frame before upload");
 		uint32_t pending = driver->upload_count;
 		VkDeviceSize reserved = onix_vk_staging_bytes_reserved(&driver->frames[driver->frame_index]);
 		updates[1].width = 4;
-		require(onix_vk_prepare_texture_updates(driver, updates, 2, 16) == NULL, "reject invalid batch region");
+		require(onix_gpu_prepare_texture_updates(driver, updates, 2, 16) == NULL, "reject invalid batch region");
 		require(driver->upload_count == pending && onix_vk_staging_bytes_reserved(&driver->frames[driver->frame_index]) == reserved, "invalid batch leaves uploads unchanged");
 		updates[1].width = 3;
 		updates[1].data_offset = 3;
-		require(onix_vk_prepare_texture_updates(driver, updates, 2, 16) == NULL, "reject unaligned batch offset");
+		require(onix_gpu_prepare_texture_updates(driver, updates, 2, 16) == NULL, "reject unaligned batch offset");
 		require(driver->upload_count == pending, "unaligned batch leaves uploads unchanged");
 		updates[1].data_offset = 4;
 		uint8_t red = frame % 2 == 0 ? 255 : 0, green = frame % 2 == 0 ? 0 : 255;
 		fill_pixels(rgba, sizeof(rgba), red, green);
-		uint8_t *staging = onix_vk_prepare_texture_updates(driver, updates, 2, 16);
+		uint8_t *staging = onix_gpu_prepare_texture_updates(driver, updates, 2, 16);
 		require(staging != NULL, "prepare mapped batch update");
 		memcpy(staging, mask, sizeof(mask));
 		memcpy(staging + 4, rgba, sizeof(rgba));
-		require(onix_vk_commit_texture_updates(driver), "commit mapped batch update");
+		require(onix_gpu_commit_texture_updates(driver), "commit mapped batch update");
 		memset(rgba, 0, sizeof(rgba));
-		if (frame % 2 == 0) require(onix_vk_begin_frame(driver, clear), "begin batch frame after upload");
+		if (frame % 2 == 0) require(onix_gpu_begin_frame(driver, clear), "begin batch frame after upload");
 		draw_target(driver, target, texture);
 		draw_target(driver, mask_target, r8);
-		require(onix_vk_present(driver), "present batch update");
+		require(onix_gpu_present(driver), "present batch update");
 		check_pixel(driver, target, red, green, frame);
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver, mask_target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read batch R8 pixel");
+		require(onix_gpu_read_render_target(driver, mask_target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read batch R8 pixel");
 		require(pixel[0] == 255 && pixel[1] == 255 && pixel[2] == 255 && pixel[3] == 255, "batch R8 alignment preserves pixels");
 	}
 	require(host_allocations == warm_host && resource_allocations == warm_resources, "mapped batches allocate nothing after warmup");
 	printf("Mapped RGBA8/R8 batches: aligned pixels, invalid-batch isolation and zero steady-state allocations passed\n");
-	require(onix_vk_destroy_render_target(driver, target), "destroy batch target");
-	require(onix_vk_destroy_render_target(driver, mask_target), "destroy batch mask target");
-	require(onix_vk_destroy_texture(driver, texture), "destroy batch texture");
-	require(onix_vk_destroy_texture(driver, r8), "destroy batch mask");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy batch target");
+	require(onix_gpu_destroy_render_target(driver, mask_target), "destroy batch mask target");
+	require(onix_gpu_destroy_texture(driver, texture), "destroy batch texture");
+	require(onix_gpu_destroy_texture(driver, r8), "destroy batch mask");
 }
 
 
-static void test_fxaa(OnixVkDriver *driver) {
+static void test_fxaa(OnixGPUDriver *driver) {
  uint32_t source_color,result_color;
- uint32_t source=onix_vk_create_render_target(driver,32,32,0,1,&source_color);
- uint32_t result=onix_vk_create_render_target(driver,48,48,0,1,&result_color);
+ uint32_t source=onix_gpu_create_render_target(driver,32,32,0,1,&source_color);
+ uint32_t result=onix_gpu_create_render_target(driver,48,48,0,1,&result_color);
  const uint8_t white[]={255,255,255,255};
- uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
+ uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
  require(source && result && texture,"create FXAA resources");
- OnixVkVertex3D vertices[]={
+ OnixGPUVertex3D vertices[]={
   {.position={-1,-1,1},.normal={0,0,1},.uv={0,0}}, {.position={1,-1,1},.normal={0,0,1},.uv={1,0}},
   {.position={1,1,1},.normal={0,0,1},.uv={1,1}}, {.position={-1,1,1},.normal={0,0,1},.uv={0,1}},
   {.position={-1,0,1},.normal={0,0,1}}, {.position={1,0,1},.normal={0,0,1}},
  };
  uint32_t indices[]={0,1,2,0,2,3,0,1,5,0,5,4,4,5,2,4,2,3},deformation[16]={0};
- OnixVkInstance3D instances[2]={
+ OnixGPUInstance3D instances[2]={
   {.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={.8f,1.5f,.5f,768},.uv_transform={1,1,0,0}},
   {.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={0,1,0,.5f},.material={.8f,1.5f,.5f,770},.uv_transform={1,1,0,0}},
  };
- OnixVkInstance3D composite={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={0,1.5f,0,512},.uv_transform={1,1,0,0}};
- OnixVkMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
+ OnixGPUInstance3D composite={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={0,1.5f,0,512},.uv_transform={1,1,0,0}};
+ OnixGPUMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
  OnixNativeMeshDraw3D draws[2]={{.texture=texture,.index_count=6,.instance_count=1},{.texture=texture,.first_index=12,.index_count=6,.first_instance=1,.instance_count=1,.alpha_mode=2}};
  OnixNativeMeshDraw3D filter={.texture=source_color,.index_count=6,.instance_count=1,.alpha_mode=2};
- float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={0};
+ float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={0};
  uint8_t rgba[48*48*4];
  int red=driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM?2:0,smoothed=0,alpha_smoothed=0;
  for(int test=0;test<4;test++) {
@@ -953,16 +953,16 @@ static void test_fxaa(OnixVkDriver *driver) {
   instances[0].material[3]=test==3?770:768;
   draws[0].first_index=test==3?6:0;draws[0].index_count=test==1 || test==2?3:6;draws[0].alpha_mode=test==3?2:0;
   for(int frame=0;frame<12;frame++) {
-   require(onix_vk_begin_frame(driver,clear),"begin FXAA frame");
-   require(onix_vk_begin_render_target(driver,source,clear,0,1,1),"begin FXAA source");onix_vk_set_viewport(driver,0,0,32,32);
+   require(onix_gpu_begin_frame(driver,clear),"begin FXAA frame");
+   require(onix_gpu_begin_render_target(driver,source,clear,0,1,1),"begin FXAA source");onix_gpu_set_viewport(driver,0,0,32,32);
    lighting[296]=1;lighting[297]=0;
-   require(onix_vk_draw_meshes(driver,&push,vertices,6,indices,18,instances,2,deformation,16,draws,test==3?2:1,lighting),"draw FXAA source geometry");require(onix_vk_end_render_target(driver),"end FXAA source");
+   require(onix_gpu_draw_meshes(driver,&push,vertices,6,indices,18,instances,2,deformation,16,draws,test==3?2:1,lighting),"draw FXAA source geometry");require(onix_gpu_end_render_target(driver),"end FXAA source");
    const float zero[]={0,0,0,0};
-   require(onix_vk_begin_render_target(driver,result,zero,0,1,1),"begin FXAA composite");onix_vk_set_viewport(driver,8,8,32,32);
+   require(onix_gpu_begin_render_target(driver,result,zero,0,1,1),"begin FXAA composite");onix_gpu_set_viewport(driver,8,8,32,32);
    lighting[296]=999;lighting[297]=7;
-   require(onix_vk_draw_meshes(driver,&push,vertices,6,indices,18,&composite,1,deformation,16,&filter,1,lighting),"draw FXAA composite");require(onix_vk_end_render_target(driver),"end FXAA composite");
-   require(onix_vk_present(driver),"present FXAA frame");
-   require(onix_vk_read_render_target(driver,result,0,0,48,48,rgba,sizeof(rgba)),"read FXAA result");
+   require(onix_gpu_draw_meshes(driver,&push,vertices,6,indices,18,&composite,1,deformation,16,&filter,1,lighting),"draw FXAA composite");require(onix_gpu_end_render_target(driver),"end FXAA composite");
+   require(onix_gpu_present(driver),"present FXAA frame");
+   require(onix_gpu_read_render_target(driver,result,0,0,48,48,rgba,sizeof(rgba)),"read FXAA result");
    if(test==0 && frame==7) host_allocations=resource_allocations=0;
    if(test==0 && frame>=8) require(host_allocations==0 && resource_allocations==0,"FXAA steady frames allocated");
   }
@@ -982,7 +982,7 @@ static void test_fxaa(OnixVkDriver *driver) {
   }
  }
  require(smoothed>0 && alpha_smoothed>0,"FXAA did not smooth diagonal or transparent edges");
- require(onix_vk_destroy_render_target(driver,source),"destroy FXAA source");require(onix_vk_destroy_render_target(driver,result),"destroy FXAA result");require(onix_vk_destroy_texture(driver,texture),"destroy FXAA texture");
+ require(onix_gpu_destroy_render_target(driver,source),"destroy FXAA source");require(onix_gpu_destroy_render_target(driver,result),"destroy FXAA result");require(onix_gpu_destroy_texture(driver,texture),"destroy FXAA texture");
  printf("Vulkan FXAA geometry edges (%d pixels), transparency (%d pixels), flat color, orientation, viewport and zero steady C/resource allocations passed\n",smoothed,alpha_smoothed);
 }
 
@@ -991,23 +991,23 @@ static int camera_display_byte(double radiance,int curve) {
  double value=curve?fmin(1.0,fmax(0.0,((radiance/0.6)*(radiance/0.6+0.0245786)-0.000090537)/((radiance/0.6)*(0.983729*radiance/0.6+0.4329510)+0.238081))):radiance/(radiance+1);
  return (int)lround((value<=.0031308?12.92*value:1.055*pow(value,1.0/2.4)-.055)*255);
 }
-static void test_camera_color(OnixVkDriver *driver) {
- uint32_t color,target=onix_vk_create_render_target(driver,16,16,0,1,&color);
+static void test_camera_color(OnixGPUDriver *driver) {
+ uint32_t color,target=onix_gpu_create_render_target(driver,16,16,0,1,&color);
  const uint8_t white[]={255,255,255,255};
- uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
+ uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,white,4,0,0);
  require(target && texture,"create camera color resources");
- OnixVkVertex3D vertices[]={
+ OnixGPUVertex3D vertices[]={
   {.position={-1,-1,-4},.normal={0,0,1}}, {.position={1,-1,-4},.normal={0,0,1}},
   {.position={1,1,-4},.normal={0,0,1}}, {.position={-1,1,-4},.normal={0,0,1}},
  };
  uint32_t indices[]={0,1,2,0,2,3},deformation[16]={0};
- OnixVkInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={0,0,0,1},.material={.8f,1.5f,.5f,512+4096},.uv_transform={1,1,0,0},.custom={{1,1,0,0},{1,1,1,0},{0,0,0,0},{0,1,0,1}}};
+ OnixGPUInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={0,0,0,1},.material={.8f,1.5f,.5f,512+4096},.uv_transform={1,1,0,0},.custom={{1,1,0,0},{1,1,1,0},{0,0,0,0},{0,1,0,1}}};
  OnixNativeMeshDraw3D draw={.texture=texture,.index_count=6,.instance_count=1};
- OnixVkMeshPush push={.view_projection={[0]=1,[5]=1,[14]=.5f,[15]=1}};
+ OnixGPUMeshPush push={.view_projection={[0]=1,[5]=1,[14]=.5f,[15]=1}};
  const float clear[]={0,0,0,0},radiance[]={0,.001f,.18f,1,4,100,FLT_MAX},distances[]={1,2,4,6,10};
  int red=(driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format==VK_FORMAT_B8G8R8A8_SRGB)?2:0;
  for(int test=0;test<32;test++) {
-  float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.0625f,[17]=-.0625f,[19]=1,[296]=1,[302]=-1};
+  float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={[16]=.0625f,[17]=-.0625f,[19]=1,[296]=1,[302]=-1};
   double expected_radiance=0;
   int curve=test<14?test/7:0,expected_alpha=255;
   instance.material[3]=512+4096;instance.base_color[3]=1;draw.alpha_mode=0;
@@ -1036,10 +1036,10 @@ static void test_camera_color(OnixVkDriver *driver) {
   lighting[847]=(float)curve;
   // Keep the shifted orthographic sample visible while preserving world X.
   push.view_projection[12]=test==24?-100:0;
-  require(onix_vk_begin_frame(driver,clear),"begin camera color frame");
-  require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin camera color target");onix_vk_set_viewport(driver,0,0,16,16);
-  require(onix_vk_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting),"draw fog/curve");require(onix_vk_end_render_target(driver),"end camera color target");require(onix_vk_present(driver),"present camera color frame");
-  uint8_t pixel[4];require(onix_vk_read_render_target(driver,target,8,8,1,1,pixel,4),"read fog/curve pixel");
+  require(onix_gpu_begin_frame(driver,clear),"begin camera color frame");
+  require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin camera color target");onix_gpu_set_viewport(driver,0,0,16,16);
+  require(onix_gpu_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting),"draw fog/curve");require(onix_gpu_end_render_target(driver),"end camera color target");require(onix_gpu_present(driver),"present camera color frame");
+  uint8_t pixel[4];require(onix_gpu_read_render_target(driver,target,8,8,1,1,pixel,4),"read fog/curve pixel");
   int expected=camera_display_byte(expected_radiance,curve);
   if(test>=28) {
    const float fogged[]={(float)expected_radiance,0,1-(float)expected_radiance};
@@ -1059,25 +1059,25 @@ static void test_camera_color(OnixVkDriver *driver) {
  }
  const float colors[][3]={{1,0,0},{0,1,0},{0,0,1},{.03f,.2f,3},{4,1,.05f}};
  for(int i=0;i<5;i++) {
-  float lighting[ONIX_VK_MESH_LIGHTING_BYTES/sizeof(float)]={[19]=1,[296]=1,[847]=1};
+  float lighting[ONIX_GPU_MESH_LIGHTING_BYTES/sizeof(float)]={[19]=1,[296]=1,[847]=1};
   for(int c=0;c<3;c++) instance.emissive_metallic[c]=colors[i][c];
   instance.material[3]=512+4096;instance.base_color[3]=1;draw.alpha_mode=0;
   unsigned char expected[3],pixel[4];aces_display_reference(colors[i],expected);
-  require(onix_vk_begin_frame(driver,clear),"begin ACES color frame");
-  require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin ACES color target");onix_vk_set_viewport(driver,0,0,16,16);
-  require(onix_vk_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting),"draw ACES color");
-  require(onix_vk_end_render_target(driver),"end ACES color target");require(onix_vk_present(driver),"present ACES color frame");
-  require(onix_vk_read_render_target(driver,target,8,8,1,1,pixel,4),"read ACES color");
+  require(onix_gpu_begin_frame(driver,clear),"begin ACES color frame");
+  require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin ACES color target");onix_gpu_set_viewport(driver,0,0,16,16);
+  require(onix_gpu_draw_meshes(driver,&push,vertices,4,indices,6,&instance,1,deformation,16,&draw,1,lighting),"draw ACES color");
+  require(onix_gpu_end_render_target(driver),"end ACES color target");require(onix_gpu_present(driver),"present ACES color frame");
+  require(onix_gpu_read_render_target(driver,target,8,8,1,1,pixel,4),"read ACES color");
   require(abs(pixel[red]-expected[0])<=1 && abs(pixel[1]-expected[1])<=1 && abs(pixel[2-red]-expected[2])<=1,"ACES color transform differs from CPU reference");
  }
- require(onix_vk_destroy_render_target(driver,target),"destroy camera color target");require(onix_vk_destroy_texture(driver,texture),"destroy camera color texture");
+ require(onix_gpu_destroy_render_target(driver,target),"destroy camera color target");require(onix_gpu_destroy_texture(driver,texture),"destroy camera color texture");
  printf("Vulkan Reinhard/ACES fit, huge HDR values, linear/exp2 fog, orthographic, unlit/transparent fog, sky/capture isolation and zero steady C/resource allocations passed\n");
 }
 
-static void test_surface_cache_retention(OnixVkDriver *driver, OnixVkFrame *frame, const uint32_t textures[2]) {
+static void test_surface_cache_retention(OnixGPUDriver *driver, OnixVkFrame *frame, const uint32_t textures[2]) {
 	uint64_t peak_bytes = (uint64_t)frame->surface_capacity * (sizeof(*frame->surface_sets) + 8);
 	VkDescriptorSet first = frame->surface_sets[0].descriptor;
-	VkDescriptorPool first_pool = frame->surface_pools[0], last_pool = frame->surface_pools[ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS - 1];
+	VkDescriptorPool first_pool = frame->surface_pools[0], last_pool = frame->surface_pools[ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS - 1];
 	onix_vk_reset_surface_cache(driver, frame);
 	size_t heap = host_allocations, resources = resource_allocations;
 	for (uint32_t iteration = 0; iteration < ONIX_BUFFER_TRIM_DELAY * 2; iteration++) {
@@ -1091,7 +1091,7 @@ static void test_surface_cache_retention(OnixVkDriver *driver, OnixVkFrame *fram
 		onix_vk_reset_surface_cache(driver, frame);
 		if (iteration < ONIX_BUFFER_TRIM_DELAY - 1) require(frame->surface_capacity == 4096 && host_allocations == heap && resource_allocations == resources,
 			"short material workload retains descriptor cache without allocating");
-		if (iteration == ONIX_BUFFER_TRIM_DELAY - 1) require(frame->surface_capacity == 4096 && frame->surface_pools[ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS - 1] == last_pool,
+		if (iteration == ONIX_BUFFER_TRIM_DELAY - 1) require(frame->surface_capacity == 4096 && frame->surface_pools[ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS - 1] == last_pool,
 			"failed table shrink preserves every owning descriptor pool");
 	}
 	require(frame->surface_capacity == 64 && frame->surface_set_count == 64 && frame->surface_pools[0] == first_pool && frame->surface_pools[1] == VK_NULL_HANDLE,
@@ -1106,7 +1106,7 @@ static void test_surface_cache_retention(OnixVkDriver *driver, OnixVkFrame *fram
 	require(host_allocations == heap && resource_allocations == resources, "shrunken material cache allocates no heap or Vulkan resources");
 	printf("Surface metadata retention: %llu -> %llu bytes; 64 descriptor pools -> 1, handles and zero warm allocations preserved\n",
 		(unsigned long long)peak_bytes, (unsigned long long)((uint64_t)frame->surface_capacity * (sizeof(*frame->surface_sets) + 8)));
-	for (uint32_t combination = 0; combination <= ONIX_VK_SURFACE_POOL_SETS; combination++) {
+	for (uint32_t combination = 0; combination <= ONIX_GPU_SURFACE_POOL_SETS; combination++) {
 		OnixNativeMeshDraw3D draw = {.texture = textures[0]};
 		for (uint32_t slot = 0; slot < 7; slot++) draw.extra_textures[slot] = combination & (1u << slot) ? textures[1] : 0;
 		require(onix_vk_surface_descriptor(driver, frame, &draw) != VK_NULL_HANDLE, "material cache regrows past retained pool boundary");
@@ -1115,34 +1115,34 @@ static void test_surface_cache_retention(OnixVkDriver *driver, OnixVkFrame *fram
 		"regrowth allocates a new tail pool without disturbing retained handles");
 }
 
-static void test_surface_descriptor_cache(OnixVkDriver *driver) {
+static void test_surface_descriptor_cache(OnixGPUDriver *driver) {
 	const uint8_t pixel[] = {255, 255, 255, 255};
 	uint32_t textures[2];
 	for (uint32_t index = 0; index < 2; index++) {
-		textures[index] = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixel, sizeof(pixel), index, 0);
+		textures[index] = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixel, sizeof(pixel), index, 0);
 		require(textures[index] != 0, "create surface cache texture");
 	}
 	// These descriptors are never submitted, so a separate cache can exercise
 	// every capacity boundary without growing the driver's steady-state storage.
 	OnixVkFrame frame = {0};
 	OnixNativeMeshDraw3D draw = {.texture = textures[0]};
-	VkDescriptorSet sets[ONIX_VK_SURFACE_SETS];
+	VkDescriptorSet sets[ONIX_GPU_SURFACE_SETS];
 	size_t updates = surface_descriptor_updates;
-	for (uint32_t combination = 0; combination < ONIX_VK_SURFACE_SETS; combination++) {
+	for (uint32_t combination = 0; combination < ONIX_GPU_SURFACE_SETS; combination++) {
 		for (uint32_t slot = 0; slot < 13; slot++) draw.extra_textures[slot] = combination & (1u << slot) ? textures[1] : 0;
 		sets[combination] = onix_vk_surface_descriptor(driver, &frame, &draw);
 		require(sets[combination] != VK_NULL_HANDLE, "allocate unique surface combination");
 		if (combination == 0) require(frame.surface_pools[1] == VK_NULL_HANDLE && frame.surface_capacity == 16, "small material count keeps surface storage small");
-		if (combination == ONIX_VK_SURFACE_POOL_SETS) require(frame.surface_pools[1] != VK_NULL_HANDLE, "surface pool grows at block boundary");
+		if (combination == ONIX_GPU_SURFACE_POOL_SETS) require(frame.surface_pools[1] != VK_NULL_HANDLE, "surface pool grows at block boundary");
 	}
-	require(surface_descriptor_updates - updates == ONIX_VK_SURFACE_SETS, "write each unique combination once");
+	require(surface_descriptor_updates - updates == ONIX_GPU_SURFACE_SETS, "write each unique combination once");
 	size_t heap = host_allocations, resources = resource_allocations;
-	for (uint32_t combination = ONIX_VK_SURFACE_SETS; combination-- > 0;) {
+	for (uint32_t combination = ONIX_GPU_SURFACE_SETS; combination-- > 0;) {
 		for (uint32_t slot = 0; slot < 13; slot++) draw.extra_textures[slot] = combination & (1u << slot) ? textures[1] : textures[0];
 		draw.metallic_roughness_texture = textures[0];
 		require(onix_vk_surface_descriptor(driver, &frame, &draw) == sets[combination], "reuse normalized keys after collisions and growth");
 	}
-	require(surface_descriptor_updates - updates == ONIX_VK_SURFACE_SETS && host_allocations == heap && resource_allocations == resources, "cache hits at capacity perform no writes or allocations");
+	require(surface_descriptor_updates - updates == ONIX_GPU_SURFACE_SETS && host_allocations == heap && resource_allocations == resources, "cache hits at capacity perform no writes or allocations");
 	draw.extra_textures[12] = textures[1];
 	require(onix_vk_surface_descriptor(driver, &frame, &draw) == VK_NULL_HANDLE, "reject additional unique combination at capacity");
 	draw.extra_textures[12] = textures[0];
@@ -1150,11 +1150,11 @@ static void test_surface_descriptor_cache(OnixVkDriver *driver) {
 	draw.metallic_roughness_texture = textures[1];
 	require(onix_vk_surface_descriptor(driver, &frame, &draw) == VK_NULL_HANDLE, "metallic roughness binding participates in key");
 	test_surface_cache_retention(driver, &frame, textures);
-	require(onix_vk_destroy_texture(driver, textures[0]), "retire cached surface texture");
+	require(onix_gpu_destroy_texture(driver, textures[0]), "retire cached surface texture");
 	draw.metallic_roughness_texture = textures[0];
 	require(onix_vk_surface_descriptor(driver, &frame, &draw) == VK_NULL_HANDLE, "cache hit still rejects retired texture");
-	require(onix_vk_destroy_texture(driver, textures[1]), "retire second surface texture");
-	for (uint32_t pool = 0; pool < ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS; pool++) {
+	require(onix_gpu_destroy_texture(driver, textures[1]), "retire second surface texture");
+	for (uint32_t pool = 0; pool < ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS; pool++) {
 		if (frame.surface_pools[pool] != VK_NULL_HANDLE) vkDestroyDescriptorPool(driver->device, frame.surface_pools[pool], NULL);
 	}
 	free(frame.surface_sets);
@@ -1162,15 +1162,15 @@ static void test_surface_descriptor_cache(OnixVkDriver *driver) {
 	printf("Surface cache: 4096 unique combinations, normalized keys, collisions, growth, capacity hits and retirement passed\n");
 }
 
-static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t textures[4], uint32_t shader) {
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
-	OnixVkVertex3D vertices[] = {
+static void test_draw_descriptor_reuse(OnixGPUDriver *driver, const uint32_t textures[4], uint32_t shader) {
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
+	OnixGPUVertex3D vertices[] = {
 		{.position = {-1, -1, .5f}, .normal = {0, 0, 1}},
 		{.position = {1, -1, .5f}, .normal = {0, 0, 1}},
 		{.position = {0, 1, .5f}, .normal = {0, 0, 1}},
 	};
 	uint32_t indices[] = {0, 1, 2};
-	uint32_t mesh = onix_vk_create_mesh(driver, vertices, 3, indices, 3);
+	uint32_t mesh = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
 	OnixNativeMeshDraw3D *draws = calloc(4097, sizeof(*draws));
 	require(target && mesh && draws, "create descriptor reuse resources");
 	for (uint32_t index = 0; index < 4097; index++) {
@@ -1180,17 +1180,17 @@ static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t text
 			for (uint32_t slot = 0; slot < 13; slot++) draws[index].extra_textures[slot] = textures[0];
 		}
 	}
-	OnixVkMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {[3] = 512}};
+	OnixGPUMeshPush push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {1, 1, 1, 1}, .material = {[3] = 512}};
 	uint32_t deformation[16] = {0};
 	const float clear[] = {0, 0, 0, 1};
 	VkDescriptorSet retained_deformation[ONIX_VK_FRAMES_IN_FLIGHT] = {0};
 	// Rotate each frame's material key so a stale hash table would skip writes.
 	for (uint32_t iteration = 0; iteration < ONIX_VK_FRAMES_IN_FLIGHT * (ONIX_BUFFER_TRIM_DELAY + 4); iteration++) {
 		draws[0].extra_textures[0] = textures[iteration / ONIX_VK_FRAMES_IN_FLIGHT % 2];
-		require(onix_vk_begin_frame(driver, clear), "begin descriptor reuse frame");
-		require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin descriptor reuse target");
-		onix_vk_set_viewport(driver, 0, 0, 16, 16);
+		require(onix_gpu_begin_frame(driver, clear), "begin descriptor reuse frame");
+		require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin descriptor reuse target");
+		onix_gpu_set_viewport(driver, 0, 0, 16, 16);
 		OnixVkFrame *frame = &driver->frames[driver->frame_index];
 		require(frame->surface_set_index == 0, "surface cache resets on frame fence");
 		size_t updates = surface_descriptor_updates;
@@ -1198,12 +1198,12 @@ static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t text
 		size_t binds = descriptor_bind_calls;
 		uint32_t count = iteration == 0 ? 4097 : 1;
 		size_t calls = indexed_draw_calls;
-		require(onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, count, NULL), "draw repeated mesh material");
+		require(onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, count, NULL), "draw repeated mesh material");
 		require(indexed_draw_calls - calls == count && surface_descriptor_updates - updates == 1 && frame->surface_set_index == 1, "4097 draws consume one surface set");
 		require(descriptor_bind_calls == binds + 1 && mesh_descriptor_updates == mesh_updates + 1, "mesh batch binds once and updates both buffer descriptors together");
 		updates = surface_descriptor_updates;
 		binds = descriptor_bind_calls;
-		require(onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, 1, NULL), "reuse surface in another batch");
+		require(onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, 1, NULL), "reuse surface in another batch");
 		require(surface_descriptor_updates == updates && frame->surface_set_index == 1, "surface cache spans batches");
 		require(descriptor_bind_calls == binds + 1, "first mesh in each batch binds descriptors");
 		if (iteration == 0) {
@@ -1216,24 +1216,24 @@ static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t text
 			changes[6].alpha_mode = 2; // Pipeline change keeps the same layout.
 			binds = descriptor_bind_calls;
 			calls = indexed_draw_calls;
-			require(onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, changes, 8, NULL), "draw changed mesh texture bindings and pipelines");
+			require(onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, changes, 8, NULL), "draw changed mesh texture bindings and pipelines");
 			require(descriptor_bind_calls == binds + 6 && indexed_draw_calls == calls + 8, "mesh binds only when base, normal or surface descriptors change");
 			OnixNativeMeshDraw3D invalid[2] = {draws[0], draws[0]};
 			invalid[1].first_instance = UINT32_MAX;
 			calls = indexed_draw_calls;
-			require(!onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 2, NULL), "reject mesh instance overflow in draw loop");
+			require(!onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 2, NULL), "reject mesh instance overflow in draw loop");
 			require(indexed_draw_calls == calls + 1, "invalid mesh is never drawn");
 			invalid[0].first_index = UINT32_MAX;
-			require(!onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject mesh index overflow");
+			require(!onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject mesh index overflow");
 			invalid[0] = draws[0]; invalid[0].normal_texture = driver->texture_slots.count + 1;
-			require(!onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject invalid normal texture");
+			require(!onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject invalid normal texture");
 			invalid[0] = draws[0]; invalid[0].extra_textures[12] = driver->texture_slots.count + 1;
-			require(!onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject invalid surface texture");
+			require(!onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, invalid, 1, NULL), "reject invalid surface texture");
 			require(indexed_draw_calls == calls + 1, "invalid mesh ranges and textures record no draws");
 		}
 		if (iteration < ONIX_VK_FRAMES_IN_FLIGHT) {
 			while (frame->deformation_set_index <= ONIX_VK_DEFORMATION_POOL_SETS) {
-				require(onix_vk_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, 1, NULL), "draw deformation descriptor peak in each frame slot");
+				require(onix_gpu_draw_meshes(driver, &push, NULL, 0, NULL, 0, &instance, 1, deformation, 16, draws, 1, NULL), "draw deformation descriptor peak in each frame slot");
 			}
 			retained_deformation[driver->frame_index] = frame->deformation_sets[0];
 			require(frame->deformation_pools[1] != VK_NULL_HANDLE, "GPU workload grows a second deformation pool");
@@ -1242,8 +1242,8 @@ static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t text
 			require(frame->deformation_pools[1] == VK_NULL_HANDLE && frame->deformation_sets[0] == retained_deformation[driver->frame_index],
 				"frame fence permits tail pool reclaim while preserving live draw handles");
 		}
-		OnixVkSpritePush sprite_push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-		OnixVkInstance sprite = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+		OnixGPUSpritePush sprite_push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+		OnixGPUInstance sprite = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
 		OnixNativeSpriteDraw sprites[6] = {
 			{.texture = textures[0], .instance_count = 1},
 			{.texture = textures[0], .additional_textures = {textures[0], textures[0], textures[0]}, .instance_count = 1},
@@ -1254,68 +1254,68 @@ static void test_draw_descriptor_reuse(OnixVkDriver *driver, const uint32_t text
 		};
 		binds = descriptor_bind_calls;
 		calls = indexed_draw_calls;
-		require(onix_vk_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 6), "draw repeated sprite bindings");
+		require(onix_gpu_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 6), "draw repeated sprite bindings");
 		require(descriptor_bind_calls - binds == 3 && indexed_draw_calls - calls == 6, "sprite binds only on changes, including shader switches");
 		binds = descriptor_bind_calls;
-		require(onix_vk_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 1), "draw sprite in another batch");
+		require(onix_gpu_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 1), "draw sprite in another batch");
 		require(descriptor_bind_calls == binds + 1, "first sprite in each batch binds descriptors");
 		sprites[1].first_instance = UINT32_MAX;
 		calls = indexed_draw_calls;
-		require(!onix_vk_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 2), "reject sprite instance overflow in draw loop");
+		require(!onix_gpu_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 2), "reject sprite instance overflow in draw loop");
 		require(indexed_draw_calls == calls + 1, "invalid sprite is never drawn");
 		sprites[0].additional_textures[2] = driver->texture_slots.count + 1;
-		require(!onix_vk_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 1), "reject invalid sprite texture");
+		require(!onix_gpu_draw_sprites(driver, &sprite_push, &sprite, 1, sprites, 1), "reject invalid sprite texture");
 		require(indexed_draw_calls == calls + 1, "invalid sprite texture records no draw");
-		require(onix_vk_end_render_target(driver), "end descriptor reuse target");
-		require(onix_vk_present(driver), "present descriptor reuse frame");
+		require(onix_gpu_end_render_target(driver), "end descriptor reuse target");
+		require(onix_gpu_present(driver), "present descriptor reuse frame");
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read descriptor reuse target");
+		require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read descriptor reuse target");
 		uint32_t red = driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB ? 2 : 0;
 		require(pixel[red] == 255 && pixel[1] == 0 && pixel[2 - red] == 0 && pixel[3] == 255, "descriptor reuse preserves pixels");
 	}
 	free(draws);
-	require(onix_vk_destroy_mesh(driver, mesh), "destroy descriptor reuse mesh");
-	require(onix_vk_destroy_render_target(driver, target), "destroy descriptor reuse target");
+	require(onix_gpu_destroy_mesh(driver, mesh), "destroy descriptor reuse mesh");
+	require(onix_gpu_destroy_render_target(driver, target), "destroy descriptor reuse target");
 	printf("Descriptor reuse: 4097 mesh draws bind once, shared materials, texture/pipeline changes, range checks; deformation pool reclaim across both frame fences and pixels passed\n");
 }
 
-static void test_static_deformation_residency(OnixVkDriver *driver) {
+static void test_static_deformation_residency(OnixGPUDriver *driver) {
  const uint8_t red[]={255,0,0,255};
- uint32_t texture=onix_vk_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,red,4,0,0),color;
- uint32_t target=onix_vk_create_render_target(driver,16,16,0,1,&color);
- OnixVkVertex3D vertices[]={ {.position={-.25f,-.25f,.5f},.normal={0,0,1}}, {.position={.25f,-.25f,.5f},.normal={0,0,1}}, {.position={0,.25f,.5f},.normal={0,0,1}} };
+ uint32_t texture=onix_gpu_create_texture_with_format(driver,1,1,1,ONIX_TEXTURE_FORMAT_RGBA8,0,red,4,0,0),color;
+ uint32_t target=onix_gpu_create_render_target(driver,16,16,0,1,&color);
+ OnixGPUVertex3D vertices[]={ {.position={-.25f,-.25f,.5f},.normal={0,0,1}}, {.position={.25f,-.25f,.5f},.normal={0,0,1}}, {.position={0,.25f,.5f},.normal={0,0,1}} };
  uint32_t indices[]={0,1,2},meshes[2];
  for (uint32_t mesh_index=0;mesh_index<2;mesh_index++) {
   uint32_t stream[52]={0};float one=1,delta=mesh_index==0?.2f:-.2f;
   for(uint32_t vertex=0;vertex<3;vertex++) { memcpy(stream+1+vertex*8+4,&one,4);memcpy(stream+25+vertex*9,&delta,4); }
-  meshes[mesh_index]=onix_vk_create_mesh(driver,vertices,3,indices,3);
-  require(meshes[mesh_index]!=0 && onix_vk_set_mesh_deformation(driver,meshes[mesh_index],stream,52,3),"upload resident skin/morph");
+  meshes[mesh_index]=onix_gpu_create_mesh(driver,vertices,3,indices,3);
+  require(meshes[mesh_index]!=0 && onix_gpu_set_mesh_deformation(driver,meshes[mesh_index],stream,52,3),"upload resident skin/morph");
   memset(stream,0,sizeof(stream)); // The driver owns a copy after upload.
  }
- OnixVkMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
- OnixVkInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={-1,1.5f,.5f},.uv_transform={1,1}};
+ OnixGPUMeshPush push={.view_projection={[0]=1,[5]=1,[10]=1,[15]=1}};
+ OnixGPUInstance3D instance={.model={[0]=1,[5]=1,[10]=1,[15]=1},.base_color={1,1,1,1},.material={-1,1.5f,.5f},.uv_transform={1,1}};
  OnixNativeMeshDraw3D draws[2]={{.mesh=meshes[0],.texture=texture,.index_count=3,.instance_count=1,.deformation_index=1},{.mesh=meshes[1],.texture=texture,.index_count=3,.instance_count=1,.deformation_index=1}};
  uint32_t animated[25]={1,25,8,24,3,1,1,1};
  const float clear[]={0,0,0,0};float matrix[16]={[0]=1,[5]=1,[10]=1,[15]=1},weight=.5f;
  for(int frame=0;frame<12;frame++) {
   if(frame==8) host_allocations=resource_allocations=0;
   matrix[12]=frame%2?.45f:-.45f;memcpy(animated+8,matrix,sizeof(matrix));memcpy(animated+24,&weight,4);
-  require(onix_vk_begin_frame(driver,clear),"begin resident deformation frame");
-  require(onix_vk_begin_render_target(driver,target,clear,0,1,1),"begin resident deformation target");onix_vk_set_viewport(driver,0,0,16,16);
-  require(onix_vk_draw_meshes(driver,&push,NULL,0,NULL,0,&instance,1,animated,25,draws,2,NULL),"draw resident deformation batch");
-  require(onix_vk_end_render_target(driver),"end resident deformation target");require(onix_vk_present(driver),"present resident deformation frame");
+  require(onix_gpu_begin_frame(driver,clear),"begin resident deformation frame");
+  require(onix_gpu_begin_render_target(driver,target,clear,0,1,1),"begin resident deformation target");onix_gpu_set_viewport(driver,0,0,16,16);
+  require(onix_gpu_draw_meshes(driver,&push,NULL,0,NULL,0,&instance,1,animated,25,draws,2,NULL),"draw resident deformation batch");
+  require(onix_gpu_end_render_target(driver),"end resident deformation target");require(onix_gpu_present(driver),"present resident deformation frame");
   unsigned char pixel[4];int x=(int)((matrix[12]+1.0f)*8.0f);
-  require(onix_vk_read_render_target(driver,target,x,8,1,1,pixel,4),"read animated resident stream");
+  require(onix_gpu_read_render_target(driver,target,x,8,1,1,pixel,4),"read animated resident stream");
   int red_channel=driver->swapchain_format==VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format==VK_FORMAT_B8G8R8A8_SRGB ? 2 : 0;
   require(pixel[red_channel]==255 && pixel[3]==255,"resident morph and joint update pixels");
  }
  require(host_allocations==0 && resource_allocations==0,"resident deformation stable frames allocate nothing");
  uint32_t retire=(driver->frame_index+ONIX_VK_FRAMES_IN_FLIGHT-1)%ONIX_VK_FRAMES_IN_FLIGHT;
- require(onix_vk_destroy_mesh(driver,meshes[0]) && onix_vk_destroy_mesh(driver,meshes[1]),"retire resident meshes");
+ require(onix_gpu_destroy_mesh(driver,meshes[0]) && onix_gpu_destroy_mesh(driver,meshes[1]),"retire resident meshes");
  require(driver->frames[retire].retired_meshes==meshes[1] && driver->meshes[meshes[1]-1].retire_next==meshes[0],"resident meshes use indexed retirement list");
- require(!onix_vk_destroy_mesh(driver,meshes[1]),"reject duplicate retirement");
- require(onix_vk_destroy_texture(driver,texture) && onix_vk_destroy_render_target(driver,target),"retire resident material/target");
- for(uint32_t frame=0;frame<ONIX_VK_FRAMES_IN_FLIGHT;frame++) { require(onix_vk_begin_frame(driver,clear),"begin retirement drain");require(onix_vk_present(driver),"present retirement drain"); }
+ require(!onix_gpu_destroy_mesh(driver,meshes[1]),"reject duplicate retirement");
+ require(onix_gpu_destroy_texture(driver,texture) && onix_gpu_destroy_render_target(driver,target),"retire resident material/target");
+ for(uint32_t frame=0;frame<ONIX_VK_FRAMES_IN_FLIGHT;frame++) { require(onix_gpu_begin_frame(driver,clear),"begin retirement drain");require(onix_gpu_present(driver),"present retirement drain"); }
  require(driver->meshes[meshes[0]-1].deformation_buffer==VK_NULL_HANDLE && driver->meshes[meshes[1]-1].deformation_buffer==VK_NULL_HANDLE && driver->frames[retire].retired_meshes==0,"resident buffers release after their frame fence");
  printf("Resident static skin/morph: copied source, animated poses, shared material across meshes, zero stable allocations and indexed retirement passed\n");
 }
@@ -1345,19 +1345,19 @@ static void test_native_slot_lifecycle(void) {
 	printf("Native slots: allocation failure, capacity, abandoned acquisition and 2048 zero-allocation reuses passed\n");
 }
 
-static void test_interleaved_upload_cancellation(OnixVkDriver *driver) {
+static void test_interleaved_upload_cancellation(OnixGPUDriver *driver) {
 	const uint8_t red[] = {255, 0, 0, 255}, green[] = {0, 255, 0, 255}, blue[] = {0, 0, 255, 255};
 	const float clear[] = {0, 0, 0, 1};
 	for (int burst = 0; burst < 2; burst++) {
-		uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+		uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 		uint32_t textures[3];
 		for (uint32_t index = 0; index < 3; index++) {
-			textures[index] = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, red, sizeof(red), 0, 0);
+			textures[index] = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, red, sizeof(red), 0, 0);
 			require(textures[index] != 0, "create interleaved upload source");
 			driver->pending_external[driver->pending_external_count++] = textures[index] - 1;
 			driver->textures[textures[index] - 1].pending_external_index = driver->pending_external_count;
 		}
-		OnixVkTextureUpdate updates[] = {
+		OnixGPUTextureUpdate updates[] = {
 			{.texture = textures[0], .width = 1, .height = 1, .data_length = 4},
 			{.texture = textures[1], .width = 1, .height = 1, .data_offset = 4, .data_length = 4},
 			{.texture = textures[2], .width = 1, .height = 1, .data_offset = 8, .data_length = 4},
@@ -1365,33 +1365,33 @@ static void test_interleaved_upload_cancellation(OnixVkDriver *driver) {
 		};
 		uint8_t pixels[16];
 		memcpy(pixels, green, 4); memcpy(pixels + 4, red, 4); memcpy(pixels + 8, blue, 4); memcpy(pixels + 12, green, 4);
-		for (int repeat = 0; repeat < 40; repeat++) require(onix_vk_update_textures(driver, updates, 4, pixels, sizeof(pixels)), "queue interleaved uploads across reallocations");
+		for (int repeat = 0; repeat < 40; repeat++) require(onix_gpu_update_textures(driver, updates, 4, pixels, sizeof(pixels)), "queue interleaved uploads across reallocations");
 		size_t allocations = host_allocations;
-		require(onix_vk_destroy_texture(driver, textures[0]) && onix_vk_destroy_texture(driver, textures[2]), "cancel first and swapped external queue entries");
+		require(onix_gpu_destroy_texture(driver, textures[0]) && onix_gpu_destroy_texture(driver, textures[2]), "cancel first and swapped external queue entries");
 		require(host_allocations == allocations && driver->upload_live_count == 81 && driver->pending_external_count == 1 && driver->pending_external[0] == textures[1] - 1, "cancellation only marks the matching uploads and fixes reverse indices");
-		uint32_t fresh = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, blue, sizeof(blue), 0, 0);
+		uint32_t fresh = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, blue, sizeof(blue), 0, 0);
 		require(fresh && fresh != textures[0] && fresh != textures[2], "pending retirement slots cannot be reused");
 		if (burst) require(onix_vk_submit_staging_burst(driver), "burst submission skips cancelled uploads");
-		require(onix_vk_begin_frame(driver, clear), "begin cancellation frame");
+		require(onix_gpu_begin_frame(driver, clear), "begin cancellation frame");
 		draw_target(driver, target, textures[1]);
-		require(onix_vk_present(driver), "present surviving interleaved uploads");
+		require(onix_gpu_present(driver), "present surviving interleaved uploads");
 		check_pixel(driver, target, 0, 255, -1);
-		OnixVkTextureUpdate fresh_update = {.texture = fresh, .width = 1, .height = 1, .data_length = 4};
-		require(onix_vk_update_textures(driver, &fresh_update, 1, blue, sizeof(blue)), "queue next upload epoch");
-		require(onix_vk_destroy_texture(driver, textures[1]) && driver->upload_live_count == 1, "stale upload heads cannot cancel a new queue epoch");
-		require(onix_vk_begin_frame(driver, clear), "begin next epoch frame");
+		OnixGPUTextureUpdate fresh_update = {.texture = fresh, .width = 1, .height = 1, .data_length = 4};
+		require(onix_gpu_update_textures(driver, &fresh_update, 1, blue, sizeof(blue)), "queue next upload epoch");
+		require(onix_gpu_destroy_texture(driver, textures[1]) && driver->upload_live_count == 1, "stale upload heads cannot cancel a new queue epoch");
+		require(onix_gpu_begin_frame(driver, clear), "begin next epoch frame");
 		draw_target(driver, target, fresh);
-		require(onix_vk_present(driver), "present next epoch frame");
+		require(onix_gpu_present(driver), "present next epoch frame");
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read surviving new epoch source");
+		require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, sizeof(pixel)), "read surviving new epoch source");
 		int blue_channel = driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB ? 0 : 2;
 		require(pixel[2 - blue_channel] == 0 && pixel[1] == 0 && pixel[blue_channel] == 255, "new epoch uploads survive stale cancellation");
-		require(onix_vk_destroy_texture(driver, fresh) && onix_vk_destroy_render_target(driver, target), "retire cancellation resources");
+		require(onix_gpu_destroy_texture(driver, fresh) && onix_gpu_destroy_render_target(driver, target), "retire cancellation resources");
 	}
 	printf("Interleaved upload cancellation: queue growth, order, burst/frame submission, epochs and deferred reuse passed\n");
 }
 
-static void test_buffer_retention(OnixVkDriver *driver) {
+static void test_buffer_retention(OnixGPUDriver *driver) {
 	OnixBufferRetention retention = {0};
 	for (uint32_t frame = 0; frame < ONIX_BUFFER_TRIM_DELAY * 2; frame++) {
 		uint64_t used = frame % 7 == 0 ? 3u * 1024u * 1024u : 65536u;
@@ -1449,21 +1449,21 @@ static void test_buffer_retention(OnixVkDriver *driver) {
 	}
 	const float clear[] = {0, 0, 0, 1};
 	for (uint32_t index = 0; index < ONIX_BUFFER_TRIM_DELAY * ONIX_VK_FRAMES_IN_FLIGHT; index++) {
-		require(onix_vk_begin_frame(driver, clear), "begin retention frame");
-		require(onix_vk_present(driver), "present retention frame");
+		require(onix_gpu_begin_frame(driver, clear), "begin retention frame");
+		require(onix_gpu_present(driver), "present retention frame");
 	}
 	OnixBufferMemory memory;
-	onix_vk_buffer_memory(driver, &memory);
+	onix_gpu_buffer_memory(driver, &memory);
 	require(memory.instances == 0 && memory.staging == 0, "completed idle frame slots release oversized pools");
 	printf("Buffer retention: single-block peaks release, intermittent demand stays warm, pool compaction allocates nothing\n");
 }
 
-static void test_mesh_memory_reuse(OnixVkDriver *driver) {
-	OnixVkVertex3D vertices[3] = {{.position = {-.5f, -.5f, .5f}}, {.position = {.5f, -.5f, .5f}}, {.position = {0, .5f, .5f}}};
+static void test_mesh_memory_reuse(OnixGPUDriver *driver) {
+	OnixGPUVertex3D vertices[3] = {{.position = {-.5f, -.5f, .5f}}, {.position = {.5f, -.5f, .5f}}, {.position = {0, .5f, .5f}}};
 	uint32_t indices[] = {0, 1, 2}, stream[64] = {1, 2, 3};
-	uint32_t first = onix_vk_create_mesh(driver, vertices, 3, indices, 3);
-	uint32_t second = onix_vk_create_mesh(driver, vertices, 3, indices, 3);
-	require(first && second && onix_vk_set_mesh_deformation(driver, second, stream, 64, 3), "create pooled mesh geometry and deformation");
+	uint32_t first = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
+	uint32_t second = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
+	require(first && second && onix_gpu_set_mesh_deformation(driver, second, stream, 64, 3), "create pooled mesh geometry and deformation");
 	OnixVkMesh a = driver->meshes[first - 1], b = driver->meshes[second - 1];
 	require(a.vertex_buffer == b.vertex_buffer && a.vertex_buffer == a.index_buffer && b.deformation_buffer == a.vertex_buffer,
 		"small mesh geometry and deformation share one GPU buffer");
@@ -1475,19 +1475,19 @@ static void test_mesh_memory_reuse(OnixVkDriver *driver) {
 		memcmp((uint8_t *)block->mapping + b.deformation_offset, stream, sizeof(stream)) == 0,
 		"all resident streams honor their arena offsets");
 	const float clear[4] = {0};
-	require(onix_vk_begin_frame(driver, clear), "begin arena retirement test");
-	require(onix_vk_destroy_mesh(driver, first), "retire arena lease");
-	uint32_t third = onix_vk_create_mesh(driver, vertices, 3, indices, 3);
+	require(onix_gpu_begin_frame(driver, clear), "begin arena retirement test");
+	require(onix_gpu_destroy_mesh(driver, first), "retire arena lease");
+	uint32_t third = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
 	require(third && driver->meshes[third - 1].vertex_offset != a.vertex_offset, "pending GPU leases stay occupied before their fence");
-	require(onix_vk_destroy_mesh(driver, third) && onix_vk_destroy_mesh(driver, second), "retire remaining arena leases");
-	require(onix_vk_present(driver), "submit arena retirement");
+	require(onix_gpu_destroy_mesh(driver, third) && onix_gpu_destroy_mesh(driver, second), "retire remaining arena leases");
+	require(onix_gpu_present(driver), "submit arena retirement");
 	for (uint32_t index = 0; index < ONIX_VK_FRAMES_IN_FLIGHT; index++) {
-		require(onix_vk_begin_frame(driver, clear) && onix_vk_present(driver), "drain arena retirement fences");
+		require(onix_gpu_begin_frame(driver, clear) && onix_gpu_present(driver), "drain arena retirement fences");
 	}
 	size_t heap = host_allocations, resources = resource_allocations;
 	for (int iteration = 0; iteration < 100; iteration++) {
-		uint32_t mesh = onix_vk_create_mesh(driver, vertices, 3, indices, 3);
-		require(mesh && onix_vk_set_mesh_deformation(driver, mesh, stream, 64, 3), "reuse coalesced resident ranges");
+		uint32_t mesh = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
+		require(mesh && onix_gpu_set_mesh_deformation(driver, mesh, stream, 64, 3), "reuse coalesced resident ranges");
 		// This mesh has never been submitted. Release directly to isolate arena
 		// reuse from command-buffer allocation and frame scheduling.
 		onix_vk_release_mesh(driver, &driver->meshes[mesh - 1]);
@@ -1495,12 +1495,12 @@ static void test_mesh_memory_reuse(OnixVkDriver *driver) {
 	}
 	require(host_allocations == heap && resource_allocations == resources, "100 resident mesh recreations allocate no C heap or Vulkan resources");
 	for (int iteration = 0; iteration < 6; iteration++) {
-		require(onix_vk_begin_frame(driver, clear), "begin shared-upload frame");
+		require(onix_gpu_begin_frame(driver, clear), "begin shared-upload frame");
 		OnixVkFrame *frame = &driver->frames[driver->frame_index];
 		OnixNativeUpload original, same, changed, aligned;
 		require(onix_vk_mesh_upload(driver, vertices, sizeof(vertices), 16, 1, &original), "upload frame geometry snapshot");
 		VkDeviceSize before = frame->instance_bytes_used;
-		OnixVkVertex3D copy[3];
+		OnixGPUVertex3D copy[3];
 		memcpy(copy, vertices, sizeof(copy));
 		require(onix_vk_mesh_upload(driver, copy, sizeof(copy), 16, 1, &same), "reuse geometry in another pass");
 		require(original.resource == same.resource && original.offset == same.offset && frame->instance_bytes_used == before,
@@ -1510,7 +1510,7 @@ static void test_mesh_memory_reuse(OnixVkDriver *driver) {
 		require((original.resource != changed.resource || original.offset != changed.offset) && memcmp(original.data, vertices, sizeof(vertices)) == 0,
 			"scratch mutations preserve the earlier uploaded snapshot");
 		require(onix_vk_mesh_upload(driver, stream, sizeof(stream), 256, 1, &aligned) && aligned.offset % 256 == 0, "shared uploads preserve storage alignment");
-		require(onix_vk_present(driver), "submit shared-upload frame");
+		require(onix_gpu_present(driver), "submit shared-upload frame");
 	}
 	// Release a large surplus block after its leases become idle, retaining the
 	// small warm arena for the next scene instead of retaining historical peaks.
@@ -1529,7 +1529,7 @@ static void test_mesh_memory_reuse(OnixVkDriver *driver) {
 	puts("Mesh memory reuse: shared resident arena offsets, fence retirement, 100 zero-allocation recreations, shared-pass snapshots, mutated scratch and idle arena trimming passed");
 }
 
-static void test_readback_retention(OnixVkDriver *driver) {
+static void test_readback_retention(OnixGPUDriver *driver) {
 	require(onix_vk_prepare_readback(driver, 32u * 1024u * 1024u), "allocate readback peak");
 	VkBuffer original = driver->readback.buffer;
 	size_t heap = host_allocations, resources = resource_allocations;
@@ -1552,7 +1552,7 @@ static void test_readback_retention(OnixVkDriver *driver) {
 	}
 	onix_vk_trim_readback(driver);
 	OnixBufferMemory memory;
-	onix_vk_buffer_memory(driver, &memory);
+	onix_gpu_buffer_memory(driver, &memory);
 	require(memory.readback == 0 && driver->readback.mapping == NULL, "readback capacity and mapping release together");
 	require(host_allocations == heap && resource_allocations == resources, "readback trimming allocates nothing");
 	require(onix_vk_prepare_readback(driver, 4) && driver->readback.capacity == 4096, "small readback rewarms to one page");
@@ -1562,35 +1562,35 @@ static void test_readback_retention(OnixVkDriver *driver) {
 	puts("Readback retention: 32 MiB peak released, 4 KiB warm buffer, intermittent demand and pending submission protection passed");
 }
 
-static void test_lcd_text_blend(OnixVkDriver *driver) {
+static void test_lcd_text_blend(OnixGPUDriver *driver) {
 	const uint8_t mask[] = {64, 128, 192, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, mask, sizeof(mask), 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, mask, sizeof(mask), 0, 0);
 	require(texture != 0, "create LCD coverage texture");
 	const float background[] = {.2f, .4f, .6f, 1};
 	const float foreground[2][3] = {{.8f, .1f, .5f}, {.1f, .9f, .2f}};
-	OnixVkSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance glyphs[2] = {
+	OnixGPUSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance glyphs[2] = {
 		{.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}},
 		{.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, .5f}},
 	};
-	OnixVkInstance next = {.model = {8, 0, 8, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, .5f}};
+	OnixGPUInstance next = {.model = {8, 0, 8, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, .5f}};
 	for (uint32_t depth = 0; depth < 2; depth++) {
-		uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, depth, &color);
+		uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, depth, &color);
 		require(target != 0, "create LCD target");
-		require(onix_vk_begin_frame(driver, background) && onix_vk_begin_render_target(driver, target, background, 0, 1, depth), "begin LCD frame");
-		onix_vk_set_viewport(driver, 0, 0, 16, 16);
+		require(onix_gpu_begin_frame(driver, background) && onix_gpu_begin_render_target(driver, target, background, 0, 1, depth), "begin LCD frame");
+		onix_gpu_set_viewport(driver, 0, 0, 16, 16);
 		OnixNativeSpriteDraw draw = {.texture = texture, .instance_count = 2};
 		size_t calls = indexed_draw_calls;
-		onix_vk_set_sprite_blend(driver, 1, foreground[0][0], foreground[0][1], foreground[0][2], 0);
-		require(onix_vk_draw_sprites(driver, &push, glyphs, 2, &draw, 1), "draw overlapping LCD glyphs in one batch");
+		onix_gpu_set_sprite_blend(driver, 1, foreground[0][0], foreground[0][1], foreground[0][2], 0);
+		require(onix_gpu_draw_sprites(driver, &push, glyphs, 2, &draw, 1), "draw overlapping LCD glyphs in one batch");
 		draw.instance_count = 1;
-		onix_vk_set_sprite_blend(driver, 1, foreground[1][0], foreground[1][1], foreground[1][2], 0);
-		require(onix_vk_draw_sprites(driver, &push, &next, 1, &draw, 1), "change LCD foreground constant");
+		onix_gpu_set_sprite_blend(driver, 1, foreground[1][0], foreground[1][1], foreground[1][2], 0);
+		require(onix_gpu_draw_sprites(driver, &push, &next, 1, &draw, 1), "change LCD foreground constant");
 		require(indexed_draw_calls - calls == 2, "LCD draws scale with color runs");
-		require(onix_vk_end_render_target(driver) && onix_vk_present(driver), "present LCD frame");
+		require(onix_gpu_end_render_target(driver) && onix_gpu_present(driver), "present LCD frame");
 		for (uint32_t sample = 0; sample < 2; sample++) {
 			uint8_t pixel[4];
-			require(onix_vk_read_render_target(driver, target, sample ? 12 : 4, 8, 1, 1, pixel, sizeof(pixel)), "read LCD composite");
+			require(onix_gpu_read_render_target(driver, target, sample ? 12 : 4, 8, 1, 1, pixel, sizeof(pixel)), "read LCD composite");
 			if (driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB) {
 				uint8_t blue = pixel[0]; pixel[0] = pixel[2]; pixel[2] = blue;
 			}
@@ -1605,74 +1605,74 @@ static void test_lcd_text_blend(OnixVkDriver *driver) {
 			}
 			require(pixel[3] == 255, "LCD keeps opaque target alpha");
 		}
-		onix_vk_destroy_render_target(driver, target);
+		onix_gpu_destroy_render_target(driver, target);
 	}
-	onix_vk_set_sprite_blend(driver, 0, 0, 0, 0, 0);
-	onix_vk_destroy_texture(driver, texture);
+	onix_gpu_set_sprite_blend(driver, 0, 0, 0, 0, 0);
+	onix_gpu_destroy_texture(driver, texture);
 	puts("LCD text: single-pass RGB coverage, overlapping glyphs, opacity, foreground changes and depth/color-only targets passed");
 }
 
-static void test_color_only_targets(OnixVkDriver *driver) {
-	uint32_t color, target = onix_vk_create_render_target(driver, 16, 16, 0, 0, &color);
+static void test_color_only_targets(OnixGPUDriver *driver) {
+	uint32_t color, target = onix_gpu_create_render_target(driver, 16, 16, 0, 0, &color);
 	require(target != 0, "create color-only target");
 	OnixVkRenderTarget *entry = &driver->render_targets[target - 1];
 	require(!entry->depth_image && !entry->depth_view && !entry->depth_memory, "Depth=false owns no depth resources");
 	const uint8_t white[] = {255, 255, 255, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, 4, 0, 0);
-	uint32_t sprite_shader = onix_vk_create_material2d_shader(driver, driver->sprite_vertex_shader, driver->sprite_fragment_shader);
-	uint32_t mesh_shader = onix_vk_create_mesh_shader(driver, driver->mesh_vertex_shader, driver->mesh_unlit_fragment_shader);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, 4, 0, 0);
+	uint32_t sprite_shader = onix_gpu_create_material2d_shader(driver, driver->sprite_vertex_shader, driver->sprite_fragment_shader);
+	uint32_t mesh_shader = onix_gpu_create_mesh_shader(driver, driver->mesh_vertex_shader, driver->mesh_unlit_fragment_shader);
 	require(texture && sprite_shader && mesh_shader, "create color-only draw resources");
 	require(driver->mesh_pipelines[mesh_shader - 1].opaque == VK_NULL_HANDLE &&
 		driver->material2d_pipelines[sprite_shader - 1].pipeline == VK_NULL_HANDLE, "custom shaders compile only consumed variants");
 	const float clear[] = {0, 0, 0, 1};
-	OnixVkSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance sprite = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {.25f, .5f, 1, 1}};
+	OnixGPUSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance sprite = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {.25f, .5f, 1, 1}};
 	OnixNativeSpriteDraw sprite_draw = {.texture = texture, .instance_count = 1};
-	OnixVkShapeInstance shapes[2] = {
+	OnixGPUShapeInstance shapes[2] = {
 		{.model = {16, 0, 0, 0, 16, 0}, .local_model = {1, 0, 0, 0, 1, 0}, .fill = {1, 1, 1, 1}, .params = {16, 16, 0, 0}},
 		{.model = {16, 0, 0, 0, 16, 0}, .local_model = {1, 0, 0, 0, 1, 0}, .fill = {1, 1, 1, 1}, .params = {16, 16, 0, 0}, .kind = 3},
 	};
-	OnixVkMeshPush mesh_push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
-	OnixVkVertex3D vertices[] = {{.position = {-1, -1, .5f}}, {.position = {1, -1, .5f}}, {.position = {0, 1, .5f}}};
+	OnixGPUMeshPush mesh_push = {.view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}};
+	OnixGPUVertex3D vertices[] = {{.position = {-1, -1, .5f}}, {.position = {1, -1, .5f}}, {.position = {0, 1, .5f}}};
 	uint32_t indices[] = {0, 1, 2}, deformation[16] = {0};
-	OnixVkInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {.25f, .5f, 1, 1}, .material = {-1}, .uv_transform = {1, 1}};
+	OnixGPUInstance3D instance = {.model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1}, .base_color = {.25f, .5f, 1, 1}, .material = {-1}, .uv_transform = {1, 1}};
 	OnixNativeMeshDraw3D mesh_draw = {.texture = texture, .index_count = 3, .instance_count = 1};
-	float lighting[ONIX_VK_MESH_LIGHTING_BYTES / sizeof(float)] = {0};
+	float lighting[ONIX_GPU_MESH_LIGHTING_BYTES / sizeof(float)] = {0};
 	size_t heap = 0, resources = 0;
 	for (uint32_t frame = 0; frame < 8; frame++) {
 		if (frame == 4) { heap = host_allocations; resources = resource_allocations; }
-		require(onix_vk_begin_frame(driver, clear), "begin color-only frame");
-		require(onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin color-only pass");
-		onix_vk_set_viewport(driver, 0, 0, 16, 16);
-		require(onix_vk_draw_shapes(driver, &push, shapes, 2), "draw shapes and corner masks without depth");
+		require(onix_gpu_begin_frame(driver, clear), "begin color-only frame");
+		require(onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin color-only pass");
+		onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+		require(onix_gpu_draw_shapes(driver, &push, shapes, 2), "draw shapes and corner masks without depth");
 		for (uint32_t blend = 0; blend < 2; blend++) {
-			onix_vk_set_sprite_blend(driver, blend, .25f, .5f, 1, 0);
+			onix_gpu_set_sprite_blend(driver, blend, .25f, .5f, 1, 0);
 			sprite_draw.shader = 0;
-			require(onix_vk_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "draw color-only sprite blend variant");
+			require(onix_gpu_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "draw color-only sprite blend variant");
 		}
-		onix_vk_set_sprite_blend(driver, 0, 0, 0, 0, 0);
+		onix_gpu_set_sprite_blend(driver, 0, 0, 0, 0, 0);
 		sprite_draw.shader = sprite_shader;
-		require(onix_vk_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "draw custom color-only sprite");
+		require(onix_gpu_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "draw custom color-only sprite");
 		for (uint32_t custom = 0; custom < 2; custom++) {
 			mesh_draw.shader = custom ? mesh_shader : 0;
 			for (uint32_t variant = 0; variant < 1 + ONIX_MESH_BLEND_MODE_COUNT; variant++) {
 				mesh_draw.alpha_mode = variant ? 2 : 0;
 				mesh_draw.blend_mode = variant ? variant - 1 : 0;
-				require(onix_vk_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
+				require(onix_gpu_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
 					deformation, 16, &mesh_draw, 1, lighting), "draw mesh without depth");
 			}
 		}
 		// Finish with a deterministic opaque pixel after all blending variants.
 		mesh_draw.alpha_mode = 0;
-		require(onix_vk_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
+		require(onix_gpu_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
 			deformation, 16, &mesh_draw, 1, lighting), "write final color-only pixel");
-		require(onix_vk_end_render_target(driver), "end color-only pass");
+		require(onix_gpu_end_render_target(driver), "end color-only pass");
 		// A load pass must ignore a depth-only clear, preserving the color.
-		require(onix_vk_begin_render_target(driver, target, clear, 0, 0, 1), "load color-only pass with depth clear requested");
-		require(onix_vk_end_render_target(driver), "end color-only load pass");
-		require(onix_vk_present(driver), "present color-only frame");
+		require(onix_gpu_begin_render_target(driver, target, clear, 0, 0, 1), "load color-only pass with depth clear requested");
+		require(onix_gpu_end_render_target(driver), "end color-only load pass");
+		require(onix_gpu_present(driver), "present color-only frame");
 		uint8_t pixel[4];
-		require(onix_vk_read_render_target(driver, target, 8, 8, 1, 1, pixel, 4), "read color-only pixel");
+		require(onix_gpu_read_render_target(driver, target, 8, 8, 1, 1, pixel, 4), "read color-only pixel");
 		int red = driver->swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || driver->swapchain_format == VK_FORMAT_B8G8R8A8_SRGB ? 2 : 0;
 		require(abs(pixel[red] - 64) <= 1 && abs(pixel[1] - 128) <= 1 && pixel[2 - red] == 255, "color-only pipelines preserve draw colors");
 		if (frame >= 4) require(host_allocations == heap && resource_allocations == resources, "color-only steady frames allocate nothing");
@@ -1680,37 +1680,37 @@ static void test_color_only_targets(OnixVkDriver *driver) {
 	require(driver->mesh_pipelines[mesh_shader - 1].opaque == VK_NULL_HANDLE &&
 		driver->material2d_pipelines[sprite_shader - 1].pipeline == VK_NULL_HANDLE, "color-only custom shaders never compile depth variants");
 	// Resize can change depth attachment requirements in either direction.
-	require(onix_vk_resize_render_target(driver, target, 32, 32, 0, 1, &color), "resize to depth-enabled target");
+	require(onix_gpu_resize_render_target(driver, target, 32, 32, 0, 1, &color), "resize to depth-enabled target");
 	require(driver->render_targets[target - 1].depth_memory != VK_NULL_HANDLE, "Depth=true restores depth storage");
-	require(onix_vk_begin_frame(driver, clear) && onix_vk_begin_render_target(driver, target, clear, 0, 1, 1), "begin resized depth target");
-	onix_vk_set_viewport(driver, 0, 0, 16, 16);
-	require(onix_vk_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "reuse custom sprite shader with depth attachment");
-	require(onix_vk_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
+	require(onix_gpu_begin_frame(driver, clear) && onix_gpu_begin_render_target(driver, target, clear, 0, 1, 1), "begin resized depth target");
+	onix_gpu_set_viewport(driver, 0, 0, 16, 16);
+	require(onix_gpu_draw_sprites(driver, &push, &sprite, 1, &sprite_draw, 1), "reuse custom sprite shader with depth attachment");
+	require(onix_gpu_draw_meshes(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1,
 		deformation, 16, &mesh_draw, 1, lighting), "reuse custom mesh shader with depth attachment");
-	require(onix_vk_end_render_target(driver) && onix_vk_present(driver), "finish resized depth target");
+	require(onix_gpu_end_render_target(driver) && onix_gpu_present(driver), "finish resized depth target");
 	require(driver->mesh_pipelines[mesh_shader - 1].opaque != VK_NULL_HANDLE &&
 		driver->material2d_pipelines[sprite_shader - 1].pipeline != VK_NULL_HANDLE, "custom depth variants compile on first use");
-	require(onix_vk_resize_render_target(driver, target, 16, 16, 0, 0, &color), "resize back to color-only target");
+	require(onix_gpu_resize_render_target(driver, target, 16, 16, 0, 0, &color), "resize back to color-only target");
 	require(driver->render_targets[target - 1].depth_memory == VK_NULL_HANDLE, "resizing back removes depth storage");
 	// Integer targets can also omit depth; picking requires depth explicitly.
-	uint32_t integer_target = onix_vk_create_render_target(driver, 16, 16, 1, 0, &color);
+	uint32_t integer_target = onix_gpu_create_render_target(driver, 16, 16, 1, 0, &color);
 	require(integer_target && !driver->render_targets[integer_target - 1].depth_image, "integer color-only target owns no depth image");
-	require(onix_vk_begin_frame(driver, clear), "begin resized color-only frame");
+	require(onix_gpu_begin_frame(driver, clear), "begin resized color-only frame");
 	draw_target(driver, target, texture);
-	require(onix_vk_begin_render_target(driver, integer_target, clear, 0, 1, 1), "begin integer color-only target");
-	require(!onix_vk_draw_mesh_picking(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1, &mesh_draw, 1), "picking rejects target without depth");
-	require(onix_vk_end_render_target(driver) && onix_vk_present(driver), "finish resized color-only frame");
+	require(onix_gpu_begin_render_target(driver, integer_target, clear, 0, 1, 1), "begin integer color-only target");
+	require(!onix_gpu_draw_mesh_picking(driver, &mesh_push, vertices, 3, indices, 3, &instance, 1, &mesh_draw, 1), "picking rejects target without depth");
+	require(onix_gpu_end_render_target(driver) && onix_gpu_present(driver), "finish resized color-only frame");
 	uint32_t identifier = 1;
-	require(onix_vk_read_render_target(driver, integer_target, 0, 0, 1, 1, (uint8_t *)&identifier, 4) && identifier == 0, "integer color-only clear and readback");
-	require(onix_vk_destroy_render_target(driver, target) && onix_vk_destroy_render_target(driver, integer_target) &&
-		onix_vk_destroy_texture(driver, texture) && onix_vk_destroy_mesh_shader(driver, mesh_shader) &&
-		onix_vk_destroy_material2d_shader(driver, sprite_shader), "retire color-only resources and custom modules");
+	require(onix_gpu_read_render_target(driver, integer_target, 0, 0, 1, 1, (uint8_t *)&identifier, 4) && identifier == 0, "integer color-only clear and readback");
+	require(onix_gpu_destroy_render_target(driver, target) && onix_gpu_destroy_render_target(driver, integer_target) &&
+		onix_gpu_destroy_texture(driver, texture) && onix_gpu_destroy_mesh_shader(driver, mesh_shader) &&
+		onix_gpu_destroy_material2d_shader(driver, sprite_shader), "retire color-only resources and custom modules");
 	puts("Color-only targets: no depth allocations, builtin/custom sprite/shape/mesh variants, load passes, resize, integer clear/readback and zero steady allocations passed");
 }
 
 #if defined(__GLIBC__)
 static void test_host_heap_retention(void) {
-	OnixVkDriver local = {.physical_device_properties = {.deviceType = VK_PHYSICAL_DEVICE_TYPE_CPU}};
+	OnixGPUDriver local = {.physical_device_properties = {.deviceType = VK_PHYSICAL_DEVICE_TYPE_CPU}};
 	size_t calls = host_heap_trim_calls, heap = host_allocations, resources = resource_allocations;
 	for (int index = 0; index < 3; index++) onix_vk_retire_host_memory(&local, ONIX_VK_HOST_HEAP_RELEASE_BYTES / 4);
 	for (uint32_t frame = 0; frame < ONIX_BUFFER_TRIM_DELAY * 2; frame++) onix_vk_release_idle_host_memory(&local);
@@ -1753,7 +1753,7 @@ static void test_host_heap_retention(void) {
 }
 #endif
 
-static void test_deformation_descriptor_pools(OnixVkDriver *driver) {
+static void test_deformation_descriptor_pools(OnixGPUDriver *driver) {
 	// Mesh resources are lazy; this isolated allocator test owns its layout.
 	require(driver->deformation_layout == VK_NULL_HANDLE, "deformation layout starts lazy");
 	VkDescriptorSetLayoutBinding bindings[] = {
@@ -1814,8 +1814,8 @@ static void test_deformation_descriptor_pools(OnixVkDriver *driver) {
 	puts("Deformation descriptor pools: 256 -> 16 reserved sets, failures, capacity, retained handles, regrowth and zero warm allocations passed");
 }
 
-static void test_upload_queue_retention(OnixVkDriver *driver) {
-	OnixVkDriver local = {0};
+static void test_upload_queue_retention(OnixGPUDriver *driver) {
+	OnixGPUDriver local = {0};
 	// Only exercise CPU queue ownership here; no commands use this image.
 	OnixVkTexture textures[2] = {{.image = driver->images[0]}, {.image = driver->images[0]}};
 	require(onix_vk_grow_uploads(&local, 4096), "reserve upload queue peak");
@@ -1860,8 +1860,8 @@ static void test_upload_queue_retention(OnixVkDriver *driver) {
 	free(local.uploads);
 }
 
-static void test_native_table_retention(OnixVkDriver *driver) {
-	OnixVkDriver local = {.device = driver->device, .physical_device = driver->physical_device};
+static void test_native_table_retention(OnixGPUDriver *driver) {
+	OnixGPUDriver local = {.device = driver->device, .physical_device = driver->physical_device};
 	OnixVkFrame *frame = &local.frames[0];
 	require(onix_vk_append_instance_buffer(&local, frame, 64) && onix_vk_append_staging_buffer(&local, frame, 64), "create live buffers for table retention");
 	VkBuffer instance = frame->instance_buffers[0].buffer, staging = frame->staging_buffers[0].buffer;
@@ -1874,7 +1874,7 @@ static void test_native_table_retention(OnixVkDriver *driver) {
 	require(frame->instance_buffers && frame->staging_buffers && frame->retired_targets, "reserve peak native tables");
 	frame->instance_buffer_capacity = frame->staging_buffer_capacity = frame->retired_target_capacity = 1024;
 	OnixBufferMemory peak, small;
-	onix_vk_buffer_memory(&local, &peak);
+	onix_gpu_buffer_memory(&local, &peak);
 	size_t resources = resource_allocations;
 	for (uint32_t iteration = 0; iteration < ONIX_BUFFER_TRIM_DELAY * 2; iteration++) {
 		if (iteration == ONIX_BUFFER_TRIM_DELAY - 1) fail_next_reallocation = 1;
@@ -1887,7 +1887,7 @@ static void test_native_table_retention(OnixVkDriver *driver) {
 	require(frame->instance_buffers[0].buffer == instance && frame->staging_buffers[0].buffer == staging &&
 		((uint8_t *)frame->instance_buffers[0].mapping)[0] == 23 && ((uint8_t *)frame->staging_buffers[0].mapping)[0] == 29,
 		"metadata shrink preserves live GPU handles and mappings");
-	onix_vk_buffer_memory(&local, &small);
+	onix_gpu_buffer_memory(&local, &small);
 	size_t heap = host_allocations;
 	for (uint32_t iteration = 0; iteration < ONIX_BUFFER_TRIM_DELAY * 2; iteration++) {
 		onix_vk_trim_instance_buffers(&local, frame);
@@ -1903,8 +1903,8 @@ static void test_native_table_retention(OnixVkDriver *driver) {
 	free(frame->retired_targets);
 }
 
-static void test_texture_descriptor_pools(OnixVkDriver *driver) {
-	OnixVkDriver local = {.device = driver->device, .texture_layout = driver->texture_layout};
+static void test_texture_descriptor_pools(OnixGPUDriver *driver) {
+	OnixGPUDriver local = {.device = driver->device, .texture_layout = driver->texture_layout};
 	OnixVkTexture *textures = calloc(ONIX_VK_MAX_TEXTURES + 1, sizeof(*textures));
 	require(textures != NULL, "allocate descriptor ownership workload");
 	size_t live = live_descriptor_pools;
@@ -1965,16 +1965,16 @@ int main(void) {
 	Window window = XCreateSimpleWindow(display, DefaultRootWindow(display), 0, 0, 64, 64, 0, 0, 0);
 	XMapWindow(display, window);
 	XSync(display, False);
-	OnixVkShader shaders[] = {
+	OnixGPUShader shaders[] = {
 		load_shader("shaders/vulkan_sprite_multi.vert.spv"), load_shader("shaders/vulkan_sprite_multi.frag.spv"),
 		load_shader("shaders/vulkan_shape.vert.spv"), load_shader("shaders/vulkan_shape.frag.spv"),
 		load_shader("shaders/vulkan_mesh.vert.spv"), load_shader("shaders/vulkan_mesh.frag.spv"),
 		load_shader("shaders/vulkan_picking.vert.spv"), load_shader("shaders/vulkan_picking.frag.spv"),
 	};
-	OnixVkSurface surface = {.kind = ONIX_VK_SURFACE_XLIB, .display = display, .window = window, .width = 64, .height = 64};
-	OnixVkShader unlit_shader = load_shader("shaders/vulkan_mesh_unlit.frag.spv");
-	OnixVkShader depth_shader = load_shader("shaders/vulkan_mesh_depth.frag.spv"), basic_shader = load_shader("shaders/vulkan_mesh_basic.frag.spv");
-	OnixVkDriver *driver = onix_vk_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], unlit_shader, depth_shader, basic_shader, shaders[6], shaders[7]);
+	OnixGPUSurface surface = {.kind = ONIX_GPU_SURFACE_XLIB, .display = display, .window = window, .width = 64, .height = 64};
+	OnixGPUShader unlit_shader = load_shader("shaders/vulkan_mesh_unlit.frag.spv");
+	OnixGPUShader depth_shader = load_shader("shaders/vulkan_mesh_depth.frag.spv"), basic_shader = load_shader("shaders/vulkan_mesh_basic.frag.spv");
+	OnixGPUDriver *driver = onix_gpu_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], unlit_shader, depth_shader, basic_shader, shaders[6], shaders[7]);
 	require(driver != NULL, "create Vulkan driver");
 	require(driver->texture_descriptor_pool_count == 0, "startup reserves no texture descriptor pool before first texture");
 	test_texture_descriptor_pools(driver);
@@ -2006,8 +2006,8 @@ int main(void) {
 	test_readback_retention(driver);
 	test_lcd_text_blend(driver);
 	test_color_only_targets(driver);
-	OnixVkShader custom_vertex = load_shader("shaders/vulkan_sprite.vert.spv"), custom_fragment = load_shader("shaders/vulkan_sprite.frag.spv");
-	uint32_t custom = onix_vk_create_material2d_shader(driver, custom_vertex, custom_fragment);
+	OnixGPUShader custom_vertex = load_shader("shaders/vulkan_sprite.vert.spv"), custom_fragment = load_shader("shaders/vulkan_sprite.frag.spv");
+	uint32_t custom = onix_gpu_create_material2d_shader(driver, custom_vertex, custom_fragment);
 	free((void *)custom_vertex.code);
 	free((void *)custom_fragment.code);
 	require(custom != 0, "create single-texture custom pipeline");
@@ -2017,7 +2017,7 @@ int main(void) {
 		uint8_t data[4 * 4 * 4];
 		uint32_t bpp = index == 3 ? 1 : 4, width = index + 1;
 		for (uint32_t pixel = 0; pixel < width * width; pixel++) memcpy(data + pixel * bpp, multi_pixels[index], bpp);
-		multi_textures[index] = onix_vk_create_texture_with_format(driver, width, width, index % 2 ? onix_vk_texture_mip_level_count(width, width) : 1, index == 3 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8, index % 2, data, width * width * bpp, 0, 0);
+		multi_textures[index] = onix_gpu_create_texture_with_format(driver, width, width, index % 2 ? onix_gpu_texture_mip_level_count(width, width) : 1, index == 3 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8, index % 2, data, width * width * bpp, 0, 0);
 		require(multi_textures[index] != 0, "create multi-texture source");
 	}
 	test_surface_descriptor_cache(driver);
@@ -2026,54 +2026,54 @@ int main(void) {
 	uint8_t *pixels = malloc(length);
 	require(pixels != NULL, "allocate source pixels");
 	fill_pixels(pixels, length, 255, 0);
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1024, 1024, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixels, length, 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1024, 1024, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixels, length, 0, 0);
 	require(texture != 0, "create texture");
 	uint32_t color;
-	uint32_t first = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
-	uint32_t second = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
-	uint32_t picking = onix_vk_create_render_target(driver, 16, 16, 1, 1, &color);
-	uint32_t multi_target = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+	uint32_t first = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
+	uint32_t second = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
+	uint32_t picking = onix_gpu_create_render_target(driver, 16, 16, 1, 1, &color);
+	uint32_t multi_target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	require(multi_target != 0, "create multi-texture target");
 	require(first != 0 && second != 0 && picking != 0, "create targets");
-	OnixVkTextureUpdate update = {.texture = texture, .width = 1024, .height = 1024, .data_length = length};
+	OnixGPUTextureUpdate update = {.texture = texture, .width = 1024, .height = 1024, .data_length = length};
 	const float clear[] = {0, 0, 0, 1};
 	for (int frame = 0; frame < 12; frame++) {
 		if (frame == 8) host_allocations = resource_allocations = 0;
 		uint8_t red = (uint8_t)(frame + 100);
 		uint8_t green = (uint8_t)(frame + 150);
 		if (frame >= 4 && frame % 2 == 0) {
-			require(onix_vk_begin_frame(driver, clear), "begin idle frame");
-			require(onix_vk_present(driver), "present idle frame");
+			require(onix_gpu_begin_frame(driver, clear), "begin idle frame");
+			require(onix_gpu_present(driver), "present idle frame");
 		}
 		fill_pixels(pixels, length, red, 0);
-		require(onix_vk_update_textures(driver, &update, 1, pixels, length), "upload before begin");
+		require(onix_gpu_update_textures(driver, &update, 1, pixels, length), "upload before begin");
 		fill_pixels(pixels, length, 0, green);
-		require(onix_vk_begin_frame(driver, clear), "begin frame");
+		require(onix_gpu_begin_frame(driver, clear), "begin frame");
 		test_external_queue(driver, texture);
 		draw_target(driver, first, texture);
-		require(onix_vk_update_textures(driver, &update, 1, pixels, length), "upload after begin");
+		require(onix_gpu_update_textures(driver, &update, 1, pixels, length), "upload after begin");
 		memset(pixels, 0, length);
 		draw_target(driver, second, texture);
 		draw_mesh(driver, texture, 0);
 		draw_mesh(driver, texture, 0);
 		draw_mesh(driver, texture, picking);
 		draw_multi_texture(driver, multi_target, multi_textures, custom, frame);
-		require(onix_vk_present(driver), "present");
+		require(onix_gpu_present(driver), "present");
 		check_pixel(driver, first, red, 0, frame);
 		check_pixel(driver, second, 0, green, frame);
 		check_multi_texture(driver, multi_target);
 		uint32_t identifier = 0;
-		require(onix_vk_read_render_target(driver, picking, 8, 8, 1, 1, (uint8_t *)&identifier, sizeof(identifier)), "read picking");
+		require(onix_gpu_read_render_target(driver, picking, 8, 8, 1, 1, (uint8_t *)&identifier, sizeof(identifier)), "read picking");
 		require(identifier == 1234567, "picking identifier");
 		uint8_t region[16 * 16 * 4];
-		require(onix_vk_read_render_target(driver, second, 0, 0, 16, 16, region, sizeof(region)), "read larger region within capacity");
+		require(onix_gpu_read_render_target(driver, second, 0, 0, 16, 16, region, sizeof(region)), "read larger region within capacity");
 	}
 	if (host_allocations != 0 || resource_allocations != 0) {
 		fprintf(stderr, "steady-state C heap allocations: %zu; Vulkan resource calls: %zu\n", host_allocations, resource_allocations);
 		exit(1);
 	}
 	OnixBufferMemory memory;
-	onix_vk_buffer_memory(driver, &memory);
+	onix_gpu_buffer_memory(driver, &memory);
 	VkDeviceSize instances = 0, staging = 0;
 	uint64_t scratch = (uint64_t)driver->upload_capacity * sizeof(*driver->uploads);
 	for (uint32_t index = 0; index < ONIX_VK_FRAMES_IN_FLIGHT; index++) {
@@ -2089,21 +2089,21 @@ int main(void) {
 		"reported native capacities match live buffer pools");
 	printf("4 steady-state upload frames plus 4 idle frames: C heap=%zu, Vulkan resource calls=%zu; 8 MiB uploads/frame, multi-texture RGBA/R8 sprites, custom shaders, meshes, picking and readback passed\n", host_allocations, resource_allocations);
 	fill_pixels(pixels, length, 255, 0);
-	uint32_t cancelled = onix_vk_create_texture_with_format(driver, 1024, 1024, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixels, length, 0, 0);
+	uint32_t cancelled = onix_gpu_create_texture_with_format(driver, 1024, 1024, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, pixels, length, 0, 0);
 	require(cancelled != 0, "create cancelled upload");
 	driver->pending_external[driver->pending_external_count++] = cancelled - 1;
 	driver->textures[cancelled - 1].pending_external_index = driver->pending_external_count;
-	require(onix_vk_destroy_texture(driver, cancelled), "cancel texture");
+	require(onix_gpu_destroy_texture(driver, cancelled), "cancel texture");
 	require(driver->upload_count == 0 && driver->pending_external_count == 0, "cancel pending queues");
-	require(onix_vk_begin_frame(driver, clear), "begin after cancellation");
-	require(onix_vk_present(driver), "present after cancellation");
-	uint32_t uninitialized = onix_vk_create_render_target(driver, 16, 16, 0, 1, &color);
+	require(onix_gpu_begin_frame(driver, clear), "begin after cancellation");
+	require(onix_gpu_present(driver), "present after cancellation");
+	uint32_t uninitialized = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	uint8_t pixel[4];
 	require(uninitialized != 0, "create unreadable target");
-	require(!onix_vk_read_render_target(driver, uninitialized, 0, 0, 1, 1, pixel, sizeof(pixel)), "reject uninitialized target");
-	require(onix_vk_destroy_render_target(driver, first), "destroy target");
-	require(!onix_vk_read_render_target(driver, first, 0, 0, 1, 1, pixel, sizeof(pixel)), "reject destroyed target");
-	onix_vk_destroy(driver);
+	require(!onix_gpu_read_render_target(driver, uninitialized, 0, 0, 1, 1, pixel, sizeof(pixel)), "reject uninitialized target");
+	require(onix_gpu_destroy_render_target(driver, first), "destroy target");
+	require(!onix_gpu_read_render_target(driver, first, 0, 0, 1, 1, pixel, sizeof(pixel)), "reject destroyed target");
+	onix_gpu_destroy(driver);
 	require(live_shader_modules == 0 && live_pipelines == 0 && live_descriptor_pools == 0, "all shader modules, pipeline variants and descriptor pools are released");
 	free((void *)unlit_shader.code);
 	free((void *)depth_shader.code);

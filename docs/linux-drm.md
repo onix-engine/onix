@@ -1,7 +1,7 @@
 # Linux DRM/KMS direct display
 
-`onix_drm` renders directly to a Linux display with GLES 3, GBM/EGL and DRM page
-flips. Add `onix_drm_vulkan` to use Vulkan display surfaces and a swapchain. Both
+`onix_drm` renders directly to a Linux display using Vulkan display surfaces and
+a swapchain by default. Add `onix_opengl` for GLES 3, GBM/EGL and DRM page flips. Both
 builds exclude X11, Wayland and WebView. Cross-compilation needs a target C compiler
 and the selected backend's development libraries.
 
@@ -9,7 +9,7 @@ and the selected backend's development libraries.
 
 ```sh
 CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags onix_drm -o app ./path/to/app
-CGO_ENABLED=1 go build -tags onix_drm,onix_drm_vulkan -o app ./path/to/app
+CGO_ENABLED=1 go build -tags onix_drm,onix_opengl -o app ./path/to/app
 ```
 
 GLES requires EGL/GLES3 headers and link libraries at build time, and
@@ -21,8 +21,7 @@ Vulkan requires instance extensions `VK_KHR_surface`, `VK_KHR_display`,
 `VK_EXT_direct_mode_display`, `VK_EXT_acquire_drm_display`, and device extension
 `VK_KHR_swapchain`. Missing extensions or display ownership cause an initialization
 error. There is no automatic GLES fallback. Desktop Vulkan or software rendering
-support alone does not establish direct-display support. `onix_drm_vulkan` must
-always be combined with `onix_drm`.
+support alone does not establish direct-display support.
 
 ## Output selection
 
@@ -86,8 +85,8 @@ DRM master access. Mock-based tests verify device/mode/plane selection, failed
 initialization cleanup and output restoration without modesetting:
 
 ```sh
-go test -tags onix_drm,onix_drm_vulkan ./render ./window
-go test -tags onix_drm ./render ./window
+go test -tags onix_drm,onix_vulkan ./render ./window
+go test -tags onix_drm,onix_opengl ./render ./window
 ```
 
 ## Driver inspection

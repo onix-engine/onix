@@ -1,4 +1,4 @@
-//go:build darwin && cgo
+//go:build cgo && (darwin || ios) && !onix_directx && !onix_vulkan && !onix_opengl && !onix_webgpu && !onix_webgl
 
 package render
 

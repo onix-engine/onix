@@ -84,9 +84,9 @@ func TestResourceReferenceVisitors(t *testing.T) {
 	}
 }
 
-func TestAndroidShaderTargetIncludesVulkanAndGLES(t *testing.T) {
-	if got := shaderTargetForBuildPlatform(BuildPlatformAndroid); got != project.ShaderTargetAndroid {
-		t.Fatalf("Android shader target = %v, want Android", got)
+func TestAndroidShaderTargetIncludesOnlyDefaultBackend(t *testing.T) {
+	if got := shaderTargetForBuildPlatform(BuildPlatformAndroid); got != project.ShaderTargetVulkan {
+		t.Fatalf("Android shader target = %v, want Vulkan", got)
 	}
 }
 

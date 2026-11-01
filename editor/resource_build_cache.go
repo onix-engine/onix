@@ -13,11 +13,12 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/resource"
 )
 
 const (
-	resourceBuildPipelineVersion = 10
+	resourceBuildPipelineVersion = 11
 	resourceBuildReportVersion   = 2
 	resourceBuildCacheFile       = "cache.json"
 )
@@ -102,6 +103,11 @@ func fingerprintResourceBuild(files map[string]resourceInput, config resourcePac
 	writeFingerprintUint64(hasher, resource.CatalogVersion)
 	writeFingerprintUint64(hasher, resource.FormatVersion)
 	writeFingerprintString(hasher, string(options.Platform))
+	backend, err := render.ResolveBackend(string(options.Platform), options.Backend)
+	if err != nil && options.Platform != "" {
+		return "", err
+	}
+	writeFingerprintString(hasher, string(backend))
 	writeFingerprintString(hasher, string(options.Mode))
 	configData, err := json.Marshal(config)
 	if err != nil {

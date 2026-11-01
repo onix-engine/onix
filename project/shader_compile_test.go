@@ -95,50 +95,39 @@ func TestPreprocessWGSLShader(t *testing.T) {
 	}
 }
 
-func TestPreprocessWGSLShaderForAndroidBuildsVulkanAndGLES(t *testing.T) {
-	source := fstest.MapFS{
-		"resources/resources.json": {Data: []byte(`{"shaders":[{"id":"effect","wgslFragment":"shaders/effect.wgsl"}]}`)},
-		"shaders/effect.wgsl":      {Data: []byte("@fragment fn sprite_fragment() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }")},
-	}
-	files, err := PreprocessManifests(source, PreprocessOptions{
-		Root:           ".",
-		ShaderTarget:   ShaderTargetAndroid,
-		ShaderCompiler: shaderCompileTestCompiler{},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest resourceManifest
-	generatedVulkan, generatedGLES := false, false
-	for _, file := range files {
-		switch file.Path {
-		case "resources/resources.json":
-			manifest, err = decodeResourceManifest(file.Data)
+func TestPreprocessWGSLShaderIncludesOnlySelectedBackend(t *testing.T) {
+	for _, target := range []ShaderTarget{ShaderTargetVulkan, ShaderTargetWebGL2, ShaderTargetDirectX} {
+		t.Run(target.String(), func(t *testing.T) {
+			source := fstest.MapFS{
+				"resources/resources.json": {Data: []byte(`{"shaders":[{"id":"effect","wgslFragment":"shaders/effect.wgsl"}]}`)},
+				"shaders/effect.wgsl":      {Data: []byte("@fragment fn sprite_fragment() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }")},
+			}
+			files, err := PreprocessManifests(source, PreprocessOptions{Root: ".", ShaderTarget: target, ShaderCompiler: shaderCompileTestCompiler{}})
 			if err != nil {
 				t.Fatal(err)
 			}
-		case "shaders/effect.wgsl.onix.vulkan.fragment.spv":
-			generatedVulkan = len(file.Data) == 4
-		case "shaders/effect.wgsl.onix.webgl2.fragment.glsl":
-			generatedGLES = string(file.Data) == "generated fragment"
-		}
-	}
-	if len(manifest.Shaders) != 1 || manifest.Shaders[0].VulkanFragment == "" || manifest.Shaders[0].WebGL2Fragment == "" || !manifest.Shaders[0].WebGL2Generated {
-		t.Fatalf("compiled Android shader manifest = %+v", manifest.Shaders)
-	}
-	if !generatedVulkan || !generatedGLES {
-		t.Fatalf("generated Vulkan = %t, generated GLES = %t", generatedVulkan, generatedGLES)
-	}
-}
-
-func TestAndroidPrecompiledShaderRequiresBothBackends(t *testing.T) {
-	shader := ShaderSpec{ID: "effect", ShaderSources: ShaderSources{VulkanFragment: "effect.spv"}}
-	if _, err := shader.forTarget(ShaderTargetAndroid); err == nil {
-		t.Fatal("Android shader without GLSL ES source succeeded")
-	}
-	shader.WebGL2Fragment = "effect.glsl"
-	if _, err := shader.forTarget(ShaderTargetAndroid); err != nil {
-		t.Fatalf("Android shader with both backends failed: %v", err)
+			var manifest resourceManifest
+			generated := 0
+			for _, file := range files {
+				if file.Path == "resources/resources.json" {
+					manifest, err = decodeResourceManifest(file.Data)
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if !file.Remove {
+					generated++
+				}
+			}
+			if len(manifest.Shaders) != 1 || generated != 1 {
+				t.Fatalf("generated shaders=%d, manifest=%+v", generated, manifest)
+			}
+			shader := manifest.Shaders[0]
+			if (shader.VulkanFragment != "") != (target == ShaderTargetVulkan) ||
+				(shader.WebGL2Fragment != "") != (target == ShaderTargetWebGL2) ||
+				(shader.DirectXFragment != "") != (target == ShaderTargetDirectX) || shader.Metal != "" || shader.WebGPUFragment != "" {
+				t.Fatalf("unselected sources retained: %+v", shader)
+			}
+		})
 	}
 }
 

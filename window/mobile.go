@@ -201,8 +201,8 @@ func SetNativeSurface(surface uintptr, width, height int) error {
 	if surface == 0 || width <= 0 || height <= 0 {
 		return nil
 	}
-	driver, err := render.NewAndroidDriver(render.VulkanSurface{
-		Kind:   render.VulkanSurfaceAndroid,
+	driver, err := render.NewAndroidDriver(render.NativeSurface{
+		Kind:   render.NativeSurfaceAndroid,
 		Window: surface,
 		Width:  width,
 		Height: height,

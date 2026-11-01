@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/resource"
 )
 
@@ -91,6 +92,7 @@ type macOSArchitectureConfig struct {
 }
 
 type BuildOptions struct {
+	Backend       render.Backend
 	ProjectDir    string
 	Platform      BuildPlatform
 	Mode          BuildMode
@@ -302,6 +304,7 @@ type projectBuildLayout struct {
 	ProjectImportPath string
 	ProjectRelPath    string
 	Platform          BuildPlatform
+	Backend           render.Backend
 	OutputRelPath     string
 	BaseDir           string
 	AppDir            string
@@ -332,6 +335,11 @@ func BuildProject(options BuildOptions) (artifact string, resultErr error) {
 	if options.Mode != BuildModeDebug && options.Mode != BuildModeRelease {
 		return "", fmt.Errorf("unsupported build mode %q", options.Mode)
 	}
+	backend, err := render.ResolveBackend(string(options.Platform), options.Backend)
+	if err != nil {
+		return "", err
+	}
+	options.Backend = backend
 	if _, err := GenerateModuleProject(options.ProjectDir); err != nil {
 		return "", fmt.Errorf("generate module project: %w", err)
 	}
@@ -474,11 +482,11 @@ func macOSCompilerNotFoundError(hostOS string, architecture BuildArchitecture, c
 	return fmt.Errorf("macOS compiler %q not found: install the Xcode command line tools", compiler)
 }
 
-func macOSBuildArgs(mode BuildMode) []string {
-	return appendReleaseFlags([]string{"build", "-buildvcs=false", "-trimpath"}, mode)
+func macOSBuildArgs(mode BuildMode, tags ...string) []string {
+	return appendBuildFlags([]string{"build", "-buildvcs=false", "-trimpath"}, mode, tags...)
 }
 
-func windowsBuildArgs(mode BuildMode, resourceFile string) []string {
+func windowsBuildArgs(mode BuildMode, resourceFile string, tags ...string) []string {
 	ldflags := []string{"-H=windowsgui"}
 	if mode == BuildModeRelease {
 		ldflags = append([]string{"-s", "-w"}, ldflags...)
@@ -487,7 +495,7 @@ func windowsBuildArgs(mode BuildMode, resourceFile string) []string {
 		resourcePath := strings.ReplaceAll(filepath.ToSlash(resourceFile), `\`, "/")
 		ldflags = append(ldflags, "-linkmode=external", "-extldflags="+strconv.Quote(resourcePath))
 	}
-	return appendBuildTags([]string{"build", "-buildvcs=false", "-trimpath", "-ldflags", strings.Join(ldflags, " ")}, mode)
+	return appendBuildTags([]string{"build", "-buildvcs=false", "-trimpath", "-ldflags", strings.Join(ldflags, " ")}, mode, tags...)
 }
 
 func buildWASM(root string, options BuildOptions) (string, error) {
@@ -516,7 +524,7 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 			return "", fmt.Errorf("create output directory: %w", err)
 		}
 		args := []string{"build", "-buildvcs=false", "-overlay", layout.OverlayPath}
-		tags := []string(nil)
+		tags := []string{layout.Backend.BuildTag()}
 		if options.Platform == BuildPlatformWeChat {
 			tags = append(tags, "wechat")
 		}
@@ -613,7 +621,7 @@ func buildAndroid(root string, options BuildOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	layout, err := stageAndroidProject(root, options.ProjectDir, options.Mode, resourceBuildProgress(options.Progress))
+	layout, err := stageAndroidProject(root, options.ProjectDir, options.Mode, resourceBuildProgress(options.Progress), options.Backend)
 	if err != nil {
 		return "", err
 	}
@@ -645,7 +653,7 @@ func buildAndroid(root string, options BuildOptions) (string, error) {
 	env := androidCommandEnvironment(os.Environ(), config)
 	env = append(env, "GOOS=android", "GOARCH=arm64", "CGO_ENABLED=1", "CC="+cc, "CXX="+cxx)
 	args := []string{"build", "-buildvcs=false", "-buildmode=c-shared", "-trimpath"}
-	args = appendReleaseFlags(args, options.Mode)
+	args = appendBuildFlags(args, options.Mode, options.Backend.BuildTag())
 	args = append(args, "-o", libPath, layout.NativePkg)
 	if err := runCommandWithProgress(options.Progress, root, env, "go", args...); err != nil {
 		return "", err
@@ -694,7 +702,7 @@ func buildIOS(root string, options BuildOptions) (string, error) {
 	}
 	output := filepath.Join(layout.BaseDir, "libonix.a")
 	args := []string{"build", "-buildvcs=false", "-buildmode=c-archive", "-trimpath"}
-	args = appendReleaseFlags(args, options.Mode)
+	args = appendBuildFlags(args, options.Mode, options.Backend.BuildTag())
 	args = append(args, "-o", output, layout.NativePkg)
 	env := append(append([]string{}, os.Environ()...), "GOOS=ios", "GOARCH=arm64", "CGO_ENABLED=1")
 	if err := runCommandWithProgress(options.Progress, root, env, "go", args...); err != nil {
@@ -832,8 +840,12 @@ func generateIOSProject(config iosProjectConfig, force bool) error {
 	return copyTemplateDir("templates/ios/native", config.NativePkgDir, vars, true)
 }
 
-func stageAndroidProject(root, project string, mode BuildMode, progress func(BuildProgress)) (projectBuildLayout, error) {
+func stageAndroidProject(root, project string, mode BuildMode, progress func(BuildProgress), backend render.Backend) (projectBuildLayout, error) {
 	layout, err := newProjectBuildLayout(root, project, BuildPlatformAndroid, "")
+	if err != nil {
+		return projectBuildLayout{}, err
+	}
+	layout.Backend, err = render.ResolveBackend("android", backend)
 	if err != nil {
 		return projectBuildLayout{}, err
 	}
@@ -883,9 +895,19 @@ func stageWASMProject(root, project string, options BuildOptions, vectorIcon boo
 	if err := layout.resetOutput(); err != nil {
 		return projectBuildLayout{}, err
 	}
+	backend, err := render.ResolveBackend(string(platform), options.Backend)
+	if err != nil {
+		return projectBuildLayout{}, err
+	}
+	layout.Backend = backend
 	vars := wasmTemplateVars(options, vectorIcon && platform == BuildPlatformWeb)
 	if err := copyTemplateDir("templates/"+string(platform), layout.BaseDir, vars, true); err != nil {
 		return projectBuildLayout{}, err
+	}
+	if platform == BuildPlatformWeb && backend == render.BackendWebGL {
+		if err := os.Remove(filepath.Join(layout.BaseDir, "runtime", "webgpu.js")); err != nil && !os.IsNotExist(err) {
+			return projectBuildLayout{}, err
+		}
 	}
 	if err := prepareExternalProjectResources(root, &layout, options.Mode, resourceBuildProgress(options.Progress)); err != nil {
 		return projectBuildLayout{}, err
@@ -936,7 +958,7 @@ func prepareExternalProjectResources(root string, layout *projectBuildLayout, mo
 			resultErr = errors.Join(resultErr, cleanupResourceOverlay(*layout))
 		}
 	}()
-	catalog, _, err := writeModuleResourcePackages(root, layout.ProjectDir, layout.ResourceDir, resourcePackageOptions{Mode: mode, Platform: layout.Platform, Progress: progress})
+	catalog, _, err := writeModuleResourcePackages(root, layout.ProjectDir, layout.ResourceDir, resourcePackageOptions{Mode: mode, Platform: layout.Platform, Backend: layout.Backend, Progress: progress})
 	if err != nil {
 		return err
 	}
@@ -944,7 +966,7 @@ func prepareExternalProjectResources(root string, layout *projectBuildLayout, mo
 }
 
 func prepareEmbeddedProjectResources(root string, layout *projectBuildLayout, mode BuildMode, progress func(BuildProgress)) error {
-	catalog, _, err := writeModuleResourcePackages(root, layout.ProjectDir, filepath.Join(layout.AppDir, "zz_generated_resources"), resourcePackageOptions{Mode: mode, Platform: layout.Platform, Progress: progress})
+	catalog, _, err := writeModuleResourcePackages(root, layout.ProjectDir, filepath.Join(layout.AppDir, "zz_generated_resources"), resourcePackageOptions{Mode: mode, Platform: layout.Platform, Backend: layout.Backend, Progress: progress})
 	if err != nil {
 		return err
 	}
@@ -1395,6 +1417,14 @@ func wasmTemplateVars(options BuildOptions, vectorIcon bool) map[string]string {
 		"__WECHAT_APP_ID__":        jsonStringContent(options.WeChatAppID),
 		"__WECHAT_PROJECT_NAME__":  jsonStringContent(options.AppName),
 		"__WASM_FILENAME__":        wasmArtifactFilename(options),
+	}
+	backend, _ := render.ResolveBackend(string(options.Platform), options.Backend)
+	vars["__WEB_RENDERER_SCRIPT__"] = ""
+	vars["__WEB_RENDERER_CHECK__"] = ""
+	if backend == render.BackendWebGPU {
+		vars["__WEB_RENDERER_SCRIPT__"] = `<script src="runtime/webgpu.js"></script>`
+		vars["__WEB_RENDERER_CHECK__"] = `if (!globalThis.isSecureContext) throw new Error("WebGPU requires HTTPS or http://localhost.");
+        if (!navigator.gpu) throw new Error("WebGPU is unavailable on this browser or device.");`
 	}
 	if vectorIcon {
 		vars["__WEB_FAVICON_TYPE__"] = "image/svg+xml"

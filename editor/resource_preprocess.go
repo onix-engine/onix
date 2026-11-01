@@ -16,11 +16,13 @@ import (
 	"github.com/diiyw/onix/graphics"
 	onixpng "github.com/diiyw/onix/images/png"
 	"github.com/diiyw/onix/project"
+	"github.com/diiyw/onix/render"
 )
 
 type resourcePackageOptions struct {
 	Mode           BuildMode
 	Platform       BuildPlatform
+	Backend        render.Backend
 	ShaderCompiler project.ShaderCompiler
 	Progress       func(BuildProgress)
 }
@@ -34,17 +36,22 @@ type resourcePreprocessContext struct {
 }
 
 func shaderTargetForBuildPlatform(platform BuildPlatform) project.ShaderTarget {
-	switch platform {
-	case BuildPlatformWindows, BuildPlatformLinux:
+	backend, _ := render.ResolveBackend(string(platform), "")
+	return shaderTargetForBackend(backend)
+}
+
+func shaderTargetForBackend(backend render.Backend) project.ShaderTarget {
+	switch backend {
+	case render.BackendVulkan:
 		return project.ShaderTargetVulkan
-	case BuildPlatformAndroid:
-		return project.ShaderTargetAndroid
-	case BuildPlatformMacOS, BuildPlatformIOS:
+	case render.BackendMetal:
 		return project.ShaderTargetMetal
-	case BuildPlatformWeChat:
+	case render.BackendOpenGL, render.BackendWebGL:
 		return project.ShaderTargetWebGL2
-	case BuildPlatformWeb:
+	case render.BackendWebGPU:
 		return project.ShaderTargetWebGPU
+	case render.BackendDirectX:
+		return project.ShaderTargetDirectX
 	default:
 		return project.ShaderTargetAll
 	}

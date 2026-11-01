@@ -1,4 +1,4 @@
-//go:build (windows || linux || android) && cgo && (!(linux && onix_drm) || onix_drm_vulkan)
+//go:build cgo && ((windows && !onix_metal && !onix_vulkan && !onix_opengl && !onix_webgpu && !onix_webgl) || ((onix_vulkan || linux || android) && (windows || linux || android || (darwin && !ios)) && !onix_directx && !onix_metal && !onix_opengl && !onix_webgpu && !onix_webgl))
 
 package render
 
@@ -9,11 +9,11 @@ import (
 
 var nativeResourceBenchmarkValue uint32
 
-func benchmarkInsertNativeMesh(d *vulkanDriver, native uint32) MeshHandle {
+func benchmarkInsertNativeMesh(d *nativeGPUDriver, native uint32) MeshHandle {
 	return d.meshes.Insert(nativeMesh{native: native})
 }
 
-func benchmarkInsertNativeTarget(d *vulkanDriver, native uint32) RenderTargetHandle {
+func benchmarkInsertNativeTarget(d *nativeGPUDriver, native uint32) RenderTargetHandle {
 	return d.targets.Insert(nativeRenderTarget{native: native, color: NewHandle[TextureResource](native, 1)})
 }
 
@@ -21,7 +21,7 @@ func benchmarkInsertNativeTarget(d *vulkanDriver, native uint32) RenderTargetHan
 func BenchmarkNativeResourceRegistry(b *testing.B) {
 	for _, count := range []int{1, 1024} {
 		b.Run(fmt.Sprintf("meshes=%d", count), func(b *testing.B) {
-			var d vulkanDriver
+			var d nativeGPUDriver
 			handles := make([]MeshHandle, count)
 			for i := range handles {
 				handles[i] = benchmarkInsertNativeMesh(&d, uint32(i+1))
@@ -43,7 +43,7 @@ func BenchmarkNativeResourceRegistry(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("targets=%d", count), func(b *testing.B) {
-			var d vulkanDriver
+			var d nativeGPUDriver
 			handles := make([]RenderTargetHandle, count)
 			for i := range handles {
 				handles[i] = benchmarkInsertNativeTarget(&d, uint32(i+1))
@@ -68,7 +68,7 @@ func BenchmarkNativeResourceRegistry(b *testing.B) {
 }
 
 func BenchmarkNativeMeshLookup(b *testing.B) {
-	var d vulkanDriver
+	var d nativeGPUDriver
 	var handles [1024]MeshHandle
 	for i := range handles {
 		handles[i] = benchmarkInsertNativeMesh(&d, uint32(i+1))

@@ -3,7 +3,8 @@
 package window
 
 /*
-#cgo LDFLAGS: -framework AppKit -framework Foundation -framework Metal -framework QuartzCore -framework CoreGraphics
+#cgo LDFLAGS: -framework AppKit -framework Foundation -framework QuartzCore -framework CoreGraphics
+#cgo onix_opengl CFLAGS: -DONIX_MAC_OPENGL
 #include <stdlib.h>
 #include "macos_native.h"
 
@@ -25,7 +26,6 @@ import (
 	"unsafe"
 
 	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
 )
 
 func init() {
@@ -108,11 +108,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		return context.nativeWindow != nil && C.onix_macos_set_mouse_captured(context.nativeWindow, C.int(boolInt(captured))) != 0
 	}
 	context.closeRequestSupport.close = func() { context.shouldClose = true }
-	driver, err := render.NewMetalDriver(render.MetalSurface{
-		Layer:  uintptr(C.onix_macos_layer(nativeWindow)),
-		Width:  context.Width,
-		Height: context.Height,
-	})
+	driver, err := newMacRenderDriver(uintptr(C.onix_macos_layer(nativeWindow)), uintptr(C.onix_macos_view(nativeWindow)), context.Width, context.Height)
 	if err != nil {
 		C.onix_macos_destroy(nativeWindow)
 		return panicContext(err)

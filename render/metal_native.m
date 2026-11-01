@@ -1,4 +1,5 @@
-//go:build darwin || ios
+//go:build cgo && (darwin || ios) && !onix_directx && !onix_vulkan && !onix_opengl && !onix_webgpu && !onix_webgl
+
 
 #include "metal_native.h"
 #include "native_slots.h"

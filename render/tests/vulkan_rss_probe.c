@@ -27,10 +27,10 @@ static int probe_malloc_trim(size_t padding) {
 #include "vulkan_native.c"
 
 static void check(int success, const char *operation) {
-	if (!success) { fprintf(stderr, "%s: %s\n", operation, onix_vk_last_error()); exit(1); }
+	if (!success) { fprintf(stderr, "%s: %s\n", operation, onix_gpu_last_error()); exit(1); }
 }
 
-static OnixVkShader load_shader(const char *path) {
+static OnixGPUShader load_shader(const char *path) {
 	FILE *file = fopen(path, "rb");
 	check(file != NULL, path);
 	check(fseek(file, 0, SEEK_END) == 0, "seek shader");
@@ -40,13 +40,13 @@ static OnixVkShader load_shader(const char *path) {
 	uint32_t *code = malloc((size_t)length);
 	check(code && fread(code, 1, (size_t)length, file) == (size_t)length, "read shader");
 	fclose(file);
-	return (OnixVkShader){.code = code, .size = (size_t)length};
+	return (OnixGPUShader){.code = code, .size = (size_t)length};
 }
 
-static void sample(const char *stage, OnixVkDriver *driver) {
+static void sample(const char *stage, OnixGPUDriver *driver) {
 	check(vkDeviceWaitIdle(driver->device) == VK_SUCCESS, "complete sampled GPU work");
 	OnixBufferMemory memory;
-	onix_vk_buffer_memory(driver, &memory);
+	onix_gpu_buffer_memory(driver, &memory);
 	struct mallinfo2 heap = mallinfo2();
 	printf("sample %s %llu %zu %zu %zu %u %llu\n", stage,
 		(unsigned long long)(memory.instances + memory.staging + memory.readback + memory.scratch),
@@ -57,13 +57,13 @@ static void sample(const char *stage, OnixVkDriver *driver) {
 	check(getchar() == '\n', "sample handshake");
 }
 
-static void draw(OnixVkDriver *driver, const OnixNativeSpriteDraw *draws, uint32_t count) {
+static void draw(OnixGPUDriver *driver, const OnixNativeSpriteDraw *draws, uint32_t count) {
 	const float clear[] = {0, 0, 0, 1};
-	OnixVkSpritePush push = {.projection = {[0] = 1.0f / 480, [5] = 1.0f / 270, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
-	OnixVkInstance instance = {.model = {1, 0, 0, 0, 1, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
-	check(onix_vk_begin_frame(driver, clear), "begin probe frame");
-	check(onix_vk_draw_sprites(driver, &push, &instance, 1, draws, count), "draw probe sprites");
-	check(onix_vk_present(driver), "present probe frame");
+	OnixGPUSpritePush push = {.projection = {[0] = 1.0f / 480, [5] = 1.0f / 270, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+	OnixGPUInstance instance = {.model = {1, 0, 0, 0, 1, 0}, .texture_model = {1, 0, 0, 0, 1, 0}, .color = {1, 1, 1, 1}};
+	check(onix_gpu_begin_frame(driver, clear), "begin probe frame");
+	check(onix_gpu_draw_sprites(driver, &push, &instance, 1, draws, count), "draw probe sprites");
+	check(onix_gpu_present(driver), "present probe frame");
 }
 
 int main(int argc, char **argv) {
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 	Window window = XCreateSimpleWindow(display, DefaultRootWindow(display), 0, 0, 960, 540, 0, 0, 0);
 	XMapWindow(display, window);
 	XSync(display, False);
-	OnixVkShader shaders[] = {
+	OnixGPUShader shaders[] = {
 		load_shader("shaders/vulkan_sprite_multi.vert.spv"), load_shader("shaders/vulkan_sprite_multi.frag.spv"),
 		load_shader("shaders/vulkan_shape.vert.spv"), load_shader("shaders/vulkan_shape.frag.spv"),
 		load_shader("shaders/vulkan_mesh.vert.spv"), load_shader("shaders/vulkan_mesh.frag.spv"),
@@ -82,14 +82,14 @@ int main(int argc, char **argv) {
         load_shader("shaders/vulkan_mesh_depth.frag.spv"), load_shader("shaders/vulkan_mesh_basic.frag.spv"),
 		load_shader("shaders/vulkan_picking.vert.spv"), load_shader("shaders/vulkan_picking.frag.spv"),
 	};
-	OnixVkSurface surface = {.kind = ONIX_VK_SURFACE_XLIB, .display = display, .window = window, .width = 960, .height = 540};
-	OnixVkDriver *driver = onix_vk_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], shaders[6], shaders[7], shaders[8], shaders[9], shaders[10]);
+	OnixGPUSurface surface = {.kind = ONIX_GPU_SURFACE_XLIB, .display = display, .window = window, .width = 960, .height = 540};
+	OnixGPUDriver *driver = onix_gpu_create(surface, shaders[0], shaders[1], shaders[2], shaders[3], shaders[4], shaders[5], shaders[6], shaders[7], shaders[8], shaders[9], shaders[10]);
 	check(driver != NULL, "create probe driver");
 	check(driver->physical_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU, "probe requires a CPU Vulkan ICD");
-	fprintf(stderr, "device: %s\n", onix_vk_device_name(driver));
+	fprintf(stderr, "device: %s\n", onix_gpu_device_name(driver));
 	sample("startup", driver);
 	const uint8_t white[] = {255, 255, 255, 255};
-	uint32_t texture = onix_vk_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
 	check(texture != 0, "create probe texture");
 	OnixNativeSpriteDraw *draws = calloc(count, sizeof(*draws));
 	check(draws != NULL, "allocate probe draws");
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 	sample("low", driver);
 	for (uint32_t frame = 0; frame < ONIX_VK_FRAMES_IN_FLIGHT * 65; frame++) draw(driver, draws, 1);
 	sample("steady", driver);
-	onix_vk_destroy(driver);
+	onix_gpu_destroy(driver);
 	free(draws);
 	for (uint32_t index = 0; index < sizeof(shaders) / sizeof(shaders[0]); index++) free((void *)shaders[index].code);
 	XDestroyWindow(display, window);

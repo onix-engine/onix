@@ -1,4 +1,4 @@
-//go:build (windows || linux || android) && cgo && (!(linux && onix_drm) || onix_drm_vulkan)
+//go:build cgo && (onix_vulkan || linux || android) && (windows || linux || android || (darwin && !ios)) && !onix_directx && !onix_metal && !onix_opengl && !onix_webgpu && !onix_webgl
 
 package render
 

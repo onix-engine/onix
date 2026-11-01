@@ -133,7 +133,7 @@ static int onix_vk_display_supports_identity(OnixVkDriver *driver) {
 
 static int onix_vk_create_drm_surface(OnixVkDriver *driver) {
     const OnixVkSurface *surface = &driver->native_surface;
-    if (surface->kind != ONIX_VK_SURFACE_DRM || surface->drm_fd < 0 || surface->drm_connector_id == 0 || surface->transparent) {
+    if (surface->kind != ONIX_GPU_SURFACE_DRM || surface->drm_fd < 0 || surface->drm_connector_id == 0 || surface->transparent) {
         onix_vk_set_error("DRM Vulkan driver requires an opaque DRM connector surface");
         return 0;
     }

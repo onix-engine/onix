@@ -324,7 +324,8 @@ func generateModuleProject(directory string, write bool) (*project.ProjectPlan, 
 	// Preflight all generated targets, including a stale contract file, before writing.
 	for _, file := range []string{"onix_generated.go", "contracts/onix_generated.go"} {
 		previous, err := os.ReadFile(filepath.Join(directory, filepath.FromSlash(file)))
-		if err == nil && !bytes.HasPrefix(previous, []byte(moduleGeneratedHeader)) {
+		header, _, _ := bytes.Cut(previous, []byte{'\n'})
+		if err == nil && string(bytes.TrimSuffix(header, []byte{'\r'})) != strings.TrimSuffix(moduleGeneratedHeader, "\n") {
 			return nil, fmt.Errorf("%s is reserved for generated code; user file was preserved", file)
 		}
 		if err != nil && !os.IsNotExist(err) {

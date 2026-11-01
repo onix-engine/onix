@@ -1,10 +1,8 @@
-//go:build cgo && (android || (linux && onix_drm && !onix_drm_vulkan))
+//go:build cgo && onix_opengl && !ios && (windows || linux || darwin || android)
 
 package render
 
 /*
-#cgo android LDFLAGS: -lEGL -lGLESv3 -landroid
-#cgo linux LDFLAGS: -lEGL -lGLESv2
 // These wrappers consume their Go arguments during the GL call.
 #cgo noescape onix_gl_begin_frame
 #cgo nocallback onix_gl_begin_frame
@@ -30,60 +28,14 @@ package render
 #cgo nocallback onix_gl_upload_buffer
 #cgo noescape onix_gl_update_textures
 #cgo nocallback onix_gl_update_textures
-#include <EGL/egl.h>
-#include <GLES3/gl3.h>
-#if defined(__ANDROID__)
-#include <android/native_window.h>
-#endif
+#include "gl_api.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-static EGLSurface onix_egl_create_window_surface(EGLDisplay display, EGLConfig config, uintptr_t window) {
-	return eglCreateWindowSurface(display, config, (EGLNativeWindowType)window, NULL);
-}
-
-static EGLBoolean onix_egl_choose_config(EGLDisplay display, EGLConfig *config, EGLint *count) {
-#if defined(__ANDROID__)
-	const EGLint attributes[] = {
-		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-		EGL_RED_SIZE, 8,
-		EGL_GREEN_SIZE, 8,
-		EGL_BLUE_SIZE, 8,
-		EGL_ALPHA_SIZE, 8,
-		EGL_DEPTH_SIZE, 0,
-		EGL_SAMPLE_BUFFERS, 0,
-		EGL_NONE,
-	};
-#else
-	const EGLint attributes[] = {
-		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-		EGL_RED_SIZE, 8,
-		EGL_GREEN_SIZE, 8,
-		EGL_BLUE_SIZE, 8,
-		EGL_DEPTH_SIZE, 0,
-		EGL_SAMPLE_BUFFERS, 0,
-		EGL_NATIVE_VISUAL_ID, 0x34325258,
-		EGL_NONE,
-	};
-#endif
-	return eglChooseConfig(display, attributes, config, 1, count);
-}
-
 static void onix_gl_shader_source(GLuint shader, const char *source, GLint length) {
 	const GLchar *sources[] = {source};
 	glShaderSource(shader, 1, sources, &length);
-}
-
-static void onix_native_window_set_buffers_geometry(uintptr_t window, int32_t format) {
-#if defined(__ANDROID__)
-	ANativeWindow_setBuffersGeometry((ANativeWindow *)window, 0, 0, format);
-#else
-	(void)window;
-	(void)format;
-#endif
 }
 
 static void onix_gl_vertex_attrib_pointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, uintptr_t offset) {
@@ -628,9 +580,7 @@ type glesMeshGeometry struct {
 
 type openGLESDriver struct {
 	driverStatistics
-	display C.EGLDisplay
-	surface C.EGLSurface
-	context C.EGLContext
+	glContext
 
 	deviceName   string
 	afterPresent func() error
@@ -684,58 +634,7 @@ type openGLESDriver struct {
 	pickingDrawsRetention scratchRetention
 }
 
-func newOpenGLESDriver(display C.EGLDisplay, window uintptr, width, height int) (Driver, error) {
-	if window == 0 || width <= 0 || height <= 0 {
-		return nil, errors.New("render: invalid OpenGL ES surface")
-	}
-	driver := &openGLESDriver{
-		width:      width,
-		height:     height,
-		viewport:   Rect{Width: int32(width), Height: int32(height)},
-		frameIndex: glesFramesInFlight - 1,
-	}
-	driver.display = display
-	var noDisplay C.EGLDisplay
-	if driver.display == noDisplay || C.eglInitialize(driver.display, nil, nil) == C.EGL_FALSE {
-		return nil, eglError("initialize display")
-	}
-	if C.eglBindAPI(C.EGL_OPENGL_ES_API) == C.EGL_FALSE {
-		err := eglError("bind OpenGL ES API")
-		driver.Destroy()
-		return nil, err
-	}
-	var config C.EGLConfig
-	var count C.EGLint
-	if C.onix_egl_choose_config(driver.display, &config, &count) == C.EGL_FALSE || count == 0 {
-		err := eglError("choose OpenGL ES 3 config")
-		driver.Destroy()
-		return nil, err
-	}
-	var visualID C.EGLint
-	if C.eglGetConfigAttrib(driver.display, config, C.EGL_NATIVE_VISUAL_ID, &visualID) == C.EGL_TRUE {
-		C.onix_native_window_set_buffers_geometry(C.uintptr_t(window), C.int32_t(visualID))
-	}
-	driver.surface = C.onix_egl_create_window_surface(driver.display, config, C.uintptr_t(window))
-	var noSurface C.EGLSurface
-	if driver.surface == noSurface {
-		err := eglError("create window surface")
-		driver.Destroy()
-		return nil, err
-	}
-	contextAttributes := [...]C.EGLint{C.EGL_CONTEXT_CLIENT_VERSION, 3, C.EGL_NONE}
-	var noContext C.EGLContext
-	driver.context = C.eglCreateContext(driver.display, config, noContext, &contextAttributes[0])
-	if driver.context == noContext || C.eglMakeCurrent(driver.display, driver.surface, driver.surface, driver.context) == C.EGL_FALSE {
-		err := eglError("create OpenGL ES 3 context")
-		driver.Destroy()
-		return nil, err
-	}
-	var surfaceWidth, surfaceHeight C.EGLint
-	if C.eglQuerySurface(driver.display, driver.surface, C.EGL_WIDTH, &surfaceWidth) == C.EGL_TRUE &&
-		C.eglQuerySurface(driver.display, driver.surface, C.EGL_HEIGHT, &surfaceHeight) == C.EGL_TRUE && surfaceWidth > 0 && surfaceHeight > 0 {
-		driver.width, driver.height = int(surfaceWidth), int(surfaceHeight)
-		driver.viewport = Rect{Width: int32(surfaceWidth), Height: int32(surfaceHeight)}
-	}
+func initializeGLDriver(driver *openGLESDriver) (Driver, error) {
 	version := C.glGetString(C.GL_VERSION)
 	if version == nil {
 		driver.Destroy()
@@ -829,7 +728,10 @@ func (d *openGLESDriver) RendererInfo() RendererInfo {
 
 func (d *openGLESDriver) SurfaceSize() (int, int) { return d.width, d.height }
 
+func (d *openGLESDriver) Activate() { d.makeContextCurrent() }
+
 func (d *openGLESDriver) BeginFrame(clear Color) error {
+	d.makeContextCurrent()
 	if d.activeTarget.Valid() {
 		return errors.New("render: OpenGL ES render target is still active")
 	}
@@ -1632,8 +1534,8 @@ func (d *openGLESDriver) Present() error {
 	if C.onix_gl_finish_uploads(&d.uploads[d.frameIndex]) == 0 {
 		return errors.New("render: OpenGL ES upload fence creation failed")
 	}
-	if C.eglSwapBuffers(d.display, d.surface) == C.EGL_FALSE {
-		return eglError("present")
+	if err := d.swapContextBuffers(); err != nil {
+		return err
 	}
 	if d.afterPresent != nil {
 		return d.afterPresent()
@@ -1646,16 +1548,11 @@ func (d *openGLESDriver) ResizeSurface(width, height int) error {
 		return nil
 	}
 	d.width, d.height = width, height
+	d.resizeContext(width, height)
 	return nil
 }
 
-func (d *openGLESDriver) SetVSync(enabled bool) {
-	interval := C.EGLint(0)
-	if enabled {
-		interval = 1
-	}
-	C.eglSwapInterval(d.display, interval)
-}
+func (d *openGLESDriver) SetVSync(enabled bool) { d.setContextVSync(enabled) }
 
 func (d *openGLESDriver) Destroy() {
 	if d == nil || d.destroyed {
@@ -1663,12 +1560,7 @@ func (d *openGLESDriver) Destroy() {
 	}
 	d.destroyed = true
 	d.textureUpload.release()
-	var noDisplay C.EGLDisplay
-	var noSurface C.EGLSurface
-	var noContext C.EGLContext
-	if d.display != noDisplay && d.context != noContext && d.surface != noSurface {
-		C.eglMakeCurrent(d.display, d.surface, d.surface, d.context)
-	}
+	d.makeContextCurrent()
 	d.deleteRenderTarget(d.surfaceTarget, true)
 	d.surfaceTarget = nil
 	d.targets.Range(func(target *glesRenderTarget) bool {
@@ -1721,18 +1613,7 @@ func (d *openGLESDriver) Destroy() {
 	d.meshes.Clear()
 	d.meshShaders.Clear()
 	d.material2DShaders.Clear()
-	if d.display != noDisplay {
-		C.eglMakeCurrent(d.display, noSurface, noSurface, noContext)
-		if d.context != noContext {
-			C.eglDestroyContext(d.display, d.context)
-		}
-		if d.surface != noSurface {
-			C.eglDestroySurface(d.display, d.surface)
-		}
-		C.eglTerminate(d.display)
-		C.eglReleaseThread()
-	}
-	d.display, d.surface, d.context = noDisplay, noSurface, noContext
+	d.destroyContext()
 }
 
 func (d *openGLESDriver) createGeometryResources() error {
@@ -2056,6 +1937,7 @@ func createGLESProgram(vertexSource, fragmentSource string, generatedWGSL bool) 
 }
 
 func compileGLESShader(kind C.GLenum, source string) (C.GLuint, error) {
+	source = platformGLShaderSource(source)
 	shader := C.glCreateShader(kind)
 	if shader == 0 {
 		return 0, errors.New("render: OpenGL ES could not create shader")
@@ -2139,10 +2021,6 @@ func sliceData[T any](values []T) unsafe.Pointer {
 		return nil
 	}
 	return unsafe.Pointer(&values[0])
-}
-
-func eglError(operation string) error {
-	return fmt.Errorf("render: OpenGL ES %s failed with EGL error %#x", operation, uint32(C.eglGetError()))
 }
 
 func glError(operation string) error {

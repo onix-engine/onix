@@ -1195,8 +1195,13 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	if text == nil || transform == nil {
 		return
 	}
-	htmlLayout := world.Has[html.ControlText](visualEntity)
+	htmlText, htmlLayout := world.Get[html.ControlText](visualEntity)
 	baseX, baseY := transform.Translation.X.Value, transform.Translation.Y.Value
+	if htmlLayout {
+		// Use the retained CSS content origin: layout rebuilds reset the
+		// transform, so it may no longer include the previous scroll offset.
+		baseX, baseY = htmlText.Content.X, htmlText.Content.Y
+	}
 	if text.WrapMode != scene.TextWrapNone || text.WrapWidth != 0 {
 		if updated := world.GetMut[scene.Text2D](visualEntity); updated != nil {
 			text = updated
@@ -1234,11 +1239,6 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 		previousSuffix := field.lastScrollValue.Slice(oldCaretByte, field.lastScrollValue.Len())
 		currentSuffix := field.Text().Slice(field.Text().ByteOffset(field.Caret), field.Text().Len())
 		keepInsertionOrigin = previousPrefix == currentPrefix && previousSuffix == currentSuffix
-	}
-	if htmlLayout && fieldOK {
-		// HTML layout already applies the control's CSS padding. Recover the
-		// unscrolled origin before updating ScrollX; the new offset is applied below.
-		baseX -= field.ScrollX
 	}
 	contentWidth, _, measured := scene.MeasureText2D(text)
 	if !measured {

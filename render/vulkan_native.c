@@ -1,4 +1,5 @@
-//go:build (windows || linux || android) && (!(linux && onix_drm) || onix_drm_vulkan)
+//go:build cgo && (onix_vulkan || linux || android) && (windows || linux || android || (darwin && !ios)) && !onix_directx && !onix_metal && !onix_opengl && !onix_webgpu && !onix_webgl
+
 
 #if defined(_WIN32)
 #define COBJMACROS
@@ -9,12 +10,12 @@
 #elif defined(_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
 #define VK_NO_PROTOTYPES
-#elif !defined(ONIX_VK_DRM)
+#elif !defined(__APPLE__) && !defined(ONIX_VK_DRM)
 #define VK_USE_PLATFORM_XLIB_KHR
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
 
-#include "vulkan_native.h"
+#include "native_gpu.h"
 #include "native_slots.h"
 #include "native_buffer.h"
 #include "native_upload.h"
@@ -36,7 +37,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #else
-#if !defined(ONIX_VK_DRM)
+#if !defined(__APPLE__) && !defined(ONIX_VK_DRM)
 #include <X11/Xlib.h>
 #include <wayland-client.h>
 #endif
@@ -54,9 +55,9 @@
 #define ONIX_VK_FRAMES_IN_FLIGHT 2
 #define ONIX_VK_DEFORMATION_SETS 256
 #define ONIX_VK_DEFORMATION_POOL_SETS 16
-#define ONIX_VK_SURFACE_TEXTURES 14
-#define ONIX_VK_SURFACE_SETS 4096
-#define ONIX_VK_SURFACE_POOL_SETS 64
+#define ONIX_GPU_SURFACE_TEXTURES 14
+#define ONIX_GPU_SURFACE_SETS 4096
+#define ONIX_GPU_SURFACE_POOL_SETS 64
 #define ONIX_MESH_BLEND_MODE_COUNT 4
 #define ONIX_VK_PIPELINE_NO_DEPTH 16
 #define ONIX_VK_PIPELINE_COMPACT_SPRITE 32
@@ -252,7 +253,7 @@ typedef struct {
 typedef struct {
 	VkDescriptorSet descriptor;
 	uint64_t hash;
-	uint32_t textures[ONIX_VK_SURFACE_TEXTURES];
+	uint32_t textures[ONIX_GPU_SURFACE_TEXTURES];
 	uint32_t static_mesh;
 } OnixVkSurfaceDescriptor;
 
@@ -268,7 +269,7 @@ typedef struct {
 	uint32_t deformation_set_count;
 	uint32_t deformation_set_index;
 	OnixBufferRetention deformation_retention;
-	VkDescriptorPool surface_pools[ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS];
+	VkDescriptorPool surface_pools[ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS];
 	OnixVkSurfaceDescriptor *surface_sets;
 	uint32_t *surface_buckets;
 	uint32_t surface_capacity;
@@ -363,8 +364,8 @@ ONIX_NATIVE_SLOTS(onix_vk_meshes, OnixVkMesh, 16, UINT32_MAX)
 ONIX_NATIVE_SLOTS(onix_vk_mesh_shaders, OnixVkMeshPipeline, 8, UINT32_MAX)
 ONIX_NATIVE_SLOTS(onix_vk_material2d_shaders, OnixVkMaterial2DPipeline, 8, UINT32_MAX)
 
-struct OnixVkDriver {
-    OnixVkSurface native_surface;
+struct OnixGPUDriver {
+    OnixGPUSurface native_surface;
     VkInstance instance;
     VkSurfaceKHR surface;
     VkPhysicalDevice physical_device;
@@ -478,21 +479,21 @@ struct OnixVkDriver {
 	uint64_t retired_host_bytes;
 	uint32_t host_heap_quiet_frames;
 
-	OnixVkShader sprite_vertex_shader;
-	OnixVkShader sprite_fragment_shader;
-	OnixVkShader shape_vertex_shader;
-	OnixVkShader shape_fragment_shader;
-	OnixVkShader mesh_vertex_shader;
-	OnixVkShader mesh_fragment_shader;
-	OnixVkShader mesh_unlit_fragment_shader;
-	OnixVkShader mesh_depth_fragment_shader, mesh_basic_fragment_shader;
-	OnixVkShader picking_vertex_shader;
-	OnixVkShader picking_fragment_shader;
+	OnixGPUShader sprite_vertex_shader;
+	OnixGPUShader sprite_fragment_shader;
+	OnixGPUShader shape_vertex_shader;
+	OnixGPUShader shape_fragment_shader;
+	OnixGPUShader mesh_vertex_shader;
+	OnixGPUShader mesh_fragment_shader;
+	OnixGPUShader mesh_unlit_fragment_shader;
+	OnixGPUShader mesh_depth_fragment_shader, mesh_basic_fragment_shader;
+	OnixGPUShader picking_vertex_shader;
+	OnixGPUShader picking_fragment_shader;
 };
 
-static int onix_vk_prepare_draw(OnixVkDriver *driver);
+static int onix_vk_prepare_draw(OnixGPUDriver *driver);
 
-void onix_vk_buffer_memory(OnixVkDriver *driver, OnixBufferMemory *memory) {
+void onix_gpu_buffer_memory(OnixGPUDriver *driver, OnixBufferMemory *memory) {
 	*memory = (OnixBufferMemory){0};
 	if (driver == NULL) return;
 	for (uint32_t index = 0; index < ONIX_VK_FRAMES_IN_FLIGHT; index++) {
@@ -518,7 +519,7 @@ static void onix_vk_set_error(const char *format, ...) {
     va_end(arguments);
 }
 
-const char *onix_vk_last_error(void) {
+const char *onix_gpu_last_error(void) {
     return onix_vk_error;
 }
 
@@ -555,7 +556,7 @@ static int onix_vk_result(VkResult result, const char *operation) {
 
 // Software Vulkan uses the process heap for command and resource storage. Only
 // request page reclamation after a substantial retirement; never trim per draw.
-static void onix_vk_retire_host_memory(OnixVkDriver *driver, uint64_t bytes) {
+static void onix_vk_retire_host_memory(OnixGPUDriver *driver, uint64_t bytes) {
 #if defined(__GLIBC__)
 	if (driver->physical_device_properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU) return;
 	uint64_t remaining = ONIX_VK_HOST_HEAP_RELEASE_BYTES - driver->retired_host_bytes;
@@ -566,13 +567,13 @@ static void onix_vk_retire_host_memory(OnixVkDriver *driver, uint64_t bytes) {
 #endif
 }
 
-static void onix_vk_note_host_activity(OnixVkDriver *driver) {
+static void onix_vk_note_host_activity(OnixGPUDriver *driver) {
 	if (driver->retired_host_bytes == ONIX_VK_HOST_HEAP_RELEASE_BYTES) driver->host_heap_quiet_frames = ONIX_BUFFER_TRIM_DELAY;
 }
 
 // Observe the completed slot, including commands its driver has already freed
 // during normal command-buffer resets. Regular bursts keep the window warm.
-static void onix_vk_observe_commands(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_observe_commands(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	if (frame->command_count > frame->command_peak) frame->command_peak = frame->command_count;
 	if (frame->command_count > ONIX_VK_COMMANDS_WARM) onix_vk_note_host_activity(driver);
 	uint64_t target = onix_buffer_trim_capacity(&frame->command_retention,
@@ -584,7 +585,7 @@ static void onix_vk_observe_commands(OnixVkDriver *driver, OnixVkFrame *frame) {
 	frame->command_count = 0;
 }
 
-static void onix_vk_release_idle_host_memory(OnixVkDriver *driver) {
+static void onix_vk_release_idle_host_memory(OnixGPUDriver *driver) {
 #if defined(__GLIBC__)
 	if (driver->retired_host_bytes < ONIX_VK_HOST_HEAP_RELEASE_BYTES || --driver->host_heap_quiet_frames != 0) return;
 	// glibc may retain free arena pages after Vulkan releases its objects. This
@@ -596,7 +597,7 @@ static void onix_vk_release_idle_host_memory(OnixVkDriver *driver) {
 #endif
 }
 
-static int onix_vk_allocate_texture_descriptor(OnixVkDriver *driver, OnixVkTexture *texture) {
+static int onix_vk_allocate_texture_descriptor(OnixGPUDriver *driver, OnixVkTexture *texture) {
 	uint32_t index = driver->texture_descriptor_pool_count, available = index;
 	for (uint32_t next = 0; next < driver->texture_descriptor_pool_count; next++) {
 		OnixVkTextureDescriptorPool *pool = &driver->texture_descriptor_pools[next];
@@ -650,7 +651,7 @@ static int onix_vk_allocate_texture_descriptor(OnixVkDriver *driver, OnixVkTextu
 }
 
 // Texture retirement has already waited for all draws referencing this set.
-static void onix_vk_release_texture_descriptor(OnixVkDriver *driver, OnixVkTexture *texture) {
+static void onix_vk_release_texture_descriptor(OnixGPUDriver *driver, OnixVkTexture *texture) {
 	if (texture->descriptor == VK_NULL_HANDLE) return;
 	OnixVkTextureDescriptorPool *pool = &driver->texture_descriptor_pools[texture->descriptor_pool - 1];
 	vkFreeDescriptorSets(driver->device, pool->pool, 1, &texture->descriptor);
@@ -659,7 +660,7 @@ static void onix_vk_release_texture_descriptor(OnixVkDriver *driver, OnixVkTextu
 	texture->descriptor_pool = 0;
 }
 
-static void onix_vk_trim_texture_descriptors(OnixVkDriver *driver) {
+static void onix_vk_trim_texture_descriptors(OnixGPUDriver *driver) {
 	for (uint32_t index = 0; index < driver->texture_descriptor_pool_count; index++) {
 		OnixVkTextureDescriptorPool *pool = &driver->texture_descriptor_pools[index];
 		if (pool->pool == VK_NULL_HANDLE) continue;
@@ -671,7 +672,7 @@ static void onix_vk_trim_texture_descriptors(OnixVkDriver *driver) {
 }
 
 static uint32_t onix_vk_find_memory_type(
-    OnixVkDriver *driver,
+    OnixGPUDriver *driver,
     uint32_t bits,
     VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memory_properties;
@@ -686,7 +687,7 @@ static uint32_t onix_vk_find_memory_type(
 }
 
 static int onix_vk_create_buffer(
-    OnixVkDriver *driver,
+    OnixGPUDriver *driver,
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties,
@@ -731,7 +732,7 @@ static int onix_vk_create_buffer(
     return 1;
 }
 
-static int onix_vk_upload_memory(OnixVkDriver *driver, VkDeviceMemory memory, const void *data, size_t size) {
+static int onix_vk_upload_memory(OnixGPUDriver *driver, VkDeviceMemory memory, const void *data, size_t size) {
     void *mapping = NULL;
     if (!onix_vk_result(vkMapMemory(driver->device, memory, 0, size, 0, &mapping), "vkMapMemory")) {
         return 0;
@@ -801,22 +802,22 @@ static void onix_vk_image_barrier(
         &barrier);
 }
 
-_Static_assert(sizeof(OnixVkInstance) == 132, "OnixVkInstance ABI must be 132 bytes");
-_Static_assert(sizeof(OnixVkShapeInstance) == 100, "OnixVkShapeInstance ABI must be 100 bytes");
-_Static_assert(sizeof(OnixVkSpritePush) == 96, "OnixVkSpritePush ABI must be 96 bytes");
-_Static_assert(sizeof(OnixVkVertex3D) == 48, "OnixVkVertex3D ABI must be 48 bytes");
-_Static_assert(sizeof(OnixVkInstance3D) == 192, "OnixVkInstance3D ABI must be 192 bytes");
-_Static_assert(sizeof(OnixVkMeshPush) == 128, "OnixVkMeshPush ABI must be 128 bytes");
+_Static_assert(sizeof(OnixGPUInstance) == 132, "OnixGPUInstance ABI must be 132 bytes");
+_Static_assert(sizeof(OnixGPUShapeInstance) == 100, "OnixGPUShapeInstance ABI must be 100 bytes");
+_Static_assert(sizeof(OnixGPUSpritePush) == 96, "OnixGPUSpritePush ABI must be 96 bytes");
+_Static_assert(sizeof(OnixGPUVertex3D) == 48, "OnixGPUVertex3D ABI must be 48 bytes");
+_Static_assert(sizeof(OnixGPUInstance3D) == 192, "OnixGPUInstance3D ABI must be 192 bytes");
+_Static_assert(sizeof(OnixGPUMeshPush) == 128, "OnixGPUMeshPush ABI must be 128 bytes");
 _Static_assert(sizeof(OnixNativeMeshDraw3D) == 104, "OnixNativeMeshDraw3D ABI must be 104 bytes");
 
 #if defined(ONIX_VK_DRM)
 #include "vulkan_display.h"
 #endif
 
-static int onix_vk_create_surface(OnixVkDriver *driver) {
+static int onix_vk_create_surface(OnixGPUDriver *driver) {
     VkResult result = VK_ERROR_EXTENSION_NOT_PRESENT;
 #if defined(__ANDROID__)
-    if (driver->native_surface.kind != ONIX_VK_SURFACE_ANDROID) {
+    if (driver->native_surface.kind != ONIX_GPU_SURFACE_ANDROID) {
         onix_vk_set_error("Android Vulkan driver requires an ANativeWindow surface");
         return 0;
     }
@@ -826,7 +827,7 @@ static int onix_vk_create_surface(OnixVkDriver *driver) {
     };
     result = vkCreateAndroidSurfaceKHR(driver->instance, &info, NULL, &driver->surface);
 #elif defined(_WIN32)
-    if (driver->native_surface.kind != ONIX_VK_SURFACE_WIN32) {
+    if (driver->native_surface.kind != ONIX_GPU_SURFACE_WIN32) {
         onix_vk_set_error("Windows Vulkan driver requires a Win32 window surface");
         return 0;
     }
@@ -836,17 +837,24 @@ static int onix_vk_create_surface(OnixVkDriver *driver) {
         .hwnd = (HWND)driver->native_surface.window,
     };
     result = vkCreateWin32SurfaceKHR(driver->instance, &info, NULL, &driver->surface);
+#elif defined(__APPLE__)
+    typedef struct { VkStructureType sType; const void *pNext; VkFlags flags; const void *pLayer; } OnixMetalSurfaceInfo;
+    typedef VkResult (VKAPI_PTR *OnixCreateMetalSurface)(VkInstance,const OnixMetalSurfaceInfo *,const VkAllocationCallbacks *,VkSurfaceKHR *);
+    OnixCreateMetalSurface create=(OnixCreateMetalSurface)vkGetInstanceProcAddr(driver->instance,"vkCreateMetalSurfaceEXT");
+    if (!create || driver->native_surface.kind != ONIX_GPU_SURFACE_METAL) { onix_vk_set_error("Vulkan requires VK_EXT_metal_surface and a CAMetalLayer"); return 0; }
+    OnixMetalSurfaceInfo info={.sType=VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,.pLayer=(const void *)driver->native_surface.window};
+    result=create(driver->instance,&info,NULL,&driver->surface);
 #elif defined(ONIX_VK_DRM)
     return onix_vk_create_drm_surface(driver);
 #else
-    if (driver->native_surface.kind == ONIX_VK_SURFACE_XLIB) {
+    if (driver->native_surface.kind == ONIX_GPU_SURFACE_XLIB) {
         VkXlibSurfaceCreateInfoKHR info = {
             .sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
             .dpy = (Display *)driver->native_surface.display,
             .window = (Window)driver->native_surface.window,
         };
         result = vkCreateXlibSurfaceKHR(driver->instance, &info, NULL, &driver->surface);
-    } else if (driver->native_surface.kind == ONIX_VK_SURFACE_WAYLAND) {
+    } else if (driver->native_surface.kind == ONIX_GPU_SURFACE_WAYLAND) {
         VkWaylandSurfaceCreateInfoKHR info = {
             .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
             .display = (struct wl_display *)driver->native_surface.display,
@@ -861,21 +869,26 @@ static int onix_vk_create_surface(OnixVkDriver *driver) {
     return onix_vk_result(result, "create Vulkan surface");
 }
 
-static int onix_vk_create_instance(OnixVkDriver *driver) {
+static int onix_vk_create_instance(OnixGPUDriver *driver) {
 #if defined(__ANDROID__)
     const char *surface_extension = VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
 #elif defined(_WIN32)
     const char *surface_extension = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+#elif defined(__APPLE__)
+    const char *surface_extension = "VK_EXT_metal_surface";
 #elif defined(ONIX_VK_DRM)
     const char *surface_extension = VK_KHR_DISPLAY_EXTENSION_NAME;
 #else
-    const char *surface_extension = driver->native_surface.kind == ONIX_VK_SURFACE_WAYLAND
+    const char *surface_extension = driver->native_surface.kind == ONIX_GPU_SURFACE_WAYLAND
         ? VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
         : VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
 #endif
     const char *extensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
         surface_extension,
+#if defined(__APPLE__)
+        VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
+#endif
 #if defined(ONIX_VK_DRM)
         VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME,
         VK_EXT_ACQUIRE_DRM_DISPLAY_EXTENSION_NAME,
@@ -892,6 +905,9 @@ static int onix_vk_create_instance(OnixVkDriver *driver) {
     VkInstanceCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &application,
+#if defined(__APPLE__)
+        .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+#endif
         .enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]),
         .ppEnabledExtensionNames = extensions,
     };
@@ -904,7 +920,7 @@ static int onix_vk_create_instance(OnixVkDriver *driver) {
     );
 }
 
-static int onix_vk_select_device(OnixVkDriver *driver) {
+static int onix_vk_select_device(OnixGPUDriver *driver) {
     uint32_t device_count = 0;
     if (!onix_vk_result(vkEnumeratePhysicalDevices(driver->instance, &device_count, NULL), "vkEnumeratePhysicalDevices(count)") || device_count == 0) {
         onix_vk_set_error("no Vulkan physical device is available");
@@ -963,11 +979,11 @@ static int onix_vk_select_device(OnixVkDriver *driver) {
     return 1;
 }
 
-const char *onix_vk_device_name(OnixVkDriver *driver) {
+const char *onix_gpu_device_name(OnixGPUDriver *driver) {
     return driver == NULL ? "" : driver->physical_device_properties.deviceName;
 }
 
-static int onix_vk_has_device_extension(OnixVkDriver *driver, const char *name) {
+static int onix_vk_has_device_extension(OnixGPUDriver *driver, const char *name) {
     uint32_t count = 0;
     if (vkEnumerateDeviceExtensionProperties(driver->physical_device, NULL, &count, NULL) != VK_SUCCESS || count == 0) {
         return 0;
@@ -988,7 +1004,7 @@ static int onix_vk_has_device_extension(OnixVkDriver *driver, const char *name) 
     return found;
 }
 
-static int onix_vk_create_device(OnixVkDriver *driver) {
+static int onix_vk_create_device(OnixGPUDriver *driver) {
     float priority = 1.0f;
     VkDeviceQueueCreateInfo queue = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -998,6 +1014,9 @@ static int onix_vk_create_device(OnixVkDriver *driver) {
     };
 	const char *extensions[6] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 	uint32_t extension_count = 1;
+#if defined(__APPLE__)
+    if (onix_vk_has_device_extension(driver,"VK_KHR_portability_subset")) extensions[extension_count++]="VK_KHR_portability_subset";
+#endif
 #if defined(_WIN32)
 	const char *external_extensions[] = {
 		VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
@@ -1052,7 +1071,7 @@ static int onix_vk_create_device(OnixVkDriver *driver) {
     return 1;
 }
 
-static void onix_vk_destroy_swapchain(OnixVkDriver *driver) {
+static void onix_vk_destroy_swapchain(OnixGPUDriver *driver) {
     if (driver->device == VK_NULL_HANDLE) {
         return;
     }
@@ -1115,7 +1134,7 @@ static VkCompositeAlphaFlagBitsKHR onix_vk_composite_alpha(VkCompositeAlphaFlags
     return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 }
 
-static VkPresentModeKHR onix_vk_present_mode(OnixVkDriver *driver) {
+static VkPresentModeKHR onix_vk_present_mode(OnixGPUDriver *driver) {
     if (driver->vsync_enabled) {
         return VK_PRESENT_MODE_FIFO_KHR;
     }
@@ -1142,7 +1161,7 @@ static VkPresentModeKHR onix_vk_present_mode(OnixVkDriver *driver) {
     return selected;
 }
 
-static int onix_vk_create_swapchain(OnixVkDriver *driver) {
+static int onix_vk_create_swapchain(OnixGPUDriver *driver) {
     VkSurfaceCapabilitiesKHR capabilities;
     if (!onix_vk_result(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(driver->physical_device, driver->surface, &capabilities), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")) {
         return 0;
@@ -1241,7 +1260,7 @@ static int onix_vk_create_swapchain(OnixVkDriver *driver) {
 }
 
 static int onix_vk_create_render_pass_with_load(
-	OnixVkDriver *driver,
+	OnixGPUDriver *driver,
 	VkAttachmentLoadOp load_op,
 	VkImageLayout initial_layout,
 	int depth,
@@ -1300,7 +1319,7 @@ static int onix_vk_create_render_pass_with_load(
 	return onix_vk_result(vkCreateRenderPass(driver->device, &info, NULL, render_pass), "vkCreateRenderPass");
 }
 
-static int onix_vk_create_target_render_pass(OnixVkDriver *driver, uint32_t clear_flags, VkFormat color_format, int depth, VkRenderPass *render_pass) {
+static int onix_vk_create_target_render_pass(OnixGPUDriver *driver, uint32_t clear_flags, VkFormat color_format, int depth, VkRenderPass *render_pass) {
 	int clear_color = (clear_flags & 1u) != 0;
 	int clear_depth = (clear_flags & 2u) != 0;
 	VkAttachmentDescription attachments[] = {{
@@ -1357,17 +1376,17 @@ static int onix_vk_create_target_render_pass(OnixVkDriver *driver, uint32_t clea
 	return onix_vk_result(vkCreateRenderPass(driver->device, &info, NULL, render_pass), "vkCreateRenderPass(target)");
 }
 
-static int onix_vk_color_only(const OnixVkDriver *driver) {
+static int onix_vk_color_only(const OnixGPUDriver *driver) {
 	return driver->active_render_target == 0 ? driver->depth_framebuffers[driver->image_index] == VK_NULL_HANDLE
 		: driver->render_targets[driver->active_render_target - 1].depth_image == VK_NULL_HANDLE;
 }
 
-static VkRenderPass onix_vk_target_pass(OnixVkDriver *driver, const OnixVkRenderTarget *target, uint32_t clear_flags) {
+static VkRenderPass onix_vk_target_pass(OnixGPUDriver *driver, const OnixVkRenderTarget *target, uint32_t clear_flags) {
 	if (target->depth_image == VK_NULL_HANDLE) return driver->color_only_target_passes[target->color_format][clear_flags & 1u];
 	return target->color_format == 1 ? driver->picking_target_render_passes[clear_flags] : driver->target_render_passes[clear_flags];
 }
 
-static int onix_vk_create_render_pass(OnixVkDriver *driver) {
+static int onix_vk_create_render_pass(OnixGPUDriver *driver) {
 	if (!onix_vk_create_render_pass_with_load(
 		driver,
 		VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -1387,7 +1406,7 @@ static int onix_vk_create_render_pass(OnixVkDriver *driver) {
 	return 1;
 }
 
-static int onix_vk_create_framebuffers(OnixVkDriver *driver) {
+static int onix_vk_create_framebuffers(OnixGPUDriver *driver) {
 	for (uint32_t index = 0; index < driver->image_count; index++) {
 		VkFramebufferCreateInfo info = {
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -1404,7 +1423,7 @@ static int onix_vk_create_framebuffers(OnixVkDriver *driver) {
 }
 
 // Each swapchain image receives depth only on its first surface mesh draw.
-static int onix_vk_create_surface_depth(OnixVkDriver *driver) {
+static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
 	uint32_t index = driver->image_index;
 	if (driver->depth_framebuffers[index] != VK_NULL_HANDLE) return 1;
 	VkImageCreateInfo depth_image = {
@@ -1464,7 +1483,7 @@ fail:
 	return 0;
 }
 
-static VkShaderModule onix_vk_shader_module(OnixVkDriver *driver, OnixVkShader shader) {
+static VkShaderModule onix_vk_shader_module(OnixGPUDriver *driver, OnixGPUShader shader) {
     VkShaderModuleCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = shader.size,
@@ -1478,7 +1497,7 @@ static VkShaderModule onix_vk_shader_module(OnixVkDriver *driver, OnixVkShader s
 }
 
 static VkPipeline onix_vk_create_pipeline(
-    OnixVkDriver *driver,
+    OnixGPUDriver *driver,
     VkShaderModule vertex,
     VkShaderModule fragment,
     VkPipelineLayout layout,
@@ -1502,7 +1521,7 @@ static VkPipeline onix_vk_create_pipeline(
     };
     VkVertexInputBindingDescription sprite_bindings[] = {
         {.binding = 0, .stride = 20, .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
-        {.binding = 1, .stride = sizeof(OnixVkInstance), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
+        {.binding = 1, .stride = sizeof(OnixGPUInstance), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
     };
 	VkVertexInputAttributeDescription sprite_attributes[] = {
 		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0},
@@ -1524,7 +1543,7 @@ static VkPipeline onix_vk_create_pipeline(
 	}
 	VkVertexInputBindingDescription shape_bindings[] = {
 		{.binding = 0, .stride = 20, .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
-		{.binding = 1, .stride = sizeof(OnixVkShapeInstance), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
+		{.binding = 1, .stride = sizeof(OnixGPUShapeInstance), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
 	};
 	VkVertexInputAttributeDescription shape_attributes[] = {
 		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0},
@@ -1539,8 +1558,8 @@ static VkPipeline onix_vk_create_pipeline(
 		{.location = 9, .binding = 1, .format = VK_FORMAT_R32_UINT, .offset = 96},
 	};
 	VkVertexInputBindingDescription mesh_bindings[] = {
-		{.binding = 0, .stride = sizeof(OnixVkVertex3D), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
-		{.binding = 1, .stride = sizeof(OnixVkInstance3D), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
+		{.binding = 0, .stride = sizeof(OnixGPUVertex3D), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
+		{.binding = 1, .stride = sizeof(OnixGPUInstance3D), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE},
 	};
 	VkVertexInputAttributeDescription mesh_attributes[] = {
 		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0},
@@ -1689,9 +1708,9 @@ static VkPipeline onix_vk_create_pipeline(
 }
 
 static VkPipeline onix_vk_create_builtin_pipeline(
-	OnixVkDriver *driver,
-	OnixVkShader vertex_shader,
-	OnixVkShader fragment_shader,
+	OnixGPUDriver *driver,
+	OnixGPUShader vertex_shader,
+	OnixGPUShader fragment_shader,
 	VkPipelineLayout layout,
 	int kind) {
 	VkShaderModule vertex = onix_vk_shader_module(driver, vertex_shader);
@@ -1708,7 +1727,7 @@ static VkPipeline onix_vk_create_builtin_pipeline(
 	return pipeline;
 }
 
-static VkPipeline onix_vk_2d_pipeline(OnixVkDriver *driver, int kind, VkPipeline *normal) {
+static VkPipeline onix_vk_2d_pipeline(OnixGPUDriver *driver, int kind, VkPipeline *normal) {
 	VkPipeline *pipeline = onix_vk_color_only(driver) ? &driver->color_only_pipelines[kind] : normal;
 	if (*pipeline == VK_NULL_HANDLE) {
 		int shape = kind == 1 || kind == 3;
@@ -1721,17 +1740,17 @@ static VkPipeline onix_vk_2d_pipeline(OnixVkDriver *driver, int kind, VkPipeline
 	return *pipeline;
 }
 
-static int onix_vk_ensure_shape_pipeline(OnixVkDriver *driver) {
+static int onix_vk_ensure_shape_pipeline(OnixGPUDriver *driver) {
 	return onix_vk_2d_pipeline(driver, 1, &driver->shape_pipeline) != VK_NULL_HANDLE;
 }
 
-static int onix_vk_ensure_corner_mask_pipeline(OnixVkDriver *driver) {
+static int onix_vk_ensure_corner_mask_pipeline(OnixGPUDriver *driver) {
 	return onix_vk_2d_pipeline(driver, 3, &driver->corner_mask_pipeline) != VK_NULL_HANDLE;
 }
 
-static int onix_vk_ensure_mesh_resources(OnixVkDriver *driver);
+static int onix_vk_ensure_mesh_resources(OnixGPUDriver *driver);
 
-static int onix_vk_ensure_picking_pipeline(OnixVkDriver *driver) {
+static int onix_vk_ensure_picking_pipeline(OnixGPUDriver *driver) {
 	if (driver->mesh_picking_pipeline != VK_NULL_HANDLE) return 1;
 	if (!onix_vk_ensure_mesh_resources(driver)) return 0;
 	driver->mesh_picking_pipeline = onix_vk_create_builtin_pipeline(driver, driver->picking_vertex_shader,
@@ -1739,7 +1758,7 @@ static int onix_vk_ensure_picking_pipeline(OnixVkDriver *driver) {
 	return driver->mesh_picking_pipeline != VK_NULL_HANDLE;
 }
 
-static VkDescriptorSet onix_vk_deformation_descriptor(OnixVkDriver *driver, OnixVkFrame *frame) {
+static VkDescriptorSet onix_vk_deformation_descriptor(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	if (frame->deformation_set_index == ONIX_VK_DEFORMATION_SETS) {
 		onix_vk_set_error("Vulkan deformation descriptor capacity exceeded");
 		return VK_NULL_HANDLE;
@@ -1778,7 +1797,7 @@ static VkDescriptorSet onix_vk_deformation_descriptor(OnixVkDriver *driver, Onix
 }
 
 // The owning frame fence has completed; retained descriptor handles stay valid.
-static void onix_vk_reset_deformation_descriptors(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_reset_deformation_descriptors(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	uint32_t capacity = (frame->deformation_set_count + ONIX_VK_DEFORMATION_POOL_SETS - 1) & ~(ONIX_VK_DEFORMATION_POOL_SETS - 1);
 	uint64_t target = onix_buffer_trim_capacity(&frame->deformation_retention,
 		capacity, frame->deformation_set_index, ONIX_VK_DEFORMATION_POOL_SETS);
@@ -1823,15 +1842,15 @@ static int onix_vk_grow_surface_cache(OnixVkFrame *frame) {
 
 // Call after the owning frame fence. Descriptor handles in retained pools stay
 // valid; pools beyond the new table capacity own only unused tail entries.
-static void onix_vk_reset_surface_cache(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_reset_surface_cache(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	uint64_t target = onix_buffer_trim_capacity(&frame->surface_retention,
-		frame->surface_capacity, frame->surface_set_index, ONIX_VK_SURFACE_POOL_SETS);
+		frame->surface_capacity, frame->surface_set_index, ONIX_GPU_SURFACE_POOL_SETS);
 	frame->surface_set_index = 0;
 	if (target) {
-		uint32_t capacity = ONIX_VK_SURFACE_POOL_SETS;
+		uint32_t capacity = ONIX_GPU_SURFACE_POOL_SETS;
 		while (capacity < target) capacity *= 2;
 		if (onix_vk_resize_surface_cache(frame, capacity)) {
-			for (uint32_t pool = capacity / ONIX_VK_SURFACE_POOL_SETS; pool < ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS; pool++) {
+			for (uint32_t pool = capacity / ONIX_GPU_SURFACE_POOL_SETS; pool < ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS; pool++) {
 				if (frame->surface_pools[pool]) vkDestroyDescriptorPool(driver->device, frame->surface_pools[pool], NULL);
 				frame->surface_pools[pool] = VK_NULL_HANDLE;
 			}
@@ -1842,12 +1861,12 @@ static void onix_vk_reset_surface_cache(OnixVkDriver *driver, OnixVkFrame *frame
 	if (frame->surface_capacity) memset(frame->surface_buckets, 0, (size_t)frame->surface_capacity * 2 * sizeof(*frame->surface_buckets));
 }
 
-static VkDescriptorSet onix_vk_surface_descriptor(OnixVkDriver *driver, OnixVkFrame *frame, const OnixNativeMeshDraw3D *draw) {
-	uint32_t textures[ONIX_VK_SURFACE_TEXTURES];
+static VkDescriptorSet onix_vk_surface_descriptor(OnixGPUDriver *driver, OnixVkFrame *frame, const OnixNativeMeshDraw3D *draw) {
+	uint32_t textures[ONIX_GPU_SURFACE_TEXTURES];
 	uint64_t hash = UINT64_C(14695981039346656037);
 	// Texture views and samplers are immutable until retirement; slots are only
 	// recycled after the frame fence, when the cache is cleared.
-	for (uint32_t slot = 0; slot < ONIX_VK_SURFACE_TEXTURES; slot++) {
+	for (uint32_t slot = 0; slot < ONIX_GPU_SURFACE_TEXTURES; slot++) {
 		uint32_t id = slot == 0 ? draw->metallic_roughness_texture : draw->extra_textures[slot - 1];
 		if (id == 0) id = draw->texture;
 		if (id == 0 || id > driver->texture_slots.count || driver->textures[id - 1].image == VK_NULL_HANDLE || driver->textures[id - 1].destroy_pending) {
@@ -1872,7 +1891,7 @@ static VkDescriptorSet onix_vk_surface_descriptor(OnixVkDriver *driver, OnixVkFr
 		bucket = (bucket + 1) & mask;
 	}
 	// Look up before checking capacity: existing combinations still work at the limit.
-	if (frame->surface_set_index == ONIX_VK_SURFACE_SETS) {
+	if (frame->surface_set_index == ONIX_GPU_SURFACE_SETS) {
 		onix_vk_set_error("surface descriptor capacity exceeded");
 		return VK_NULL_HANDLE;
 	}
@@ -1884,12 +1903,12 @@ static VkDescriptorSet onix_vk_surface_descriptor(OnixVkDriver *driver, OnixVkFr
 	}
 	OnixVkSurfaceDescriptor *entry = &frame->surface_sets[frame->surface_set_index];
 	if (frame->surface_set_index == frame->surface_set_count) {
-		VkDescriptorPool *pool = &frame->surface_pools[frame->surface_set_count / ONIX_VK_SURFACE_POOL_SETS];
+		VkDescriptorPool *pool = &frame->surface_pools[frame->surface_set_count / ONIX_GPU_SURFACE_POOL_SETS];
 		if (*pool == VK_NULL_HANDLE) {
-			VkDescriptorPoolSize sizes[] = {{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = ONIX_VK_SURFACE_POOL_SETS * ONIX_VK_SURFACE_TEXTURES}, {.type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=ONIX_VK_SURFACE_POOL_SETS}};
+			VkDescriptorPoolSize sizes[] = {{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = ONIX_GPU_SURFACE_POOL_SETS * ONIX_GPU_SURFACE_TEXTURES}, {.type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=ONIX_GPU_SURFACE_POOL_SETS}};
 			VkDescriptorPoolCreateInfo create = {
 				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-				.maxSets = ONIX_VK_SURFACE_POOL_SETS,
+				.maxSets = ONIX_GPU_SURFACE_POOL_SETS,
 				.poolSizeCount = 2,
 				.pPoolSizes = sizes,
 			};
@@ -1904,16 +1923,16 @@ static VkDescriptorSet onix_vk_surface_descriptor(OnixVkDriver *driver, OnixVkFr
 		if (!onix_vk_result(vkAllocateDescriptorSets(driver->device, &allocate, &entry->descriptor), "vkAllocateDescriptorSets(surface)")) return VK_NULL_HANDLE;
 		frame->surface_set_count++;
 	}
-	VkDescriptorImageInfo images[ONIX_VK_SURFACE_TEXTURES];
-	VkWriteDescriptorSet writes[ONIX_VK_SURFACE_TEXTURES + 1];
-	for (uint32_t slot = 0; slot < ONIX_VK_SURFACE_TEXTURES; slot++) {
+	VkDescriptorImageInfo images[ONIX_GPU_SURFACE_TEXTURES];
+	VkWriteDescriptorSet writes[ONIX_GPU_SURFACE_TEXTURES + 1];
+	for (uint32_t slot = 0; slot < ONIX_GPU_SURFACE_TEXTURES; slot++) {
 		OnixVkTexture *source = &driver->textures[textures[slot] - 1];
 		images[slot] = (VkDescriptorImageInfo){.sampler = driver->texture_samplers[source->sampler_index], .imageView = source->view, .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 		writes[slot] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = entry->descriptor, .dstBinding = slot, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .pImageInfo = &images[slot]};
 	}
 	VkDescriptorBufferInfo static_info = {.buffer=static_mesh == 0 ? driver->empty_deformation_buffer : driver->meshes[static_mesh-1].deformation_buffer,.offset=static_mesh == 0 ? 0 : driver->meshes[static_mesh-1].deformation_offset,.range=static_mesh == 0 ? 4 : driver->meshes[static_mesh-1].deformation_size};
-	writes[ONIX_VK_SURFACE_TEXTURES] = (VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=entry->descriptor,.dstBinding=14,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&static_info};
-	vkUpdateDescriptorSets(driver->device, ONIX_VK_SURFACE_TEXTURES+1, writes, 0, NULL);
+	writes[ONIX_GPU_SURFACE_TEXTURES] = (VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=entry->descriptor,.dstBinding=14,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&static_info};
+	vkUpdateDescriptorSets(driver->device, ONIX_GPU_SURFACE_TEXTURES+1, writes, 0, NULL);
 	entry->static_mesh = static_mesh;
 	entry->hash = hash;
 	memcpy(entry->textures, textures, sizeof(textures));
@@ -1923,7 +1942,7 @@ static VkDescriptorSet onix_vk_surface_descriptor(OnixVkDriver *driver, OnixVkFr
 
 // Compile only the variant consumed by this draw. Guides, sky and unlit
 // sprites never pull the PBR lighting loops into their first pipeline.
-static VkPipeline onix_vk_mesh_pipeline(OnixVkDriver *driver, const OnixNativeMeshDraw3D *draw, const OnixVkInstance3D *instances, int pass) {
+static VkPipeline onix_vk_mesh_pipeline(OnixGPUDriver *driver, const OnixNativeMeshDraw3D *draw, const OnixGPUInstance3D *instances, int pass) {
     int variant = draw->shader ? ONIX_MESH_FULL : onix_mesh_builtin_variant(instances, draw->first_instance, draw->instance_count, pass);
     OnixVkMeshPipeline *variants = draw->shader ? &driver->mesh_pipelines[draw->shader - 1] : &driver->mesh_builtin[variant];
 	int kind = draw->alpha_mode == 2 ? 4 + (int)draw->blend_mode : driver->active_render_target == 0 ? 9 : 2;
@@ -1937,14 +1956,14 @@ static VkPipeline onix_vk_mesh_pipeline(OnixVkDriver *driver, const OnixNativeMe
 		*pipeline = draw->shader
 			? onix_vk_create_pipeline(driver, variants->vertex, variants->fragment, driver->mesh_layout, kind)
 			: onix_vk_create_builtin_pipeline(driver, driver->mesh_vertex_shader,
-				(OnixVkShader[]){driver->mesh_fragment_shader, driver->mesh_unlit_fragment_shader, driver->mesh_depth_fragment_shader, driver->mesh_basic_fragment_shader}[variant], driver->mesh_layout, kind);
+				(OnixGPUShader[]){driver->mesh_fragment_shader, driver->mesh_unlit_fragment_shader, driver->mesh_depth_fragment_shader, driver->mesh_basic_fragment_shader}[variant], driver->mesh_layout, kind);
 	}
 	return *pipeline;
 }
 
 // A 2D window never needs mesh layouts or the fallback deformation buffer.
 // Publish them together so a failed first use can be retried without leaks.
-static int onix_vk_ensure_mesh_resources(OnixVkDriver *driver) {
+static int onix_vk_ensure_mesh_resources(OnixGPUDriver *driver) {
 	if (driver->mesh_layout != VK_NULL_HANDLE) return 1;
 	VkDescriptorSetLayout deformation = VK_NULL_HANDLE, surface = VK_NULL_HANDLE;
 	VkBuffer empty_buffer = VK_NULL_HANDLE;
@@ -1972,7 +1991,7 @@ static int onix_vk_ensure_mesh_resources(OnixVkDriver *driver) {
 	if (!onix_vk_create_buffer(driver, 4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &empty_buffer, &empty_memory) || !onix_vk_upload_memory(driver, empty_memory, &empty_deformation, 4)) goto failed;
 	VkPushConstantRange mesh_push = {
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.size = sizeof(OnixVkMeshPush),
+		.size = sizeof(OnixGPUMeshPush),
 	};
 	VkPipelineLayoutCreateInfo mesh_layout = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1997,7 +2016,7 @@ failed:
 	return 0;
 }
 
-static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
+static int onix_vk_create_pipeline_resources(OnixGPUDriver *driver) {
 	VkPipelineCacheCreateInfo cache = {.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
 	if (!onix_vk_result(vkCreatePipelineCache(driver->device, &cache, NULL, &driver->pipeline_cache), "vkCreatePipelineCache")) return 0;
 	VkDescriptorSetLayoutBinding texture_bindings[] = {
@@ -2014,7 +2033,7 @@ static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
     VkPushConstantRange sprite_push = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
-        .size = sizeof(OnixVkSpritePush),
+        .size = sizeof(OnixGPUSpritePush),
     };
     VkPipelineLayoutCreateInfo sprite_layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -2039,11 +2058,11 @@ static int onix_vk_create_pipeline_resources(OnixVkDriver *driver) {
 	return 1;
 }
 
-const uint8_t *onix_vk_pipeline_cache_uuid(OnixVkDriver *driver) {
+const uint8_t *onix_gpu_pipeline_cache_uuid(OnixGPUDriver *driver) {
 	return driver->physical_device_properties.pipelineCacheUUID;
 }
 
-void onix_vk_load_pipeline_cache(OnixVkDriver *driver, const void *data, size_t size) {
+void onix_gpu_load_pipeline_cache(OnixGPUDriver *driver, const void *data, size_t size) {
 	// Vulkan requires initial data to match this device and driver. Validate the
 	// version-one header before passing a persisted blob to the implementation.
 	if (size < 32 || data == NULL) return;
@@ -2060,12 +2079,12 @@ void onix_vk_load_pipeline_cache(OnixVkDriver *driver, const void *data, size_t 
 	vkDestroyPipelineCache(driver->device, loaded, NULL);
 }
 
-size_t onix_vk_pipeline_cache_data(OnixVkDriver *driver, void *data, size_t size) {
+size_t onix_gpu_pipeline_cache_data(OnixGPUDriver *driver, void *data, size_t size) {
 	if (vkGetPipelineCacheData(driver->device, driver->pipeline_cache, &size, data) != VK_SUCCESS) return 0;
 	return size;
 }
 
-uint32_t onix_vk_create_mesh_shader(OnixVkDriver *driver, OnixVkShader vertex_shader, OnixVkShader fragment_shader) {
+uint32_t onix_gpu_create_mesh_shader(OnixGPUDriver *driver, OnixGPUShader vertex_shader, OnixGPUShader fragment_shader) {
 	if (driver == NULL || vertex_shader.code == NULL || vertex_shader.size == 0 || fragment_shader.code == NULL || fragment_shader.size == 0) {
 		onix_vk_set_error("invalid Vulkan mesh shader");
 		return 0;
@@ -2089,7 +2108,7 @@ uint32_t onix_vk_create_mesh_shader(OnixVkDriver *driver, OnixVkShader vertex_sh
 	return index + 1;
 }
 
-int onix_vk_destroy_mesh_shader(OnixVkDriver *driver, uint32_t shader) {
+int onix_gpu_destroy_mesh_shader(OnixGPUDriver *driver, uint32_t shader) {
 	if (driver == NULL || shader == 0 || shader > driver->mesh_shader_slots.count) {
 		onix_vk_set_error("invalid Vulkan mesh shader");
 		return 0;
@@ -2108,7 +2127,7 @@ int onix_vk_destroy_mesh_shader(OnixVkDriver *driver, uint32_t shader) {
 	return 1;
 }
 
-uint32_t onix_vk_create_material2d_shader(OnixVkDriver *driver, OnixVkShader vertex_shader, OnixVkShader fragment_shader) {
+uint32_t onix_gpu_create_material2d_shader(OnixGPUDriver *driver, OnixGPUShader vertex_shader, OnixGPUShader fragment_shader) {
 	if (driver == NULL || vertex_shader.code == NULL || vertex_shader.size == 0 || fragment_shader.code == NULL || fragment_shader.size == 0) {
 		onix_vk_set_error("invalid Vulkan Material2D shader");
 		return 0;
@@ -2132,7 +2151,7 @@ uint32_t onix_vk_create_material2d_shader(OnixVkDriver *driver, OnixVkShader ver
 	return index + 1;
 }
 
-int onix_vk_destroy_material2d_shader(OnixVkDriver *driver, uint32_t shader) {
+int onix_gpu_destroy_material2d_shader(OnixGPUDriver *driver, uint32_t shader) {
 	if (driver == NULL || shader == 0 || shader > driver->material2d_shader_slots.count) {
 		onix_vk_set_error("invalid Vulkan Material2D shader");
 		return 0;
@@ -2151,7 +2170,7 @@ int onix_vk_destroy_material2d_shader(OnixVkDriver *driver, uint32_t shader) {
 	return 1;
 }
 
-static int onix_vk_create_commands(OnixVkDriver *driver) {
+static int onix_vk_create_commands(OnixGPUDriver *driver) {
     VkCommandPoolCreateInfo pool = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -2187,7 +2206,7 @@ static int onix_vk_create_commands(OnixVkDriver *driver) {
 	return 1;
 }
 
-static int onix_vk_create_geometry(OnixVkDriver *driver) {
+static int onix_vk_create_geometry(OnixGPUDriver *driver) {
     const float vertices[] = {
         0, 0, 0, 0, 0,
         1, 0, 0, 1, 0,
@@ -2205,26 +2224,26 @@ static int onix_vk_create_geometry(OnixVkDriver *driver) {
     return 1;
 }
 
-OnixVkDriver *onix_vk_create(
-    OnixVkSurface surface,
-    OnixVkShader sprite_vertex,
-	OnixVkShader sprite_fragment,
-	OnixVkShader shape_vertex,
-	OnixVkShader shape_fragment,
-	OnixVkShader mesh_vertex,
-	OnixVkShader mesh_fragment,
-	OnixVkShader mesh_unlit_fragment,
-	OnixVkShader mesh_depth_fragment,
-	OnixVkShader mesh_basic_fragment,
-	OnixVkShader picking_vertex,
-	OnixVkShader picking_fragment) {
+OnixGPUDriver *onix_gpu_create(
+    OnixGPUSurface surface,
+    OnixGPUShader sprite_vertex,
+	OnixGPUShader sprite_fragment,
+	OnixGPUShader shape_vertex,
+	OnixGPUShader shape_fragment,
+	OnixGPUShader mesh_vertex,
+	OnixGPUShader mesh_fragment,
+	OnixGPUShader mesh_unlit_fragment,
+	OnixGPUShader mesh_depth_fragment,
+	OnixGPUShader mesh_basic_fragment,
+	OnixGPUShader picking_vertex,
+	OnixGPUShader picking_fragment) {
     onix_vk_error[0] = '\0';
 #if defined(_WIN32)
     if (!onix_vk_load_library()) {
         return NULL;
     }
 #endif
-    OnixVkDriver *driver = calloc(1, sizeof(OnixVkDriver));
+    OnixGPUDriver *driver = calloc(1, sizeof(OnixGPUDriver));
     if (driver == NULL) {
         onix_vk_set_error("failed to allocate Vulkan driver");
         return NULL;
@@ -2252,13 +2271,13 @@ OnixVkDriver *onix_vk_create(
         !onix_vk_create_pipeline_resources(driver) ||
         !onix_vk_create_commands(driver) ||
         !onix_vk_create_geometry(driver)) {
-        onix_vk_destroy(driver);
+        onix_gpu_destroy(driver);
         return NULL;
     }
     return driver;
 }
 
-static void onix_vk_destroy_buffer(OnixVkDriver *driver, VkBuffer *buffer, VkDeviceMemory *memory) {
+static void onix_vk_destroy_buffer(OnixGPUDriver *driver, VkBuffer *buffer, VkDeviceMemory *memory) {
     if (*buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(driver->device, *buffer, NULL);
         *buffer = VK_NULL_HANDLE;
@@ -2269,7 +2288,7 @@ static void onix_vk_destroy_buffer(OnixVkDriver *driver, VkBuffer *buffer, VkDev
     }
 }
 
-static int onix_vk_mesh_storage(OnixVkDriver *driver, VkDeviceSize size, OnixVkMeshLease *lease, VkBuffer *buffer, VkDeviceSize *offset, void **mapping) {
+static int onix_vk_mesh_storage(OnixGPUDriver *driver, VkDeviceSize size, OnixVkMeshLease *lease, VkBuffer *buffer, VkDeviceSize *offset, void **mapping) {
 	uint32_t available = driver->mesh_block_count;
 	for (uint32_t index = 0; index < driver->mesh_block_count; index++) {
 		OnixVkMeshBlock *block = &driver->mesh_blocks[index];
@@ -2320,7 +2339,7 @@ static int onix_vk_mesh_storage(OnixVkDriver *driver, VkDeviceSize size, OnixVkM
 
 // Retirement has already waited for the last frame using each lease. Keep one
 // small empty block warm, and release surplus empty arenas after sustained idle.
-static void onix_vk_trim_mesh_storage(OnixVkDriver *driver) {
+static void onix_vk_trim_mesh_storage(OnixGPUDriver *driver) {
 	int warm = 0;
 	for (uint32_t index = 0; index < driver->mesh_block_count; index++) {
 		OnixVkMeshBlock *block = &driver->mesh_blocks[index];
@@ -2336,20 +2355,20 @@ static void onix_vk_trim_mesh_storage(OnixVkDriver *driver) {
 	}
 }
 
-static void onix_vk_release_mesh(OnixVkDriver *driver, OnixVkMesh *mesh) {
+static void onix_vk_release_mesh(OnixGPUDriver *driver, OnixVkMesh *mesh) {
 	if (mesh == NULL) return;
 	if (mesh->geometry.node) onix_buddy_release(&driver->mesh_blocks[mesh->geometry.block].buddy, mesh->geometry.node);
 	if (mesh->deformation.node) onix_buddy_release(&driver->mesh_blocks[mesh->deformation.block].buddy, mesh->deformation.node);
 	*mesh = (OnixVkMesh){0};
 }
 
-static int onix_vk_acquire_mesh_slot(OnixVkDriver *driver, uint32_t *slot) {
+static int onix_vk_acquire_mesh_slot(OnixGPUDriver *driver, uint32_t *slot) {
 	if (onix_vk_meshes_acquire(&driver->meshes, &driver->mesh_slots, slot)) return 1;
 	onix_vk_set_error("failed to acquire Vulkan mesh slot");
 	return 0;
 }
 
-static void onix_vk_destroy_instance_buffers(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_destroy_instance_buffers(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	for (uint32_t index = 0; index < frame->instance_buffer_count; index++) {
 		OnixVkInstanceBuffer *buffer = &frame->instance_buffers[index];
         if (buffer->mapping != NULL) {
@@ -2367,7 +2386,7 @@ static void onix_vk_destroy_instance_buffers(OnixVkDriver *driver, OnixVkFrame *
 	frame->instance_table_retention = (OnixBufferRetention){0};
 }
 
-static void onix_vk_destroy_staging_buffers(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_destroy_staging_buffers(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	for (uint32_t index = 0; index < frame->staging_buffer_count; index++) {
 		OnixVkStagingBuffer *buffer = &frame->staging_buffers[index];
 		if (buffer->mapping != NULL) {
@@ -2393,7 +2412,7 @@ static VkDeviceSize onix_vk_staging_bytes_reserved(const OnixVkFrame *frame) {
 // Only called after the frame fence completes. Compact the pool in one pass,
 // retaining existing blocks that fit the budget; large blocks are recreated
 // lazily on demand rather than keeping a historical peak forever.
-static uint32_t onix_vk_trim_buffer_pool(OnixVkDriver *driver, OnixVkInstanceBuffer *buffers, uint32_t count, VkDeviceSize budget, VkDeviceSize *capacity) {
+static uint32_t onix_vk_trim_buffer_pool(OnixGPUDriver *driver, OnixVkInstanceBuffer *buffers, uint32_t count, VkDeviceSize budget, VkDeviceSize *capacity) {
 	VkDeviceSize retained = 0;
 	uint32_t keep = 0;
 	for (uint32_t index = 0; index < count; index++) {
@@ -2411,7 +2430,7 @@ static uint32_t onix_vk_trim_buffer_pool(OnixVkDriver *driver, OnixVkInstanceBuf
 	return keep;
 }
 
-static void onix_vk_trim_staging_buffers(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_trim_staging_buffers(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	VkDeviceSize budget = onix_buffer_trim_capacity(&frame->staging_retention,
 		frame->staging_capacity, frame->staging_reserved, ONIX_VK_STAGING_BUFFER_BLOCK_SIZE);
 	if (budget) {
@@ -2424,7 +2443,7 @@ static void onix_vk_trim_staging_buffers(OnixVkDriver *driver, OnixVkFrame *fram
 		frame->staging_buffer_count, sizeof(*frame->staging_buffers), 2, &frame->staging_table_retention);
 }
 
-static void onix_vk_trim_instance_buffers(OnixVkDriver *driver, OnixVkFrame *frame) {
+static void onix_vk_trim_instance_buffers(OnixGPUDriver *driver, OnixVkFrame *frame) {
 	VkDeviceSize budget = onix_buffer_trim_capacity(&frame->instance_retention,
 		frame->instance_capacity, frame->instance_bytes_used, ONIX_VK_INSTANCE_BUFFER_BLOCK_SIZE);
 	if (budget) {
@@ -2436,7 +2455,7 @@ static void onix_vk_trim_instance_buffers(OnixVkDriver *driver, OnixVkFrame *fra
 		frame->instance_buffer_count, sizeof(*frame->instance_buffers), 4, &frame->instance_table_retention);
 }
 
-static OnixVkInstanceBuffer *onix_vk_append_instance_buffer(OnixVkDriver *driver, OnixVkFrame *frame, VkDeviceSize required) {
+static OnixVkInstanceBuffer *onix_vk_append_instance_buffer(OnixGPUDriver *driver, OnixVkFrame *frame, VkDeviceSize required) {
 	if (frame->instance_buffer_count == frame->instance_buffer_capacity) {
 		uint32_t capacity = frame->instance_buffer_capacity == 0 ? 4 : frame->instance_buffer_capacity * 2;
 		OnixVkInstanceBuffer *buffers = realloc(frame->instance_buffers, capacity * sizeof(OnixVkInstanceBuffer));
@@ -2462,7 +2481,7 @@ static OnixVkInstanceBuffer *onix_vk_append_instance_buffer(OnixVkDriver *driver
 	return &frame->instance_buffers[frame->instance_buffer_count - 1];
 }
 
-static OnixVkInstanceBuffer *onix_vk_acquire_instance_buffer_aligned(OnixVkDriver *driver, VkDeviceSize size, VkDeviceSize alignment, VkDeviceSize *offset) {
+static OnixVkInstanceBuffer *onix_vk_acquire_instance_buffer_aligned(OnixGPUDriver *driver, VkDeviceSize size, VkDeviceSize alignment, VkDeviceSize *offset) {
 	OnixVkFrame *frame = &driver->frames[driver->frame_index];
 	if (alignment < 1) alignment = 1;
 	for (uint32_t index = frame->instance_buffer_index; index < frame->instance_buffer_count; index++) {
@@ -2486,7 +2505,7 @@ static OnixVkInstanceBuffer *onix_vk_acquire_instance_buffer_aligned(OnixVkDrive
     return buffer;
 }
 
-static OnixVkStagingBuffer *onix_vk_append_staging_buffer(OnixVkDriver *driver, OnixVkFrame *frame, VkDeviceSize required) {
+static OnixVkStagingBuffer *onix_vk_append_staging_buffer(OnixGPUDriver *driver, OnixVkFrame *frame, VkDeviceSize required) {
 	if (frame->staging_buffer_count == frame->staging_buffer_capacity) {
 		uint32_t capacity = frame->staging_buffer_capacity == 0 ? 2 : frame->staging_buffer_capacity * 2;
 		OnixVkStagingBuffer *buffers = realloc(frame->staging_buffers, capacity * sizeof(OnixVkStagingBuffer));
@@ -2512,7 +2531,7 @@ static OnixVkStagingBuffer *onix_vk_append_staging_buffer(OnixVkDriver *driver, 
 	return &frame->staging_buffers[frame->staging_buffer_count - 1];
 }
 
-static OnixVkStagingBuffer *onix_vk_acquire_staging_buffer(OnixVkDriver *driver, VkDeviceSize size, VkDeviceSize *offset) {
+static OnixVkStagingBuffer *onix_vk_acquire_staging_buffer(OnixGPUDriver *driver, VkDeviceSize size, VkDeviceSize *offset) {
 	OnixVkFrame *frame = &driver->frames[driver->frame_index];
 	if (!frame->staging_prepared) {
 		if (!onix_vk_result(vkWaitForFences(driver->device, 1, &frame->fence, VK_TRUE, UINT64_MAX), "vkWaitForFences(staging)")) return NULL;
@@ -2544,11 +2563,11 @@ static OnixVkStagingBuffer *onix_vk_acquire_staging_buffer(OnixVkDriver *driver,
 	return buffer;
 }
 
-static OnixVkInstanceBuffer *onix_vk_acquire_instance_buffer(OnixVkDriver *driver, VkDeviceSize size, VkDeviceSize *offset) {
+static OnixVkInstanceBuffer *onix_vk_acquire_instance_buffer(OnixGPUDriver *driver, VkDeviceSize size, VkDeviceSize *offset) {
 	return onix_vk_acquire_instance_buffer_aligned(driver, size, 16, offset);
 }
 
-static int onix_vk_mesh_upload(OnixVkDriver *driver, const void *data, VkDeviceSize size, VkDeviceSize alignment, int cached, OnixNativeUpload *upload) {
+static int onix_vk_mesh_upload(OnixGPUDriver *driver, const void *data, VkDeviceSize size, VkDeviceSize alignment, int cached, OnixNativeUpload *upload) {
 	if (size > SIZE_MAX) { onix_vk_set_error("Vulkan upload exceeds addressable memory"); return 0; }
 	OnixNativeUploadCache *cache = &driver->frames[driver->frame_index].mesh_uploads;
 	uint64_t hash = cached ? onix_upload_hash(data, (size_t)size) : 0;
@@ -2563,7 +2582,7 @@ static int onix_vk_mesh_upload(OnixVkDriver *driver, const void *data, VkDeviceS
 	return 1;
 }
 
-static int onix_vk_grow_uploads(OnixVkDriver *driver, uint32_t additional) {
+static int onix_vk_grow_uploads(OnixGPUDriver *driver, uint32_t additional) {
 	uint64_t required = (uint64_t)driver->upload_count + additional;
 	if (required <= driver->upload_capacity) {
 		return 1;
@@ -2594,7 +2613,7 @@ static int onix_vk_grow_uploads(OnixVkDriver *driver, uint32_t additional) {
 
 // Queue records contain indices, not pointers into this allocation. Observe the
 // largest queue since the previous frame, including queues already flushed.
-static void onix_vk_trim_uploads(OnixVkDriver *driver) {
+static void onix_vk_trim_uploads(OnixGPUDriver *driver) {
 	driver->uploads = onix_buffer_trim_array(driver->uploads, &driver->upload_capacity,
 		driver->upload_peak, sizeof(*driver->uploads), 32, &driver->upload_retention);
 	driver->upload_peak = driver->upload_count;
@@ -2602,7 +2621,7 @@ static void onix_vk_trim_uploads(OnixVkDriver *driver) {
 
 /* The encoded size of a format is driven by its texel block, not by a byte
  * count per pixel: block-compressed formats address 4x4 texel groups and round
- * partial groups up to a whole block. onix_vk_texture_chain_size is checked
+ * partial groups up to a whole block. onix_gpu_texture_chain_size is checked
  * against the Go side's render.TextureFormat.ChainSize by a test, so the two
  * implementations cannot drift apart. */
 typedef struct {
@@ -2654,11 +2673,11 @@ static uint32_t onix_vk_texture_mip_levels(uint32_t width, uint32_t height) {
 	return levels;
 }
 
-uint32_t onix_vk_texture_mip_level_count(uint32_t width, uint32_t height) {
+uint32_t onix_gpu_texture_mip_level_count(uint32_t width, uint32_t height) {
 	return onix_vk_texture_mip_levels(width, height);
 }
 
-uint64_t onix_vk_texture_chain_size(uint32_t format, uint32_t width, uint32_t height, uint32_t levels) {
+uint64_t onix_gpu_texture_chain_size(uint32_t format, uint32_t width, uint32_t height, uint32_t levels) {
 	if (width == 0 || height == 0) return 0;
 	uint32_t available = onix_vk_texture_mip_levels(width, height);
 	if (levels == 0) levels = 1;
@@ -2692,17 +2711,17 @@ static VkFormat onix_vk_texture_image_format(uint32_t format) {
 	}
 }
 
-static int onix_vk_submit_staging_burst(OnixVkDriver *driver);
+static int onix_vk_submit_staging_burst(OnixGPUDriver *driver);
 
 // Per-texture heads are one-based queue indices. Resetting the epoch expires all
 // heads at once; cancellation leaves holes so surviving uploads keep their order.
-static void onix_vk_reset_uploads(OnixVkDriver *driver) {
+static void onix_vk_reset_uploads(OnixGPUDriver *driver) {
 	driver->upload_count = 0;
 	driver->upload_live_count = 0;
 	driver->upload_epoch++;
 }
 
-static void onix_vk_append_texture_upload(OnixVkDriver *driver, OnixVkTexture *texture, OnixVkTextureUpload upload) {
+static void onix_vk_append_texture_upload(OnixGPUDriver *driver, OnixVkTexture *texture, OnixVkTextureUpload upload) {
 	if (texture->upload_epoch != driver->upload_epoch) {
 		texture->upload_epoch = driver->upload_epoch;
 		texture->upload_head = 0;
@@ -2715,7 +2734,7 @@ static void onix_vk_append_texture_upload(OnixVkDriver *driver, OnixVkTexture *t
 }
 
 static int onix_vk_enqueue_texture_upload(
-	OnixVkDriver *driver,
+	OnixGPUDriver *driver,
 	OnixVkTexture *texture,
 	int32_t x,
 	int32_t y,
@@ -2754,7 +2773,7 @@ static int onix_vk_enqueue_texture_upload(
 	return 1;
 }
 
-static void onix_vk_cancel_texture_uploads(OnixVkDriver *driver, OnixVkTexture *texture) {
+static void onix_vk_cancel_texture_uploads(OnixGPUDriver *driver, OnixVkTexture *texture) {
 	if (texture->upload_epoch != driver->upload_epoch) return;
 	while (texture->upload_head != 0) {
 		OnixVkTextureUpload *upload = &driver->uploads[texture->upload_head - 1];
@@ -2846,7 +2865,7 @@ static void onix_vk_record_texture_upload(
 		1);
 }
 
-static int onix_vk_flush_uploads(OnixVkDriver *driver) {
+static int onix_vk_flush_uploads(OnixGPUDriver *driver) {
 	if (driver->upload_count == 0) {
 		return 1;
 	}
@@ -2874,7 +2893,7 @@ static int onix_vk_flush_uploads(OnixVkDriver *driver) {
 // frame is begun, so without this the staging pool would hold the entire upload
 // volume as mapped host memory. Only transfer commands run here, so no swapchain
 // image is involved; the frame fence orders the copies before any later frame.
-static int onix_vk_submit_staging_burst(OnixVkDriver *driver) {
+static int onix_vk_submit_staging_burst(OnixGPUDriver *driver) {
 	if (driver->upload_count == 0 || driver->frame_active) {
 		return 1;
 	}
@@ -2921,7 +2940,7 @@ static int onix_vk_submit_staging_burst(OnixVkDriver *driver) {
 	return 1;
 }
 
-static void onix_vk_initialize_external_textures(OnixVkDriver *driver) {
+static void onix_vk_initialize_external_textures(OnixGPUDriver *driver) {
 	OnixVkFrame *frame = &driver->frames[driver->frame_index];
 	for (uint32_t index = 0; index < driver->pending_external_count; index++) {
 		OnixVkTexture *texture = &driver->textures[driver->pending_external[index]];
@@ -2945,7 +2964,7 @@ static void onix_vk_initialize_external_textures(OnixVkDriver *driver) {
 	driver->pending_external_count = 0;
 }
 
-static int onix_vk_prepare_draw(OnixVkDriver *driver) {
+static int onix_vk_prepare_draw(OnixGPUDriver *driver) {
 	if (driver == NULL || !driver->frame_active || !onix_vk_flush_uploads(driver)) {
 		return 0;
 	}
@@ -2981,7 +3000,7 @@ static int onix_vk_prepare_draw(OnixVkDriver *driver) {
 	return 1;
 }
 
-static int onix_vk_require_surface_depth(OnixVkDriver *driver) {
+static int onix_vk_require_surface_depth(OnixGPUDriver *driver) {
 	if (driver->active_render_target != 0 || driver->depth_framebuffers[driver->image_index] != VK_NULL_HANDLE) return 1;
 	if (!onix_vk_create_surface_depth(driver)) return 0;
 	VkCommandBuffer command = driver->frames[driver->frame_index].command_buffer;
@@ -3008,7 +3027,7 @@ static int onix_vk_require_surface_depth(OnixVkDriver *driver) {
 	return 1;
 }
 
-static void onix_vk_prepare_surface_depth(OnixVkDriver *driver) {
+static void onix_vk_prepare_surface_depth(OnixGPUDriver *driver) {
 	if (driver->active_render_target != 0 || driver->surface_depth_cleared) return;
 	VkClearAttachment attachment = {
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -3049,7 +3068,7 @@ static void onix_vk_pool_merge_ranges(OnixVkTexturePool *pool, uint32_t index) {
 }
 
 // onix_vk_create_texture_pool_block reserves one device-local block for leases.
-static int onix_vk_create_texture_pool_block(OnixVkDriver *driver, OnixVkTexturePool *pool, const VkMemoryRequirements *requirements) {
+static int onix_vk_create_texture_pool_block(OnixGPUDriver *driver, OnixVkTexturePool *pool, const VkMemoryRequirements *requirements) {
 	uint32_t memory_type = onix_vk_find_memory_type(driver, requirements->memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	if (memory_type == UINT32_MAX) return 0;
 	VkMemoryAllocateInfo allocation = {
@@ -3066,7 +3085,7 @@ static int onix_vk_create_texture_pool_block(OnixVkDriver *driver, OnixVkTexture
 // onix_vk_acquire_texture_pool leases a range for one image out of a shared
 // block; larger images keep their dedicated allocation.
 static int onix_vk_acquire_texture_pool(
-    OnixVkDriver *driver,
+    OnixGPUDriver *driver,
     const VkMemoryRequirements *requirements,
     uint32_t *lease,
     VkDeviceMemory *memory,
@@ -3106,7 +3125,7 @@ static int onix_vk_acquire_texture_pool(
 }
 
 // onix_vk_release_texture_pool returns a lease and drops a block once empty.
-static void onix_vk_release_texture_pool(OnixVkDriver *driver, uint32_t lease) {
+static void onix_vk_release_texture_pool(OnixGPUDriver *driver, uint32_t lease) {
 	uint32_t block = lease >> 16, index = (lease & 0xFFFFu) - 1;
 	if (block >= ONIX_VK_TEXTURE_POOL_BLOCKS || index >= ONIX_VK_TEXTURE_POOL_RANGES) return;
 	OnixVkTexturePool *pool = &driver->texture_pools[block];
@@ -3120,7 +3139,7 @@ static void onix_vk_release_texture_pool(OnixVkDriver *driver, uint32_t lease) {
 }
 
 // onix_vk_forget_texture_memory releases whatever owns the texture image.
-static void onix_vk_forget_texture_memory(OnixVkDriver *driver, OnixVkTexture *texture) {
+static void onix_vk_forget_texture_memory(OnixGPUDriver *driver, OnixVkTexture *texture) {
 	if (texture->pool != 0) {
 		onix_vk_release_texture_pool(driver, texture->pool);
 		return;
@@ -3128,7 +3147,7 @@ static void onix_vk_forget_texture_memory(OnixVkDriver *driver, OnixVkTexture *t
 	if (texture->memory != VK_NULL_HANDLE) vkFreeMemory(driver->device, texture->memory, NULL);
 }
 
-static void onix_vk_release_texture(OnixVkDriver *driver, OnixVkTexture *texture) {
+static void onix_vk_release_texture(OnixGPUDriver *driver, OnixVkTexture *texture) {
 	onix_vk_release_texture_descriptor(driver, texture);
     if (texture->view != VK_NULL_HANDLE) vkDestroyImageView(driver->device, texture->view, NULL);
     if (texture->image != VK_NULL_HANDLE) vkDestroyImage(driver->device, texture->image, NULL);
@@ -3136,7 +3155,7 @@ static void onix_vk_release_texture(OnixVkDriver *driver, OnixVkTexture *texture
     *texture = (OnixVkTexture){0};
 }
 
-static void onix_vk_release_retired_target(OnixVkDriver *driver, OnixVkRetiredRenderTarget *target) {
+static void onix_vk_release_retired_target(OnixGPUDriver *driver, OnixVkRetiredRenderTarget *target) {
 	if (target->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(driver->device, target->framebuffer, NULL);
 	if (target->depth_view != VK_NULL_HANDLE) vkDestroyImageView(driver->device, target->depth_view, NULL);
 	if (target->depth_image != VK_NULL_HANDLE) vkDestroyImage(driver->device, target->depth_image, NULL);
@@ -3144,7 +3163,7 @@ static void onix_vk_release_retired_target(OnixVkDriver *driver, OnixVkRetiredRe
 	*target = (OnixVkRetiredRenderTarget){0};
 }
 
-static void onix_vk_release_render_target_attachments(OnixVkDriver *driver, OnixVkRenderTarget *target) {
+static void onix_vk_release_render_target_attachments(OnixGPUDriver *driver, OnixVkRenderTarget *target) {
 	OnixVkRetiredRenderTarget retired = {
 		.framebuffer = target->framebuffer,
 		.depth_image = target->depth_image,
@@ -3158,7 +3177,7 @@ static void onix_vk_release_render_target_attachments(OnixVkDriver *driver, Onix
 	target->depth_memory = VK_NULL_HANDLE;
 }
 
-static void onix_vk_release_mesh_pipeline(OnixVkDriver *driver, OnixVkMeshPipeline *pipeline) {
+static void onix_vk_release_mesh_pipeline(OnixGPUDriver *driver, OnixVkMeshPipeline *pipeline) {
 	if (pipeline->opaque != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->opaque, NULL);
 	if (pipeline->opaque_surface != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->opaque_surface, NULL);
 	for (uint32_t blend = 0; blend < ONIX_MESH_BLEND_MODE_COUNT; blend++) {
@@ -3172,7 +3191,7 @@ static void onix_vk_release_mesh_pipeline(OnixVkDriver *driver, OnixVkMeshPipeli
 	*pipeline = (OnixVkMeshPipeline){0};
 }
 
-static void onix_vk_release_material2d_pipeline(OnixVkDriver *driver, OnixVkMaterial2DPipeline *pipeline) {
+static void onix_vk_release_material2d_pipeline(OnixGPUDriver *driver, OnixVkMaterial2DPipeline *pipeline) {
 	if (pipeline->pipeline != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->pipeline, NULL);
 	if (pipeline->color_only) vkDestroyPipeline(driver->device, pipeline->color_only, NULL);
 	if (pipeline->vertex) vkDestroyShaderModule(driver->device, pipeline->vertex, NULL);
@@ -3180,7 +3199,7 @@ static void onix_vk_release_material2d_pipeline(OnixVkDriver *driver, OnixVkMate
 	*pipeline = (OnixVkMaterial2DPipeline){0};
 }
 
-static void onix_vk_collect_resources(OnixVkDriver *driver, uint32_t frame_index) {
+static void onix_vk_collect_resources(OnixGPUDriver *driver, uint32_t frame_index) {
 	OnixVkFrame *frame = &driver->frames[frame_index];
 	for (uint32_t index = 0; index < frame->retired_target_count; index++) onix_vk_release_retired_target(driver, &frame->retired_targets[index]);
 	frame->retired_targets = onix_buffer_trim_array(frame->retired_targets, &frame->retired_target_capacity,
@@ -3222,7 +3241,7 @@ static void onix_vk_collect_resources(OnixVkDriver *driver, uint32_t frame_index
 	}
 }
 
-void onix_vk_destroy(OnixVkDriver *driver) {
+void onix_gpu_destroy(OnixGPUDriver *driver) {
     if (driver == NULL) {
         return;
     }
@@ -3261,7 +3280,7 @@ void onix_vk_destroy(OnixVkDriver *driver) {
 			free(frame->retired_targets);
 			free(frame->surface_sets);
 			free(frame->surface_buckets);
-			for (uint32_t pool = 0; pool < ONIX_VK_SURFACE_SETS / ONIX_VK_SURFACE_POOL_SETS; pool++) {
+			for (uint32_t pool = 0; pool < ONIX_GPU_SURFACE_SETS / ONIX_GPU_SURFACE_POOL_SETS; pool++) {
 				if (frame->surface_pools[pool] != VK_NULL_HANDLE) vkDestroyDescriptorPool(driver->device, frame->surface_pools[pool], NULL);
 			}
 			if (frame->fence != VK_NULL_HANDLE) vkDestroyFence(driver->device, frame->fence, NULL);
@@ -3341,7 +3360,7 @@ void onix_vk_destroy(OnixVkDriver *driver) {
 	free(driver);
 }
 
-int onix_vk_resize(OnixVkDriver *driver, uint32_t width, uint32_t height) {
+int onix_gpu_resize(OnixGPUDriver *driver, uint32_t width, uint32_t height) {
     if (driver == NULL || width == 0 || height == 0) {
         return 1;
     }
@@ -3356,7 +3375,7 @@ int onix_vk_resize(OnixVkDriver *driver, uint32_t width, uint32_t height) {
 }
 
 // Readback is synchronous, but a failed wait may leave a submission pending.
-static void onix_vk_trim_readback(OnixVkDriver *driver) {
+static void onix_vk_trim_readback(OnixGPUDriver *driver) {
 	if (driver->readback_pending) return;
 	if (onix_buffer_trim_capacity(&driver->readback_retention, driver->readback.capacity, driver->readback_used, 64u * 1024u)) {
 		onix_vk_retire_host_memory(driver, driver->readback.capacity);
@@ -3367,11 +3386,11 @@ static void onix_vk_trim_readback(OnixVkDriver *driver) {
 	driver->readback_used = 0;
 }
 
-int onix_vk_begin_frame(OnixVkDriver *driver, const float clear_color[4]) {
+int onix_gpu_begin_frame(OnixGPUDriver *driver, const float clear_color[4]) {
     if (driver == NULL || driver->frame_active) {
         return driver != NULL;
     }
-	if (driver->swapchain_dirty && !onix_vk_resize(driver, driver->native_surface.width, driver->native_surface.height)) {
+	if (driver->swapchain_dirty && !onix_gpu_resize(driver, driver->native_surface.width, driver->native_surface.height)) {
 		return 0;
 	}
 	OnixVkFrame *frame = &driver->frames[driver->frame_index];
@@ -3399,7 +3418,7 @@ int onix_vk_begin_frame(OnixVkDriver *driver, const float clear_color[4]) {
 	onix_vk_release_idle_host_memory(driver);
 	VkResult acquire = vkAcquireNextImageKHR(driver->device, driver->swapchain, UINT64_MAX, frame->image_available, VK_NULL_HANDLE, &driver->image_index);
     if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
-        if (!onix_vk_resize(driver, driver->native_surface.width, driver->native_surface.height)) {
+        if (!onix_gpu_resize(driver, driver->native_surface.width, driver->native_surface.height)) {
             return 0;
         }
 		acquire = vkAcquireNextImageKHR(driver->device, driver->swapchain, UINT64_MAX, frame->image_available, VK_NULL_HANDLE, &driver->image_index);
@@ -3427,7 +3446,7 @@ int onix_vk_begin_frame(OnixVkDriver *driver, const float clear_color[4]) {
     return 1;
 }
 
-void onix_vk_set_sprite_blend(OnixVkDriver *driver, int mode, float red, float green, float blue, float alpha) {
+void onix_gpu_set_sprite_blend(OnixGPUDriver *driver, int mode, float red, float green, float blue, float alpha) {
 	if (driver == NULL) return;
 	driver->sprite_blend = mode == 1;
 	driver->blend_constant[0] = red;
@@ -3436,7 +3455,7 @@ void onix_vk_set_sprite_blend(OnixVkDriver *driver, int mode, float red, float g
 	driver->blend_constant[3] = alpha;
 }
 
-void onix_vk_set_viewport(OnixVkDriver *driver, int32_t x, int32_t y, int32_t width, int32_t height) {
+void onix_gpu_set_viewport(OnixGPUDriver *driver, int32_t x, int32_t y, int32_t width, int32_t height) {
     if (driver == NULL || width <= 0 || height <= 0) {
         return;
     }
@@ -3446,7 +3465,7 @@ void onix_vk_set_viewport(OnixVkDriver *driver, int32_t x, int32_t y, int32_t wi
     driver->viewport_rect.extent.height = (uint32_t)height;
 }
 
-void onix_vk_set_scissor(OnixVkDriver *driver, int enabled, int32_t x, int32_t y, int32_t width, int32_t height) {
+void onix_gpu_set_scissor(OnixGPUDriver *driver, int enabled, int32_t x, int32_t y, int32_t width, int32_t height) {
     if (driver == NULL) {
         return;
     }
@@ -3459,7 +3478,7 @@ void onix_vk_set_scissor(OnixVkDriver *driver, int enabled, int32_t x, int32_t y
     }
 }
 
-void onix_vk_set_vsync(OnixVkDriver *driver, int enabled) {
+void onix_gpu_set_vsync(OnixGPUDriver *driver, int enabled) {
     if (driver == NULL || driver->vsync_enabled == (enabled != 0)) {
         return;
     }
@@ -3467,7 +3486,7 @@ void onix_vk_set_vsync(OnixVkDriver *driver, int enabled) {
     driver->swapchain_dirty = 1;
 }
 
-void onix_vk_set_corner_radius(OnixVkDriver *driver, int radius) {
+void onix_gpu_set_corner_radius(OnixGPUDriver *driver, int radius) {
 	if (driver == NULL) {
 		return;
 	}
@@ -3479,7 +3498,7 @@ void onix_vk_set_corner_radius(OnixVkDriver *driver, int radius) {
 	driver->swapchain_dirty = 1;
 }
 
-static int onix_vk_apply_corner_mask(OnixVkDriver *driver, VkCommandBuffer command_buffer) {
+static int onix_vk_apply_corner_mask(OnixGPUDriver *driver, VkCommandBuffer command_buffer) {
 	int radius = driver->corner_radius;
 	if (radius <= 0) {
 		return 1;
@@ -3490,7 +3509,7 @@ static int onix_vk_apply_corner_mask(OnixVkDriver *driver, VkCommandBuffer comma
 	}
 	if ((uint32_t)(radius * 2) > driver->extent.width) radius = (int)driver->extent.width / 2;
 	if ((uint32_t)(radius * 2) > driver->extent.height) radius = (int)driver->extent.height / 2;
-	OnixVkShapeInstance instance = {
+	OnixGPUShapeInstance instance = {
 		.model = {2, 0, -1, 0, 2, -1},
 		.local_model = {1, 0, 0, 0, 1, 0},
 		.fill = {1, 1, 1, 1},
@@ -3503,7 +3522,7 @@ static int onix_vk_apply_corner_mask(OnixVkDriver *driver, VkCommandBuffer comma
 		return 0;
 	}
 	memcpy((uint8_t *)instance_buffer->mapping + offset, &instance, sizeof(instance));
-	OnixVkSpritePush push = {.projection = {
+	OnixGPUSpritePush push = {.projection = {
 		1, 0, 0, 0,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
@@ -3531,7 +3550,7 @@ static int onix_vk_apply_corner_mask(OnixVkDriver *driver, VkCommandBuffer comma
 	return 1;
 }
 
-static void onix_vk_apply_dynamic_state(OnixVkDriver *driver) {
+static void onix_vk_apply_dynamic_state(OnixGPUDriver *driver) {
 	vkCmdSetBlendConstants(driver->frames[driver->frame_index].command_buffer, driver->blend_constant);
 	OnixVkFrame *frame = &driver->frames[driver->frame_index];
 	VkExtent2D extent = driver->extent;
@@ -3568,7 +3587,7 @@ static void onix_vk_apply_dynamic_state(OnixVkDriver *driver) {
 	vkCmdSetScissor(frame->command_buffer, 0, 1, &scissor);
 }
 
-int onix_vk_present(OnixVkDriver *driver) {
+int onix_gpu_present(OnixGPUDriver *driver) {
     if (driver == NULL || !driver->frame_active) {
         return driver != NULL;
 	}
@@ -3662,13 +3681,13 @@ int onix_vk_present(OnixVkDriver *driver) {
     return onix_vk_result(result, "vkQueuePresentKHR");
 }
 
-static int onix_vk_acquire_texture_slot(OnixVkDriver *driver, uint32_t *slot) {
+static int onix_vk_acquire_texture_slot(OnixGPUDriver *driver, uint32_t *slot) {
 	if (onix_vk_textures_acquire(&driver->textures, &driver->texture_slots, slot)) return 1;
 	onix_vk_set_error("failed to acquire Vulkan texture slot");
 	return 0;
 }
 
-static int onix_vk_ensure_texture_sampler(OnixVkDriver *driver, uint32_t index) {
+static int onix_vk_ensure_texture_sampler(OnixGPUDriver *driver, uint32_t index) {
 	if (driver->texture_samplers[index] != VK_NULL_HANDLE) return 1;
 	const VkSamplerAddressMode modes[] = {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
 	VkSamplerCreateInfo sampler = {
@@ -3684,7 +3703,7 @@ static int onix_vk_ensure_texture_sampler(OnixVkDriver *driver, uint32_t index) 
 	return onix_vk_result(vkCreateSampler(driver->device, &sampler, NULL, &driver->texture_samplers[index]), "vkCreateSampler");
 }
 
-static int onix_vk_create_texture_descriptor(OnixVkDriver *driver, OnixVkTexture *texture, VkFormat format) {
+static int onix_vk_create_texture_descriptor(OnixGPUDriver *driver, OnixVkTexture *texture, VkFormat format) {
 	if (!onix_vk_ensure_texture_sampler(driver, texture->sampler_index)) return 0;
     VkImageViewCreateInfo view = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -3720,7 +3739,7 @@ static int onix_vk_create_texture_descriptor(OnixVkDriver *driver, OnixVkTexture
     return 1;
 }
 
-uint32_t onix_vk_create_texture_with_format(OnixVkDriver *driver, uint32_t width, uint32_t height, uint32_t levels, uint32_t format, int mipmap, const uint8_t *pixels, size_t length, uint32_t wrap_u, uint32_t wrap_v) {
+uint32_t onix_gpu_create_texture_with_format(OnixGPUDriver *driver, uint32_t width, uint32_t height, uint32_t levels, uint32_t format, int mipmap, const uint8_t *pixels, size_t length, uint32_t wrap_u, uint32_t wrap_v) {
 	if (wrap_u > 2 || wrap_v > 2 || mipmap < 0 || mipmap > 1 || driver == NULL || pixels == NULL || width == 0 || height == 0 ||
 		format >= ONIX_TEXTURE_FORMAT_COUNT) {
 		onix_vk_set_error("invalid Vulkan texture data");
@@ -3734,7 +3753,7 @@ uint32_t onix_vk_create_texture_with_format(OnixVkDriver *driver, uint32_t width
 	}
 	/* A compressed payload carries every level; an uncompressed payload carries
 	 * the base level and the device blits the rest of the chain from it. */
-	size_t expected = (size_t)onix_vk_texture_chain_size(format, width, height, compressed ? levels : 1);
+	size_t expected = (size_t)onix_gpu_texture_chain_size(format, width, height, compressed ? levels : 1);
 	if (length != expected) {
 		onix_vk_set_error("invalid Vulkan texture data");
 		return 0;
@@ -3821,14 +3840,14 @@ uint32_t onix_vk_create_texture_with_format(OnixVkDriver *driver, uint32_t width
     return slot + 1;
 }
 
-static int onix_vk_acquire_render_target_slot(OnixVkDriver *driver, uint32_t *slot) {
+static int onix_vk_acquire_render_target_slot(OnixGPUDriver *driver, uint32_t *slot) {
 	if (onix_vk_targets_acquire(&driver->render_targets, &driver->target_slots, slot)) return 1;
 	onix_vk_set_error("failed to acquire Vulkan render_target slot");
 	return 0;
 }
 
 static int onix_vk_create_render_target_resources(
-	OnixVkDriver *driver,
+	OnixGPUDriver *driver,
 	uint32_t width,
 	uint32_t height,
 	uint32_t color_format,
@@ -3942,7 +3961,7 @@ static int onix_vk_create_render_target_resources(
 	return 1;
 }
 
-static int onix_vk_retire_render_target_attachments(OnixVkDriver *driver, OnixVkRenderTarget *target) {
+static int onix_vk_retire_render_target_attachments(OnixGPUDriver *driver, OnixVkRenderTarget *target) {
 	if (target->framebuffer == VK_NULL_HANDLE && target->depth_image == VK_NULL_HANDLE) return 1;
 	if (!driver->frame_active) {
 		onix_vk_release_render_target_attachments(driver, target);
@@ -3972,8 +3991,8 @@ static int onix_vk_retire_render_target_attachments(OnixVkDriver *driver, OnixVk
 	return 1;
 }
 
-uint32_t onix_vk_create_render_target(
-	OnixVkDriver *driver,
+uint32_t onix_gpu_create_render_target(
+	OnixGPUDriver *driver,
 	uint32_t width,
 	uint32_t height,
 	uint32_t color_format,
@@ -3992,8 +4011,8 @@ uint32_t onix_vk_create_render_target(
 	return slot + 1;
 }
 
-int onix_vk_resize_render_target(
-	OnixVkDriver *driver,
+int onix_gpu_resize_render_target(
+	OnixGPUDriver *driver,
 	uint32_t handle,
 	uint32_t width,
 	uint32_t height,
@@ -4017,7 +4036,7 @@ int onix_vk_resize_render_target(
 		onix_vk_release_render_target_attachments(driver, &replacement);
 		return 0;
 	}
-	if (!onix_vk_destroy_texture(driver, target->color_texture)) {
+	if (!onix_gpu_destroy_texture(driver, target->color_texture)) {
 		onix_vk_release_texture(driver, &driver->textures[replacement.color_texture - 1]);
 		onix_vk_textures_recycle(driver->textures, &driver->texture_slots, replacement.color_texture - 1);
 		onix_vk_release_render_target_attachments(driver, &replacement);
@@ -4028,7 +4047,7 @@ int onix_vk_resize_render_target(
 	return 1;
 }
 
-int onix_vk_destroy_render_target(OnixVkDriver *driver, uint32_t handle) {
+int onix_gpu_destroy_render_target(OnixGPUDriver *driver, uint32_t handle) {
 	if (driver == NULL || handle == 0 || handle > driver->target_slots.count || driver->active_render_target == handle) {
 		onix_vk_set_error("invalid Vulkan render target destruction");
 		return 0;
@@ -4038,7 +4057,7 @@ int onix_vk_destroy_render_target(OnixVkDriver *driver, uint32_t handle) {
 		onix_vk_set_error("Vulkan render target is already destroyed");
 		return 0;
 	}
-	if (!onix_vk_retire_render_target_attachments(driver, target) || !onix_vk_destroy_texture(driver, target->color_texture)) return 0;
+	if (!onix_vk_retire_render_target_attachments(driver, target) || !onix_gpu_destroy_texture(driver, target->color_texture)) return 0;
 	target->color_texture = 0;
 	target->destroy_pending = 1;
 	target->retire_frame = driver->frame_active
@@ -4049,8 +4068,8 @@ int onix_vk_destroy_render_target(OnixVkDriver *driver, uint32_t handle) {
 	return 1;
 }
 
-int onix_vk_begin_render_target(
-	OnixVkDriver *driver,
+int onix_gpu_begin_render_target(
+	OnixGPUDriver *driver,
 	uint32_t handle,
 	const float clear_color[4],
 	float clear_depth,
@@ -4093,7 +4112,7 @@ int onix_vk_begin_render_target(
 	return 1;
 }
 
-int onix_vk_end_render_target(OnixVkDriver *driver) {
+int onix_gpu_end_render_target(OnixGPUDriver *driver) {
 	if (driver == NULL || !driver->frame_active || !driver->render_pass_active || driver->active_render_target == 0) {
 		onix_vk_set_error("invalid Vulkan render target end");
 		return 0;
@@ -4105,7 +4124,7 @@ int onix_vk_end_render_target(OnixVkDriver *driver) {
 	return 1;
 }
 
-static int onix_vk_prepare_readback(OnixVkDriver *driver, VkDeviceSize size) {
+static int onix_vk_prepare_readback(OnixGPUDriver *driver, VkDeviceSize size) {
 	if (driver->readback_pending) {
 		if (!onix_vk_result(vkWaitForFences(driver->device, 1, &driver->readback_fence, VK_TRUE, UINT64_MAX), "vkWaitForFences(readback)")) return 0;
 		driver->readback_pending = 0;
@@ -4140,7 +4159,7 @@ static int onix_vk_prepare_readback(OnixVkDriver *driver, VkDeviceSize size) {
 	return onix_vk_result(vkResetCommandBuffer(driver->readback_command, 0), "vkResetCommandBuffer(readback)");
 }
 
-int onix_vk_read_render_target(OnixVkDriver *driver, uint32_t handle, int32_t x, int32_t y, uint32_t width, uint32_t height, uint8_t *destination, size_t length) {
+int onix_gpu_read_render_target(OnixGPUDriver *driver, uint32_t handle, int32_t x, int32_t y, uint32_t width, uint32_t height, uint8_t *destination, size_t length) {
 	if (driver == NULL || driver->frame_active || handle == 0 || handle > driver->target_slots.count || destination == NULL || width == 0 || height == 0 ||
 		length != (size_t)width * height * 4 || x < 0 || y < 0) {
 		onix_vk_set_error("invalid Vulkan render target readback");
@@ -4176,7 +4195,7 @@ int onix_vk_read_render_target(OnixVkDriver *driver, uint32_t handle, int32_t x,
 	return 1;
 }
 
-uint32_t onix_vk_create_external_d3d11_texture(OnixVkDriver *driver, uintptr_t handle, uint32_t width, uint32_t height) {
+uint32_t onix_gpu_create_external_d3d11_texture(OnixGPUDriver *driver, uintptr_t handle, uint32_t width, uint32_t height) {
 #if defined(_WIN32)
     if (driver == NULL || !driver->external_d3d11_supported || handle == 0 || width == 0 || height == 0) {
         onix_vk_set_error("Vulkan D3D11 external textures are unavailable");
@@ -4283,7 +4302,7 @@ uint32_t onix_vk_create_external_d3d11_texture(OnixVkDriver *driver, uintptr_t h
 #endif
 }
 
-uint32_t onix_vk_create_external_dmabuf_texture(OnixVkDriver *driver, int fd, uint32_t width, uint32_t height, uint32_t stride, uint32_t offset, uint64_t modifier) {
+uint32_t onix_gpu_create_external_dmabuf_texture(OnixGPUDriver *driver, int fd, uint32_t width, uint32_t height, uint32_t stride, uint32_t offset, uint64_t modifier) {
 #if defined(__linux__) && !defined(__ANDROID__)
     if (driver == NULL || !driver->external_dmabuf_supported || fd < 0 || width == 0 || height == 0 || stride < width * 4) {
         onix_vk_set_error("Vulkan DMA-BUF external textures are unavailable");
@@ -4367,7 +4386,7 @@ uint32_t onix_vk_create_external_dmabuf_texture(OnixVkDriver *driver, int fd, ui
 #endif
 }
 
-int onix_vk_refresh_external_texture(OnixVkDriver *driver, uint32_t handle) {
+int onix_gpu_refresh_external_texture(OnixGPUDriver *driver, uint32_t handle) {
     if (driver == NULL || handle == 0 || handle > driver->texture_slots.count) {
         onix_vk_set_error("invalid external Vulkan texture refresh");
         return 0;
@@ -4381,13 +4400,13 @@ int onix_vk_refresh_external_texture(OnixVkDriver *driver, uint32_t handle) {
     return 1;
 }
 
-static int onix_vk_validate_texture_updates(OnixVkDriver *driver, const OnixVkTextureUpdate *updates, uint32_t update_count, size_t length, int aligned) {
+static int onix_vk_validate_texture_updates(OnixGPUDriver *driver, const OnixGPUTextureUpdate *updates, uint32_t update_count, size_t length, int aligned) {
 	if (driver == NULL || updates == NULL || update_count == 0 || length == 0) {
 		onix_vk_set_error("invalid Vulkan texture updates");
 		return 0;
 	}
 	for (uint32_t index = 0; index < update_count; index++) {
-		const OnixVkTextureUpdate *update = &updates[index];
+		const OnixGPUTextureUpdate *update = &updates[index];
 		if (update->texture == 0 || update->texture > driver->texture_slots.count || update->x < 0 || update->y < 0 || update->width == 0 || update->height == 0 ||
 			update->data_offset > length || update->data_length > length - update->data_offset || (aligned && (update->data_offset & 3u) != 0)) {
 			onix_vk_set_error("invalid Vulkan texture update");
@@ -4412,7 +4431,7 @@ static int onix_vk_validate_texture_updates(OnixVkDriver *driver, const OnixVkTe
 	return 1;
 }
 
-uint8_t *onix_vk_prepare_texture_updates(OnixVkDriver *driver, const OnixVkTextureUpdate *updates, uint32_t update_count, size_t length) {
+uint8_t *onix_gpu_prepare_texture_updates(OnixGPUDriver *driver, const OnixGPUTextureUpdate *updates, uint32_t update_count, size_t length) {
 	if (!onix_vk_validate_texture_updates(driver, updates, update_count, length, 1)) return NULL;
 	// Reserve the entire queue before acquiring storage, so failure cannot leave
 	// pending uploads pointing at a batch Go has not filled yet.
@@ -4421,7 +4440,7 @@ uint8_t *onix_vk_prepare_texture_updates(OnixVkDriver *driver, const OnixVkTextu
 	OnixVkStagingBuffer *staging = onix_vk_acquire_staging_buffer(driver, length, &offset);
 	if (staging == NULL) return NULL;
 	for (uint32_t index = 0; index < update_count; index++) {
-		const OnixVkTextureUpdate *update = &updates[index];
+		const OnixGPUTextureUpdate *update = &updates[index];
 		OnixVkTexture *texture = &driver->textures[update->texture - 1];
 		onix_vk_append_texture_upload(driver, texture, (OnixVkTextureUpload){
 			.image = texture->image,
@@ -4440,7 +4459,7 @@ uint8_t *onix_vk_prepare_texture_updates(OnixVkDriver *driver, const OnixVkTextu
 	return (uint8_t *)staging->mapping + offset;
 }
 
-int onix_vk_commit_texture_updates(OnixVkDriver *driver) {
+int onix_gpu_commit_texture_updates(OnixGPUDriver *driver) {
 	if (driver == NULL) return 0;
 	if (!driver->frame_active && onix_vk_staging_bytes_reserved(&driver->frames[driver->frame_index]) >= ONIX_VK_STAGING_BURST_LIMIT) {
 		return onix_vk_submit_staging_burst(driver);
@@ -4448,14 +4467,14 @@ int onix_vk_commit_texture_updates(OnixVkDriver *driver) {
 	return 1;
 }
 
-int onix_vk_update_textures(OnixVkDriver *driver, const OnixVkTextureUpdate *updates, uint32_t update_count, const uint8_t *pixels, size_t length) {
+int onix_gpu_update_textures(OnixGPUDriver *driver, const OnixGPUTextureUpdate *updates, uint32_t update_count, const uint8_t *pixels, size_t length) {
 	if (pixels == NULL) {
 		onix_vk_set_error("invalid Vulkan texture update pixels");
 		return 0;
 	}
 	if (!onix_vk_validate_texture_updates(driver, updates, update_count, length, 0)) return 0;
 	for (uint32_t index = 0; index < update_count; index++) {
-		const OnixVkTextureUpdate *update = &updates[index];
+		const OnixGPUTextureUpdate *update = &updates[index];
 		OnixVkTexture *texture = &driver->textures[update->texture - 1];
 		if (!onix_vk_enqueue_texture_upload(
 			driver,
@@ -4475,7 +4494,7 @@ int onix_vk_update_textures(OnixVkDriver *driver, const OnixVkTextureUpdate *upd
 	return 1;
 }
 
-int onix_vk_destroy_texture(OnixVkDriver *driver, uint32_t handle) {
+int onix_gpu_destroy_texture(OnixGPUDriver *driver, uint32_t handle) {
 	if (driver == NULL || handle == 0 || handle > driver->texture_slots.count) {
 		onix_vk_set_error("invalid Vulkan texture destruction");
 		return 0;
@@ -4509,9 +4528,9 @@ int onix_vk_destroy_texture(OnixVkDriver *driver, uint32_t handle) {
 	return 1;
 }
 
-uint32_t onix_vk_create_mesh(
-	OnixVkDriver *driver,
-	const OnixVkVertex3D *vertices,
+uint32_t onix_gpu_create_mesh(
+	OnixGPUDriver *driver,
+	const OnixGPUVertex3D *vertices,
 	uint32_t vertex_count,
 	const uint32_t *indices,
 	uint32_t index_count) {
@@ -4522,7 +4541,7 @@ uint32_t onix_vk_create_mesh(
 	uint32_t slot;
 	if (!onix_vk_acquire_mesh_slot(driver, &slot)) return 0;
 	OnixVkMesh mesh = {.vertex_count = vertex_count, .index_count = index_count};
-	VkDeviceSize vertex_size = (VkDeviceSize)vertex_count * sizeof(OnixVkVertex3D);
+	VkDeviceSize vertex_size = (VkDeviceSize)vertex_count * sizeof(OnixGPUVertex3D);
 	VkDeviceSize index_size = (VkDeviceSize)index_count * sizeof(uint32_t);
 	VkDeviceSize index_base = (vertex_size + 15u) & ~(VkDeviceSize)15u;
 	if (index_base + index_size > SIZE_MAX) { onix_vk_set_error("Vulkan mesh exceeds addressable memory"); return 0; }
@@ -4537,7 +4556,7 @@ uint32_t onix_vk_create_mesh(
 	return slot + 1;
 }
 
-int onix_vk_set_mesh_deformation(OnixVkDriver *driver, uint32_t handle, const uint32_t *words, uint32_t word_count, uint32_t vertex_count) {
+int onix_gpu_set_mesh_deformation(OnixGPUDriver *driver, uint32_t handle, const uint32_t *words, uint32_t word_count, uint32_t vertex_count) {
 	if (driver == NULL || handle == 0 || handle > driver->mesh_slots.count || words == NULL || word_count == 0) { onix_vk_set_error("invalid static mesh deformation"); return 0; }
 	OnixVkMesh *mesh = &driver->meshes[handle-1];
 	VkDeviceSize bytes = (VkDeviceSize)word_count * 4;
@@ -4549,7 +4568,7 @@ int onix_vk_set_mesh_deformation(OnixVkDriver *driver, uint32_t handle, const ui
 	return 1;
 }
 
-int onix_vk_destroy_mesh(OnixVkDriver *driver, uint32_t handle) {
+int onix_gpu_destroy_mesh(OnixGPUDriver *driver, uint32_t handle) {
 	if (driver == NULL || handle == 0 || handle > driver->mesh_slots.count) {
 		onix_vk_set_error("invalid Vulkan mesh destruction");
 		return 0;
@@ -4568,10 +4587,10 @@ int onix_vk_destroy_mesh(OnixVkDriver *driver, uint32_t handle) {
 	return 1;
 }
 
-int onix_vk_draw_sprites(
-	OnixVkDriver *driver,
-	const OnixVkSpritePush *push,
-	const OnixVkInstance *instances,
+int onix_gpu_draw_sprites(
+	OnixGPUDriver *driver,
+	const OnixGPUSpritePush *push,
+	const OnixGPUInstance *instances,
 	uint32_t instance_count,
 	const OnixNativeSpriteDraw *draws,
 	uint32_t draw_count) {
@@ -4658,10 +4677,10 @@ int onix_vk_draw_sprites(
 	return 1;
 }
 
-int onix_vk_draw_shapes(
-	OnixVkDriver *driver,
-	const OnixVkSpritePush *push,
-	const OnixVkShapeInstance *instances,
+int onix_gpu_draw_shapes(
+	OnixGPUDriver *driver,
+	const OnixGPUSpritePush *push,
+	const OnixGPUShapeInstance *instances,
 	uint32_t instance_count) {
 	if (driver == NULL || !driver->frame_active || push == NULL || instances == NULL || instance_count == 0) {
 		onix_vk_set_error("invalid Vulkan shape draw");
@@ -4673,7 +4692,7 @@ int onix_vk_draw_shapes(
 	if (!onix_vk_prepare_draw(driver)) {
 		return 0;
 	}
-	VkDeviceSize size = (VkDeviceSize)instance_count * sizeof(OnixVkShapeInstance);
+	VkDeviceSize size = (VkDeviceSize)instance_count * sizeof(OnixGPUShapeInstance);
 	VkDeviceSize offset;
 	OnixVkInstanceBuffer *instance_buffer = onix_vk_acquire_instance_buffer(driver, size, &offset);
 	if (instance_buffer == NULL) {
@@ -4702,14 +4721,14 @@ int onix_vk_draw_shapes(
 	return 1;
 }
 
-int onix_vk_draw_meshes(
-	OnixVkDriver *driver,
-	const OnixVkMeshPush *push,
-	const OnixVkVertex3D *vertices,
+int onix_gpu_draw_meshes(
+	OnixGPUDriver *driver,
+	const OnixGPUMeshPush *push,
+	const OnixGPUVertex3D *vertices,
 	uint32_t vertex_count,
 	const uint32_t *indices,
 	uint32_t index_count,
-	const OnixVkInstance3D *instances,
+	const OnixGPUInstance3D *instances,
 	uint32_t instance_count,
 	const uint32_t *deformation_words,
 	uint32_t deformation_word_count,
@@ -4756,14 +4775,14 @@ int onix_vk_draw_meshes(
 		.pBufferInfo = &deformation_info,
 	};
 	VkDeviceSize lighting_offset;
-	OnixVkInstanceBuffer *lighting_buffer = onix_vk_acquire_instance_buffer_aligned(driver, ONIX_VK_MESH_LIGHTING_BYTES, driver->physical_device_properties.limits.minUniformBufferOffsetAlignment, &lighting_offset);
+	OnixVkInstanceBuffer *lighting_buffer = onix_vk_acquire_instance_buffer_aligned(driver, ONIX_GPU_MESH_LIGHTING_BYTES, driver->physical_device_properties.limits.minUniformBufferOffsetAlignment, &lighting_offset);
 	if (lighting_buffer == NULL) return 0;
 	float *lighting_dst = (float *)((uint8_t *)lighting_buffer->mapping + lighting_offset);
-	if (lighting != NULL) memcpy(lighting_dst, lighting, ONIX_VK_MESH_LIGHTING_BYTES);
-	else { memset(lighting_dst, 0, ONIX_VK_MESH_LIGHTING_BYTES); memcpy(lighting_dst, push, sizeof(*push)); }
+	if (lighting != NULL) memcpy(lighting_dst, lighting, ONIX_GPU_MESH_LIGHTING_BYTES);
+	else { memset(lighting_dst, 0, ONIX_GPU_MESH_LIGHTING_BYTES); memcpy(lighting_dst, push, sizeof(*push)); }
 	// Both surfaces use the vertex shader's Y flip and the same front face.
 	lighting_dst[299] = 0.0f;
-	VkDescriptorBufferInfo lighting_info = {.buffer=lighting_buffer->buffer,.offset=lighting_offset,.range=ONIX_VK_MESH_LIGHTING_BYTES};
+	VkDescriptorBufferInfo lighting_info = {.buffer=lighting_buffer->buffer,.offset=lighting_offset,.range=ONIX_GPU_MESH_LIGHTING_BYTES};
 	VkWriteDescriptorSet lighting_write = {.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=deformation_descriptor,.dstBinding=1,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,.pBufferInfo=&lighting_info};
 	VkWriteDescriptorSet writes[] = {deformation_write, lighting_write};
 	vkUpdateDescriptorSets(driver->device, 2, writes, 0, NULL);
@@ -4827,7 +4846,7 @@ int onix_vk_draw_meshes(
 			vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, driver->mesh_layout, 0, 4, descriptors, 0, NULL);
 			memcpy(bound_descriptors, descriptors, sizeof(descriptors));
 		}
-		OnixVkMeshPush draw_push = *push;
+		OnixGPUMeshPush draw_push = *push;
 		if (draw->deformation_index != 0) draw_push.directional_light[3] = -(float)draw->deformation_index;
 		vkCmdPushConstants(command_buffer, driver->mesh_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(draw_push), &draw_push);
 		vkCmdDrawIndexed(command_buffer, draw->index_count, draw->instance_count, draw->first_index, draw->base_vertex, draw->first_instance);
@@ -4836,14 +4855,14 @@ int onix_vk_draw_meshes(
 	return 1;
 }
 
-int onix_vk_draw_mesh_picking(
-	OnixVkDriver *driver,
-	const OnixVkMeshPush *push,
-	const OnixVkVertex3D *vertices,
+int onix_gpu_draw_mesh_picking(
+	OnixGPUDriver *driver,
+	const OnixGPUMeshPush *push,
+	const OnixGPUVertex3D *vertices,
 	uint32_t vertex_count,
 	const uint32_t *indices,
 	uint32_t index_count,
-	const OnixVkInstance3D *instances,
+	const OnixGPUInstance3D *instances,
 	uint32_t instance_count,
 	const OnixNativeMeshDraw3D *draws,
 	uint32_t draw_count) {
