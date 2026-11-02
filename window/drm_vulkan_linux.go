@@ -1,4 +1,4 @@
-//go:build linux && cgo && onix_drm && !onix_opengl
+//go:build linux && cgo && onix_drm && onix_vulkan && !onix_opengl
 
 package window
 

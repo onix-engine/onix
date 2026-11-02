@@ -1,0 +1,9 @@
+{
+  "scopeName": "text.vim-help",
+  "patterns": [
+    {"match": "\\*[^\\s*]+\\*", "name": "entity.name.tag.vim-help"},
+    {"match": "\\|[^\\s|]+\\|", "name": "markup.underline.link.vim-help"},
+    {"match": "^[A-Z][A-Z0-9 ._-]+$", "name": "markup.heading.vim-help"},
+    {"begin": ">\\s*$", "end": "^(?=\\S)", "name": "markup.raw.block.vim-help"}
+  ]
+}

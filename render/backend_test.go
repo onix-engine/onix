@@ -8,6 +8,11 @@ import (
 )
 
 func TestBackendBuildIsolation(t *testing.T) {
+	for platform, want := range map[string]Backend{"linux": BackendOpenGL, "android": BackendVulkan} {
+		if got, err := ResolveBackend(platform, ""); err != nil || got != want {
+			t.Fatalf("%s default = %s, %v; want %s", platform, got, err, want)
+		}
+	}
 	implementations := map[Backend]string{
 		BackendDirectX: "directx_native.c", BackendMetal: "metal_native.m",
 		BackendVulkan: "vulkan_native.c", BackendOpenGL: "opengles.go",
@@ -57,6 +62,24 @@ func TestBackendBuildIsolation(t *testing.T) {
 							backend != BackendOpenGL && backend != BackendWebGL && strings.Contains(pattern, "gles_") ||
 							backend != BackendWebGPU && strings.HasSuffix(pattern, ".wgsl") {
 							t.Errorf("unselected shader embedded: %s", pattern)
+						}
+					}
+					if platform == "linux" {
+						for _, drm := range []bool{false, true} {
+							windowContext := context
+							if drm {
+								windowContext.BuildTags = append(slices.Clone(context.BuildTags), "onix_drm")
+							}
+							for file, want := range map[string]bool{
+								"render_opengl_native.go": backend == BackendOpenGL && !drm,
+								"render_vulkan_native.go": backend == BackendVulkan && !drm,
+								"drm_gles_linux.go":       backend == BackendOpenGL && drm,
+								"drm_vulkan_linux.go":     backend == BackendVulkan && drm,
+							} {
+								if got, err := windowContext.MatchFile("../window", file); err != nil || got != want {
+									t.Errorf("%s drm=%v: included=%v, error=%v; want %v", file, drm, got, err, want)
+								}
+							}
 						}
 					}
 					if slices.Contains(files, "directx_composition.cc") != (backend == BackendDirectX) {

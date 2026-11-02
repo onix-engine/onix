@@ -244,6 +244,14 @@ static inline GLint onix_call_glGetUniformLocation(GLuint program, const GLchar 
 extern PFNGLLINKPROGRAMPROC onix_ptr_glLinkProgram;
 static inline void onix_call_glLinkProgram(GLuint program) { onix_ptr_glLinkProgram(program); }
 #define glLinkProgram onix_call_glLinkProgram
+extern PFNGLMAPBUFFERRANGEPROC onix_ptr_glMapBufferRange;
+static inline void *onix_call_glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) {
+    return onix_ptr_glMapBufferRange(target, offset, length, access);
+}
+#define glMapBufferRange onix_call_glMapBufferRange
+extern PFNGLUNMAPBUFFERPROC onix_ptr_glUnmapBuffer;
+static inline GLboolean onix_call_glUnmapBuffer(GLenum target) { return onix_ptr_glUnmapBuffer(target); }
+#define glUnmapBuffer onix_call_glUnmapBuffer
 extern PFNGLPIXELSTOREIPROC onix_ptr_glPixelStorei;
 static inline void onix_call_glPixelStorei(GLenum pname, GLint param) { onix_ptr_glPixelStorei(pname, param); }
 #define glPixelStorei onix_call_glPixelStorei

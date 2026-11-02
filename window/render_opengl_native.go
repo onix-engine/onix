@@ -1,4 +1,4 @@
-//go:build cgo && onix_opengl && !android && !ios && !onix_drm && (windows || linux)
+//go:build cgo && (onix_opengl || (linux && !android && !onix_vulkan)) && !android && !ios && !onix_drm && (windows || linux)
 
 package window
 

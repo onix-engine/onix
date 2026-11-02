@@ -12,10 +12,10 @@ func TestDocumentPlainTextTransitions(t *testing.T) {
 		}
 		tokens := document.Tokens(theme, nil)
 		if filename == "main.go" {
-			if document.Language() != "go" || document.Tree() == nil || len(tokens) == 0 {
+			if document.Language() != "go" || document.grammar == nil || len(tokens) == 0 {
 				t.Fatalf("Go parsing was not restored after plain text: %s", filename)
 			}
-		} else if document.Language() != "" || document.Tree() != nil || document.highlighter != nil || len(tokens) != 0 {
+		} else if document.Language() != "" || document.grammar != nil || len(document.lines) != 0 || len(tokens) != 0 {
 			t.Fatalf("plain text retained a parser or highlights: %s", filename)
 		}
 	}
@@ -32,7 +32,7 @@ func TestDocumentNamedTextLanguages(t *testing.T) {
 			if err := document.Update(fixture.filename, fixture.source); err != nil {
 				t.Fatal(err)
 			}
-			if document.Language() != fixture.language || document.Tree() == nil {
+			if document.Language() != fixture.language || document.grammar == nil {
 				t.Fatalf("named language %s lost its grammar", fixture.filename)
 			}
 		})

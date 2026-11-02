@@ -39,8 +39,8 @@ func TestDocumentLanguages(t *testing.T) {
 			if err := document.Update(fixture.name, fixture.source); err != nil {
 				t.Fatal(err)
 			}
-			if document.Tree() == nil || document.Tree().RootNode() == nil {
-				t.Fatal("language did not produce an AST")
+			if document.grammar == nil || len(document.lines) == 0 {
+				t.Fatal("language did not produce lexical states")
 			}
 			tokens := document.Tokens(theme, nil)
 			position := strings.Index(fixture.source, fixture.colored)
@@ -102,22 +102,22 @@ func TestDocumentSwitchReusesLanguageAndMatchesFreshParse(t *testing.T) {
 		{"notes.unknown", "plain text"},
 		{"again.go", "package again\nvar Value = 3\n"},
 	} {
-		previous, language := document.highlighter, document.Language()
+		previous, language := document.grammar, document.Language()
 		if err := document.Update(fixture.name, fixture.source); err != nil {
 			t.Fatal(err)
 		}
-		if language == document.Language() && previous != nil && previous != document.highlighter {
+		if language == document.Language() && previous != nil && previous != document.grammar {
 			t.Fatal("switching files recreated the same language's highlighter")
 		}
 		var fresh Document
 		if err := fresh.Update(fixture.name, fixture.source); err != nil {
 			t.Fatal(err)
 		}
-		if actual, expected := document.Tokens(theme, nil), fresh.Tokens(theme, nil); !slices.Equal(actual, expected) || document.rootScope != fresh.rootScope {
+		if actual, expected := document.Tokens(theme, nil), fresh.Tokens(theme, nil); !slices.Equal(actual, expected) {
 			t.Fatalf("switching to %s changed syntax colors or scopes", fixture.name)
 		}
 		fresh.Close()
-		ReleaseParserMemory()
+		ReleaseGrammarCache()
 	}
 	document.Close()
 	document.Close()
@@ -133,9 +133,9 @@ func TestDocumentCacheAndThemeSwitch(t *testing.T) {
 	monokai := testTheme(t, "monokai")
 	dark := testTheme(t, "dark-plus")
 	first := append([]Token(nil), document.Tokens(monokai, nil)...)
-	tree := document.Tree()
+	captures := &document.Captures()[0]
 	second := document.Tokens(dark, nil)
-	if document.Tree() != tree || slices.Equal(first, second) {
+	if &document.Captures()[0] != captures || slices.Equal(first, second) {
 		t.Fatal("theme switch reparsed the document or did not recolor tokens")
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
@@ -149,8 +149,8 @@ func TestDocumentCacheAndThemeSwitch(t *testing.T) {
 	if err := document.Update("notes.unknown", source); err != nil {
 		t.Fatal(err)
 	}
-	if document.Tree() != nil || len(document.Tokens(dark, nil)) != 0 {
-		t.Fatal("unknown language retained the previous file's tree or colors")
+	if document.grammar != nil || len(document.Tokens(dark, nil)) != 0 {
+		t.Fatal("unknown language retained the previous file's lexical state or colors")
 	}
 }
 
@@ -209,7 +209,7 @@ func TestContextualCapturesOverrideGenericIdentifiers(t *testing.T) {
 	}
 	tokens := document.Tokens(testTheme(t, "monokai"), nil)
 	for _, fixture := range []struct{ word, capture string }{
-		{"greet", "function"}, {"world", "variable"}, {"Spawn", "function.method"}, {"println", "function.builtin"},
+		{"greet", "function"}, {"world", "variable"}, {"Spawn", "function"}, {"println", "function"},
 	} {
 		position := strings.Index(source, fixture.word)
 		found := false

@@ -1,5 +1,5 @@
-// Package syntax parses code with gotreesitter and colors its captures with
-// VS Code color themes. Documents retain their trees and highlight buffers.
+// Package syntax incrementally tokenizes TextMate grammars and colors their
+// scopes with VS Code themes. Documents retain line states and token buffers.
 package syntax
 
 import (

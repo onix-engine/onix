@@ -5,6 +5,10 @@ github.com/ebitengine/oto/v3 v3.5.1 h1:7gL5DxxSQp8S1Me2jDSp+gSAyondYxpjM5RPBBqLT
 github.com/ebitengine/oto/v3 v3.5.1/go.mod h1:Elkm7yzTRns3w2efvibzVOoQ65YOwmec9a76dCiK10o=
 github.com/ebitengine/purego v0.11.2 h1:WWiTx8rD8zYdOwSj8O/NiNbsOvSAgJMTlyV1XlbUSeU=
 github.com/ebitengine/purego v0.11.2/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
+github.com/eugenioenko/regexp2/v2 v2.8.2 h1:FK5xiQNuz6TCgNeMXGGIUfH89ZJ2pxmu9n8qvT9v0XQ=
+github.com/eugenioenko/regexp2/v2 v2.8.2/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
+github.com/eugenioenko/textmate-go v0.2.2 h1:IFdXOZcY4GHFm4JDERuOfyS+UqZJY9DzSBIMK9Mhdjk=
+github.com/eugenioenko/textmate-go v0.2.2/go.mod h1:cYY9RpILD0oRBWCBIW1Z9GMlv0GAGvSdvv/iRvnkiNM=
 github.com/ftrvxmtrx/tga v0.0.0-20150524081124-bd8e8d5be13a/go.mod h1:US5WvgEHtG+BvWNNs6gk937h0QL2g2x+r7RH8m3g80Y=
 github.com/go-gl/mathgl v1.2.0 h1:v2eOj/y1B2afDxF6URV1qCYmo1KW08lAMtTbOn3KXCY=
 github.com/go-gl/mathgl v1.2.0/go.mod h1:pf9+b5J3LFP7iZ4XXaVzZrCle0Q/vNpB/vDe5+3ulRE=
@@ -35,8 +39,6 @@ github.com/mewkiz/pkg v0.0.0-20260703220044-4fb89b18cc87 h1:fpWNLIg7nX2f+D+6ZveQ
 github.com/mewkiz/pkg v0.0.0-20260703220044-4fb89b18cc87/go.mod h1:wohiqwTwXA5twjDES74xIJLGjAxo3/0pHSbTXLbSDW8=
 github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 h1:h8O1byDZ1uk6RUXMhj1QJU3VXFKXHDZxr4TXRPGeBa8=
 github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985/go.mod h1:uiPmbdUbdt1NkGApKl7htQjZ8S7XaGUAVulJUJ9v6q4=
-github.com/odvcencio/gotreesitter v0.56.0 h1:2cyxAbG9yAMs1d8xTAxq3HWrKh8m7mi7pAjRBZd1Pp8=
-github.com/odvcencio/gotreesitter v0.56.0/go.mod h1:hBVkghd0paaYAVwd2087vfwdeU984bQbMo9LvpE0moo=
 github.com/oov/psd v0.0.0-20160830175917-fe6d1f744881/go.mod h1:GHI1bnmAcbp96z6LNfBJvtrjxhaXGkbsk967utPlvL8=
 github.com/qmuntal/gltf v0.21.0/go.mod h1:7FR0CRHoOehIgKTBVq/QVyvPn0i6tzp2AdIghb2bPg4=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=

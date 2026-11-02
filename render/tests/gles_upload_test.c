@@ -6,6 +6,7 @@
 #include <string.h>
 
 static size_t allocations, storage_calls, upload_calls;
+static uintptr_t upload_offset;
 static int fail_reallocation;
 static void require(int success, const char *message) {
 	if (!success) { fprintf(stderr, "%s\n", message); exit(1); }
@@ -24,6 +25,14 @@ static void tracked_upload(GLenum target, GLintptr offset, GLsizeiptr size, cons
 	upload_calls++;
 	glBufferSubData(target, offset, size, data);
 }
+static void *tracked_mapping(GLenum target, GLintptr offset, GLsizeiptr size, GLbitfield access) {
+	if (access & GL_MAP_WRITE_BIT) {
+		require(access == (GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT), "stream writes avoid implicit synchronization");
+		upload_calls++;
+	}
+	return glMapBufferRange(target, offset, size, access);
+}
+#define glMapBufferRange tracked_mapping
 #define calloc tracked_calloc
 #define realloc tracked_realloc
 #define glBufferData tracked_storage
@@ -135,10 +144,11 @@ static void test_draw_bindings(void) {
 	vertices[24] = -1; vertices[25] = 3;
 	uint32_t indices[3] = {0, 1, 2};
 	GLuint vertex_buffer = 0, index_buffer = 0, instance_buffer = 0, first_vertex = 0, first_index = 0;
+	uintptr_t instance_offset;
 	for (int pass = 0; pass < 3; pass++) {
 		float instance[48] = {0};
 		instance[pass % 2 ? 2 : 0] = instance[3] = 1;
-		require(onix_gl_upload_mesh_batch(&pool, &vertex_buffer, &index_buffer, &instance_buffer,
+		require(onix_gl_upload_mesh_batch(&pool, &vertex_buffer, &index_buffer, &instance_buffer, &instance_offset,
 			vertices, sizeof(vertices), indices, sizeof(indices), instance, sizeof(instance)), "upload production mesh batch");
 		if (pass == 0) {
 			first_vertex = vertex_buffer; first_index = index_buffer;
@@ -146,10 +156,10 @@ static void test_draw_bindings(void) {
 		}
 		else require(vertex_buffer == first_vertex && index_buffer == first_index, "normal and picking passes share geometry uploads");
 		if (pass == 2) {
-			OnixGLESPickingDraw draw = {.index_count = 3, .instances = 1};
+			OnixGLESPickingDraw draw = {.base = instance_offset, .index_count = 3, .instances = 1};
 			onix_gl_draw_mesh_picking_run(&draw, 1, instance_buffer, vertex_buffer, index_buffer, 48, 192);
 		} else {
-			OnixGLESMeshDraw draw = {.index_count = 3, .instances = 1};
+			OnixGLESMeshDraw draw = {.base = instance_offset, .index_count = 3, .instances = 1};
 			onix_gl_draw_mesh_run(&draw, 1, instance_buffer, vertex_buffer, index_buffer, -1, -1, 48, 192, 0);
 		}
 		check_draw_color(pass % 2);
@@ -160,14 +170,15 @@ static void test_draw_bindings(void) {
 	for (int pass = 0; pass < 2; pass++) {
 		float instance[33] = {0};
 		instance[12 + (pass ? 2 : 0)] = instance[15] = 1;
-		GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(instance), instance, 0);
+		GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(instance), instance, 0, &upload_offset);
 		require(buffer != 0, "upload sprite instance block");
-		onix_gl_sprite_attributes(132, 0, 1);
+		uintptr_t instance_base = upload_offset;
+		onix_gl_sprite_attributes(132, instance_base, 1);
 		// Use the already established triangle geometry with the sprite wrapper's
 		// six-index convention, repeating the triangle once.
 		const uint16_t sprite_indices[6] = {0, 1, 2, 0, 1, 2};
-		require(onix_gl_upload_buffer(&pool, GL_ELEMENT_ARRAY_BUFFER, sizeof(sprite_indices), sprite_indices, 1), "upload sprite indices");
-		OnixGLESSpriteDraw draw = {.instances = 1};
+		require(onix_gl_upload_buffer(&pool, GL_ELEMENT_ARRAY_BUFFER, sizeof(sprite_indices), sprite_indices, 1, &upload_offset), "upload sprite indices");
+		OnixGLESSpriteDraw draw = {.base = instance_base, .instances = 1};
 		onix_gl_draw_sprite_run(&draw, 1, 0, 132);
 		check_draw_color(pass);
 	}
@@ -175,6 +186,70 @@ static void test_draw_bindings(void) {
 	glDeleteProgram(program);
 	glDeleteVertexArrays(1, &vao);
 	onix_gl_destroy_uploads(&pool);
+}
+
+static void test_stream_ranges(void) {
+	OnixGLUploadPool pools[3] = {0};
+	GLuint vao, vertices;
+	glGenVertexArrays(1, &vao); glBindVertexArray(vao);
+	glGenBuffers(1, &vertices); glBindBuffer(GL_ARRAY_BUFFER, vertices);
+	const float triangle[] = {-1, -1, 0, 3, -1, 0, -1, 3, 0};
+	glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL); glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(3); glVertexAttribDivisor(3, 1);
+	GLuint program = test_program("#version 300 es\nlayout(location=0) in vec3 p; layout(location=3) in vec4 c; out vec4 color; void main(){gl_Position=vec4(p,1);color=c;}");
+	glUseProgram(program); glEnable(GL_SCISSOR_TEST);
+	size_t heap = 0, storage = 0;
+	for (unsigned frame = 0; frame < 96; frame++) {
+		OnixGLUploadPool *pool = &pools[frame % 3];
+		require(onix_gl_begin_uploads(pool), "recycle only a completed stream frame");
+		glBindVertexArray(vao);
+		if (frame == 3) { heap = allocations; storage = storage_calls; }
+		GLuint last_buffer = 0;
+		uintptr_t last_end = 0;
+		unsigned blocks = 0;
+		for (unsigned batch = 0; batch < 2600; batch++) {
+			float data[32] = {0};
+			data[(batch / 163 + frame) % 2 ? 2 : 0] = data[3] = 1;
+			data[31] = (float)batch;
+			uintptr_t offset;
+			GLuint buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(data), data, 0, &offset);
+			require(buffer && offset % 16 == 0, "stream ranges are aligned");
+			if (buffer == last_buffer) require(offset >= last_end, "same-frame stream ranges never overlap");
+			else blocks++;
+			last_buffer = buffer; last_end = offset + sizeof(data);
+			if (batch % 163 == 0) {
+				unsigned tile = batch / 163;
+				glScissor(tile % 4, tile / 4, 1, 1);
+				glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(data), (void *)offset);
+				glDrawArraysInstanced(GL_TRIANGLES, 0, 3, 1);
+			}
+			memset(data, 0, sizeof(data));
+		}
+		require(blocks == 3 && pool->count == 3 && pool->bytes == 448u * 1024u,
+			"2600 batches share three bounded stream blocks");
+		uint8_t pixels[4 * 4 * 4];
+		glReadPixels(0, 0, 4, 4, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		for (unsigned tile = 0; tile < 16; tile++) {
+			const uint8_t *pixel = pixels + tile * 4;
+			unsigned blue = (tile + frame) % 2;
+			if (!(pixel[blue ? 2 : 0] == 255 && pixel[blue ? 0 : 2] == 0 && pixel[3] == 255))
+				fprintf(stderr, "stream frame=%u tile=%u rgba=%u,%u,%u,%u GL=0x%x\n", frame, tile, pixel[0], pixel[1], pixel[2], pixel[3], glGetError());
+			require(pixel[blue ? 2 : 0] == 255 && pixel[blue ? 0 : 2] == 0 && pixel[3] == 255,
+				"interleaved draws retain prior ranges across block growth and three-frame reuse");
+		}
+		glBindBuffer(GL_ARRAY_BUFFER, last_buffer);
+		const float *last = glMapBufferRange(GL_ARRAY_BUFFER, (GLintptr)(last_end - 128), 128, GL_MAP_READ_BIT);
+		require(last && last[31] == 2599, "stream uploads own their bytes after source mutation");
+		require(glUnmapBuffer(GL_ARRAY_BUFFER), "unmap stream readback");
+		require(onix_gl_finish_uploads(pool), "fence stream draws");
+		if (frame >= 3) require(allocations == heap && storage_calls == storage,
+			"stream slabs stay warm without native allocation or storage recreation beyond the trim window");
+	}
+	glDisable(GL_SCISSOR_TEST); glDeleteProgram(program);
+	glDeleteVertexArrays(1, &vao); glDeleteBuffers(1, &vertices);
+	for (unsigned index = 0; index < 3; index++) onix_gl_destroy_uploads(&pools[index]);
+	puts("GLES streams: 2600 batches -> 3 buffers, aligned non-overlap, interleaved draw pixels, source mutation, 96 frames with zero warm allocation/storage recreation passed");
 }
 
 static void test_cache_retention(void) {
@@ -227,14 +302,16 @@ static void test_cache_retention(void) {
 static void test_buffer_table_retention(void) {
 	OnixGLUploadPool pool = {0};
 	uint32_t value = 29;
+	uint8_t peak_data[64 << 10] = {0};
 	require(onix_gl_begin_uploads(&pool), "begin GLES table peak");
 	GLuint first = 0;
 	for (uint32_t index = 0; index < 256; index++) {
-		GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(value), &value, 0);
+		GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(peak_data), peak_data, 0, &upload_offset);
 		require(buffer != 0, "grow GLES buffer table");
 		if (index == 0) first = buffer;
 	}
-	require(onix_gl_finish_uploads(&pool) && pool.capacity == 256, "fence GLES table peak");
+	uint32_t peak_capacity = pool.capacity;
+	require(onix_gl_finish_uploads(&pool) && peak_capacity > 8, "fence GLES table peak");
 	uint64_t peak = (uint64_t)pool.capacity * sizeof(*pool.buffers);
 	size_t storage = storage_calls;
 	int failed = 0;
@@ -242,17 +319,17 @@ static void test_buffer_table_retention(void) {
 		int inject = !failed && pool.table_retention.frames == ONIX_BUFFER_TRIM_DELAY - 1;
 		if (inject) fail_reallocation = 1;
 		require(onix_gl_begin_uploads(&pool), "begin small GLES table workload");
-		if (inject) { failed = 1; require(pool.capacity == 256, "failed GLES table shrink preserves storage"); }
-		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(value), &value, 0) == first, "GLES table compaction keeps first live buffer");
+		if (inject) { failed = 1; require(pool.capacity == peak_capacity, "failed GLES table shrink preserves storage"); }
+		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(value), &value, 0, &upload_offset) == first, "GLES table compaction keeps first live buffer");
 		require(onix_gl_finish_uploads(&pool), "fence small GLES table workload");
 	}
-	require(failed && pool.capacity == 8 && pool.count == 1 && pool.bytes == 1024 && storage_calls == storage,
+	require(failed && pool.capacity == 8 && pool.count == 1 && pool.bytes == 64 << 10 && storage_calls == storage,
 		"GLES releases table peak without recreating live GPU storage");
 	check_buffer(first, &value, sizeof(value));
 	size_t heap = allocations;
 	for (uint32_t iteration = 0; iteration < ONIX_BUFFER_TRIM_DELAY * 2; iteration++) {
 		require(onix_gl_begin_uploads(&pool), "reuse shrunken GLES table");
-		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(value), &value, 0) == first && onix_gl_finish_uploads(&pool), "reuse live GLES storage after table shrink");
+		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, sizeof(value), &value, 0, &upload_offset) == first && onix_gl_finish_uploads(&pool), "reuse live GLES storage after table shrink");
 	}
 	require(allocations == heap && storage_calls == storage, "shrunken GLES table reuses without allocations");
 	printf("GLES buffer table: %llu -> %llu bytes; failed shrink, live pixels and zero warm allocations passed\n",
@@ -267,23 +344,23 @@ static void test_snapshot_retention(void) {
 	require(data != NULL, "allocate snapshot workload");
 	memset(data, 19, size);
 	require(onix_gl_begin_uploads(&pool), "begin snapshot peak");
-	GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, size, data, 1);
+	GLuint buffer = onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, size, data, 1, &upload_offset);
 	require(buffer && pool.snapshot_bytes == size && onix_gl_finish_uploads(&pool), "create native snapshot peak");
 	size_t heap = allocations, storage = storage_calls;
 	for (uint32_t frame = 0; frame <= ONIX_BUFFER_TRIM_DELAY; frame++) {
 		require(onix_gl_begin_uploads(&pool), "reuse GPU storage while CPU snapshot becomes idle");
 		if (frame < ONIX_BUFFER_TRIM_DELAY) require(pool.snapshot_bytes == size, "snapshot survives short idle periods");
 		else require(pool.snapshot_bytes == 0 && pool.buffers[0].snapshot == NULL, "idle CPU snapshot releases independently of GPU buffer");
-		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, size, data, 0) == buffer, "uncached upload keeps using the original GPU buffer");
+		require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, size, data, 0, &upload_offset) == buffer, "uncached upload keeps using the original GPU buffer");
 		require(onix_gl_finish_uploads(&pool), "fence uncached snapshot workload");
 	}
 	require(allocations == heap && storage_calls == storage && pool.bytes == size, "snapshot reclaim does not allocate or recreate GPU storage");
 	// Return to cached geometry with a much smaller source.
 	require(onix_gl_begin_uploads(&pool), "begin small cached workload");
-	require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, 64, data, 1) == buffer && pool.snapshot_bytes == 64, "small snapshot rewarms at its actual size");
+	require(onix_gl_upload_buffer(&pool, GL_ARRAY_BUFFER, 64, data, 1, &upload_offset) == buffer && pool.snapshot_bytes == 64, "small snapshot rewarms at its actual size");
 	check_buffer(buffer, data, 64);
 	size_t writes = upload_calls;
-	require(onix_gl_upload_buffer(&pool, GL_ELEMENT_ARRAY_BUFFER, 64, data, 1) == buffer && upload_calls == writes, "rewarmed snapshot still deduplicates across targets");
+	require(onix_gl_upload_buffer(&pool, GL_ELEMENT_ARRAY_BUFFER, 64, data, 1, &upload_offset) == buffer && upload_calls == writes, "rewarmed snapshot still deduplicates across targets");
 	require(onix_gl_finish_uploads(&pool), "fence small snapshot");
 	onix_gl_destroy_uploads(&pool);
 	free(data);
@@ -307,6 +384,7 @@ int main(void) {
 	EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_attributes);
 	require(eglMakeCurrent(display, surface, surface, context), "activate GLES3 context");
 	test_draw_bindings();
+	test_stream_ranges();
 	test_buffer_table_retention();
 	test_snapshot_retention();
 	GLuint vao;
@@ -321,15 +399,15 @@ int main(void) {
 		OnixGLUploadPool *pool = &pools[frame % 3];
 		require(onix_gl_begin_uploads(pool), "wait before reusing a frame's buffers");
 		memcpy(source, original, sizeof(source));
-		GLuint geometry = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 1);
+		GLuint geometry = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 1, &upload_offset);
 		require(geometry, "upload geometry");
 		size_t writes = upload_calls;
-		GLuint shared = onix_gl_upload_buffer(pool, GL_ELEMENT_ARRAY_BUFFER, sizeof(original), original, 1);
+		GLuint shared = onix_gl_upload_buffer(pool, GL_ELEMENT_ARRAY_BUFFER, sizeof(original), original, 1, &upload_offset);
 		require(shared == geometry && upload_calls == writes, "another pass reuses the uploaded geometry");
 		source[0] = 13;
-		GLuint changed = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 1);
+		GLuint changed = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 1, &upload_offset);
 		require(changed && changed != geometry, "mutating the same source pointer creates a new snapshot");
-		GLuint instances = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 0);
+		GLuint instances = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, sizeof(source), source, 0, &upload_offset);
 		require(instances && instances != geometry && instances != changed, "later batches never overwrite earlier GPU ranges");
 		check_buffer(geometry, original, sizeof(original));
 		check_buffer(changed, source, sizeof(source));
@@ -339,8 +417,8 @@ int main(void) {
 	// Exhaust metadata, inject growth failure, then retry without consuming a slot.
 	OnixGLUploadPool failure = {0};
 	fail_reallocation = 1;
-	require(!onix_gl_upload_buffer(&failure, GL_ARRAY_BUFFER, 16, source, 0) && failure.used == 0, "allocation failure leaves the pool reusable");
-	require(onix_gl_upload_buffer(&failure, GL_ARRAY_BUFFER, 16, source, 0), "retry failed pool growth");
+	require(!onix_gl_upload_buffer(&failure, GL_ARRAY_BUFFER, 16, source, 0, &upload_offset) && failure.used == 0, "allocation failure leaves the pool reusable");
+	require(onix_gl_upload_buffer(&failure, GL_ARRAY_BUFFER, 16, source, 0, &upload_offset), "retry failed pool growth");
 	onix_gl_destroy_uploads(&failure);
 	GLuint vaos[3], quad[2];
 	glGenVertexArrays(3, vaos);

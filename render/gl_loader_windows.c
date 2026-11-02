@@ -56,6 +56,8 @@ PFNGLGETSTRINGPROC onix_ptr_glGetString;
 PFNGLGETSTRINGIPROC onix_ptr_glGetStringi;
 PFNGLGETUNIFORMLOCATIONPROC onix_ptr_glGetUniformLocation;
 PFNGLLINKPROGRAMPROC onix_ptr_glLinkProgram;
+PFNGLMAPBUFFERRANGEPROC onix_ptr_glMapBufferRange;
+PFNGLUNMAPBUFFERPROC onix_ptr_glUnmapBuffer;
 PFNGLPIXELSTOREIPROC onix_ptr_glPixelStorei;
 PFNGLREADPIXELSPROC onix_ptr_glReadPixels;
 PFNGLRENDERBUFFERSTORAGEPROC onix_ptr_glRenderbufferStorage;
@@ -357,6 +359,16 @@ int onix_gl_load(void) {
     if ((uintptr_t)onix_ptr_glLinkProgram <= 3 || (intptr_t)onix_ptr_glLinkProgram == -1)
         onix_ptr_glLinkProgram = (PFNGLLINKPROGRAMPROC)GetProcAddress(library, "glLinkProgram");
     if (!onix_ptr_glLinkProgram)
+        return 0;
+    onix_ptr_glMapBufferRange = (PFNGLMAPBUFFERRANGEPROC)wglGetProcAddress("glMapBufferRange");
+    if ((uintptr_t)onix_ptr_glMapBufferRange <= 3 || (intptr_t)onix_ptr_glMapBufferRange == -1)
+        onix_ptr_glMapBufferRange = (PFNGLMAPBUFFERRANGEPROC)GetProcAddress(library, "glMapBufferRange");
+    if (!onix_ptr_glMapBufferRange)
+        return 0;
+    onix_ptr_glUnmapBuffer = (PFNGLUNMAPBUFFERPROC)wglGetProcAddress("glUnmapBuffer");
+    if ((uintptr_t)onix_ptr_glUnmapBuffer <= 3 || (intptr_t)onix_ptr_glUnmapBuffer == -1)
+        onix_ptr_glUnmapBuffer = (PFNGLUNMAPBUFFERPROC)GetProcAddress(library, "glUnmapBuffer");
+    if (!onix_ptr_glUnmapBuffer)
         return 0;
     onix_ptr_glPixelStorei = (PFNGLPIXELSTOREIPROC)wglGetProcAddress("glPixelStorei");
     if ((uintptr_t)onix_ptr_glPixelStorei <= 3 || (intptr_t)onix_ptr_glPixelStorei == -1)

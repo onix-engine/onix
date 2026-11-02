@@ -1,7 +1,7 @@
 # Linux DRM/KMS direct display
 
-`onix_drm` renders directly to a Linux display using Vulkan display surfaces and
-a swapchain by default. Add `onix_opengl` for GLES 3, GBM/EGL and DRM page flips. Both
+`onix_drm` renders directly to a Linux display using GLES 3, GBM/EGL and DRM page
+flips by default. Add `onix_vulkan` for Vulkan display surfaces and a swapchain. Both
 builds exclude X11, Wayland and WebView. Cross-compilation needs a target C compiler
 and the selected backend's development libraries.
 
@@ -9,7 +9,7 @@ and the selected backend's development libraries.
 
 ```sh
 CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags onix_drm -o app ./path/to/app
-CGO_ENABLED=1 go build -tags onix_drm,onix_opengl -o app ./path/to/app
+CGO_ENABLED=1 go build -tags onix_drm,onix_vulkan -o app ./path/to/app
 ```
 
 GLES requires EGL/GLES3 headers and link libraries at build time, and

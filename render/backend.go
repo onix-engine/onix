@@ -22,7 +22,7 @@ func Backends(platform string) []Backend {
 	case "darwin", "macos":
 		return []Backend{BackendMetal, BackendVulkan, BackendOpenGL}
 	case "linux":
-		return []Backend{BackendVulkan, BackendOpenGL}
+		return []Backend{BackendOpenGL, BackendVulkan}
 	case "js", "web":
 		return []Backend{BackendWebGPU, BackendWebGL}
 	case "wechat":

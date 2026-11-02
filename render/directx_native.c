@@ -10,6 +10,7 @@ void onix_dx_destroy_composition(void *);
 void onix_dx_clip_composition(void *, int, int, int);
 #include "native_gpu.h"
 #include "native_slots.h"
+#include "native_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +32,9 @@ static int dx_ok(HRESULT result, const char *message) { return SUCCEEDED(result)
 const char *onix_gpu_last_error(void) { return dx_error; }
 typedef struct {
     ID3D11Buffer *value;
-    UINT capacity;
+    UINT capacity, used, offset;
+    uint64_t demand;
+    OnixBufferRetention retention;
 } DxBuffer;
 typedef struct {
     ID3D11Texture2D *value;
@@ -229,31 +232,53 @@ static int dx_create_program(OnixGPUDriver *d, DxProgram *p, OnixGPUShader verte
 static int dx_upload(OnixGPUDriver *d, DxBuffer *buffer, const void *data, size_t bytes, UINT bind) {
     if (!bytes || bytes > UINT_MAX)
         return dx_fail("invalid upload size", E_INVALIDARG);
-    if (buffer->capacity < bytes) {
-        UINT capacity = 4096;
-        while (capacity < bytes && capacity <= UINT_MAX / 2)
-            capacity *= 2;
-        if (capacity < bytes)
+    uint64_t offset = ((uint64_t)buffer->used + 15) & ~UINT64_C(15);
+    if (offset + bytes > buffer->capacity) {
+        uint64_t capacity = onix_buffer_block_capacity(bytes, 64u << 10, buffer->capacity, 1u << 20);
+        if (!capacity || capacity > UINT_MAX)
             return dx_fail("upload too large", E_INVALIDARG);
-        D3D11_BUFFER_DESC desc = {.ByteWidth = capacity,
-                                  .Usage = D3D11_USAGE_DYNAMIC,
-                                  .BindFlags = bind,
-                                  .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE};
-        ID3D11Buffer *value = NULL;
-        if (!dx_ok(ID3D11Device_CreateBuffer(d->device, &desc, NULL, &value), "create upload buffer"))
-            return 0;
-        RELEASE(buffer->value);
-        buffer->value = value;
-        buffer->capacity = capacity;
+        if (capacity != buffer->capacity) {
+            D3D11_BUFFER_DESC desc = {.ByteWidth = (UINT)capacity,
+                                      .Usage = D3D11_USAGE_DYNAMIC,
+                                      .BindFlags = bind,
+                                      .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE};
+            ID3D11Buffer *value = NULL;
+            if (!dx_ok(ID3D11Device_CreateBuffer(d->device, &desc, NULL, &value), "create upload buffer"))
+                return 0;
+            RELEASE(buffer->value);
+            buffer->value = value;
+            buffer->capacity = (UINT)capacity;
+        }
+        offset = 0;
     }
     D3D11_MAPPED_SUBRESOURCE mapped;
-    if (!dx_ok(ID3D11DeviceContext_Map(d->context, (ID3D11Resource *)buffer->value, 0, D3D11_MAP_WRITE_DISCARD, 0,
+    // Only vertex/index buffers use this path. Append disjoint ranges until
+    // full; DISCARD then lets D3D preserve storage still consumed by the GPU.
+    if (!dx_ok(ID3D11DeviceContext_Map(d->context, (ID3D11Resource *)buffer->value, 0,
+                                       offset ? D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD, 0,
                                        &mapped),
                "map upload"))
         return 0;
-    memcpy(mapped.pData, data, bytes);
+    memcpy((uint8_t *)mapped.pData + offset, data, bytes);
     ID3D11DeviceContext_Unmap(d->context, (ID3D11Resource *)buffer->value, 0);
+    buffer->offset = (UINT)offset;
+    buffer->used = (UINT)(offset + bytes);
+    buffer->demand += (bytes + 15u) & ~(size_t)15u;
     return 1;
+}
+static void dx_begin_uploads(OnixGPUDriver *d, DxBuffer *buffer) {
+    if (onix_buffer_trim_capacity(&buffer->retention, buffer->capacity, buffer->demand, 64u << 10)) {
+        // The immediate context retains its last vertex/index bindings.
+        // Detach them so an idle view can release the historical peak too.
+        ID3D11Buffer *empty[2] = {0};
+        UINT zero[2] = {0};
+        ID3D11DeviceContext_IASetVertexBuffers(d->context, 0, 2, empty, zero, zero);
+        ID3D11DeviceContext_IASetIndexBuffer(d->context, NULL, DXGI_FORMAT_R32_UINT, 0);
+        RELEASE(buffer->value);
+        buffer->capacity = 0;
+    }
+    buffer->used = buffer->offset = 0;
+    buffer->demand = 0;
 }
 static ID3D11Buffer *dx_static_buffer(OnixGPUDriver *d, const void *data, UINT bytes, UINT bind) {
     ID3D11Buffer *value = NULL;
@@ -284,9 +309,11 @@ static void dx_bind_program(OnixGPUDriver *d, DxProgram *p) {
 static void dx_bind_geometry(OnixGPUDriver *d, ID3D11Buffer *vertices, ID3D11Buffer *indices, UINT vertex_stride,
                              UINT instance_stride, UINT instance_offset) {
     ID3D11Buffer *buffers[] = {vertices, d->instances.value};
-    UINT strides[] = {vertex_stride, instance_stride}, offsets[] = {0, instance_offset};
+    UINT vertex_offset = vertices == d->vertices.value ? d->vertices.offset : 0;
+    UINT index_offset = indices == d->indices.value ? d->indices.offset : 0;
+    UINT strides[] = {vertex_stride, instance_stride}, offsets[] = {vertex_offset, d->instances.offset + instance_offset};
     ID3D11DeviceContext_IASetVertexBuffers(d->context, 0, 2, buffers, strides, offsets);
-    ID3D11DeviceContext_IASetIndexBuffer(d->context, indices, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11DeviceContext_IASetIndexBuffer(d->context, indices, DXGI_FORMAT_R32_UINT, index_offset);
     ID3D11DeviceContext_IASetPrimitiveTopology(d->context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 static void dx_bind_textures(OnixGPUDriver *d, const uint32_t *textures, UINT count) {
@@ -529,6 +556,9 @@ int onix_gpu_resize(OnixGPUDriver *d, uint32_t width, uint32_t height) {
     return dx_surface(d);
 }
 int onix_gpu_begin_frame(OnixGPUDriver *d, const float clear[4]) {
+    dx_begin_uploads(d, &d->vertices);
+    dx_begin_uploads(d, &d->indices);
+    dx_begin_uploads(d, &d->instances);
     d->active_target = 0;
     dx_bind_target(d, &d->surface);
     ID3D11DeviceContext_ClearRenderTargetView(d->context, d->surface.color, clear);

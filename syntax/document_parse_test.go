@@ -1,14 +1,10 @@
 package syntax
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/odvcencio/gotreesitter"
 )
 
 func TestDocumentRetypedMethodMatchesFreshParse(t *testing.T) {
@@ -51,8 +47,8 @@ func TestDocumentLargeGoFileHighlightsThroughEnd(t *testing.T) {
 	if err := document.Update("large.go", content); err != nil {
 		t.Fatal(err)
 	}
-	if document.Tree() == nil || document.Tree().ParseStoppedEarly() {
-		t.Fatal("large Go file did not finish parsing")
+	if document.grammar == nil || len(document.lines) != 3002 {
+		t.Fatal("large Go file did not finish tokenizing")
 	}
 	tokens := document.Tokens(testTheme(t, "monokai"), nil)
 	for _, literal := range []string{"\"value0\"", "\"value1500\"", "\"value2999\""} {
@@ -67,42 +63,5 @@ func TestDocumentLargeGoFileHighlightsThroughEnd(t *testing.T) {
 		if !found {
 			t.Fatalf("large Go file lost highlighting for %s", literal)
 		}
-	}
-}
-
-type delayedSyntaxTokenSource struct{}
-
-func (delayedSyntaxTokenSource) Next() gotreesitter.Token {
-	time.Sleep(2 * time.Millisecond)
-	return gotreesitter.Token{}
-}
-
-func TestDocumentInterruptedParseCanRetrySameSource(t *testing.T) {
-	for _, filename := range []string{"main.go", "other.go"} {
-		t.Run(filename, func(t *testing.T) {
-			var document Document
-			defer document.Close()
-			if err := document.Update("main.go", "package demo\nvar Before = 1\n"); err != nil {
-				t.Fatal(err)
-			}
-			// Force a timeout during both an incremental edit and a new file.
-			gotreesitter.WithHighlighterTimeoutMicros(1)(document.highlighter)
-			gotreesitter.WithTokenSourceFactory(func([]byte) gotreesitter.TokenSource {
-				return delayedSyntaxTokenSource{}
-			})(document.highlighter)
-			const source = "package demo\nvar After = \"complete\"\n"
-			if err := document.Update(filename, source); !errors.Is(err, gotreesitter.ErrParseStoppedEarly) {
-				t.Fatalf("interrupted parse error = %v", err)
-			}
-			if document.initialized || document.Tree() != nil || len(document.Tokens(testTheme(t, "monokai"), nil)) != 0 {
-				t.Fatal("interrupted parse retained a successful snapshot or partial highlights")
-			}
-			if err := document.Update(filename, source); err != nil {
-				t.Fatal(err)
-			}
-			if document.Tree() == nil || document.Tree().ParseStoppedEarly() || len(document.Tokens(testTheme(t, "monokai"), nil)) == 0 {
-				t.Fatal("retrying the same source reused the interrupted parse")
-			}
-		})
 	}
 }

@@ -1,4 +1,4 @@
-//go:build linux && cgo && onix_opengl && !android && !onix_drm
+//go:build linux && cgo && (onix_opengl || (linux && !android && !onix_vulkan)) && !android && !onix_drm
 
 #include "opengl_context.h"
 #include <GL/glx.h>

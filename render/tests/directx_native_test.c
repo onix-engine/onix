@@ -1,4 +1,21 @@
 #define COBJMACROS
+#include <d3d11.h>
+static unsigned stream_discards, stream_appends;
+static HRESULT tracked_map(ID3D11DeviceContext *context, ID3D11Resource *resource, UINT subresource,
+                           D3D11_MAP mode, UINT flags, D3D11_MAPPED_SUBRESOURCE *mapping) {
+    HRESULT result = context->lpVtbl->Map(context, resource, subresource, mode, flags, mapping);
+    if (SUCCEEDED(result) && (mode == D3D11_MAP_WRITE_DISCARD || mode == D3D11_MAP_WRITE_NO_OVERWRITE)) {
+        D3D11_BUFFER_DESC desc;
+        ID3D11Buffer_GetDesc((ID3D11Buffer *)resource, &desc);
+        if (desc.BindFlags & (D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER)) {
+            stream_discards += mode == D3D11_MAP_WRITE_DISCARD;
+            stream_appends += mode == D3D11_MAP_WRITE_NO_OVERWRITE;
+        }
+    }
+    return result;
+}
+#undef ID3D11DeviceContext_Map
+#define ID3D11DeviceContext_Map tracked_map
 #include "../directx_native.c"
 static void require(int success, const char *operation) {
     if (!success) {
@@ -87,6 +104,39 @@ static void check_sprites(OnixGPUDriver *d) {
                 onix_gpu_destroy_texture(d, texture),
             "destroy sprite resources");
 }
+static void check_streams(OnixGPUDriver *d) {
+    const uint8_t white[] = {255, 255, 255, 255};
+    uint32_t texture = onix_gpu_create_texture_with_format(d, 1, 1, 1, 0, 0, white, 4, 0, 0), color;
+    uint32_t target = onix_gpu_create_render_target(d, 16, 16, 0, 0, &color);
+    require(texture && target, "stream resources");
+    OnixGPUSpritePush push = {.projection = {[0] = .125f, [5] = .125f, [10] = 1, [12] = -1, [13] = -1, [15] = 1}};
+    OnixGPUInstance instance = {.model = {16, 0, 0, 0, 16, 0}, .texture_model = {1, 0, 0, 0, 1, 0}};
+    OnixNativeSpriteDraw draw = {.texture = texture, .instance_count = 1};
+    float clear[4] = {0};
+    for (unsigned frame = 0; frame < 5; frame++) {
+        require(onix_gpu_begin_frame(d, clear) && onix_gpu_begin_render_target(d, target, clear, 0, 1, 0), "begin stream target");
+        onix_gpu_set_viewport(d, 0, 0, 16, 16);
+        stream_discards = stream_appends = 0;
+        for (unsigned batch = 0; batch < 900; batch++) {
+            instance.color[0] = (batch + frame) % 2 == 0;
+            instance.color[1] = (batch + frame) % 2 != 0;
+            instance.color[3] = 1;
+            unsigned tile = batch % 256;
+            onix_gpu_set_scissor(d, 1, tile % 16, tile / 16, 1, 1);
+            require(onix_gpu_draw_sprites(d, &push, &instance, 1, &draw, 1), "interleaved sprite upload/draw");
+        }
+        if (frame) require(stream_discards == 1 && stream_appends == 899, "warm stream map counts");
+        onix_gpu_set_scissor(d, 0, 0, 0, 0, 0);
+        require(onix_gpu_end_render_target(d), "end stream target");
+        uint8_t pixels[16 * 16 * 4];
+        require(onix_gpu_read_render_target(d, target, 0, 0, 16, 16, pixels, sizeof(pixels)), "stream readback");
+        for (unsigned tile = 0; tile < 256; tile++) {
+            unsigned channel = (tile + frame) % 2;
+            require(pixels[tile * 4 + channel] == 255 && pixels[tile * 4 + 1 - channel] == 0 && pixels[tile * 4 + 3] == 255, "stream tile pixel after growth/reuse");
+        }
+    }
+    require(onix_gpu_destroy_render_target(d, target) && onix_gpu_destroy_texture(d, texture), "destroy stream resources");
+}
 static void check_picking(OnixGPUDriver *d) {
     uint32_t color, target = onix_gpu_create_render_target(d, 16, 16, 1, 1, &color), identifier = 1234567, pixel = 0;
     require(target != 0, "picking target");
@@ -150,6 +200,7 @@ int main(void) {
     require(pixels[0] == 255 && pixels[1] == 0 && pixels[3] == 255, "red pixel");
     require(onix_gpu_destroy_render_target(d, target), "destroy clear target");
     check_sprites(d);
+    check_streams(d);
     check_mipmap_updates(d);
     check_picking(d);
     require(onix_gpu_present(d), "present");

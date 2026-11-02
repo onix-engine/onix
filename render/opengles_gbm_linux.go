@@ -1,4 +1,4 @@
-//go:build linux && !android && cgo && onix_drm && onix_opengl
+//go:build linux && !android && cgo && onix_drm && (onix_opengl || (linux && !android && !onix_vulkan))
 
 package render
 

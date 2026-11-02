@@ -1,4 +1,4 @@
-//go:build cgo && onix_opengl && !ios && (windows || linux || darwin || android)
+//go:build cgo && (onix_opengl || (linux && !android && !onix_vulkan)) && !ios && (windows || linux || darwin || android)
 
 package render
 
@@ -6,6 +6,8 @@ package render
 // These wrappers consume their Go arguments during the GL call.
 #cgo noescape onix_gl_begin_frame
 #cgo nocallback onix_gl_begin_frame
+#cgo noescape onix_gl_begin_render_target
+#cgo nocallback onix_gl_begin_render_target
 #cgo noescape onix_gl_draw_sprite_run
 #cgo nocallback onix_gl_draw_sprite_run
 #cgo noescape onix_gl_draw_mesh_run
@@ -324,15 +326,16 @@ static void onix_gl_draw_mesh_picking_run(const OnixGLESPickingDraw *draws, size
 	}
 }
 
-static int onix_gl_upload_mesh_batch(OnixGLUploadPool *pool, GLuint *vertex_buffer, GLuint *index_buffer, GLuint *instance_buffer,
+static int onix_gl_upload_mesh_batch(OnixGLUploadPool *pool, GLuint *vertex_buffer, GLuint *index_buffer, GLuint *instance_buffer, uintptr_t *instance_offset,
 	const void *vertices, GLsizeiptr vertex_bytes, const void *indices, GLsizeiptr index_bytes,
 	const void *instances, GLsizeiptr instance_bytes) {
+	uintptr_t offset;
 	if (vertex_bytes > 0) {
-		*vertex_buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, vertex_bytes, vertices, 1);
-		*index_buffer = onix_gl_upload_buffer(pool, GL_ELEMENT_ARRAY_BUFFER, index_bytes, indices, 1);
+		*vertex_buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, vertex_bytes, vertices, 1, &offset);
+		*index_buffer = onix_gl_upload_buffer(pool, GL_ELEMENT_ARRAY_BUFFER, index_bytes, indices, 1, &offset);
 		if (!*vertex_buffer || !*index_buffer) return 0;
 	}
-	*instance_buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, instance_bytes, instances, 0);
+	*instance_buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, instance_bytes, instances, 0, instance_offset);
 	return *instance_buffer != 0;
 }
 
@@ -576,6 +579,7 @@ type glesMeshGeometry struct {
 	vertexBuffer   C.GLuint
 	indexBuffer    C.GLuint
 	instanceBuffer C.GLuint
+	instanceOffset C.uintptr_t
 }
 
 type openGLESDriver struct {
@@ -1128,7 +1132,7 @@ func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 	d.setBlendEnabled(true)
 	geometry := &d.spriteGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	err := d.uploadGLESInstanceBuffer(geometry, scratch.data)
+	base, err := d.uploadGLESInstanceBuffer(geometry, scratch.data)
 	if err != nil {
 		return err
 	}
@@ -1154,7 +1158,7 @@ func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 			packedOffset = uintptr(spriteInstanceOffset(uint64(packedOffset), draw))
 			nativeDraw := C.OnixGLESSpriteDraw{
 				texture: texture.value, bind_additional: C.int(glesInt(!draw.Shader.Valid())),
-				base: C.uintptr_t(packedOffset), instances: C.GLsizei(draw.InstanceCount),
+				base: C.uintptr_t(base + packedOffset), instances: C.GLsizei(draw.InstanceCount),
 			}
 			for slot := 1; slot < SpriteTextureSlots; slot++ {
 				value, _ := d.textures.Get(draw.TextureAt(slot))
@@ -1192,7 +1196,7 @@ func (d *openGLESDriver) DrawShapes(batch ShapeBatch) error {
 	d.setProjection(program, batch.Projection)
 	geometry := &d.shapeGeometry[d.frameIndex]
 	d.bindVertexArray(geometry.vao)
-	if err := d.uploadGLESInstanceBuffer(geometry, batch.Instances); err != nil {
+	if _, err := d.uploadGLESInstanceBuffer(geometry, batch.Instances); err != nil {
 		return err
 	}
 	C.glDrawElementsInstanced(C.GL_TRIANGLES, 6, C.GL_UNSIGNED_SHORT, nil, C.GLsizei(len(batch.Instances)))
@@ -1349,7 +1353,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 		nativeDraw := C.OnixGLESMeshDraw{
 			texture: texture.value, normal_texture: normalTexture.value, metallic_roughness_texture: metallicRoughnessTexture.value,
 			has_normal_texture: hasNormal, has_metallic_roughness_texture: hasMetallicRoughness,
-			base: C.uintptr_t(uintptr(draw.FirstInstance) * unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
+			base: d.meshGeometry.instanceOffset + C.uintptr_t(uintptr(draw.FirstInstance)*unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
 			index_offset: C.uintptr_t(draw.FirstIndex * 4), instances: C.GLsizei(draw.InstanceCount),
 		}
 		copy(nativeDraw.extra_textures[:], extraTextures[:])
@@ -1415,7 +1419,7 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 			boundGeometry, boundMesh = true, draw.Mesh
 		}
 		d.pickingDraws = append(d.pickingDraws, C.OnixGLESPickingDraw{
-			base: C.uintptr_t(uintptr(draw.FirstInstance) * unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
+			base: d.meshGeometry.instanceOffset + C.uintptr_t(uintptr(draw.FirstInstance)*unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
 			index_offset: C.uintptr_t(draw.FirstIndex * 4), instances: C.GLsizei(draw.InstanceCount),
 		})
 	}
@@ -1487,7 +1491,7 @@ func (d *openGLESDriver) uploadMeshBatch(batch MeshBatch3D) error {
 		indexBytes = len(batch.Indices) * 4
 	}
 	if C.onix_gl_upload_mesh_batch(
-		&d.uploads[d.frameIndex], &d.meshGeometry.vertexBuffer, &d.meshGeometry.indexBuffer, &d.meshGeometry.instanceBuffer,
+		&d.uploads[d.frameIndex], &d.meshGeometry.vertexBuffer, &d.meshGeometry.indexBuffer, &d.meshGeometry.instanceBuffer, &d.meshGeometry.instanceOffset,
 		vertices, C.GLsizeiptr(vertexBytes), indices, C.GLsizeiptr(indexBytes),
 		sliceData(batch.Instances), C.GLsizeiptr(len(batch.Instances)*int(unsafe.Sizeof(Instance3D{}))),
 	) == 0 {
@@ -1670,7 +1674,7 @@ func (d *openGLESDriver) createGeometry(shape bool) glesGeometry {
 	C.glEnableVertexAttribArray(1)
 	C.glBindBuffer(C.GL_ELEMENT_ARRAY_BUFFER, d.quadIndexBuffer)
 	if shape {
-		d.configureShapeAttributes(true)
+		d.configureShapeAttributes(0, true)
 	} else {
 		d.configureSpriteAttributes(0, true)
 	}
@@ -1681,7 +1685,7 @@ func (d *openGLESDriver) configureSpriteAttributes(base uintptr, initialize bool
 	C.onix_gl_sprite_attributes(C.GLsizei(unsafe.Sizeof(Instance2D{})), C.uintptr_t(base), C.int(glesBoolean(initialize)))
 }
 
-func (d *openGLESDriver) configureShapeAttributes(initialize bool) {
+func (d *openGLESDriver) configureShapeAttributes(base uintptr, initialize bool) {
 	attributes := [...]struct {
 		index  C.GLuint
 		size   C.GLint
@@ -1691,33 +1695,34 @@ func (d *openGLESDriver) configureShapeAttributes(initialize bool) {
 		{6, 4, 48}, {7, 4, 64}, {8, 4, 80},
 	}
 	for _, attribute := range attributes {
-		C.onix_gl_vertex_attrib_pointer(attribute.index, attribute.size, C.GL_FLOAT, C.GL_FALSE, C.GLsizei(unsafe.Sizeof(ShapeInstance2D{})), C.uintptr_t(attribute.offset))
+		C.onix_gl_vertex_attrib_pointer(attribute.index, attribute.size, C.GL_FLOAT, C.GL_FALSE, C.GLsizei(unsafe.Sizeof(ShapeInstance2D{})), C.uintptr_t(base+attribute.offset))
 		if initialize {
 			C.glEnableVertexAttribArray(attribute.index)
 			C.glVertexAttribDivisor(attribute.index, 1)
 		}
 	}
-	C.onix_gl_vertex_attrib_i_pointer(9, 1, C.GL_UNSIGNED_INT, C.GLsizei(unsafe.Sizeof(ShapeInstance2D{})), 96)
+	C.onix_gl_vertex_attrib_i_pointer(9, 1, C.GL_UNSIGNED_INT, C.GLsizei(unsafe.Sizeof(ShapeInstance2D{})), C.uintptr_t(base+96))
 	if initialize {
 		C.glEnableVertexAttribArray(9)
 		C.glVertexAttribDivisor(9, 1)
 	}
 }
 
-func (d *openGLESDriver) uploadGLESInstanceBuffer[T any](geometry *glesGeometry, values []T) error {
+func (d *openGLESDriver) uploadGLESInstanceBuffer[T any](geometry *glesGeometry, values []T) (uintptr, error) {
 	var value T
 	byteLength := len(values) * int(unsafe.Sizeof(value))
-	buffer := C.onix_gl_upload_buffer(&d.uploads[d.frameIndex], C.GL_ARRAY_BUFFER, C.size_t(byteLength), sliceData(values), 0)
+	var offset C.uintptr_t
+	buffer := C.onix_gl_upload_buffer(&d.uploads[d.frameIndex], C.GL_ARRAY_BUFFER, C.size_t(byteLength), sliceData(values), 0, &offset)
 	if buffer == 0 {
-		return errors.New("render: OpenGL ES instance upload allocation failed")
+		return 0, errors.New("render: OpenGL ES instance upload allocation failed")
 	}
-	// Every batch may use a different retained block. Attribute bindings belong
-	// to the VAO and must follow the new buffer, including the shape attributes.
+	// Attribute pointers follow both the retained block and this batch's range.
+	// Sprite runs apply their individual draw offsets after this upload.
 	d.boundBuffer = buffer
 	if geometry == &d.shapeGeometry[d.frameIndex] {
-		d.configureShapeAttributes(false)
+		d.configureShapeAttributes(uintptr(offset), false)
 	}
-	return nil
+	return uintptr(offset), nil
 }
 
 func (d *openGLESDriver) useProgram(program *glesProgram) {

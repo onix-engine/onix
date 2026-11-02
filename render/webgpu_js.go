@@ -38,6 +38,7 @@ type webGPUFrame struct {
 	offset     int
 	generation uint64
 	retired    []js.Value
+	retention  bufferRetention
 }
 
 func (frame *webGPUFrame) destroyRetired() {
@@ -406,6 +407,9 @@ func (d *webGPUDriver) BeginFrame(clear Color) error {
 	d.frameIndex = (d.frameIndex + 1) % webGPUFramesInFlight
 	frame := &d.frames[d.frameIndex]
 	frame.destroyRetired()
+	if capacity := frame.retention.trimCapacity(frame.buffer.capacity, frame.offset, 1024); capacity != 0 {
+		d.replaceFrameBuffer(frame, nextBufferCapacity(capacity))
+	}
 	frame.offset = 0
 	depthView := js.Null()
 	if d.surfaceDepthEnabled {
@@ -1566,9 +1570,12 @@ func (d *webGPUDriver) reserve(required int) {
 	if required <= frame.buffer.capacity {
 		return
 	}
-	old := frame.buffer.value
-	frame.retired = append(frame.retired, old)
-	frame.buffer = d.createFrameBuffer(nextBufferCapacity(required))
+	d.replaceFrameBuffer(frame, nextBufferCapacity(required))
+}
+
+func (d *webGPUDriver) replaceFrameBuffer(frame *webGPUFrame, capacity int) {
+	frame.retired = append(frame.retired, frame.buffer.value)
+	frame.buffer = d.createFrameBuffer(capacity)
 	frame.generation++
 }
 

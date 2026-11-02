@@ -124,6 +124,8 @@ type webGLGeometry struct {
 	instanceBytes  int
 	instanceOffset int
 	instanceStride int
+	instanceUsed   int
+	retention      bufferRetention
 }
 
 type webGLMeshGeometry struct {
@@ -414,6 +416,9 @@ func (d *webGL2Driver) BeginFrame(clear Color) error {
 	}
 	d.gl.Call("bindFramebuffer", webGLFramebuffer, d.surfaceFramebuffer())
 	d.frameIndex = (d.frameIndex + 1) % webGLFramesInFlight
+	for _, geometry := range [...]*webGLGeometry{&d.spriteGeometry[d.frameIndex], &d.shapeGeometry[d.frameIndex]} {
+		d.beginInstanceUploads(geometry)
+	}
 	restoreScissor := d.scissorEnabled
 	if restoreScissor {
 		d.gl.Call("disable", webGLScissorTest)
@@ -1613,7 +1618,19 @@ func (d *webGL2Driver) bindTexture(texture js.Value) {
 	d.boundTexture = texture
 }
 
+// Instance storage is orphaned per batch so browsers can preserve busy GPU
+// ranges. Measure the largest batch, including batches before the last draw.
+func (d *webGL2Driver) beginInstanceUploads(geometry *webGLGeometry) {
+	if capacity := geometry.retention.trimCapacity(geometry.instanceBytes, geometry.instanceUsed, 1024); capacity != 0 {
+		geometry.instanceBytes = nextBufferCapacity(capacity)
+		d.bindArrayBuffer(geometry.instanceBuffer)
+		d.gl.Call("bufferData", webGLArrayBuffer, geometry.instanceBytes, webGLDynamicDraw)
+	}
+	geometry.instanceUsed = 0
+}
+
 func (d *webGL2Driver) uploadInstances(geometry *webGLGeometry, data js.Value, byteLength int) {
+	geometry.instanceUsed = max(geometry.instanceUsed, byteLength)
 	d.bindArrayBuffer(geometry.instanceBuffer)
 	if byteLength > geometry.instanceBytes {
 		geometry.instanceBytes = nextBufferCapacity(byteLength)

@@ -13,7 +13,7 @@ to direct `go build` commands without a renderer tag:
 | Platform | Default | Other choices |
 | --- | --- | --- |
 | macOS | Metal | Vulkan, OpenGL |
-| Linux | Vulkan | OpenGL |
+| Linux | OpenGL | Vulkan |
 | Windows | DirectX 11 | Vulkan, OpenGL |
 | Web | WebGPU | WebGL 2 |
 | WeChat | WebGL 2 | — |

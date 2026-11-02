@@ -50,13 +50,20 @@ func assertLazyBrowserResources(t *testing.T, driver Driver, depth, mesh bool) {
 		t.Fatal("ordinary rendering compiled picking pipeline")
 	}
 	found := false
-	for _, variants := range d.programs[PipelineMesh].meshPipelines {
-		for _, pipeline := range variants {
-			found = found || pipeline.Truthy()
+	programs := [meshVariantCount]*webGPUShader{d.programs[PipelineMesh]}
+	copy(programs[1:], d.meshBuiltins[:])
+	for _, program := range programs {
+		if program == nil {
+			continue
+		}
+		for _, variants := range program.meshPipelines {
+			for _, pipeline := range variants {
+				found = found || pipeline.Truthy()
+			}
 		}
 	}
 	if found != mesh {
-		t.Fatal("unexpected builtin mesh pipeline allocation")
+		t.Fatalf("builtin mesh pipelines present=%v, want %v", found, mesh)
 	}
 }
 

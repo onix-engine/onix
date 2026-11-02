@@ -3,16 +3,15 @@ package syntax
 import (
 	"fmt"
 	"maps"
-	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
-	"github.com/odvcencio/gotreesitter"
-	"github.com/odvcencio/gotreesitter/grammars"
+	textmate "github.com/eugenioenko/textmate-go"
 )
 
-// Definitions maps tree-sitter query captures to TextMate scopes. The longest
+// Definitions maps lexical token categories to TextMate scopes. The longest
 // capture prefix wins, so function.method.call can inherit function.method.
 type Definitions struct {
 	Captures     map[string]string `json:"captures"`
@@ -64,8 +63,13 @@ func (d *Definitions) Scope(capture string) string {
 type Token struct {
 	Start, End int
 	Capture    string
+	Scopes     string // Space-separated TextMate scopes, outermost first.
 	Style      Style
 	CSS        string
+}
+
+type tokenKey struct {
+	capture, scopes string
 }
 
 type tokenStyle struct {
@@ -73,243 +77,268 @@ type tokenStyle struct {
 	css   string
 }
 
-// Document owns one syntax tree. Update and Tokens reuse cached results when
-// the source and theme are unchanged. It must not be used concurrently.
+// Capture is a render-neutral UTF-8 byte range. Scopes preserves the full
+// TextMate scope stack; Capture is its coarse category for editor behavior.
+type Capture struct {
+	StartByte, EndByte uint32
+	Capture, Scopes    string
+}
+
+type lexicalLine struct {
+	start, tokenStart int
+	endState          *textmate.StateStack
+}
+
+// Document caches each line's ending state and tokens. Updates tokenize from
+// the first changed line until the unchanged suffix has the same start state.
+// Its buffers are reused; a Document belongs to one worker.
 type Document struct {
-	filename    string
-	source      string
-	initialized bool
-	language    string
-	rootScope   string
-	highlighter *gotreesitter.Highlighter
-	tree        *gotreesitter.Tree
-	ranges      []gotreesitter.HighlightRange
-	theme       *Theme
-	definitions *Definitions
-	palette     map[string]tokenStyle
-	tokens      []Token
-	styled      bool
+	filename, source, language string
+	initialized                bool
+	grammar                    *textmate.Grammar
+	lines, lineScratch         []lexicalLine
+	ranges, scratch            []Capture
+	scopes                     map[*textmate.ScopeStack]tokenKey
+	painter                    Painter
+	tokens                     []Token
+	styled                     bool
+	retokenized                int
 }
 
-func (d *Document) Tree() *gotreesitter.Tree { return d.tree }
-func (d *Document) Language() string         { return d.language }
+func (d *Document) Language() string { return d.language }
+func (d *Document) Close()           { *d = Document{} }
 
-// Close releases retained parser arenas; the document can subsequently be reused.
-func (d *Document) Close() {
-	if d.tree != nil {
-		d.tree.Release()
-	}
-	*d = Document{}
-}
-
-// Release closes a worker-owned tree and optionally trims idle parser arenas.
-func (d *Document) Release(trim bool) {
-	d.Close()
-	if trim {
-		ReleaseParserMemory()
-	}
-}
-
-// ReleaseParserMemory drops idle tree arenas held by the parser's global pools.
-// Live documents remain valid. Call at an idle boundary, not on every edit.
-func ReleaseParserMemory() { gotreesitter.DrainArenaPools() }
-
-// Update detects a filename or language name, parses it, and retains captures.
-// Unknown languages are plain text. Syntax errors still yield a partial tree.
+// Update detects file extensions or language IDs. Unknown languages stay plain.
 func (d *Document) Update(filename, source string) error {
-	return d.update(filename, source, nil)
+	if d.initialized && d.filename == filename && d.source == source {
+		d.retokenized = 0
+		return nil
+	}
+	start, oldEnd, newEnd := changedRange(d.source, source)
+	return d.UpdateRange(filename, source, start, oldEnd, newEnd)
 }
 
-// UpdateRange consumes an already known UTF-8 edit and avoids rediscovering it.
-// Offsets refer to the previous source and the new source, respectively.
+// UpdateRange accepts a known UTF-8 edit. Bytes outside the edit must be equal.
 func (d *Document) UpdateRange(filename, source string, start, oldEnd, newEnd int) error {
-	if start < 0 || oldEnd < start || oldEnd > len(d.source) || newEnd < start || newEnd > len(source) {
+	if start < 0 || oldEnd < start || oldEnd > len(d.source) || newEnd < start || newEnd > len(source) || start > len(source) ||
+		!byteBoundary(d.source, start) || !byteBoundary(d.source, oldEnd) || !byteBoundary(source, start) || !byteBoundary(source, newEnd) {
 		return fmt.Errorf("invalid syntax edit range")
 	}
-	point := advancePoint(gotreesitter.Point{}, d.source[:start])
-	edit := gotreesitter.InputEdit{StartByte: uint32(start), OldEndByte: uint32(oldEnd), NewEndByte: uint32(newEnd), StartPoint: point, OldEndPoint: advancePoint(point, d.source[start:oldEnd]), NewEndPoint: advancePoint(point, source[start:newEnd])}
-	return d.update(filename, source, &edit)
-}
-
-func (d *Document) update(filename, source string, edit *gotreesitter.InputEdit) error {
 	if d.initialized && d.filename == filename && d.source == source {
+		d.retokenized = 0
 		return nil
 	}
 	if !d.initialized || d.filename != filename {
-		entry := grammars.DetectLanguage(filename)
-		if entry == nil {
-			entry = grammars.DetectLanguageByName(filename)
-		}
-		// Vim help shares .txt with plain text; require an explicit vimdoc language.
-		// Keep named files such as CMakeLists.txt associated with their grammar.
-		if entry != nil && entry.Name == "vimdoc" && strings.EqualFold(filepath.Ext(filename), ".txt") {
-			entry = nil
-		}
-		languageName := ""
-		if entry != nil {
-			languageName = entry.Name
-		}
-		if d.tree != nil {
-			d.tree.Release()
-			d.tree = nil
-		}
-		d.source, d.ranges, d.initialized, d.styled = "", nil, false, false
-		if d.language != languageName {
-			d.highlighter = nil
-			d.language = languageName
-			d.definitions = nil // Language scopes also determine the palette.
-			clear(d.palette)
-		}
-		d.filename = filename
-		if entry != nil && d.highlighter == nil {
-			d.language = entry.Name
-			language := entry.Language()
-			if language == nil {
-				return fmt.Errorf("syntax grammar %q is unavailable", entry.Name)
-			}
-			var options []gotreesitter.HighlighterOption
-			if entry.TokenSourceFactory != nil {
-				options = append(options, gotreesitter.WithTokenSourceFactory(func(source []byte) gotreesitter.TokenSource {
-					return entry.TokenSourceFactory(source, language)
-				}))
-			}
-			query, err := highlightQuery(entry.HighlightQuery, language)
-			if err == nil {
-				d.highlighter, err = gotreesitter.NewHighlighter(language, query, options...)
-			}
+		language, scope := detectLanguage(filename)
+		if d.grammar == nil || language != d.language {
+			grammar, err := loadGrammar(scope)
 			if err != nil {
-				return fmt.Errorf("syntax query %s: %w", entry.Name, err)
+				return err
 			}
+			d.grammar = grammar
+			clear(d.scopes)
 		}
+		d.language, d.filename = language, filename
+		clear(d.lines)
+		clear(d.ranges)
+		d.lines, d.ranges = d.lines[:0], d.ranges[:0]
+		start, oldEnd, newEnd = 0, len(d.source), len(source)
 	}
+	d.retokenized = 0
 	d.styled = false
-	if d.highlighter != nil {
-		oldTree := d.tree
-		if oldTree != nil {
-			if edit == nil {
-				value := changedRange(d.source, source)
-				edit = &value
-			}
-			oldTree.Edit(*edit)
-		}
-		// A wall-clock deadline can turn an ordinary file into an empty or
-		// partial highlight under load. Let parsing finish, and never cache a
-		// tree stopped by the parser's safety limits as a successful update.
-		var err error
-		d.ranges, d.tree, err = d.highlighter.HighlightIncrementalStrict([]byte(source), oldTree)
-		if oldTree != nil {
-			oldTree.Release()
-		}
-		if err != nil {
-			d.Close()
-			return fmt.Errorf("syntax parse %s: %w", filename, err)
-		}
+	if d.grammar != nil {
+		d.tokenize(source, start, oldEnd, newEnd)
+	} else {
+		d.lines, d.ranges = d.lines[:0], d.ranges[:0]
 	}
 	d.source, d.initialized = source, true
 	return nil
 }
 
-func changedRange(before, after string) gotreesitter.InputEdit {
-	prefix := 0
-	point := gotreesitter.Point{}
-	for prefix < len(before) && prefix < len(after) {
-		oldRune, oldSize := utf8.DecodeRuneInString(before[prefix:])
-		newRune, newSize := utf8.DecodeRuneInString(after[prefix:])
-		if oldRune != newRune || oldSize != newSize {
-			break
+func byteBoundary(source string, offset int) bool {
+	return offset == len(source) || utf8.RuneStart(source[offset])
+}
+
+// changedRange finds one replacement without allocating or splitting UTF-8.
+func changedRange(before, after string) (start, oldEnd, newEnd int) {
+	for start < min(len(before), len(after)) && before[start] == after[start] {
+		start++
+	}
+	for start > 0 && (!byteBoundary(before, start) || !byteBoundary(after, start)) {
+		start--
+	}
+	oldEnd, newEnd = len(before), len(after)
+	for oldEnd > start && newEnd > start && before[oldEnd-1] == after[newEnd-1] {
+		oldEnd--
+		newEnd--
+	}
+	for oldEnd < len(before) && (!byteBoundary(before, oldEnd) || !byteBoundary(after, newEnd)) {
+		oldEnd++
+		newEnd++
+	}
+	return
+}
+
+func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
+	first := 0
+	if len(d.lines) != 0 {
+		first, _ = slices.BinarySearchFunc(d.lines, start, func(line lexicalLine, offset int) int { return line.start - offset })
+		if first == len(d.lines) || d.lines[first].start > start {
+			first--
 		}
-		if oldRune == '\n' {
-			point.Row++
-			point.Column = 0
+	}
+	pos, prefix := 0, 0
+	var state *textmate.StateStack
+	if len(d.lines) != 0 {
+		pos, prefix = d.lines[first].start, d.lines[first].tokenStart
+	}
+	if first > 0 {
+		state = d.lines[first-1].endState
+	}
+	ranges := append(d.scratch[:0], d.ranges[:prefix]...)
+	lines := append(d.lineScratch[:0], d.lines[:first]...)
+	shift := len(source) - len(d.source)
+	for pos <= len(source) {
+		// The suffix text is unchanged by contract. Matching its incoming lexical
+		// state proves that all its cached tokens and ending states remain valid.
+		if pos >= newEnd && pos-shift >= oldEnd && len(lines) > first {
+			old, found := slices.BinarySearchFunc(d.lines, pos-shift, func(line lexicalLine, offset int) int { return line.start - offset })
+			if found && old > 0 && state.Equal(d.lines[old-1].endState) {
+				tokenShift := len(ranges) - d.lines[old].tokenStart
+				for _, capture := range d.ranges[d.lines[old].tokenStart:] {
+					capture.StartByte = uint32(int(capture.StartByte) + shift)
+					capture.EndByte = uint32(int(capture.EndByte) + shift)
+					ranges = append(ranges, capture)
+				}
+				for _, line := range d.lines[old:] {
+					line.start += shift
+					line.tokenStart += tokenShift
+					lines = append(lines, line)
+				}
+				break
+			}
+		}
+		end := strings.IndexByte(source[pos:], '\n')
+		if end < 0 {
+			end = len(source)
 		} else {
-			point.Column += uint32(oldSize)
+			end += pos
 		}
-		prefix += oldSize
-	}
-	oldEnd, newEnd := len(before), len(after)
-	for oldEnd > prefix && newEnd > prefix {
-		oldRune, oldSize := utf8.DecodeLastRuneInString(before[:oldEnd])
-		newRune, newSize := utf8.DecodeLastRuneInString(after[:newEnd])
-		if oldRune != newRune || oldSize != newSize {
+		text := source[pos:end]
+		tokenStart := len(ranges)
+		result := d.grammar.TokenizeLineWithOptions(text, state, textmate.TokenizeOptions{MaxLineBytes: 20_000})
+		d.retokenized++
+		// Convert monotonically increasing rune offsets in one pass. The editor and
+		// wire protocol use bytes, including for CJK and astral Unicode characters.
+		runePos, bytePos := 0, 0
+		toByte := func(target int) int {
+			for runePos < target && bytePos < len(text) {
+				_, size := utf8.DecodeRuneInString(text[bytePos:])
+				bytePos += size
+				runePos++
+			}
+			return bytePos
+		}
+		for _, token := range result.Tokens {
+			begin, finish := toByte(token.Start), toByte(token.End)
+			if begin == finish {
+				continue
+			}
+			if d.scopes == nil {
+				d.scopes = make(map[*textmate.ScopeStack]tokenKey)
+			}
+			key, ok := d.scopes[token.ScopeStack]
+			if !ok {
+				key = tokenKey{capture: lexicalCategory(token), scopes: strings.Join(token.Scopes, " ")}
+				d.scopes[token.ScopeStack] = key
+			}
+			ranges = append(ranges, Capture{uint32(pos + begin), uint32(pos + finish), key.capture, key.scopes})
+		}
+		state = result.RuleStack
+		lines = append(lines, lexicalLine{pos, tokenStart, state})
+		if end == len(source) {
 			break
 		}
-		oldEnd -= oldSize
-		newEnd -= newSize
+		pos = end + 1
 	}
-	return gotreesitter.InputEdit{
-		StartByte: uint32(prefix), OldEndByte: uint32(oldEnd), NewEndByte: uint32(newEnd),
-		StartPoint: point, OldEndPoint: advancePoint(point, before[prefix:oldEnd]), NewEndPoint: advancePoint(point, after[prefix:newEnd]),
-	}
+	oldRanges, oldLines := d.ranges, d.lines
+	d.ranges, d.lines = ranges, lines
+	clear(oldRanges)
+	clear(oldLines)
+	d.scratch, d.lineScratch = oldRanges[:0], oldLines[:0]
 }
 
-func advancePoint(point gotreesitter.Point, value string) gotreesitter.Point {
-	if last := strings.LastIndexByte(value, '\n'); last >= 0 {
-		point.Row += uint32(strings.Count(value, "\n"))
-		point.Column = uint32(len(value) - last - 1)
-	} else {
-		point.Column += uint32(len(value))
+func lexicalCategory(token textmate.Token) string {
+	// Bracket matching must ignore comment/string delimiters as well as bodies.
+	ignored := ""
+	for _, scope := range token.Scopes {
+		switch {
+		case scopePrefix(scope, "meta.embedded"), scopePrefix(scope, "meta.template.expression"):
+			ignored = ""
+		case scopePrefix(scope, "comment"):
+			ignored = "comment"
+		case scopePrefix(scope, "string.regexp"):
+			ignored = "string.regexp"
+		case scopePrefix(scope, "string"), scopePrefix(scope, "constant.character"), scopePrefix(scope, "markup.raw"), scopePrefix(scope, "markup.inline.raw"):
+			ignored = "string"
+		}
 	}
-
-	return point
+	if ignored != "" {
+		return ignored
+	}
+	category := token.Category()
+	if category == textmate.TokenCategoryRegexp {
+		return "string.regexp"
+	}
+	if category == textmate.TokenCategoryHeading {
+		return "markup.heading"
+	}
+	if category == textmate.TokenCategoryBold {
+		return "markup.bold"
+	}
+	if category == textmate.TokenCategoryItalic {
+		return "markup.italic"
+	}
+	if category == textmate.TokenCategoryInvalid {
+		return "error"
+	}
+	return category.String()
 }
 
-// Tokens returns sorted, non-overlapping byte ranges. Switching the theme or
-// definitions recolors cached captures without parsing or executing queries.
+func scopePrefix(scope, prefix string) bool {
+	return scope == prefix || strings.HasPrefix(scope, prefix+".")
+}
+
+// Captures borrows the current ranges until the next update or Close.
+func (d *Document) Captures() []Capture { return d.ranges }
+
+// Tokens recolors cached scopes. Neither theme changes nor identical updates
+// invoke the tokenizer. The unchanged source/theme path allocates no memory.
 func (d *Document) Tokens(theme *Theme, definitions *Definitions) []Token {
 	if definitions == nil {
 		definitions = DefaultDefinitions()
 	}
-	if d.theme != theme || d.definitions != definitions {
-		d.theme, d.definitions, d.styled = theme, definitions, false
-		clear(d.palette)
-		d.rootScope = definitions.SourceScopes[d.language]
-		if d.rootScope == "" {
-			d.rootScope = "source." + d.language
+	if d.styled && d.painter.theme == theme && d.painter.definitions == definitions {
+		return d.painter.tokens
+	}
+	if !d.styled {
+		clear(d.tokens)
+		d.tokens = d.tokens[:0]
+		for _, c := range d.ranges {
+			d.tokens = append(d.tokens, Token{Start: int(c.StartByte), End: int(c.EndByte), Capture: c.Capture, Scopes: c.Scopes})
 		}
 	}
-	if d.styled {
-		return d.tokens
-	}
-	if d.palette == nil {
-		d.palette = make(map[string]tokenStyle)
-	}
-	d.tokens = d.tokens[:0]
-	for _, capture := range d.ranges {
-		start, end := int(capture.StartByte), int(capture.EndByte)
-		if start >= end || end > len(d.source) {
-			continue
-		}
-		style, ok := d.palette[capture.Capture]
-		if !ok {
-			scope := definitions.Scope(capture.Capture)
-			if scope == "" {
-				continue
-			}
-			// The language suffix permits conventional language-specific rules.
-			suffix := d.language
-			if strings.HasPrefix(d.rootScope, "source.") {
-				suffix = strings.TrimPrefix(d.rootScope, "source.")
-			}
-			style.style = theme.Resolve(d.rootScope, scope+"."+suffix)
-			style.css = style.style.CSS()
-			d.palette[capture.Capture] = style
-		}
-		d.tokens = append(d.tokens, Token{start, end, capture.Capture, style.style, style.css})
-	}
+	result := d.painter.Tokens(d.language, d.tokens, theme, definitions)
 	d.styled = true
-	return d.tokens
+	return result
 }
 
-// Captures exposes render-neutral byte ranges, borrowed until Update or Close.
-func (d *Document) Captures() []gotreesitter.HighlightRange { return d.ranges }
-
-// Painter resolves remote captures using the GUI's current theme. It holds no
-// parser, tree, or source text and reuses its palette and output storage.
+// Painter resolves lexical scopes locally, independent of the tokenizer.
 type Painter struct {
 	language    string
 	theme       *Theme
 	definitions *Definitions
-	palette     map[string]tokenStyle
+	palette     map[tokenKey]tokenStyle
 	tokens      []Token
 }
 
@@ -322,27 +351,39 @@ func (p *Painter) Tokens(language string, captures []Token, theme *Theme, defini
 		p.language, p.theme, p.definitions = language, theme, definitions
 	}
 	if p.palette == nil {
-		p.palette = make(map[string]tokenStyle)
+		p.palette = make(map[tokenKey]tokenStyle)
 	}
-	root := definitions.SourceScopes[language]
-	if root == "" {
-		root = "source." + language
-	}
-	suffix := strings.TrimPrefix(root, "source.")
+	previous := len(p.tokens)
 	p.tokens = p.tokens[:0]
 	for _, capture := range captures {
-		style, ok := p.palette[capture.Capture]
+		key := tokenKey{capture.Capture, capture.Scopes}
+		style, ok := p.palette[key]
 		if !ok {
-			scope := definitions.Scope(capture.Capture)
-			if scope == "" {
-				continue
+			scopes := strings.Fields(capture.Scopes)
+			if root := definitions.SourceScopes[language]; root != "" && len(scopes) > 0 {
+				scopes[0] = root
 			}
-			style.style = theme.Resolve(root, scope+"."+suffix)
+			// Explicit user category overrides remain useful with native TextMate scopes.
+			scope := definitions.Scope(capture.Capture)
+			if scope != "" && (len(scopes) == 0 || scope != DefaultDefinitions().Scope(capture.Capture)) {
+				root := definitions.SourceScopes[language]
+				if root == "" {
+					root = "source." + language
+				}
+				if len(scopes) == 0 {
+					scopes = append(scopes, root)
+				}
+				scopes = append(scopes, scope+"."+strings.TrimPrefix(root, "source."))
+			}
+			style.style = theme.Resolve(scopes...)
 			style.css = style.style.CSS()
-			p.palette[capture.Capture] = style
+			p.palette[key] = style
 		}
 		capture.Style, capture.CSS = style.style, style.css
 		p.tokens = append(p.tokens, capture)
+	}
+	if len(p.tokens) < previous {
+		clear(p.tokens[len(p.tokens):previous])
 	}
 	return p.tokens
 }
