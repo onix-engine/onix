@@ -14,7 +14,7 @@ type modHTMLImages struct {
 	base  string
 }
 
-func (p modHTMLImages) ResolveHTMLImage(source string) (*graphics.Texture, bool) {
+func (p modHTMLImages) ResolveHTMLImage(source string, width, height float32) (*graphics.Texture, bool) {
 	location, err := url.Parse(source)
 	if err != nil || location.Scheme != "" || location.Host != "" || location.Opaque != "" {
 		return nil, false

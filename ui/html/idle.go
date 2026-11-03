@@ -8,9 +8,10 @@ import (
 // NeedsFrame includes changes made after HTML synchronization. An app must
 // flush them before suspending, even if it already consumed its render request.
 func NeedsFrame(world *ecs.World) bool {
-	for entity, access := range world.Query[htmlComponentInstance]().All {
-		instance := access.Ref()
-		if instance.Dirty && instance.Definition != nil && scene.IsActive(world, entity) {
+	queue := world.FrameValue[htmlComponentDirtyTag, htmlComponentPending]()
+	for _, entity := range queue.Entities {
+		instance := world.GetRef[htmlComponentInstance](entity)
+		if instance != nil && instance.Dirty && instance.Definition != nil && world.InQueryScope(entity) && scene.IsActive(world, entity) {
 			return true
 		}
 	}
@@ -50,16 +51,5 @@ func Animating(world *ecs.World) bool {
 }
 
 func htmlAnimating(state *htmlRenderState) bool {
-	for _, node := range state.Animations {
-		if node.Active != 0 {
-			return true
-		}
-		for _, animation := range node.Tracks {
-			definition := animation.Track.Definition
-			if !definition.Paused && animation.Track.Properties != 0 && animation.Elapsed < definition.Delay+htmlAnimationActiveDuration(definition) {
-				return true
-			}
-		}
-	}
-	return false
+	return len(state.ActiveAnimations) != 0
 }

@@ -137,10 +137,24 @@ int main(void) {
 		uint32_t ids[32 * 32];
 		require(onix_metal_read_render_target(driver, picking, 0, 0, 32, 32, (uint8_t *)ids, sizeof(ids)), "read picking target");
 		require(ids[16 * 32 + 16] == 42, "near picking ID survives later far draw");
+		OnixBufferMemory retained;
+		onix_metal_buffer_memory(driver, &retained);
+		require(retained.instances > 0 && retained.readback > 0, "transient buffers allocated before idle");
+		id<MTLCommandBuffer> pending = [driver->queue commandBuffer];
+		driver->inflight_commands[0] = [pending retain];
+		[pending commit];
+		require(onix_metal_trim_idle(driver), "trim idle buffers");
+		require(driver->inflight_commands[0] == nil, "idle waited for and released in-flight work");
+		onix_metal_buffer_memory(driver, &retained);
+		require(retained.instances == 0 && retained.staging == 0 && retained.readback == 0 && retained.scratch == 0, "idle released all transient storage");
+		require(onix_metal_trim_idle(driver), "repeated idle trim is safe");
+		require(onix_metal_read_render_target(driver, picking, 0, 0, 32, 32, (uint8_t *)ids, sizeof(ids)), "recreate readback after idle");
+		require(ids[16 * 32 + 16] == 42, "idle preserved persistent render targets");
 
 		uint8_t pixels[32 * 256];
 		for (int frame = 0; frame < 4; frame++) {
 			require(onix_metal_begin_frame(driver, blue), "begin mixed frame");
+			require(!onix_metal_trim_idle(driver), "reject trimming an active frame");
 			onix_metal_set_scissor(driver, 1, 0, 0, 4, 4); shapes(driver);
 			onix_metal_set_scissor(driver, 0, 0, 0, 0, 0);
 			require(mesh(driver, 0, 0, 0.6, 0, 0), "first surface mesh upgrades encoder");

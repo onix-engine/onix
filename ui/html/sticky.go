@@ -20,7 +20,7 @@ type htmlStickyBinding struct {
 	area                     ecs.Entity
 	viewport                 layout.Rect
 	offset                   mgl32.Vec2
-	resolved                 bool
+	resolved                 uint64
 }
 
 type htmlStickyRoute struct {
@@ -60,6 +60,7 @@ func bindHTMLStickyContent(world *ecs.World, state *htmlRenderState) {
 	if len(state.StickyBindings) == 0 && len(state.StickyRoutes.values) == 0 {
 		return
 	}
+	world.FrameValue[htmlStickyWorkTag, htmlStickyWork]().revision++
 	for node, binding := range state.StickyBindings {
 		box := state.BoxesByNode[node]
 		if box == nil || box.Style.Position != style.Keyword("sticky") {
@@ -152,34 +153,67 @@ func htmlStickyTableInternal(display string) bool {
 // SyncScrollContent applies HTML scroll and sticky offsets after scroll input,
 // before global transforms and hit-test bounds are synchronized.
 func SyncScrollContent(world *ecs.World) {
-	for _, access := range world.Query[htmlRenderState]().All {
-		for _, binding := range access.Ref().StickyBindings {
-			binding.resolved = false
+	work := world.FrameValue[htmlStickyWorkTag, htmlStickyWork]()
+	index := world.ScopeValue[htmlScrollContentTag, htmlScrollIndex[ScrollContent, htmlScrollPosition]]()
+	contents, _ := world.ComponentValueRevision[ScrollContent]()
+	transformWrites, transforms := world.ComponentValueRevision[scene.UITransform]()
+	if index.rebuild(world, [7]uint64{contents, transforms}, work.revision) {
+		for entity, access := range world.Query2[ScrollContent, scene.UITransform]().All {
+			content := access.A.Get()
+			entry := len(index.entries)
+			index.entries = append(index.entries, htmlScrollEntry[ScrollContent]{entity: entity, value: content})
+			index.add(content.Area, entry)
+			index.addSticky(content.sticky, entry)
+			index.addSticky(content.parentSticky, entry)
+			clear(index.seen)
 		}
+		index.trim()
+	} else {
+		index.context = world.ChangesSince(index.lastRun - 1)
+		index.dirtyOutput[scene.UITransform](world, transformWrites, 0, htmlScrollContentArea)
 	}
-	for entity, access := range world.Query2[ScrollContent, scene.UITransform]().All {
-		content := access.A.Ref()
-		offset, ok := scene.GetUIScrollOffset(world, content.Area)
-		if !ok && content.sticky == nil && content.parentSticky == nil {
+	index.generation++
+	work.generation++
+	for area, group := range index.groups {
+		snapshot := htmlScrollPosition{}
+		if scroll := world.GetRef[scene.UIScroll](area); scroll != nil {
+			snapshot = htmlScrollPosition{position: scroll.Position, contentSize: scroll.ContentSize, exists: true}
+		}
+		if !group.dirty && group.snapshot == snapshot {
 			continue
 		}
-		offset = offset.Add(content.sticky.resolve(world)).Sub(content.parentSticky.resolve(world))
-		transform := access.B.Get()
-		transform.Translation.X.Value = content.X + offset.X()
-		transform.Translation.Y.Value = content.Y + offset.Y()
-		world.SetIfChanged(entity, transform)
+		group.snapshot, group.dirty = snapshot, false
+		for _, entryIndex := range group.indices {
+			entry := &index.entries[entryIndex]
+			if entry.applied == index.generation {
+				continue
+			}
+			entry.applied = index.generation
+			content := entry.value
+			offset, ok := scene.GetUIScrollOffset(world, content.Area)
+			if !ok && content.sticky == nil && content.parentSticky == nil {
+				continue
+			}
+			offset = offset.Add(content.sticky.resolve(world, work.generation)).Sub(content.parentSticky.resolve(world, work.generation))
+			transform, _ := world.Get[scene.UITransform](entry.entity)
+			transform.Translation.X.Value = content.X + offset.X()
+			transform.Translation.Y.Value = content.Y + offset.Y()
+			world.SetIfChanged(entry.entity, transform)
+		}
 	}
+	index.outputs[0], _ = world.ComponentValueRevision[scene.UITransform]()
+	index.lastRun = world.ChangeTick()
 }
 
-func (binding *htmlStickyBinding) resolve(world *ecs.World) mgl32.Vec2 {
+func (binding *htmlStickyBinding) resolve(world *ecs.World, generation uint64) mgl32.Vec2 {
 	if binding == nil {
 		return mgl32.Vec2{}
 	}
-	if binding.resolved {
+	if binding.resolved == generation {
 		return binding.offset
 	}
-	parent := binding.parent.resolve(world)
-	viewShift := parent.Sub(binding.scrollportSticky.resolve(world))
+	parent := binding.parent.resolve(world, generation)
+	viewShift := parent.Sub(binding.scrollportSticky.resolve(world, generation))
 	if scroll, ok := scene.GetUIScrollOffset(world, binding.area); ok {
 		viewShift = viewShift.Add(scroll)
 	}
@@ -201,7 +235,7 @@ func (binding *htmlStickyBinding) resolve(world *ecs.World) mgl32.Vec2 {
 		float32(htmlStickyAxis(border.X, border.Width, containing.X, containing.Width, box.Margin.Left, box.Margin.Right, view.X-float64(viewShift.X()), view.Width, box.Style.Left, box.Style.Right)),
 		float32(htmlStickyAxis(border.Y, border.Height, containing.Y, containing.Height, box.Margin.Top, box.Margin.Bottom, view.Y-float64(viewShift.Y()), view.Height, box.Style.Top, box.Style.Bottom)),
 	})
-	binding.resolved = true
+	binding.resolved = generation
 	return binding.offset
 }
 

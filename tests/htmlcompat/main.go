@@ -23,7 +23,7 @@ type fixtureImageProvider struct {
 	textures map[string]*graphics.Texture
 }
 
-func (p *fixtureImageProvider) ResolveHTMLImage(source string) (*graphics.Texture, bool) {
+func (p *fixtureImageProvider) ResolveHTMLImage(source string, width, height float32) (*graphics.Texture, bool) {
 	if p == nil || source == "" || strings.Contains(source, "://") || filepath.IsAbs(source) {
 		return nil, false
 	}

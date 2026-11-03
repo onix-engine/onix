@@ -12,6 +12,9 @@ import (
 // GlyphLCD produces raw RGB coverage using Skia's four-sample LCD filter.
 // Atlas users apply foreground preblend and retain the resulting bitmap.
 func (f *ScaledFace) GlyphLCD(r rune, phaseX uint8) (image.Rectangle, *image.RGBA, Int26_6, bool) {
+	if IsGlyphFormatControl(r) {
+		return image.Rectangle{}, nil, 0, true
+	}
 	if f == nil || f.font == nil {
 		return image.Rectangle{}, nil, 0, false
 	}

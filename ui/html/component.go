@@ -188,7 +188,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		if behavior.HandleEvent != nil {
 			behavior.HandleEvent(context)
 		}
-		instance.Dirty = true
+		markHTMLComponentDirty(world, entity)
 		if context.defaultPrevented && pointer != nil {
 			pointer.Consume()
 		}
@@ -510,6 +510,7 @@ type htmlComponentInstance struct {
 	Current           htmlComponentVNodeState
 	Next              htmlComponentVNodeState
 	Dirty             bool
+	queued            bool
 	Mounted           bool
 	ChildrenPending   bool
 	Rendering         bool
@@ -739,7 +740,7 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 		Refs: make(map[string]*dom.Node), Handlers: make(map[string]ClickHandler), EventNodes: make(map[htmlComponentEventKey]*dom.Node),
 		Keyed:             make(map[string]*htmlComponentKeyedList),
 		ComponentChildren: make(map[string]*htmlComponentChildList),
-		Current:           newHTMLComponentVNodeState(), Next: newHTMLComponentVNodeState(), Dirty: true,
+		Current:           newHTMLComponentVNodeState(), Next: newHTMLComponentVNodeState(),
 	}
 	if adoptedRoots != nil {
 		for _, root := range adoptedRoots {
@@ -776,6 +777,7 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 			parentInstance.Children = append(parentInstance.Children, entity)
 		}
 	}
+	markHTMLComponentDirty(world, entity)
 	definition.runtime.mount(world, entity)
 	return entity, nil
 }
@@ -1011,6 +1013,7 @@ func SyncComponentsSystem(name string) ecs.SystemConfig {
 
 type htmlComponentEventReaderTag struct{}
 type htmlComponentPendingTag struct{}
+type htmlComponentDirtyTag struct{}
 
 type htmlComponentPending struct {
 	Entities []ecs.Entity
@@ -1026,18 +1029,27 @@ func syncHTMLComponents(context *ecs.SystemContext) error {
 		dispatchHTMLComponentEvent(world, event)
 	}
 	pending := context.Local[htmlComponentPendingTag, htmlComponentPending]()
-	pending.Entities = pending.Entities[:0]
-	for entity, access := range world.Query[htmlComponentInstance]().All {
-		instance := access.Ref()
-
-		if instance == nil || !instance.Dirty || instance.Definition == nil || !world.IsAlive(entity) || !scene.IsActive(world, entity) {
+	queue := world.FrameValue[htmlComponentDirtyTag, htmlComponentPending]()
+	// Snapshot this pass. Changes made by rendering wait for the next sync;
+	// inactive and out-of-scope components keep their place in the dirty queue.
+	pending.Entities, queue.Entities = queue.Entities, pending.Entities[:0]
+	for _, entity := range pending.Entities {
+		instance := world.GetRef[htmlComponentInstance](entity)
+		if instance == nil {
 			continue
 		}
-		pending.Entities = append(pending.Entities, entity)
-	}
-	for _, entity := range pending.Entities {
+		if !instance.Dirty || instance.Definition == nil {
+			instance.queued = false
+			continue
+		}
+		if !world.InQueryScope(entity) || !scene.IsActive(world, entity) {
+			queue.Entities = append(queue.Entities, entity)
+			continue
+		}
+		instance.queued = false
 		renderDirtyHTMLComponent(world, entity)
 	}
+	pending.Entities = pending.Entities[:0]
 	return nil
 }
 
@@ -1183,8 +1195,13 @@ func htmlComponentEventNode(world *ecs.World, event *Event) *dom.Node {
 }
 
 func markHTMLComponentDirty(world *ecs.World, entity ecs.Entity) {
-	if instance := world.GetMut[htmlComponentInstance](entity); instance != nil {
+	if instance := world.GetRef[htmlComponentInstance](entity); instance != nil {
 		instance.Dirty = true
+		if !instance.queued {
+			instance.queued = true
+			queue := world.FrameValue[htmlComponentDirtyTag, htmlComponentPending]()
+			queue.Entities = append(queue.Entities, entity)
+		}
 	}
 }
 

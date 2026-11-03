@@ -1597,13 +1597,15 @@ func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range world.Query2[scene.Sprite2D, scene.Parent]().All {
-		sprite := access.A.Get()
+	for _, access := range world.Query2[scene.SpriteLayers2D, scene.Parent]().All {
 		parent := access.B.Get()
-
-		if parent.Entity == owner && sprite.Shape.Fill == graphics.ColorFromRGB(0x44, 0x55, 0x66) {
-			found = true
-			break
+		if parent.Entity != owner {
+			continue
+		}
+		for _, layer := range access.A.Ref().Layers {
+			if layer.Visible && layer.Transform.X == 0 && layer.Transform.Y == 0 && layer.Sprite.Width == 2 && layer.Sprite.Shape.Fill == graphics.ColorFromRGB(0x44, 0x55, 0x66) {
+				found = true
+			}
 		}
 	}
 	if !found {

@@ -23,6 +23,12 @@ type ScaledFace struct {
 	metrics     Metrics
 }
 
+// IsGlyphFormatControl identifies joiners, variation selectors and emoji tags.
+// They remain in the source text for selection but have no standalone ink or advance.
+func IsGlyphFormatControl(r rune) bool {
+	return r == 0x200c || r == 0x200d || r >= 0xfe00 && r <= 0xfe0f || r >= 0xe0020 && r <= 0xe007f || r >= 0xe0100 && r <= 0xe01ef
+}
+
 func NewFace(face *Face, opts *FaceOptions) (*ScaledFace, error) {
 	if face == nil {
 		return nil, nil
@@ -74,7 +80,7 @@ func (f *ScaledFace) Metrics() Metrics {
 }
 
 func (f *ScaledFace) Kern(left, right rune) Int26_6 {
-	if f == nil || f.font == nil {
+	if f == nil || f.font == nil || IsGlyphFormatControl(left) || IsGlyphFormatControl(right) {
 		return 0
 	}
 
@@ -97,6 +103,9 @@ func (f *ScaledFace) resolveGlyph(r rune) (*Face, uint16, float64) {
 }
 
 func (f *ScaledFace) GlyphAdvance(r rune) (Int26_6, bool) {
+	if IsGlyphFormatControl(r) {
+		return 0, true
+	}
 	if f == nil || f.font == nil {
 		return 0, false
 	}
@@ -110,6 +119,9 @@ func (f *ScaledFace) GlyphAdvance(r rune) (Int26_6, bool) {
 }
 
 func (f *ScaledFace) Glyph(dot Point26_6, r rune) (image.Rectangle, image.Image, image.Point, Int26_6, bool) {
+	if IsGlyphFormatControl(r) {
+		return image.Rectangle{}, nil, image.Point{}, 0, true
+	}
 	if f == nil || f.font == nil {
 		return image.Rectangle{}, nil, image.Point{}, 0, false
 	}
@@ -122,11 +134,17 @@ func (f *ScaledFace) Glyph(dot Point26_6, r rune) (image.Rectangle, image.Image,
 
 	bounds := bitmap.Bounds
 	dr := image.Rect(bounds.Min.X, -bounds.Max.Y, bounds.Max.X, -bounds.Min.Y).Add(image.Pt(int(dot.X>>6), int(dot.Y>>6)))
+	if bitmap.Color != nil {
+		return dr, bitmap.Color, image.Point{}, toFixed(bitmap.Advance), true
+	}
 	return dr, bitmap.Image, image.Point{}, toFixed(bitmap.Advance), true
 }
 
 // GlyphBounds matches Glyph at the pixel origin without rasterizing a bitmap.
 func (f *ScaledFace) GlyphBounds(r rune) (image.Rectangle, Int26_6, bool) {
+	if IsGlyphFormatControl(r) {
+		return image.Rectangle{}, 0, true
+	}
 	if f == nil || f.font == nil || f.font.Head.UnitsPerEm == 0 {
 		return image.Rectangle{}, 0, false
 	}
@@ -134,6 +152,9 @@ func (f *ScaledFace) GlyphBounds(r rune) (image.Rectangle, Int26_6, bool) {
 	metrics, err := face.HorizontalMetrics(glyphID)
 	if err != nil {
 		return image.Rectangle{}, 0, false
+	}
+	if bounds, ok := face.colorBounds(glyphID, f.pixelsPerEm, 0, 0); ok {
+		return image.Rect(bounds.Min.X, -bounds.Max.Y, bounds.Max.X, -bounds.Min.Y), toFixed(float64(metrics.AdvanceWidth) * scale), true
 	}
 	bounds, err := face.GlyphBounds(glyphID)
 	if err != nil {

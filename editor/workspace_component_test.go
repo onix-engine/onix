@@ -210,7 +210,7 @@ func TestWorkspaceResourcesUseFlatIconTilesAndKeepSelection(t *testing.T) {
 		t.Fatal("selection replaced the file tile control")
 	}
 	for _, provider := range []html.ImageProvider{a, editorHTMLImages{}} {
-		texture, ok := provider.ResolveHTMLImage("onix-file-icons/json")
+		texture, ok := provider.ResolveHTMLImage("onix-file-icons/json", 0, 0)
 		if !ok || texture == nil || texture != editorresources.FileIconTexture("json") {
 			t.Fatal("editor image provider did not resolve the atlas frame")
 		}

@@ -102,6 +102,18 @@ func (d *metalDriver) BufferMemoryStatistics() BufferMemoryStatistics {
 	}
 }
 
+func (d *metalDriver) TrimIdleBuffers() error {
+	if C.onix_metal_trim_idle(d.native) == 0 {
+		return metalError("trim idle buffers")
+	}
+	d.textureUpload.release()
+	d.draws = nil
+	d.draws3D = nil
+	d.deformationWords = nil
+	d.updates = nil
+	return nil
+}
+
 func (d *metalDriver) RendererInfo() RendererInfo {
 	return RendererInfo{Backend: "Metal", Device: d.deviceName}
 }

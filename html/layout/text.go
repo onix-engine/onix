@@ -1567,6 +1567,10 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 	var previous uint16
 	var previousFace *font.Face
 	for _, r := range token.Text {
+		if font.IsGlyphFormatControl(r) {
+			glyphs = append(glyphs, shapedGlyph{Rune: r, X: advance, PenX: float32(advance)})
+			continue
+		}
 		glyphFace, glyphID := face.ResolveGlyph(r)
 		scale := fontSize / float64(glyphFace.Head.UnitsPerEm)
 		if previousFace == glyphFace {

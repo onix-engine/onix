@@ -618,9 +618,8 @@ func autofocusHTMLElement(world *ecs.World) {
 		return
 	}
 	var target ecs.Entity
-	for entity, access := range world.Query[html.Focusable]().All {
-		focusable := access.Get()
-
+	for _, entity := range htmlFocusLookup(world).autofocus {
+		focusable, _ := world.Get[html.Focusable](entity)
 		if !focusable.AutoFocus || world.Has[htmlAutofocusApplied](focusable.Owner) || !scene.IsInteractive(world, entity) {
 			continue
 		}

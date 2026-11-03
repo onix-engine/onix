@@ -528,8 +528,9 @@ func dispatchHTMLActionHandler(world *ecs.World, context *ActionContext, entity 
 
 // ImageProvider resolves an img src into an engine texture. Applications
 // can install one as a resource when HTML pages reference project assets.
+// Width and height are the laid-out CSS size before surface transforms and DPI.
 type ImageProvider interface {
-	ResolveHTMLImage(source string) (*graphics.Texture, bool)
+	ResolveHTMLImage(source string, width, height float32) (*graphics.Texture, bool)
 }
 
 // Images binds an immutable image provider to one surface. Its owner resolves
@@ -1389,28 +1390,26 @@ func SetNodeOffset(world *ecs.World, owner ecs.Entity, id string, x, y float32) 
 	if state == nil || state.Root == nil {
 		return false
 	}
+	full := state.IndexDirty || len(state.Mutations) != 0
 	target := lookupHTMLNode(state, id)
 	if target == nil {
 		return false
 	}
+	full = prepareHTMLNodeBindings(world, state) || full
 	offset := mgl32.Vec2{x, y}
-	stored := false
-	for index := range state.NodeOffsets {
-		if state.NodeOffsets[index].ID != id {
-			continue
-		}
+	if index, stored := state.NodeOffsetIDs[id]; stored {
 		state.NodeOffsets[index].Offset = offset
-		stored = true
-		break
-	}
-	if !stored {
-		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{ID: id, Offset: offset})
+	} else {
+		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{node: target, ID: id, Offset: offset})
 		if len(state.PaintCullOffsets) != 0 {
 			state.Revision++
 		}
+		full = prepareHTMLNodeBindings(world, state) || full
 	}
-	prepareHTMLNodeBindings(world, state)
-	return applyHTMLNodeBindings(world, state, state.Children)
+	if full {
+		return applyHTMLNodeBindings(world, state, state.Children)
+	}
+	return applyHTMLNodeBindingSubtree(world, state, target)
 }
 
 // SetNodeScroll attaches the generated visuals for an HTML element to an
@@ -1426,21 +1425,19 @@ func SetNodeScroll(world *ecs.World, owner ecs.Entity, id string, area ecs.Entit
 	if state == nil || state.Root == nil {
 		return false
 	}
+	full := state.IndexDirty || len(state.Mutations) != 0
 	target := lookupHTMLNode(state, id)
 	if target == nil {
 		return false
 	}
-	binding := htmlNodeScroll{ID: id, Area: area, Origin: mgl32.Vec2{originX, originY}}
-	stored := false
-	for index := range state.NodeScrolls {
-		if state.NodeScrolls[index].ID != id {
-			continue
+	full = prepareHTMLNodeBindings(world, state) || full
+	binding := htmlNodeScroll{node: target, ID: id, Area: area, Origin: mgl32.Vec2{originX, originY}, live: true}
+	if index, stored := state.NodeScrollIDs[id]; stored {
+		if state.NodeScrolls[index].Area != binding.Area {
+			state.NodeBindingsPrepared = false
 		}
-		state.NodeScrolls[index] = binding
-		stored = true
-		break
-	}
-	if !stored {
+		state.NodeScrolls[index].Area, state.NodeScrolls[index].Origin = binding.Area, binding.Origin
+	} else {
 		state.NodeScrolls = append(state.NodeScrolls, binding)
 		if len(state.PaintCullOffsets) != 0 {
 			state.Revision++
@@ -1450,8 +1447,10 @@ func SetNodeScroll(world *ecs.World, owner ecs.Entity, id string, area ecs.Entit
 	if _, clipped := state.OverflowBindings[target]; clipped {
 		state.PartialValid = false
 	}
-	prepareHTMLNodeBindings(world, state)
-	return applyHTMLNodeBindings(world, state, state.Children)
+	if prepareHTMLNodeBindings(world, state) || full {
+		return applyHTMLNodeBindings(world, state, state.Children)
+	}
+	return applyHTMLNodeBindingSubtree(world, state, target)
 }
 
 type htmlNodeScroll struct {
@@ -1459,25 +1458,49 @@ type htmlNodeScroll struct {
 	ID     string
 	Area   ecs.Entity
 	Origin mgl32.Vec2
+	live   bool
 }
 
 type htmlBindingIndices struct{ offset, scroll int }
 
+type htmlNodeBindingKey struct {
+	root               *dom.Node
+	revision, entities uint64
+	offsets, scrolls   int
+}
+
 // Resolve IDs and registration precedence once per synchronization. Shared
 // ancestor routes are then reused across all local entity batches.
-func prepareHTMLNodeBindings(world *ecs.World, state *htmlRenderState) {
+// Report changes that can affect bindings outside a setter's target subtree.
+func prepareHTMLNodeBindings(world *ecs.World, state *htmlRenderState) bool {
+	state.NodeBindingRoutes.clear()
+	key := htmlNodeBindingKey{state.Root, state.Revision, world.EntityVersion(), len(state.NodeOffsets), len(state.NodeScrolls)}
+	if state.NodeBindingsPrepared && state.NodeBindingKey == key {
+		return false
+	}
+	state.NodeBindingKey, state.NodeBindingsPrepared = key, true
 	clear(state.NodeBindingLocals)
 	clear(state.NodeScrollBindings)
-	state.NodeBindingRoutes.clear()
+	clear(state.NodeOffsetIDs)
+	clear(state.NodeScrollIDs)
 	if len(state.NodeOffsets) == 0 && len(state.NodeScrolls) == 0 {
-		return
+		return false
 	}
+	changed := false
 	if state.NodeBindingLocals == nil {
 		state.NodeBindingLocals = make(map[*dom.Node]htmlBindingIndices)
 	}
+	if len(state.NodeOffsets) != 0 && state.NodeOffsetIDs == nil {
+		state.NodeOffsetIDs = make(map[string]int)
+	}
 	for i := range state.NodeOffsets {
 		binding := &state.NodeOffsets[i]
-		binding.node = lookupHTMLNode(state, binding.ID)
+		if _, exists := state.NodeOffsetIDs[binding.ID]; !exists {
+			state.NodeOffsetIDs[binding.ID] = i
+		}
+		node := lookupHTMLNode(state, binding.ID)
+		changed = changed || binding.node != node
+		binding.node = node
 		if binding.node != nil {
 			indices := state.NodeBindingLocals[binding.node]
 			indices.offset = i + 1
@@ -1486,15 +1509,21 @@ func prepareHTMLNodeBindings(world *ecs.World, state *htmlRenderState) {
 	}
 	if len(state.NodeScrolls) != 0 && state.NodeScrollBindings == nil {
 		state.NodeScrollBindings = make(map[*dom.Node]struct{})
+		state.NodeScrollIDs = make(map[string]int)
 	}
 	for i := range state.NodeScrolls {
 		binding := &state.NodeScrolls[i]
-		binding.node = lookupHTMLNode(state, binding.ID)
+		if _, exists := state.NodeScrollIDs[binding.ID]; !exists {
+			state.NodeScrollIDs[binding.ID] = i
+		}
+		node, live := lookupHTMLNode(state, binding.ID), world.IsAlive(binding.Area)
+		changed = changed || binding.node != node || binding.live != live
+		binding.node, binding.live = node, live
 		if binding.node == nil {
 			continue
 		}
 		state.NodeScrollBindings[binding.node] = struct{}{}
-		if world.IsAlive(binding.Area) {
+		if live {
 			indices := state.NodeBindingLocals[binding.node]
 			if indices.scroll == 0 {
 				indices.scroll = i + 1
@@ -1502,6 +1531,21 @@ func prepareHTMLNodeBindings(world *ecs.World, state *htmlRenderState) {
 			}
 		}
 	}
+	return changed
+}
+
+func applyHTMLNodeBindingSubtree(world *ecs.World, state *htmlRenderState, node *dom.Node) bool {
+	if computed := state.Styles[node]; computed != nil && computed.Display == style.Keyword("none") {
+		return false
+	}
+	changed := false
+	if rendered := state.RenderNodes[node]; rendered != nil {
+		changed = applyHTMLNodeBindings(world, state, rendered.Entities)
+	}
+	for _, child := range node.Children {
+		changed = applyHTMLNodeBindingSubtree(world, state, child) || changed
+	}
+	return changed
 }
 
 // Replay only freshly emitted entities during local reconciliation. Offset
@@ -1760,6 +1804,9 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		state.EmbeddedCSS = embeddedCSS
 		state.Root = root
 		clear(state.Animations)
+		clear(state.ActiveAnimations)
+		state.ActiveAnimations = state.ActiveAnimations[:0]
+		state.AnimationTime = 0
 		clear(state.AnimationBaselines)
 		state.TransformFrameSet = false
 		state.StyleCache.InvalidateDefinitions()
@@ -1909,7 +1956,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		for node := range styles {
 			if !state.NodeFlags.resolve(node, htmlNodeParent, withinDocument) {
 				delete(styles, node)
-				delete(state.Animations, node)
+				removeHTMLNodeAnimation(state, node)
 				delete(state.AnimationBaselines, node)
 				delete(state.OverflowRoutes, node)
 			}
@@ -3422,6 +3469,7 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			Vertical:              showVertical,
 			ConsumeWheel:          true,
 			DisableInput:          !htmlStyleVisible(box.Style),
+			DisableContentDrag:    true,
 		})
 	}
 	(&bundle).putHTML(htmlOverflowClip{})
@@ -3601,7 +3649,8 @@ func SyncScrollbars(world *ecs.World) {
 	if world == nil {
 		return
 	}
-	for entity, access := range world.Query4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D]().All {
+	index := changedHTMLScrollbars(world)
+	for entity, access := range world.Query4[ScrollbarPart, scene.UITransform, scene.Size2D, scene.Sprite2D]().In(index.pending).All {
 		if !func(_ ecs.Entity, partAccess ecs.ComponentAccess[ScrollbarPart], transformAccess ecs.ComponentAccess[scene.UITransform], sizeAccess ecs.ComponentAccess[scene.Size2D], spriteAccess ecs.ComponentAccess[scene.Sprite2D]) bool {
 			part := partAccess.Ref()
 			nextTransform, nextSize, nextSprite := transformAccess.Get(), sizeAccess.Get(), spriteAccess.Get()
@@ -3677,7 +3726,7 @@ func SyncScrollbars(world *ecs.World) {
 				thumbOffset = travel * min(max(scrollOffset/maxScroll, 0), 1)
 			}
 			inset := min(max(bar*0.2, 1), 3)
-			if scene.UIScrollScrollbarActive(world, part.Area, part.Axis) {
+			if index.groups[part.Area].snapshot.active[part.Axis] {
 				inset = 0
 			}
 			paintLength := max(thumb, 0)
@@ -3697,6 +3746,8 @@ func SyncScrollbars(world *ecs.World) {
 			break
 		}
 	}
+	index.outputs = htmlScrollbarOutputVersions(world)
+	index.lastRun = world.ChangeTick()
 }
 
 func setHTMLScrollbarPartVisible(transform *scene.UITransform, size *scene.Size2D, sprite *scene.Sprite2D, visible bool) {
@@ -5079,7 +5130,7 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 	if !ok {
 		return 0, false
 	}
-	texture, ok := provider.ResolveHTMLImage(source)
+	texture, ok := provider.ResolveHTMLImage(source, float32(fragment.Rect.Width), float32(fragment.Rect.Height))
 	if !ok || texture == nil || !texture.ValidFor(graphics.DeviceFor(world)) {
 		return 0, false
 	}

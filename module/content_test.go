@@ -254,12 +254,12 @@ func TestModuleHTMLPrivateURLsPauseResumeAndUnload(t *testing.T) {
 	c := &s.modules[0]
 	surface, _ := c.Get[htmlui.Surface](c.Root())
 	for _, name := range []string{"pixel.png", "./pixel.png", "p%69xel.png?version=1#icon"} {
-		if texture, ok := surface.Images.Provider.ResolveHTMLImage(name); !ok || texture == nil {
+		if texture, ok := surface.Images.Provider.ResolveHTMLImage(name, 0, 0); !ok || texture == nil {
 			t.Fatal("relative private HTML image was not loaded", name)
 		}
 	}
 	for _, name := range []string{"../../outside.png", "%2e%2e/%2e%2e/outside.png", "/page/pages/pixel.png", "%2fpixel.png", "https://example.com/image.png", "//example.com/image.png", `%2e%2e%5cother%5cimage.png`, `..\other\image.png`, "%zz"} {
-		if _, ok := surface.Images.Provider.ResolveHTMLImage(name); ok {
+		if _, ok := surface.Images.Provider.ResolveHTMLImage(name, 0, 0); ok {
 			t.Fatal("HTML resource escaped", name)
 		}
 	}

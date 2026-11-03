@@ -130,7 +130,7 @@ func (a *ModuleEditor) syncCanvas(w *ecs.World) error {
 	return nil
 }
 
-func (a *ModuleEditor) ResolveHTMLImage(name string) (*graphics.Texture, bool) {
+func (a *ModuleEditor) ResolveHTMLImage(name string, width, height float32) (*graphics.Texture, bool) {
 	if icon, ok := strings.CutPrefix(name, "onix-file-icons/"); ok {
 		texture := editorresources.FileIconTexture(icon)
 		return texture, texture != nil

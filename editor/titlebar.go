@@ -50,7 +50,7 @@ type editorHTMLImages struct {
 	dialogTextures map[string]*graphics.Texture
 }
 
-func (p editorHTMLImages) ResolveHTMLImage(source string) (*graphics.Texture, bool) {
+func (p editorHTMLImages) ResolveHTMLImage(source string, width, height float32) (*graphics.Texture, bool) {
 	if name, ok := strings.CutPrefix(source, "onix-file-icons/"); ok {
 		texture := editorresources.FileIconTexture(name)
 		return texture, texture != nil
@@ -69,7 +69,7 @@ func (p editorHTMLImages) ResolveHTMLImage(source string) (*graphics.Texture, bo
 		return editorHTMLIcon(name, graphics.ColorFromRGB(176, 183, 195)), true
 	}
 	if p.previous != nil {
-		return p.previous.ResolveHTMLImage(source)
+		return p.previous.ResolveHTMLImage(source, width, height)
 	}
 	return nil, false
 }

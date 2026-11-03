@@ -57,7 +57,7 @@ func (t *Text2D) appendStyledTextRuns(dst []renderItem2D, order uint64, transfor
 			texture, ok := t.cache.Atlas(atlas)
 			if ok && texture != nil {
 				item := t.newTextRenderItem(order, start, end, transform, color, texture, clip, ui, sortIndex, false)
-				item.lcdText = true
+				item.lcdText = !t.glyphs[start].raster.RGBA()
 				item.sequence = uint32(len(dst))
 				dst = append(dst, item)
 			}
@@ -166,7 +166,7 @@ func (item renderItem2D) drawText(c *graphics.Canvas2D) {
 			x = (float32(quarter>>2)+raster.OffsetX)/scale - paintTransform[12]
 			y = (float32(math.Floor(float64(originY)+0.5))+raster.OffsetY)/scale - paintTransform[13]
 		}
-		if lcd {
+		if lcd || raster.RGBA() {
 			coverageColor := graphics.White
 			coverageColor.A = item.color.A
 			item.text.drawGlyph(c, raster, paintTransform, x, y, texture, coverageColor, item.clip)

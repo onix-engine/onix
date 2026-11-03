@@ -42,6 +42,9 @@ type htmlNodeAnimation struct {
 	From, Target, ReverseStart style.AnimationValue
 	Transitions                [style.AnimatedPropertyCount]htmlCSSTransition
 	Active                     style.AnimatedProperties
+	sampleTime                 float64
+	activeIndex                int
+	changed                    bool
 }
 
 func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle) *htmlNodeAnimation {
@@ -49,6 +52,12 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	animation := state.Animations[node]
 	if baseline.Computed == computed && (animation == nil || animation.Stylesheet == state.Stylesheet && animation.Viewport == state.Viewport) {
 		return animation
+	}
+	// Inactive tracks retain their timeline without being sampled every frame.
+	// Catch them up before matching tracks after a duration/play-state change.
+	if animation != nil {
+		sampleHTMLNodeAnimation(animation, state.AnimationTime-animation.sampleTime)
+		animation.sampleTime = state.AnimationTime
 	}
 	needsMotion := computed.HasMotion()
 	if state.AnimationBaselines == nil {
@@ -61,7 +70,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	baseline.Computed = computed
 	state.AnimationBaselines[node] = baseline
 	if !needsMotion {
-		delete(state.Animations, node)
+		removeHTMLNodeAnimation(state, node)
 		return nil
 	}
 	target := style.BaseAnimationValue(computed)
@@ -77,7 +86,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 			previous = current
 			previous.Colors[style.AnimationForeground] = style.ColorForAnimation(previousStyle.Color)
 		}
-		animation = &htmlNodeAnimation{Computed: previousStyle, Current: current, Target: previous}
+		animation = &htmlNodeAnimation{Computed: previousStyle, Current: current, Target: previous, sampleTime: state.AnimationTime}
 		state.Animations[node] = animation
 	}
 	if animation.Computed != nil {
@@ -124,8 +133,40 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	tracks := style.CompileAnimationTracks(node, computed, state.Stylesheet, &style.QueryEnvironment{Viewport: state.Viewport, Styles: state.Styles, ContainerMetrics: state.StyleCache.ContainerMetrics})
 	syncHTMLAnimationTracks(state, animation, tracks)
 	animation.Computed, animation.Stylesheet, animation.Viewport = computed, state.Stylesheet, state.Viewport
-	sampleHTMLNodeAnimation(animation, 0)
+	running := sampleHTMLNodeAnimation(animation, 0)
+	syncHTMLAnimationActivity(state, node, animation, running)
 	return animation
+}
+
+func syncHTMLAnimationActivity(state *htmlRenderState, node *dom.Node, animation *htmlNodeAnimation, running bool) {
+	if running {
+		if animation.activeIndex == 0 {
+			state.ActiveAnimations = append(state.ActiveAnimations, node)
+			animation.activeIndex = len(state.ActiveAnimations)
+		}
+	} else {
+		deactivateHTMLAnimation(state, animation)
+	}
+}
+
+func deactivateHTMLAnimation(state *htmlRenderState, animation *htmlNodeAnimation) {
+	if animation.activeIndex == 0 {
+		return
+	}
+	index, last := animation.activeIndex-1, len(state.ActiveAnimations)-1
+	node := state.ActiveAnimations[last]
+	state.ActiveAnimations[index] = node
+	state.Animations[node].activeIndex = index + 1
+	state.ActiveAnimations[last] = nil
+	state.ActiveAnimations = state.ActiveAnimations[:last]
+	animation.activeIndex = 0
+}
+
+func removeHTMLNodeAnimation(state *htmlRenderState, node *dom.Node) {
+	if animation := state.Animations[node]; animation != nil {
+		deactivateHTMLAnimation(state, animation)
+		delete(state.Animations, node)
+	}
 }
 
 func syncHTMLAnimationTracks(state *htmlRenderState, animation *htmlNodeAnimation, tracks []style.AnimationTrack) {
@@ -166,7 +207,7 @@ func syncHTMLAnimations(state *htmlRenderState) {
 			continue
 		}
 		if state.NodeFlags.resolve(node, htmlNodeParent, hiddenByAncestor) {
-			delete(state.Animations, node)
+			removeHTMLNodeAnimation(state, node)
 			delete(state.AnimationBaselines, node)
 			continue
 		}
@@ -174,13 +215,13 @@ func syncHTMLAnimations(state *htmlRenderState) {
 	}
 	for node := range state.AnimationBaselines {
 		if state.Styles[node] == nil {
-			delete(state.Animations, node)
+			removeHTMLNodeAnimation(state, node)
 			delete(state.AnimationBaselines, node)
 		}
 	}
 }
 
-func sampleHTMLNodeAnimation(animation *htmlNodeAnimation, delta float64) {
+func sampleHTMLNodeAnimation(animation *htmlNodeAnimation, delta float64) bool {
 	value := animation.Target
 	if animation.Computed.ColorInherited {
 		value.Colors[style.AnimationForeground] = style.AnimationColor{Current: 1}
@@ -201,10 +242,14 @@ func sampleHTMLNodeAnimation(animation *htmlNodeAnimation, delta float64) {
 			style.InterpolateAnimatedProperty(&value, animation.From, animation.Target, property, factor)
 		}
 	}
+	running := animation.Active != 0
 	for i := range animation.Tracks {
 		active := &animation.Tracks[i]
 		if !active.Track.Definition.Paused {
 			active.Elapsed += delta
+			if active.Track.Properties != 0 && active.Elapsed < active.Track.Definition.Delay+htmlAnimationActiveDuration(active.Track.Definition) {
+				running = true
+			}
 		}
 		if progress, applies, before := active.Track.Definition.Progress(active.Elapsed); applies {
 			sampled := active.Track.Sample(progress, value, before)
@@ -212,28 +257,63 @@ func sampleHTMLNodeAnimation(animation *htmlNodeAnimation, delta float64) {
 		}
 	}
 	animation.Current = value
+	return running
 }
 
 func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float64) {
 	if delta <= 0 {
 		return
 	}
-	changed := false
-	for _, animation := range state.Animations {
-		if animation.Active == 0 && len(animation.Tracks) == 0 {
-			continue
-		}
+	state.AnimationTime += delta
+	for index := 0; index < len(state.ActiveAnimations); {
+		node := state.ActiveAnimations[index]
+		animation := state.Animations[node]
 		previous := animation.Current
-		sampleHTMLNodeAnimation(animation, delta)
-		changed = changed || previous != animation.Current
+		running := sampleHTMLNodeAnimation(animation, state.AnimationTime-animation.sampleTime)
+		animation.sampleTime = state.AnimationTime
+		animation.changed = previous != animation.Current
+		if animation.changed {
+			state.AnimationRoots = append(state.AnimationRoots, node)
+		}
+		if running {
+			index++
+		} else {
+			deactivateHTMLAnimation(state, animation)
+		}
 	}
-	if !changed {
+	if len(state.AnimationRoots) == 0 {
 		return
 	}
-	for node, rendered := range state.RenderNodes {
+	// Coalesce changed subtrees after sampling every animation. Memoize shared
+	// ancestor paths so nested animations do not repeat either traversal.
+	hasChangedAncestor := func(node *dom.Node, changed bool) bool {
+		animation := state.Animations[node]
+		return changed || animation != nil && animation.changed
+	}
+	for _, node := range state.AnimationRoots {
+		if !state.NodeFlags.resolve(node.Parent, htmlNodeParent, hasChangedAncestor) {
+			applyHTMLAnimatedSubtree(world, state, node)
+		}
+	}
+	state.NodeFlags.clear()
+	for _, node := range state.AnimationRoots {
+		state.Animations[node].changed = false
+	}
+	clear(state.AnimationRoots)
+	state.AnimationRoots = state.AnimationRoots[:0]
+}
+
+func applyHTMLAnimatedSubtree(world *ecs.World, state *htmlRenderState, node *dom.Node) {
+	if computed := state.Styles[node]; computed != nil && computed.Display == style.Keyword("none") {
+		return
+	}
+	if rendered := state.RenderNodes[node]; rendered != nil {
 		for _, entity := range rendered.Entities {
 			applyHTMLAnimatedVisual(world, state, entity, node)
 		}
+	}
+	for _, child := range node.Children {
+		applyHTMLAnimatedSubtree(world, state, child)
 	}
 }
 

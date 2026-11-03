@@ -27,6 +27,7 @@ type Face struct {
 	weight      int
 	italic      bool
 	fallback    *fallbackSet
+	color       colorGlyphTables
 
 	cacheMu          sync.RWMutex
 	asciiGlyphs      [128]uint16
@@ -67,6 +68,7 @@ func (f *Face) Close() error {
 	f.Kern = nil
 	f.pairLookups = nil
 	f.fallback = nil
+	f.color = colorGlyphTables{}
 	clear(f.glyphIndexCache)
 	clear(f.outlineCache)
 	clear(f.glyphBitmapCache)
@@ -137,6 +139,7 @@ func ParseIndex(data []byte, index int) (*Face, error) {
 		outlineCache:     map[uint16]weak.Pointer[Outline]{},
 		glyphBitmapCache: map[glyphBitmapCacheKey]*GlyphBitmap{},
 	}
+	face.color.load(sfntData)
 	for r := range face.asciiGlyphs {
 		face.asciiGlyphs[r] = cmapTable.GlyphIndex(rune(r))
 	}
@@ -173,6 +176,9 @@ func ParseIndex(data []byte, index int) (*Face, error) {
 
 	locaData, err := sfntData.table("loca")
 	if err != nil {
+		if len(face.color.cbdt) != 0 || len(face.color.sbix) != 0 {
+			return face, nil
+		}
 		return nil, err
 	}
 	glyfData, err := sfntData.table("glyf")

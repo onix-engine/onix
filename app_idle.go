@@ -5,17 +5,19 @@ import (
 	"time"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/scene"
 )
 
 type appIdleState struct {
 	sync.Mutex
-	enabled       bool
-	deadline      time.Time
-	caretDeadline time.Time
-	version       uint64
-	started       bool
+	enabled        bool
+	deadline       time.Time
+	caretDeadline  time.Time
+	bufferDeadline time.Time
+	version        uint64
+	started        bool
 }
 
 // SetIdleEnabled allows an on-demand app to suspend its schedules between
@@ -140,8 +142,33 @@ func (app *App) idleDeadline() (time.Time, bool) {
 // Caller holds the idle mutex; caret deadlines belong to the loop thread.
 func (app *App) nextIdleDeadline() time.Time {
 	deadline := app.idle.deadline
+	if buffers := app.idle.bufferDeadline; !buffers.IsZero() && (deadline.IsZero() || buffers.Before(deadline)) {
+		deadline = buffers
+	}
 	if caret := app.idle.caretDeadline; !caret.IsZero() && (deadline.IsZero() || caret.Before(deadline)) {
 		deadline = caret
 	}
 	return deadline
+}
+
+const idleBufferTrimDelay = 2 * time.Second
+
+func (app *App) scheduleIdleBufferTrim(now time.Time) {
+	if !app.idleEnabled() || !graphics.DeviceFor(app.World).SupportsIdleBufferTrim() {
+		return
+	}
+	app.idle.Lock()
+	app.idle.bufferDeadline = now.Add(idleBufferTrimDelay)
+	app.idle.Unlock()
+}
+func (app *App) trimIdleBuffers(now time.Time) error {
+	app.idle.Lock()
+	deadline := app.idle.bufferDeadline
+	if deadline.IsZero() || now.Before(deadline) {
+		app.idle.Unlock()
+		return nil
+	}
+	app.idle.bufferDeadline = time.Time{}
+	app.idle.Unlock()
+	return graphics.DeviceFor(app.World).TrimIdleBuffers()
 }

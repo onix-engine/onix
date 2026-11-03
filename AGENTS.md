@@ -10,7 +10,7 @@
 
 ## Mobile testing
 
-Try connecting to the Android device with `adb connect 10.0.0.174:16416`.
+Try connecting to the Android device with `adb connect 10.0.0.174:16384`.
 
 ## Prohibited actions
 

@@ -94,6 +94,7 @@ func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entit
 	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), NodeByID: make(map[string]*dom.Node)}}
 	owners := world.NewSpawner1[htmlRenderState]()
 	owner := owners.Spawn(state)
+	state.RenderNodes = make(map[*dom.Node]*htmlNodeRendering)
 	children := world.NewSpawner3[htmlChild, scene.UITransform, scene.Parent]()
 	for i := range count {
 		id := fmt.Sprint(i)
@@ -101,7 +102,9 @@ func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entit
 		state.Root.AppendChild(node)
 		state.NodeByID[id] = node
 		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{ID: id, Offset: mgl32.Vec2{float32(i), 1}})
-		state.Children = append(state.Children, children.Spawn(htmlChild{Owner: owner, Node: node}, scene.NewUITransform(), scene.Parent{Entity: owner}))
+		entity := children.Spawn(htmlChild{Owner: owner, Node: node}, scene.NewUITransform(), scene.Parent{Entity: owner})
+		state.Children = append(state.Children, entity)
+		state.RenderNodes[node] = &htmlNodeRendering{Entities: []ecs.Entity{entity}}
 	}
 	*world.GetMut[htmlRenderState](owner) = state
 	SetNodeOffset(world, owner, "0", 0, 1)
@@ -114,6 +117,7 @@ func TestHTMLBindingBatchIgnoresDeadScrollAndRefreshesRoutes(t *testing.T) {
 	target := state.Root.Children[1]
 	state.Root.Children = slices.Delete(state.Root.Children, 1, 2)
 	state.Root.Children[0].AppendChild(target)
+	state.IndexDirty = true
 	first, second := htmlBindingArea(world, 0, 0), htmlBindingArea(world, 0, 0)
 	SetNodeScroll(world, owner, "0", first, 0, 0)
 	SetNodeScroll(world, owner, "1", second, 0, 0)
@@ -130,6 +134,7 @@ func TestHTMLBindingBatchIgnoresDeadScrollAndRefreshesRoutes(t *testing.T) {
 	// Register the ancestor last: precedence follows registration, not depth.
 	state = world.GetMut[htmlRenderState](owner)
 	state.NodeOffsets[0], state.NodeOffsets[1] = state.NodeOffsets[1], state.NodeOffsets[0]
+	state.NodeBindingsPrepared = false
 	SetNodeOffset(world, owner, "0", 5, 7)
 	child, _ := world.Get[htmlChild](entities[1])
 	if child.offset != (mgl32.Vec2{5, 7}) {
@@ -141,6 +146,7 @@ func TestHTMLBindingBatchIgnoresDeadScrollAndRefreshesRoutes(t *testing.T) {
 	state = world.GetMut[htmlRenderState](owner)
 	state.Root.Children[0].Children = nil
 	state.Root.AppendChild(target)
+	state.IndexDirty = true
 	SetNodeOffset(world, owner, "0", 5, 7)
 	child, _ = world.Get[htmlChild](entities[1])
 	if child.offset != (mgl32.Vec2{1, 1}) {

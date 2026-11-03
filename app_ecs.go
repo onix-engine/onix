@@ -106,6 +106,9 @@ func (app *App) Step() (bool, error) {
 	}
 	app.syncViewportState()
 	now := app.currentTime()
+	if err := app.trimIdleBuffers(now); err != nil {
+		return false, err
+	}
 	if app.shouldIdle(now) {
 		return false, nil
 	}
@@ -132,6 +135,7 @@ func (app *App) Step() (bool, error) {
 		app.renderRequested.Store(true)
 		return false, err
 	}
+	app.scheduleIdleBufferTrim(now)
 	return true, nil
 }
 

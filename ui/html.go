@@ -202,15 +202,11 @@ func captureHTMLFocusRebuildState(world *ecs.World) (htmlFocusRebuildState, bool
 	}
 	ordinal := 0
 	if focusable.ID == "" {
-		for candidate, access := range world.Query[htmlui.Focusable]().All {
-			candidateTarget := access.Get()
-
-			if candidate == entity {
-				break
-			}
-			if candidateTarget.Owner == focusable.Owner && candidateTarget.ID == "" && candidateTarget.Tag == focusable.Tag && candidateTarget.Type == focusable.Type {
-				ordinal++
-			}
+		lookup := htmlFocusLookup(world)
+		var found bool
+		ordinal, found = lookup.ordinals[entity]
+		if !found {
+			ordinal = len(lookup.groups[htmlFocusGroup{focusable.Owner, focusable.Tag, focusable.Type}])
 		}
 	}
 	state := htmlFocusRebuildState{Entity: entity, Focusable: focusable, Ordinal: ordinal, FocusVisible: input.FocusVisible}
@@ -309,31 +305,25 @@ func restoreHTMLFocusRebuildState(world *ecs.World, state htmlFocusRebuildState)
 }
 
 func matchingHTMLFocusable(world *ecs.World, previous htmlui.Focusable, ordinal int) (ecs.Entity, bool) {
-	var entity ecs.Entity
-	matches := 0
-	noIDIndex := 0
+	if previous.ID == "" {
+		lookup := htmlFocusLookup(world)
+		entities := lookup.groups[htmlFocusGroup{previous.Owner, previous.Tag, previous.Type}]
+		if ordinal >= 0 && ordinal < len(entities) {
+			return entities[ordinal], true
+		}
+		return 0, false
+	}
 	for candidate, access := range world.Query[htmlui.Focusable]().All {
 		target := access.Get()
 
 		if target.Owner != previous.Owner || target.Tag != previous.Tag || target.Type != previous.Type {
 			continue
 		}
-		if previous.ID != "" {
-			if target.ID == previous.ID {
-				entity, matches = candidate, 1
-				break
-			}
-			continue
-		}
-		if target.ID == "" && noIDIndex == ordinal {
-			entity, matches = candidate, 1
-			break
-		}
-		if target.ID == "" {
-			noIDIndex++
+		if target.ID == previous.ID {
+			return candidate, true
 		}
 	}
-	return entity, matches == 1
+	return 0, false
 }
 
 func updateHTMLRuntime(context *ecs.SystemContext) error {
@@ -797,9 +787,28 @@ func publishHTMLSelectChange(world *ecs.World, entity ecs.Entity) {
 }
 
 func enrichHTMLControls(world *ecs.World) {
+	enrichHTMLControlStates(world)
+	enrichHTMLEditables(world)
+	cleanupHTMLSelectorElements(world)
+	enrichHTMLControlTexts(world)
+	enrichHTMLEditableTexts(world)
+	enrichHTMLControlVisuals(world)
+	enrichHTMLEditableVisuals(world)
+}
+
+func enrichHTMLControlStates(world *ecs.World) {
+	state, changed, full := prepareHTMLBridge[htmlControlsScratch](world, htmlControlBridgeVersions(world))
+	if !changed {
+		return
+	}
 	controls := world.FrameScratch[htmlControlsScratch, ecs.Entity]()
 	defer controls.ReleaseUnused()
-	for entity, access := range world.Query[htmlui.Control]().All {
+	query := world.Query[htmlui.Control]()
+	changes := state.changes(world)
+	if !full {
+		query = world.Query[htmlui.Control](changes.Changed[htmlui.Control]())
+	}
+	for entity, access := range query.All {
 		control := access.Get()
 
 		state, exists := world.Get[htmlControlState](entity)
@@ -879,9 +888,22 @@ func enrichHTMLControls(world *ecs.World) {
 		}
 	}
 
+	state.capture(world, htmlControlBridgeVersions(world))
+}
+
+func enrichHTMLEditables(world *ecs.World) {
+	state, changed, full := prepareHTMLBridge[htmlEditablesScratch](world, htmlEditableBridgeVersions(world))
+	if !changed {
+		return
+	}
 	editables := world.FrameScratch[htmlEditablesScratch, ecs.Entity]()
 	defer editables.ReleaseUnused()
-	for entity, access := range world.Query[htmlui.Editable]().All {
+	query := world.Query[htmlui.Editable]()
+	changes := state.changes(world)
+	if !full {
+		query = world.Query[htmlui.Editable](changes.Changed[htmlui.Editable]())
+	}
+	for entity, access := range query.All {
 		editable := access.Get()
 
 		state, exists := world.Get[htmlEditableState](entity)
@@ -908,14 +930,18 @@ func enrichHTMLControls(world *ecs.World) {
 		})
 		_ = world.Insert(entity, htmlEditableState{RenderRevision: editable.RenderRevision})
 	}
-	cleanupHTMLSelectorElements(world)
+	state.capture(world, htmlEditableBridgeVersions(world))
+}
 
+func enrichHTMLControlTexts(world *ecs.World) {
+	state, changed, _ := prepareHTMLBridge[htmlControlTextsScratch](world, htmlRelationBridgeVersions[htmlui.ControlText, Relation[scene.Text2D], htmlui.Control](world))
+	if !changed {
+		return
+	}
 	texts := world.FrameScratch[htmlControlTextsScratch, ecs.Entity]()
 	defer texts.ReleaseUnused()
-	for entity, _ := range world.Query[htmlui.ControlText]().All {
-		if !world.Has[Relation[scene.Text2D]](entity) {
-			texts.Values = append(texts.Values, entity)
-		}
+	for entity := range world.Query[htmlui.ControlText](ecs.Without[Relation[scene.Text2D]]()).All {
+		texts.Values = append(texts.Values, entity)
 	}
 	for _, entity := range texts.Values {
 		link, ok := world.Get[htmlui.ControlText](entity)
@@ -935,12 +961,18 @@ func enrichHTMLControls(world *ecs.World) {
 		}
 	}
 
+	state.capture(world, htmlRelationBridgeVersions[htmlui.ControlText, Relation[scene.Text2D], htmlui.Control](world))
+}
+
+func enrichHTMLEditableTexts(world *ecs.World) {
+	state, changed, _ := prepareHTMLBridge[htmlEditableTextsScratch](world, htmlRelationBridgeVersions[htmlui.EditableText, Relation[scene.Text2D], htmlui.Editable](world))
+	if !changed {
+		return
+	}
 	editableTexts := world.FrameScratch[htmlEditableTextsScratch, ecs.Entity]()
 	defer editableTexts.ReleaseUnused()
-	for entity, _ := range world.Query[htmlui.EditableText]().All {
-		if !world.Has[Relation[scene.Text2D]](entity) {
-			editableTexts.Values = append(editableTexts.Values, entity)
-		}
+	for entity := range world.Query[htmlui.EditableText](ecs.Without[Relation[scene.Text2D]]()).All {
+		editableTexts.Values = append(editableTexts.Values, entity)
 	}
 	for _, entity := range editableTexts.Values {
 		link, ok := world.Get[htmlui.EditableText](entity)
@@ -952,12 +984,18 @@ func enrichHTMLControls(world *ecs.World) {
 		_ = world.Insert(entity, Part[ValuePart]{})
 	}
 
+	state.capture(world, htmlRelationBridgeVersions[htmlui.EditableText, Relation[scene.Text2D], htmlui.Editable](world))
+}
+
+func enrichHTMLControlVisuals(world *ecs.World) {
+	state, changed, _ := prepareHTMLBridge[htmlControlVisualsScratch](world, htmlRelationBridgeVersions[htmlui.ControlVisual, Relation[SurfaceStyle], htmlui.Control](world))
+	if !changed {
+		return
+	}
 	visuals := world.FrameScratch[htmlControlVisualsScratch, ecs.Entity]()
 	defer visuals.ReleaseUnused()
-	for entity, _ := range world.Query[htmlui.ControlVisual]().All {
-		if !world.Has[Relation[SurfaceStyle]](entity) {
-			visuals.Values = append(visuals.Values, entity)
-		}
+	for entity := range world.Query[htmlui.ControlVisual](ecs.Without[Relation[SurfaceStyle]]()).All {
+		visuals.Values = append(visuals.Values, entity)
 	}
 	for _, entity := range visuals.Values {
 		visual, ok := world.Get[htmlui.ControlVisual](entity)
@@ -986,12 +1024,18 @@ func enrichHTMLControls(world *ecs.World) {
 		}
 	}
 
+	state.capture(world, htmlRelationBridgeVersions[htmlui.ControlVisual, Relation[SurfaceStyle], htmlui.Control](world))
+}
+
+func enrichHTMLEditableVisuals(world *ecs.World) {
+	state, changed, _ := prepareHTMLBridge[htmlEditableVisualsScratch](world, htmlRelationBridgeVersions[htmlui.EditableVisual, Relation[SurfaceStyle], htmlui.Editable](world))
+	if !changed {
+		return
+	}
 	editableVisuals := world.FrameScratch[htmlEditableVisualsScratch, ecs.Entity]()
 	defer editableVisuals.ReleaseUnused()
-	for entity, _ := range world.Query[htmlui.EditableVisual]().All {
-		if !world.Has[Relation[SurfaceStyle]](entity) {
-			editableVisuals.Values = append(editableVisuals.Values, entity)
-		}
+	for entity := range world.Query[htmlui.EditableVisual](ecs.Without[Relation[SurfaceStyle]]()).All {
+		editableVisuals.Values = append(editableVisuals.Values, entity)
 	}
 	for _, entity := range editableVisuals.Values {
 		visual, ok := world.Get[htmlui.EditableVisual](entity)
@@ -1006,6 +1050,7 @@ func enrichHTMLControls(world *ecs.World) {
 			_ = world.Insert(entity, Part[CaretPart]{})
 		}
 	}
+	state.capture(world, htmlRelationBridgeVersions[htmlui.EditableVisual, Relation[SurfaceStyle], htmlui.Editable](world))
 }
 
 const (
@@ -1186,6 +1231,11 @@ func setHTMLSelectorVisibility(world *ecs.World, selector ecs.Entity, visible bo
 }
 
 func cleanupHTMLSelectorElements(world *ecs.World) {
+	versions := [5]uint64{htmlBridgeMembership[htmlui.Control](world), htmlBridgeMembership[htmlSelectorElement](world)}
+	state, changed, _ := prepareHTMLBridge[htmlSelectorElementsScratch](world, versions)
+	if !changed {
+		return
+	}
 	stale := world.FrameScratch[htmlSelectorElementsScratch, ecs.Entity]()
 	defer stale.ReleaseUnused()
 	for entity, access := range world.Query[htmlSelectorElement]().All {
@@ -1198,6 +1248,8 @@ func cleanupHTMLSelectorElements(world *ecs.World) {
 	for _, entity := range stale.Values {
 		world.Despawn(entity)
 	}
+	versions[1] = htmlBridgeMembership[htmlSelectorElement](world)
+	state.capture(world, versions)
 }
 
 func refreshHTMLControlText(world *ecs.World, controlEntity ecs.Entity, control htmlui.Control) {

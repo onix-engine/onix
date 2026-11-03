@@ -3,6 +3,7 @@ package html
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"math"
 
 	"github.com/diiyw/onix/font"
@@ -51,6 +52,9 @@ func rasterHTMLText(dst *image.RGBA, box *layout.Box, regular, bold *font.Face, 
 		size := float64(fragmentFontSize(computed))
 		c := color.RGBA(computed.Color.Color)
 		for _, glyph := range fragment.Glyphs {
+			if font.IsGlyphFormatControl(glyph.Rune) {
+				continue
+			}
 			glyphFace, id := face.ResolveGlyph(glyph.Rune)
 			scale := size / float64(glyphFace.Head.UnitsPerEm)
 			metrics, err := glyphFace.HorizontalMetrics(id)
@@ -63,10 +67,18 @@ func rasterHTMLText(dst *image.RGBA, box *layout.Box, regular, bold *font.Face, 
 			y := glyph.Y - originY
 			ix, iy := math.Floor(x), math.Floor(y)
 			bitmap, err := glyphFace.RasterizeGlyphAt(id, size, uint8((x-ix)*4), uint8((y-iy)*4))
-			if err != nil || bitmap == nil || bitmap.Image == nil {
+			if err != nil || bitmap == nil {
 				continue
 			}
 			left, top := int(ix)+bitmap.Bounds.Min.X, int(iy)-bitmap.Bounds.Max.Y
+			if bitmap.Color != nil {
+				mask := image.NewUniform(color.Alpha{A: c.A})
+				draw.DrawMask(dst, bitmap.Color.Rect.Add(image.Pt(left, top)), bitmap.Color, image.Point{}, mask, image.Point{}, draw.Over)
+				continue
+			}
+			if bitmap.Image == nil {
+				continue
+			}
 			for sy := range bitmap.Image.Rect.Dy() {
 				dy := top + sy
 				if dy < dst.Rect.Min.Y || dy >= dst.Rect.Max.Y {

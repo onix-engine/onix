@@ -7,12 +7,63 @@ import (
 	"time"
 
 	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/input"
 	"github.com/diiyw/onix/physics"
+	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/resource"
 	"github.com/diiyw/onix/scene"
 	"github.com/diiyw/onix/ui"
 )
+
+type idleTrimDriver struct {
+	render.Driver
+	trims int
+}
+
+func (d *idleTrimDriver) TrimIdleBuffers() error { d.trims++; return nil }
+
+func TestIdleBufferDeadlineReleasesWithoutRendering(t *testing.T) {
+	app := NewApp()
+	app.SetRenderMode(RenderOnDemand)
+	app.SetIdleEnabled(true)
+	app.SetTargetFPS(0)
+	now := time.Unix(20, 0)
+	app.now = func() time.Time { return now }
+	if _, err := app.Step(); err != nil {
+		t.Fatal(err)
+	}
+	driver := &idleTrimDriver{}
+	device, err := render.NewDevice(driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graphics.BindFrame(app.World, graphics.NewCanvas2D(device, 10, 10))
+	app.recordIdleFrame()
+	app.scheduleIdleBufferTrim(now)
+	deadline, idle := app.idleDeadline()
+	if !idle || deadline != now.Add(idleBufferTrimDelay) {
+		t.Fatalf("trim deadline: %v %v", deadline, idle)
+	}
+	now = deadline.Add(-time.Nanosecond)
+	if rendered, err := app.Step(); rendered || err != nil || driver.trims != 0 {
+		t.Fatalf("trim ran early: %v %v", rendered, err)
+	}
+	now = deadline
+	if rendered, err := app.Step(); rendered || err != nil || driver.trims != 1 {
+		t.Fatalf("idle cleanup rendered or failed: %v %v, trims=%d", rendered, err, driver.trims)
+	}
+	if deadline, idle := app.idleDeadline(); !idle || !deadline.IsZero() {
+		t.Fatal("idle cleanup kept waking the app")
+	}
+	if n := testing.AllocsPerRun(100, func() { app.trimIdleBuffers(now) }); n != 0 {
+		t.Fatalf("idle cleanup allocated %g", n)
+	}
+	app.scheduleIdleBufferTrim(now)
+	if deadline, _ := app.idleDeadline(); deadline != now.Add(idleBufferTrimDelay) {
+		t.Fatal("new frame did not rearm cleanup")
+	}
+}
 
 func TestIdleSkipsSchedulesAndWakesForChangesInputAndDeadline(t *testing.T) {
 	app := NewApp()

@@ -7,6 +7,7 @@
 #include "native_draw.h"
 
 typedef struct OnixMetalDriver OnixMetalDriver;
+int onix_metal_trim_idle(OnixMetalDriver *driver);
 void onix_metal_buffer_memory(OnixMetalDriver *driver, OnixBufferMemory *memory);
 
 typedef struct {

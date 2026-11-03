@@ -35,3 +35,18 @@ func sliceCapacityBytes[T any](values []T) uint64 {
 	var value T
 	return uint64(cap(values)) * uint64(unsafe.Sizeof(value))
 }
+
+// IdleBufferTrimmer releases transient storage after submitted work completes.
+// App calls it on the rendering thread, outside any active frame.
+type IdleBufferTrimmer interface{ TrimIdleBuffers() error }
+
+func (device *Device) SupportsIdleBufferTrim() bool {
+	_, ok := device.Driver().(IdleBufferTrimmer)
+	return ok
+}
+func (device *Device) TrimIdleBuffers() error {
+	if driver, ok := device.Driver().(IdleBufferTrimmer); ok {
+		return driver.TrimIdleBuffers()
+	}
+	return nil
+}

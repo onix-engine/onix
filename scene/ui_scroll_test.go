@@ -239,3 +239,47 @@ func TestUIScrollConsumesWheelWhenHoveredWithoutOverflow(t *testing.T) {
 		t.Fatalf("hovered non-scrollable container left wheel=%v, want consumed", wheel)
 	}
 }
+
+func TestUIScrollTextSelectionKeepsWheelAndScrollbar(t *testing.T) {
+	world := ecs.NewWorld()
+	state := input.NewState()
+	world.InsertResource(state)
+	bundle := ecs.NewBundle(5)
+	bundle.Put(UIGlobalTransform{Matrix: mgl32.Ident4()})
+	bundle.Put(Visibility{Visible: true})
+	bundle.Put(AnchorTopLeft)
+	bundle.Put(Size2D{Width: 100, Height: 100})
+	bundle.Put(UIScroll{Position: mgl32.Vec2{0, -40}, ViewportSize: mgl32.Vec2{100, 100}, ContentSize: mgl32.Vec2{100, 300}, Vertical: true, ScrollbarSize: 10, DisableContentDrag: true})
+	area := world.Spawn(bundle)
+	system := UIScrollSystem("")
+	step := func() {
+		t.Helper()
+		if err := system.Run(world); err != nil {
+			t.Fatal(err)
+		}
+		state.EndFrame()
+	}
+	state.PressMouse(input.MouseLeft, 30, 70)
+	step()
+	state.MoveMouse(30, 20)
+	step()
+	state.ReleaseMouse(input.MouseLeft, 30, 20)
+	step()
+	scroll := world.GetMut[UIScroll](area)
+	if scroll.Position.Y() != -40 || scroll.Momentum.Y() != 0 {
+		t.Fatal("text selection panned the content")
+	}
+	state.ScrollMouse(0, -1)
+	step()
+	if scroll.Position.Y() >= -40 {
+		t.Fatal("wheel scrolling was disabled")
+	}
+	scroll.Position[1] = -40
+	state.PressMouse(input.MouseLeft, 95, 20)
+	step()
+	state.MoveMouse(95, 50)
+	step()
+	if scroll.Position.Y() >= -40 {
+		t.Fatal("scrollbar dragging was disabled")
+	}
+}

@@ -3,6 +3,7 @@ package text
 import (
 	"errors"
 	"image"
+	"image/draw"
 	"math"
 	"math/bits"
 	"sync"
@@ -32,6 +33,9 @@ type Glyph struct {
 	Height  int
 	page    *glyphAtlas
 }
+
+// RGBA reports whether the atlas retains RGB channels (color or LCD glyphs).
+func (g Glyph) RGBA() bool { return g.page != nil && g.page.lcd }
 
 func (g Glyph) Visible() bool {
 	return g.Width > 0 && g.Height > 0
@@ -333,11 +337,20 @@ func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, 
 		return g
 	}
 
-	bitmap := glyphBitmap(mask, maskp, dr)
-	if preblend {
-		color.PreblendGray(bitmap)
+	var bitmap image.Image
+	_, colored := mask.(*image.RGBA)
+	if colored {
+		rgba := image.NewRGBA(image.Rect(0, 0, dr.Dx()+2*glyphBitmapPadding, dr.Dy()+2*glyphBitmapPadding))
+		draw.Draw(rgba, rgba.Rect.Inset(glyphBitmapPadding), mask, maskp, draw.Src)
+		bitmap = rgba
+	} else {
+		alpha := glyphBitmap(mask, maskp, dr)
+		if preblend {
+			color.PreblendGray(alpha)
+		}
+		bitmap = alpha
 	}
-	page, x, y := c.allocate(bitmap)
+	page, x, y := c.allocateFormat(bitmap, colored)
 
 	g := Glyph{
 		Rune:    r,

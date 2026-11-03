@@ -21,7 +21,7 @@ type testHTMLImageProvider struct {
 	texture *graphics.Texture
 }
 
-func (p testHTMLImageProvider) ResolveHTMLImage(string) (*graphics.Texture, bool) {
+func (p testHTMLImageProvider) ResolveHTMLImage(string, float32, float32) (*graphics.Texture, bool) {
 	return p.texture, p.texture != nil
 }
 

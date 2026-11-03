@@ -31,6 +31,9 @@ type htmlStyleState struct {
 	StyleChanges            []style.NodeChange
 	AnimationBaselines      map[*dom.Node]htmlAnimationBaseline
 	Animations              map[*dom.Node]*htmlNodeAnimation
+	ActiveAnimations        []*dom.Node
+	AnimationTime           float64
+	AnimationRoots          []*dom.Node
 	AnimationTrackHeads     map[string]int
 	TransformFrame          uint64
 	TransformFrameSet       bool
@@ -89,6 +92,10 @@ type htmlInputState struct {
 	NodeScrollBindings   map[*dom.Node]struct{}
 	NodeBindingLocals    map[*dom.Node]htmlBindingIndices
 	NodeBindingRoutes    htmlAncestorCache[*dom.Node, htmlBindingIndices]
+	NodeBindingKey       htmlNodeBindingKey
+	NodeBindingsPrepared bool
+	NodeOffsetIDs        map[string]int
+	NodeScrollIDs        map[string]int
 	OverflowBindings     map[*dom.Node]htmlOverflowClipBinding
 	OverflowEntities     map[ecs.Entity]htmlOverflowClipBinding
 	OverflowRoutes       map[*dom.Node]htmlOverflowClipBinding

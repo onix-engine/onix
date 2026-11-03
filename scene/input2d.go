@@ -58,6 +58,9 @@ type inputTracker2D struct {
 	hovered         ecs.Entity
 	hoveredReceiver ecs.Entity
 	hasActive       bool
+	pointerDevice   input.PointerDevice
+	pointerX        float32
+	pointerY        float32
 }
 
 // RemapInputEntity2D preserves pointer tracking when a retained UI
@@ -235,7 +238,9 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 		world.InsertResource(capture)
 	}
 	pointer := inputState.Pointer()
-	pointerActive := pointer.Pressed || pointer.Released || pointer.DeltaX != 0 || pointer.DeltaY != 0 || pointer.WheelX != 0 || pointer.WheelY != 0
+	pointerMoved := tracker.pointerDevice != pointer.Device || tracker.pointerX != pointer.X || tracker.pointerY != pointer.Y
+	tracker.pointerDevice, tracker.pointerX, tracker.pointerY = pointer.Device, pointer.X, pointer.Y
+	pointerActive := pointerMoved || pointer.Pressed || pointer.Released || pointer.DeltaX != 0 || pointer.DeltaY != 0 || pointer.WheelX != 0 || pointer.WheelY != 0
 	cache := world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 	changed := cache.refresh(world, tracker.active, tracker.activeCamera)
 	if !changed && !pointerActive {

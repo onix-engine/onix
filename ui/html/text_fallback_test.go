@@ -38,3 +38,29 @@ func TestHTMLCompositeTextRasterUsesFallbackFace(t *testing.T) {
 		t.Fatal("composite text did not rasterize the owning fallback glyph")
 	}
 }
+
+func TestHTMLCompositeTextRetainsEmojiColors(t *testing.T) {
+	face, err := font.Load("../../testdata/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = face.Close() })
+	face.UseSystemFallback()
+	owner, id := face.ResolveGlyph('🙂')
+	bitmap, err := owner.RasterizeGlyph(id, 24)
+	if err != nil || bitmap == nil || bitmap.Color == nil {
+		t.Skip("no color emoji fallback installed")
+	}
+	computed := &style.ComputedStyle{}
+	computed.FontSize = style.LengthPx(24)
+	computed.Color = style.Value{Kind: style.ValueColor, Color: style.Color{B: 255, A: 255}}
+	box := &layout.Box{TextFragments: []layout.TextFragment{{Style: computed, Text: "🙂", Glyphs: []layout.GlyphFragment{{Rune: '🙂', X: 8, Y: 32}}}}}
+	dst := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	rasterHTMLText(dst, box, face, nil, 0, 0)
+	for i := 0; i < len(dst.Pix); i += 4 {
+		if dst.Pix[i] > 0 && dst.Pix[i+3] > 0 {
+			return
+		}
+	}
+	t.Fatal("composite emoji disappeared or was tinted by the blue text color")
+}

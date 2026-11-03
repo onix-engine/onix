@@ -9,9 +9,17 @@ import (
 
 type GlyphBitmap struct {
 	Image   *image.Alpha
+	Color   *image.RGBA
 	Bounds  image.Rectangle
 	Advance float64
 	Scale   float64
+}
+
+func (b *GlyphBitmap) bytes() int {
+	if b.Color != nil {
+		return len(b.Color.Pix)
+	}
+	return len(b.Image.Pix)
 }
 
 type glyphBitmapCacheKey struct {
@@ -33,7 +41,7 @@ func (f *Face) cacheBitmap(key glyphBitmapCacheKey, bitmap *GlyphBitmap) *GlyphB
 	if cached, ok := f.glyphBitmapCache[key]; ok {
 		return cached
 	}
-	size := len(bitmap.Image.Pix)
+	size := bitmap.bytes()
 	if size > glyphBitmapCacheByteLimit {
 		return bitmap
 	}
@@ -42,7 +50,7 @@ func (f *Face) cacheBitmap(key glyphBitmapCacheKey, bitmap *GlyphBitmap) *GlyphB
 	}
 	for len(f.glyphBitmapCache) >= glyphBitmapCacheEntryLimit || f.bitmapBytes+size > glyphBitmapCacheByteLimit {
 		old := f.bitmapOrder[f.bitmapHead]
-		f.bitmapBytes -= len(f.glyphBitmapCache[old].Image.Pix)
+		f.bitmapBytes -= f.glyphBitmapCache[old].bytes()
 		delete(f.glyphBitmapCache, old)
 		f.bitmapOrder[f.bitmapHead] = glyphBitmapCacheKey{}
 		f.bitmapHead = (f.bitmapHead + 1) % len(f.bitmapOrder)
@@ -68,7 +76,6 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 		pixelsPerEm = 16
 	}
 	phaseX, phaseY = phaseX&3, phaseY&3
-	shiftX, shiftY := float64(phaseX)/4, float64(phaseY)/4
 	key := glyphBitmapCacheKey{glyphID: glyphID, sizeBits: math.Float64bits(pixelsPerEm), phaseX: phaseX, phaseY: phaseY}
 	f.cacheMu.RLock()
 	if bitmap, ok := f.glyphBitmapCache[key]; ok {
@@ -76,7 +83,21 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 		return bitmap, nil
 	}
 	f.cacheMu.RUnlock()
+	bitmap, err := f.rasterizeColorGlyph(glyphID, pixelsPerEm, phaseX, phaseY)
+	if bitmap == nil && err == nil {
+		bitmap, err = f.rasterizeOutlineGlyph(glyphID, pixelsPerEm, phaseX, phaseY)
+	}
+	if err != nil || bitmap == nil {
+		return bitmap, err
+	}
+	f.cacheMu.Lock()
+	f.ensureCachesLocked()
+	bitmap = f.cacheBitmap(key, bitmap)
+	f.cacheMu.Unlock()
+	return bitmap, nil
+}
 
+func (f *Face) rasterizeOutlineGlyph(glyphID uint16, pixelsPerEm float64, phaseX, phaseY uint8) (*GlyphBitmap, error) {
 	outline, err := f.Outline(glyphID)
 	if err != nil {
 		return nil, err
@@ -85,9 +106,10 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 	if err != nil {
 		return nil, err
 	}
-	if f.Head.UnitsPerEm == 0 {
+	if f.Head.UnitsPerEm == 0 || outline == nil {
 		return nil, nil
 	}
+	shiftX, shiftY := float64(phaseX&3)/4, float64(phaseY&3)/4
 	scale := pixelsPerEm / float64(f.Head.UnitsPerEm)
 	bounds := image.Rect(
 		int(math.Floor(float64(outline.Bounds.XMin)*scale+shiftX)),
@@ -95,27 +117,14 @@ func (f *Face) RasterizeGlyphAt(glyphID uint16, pixelsPerEm float64, phaseX, pha
 		int(math.Ceil(float64(outline.Bounds.XMax)*scale+shiftX)),
 		int(math.Ceil(float64(outline.Bounds.YMax)*scale-shiftY)),
 	)
-	if bounds.Empty() {
-		bitmap := &GlyphBitmap{Image: image.NewAlpha(image.Rect(0, 0, 0, 0)), Bounds: bounds, Advance: float64(metrics.AdvanceWidth) * scale, Scale: scale}
-		f.cacheMu.Lock()
-		f.ensureCachesLocked()
-		bitmap = f.cacheBitmap(key, bitmap)
-		f.cacheMu.Unlock()
-		return bitmap, nil
-	}
-
 	img := image.NewAlpha(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	scratch := acquireGlyphRasterScratch()
-	scaledContours := scratch.scaleOutline(outline.Contours, scale, bounds, shiftX, shiftY, 1)
-	paintCoverage(img, scaledContours)
-	releaseGlyphRasterScratch(scratch)
-
-	bitmap := &GlyphBitmap{Image: img, Bounds: bounds, Advance: float64(metrics.AdvanceWidth) * scale, Scale: scale}
-	f.cacheMu.Lock()
-	f.ensureCachesLocked()
-	bitmap = f.cacheBitmap(key, bitmap)
-	f.cacheMu.Unlock()
-	return bitmap, nil
+	if !bounds.Empty() {
+		scratch := acquireGlyphRasterScratch()
+		scaledContours := scratch.scaleOutline(outline.Contours, scale, bounds, shiftX, shiftY, 1)
+		paintCoverage(img, scaledContours)
+		releaseGlyphRasterScratch(scratch)
+	}
+	return &GlyphBitmap{Image: img, Bounds: bounds, Advance: float64(metrics.AdvanceWidth) * scale, Scale: scale}, nil
 }
 
 func paintCoverage(img *image.Alpha, contours []OutlineContour) {

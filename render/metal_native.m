@@ -846,6 +846,33 @@ void onix_metal_destroy(OnixMetalDriver *driver) {
 	free(driver);
 }
 
+// Idle cleanup is independent of frame count. It waits for every in-flight
+// slot before releasing transient buffers or resources retired by that slot.
+int onix_metal_trim_idle(OnixMetalDriver *driver) {
+ if (driver == NULL) return 1;
+ if (driver->command_buffer != nil || driver->encoder != nil) {
+  onix_metal_set_error("cannot trim buffers inside a Metal frame"); return 0;
+ }
+ @autoreleasepool {
+  for (uint32_t index=0; index<ONIX_METAL_FRAMES_IN_FLIGHT; index++) {
+   if (driver->inflight_commands[index] != nil) {
+    [driver->inflight_commands[index] waitUntilCompleted];
+    [driver->inflight_commands[index] release];
+    driver->inflight_commands[index]=nil;
+   }
+   [driver->frame_resources[index] removeAllObjects];
+   OnixMetalUploadFrame *frame=&driver->uploads[index];
+   for (uint32_t block=0; block<frame->count; block++) [frame->blocks[block].buffer release];
+   free(frame->blocks); onix_upload_cache_destroy(&frame->cache);
+   *frame=(OnixMetalUploadFrame){0};
+  }
+  [driver->readback_buffer release]; driver->readback_buffer=nil;
+  driver->readback_capacity=0; driver->readback_used=0;
+  driver->readback_retention=(OnixBufferRetention){0};
+ }
+ return 1;
+}
+
 int onix_metal_resize(OnixMetalDriver *driver, uint32_t width, uint32_t height) {
     if (driver == NULL || width == 0 || height == 0) return driver != NULL;
 	for (uint32_t index = 0; index < ONIX_METAL_FRAMES_IN_FLIGHT; index++) {

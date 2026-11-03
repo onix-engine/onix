@@ -29,9 +29,12 @@ type UIScroll struct {
 	ScrollbarOverlay bool
 	DisableInput     bool
 	DisableDrag      bool
-	ConsumeWheel     bool
-	Horizontal       bool
-	Vertical         bool
+	// DisableContentDrag leaves left-button gestures to text selection while
+	// preserving scrollbar dragging, the wheel and middle-button panning.
+	DisableContentDrag bool
+	ConsumeWheel       bool
+	Horizontal         bool
+	Vertical           bool
 
 	pointerOrigin mgl32.Vec2
 	scrollOrigin  mgl32.Vec2
@@ -238,13 +241,13 @@ func updateUIScroll(context *ecs.SystemContext) error {
 				}
 			}
 		}
-		if !scroll.dragging {
+		if !scroll.dragging && (pan || !scroll.DisableContentDrag) {
 			axis := uiScrollDragContent
 			if pan {
 				axis = uiScrollDragPan
 			}
 			scroll.pointerOrigin, scroll.scrollOrigin, scroll.dragging, scroll.dragAxis = position, scroll.Position, true, axis
-		} else {
+		} else if scroll.dragging {
 			old := scroll.Position
 			drag := position.Sub(scroll.pointerOrigin).Mul(1 / scale)
 			switch scroll.dragAxis {
