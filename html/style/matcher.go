@@ -83,7 +83,8 @@ func validateDeclaration(property, value string) bool {
 	}
 	if property == "font" {
 		ctx := parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16}
-		size, line, _, err := parseFontShorthandParts(value, ctx)
+		parts, err := parseFontShorthandParts(value, ctx)
+		size, line := parts.size, parts.line
 		if err != nil {
 			return false
 		}

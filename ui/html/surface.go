@@ -5372,7 +5372,7 @@ func htmlPreservesWhitespace(value *style.ComputedStyle) bool {
 
 func htmlFontForControl(world *ecs.World, control ecs.Entity, regular, bold *onixtext.Font, value *style.ComputedStyle) *onixtext.Font {
 	if override := world.GetRef[ControlTextFont](control); override != nil && override.Font != nil {
-		return override.Font
+		return htmlFontForStyle(override.Font, nil, value)
 	}
 	return htmlFontForStyle(regular, bold, value)
 }
@@ -5381,7 +5381,10 @@ func htmlFontForStyle(regular, bold *onixtext.Font, value *style.ComputedStyle) 
 	// The project ships Regular and Bold faces, so semi-bold weights use the
 	// nearest available bold face instead of silently reusing Regular glyphs.
 	if bold != nil && value.FontWeight.Kind == style.ValueNumber && value.FontWeight.Number >= 600 {
-		return bold
+		regular = bold
+	}
+	if value.FontStyle != style.FontNormal {
+		return regular.Italic()
 	}
 	return regular
 }

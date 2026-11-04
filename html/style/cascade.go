@@ -49,7 +49,7 @@ type specifiedProperty struct {
 }
 
 var cascadePropertyGroups = [...][]string{
-	{"font", "font-size", "font-family", "font-weight"},
+	{"font", "font-size", "font-family", "font-weight", "font-style"},
 	{"display", "appearance", "pointer-events", "visibility"},
 	{"table-layout", "border-spacing", "vertical-align"},
 	{"flex", "flex-flow", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "flex-basis"},
@@ -280,6 +280,12 @@ func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *Compu
 	// marker type before inherited author values are applied to descendants.
 	if node != nil && node.Type == dom.ElementNode {
 		switch node.Data {
+		case "i", "em", "cite", "dfn", "var", "address":
+			_, hasStyle := specified["font-style"]
+			_, hasFont := specified["font"]
+			if !hasStyle && !hasFont {
+				computed.FontStyle = FontItalic
+			}
 		case "ol":
 			if _, declared := specified["list-style-type"]; !declared {
 				computed.ListStyleType = Keyword("decimal")
@@ -401,7 +407,7 @@ func computedStyleChangeForNode(node *dom.Node, previous, current *ComputedStyle
 		previous.TextIndent != current.TextIndent || previous.LetterSpacing != current.LetterSpacing || previous.TabSize != current.TabSize ||
 		previous.FontSize != current.FontSize ||
 		previous.LineHeight != current.LineHeight || previous.LineHeightNormal != current.LineHeightNormal || previous.FontFamily != current.FontFamily ||
-		previous.FontWeight != current.FontWeight || previous.WhiteSpace != current.WhiteSpace ||
+		previous.FontStyle != current.FontStyle || previous.FontWeight != current.FontWeight || previous.WhiteSpace != current.WhiteSpace ||
 		previous.ListStyleType != current.ListStyleType ||
 		previous.WordBreak != current.WordBreak || previous.OverflowWrap != current.OverflowWrap ||
 		previous.TextOverflow != current.TextOverflow ||
@@ -1032,7 +1038,8 @@ func applyCascadedLineHeight(node *dom.Node, computed, parent *ComputedStyle, sp
 		if isCSSWideKeyword(raw) {
 			return nil
 		}
-		_, linePart, _, err := parseFontShorthandParts(raw, ctx)
+		parts, err := parseFontShorthandParts(raw, ctx)
+		linePart := parts.line
 		if err != nil {
 			return err
 		}
@@ -1850,6 +1857,12 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		style.LineHeightNormal = strings.EqualFold(strings.TrimSpace(raw), "normal")
 	case "font-family":
 		style.FontFamily = Keyword(strings.Trim(strings.TrimSpace(raw), `"'`))
+	case "font-style":
+		value, err := parseKeyword(raw, "normal", "italic", "oblique")
+		if err != nil {
+			return err
+		}
+		style.FontStyle = fontStyleKeyword(value.Keyword)
 	case "font-weight":
 		value, err := parseFontWeight(raw)
 		if err != nil {
@@ -3795,10 +3808,12 @@ func applyFontShorthand(computed *ComputedStyle, raw string, ctx parseContext) e
 	if computed == nil {
 		return nil
 	}
-	fontSize, linePart, family, err := parseFontShorthandParts(raw, ctx)
+	parts, err := parseFontShorthandParts(raw, ctx)
+	fontSize, linePart, family := parts.size, parts.line, parts.family
 	if err != nil {
 		return err
 	}
+	computed.FontStyle, computed.FontWeight = parts.style, parts.weight
 	computed.FontSize = fontSize
 	computed.LineHeight = LengthPx(fontSize.LengthPx * 1.2)
 	computed.LineHeightNormal = true
@@ -3814,36 +3829,6 @@ func applyFontShorthand(computed *ComputedStyle, raw string, ctx parseContext) e
 		computed.FontFamily = Keyword(family)
 	}
 	return nil
-}
-
-func parseFontShorthandParts(raw string, ctx parseContext) (Value, string, string, error) {
-	parts := splitCSSFields(strings.TrimSpace(raw))
-	if len(parts) == 0 {
-		return Value{}, "", "", fmt.Errorf("invalid font shorthand %q", raw)
-	}
-	sizeIndex := -1
-	var sizePart, linePart string
-	for index, part := range parts {
-		candidate, candidateLine, hasLine := strings.Cut(part, "/")
-		if value, err := parseFontSize(candidate, ctx); err == nil && value.Kind == ValueLengthPx {
-			sizeIndex = index
-			sizePart, linePart = candidate, candidateLine
-			if !hasLine {
-				linePart = ""
-			}
-			break
-		}
-	}
-	if sizeIndex < 0 {
-		return Value{}, "", "", fmt.Errorf("font shorthand is missing a size: %q", raw)
-	}
-	fontSize, err := parseFontSize(sizePart, ctx)
-	if err != nil {
-		return Value{}, "", "", err
-	}
-	family := strings.TrimSpace(strings.Join(parts[sizeIndex+1:], " "))
-	family = strings.Trim(strings.TrimSpace(family), `"'`)
-	return fontSize, linePart, family, nil
 }
 
 func parseColor(input string) (Color, error) {

@@ -37,7 +37,9 @@ func (f *Face) loadOutline(glyphID uint16, depth int) (*Outline, error) {
 		outline *Outline
 		err     error
 	)
-	if f.CFF != nil {
+	if f.italicSource != nil {
+		outline, err = f.italicOutline(glyphID)
+	} else if f.CFF != nil {
 		outline, err = f.CFF.outline(glyphID)
 	} else {
 		outline, err = f.outline(glyphID, depth)

@@ -579,7 +579,7 @@ body{width:100%%;line-height:1.45}
 h1,h2,h3,h4,h5,h6{margin:0.8em 0 0.4em 0;color:%s;font-weight:700;line-height:1.2}
 h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5,h6{font-size:1em}
 p{margin:0 0 0.75em 0}
-strong{color:%s;font-weight:700}em{color:%s}del{color:%s;text-decoration-line:line-through}
+strong{color:%s;font-weight:700}em{color:%s;font-style:italic}del{color:%s;text-decoration-line:line-through}
 a{color:%s}
 blockquote{margin:0.75em 0;padding:0.65em 0.9em;border-left:%gpx solid %s;color:%s;background-color:%s;border-radius:%gpx}
 blockquote > p{margin:0}
@@ -604,7 +604,7 @@ tbody tr:nth-child(odd) td{background-color:%s}tbody tr:nth-child(even) td{backg
 .math-base,.math-radicand,.math-radicand-body,.math-cell{display:flex;align-items:center}.math-radicand{border-top:1px solid %s;padding:0 0.08em}.math-radicand-body{position:relative;left:-0.32em}
 .math-root-index{font-size:0.62em}.math-root-symbol,.math-delimiter{font-size:1.25em}
 .math-grid{row-gap:0.18em}.math-row{column-gap:0.45em}.math-cell{flex:1}.math-align-left{justify-content:flex-start}.math-align-center{justify-content:center}.math-align-right{justify-content:flex-end}
-.math-bold{font-weight:700}.math-mono{font-family:monospace}
+.math-italic{font-style:italic}.math-bold{font-weight:700}.math-mono{font-family:monospace}
 .math-bar,.math-overline{border-top:1px solid %s}.math-underline{border-bottom:1px solid %s}
 
 %s

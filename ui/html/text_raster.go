@@ -29,6 +29,7 @@ func htmlTextRasterHash(box *layout.Box) uint64 {
 		for _, value := range [...]uint64{htmlVisibilityHash(computed), uint64(c.R)<<24 | uint64(c.G)<<16 | uint64(c.B)<<8 | uint64(c.A), math.Float64bits(computed.FontSize.LengthPx), math.Float64bits(computed.FontWeight.Number)} {
 			hash = (hash ^ value) * 1099511628211
 		}
+		hash = (hash ^ uint64(computed.FontStyle)) * 1099511628211
 		for index := range len(computed.TextDecorationLine.Keyword) {
 			hash = (hash ^ uint64(computed.TextDecorationLine.Keyword[index])) * 1099511628211
 		}
@@ -45,6 +46,9 @@ func rasterHTMLText(dst *image.RGBA, box *layout.Box, regular, bold *font.Face, 
 		face := regular
 		if bold != nil && computed.FontWeight.Number >= 600 {
 			face = bold
+		}
+		if computed.FontStyle != style.FontNormal {
+			face = face.Italic()
 		}
 		if face == nil || face.Head.UnitsPerEm == 0 {
 			continue

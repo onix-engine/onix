@@ -1613,7 +1613,10 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 
 func fontForStyle(regular *font.Face, value *style.ComputedStyle, ctx *layoutContext) *font.Face {
 	if ctx != nil && ctx.boldFace != nil && value.FontWeight.Kind == style.ValueNumber && value.FontWeight.Number >= 600 {
-		return ctx.boldFace
+		regular = ctx.boldFace
+	}
+	if value.FontStyle != style.FontNormal {
+		return regular.Italic()
 	}
 	return regular
 }

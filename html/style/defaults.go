@@ -59,6 +59,7 @@ func defaultStyle(node *dom.Node) ComputedStyle {
 		LineHeightNormal:         true,
 		FontFamily:               Keyword("sans-serif"),
 		FontWeight:               Number(400),
+		FontStyle:                FontNormal,
 		ListStyleType:            Keyword("disc"),
 		WhiteSpace:               Keyword("normal"),
 		WordBreak:                Keyword("normal"),

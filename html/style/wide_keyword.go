@@ -18,6 +18,7 @@ var inheritedProperties = map[string]struct{}{
 	"font-size":            {},
 	"font-family":          {},
 	"font-weight":          {},
+	"font-style":           {},
 	"visibility":           {},
 	"pointer-events":       {},
 	"color":                {},
@@ -87,6 +88,7 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 	switch property {
 	case "font":
 		style.FontSize, style.FontFamily, style.FontWeight = parent.FontSize, parent.FontFamily, parent.FontWeight
+		style.FontStyle = parent.FontStyle
 		style.LineHeight, style.LineHeightNormal = parent.LineHeight, parent.LineHeightNormal
 	case "display":
 		style.Display = parent.Display
@@ -309,6 +311,8 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 		style.LineHeight, style.LineHeightNormal = parent.LineHeight, parent.LineHeightNormal
 	case "font-family":
 		style.FontFamily = parent.FontFamily
+	case "font-style":
+		style.FontStyle = parent.FontStyle
 	case "font-weight":
 		style.FontWeight = parent.FontWeight
 	case "white-space":

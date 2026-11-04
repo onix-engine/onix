@@ -8,6 +8,7 @@ import (
 )
 
 type Font struct {
+	italicVariant *Font
 	*font.Face
 	caches    map[glyphCacheKey]*GlyphCache
 	atlasPool *glyphAtlasPool
@@ -115,9 +116,16 @@ func (f *Font) Dispose() error {
 	f.caches = nil
 	pool := f.atlasPool
 	f.atlasPool = nil
+	italic := f.italicVariant
+	f.italicVariant = nil
 	f.mu.Unlock()
 
 	errList := make([]error, 0, len(caches))
+	if italic != nil {
+		if err := italic.Dispose(); err != nil {
+			errList = append(errList, err)
+		}
+	}
 	for _, cache := range caches {
 		if err := cache.Dispose(); err != nil {
 			errList = append(errList, err)

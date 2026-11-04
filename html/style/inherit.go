@@ -15,6 +15,7 @@ func inherit(parent *ComputedStyle, current *ComputedStyle, specified map[string
 	// from defaultStyle survives when applySpecifiedValues resolves them.
 	if inheritsFromParent(specified, "font") {
 		current.FontSize, current.FontFamily, current.FontWeight = parent.FontSize, parent.FontFamily, parent.FontWeight
+		current.FontStyle = parent.FontStyle
 		current.LineHeight, current.LineHeightNormal = parent.LineHeight, parent.LineHeightNormal
 	}
 	if inheritsFromParent(specified, "color") {
@@ -47,6 +48,9 @@ func inherit(parent *ComputedStyle, current *ComputedStyle, specified map[string
 	}
 	if inheritsFromParent(specified, "font-family") {
 		current.FontFamily = parent.FontFamily
+	}
+	if inheritsFromParent(specified, "font-style") {
+		current.FontStyle = parent.FontStyle
 	}
 	if inheritsFromParent(specified, "font-weight") {
 		current.FontWeight = parent.FontWeight

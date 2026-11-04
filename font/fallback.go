@@ -108,6 +108,9 @@ func (f *Face) ResolveGlyph(r rune) (*Face, uint16) {
 	}
 	g := f.fallback.resolve(r)
 	if g.face != nil {
+		if f.italicSource != nil {
+			return g.face.Italic(), g.id
+		}
 		return g.face, g.id
 	}
 	return f, 0

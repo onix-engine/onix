@@ -232,6 +232,7 @@ type styleCore struct {
 	ColorInherited           bool
 	LineHeightNormal         bool
 	TextInOpacityGroup       bool
+	FontStyle                FontStyle
 	// Derived paint context, propagated during the existing cascade traversal.
 	TextOpaqueBackdrop bool
 }

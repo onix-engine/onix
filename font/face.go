@@ -10,6 +10,8 @@ import (
 )
 
 type Face struct {
+	italicSource     *Face
+	italicVariant    *Face
 	Cmap             cmap
 	outlineCache     map[uint16]weak.Pointer[Outline]
 	Kern             kernTable
@@ -302,6 +304,10 @@ func (f *Face) Glyph(glyphID uint16) (*Glyph, error) {
 
 // GlyphBounds reads TrueType ink bounds without decoding or retaining contours.
 func (f *Face) GlyphBounds(glyphID uint16) (Bounds, error) {
+	if f.italicSource != nil {
+		bounds, err := f.italicSource.GlyphBounds(glyphID)
+		return italicBounds(bounds), err
+	}
 	if f.CFF != nil {
 		outline, err := f.Outline(glyphID)
 		if err != nil || outline == nil {
