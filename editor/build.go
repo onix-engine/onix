@@ -92,22 +92,22 @@ type macOSArchitectureConfig struct {
 }
 
 type BuildOptions struct {
-	Backend       render.Backend
-	ProjectDir    string
-	Platform      BuildPlatform
+	Progress      func(BuildProgress)
+	AppName       string
+	JavaPackage   string
 	Mode          BuildMode
 	PackageFormat BuildPackageFormat
 	Architecture  BuildArchitecture
-	AppName       string
+	Backend       render.Backend
 	// Icon is only used when a project does not declare window.icon.
 	Icon          string
-	JavaPackage   string
-	AndroidMinSDK int
+	Platform      BuildPlatform
+	ProjectDir    string
 	AndroidSDK    string
 	AndroidNDK    string
 	WebTitle      string
 	WeChatAppID   string
-	Progress      func(BuildProgress)
+	AndroidMinSDK int
 }
 
 // BuildProgress reports completed work within build phases. Indeterminate
@@ -259,35 +259,35 @@ func macOSArchitectureConfigFor(architecture BuildArchitecture) (macOSArchitectu
 }
 
 type androidProjectConfig struct {
-	AppName         string
-	JavaPackage     string
-	GoPackage       string
-	GoPackageName   string
-	HostProjectName string
-	MinSDK          int
-	CompileSDK      int
-	TargetSDK       int
 	BuildTools      string
+	JavaHome        string
+	GoPackage       string
 	NDKVersion      string
+	HostProjectName string
+	JNIPrefix       string
+	JavaPackagePath string
+	NativePkgDir    string
+	JavaPackage     string
 	NDKPath         string
+	GoPackageName   string
 	SDKPath         string
 	CMakeVersion    string
-	JavaHome        string
+	AppName         string
 	AppDir          string
 	HostDir         string
-	NativePkgDir    string
-	JavaPackagePath string
-	JNIPrefix       string
+	TargetSDK       int
+	CompileSDK      int
+	MinSDK          int
 }
 
 type androidBuildEnvironment struct {
 	SDKPath      string
 	NDKPath      string
 	JavaHome     string
-	CompileSDK   int
 	BuildTools   string
 	CMakeVersion string
 	NDKVersion   string
+	CompileSDK   int
 }
 
 type iosProjectConfig struct {

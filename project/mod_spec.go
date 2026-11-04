@@ -29,13 +29,13 @@ const (
 // ProjectSpec selects the entry and scene order. Scene files live in
 // resources/scenes; compilation discovers additional scenes in that directory.
 type ProjectSpec struct {
-	Entry      SceneID                   `json:"entry"`
-	Scenes     []SceneID                 `json:"scenes,omitempty"`
-	ClearColor string                    `json:"clearColor,omitempty"`
-	Window     WindowConfig              `json:"window,omitempty"`
-	Viewport   SizeConfig                `json:"viewport,omitempty"`
-	Engine     EngineConfig              `json:"engine,omitempty"`
 	Types      map[ValueType]ValueSchema `json:"types,omitempty"`
+	Entry      SceneID                   `json:"entry"`
+	ClearColor string                    `json:"clearColor,omitempty"`
+	Engine     EngineConfig              `json:"engine,omitempty"`
+	Scenes     []SceneID                 `json:"scenes,omitempty"`
+	Viewport   SizeConfig                `json:"viewport,omitempty"`
+	Window     WindowConfig              `json:"window,omitempty"`
 }
 
 type ValueSchema struct {
@@ -61,24 +61,24 @@ type SceneSpec struct {
 }
 
 type ModSpec struct {
-	Name       string                     `json:"name,omitempty"`
-	Space      CoordinateSpace            `json:"space,omitempty"`
-	Transform  ModTransformSpec           `json:"transform,omitzero"`
 	Components ModComponents              `json:"components,omitzero"`
-	Elements   []ModElementSpec           `json:"elements,omitempty"`
 	Resources  map[string]ModResourceSpec `json:"resources,omitempty"`
 	Slots      map[string]SlotSpec        `json:"slots,omitempty"`
+	Name       string                     `json:"name,omitempty"`
+	Space      CoordinateSpace            `json:"space,omitempty"`
 	Behavior   string                     `json:"behavior,omitempty"`
+	Transform  ModTransformSpec           `json:"transform,omitzero"`
+	Elements   []ModElementSpec           `json:"elements,omitempty"`
 }
 
 type ModInstanceSpec struct {
+	Slots     map[string]json.RawMessage `json:"slots,omitempty"`
+	Enabled   *bool                      `json:"enabled,omitempty"`
+	Visible   *bool                      `json:"visible,omitempty"`
 	ID        string                     `json:"id"`
 	Mod       ModID                      `json:"mod"`
 	Placement ModTransformSpec           `json:"placement,omitzero"`
-	Slots     map[string]json.RawMessage `json:"slots,omitempty"`
 	Children  []ModInstanceSpec          `json:"children,omitempty"`
-	Enabled   *bool                      `json:"enabled,omitempty"`
-	Visible   *bool                      `json:"visible,omitempty"`
 }
 
 type ModTransformSpec struct {
@@ -90,38 +90,38 @@ type ModTransformSpec struct {
 // Elements are private implementation details of one module. Scene messages and
 // placements cannot address them; only the owning behavior can obtain a handle.
 type ModElementSpec struct {
+	Components ModComponents    `json:"components,omitzero"`
+	Visible    *bool            `json:"visible,omitempty"`
 	ID         string           `json:"id"`
 	Parent     string           `json:"parent,omitempty"`
 	Space      CoordinateSpace  `json:"space,omitempty"`
-	Visible    *bool            `json:"visible,omitempty"`
 	Transform  ModTransformSpec `json:"transform,omitzero"`
-	Components ModComponents    `json:"components,omitzero"`
 }
 
 type ModComponents struct {
-	Size                   []float32                   `json:"size,omitempty"`
-	Layout                 *engineui.Layout            `json:"layout,omitempty"`
+	RigidBody3D            *RigidBody3DSpec            `json:"rigidBody3D,omitempty"`
+	AmbientLight           *AmbientLightSpec           `json:"ambientLight,omitempty"`
 	Anchor                 *scene.Anchor               `json:"anchor,omitempty"`
 	Sprite                 *ModSpriteSpec              `json:"sprite,omitempty"`
 	Trail                  *SpriteTrailSpec            `json:"trail,omitempty"`
 	Material               *ModMaterial2DSpec          `json:"material,omitempty"`
 	Shader                 *ShaderComponentSpec        `json:"shader,omitempty"`
 	Input                  *ModInputSpec               `json:"input,omitempty"`
-	Text                   *TextComponentSpec          `json:"text,omitempty"`
+	SegmentCollider2D      *SegmentCollider2DSpec      `json:"segmentCollider2D,omitempty"`
 	Animation              *AnimationComponentSpec     `json:"animation,omitempty"`
 	HTML                   *ModHTMLSpec                `json:"html,omitempty"`
 	Emitter                *EmitterSpec                `json:"emitter,omitempty"`
 	Particle               *TextureSpec                `json:"particle,omitempty"`
 	Tilemap                *TilemapSpec                `json:"tilemap,omitempty"`
-	Model                  *ModelSpec                  `json:"model,omitempty"`
-	Spine                  *ModSpineSpec               `json:"spine,omitempty"`
-	RigidBody3D            *RigidBody3DSpec            `json:"rigidBody3D,omitempty"`
+	Layout                 *engineui.Layout            `json:"layout,omitempty"`
 	TriangleMeshCollider3D *TriangleMeshCollider3DSpec `json:"triangleMeshCollider3D,omitempty"`
+	Text                   *TextComponentSpec          `json:"text,omitempty"`
+	Spine                  *ModSpineSpec               `json:"spine,omitempty"`
 	ConvexHullCollider3D   *ConvexHullCollider3DSpec   `json:"convexHullCollider3D,omitempty"`
 	CompoundCollider3D     *CompoundCollider3DSpec     `json:"compoundCollider3D,omitempty"`
 	Camera                 *Camera3DSpec               `json:"camera,omitempty"`
 	Camera2D               *ModCamera2DSpec            `json:"camera2D,omitempty"`
-	AmbientLight           *AmbientLightSpec           `json:"ambientLight,omitempty"`
+	Model                  *ModelSpec                  `json:"model,omitempty"`
 	DirectionalLight       *DirectionalLightSpec       `json:"directionalLight,omitempty"`
 	PointLight             *PointLightSpec             `json:"pointLight,omitempty"`
 	SpotLight              *SpotLightSpec              `json:"spotLight,omitempty"`
@@ -130,7 +130,7 @@ type ModComponents struct {
 	Collision              *ModCollisionSpec           `json:"collision,omitempty"`
 	CircleCollider2D       *CircleCollider2DSpec       `json:"circleCollider2D,omitempty"`
 	BoxCollider2D          *BoxCollider2DSpec          `json:"boxCollider2D,omitempty"`
-	SegmentCollider2D      *SegmentCollider2DSpec      `json:"segmentCollider2D,omitempty"`
+	Size                   []float32                   `json:"size,omitempty"`
 }
 
 type ModHTMLSpec struct {
@@ -146,10 +146,10 @@ type ModCollisionSpec struct {
 }
 
 type ModCamera2DSpec struct {
-	Order      int                  `json:"order,omitempty"`
-	Viewport   scene.CameraViewport `json:"viewport,omitzero"`
 	Clear      *bool                `json:"clear,omitempty"`
 	ClearColor string               `json:"clearColor,omitempty"`
+	Order      int                  `json:"order,omitempty"`
+	Viewport   scene.CameraViewport `json:"viewport,omitzero"`
 	Scale      float32              `json:"scale,omitempty"`
 }
 
@@ -163,9 +163,9 @@ type ModSpineSpec struct {
 
 type ModSpriteSpec struct {
 	Texture *TextureSpec `json:"texture,omitempty"`
+	Alpha   *float32     `json:"alpha,omitempty"`
 	Color   string       `json:"color,omitempty"`
 	Size    []float32    `json:"size,omitempty"`
-	Alpha   *float32     `json:"alpha,omitempty"`
 }
 
 type ModMaterial2DSpec struct {
@@ -194,19 +194,19 @@ type SlotSpec struct {
 // Plans contain resolved indices and typed values. JSON bytes are authoring
 // data only; dispatch and slot updates do not need to decode JSON or use any.
 type ProjectPlan struct {
-	Spec   ProjectSpec
 	Mods   []ModPlan
 	Scenes []ScenePlan
+	Spec   ProjectSpec
 	Entry  uint32
 }
 
 type ModPlan struct {
-	ID        ModID
 	Spec      ModSpec
-	Transform ModTransform
+	ID        ModID
 	Resources []ModResourcePlan
 	Slots     []SlotPlan
 	Elements  []ModElementPlan
+	Transform ModTransform
 }
 
 type ModElementPlan struct {
@@ -238,11 +238,11 @@ type SlotPlan struct {
 type SlotValue struct {
 	Type    ValueType
 	String  string
-	Bool    bool
+	Fields  []SlotFieldValue
 	Number  float64
 	Integer int64
 	Vector  [4]float32
-	Fields  []SlotFieldValue
+	Bool    bool
 }
 
 type SlotFieldValue struct {
@@ -253,16 +253,16 @@ type SlotFieldValue struct {
 type ScenePlan struct {
 	ID        SceneID
 	Spec      SceneSpec
-	Transform ModTransform
 	Instances []ModInstancePlan
+	Transform ModTransform
 }
 
 type ModInstancePlan struct {
 	ID        string
+	Slots     []SlotValue
+	Placement ModTransform
 	Mod       uint32
 	Parent    int32
-	Placement ModTransform
-	Slots     []SlotValue
 	Enabled   bool
 	Visible   bool
 }

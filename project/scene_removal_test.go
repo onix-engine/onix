@@ -9,13 +9,13 @@ import (
 
 func TestSceneComponentClearersPreserveProfileAndMigrateOnce(t *testing.T) {
 	for _, test := range []struct {
-		name             string
 		clear            sceneComponentClearer
+		name             string
 		removesAnimation bool
 	}{
-		{"full", clearAuthoredSceneComponents, true},
-		{"2d", clear2DSceneComponents, false},
-		{"2d_animation", clear2DAnimationSceneComponents, true},
+		{name: "full", clear: clearAuthoredSceneComponents, removesAnimation: true},
+		{name: "2d", clear: clear2DSceneComponents, removesAnimation: false},
+		{name: "2d_animation", clear: clear2DAnimationSceneComponents, removesAnimation: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()

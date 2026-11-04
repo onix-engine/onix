@@ -12,13 +12,13 @@ import (
 type span struct{ start, end int }
 
 type htmlScanner struct {
-	input                             string
-	tt                                TokenType
 	err                               error
-	raw, data                         span
-	pendingAttr                       [2]span
-	attr                              [][2]span
+	input                             string
 	rawTag                            string
+	attr                              [][2]span
+	pendingAttr                       [2]span
+	raw, data                         span
+	tt                                TokenType
 	textIsRaw, convertNUL, allowCDATA bool
 }
 

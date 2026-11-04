@@ -8,20 +8,20 @@ import (
 // ContentRenderContext is passed by value; Props and State refer to the component.
 type ContentRenderContext[P, S any] struct {
 	World     *Content
-	Component ecs.Entity
 	Props     *P
 	State     *S
+	Component ecs.Entity
 }
 type ContentComponentContext[P, S any] = ContentRenderContext[P, S]
 type ContentEventContext[P, S any] struct {
 	World     *Content
-	Component ecs.Entity
-	Ref       string
-	Event     html.Event
 	Pointer   *html.PointerEvent
 	Props     *P
 	State     *S
 	event     *html.ComponentEventContext[P, S]
+	Ref       string
+	Event     html.Event
+	Component ecs.Entity
 }
 
 func (c *ContentEventContext[P, S]) UpdateState(update func(*S)) bool {
@@ -40,12 +40,12 @@ func (c *Content) Define[P, S any](template html.Template, css string, b Content
 	return html.Define(template, css, html.Behavior[P, S]{
 		Render: func(ctx html.RenderContext[P, S], v *html.View) {
 			if b.Render != nil {
-				b.Render(ContentRenderContext[P, S]{c, ctx.Component, ctx.Props, ctx.State}, v)
+				b.Render(ContentRenderContext[P, S]{World: c, Component: ctx.Component, Props: ctx.Props, State: ctx.State}, v)
 			}
 		},
 		Unmount: func(ctx *html.ComponentContext[P, S]) {
 			if b.Unmount != nil {
-				b.Unmount(&ContentComponentContext[P, S]{c, ctx.Component, ctx.Props, ctx.State})
+				b.Unmount(&ContentComponentContext[P, S]{World: c, Component: ctx.Component, Props: ctx.Props, State: ctx.State})
 			}
 		},
 		HandleEvent: func(ctx *html.ComponentEventContext[P, S]) {

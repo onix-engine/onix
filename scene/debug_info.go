@@ -62,14 +62,14 @@ func RenderDebugInfoSystem(name string) ecs.SystemConfig {
 }
 
 type debugInfoSystemState struct {
-	atlas         *graphics.Texture
 	lastFrame     time.Time
 	windowStarted time.Time
+	atlas         *graphics.Texture
+	text          debugInfoText
+	bufferMemory  render.BufferMemoryStatistics
 	windowFrames  uint64
 	fps           float64
 	heapBytes     uint64
-	bufferMemory  render.BufferMemoryStatistics
-	text          debugInfoText
 }
 
 type debugInfoSystemStateTag struct{}

@@ -69,13 +69,13 @@ func managerPlan(t testing.TB) (*project.ProjectPlan, Registry, *managerProbe) {
 }
 
 type managerProbe struct {
-	buttons                                     []*Context
-	installs, mainUpdates, gameUpdates, results int
-	message, ack                                string
-	result                                      SceneSwitchResult
-	startup                                     SceneStartup
-	loadingState                                SceneState
 	duringActive                                *Scene
+	result                                      SceneSwitchResult
+	message, ack                                string
+	buttons                                     []*Context
+	startup                                     SceneStartup
+	installs, mainUpdates, gameUpdates, results int
+	loadingState                                SceneState
 }
 
 func TestSceneManagerDeclarativeClickBridgePreparesBeforeActivation(t *testing.T) {

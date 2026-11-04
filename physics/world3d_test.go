@@ -7,8 +7,8 @@ import (
 
 func Test3DDynamicShapesSettleOnStaticBox(t *testing.T) {
 	tests := []struct {
-		name      string
 		add       func(*World3D, Body3D)
+		name      string
 		position  Vector3D
 		settledAt float64
 	}{
@@ -84,9 +84,9 @@ func Test3DEveryShapePairProducesContact(t *testing.T) {
 		world.AddCollider(body, definition)
 	}
 	tests := []struct {
-		name   string
 		first  addShape
 		second addShape
+		name   string
 	}{
 		{name: "sphere-sphere", first: addSphere, second: addSphere},
 		{name: "sphere-box", first: addSphere, second: addBox},

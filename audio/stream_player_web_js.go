@@ -9,18 +9,18 @@ import (
 )
 
 type webStreamPlayer struct {
-	mu       sync.Mutex
 	media    js.Value
 	source   js.Value
 	gain     js.Value
+	err      error
 	ended    js.Func
 	url      string
 	duration float64
 	offset   float64
 	volume   float64
+	mu       sync.Mutex
 	playing  bool
 	closed   bool
-	err      error
 }
 
 func newStreamingWebPlayer(clip *Clip) (platformPlayer, error) {

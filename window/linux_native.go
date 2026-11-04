@@ -32,41 +32,41 @@ import (
 )
 
 type Context struct {
-	renderContext
-	loopControl
-	mouseCaptureSupport
 	textInputSupport
-	closeRequestSupport
 	iconDecoderSupport
-	Width          int
-	Height         int
-	windowWidth    int
-	windowHeight   int
+	renderErr error
+	renderContext
+	closeRequestSupport
+	onMouseMove    func(x, y float64)
+	onTouchEnd     func(x, y float64)
+	wakePipe       *wakePipe
+	onFilesDropped func(x, y float64, files []string)
+	onTouchMove    func(x, y float64)
 	nativeWindow   *C.OnixNativeWindow
-	shouldClose    bool
+	onTouchStart   func(x, y float64)
 	onKeydown      func(input.KeyCode)
 	onKeyup        func(input.KeyCode)
 	onMouseDown    func(x, y float64, button input.MouseButton)
 	onMouseUp      func(x, y float64, button input.MouseButton)
-	onMouseMove    func(x, y float64)
 	onMouseWheel   func(xoff, yoff float64)
-	onTouchStart   func(x, y float64)
-	onTouchMove    func(x, y float64)
-	onTouchEnd     func(x, y float64)
-	onFilesDropped func(x, y float64, files []string)
-	viewport       viewportState
 	framePacer     framePacer
-	renderErr      error
-	roundedCorners bool
+	loopControl
+	decorations DecorationMode
+	inputRegion []InputRegionRect
+	mouseCaptureSupport
+	viewport       viewportState
+	events         [256]C.OnixEvent
+	Height         int
+	windowHeight   int
+	Width          int
+	windowWidth    int
 	cornerRadius   int
-	transparent    bool
-	decorations    DecorationMode
-	border         bool
+	roundedCorners bool
 	shadow         bool
 	resizable      bool
-	inputRegion    []InputRegionRect
-	events         [256]C.OnixEvent
-	wakePipe       *wakePipe
+	border         bool
+	transparent    bool
+	shouldClose    bool
 }
 
 // NativeHandle returns the native surface identifier when the host needs to

@@ -54,16 +54,16 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 		name       string
 		components project.ModComponents
 	}{
-		{"camera", project.ModComponents{Camera: &camera}},
-		{"ambient", project.ModComponents{AmbientLight: &ambient}},
-		{"sun", project.ModComponents{DirectionalLight: &sun}},
-		{"point", project.ModComponents{PointLight: &point}},
-		{"spot", project.ModComponents{SpotLight: &spot}},
-		{"pyramid", project.ModComponents{SpotLight: &pyramid}},
-		{"box", project.ModComponents{SpotLight: &box}},
-		{"rectangle", project.ModComponents{AreaLight: &area}},
-		{"disc", project.ModComponents{AreaLight: &disc}},
-		{"tube", project.ModComponents{AreaLight: &tube}},
+		{name: "camera", components: project.ModComponents{Camera: &camera}},
+		{name: "ambient", components: project.ModComponents{AmbientLight: &ambient}},
+		{name: "sun", components: project.ModComponents{DirectionalLight: &sun}},
+		{name: "point", components: project.ModComponents{PointLight: &point}},
+		{name: "spot", components: project.ModComponents{SpotLight: &spot}},
+		{name: "pyramid", components: project.ModComponents{SpotLight: &pyramid}},
+		{name: "box", components: project.ModComponents{SpotLight: &box}},
+		{name: "rectangle", components: project.ModComponents{AreaLight: &area}},
+		{name: "disc", components: project.ModComponents{AreaLight: &disc}},
+		{name: "tube", components: project.ModComponents{AreaLight: &tube}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			a, context := workspace3DHelpersFixture(t, test.components, nil)

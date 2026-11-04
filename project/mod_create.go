@@ -13,14 +13,14 @@ import (
 // CreateProjectOptions configures the authoring scaffold. Module folders and
 // their private resource layouts are created by the module author.
 type CreateProjectOptions struct {
-	Width  int
-	Height int
-	Title  string
+	Title string
 	// Used when there is no enclosing go.mod. EngineDirectory selects a local
 	// engine checkout; EngineVersion selects a published module version.
 	ModulePath      string
 	EngineDirectory string
 	EngineVersion   string
+	Width           int
+	Height          int
 }
 
 // CreateProjectDirectory creates the module-system project entry.

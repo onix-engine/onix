@@ -14,9 +14,9 @@ const (
 )
 
 type Token struct {
-	Type       TokenType
-	Data       string
 	Attributes map[string]string
+	Data       string
+	Type       TokenType
 }
 
 // Tokenizer scans UTF-8 HTML, borrowing unchanged source text. It skips comments

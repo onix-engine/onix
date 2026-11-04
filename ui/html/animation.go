@@ -31,20 +31,22 @@ type htmlAnimationBaseline struct {
 }
 
 type htmlNodeAnimation struct {
-	Computed                   *style.ComputedStyle
-	Stylesheet                 *css.Stylesheet
-	Viewport                   style.Viewport
-	Current                    style.AnimationValue
-	PaintSource                *style.ComputedStyle
-	PaintStyle                 *style.ComputedStyle
-	Tracks                     []htmlCSSAnimation
-	TrackScratch               []htmlCSSAnimation
-	From, Target, ReverseStart style.AnimationValue
-	Transitions                [style.AnimatedPropertyCount]htmlCSSTransition
-	Active                     style.AnimatedProperties
-	sampleTime                 float64
-	activeIndex                int
-	changed                    bool
+	Stylesheet   *css.Stylesheet
+	Computed     *style.ComputedStyle
+	PaintSource  *style.ComputedStyle
+	PaintStyle   *style.ComputedStyle
+	TrackScratch []htmlCSSAnimation
+	Tracks       []htmlCSSAnimation
+	Transitions  [style.AnimatedPropertyCount]htmlCSSTransition
+	From         style.AnimationValue
+	Current      style.AnimationValue
+	Target       style.AnimationValue
+	ReverseStart style.AnimationValue
+	Viewport     style.Viewport
+	sampleTime   float64
+	activeIndex  int
+	Active       style.AnimatedProperties
+	changed      bool
 }
 
 func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle) *htmlNodeAnimation {
@@ -284,6 +286,7 @@ func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float
 	if len(state.AnimationRoots) == 0 {
 		return
 	}
+	state.AnimationComposition.Batch = true
 	// Coalesce changed subtrees after sampling every animation. Memoize shared
 	// ancestor paths so nested animations do not repeat either traversal.
 	hasChangedAncestor := func(node *dom.Node, changed bool) bool {
@@ -296,6 +299,8 @@ func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float
 		}
 	}
 	state.NodeFlags.clear()
+	state.AnimationComposition.Batch = false
+	state.AnimationComposition.clear()
 	for _, node := range state.AnimationRoots {
 		state.Animations[node].changed = false
 	}
@@ -339,6 +344,9 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	if !ok {
 		return
 	}
+	if !state.AnimationComposition.Batch {
+		defer state.AnimationComposition.clear()
+	}
 	// A generated control/clip container already carries the DOM transforms
 	// above its node; only compose the portion below that ECS parent.
 	var stop *dom.Node
@@ -350,7 +358,7 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			// container, while CSS transform origins remain in page coordinates.
 			if clip, ok := state.OverflowEntities[parent.Entity]; ok {
 				originOffset = mgl32.Vec2{float32(clip.rect.X), float32(clip.rect.Y)}
-			} else if box := state.BoxesByNode[stop]; box != nil {
+			} else if box := state.boxForNode(stop); box != nil {
 				rect := box.BorderBox()
 				originOffset = mgl32.Vec2{float32(rect.X), float32(rect.Y)}
 			}
@@ -362,60 +370,18 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	if ownNode.Type == dom.TextNode {
 		ownNode = ownNode.Parent
 	}
-	ownOnly := true
-	opacity := float64(1)
-	foreground := style.AnimationColor{Current: 1}
-	stopped := false
-	for current := node; current != nil; current = current.Parent {
-		computed := state.Styles[current]
-		if computed == nil || current.Type != dom.ElementNode {
-			continue
+	visual := state.animationVisualValue(node)
+	opacity, foreground := visual.Opacity, visual.Foreground
+	composed := state.animationTransformValue(node, stop, visual.Transform)
+	if composed.Count != 0 {
+		matrix = composed.Matrix.shifted(child.offset.Sub(originOffset).Sub(translation))
+	}
+	ownOnly := composed.Count == 0
+	if composed.Count == 1 && ownNode != stop {
+		ownOnly = visual.Transformed
+		if ownNode != node {
+			ownOnly = state.animationVisualValue(ownNode).Transformed
 		}
-		var value style.AnimationValue
-		if animation := state.Animations[current]; animation != nil {
-			value = animation.Current
-		} else {
-			value = style.BaseAnimationValue(computed)
-		}
-		if foreground.Current != 0 {
-			color := value.Colors[style.AnimationForeground]
-			weight := foreground.Current
-			foreground.R += weight * color.R
-			foreground.G += weight * color.G
-			foreground.B += weight * color.B
-			foreground.A += weight * color.A
-			foreground.Current *= color.Current
-		}
-		// Composite roots carry their own opacity on the final sprite.
-		opacity *= value.Opacity
-		if current == stop {
-			stopped = true
-		}
-		if stopped {
-			continue
-		}
-		box := state.BoxesByNode[current]
-		if box == nil {
-			continue
-		}
-		rect := box.BorderBox()
-		tx, ty := style.ResolveAnimatedTranslation(value, rect.Width, rect.Height)
-		if value.Rotation == 0 && value.SkewX == 0 && value.ScaleX == 1 && value.ScaleY == 1 && tx == 0 && ty == 0 {
-			continue
-		}
-		if current != ownNode {
-			ownOnly = false
-		}
-		origin := mgl32.Vec2{
-			float32(rect.X+style.ResolveLength(computed.TransformOriginX, rect.Width)) - originOffset.X() + child.offset.X() - translation.X(),
-			float32(rect.Y+style.ResolveLength(computed.TransformOriginY, rect.Height)) - originOffset.Y() + child.offset.Y() - translation.Y(),
-		}
-		local := mgl32.Translate3D(origin.X()+float32(tx), origin.Y()+float32(ty), 0).
-			Mul4(mgl32.HomogRotate3DZ(float32(value.Rotation * math.Pi / 180))).
-			Mul4(mgl32.Mat4{1, 0, 0, 0, float32(math.Tan(value.SkewX * math.Pi / 180)), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}).
-			Mul4(mgl32.Scale3D(float32(value.ScaleX), float32(value.ScaleY), 1)).
-			Mul4(mgl32.Translate3D(-origin.X(), -origin.Y(), 0))
-		matrix = local.Mul4(matrix)
 	}
 	// Keep single-node transforms in their authored representation, preserving
 	// complete turns for spinning animations and the inspectable CSS pivot.
@@ -427,13 +393,13 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 		if current.Type == dom.TextNode {
 			current = current.Parent
 		}
-		value := style.AnimationValue{ScaleX: 1, ScaleY: 1}
-		if animation := state.Animations[current]; animation != nil {
-			value = animation.Current
-		} else if computed := state.Styles[current]; computed != nil {
-			value = style.BaseAnimationValue(computed)
-		}
-		if box := state.BoxesByNode[current]; ownOnly && current != stop && box != nil {
+		if box := state.boxForNode(current); ownOnly && current != stop && box != nil {
+			value := style.AnimationValue{ScaleX: 1, ScaleY: 1}
+			if animation := state.Animations[current]; animation != nil {
+				value = animation.Current
+			} else if computed := state.Styles[current]; computed != nil {
+				value = style.BaseAnimationValue(computed)
+			}
 			rect := box.BorderBox()
 			computed := state.Styles[current]
 			rotation, scale = float32(value.Rotation*math.Pi/180), mgl32.Vec2{float32(value.ScaleX), float32(value.ScaleY)}
@@ -471,8 +437,6 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			updated.Alpha, updated.LCD = float32(opacity), lcd
 		}
 	}
-	foreground.A += foreground.Current
-	foreground.Current = 0
 	if baseline, ok := state.AnimationBaselines[ownNode]; ok && baseline.Foreground != foreground {
 		baseline.Foreground = foreground
 		state.AnimationBaselines[ownNode] = baseline

@@ -10,8 +10,8 @@ import (
 type PointLightSpec struct {
 	Shadows     *PunctualShadowSpec `json:"shadows,omitempty"`
 	Color       string              `json:"color"`
-	Intensity   float32             `json:"intensity"`
 	Unit        graphics.LightUnit  `json:"unit"`
+	Intensity   float32             `json:"intensity"`
 	LuxDistance float32             `json:"luxDistance"`
 	Range       float32             `json:"range"`
 	Radius      float32             `json:"radius"`
@@ -39,12 +39,12 @@ func compileScenePointLight(spec SceneNodeSpec) (render3d.PointLight, error) {
 type SpotLightSpec struct {
 	Shadows          *PunctualShadowSpec     `json:"shadows,omitempty"`
 	Color            string                  `json:"color"`
-	Intensity        float32                 `json:"intensity"`
-	Unit             graphics.LightUnit      `json:"unit"`
-	LuxDistance      float32                 `json:"luxDistance"`
-	Range            float32                 `json:"range"`
-	Radius           float32                 `json:"radius"`
 	Shape            render3d.SpotLightShape `json:"shape"`
+	Unit             graphics.LightUnit      `json:"unit"`
+	Radius           float32                 `json:"radius"`
+	Range            float32                 `json:"range"`
+	LuxDistance      float32                 `json:"luxDistance"`
+	Intensity        float32                 `json:"intensity"`
 	InnerConeAngle   float32                 `json:"innerConeAngle"`
 	OuterConeAngle   float32                 `json:"outerConeAngle"`
 	AspectRatio      float32                 `json:"aspectRatio"`
@@ -91,9 +91,9 @@ func NewPunctualShadowSpec() *PunctualShadowSpec {
 
 type AreaLightSpec struct {
 	Color     string                  `json:"color"`
-	Intensity float32                 `json:"intensity"`
 	Unit      graphics.LightUnit      `json:"unit"`
 	Shape     render3d.AreaLightShape `json:"shape"`
+	Intensity float32                 `json:"intensity"`
 	Range     float32                 `json:"range"`
 	Width     float32                 `json:"width"`
 	Height    float32                 `json:"height"`

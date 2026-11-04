@@ -98,8 +98,8 @@ func TestMeshAttachmentUVsMatchSpineRuntime(t *testing.T) {
 	input := []float32{0, 0, 1, 0, 1, 1, 0, 1}
 	tests := []struct {
 		name   string
-		region atlasRegion
 		want   []float32
+		region atlasRegion
 	}{
 		{
 			name:   "trimmed",

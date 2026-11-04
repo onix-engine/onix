@@ -24,42 +24,43 @@ type workspace2DMod struct {
 }
 
 type workspace2DRow struct {
+	targets                   map[string]ecs.Entity
 	id                        string
 	mod                       project.ModID
+	parts, slots              []ecs.Entity
+	selectedParts             []bool
 	revision, contentRevision uint64
 	placement, root           ecs.Entity
-	parts, slots              []ecs.Entity
-	targets                   map[string]ecs.Entity
-	selectedParts             []bool
-	animated                  bool
 	transform                 project.ModTransform
+	animated                  bool
 }
 
 type workspaceViewport2D struct {
-	world               *ecs.World
-	mods                map[project.ModID]workspace2DMod
-	retired             []*project.Resources
-	rows                []workspace2DRow
-	sceneRoot           ecs.Entity
-	target, sceneTarget editorRenderTarget
-	structure           uint64
-	generation          uint64
-	frame               rect
-	offset              mgl32.Vec2
-	panning             bool
-	local               project.ModID
-	focusPending        bool
-	size                [2]int
-	animated            bool
-	cssAnimated         bool
-	worldSpace          bool
-	labels              [3]scene.Text2D
-	err                 error
-	imageName           string
-	clearColor          graphics.ColorRGBA
-	clearColorSource    string
-	dragEntity          ecs.Entity
-	dragTransform       project.ModTransform
+	target           editorRenderTarget
+	err              error
+	sceneTarget      editorRenderTarget
+	mods             map[project.ModID]workspace2DMod
+	world            *ecs.World
+	local            project.ModID
+	clearColorSource string
+	imageName        string
+	rows             []workspace2DRow
+	retired          []*project.Resources
+	labels           [3]scene.Text2D
+	size             [2]int
+	sceneRoot        ecs.Entity
+	dragEntity       ecs.Entity
+	structure        uint64
+	generation       uint64
+	dragTransform    project.ModTransform
+	frame            rect
+	clearColor       graphics.ColorRGBA
+	offset           mgl32.Vec2
+	panning          bool
+	worldSpace       bool
+	cssAnimated      bool
+	animated         bool
+	focusPending     bool
 }
 
 func (v *workspaceViewport2D) dispose() {

@@ -17,8 +17,8 @@ import (
 // Sampling returns linear RGB; stored exposure/color corrections are already
 // applied to the pixels and are not applied again. RGB primaries are preserved.
 type Panorama struct {
-	width, height int
 	pixels        []byte
+	width, height int
 }
 
 func (p *Panorama) Size() (int, int) { return p.width, p.height }

@@ -12,23 +12,23 @@ import (
 )
 
 type ModelSpec struct {
+	Mesh          *MeshSpec                   `json:"mesh,omitempty"`
 	AnimationPath string                      `json:"animationPath,omitempty"`
 	ID            string                      `json:"id"`
 	Path          string                      `json:"path,omitempty"`
-	Mesh          *MeshSpec                   `json:"mesh,omitempty"`
-	Material      ModelMaterialSpec           `json:"material,omitempty"`
 	Collision     enginephysics.CollisionMode `json:"collision,omitempty"`
 	CollisionPath string                      `json:"collisionPath,omitempty"`
+	Material      ModelMaterialSpec           `json:"material,omitempty"`
 }
 
 type MeshSpec struct {
 	Primitive string           `json:"primitive,omitempty"`
-	Size      float32          `json:"size,omitempty"`
-	Radius    float32          `json:"radius,omitempty"`
-	Sectors   int              `json:"sectors,omitempty"`
-	Stacks    int              `json:"stacks,omitempty"`
 	Vertices  []MeshVertexSpec `json:"vertices,omitempty"`
 	Indices   []uint32         `json:"indices,omitempty"`
+	Sectors   int              `json:"sectors,omitempty"`
+	Stacks    int              `json:"stacks,omitempty"`
+	Size      float32          `json:"size,omitempty"`
+	Radius    float32          `json:"radius,omitempty"`
 }
 
 type MeshVertexSpec struct {

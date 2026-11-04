@@ -81,13 +81,13 @@ func TestModuleIndependentComponentValidation(t *testing.T) {
 	plan := ModPlan{}
 	for _, test := range []struct {
 		name       string
-		components ModComponents
 		want       string
+		components ModComponents
 	}{
-		{"negative trail lifetime", ModComponents{Trail: &SpriteTrailSpec{Lifetime: -1}}, "lifetime must be non-negative"},
-		{"invalid trail alpha", ModComponents{Trail: &SpriteTrailSpec{AlphaStart: 2}}, "alphaStart must be between"},
-		{"empty shader source", ModComponents{Shader: &ShaderComponentSpec{WGSLFragment: " "}}, "requires at least one platform source"},
-		{"non-finite uniforms", ModComponents{Material: &ModMaterial2DSpec{Custom: [4][4]float32{{float32(math.NaN())}}}}, "material.custom must be finite"},
+		{name: "negative trail lifetime", components: ModComponents{Trail: &SpriteTrailSpec{Lifetime: -1}}, want: "lifetime must be non-negative"},
+		{name: "invalid trail alpha", components: ModComponents{Trail: &SpriteTrailSpec{AlphaStart: 2}}, want: "alphaStart must be between"},
+		{name: "empty shader source", components: ModComponents{Shader: &ShaderComponentSpec{WGSLFragment: " "}}, want: "requires at least one platform source"},
+		{name: "non-finite uniforms", components: ModComponents{Material: &ModMaterial2DSpec{Custom: [4][4]float32{{float32(math.NaN())}}}}, want: "material.custom must be finite"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := compiler.validateContent("effect", test.components, &plan, modIndices{})

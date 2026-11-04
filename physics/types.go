@@ -14,18 +14,18 @@ type BodyID uint64
 type ColliderID uint64
 
 type BodyDef struct {
-	Type            BodyType
-	Position        Vector
-	Rotation        float64
 	Velocity        Vector
+	Position        Vector
+	Inertia         float64
+	Rotation        float64
 	AngularVelocity float64
 	Mass            float64
-	Inertia         float64
 	GravityScale    float64
 	LinearDamping   float64
 	AngularDamping  float64
-	FixedRotation   bool
 	UserData        uint64
+	Type            BodyType
+	FixedRotation   bool
 	gravitySet      bool
 }
 
@@ -101,11 +101,11 @@ func (filter Filter) normalized() Filter {
 
 type ColliderDef[S Shape] struct {
 	Shape         S
+	Filter        Filter
 	Friction      float64
 	Restitution   float64
-	Sensor        bool
-	Filter        Filter
 	CollisionType uint32
+	Sensor        bool
 }
 
 func NewColliderDef[S Shape](shape S) ColliderDef[S] {

@@ -481,19 +481,19 @@ func installCanvasTestDriver(t *testing.T, driver render.Driver) {
 }
 
 type canvasTestDriver struct {
-	viewport        render.Rect
-	scissor         *render.Rect
 	beginErr        error
-	nextID          uint32
-	nextShaderID    uint32
+	scissor         *render.Rect
+	spriteBatches   []render.SpriteBatch
 	textures        []render.TextureHandle
 	pipelines       []render.Pipeline
 	projections     [][16]float32
-	submits         int
-	spriteBatches   []render.SpriteBatch
-	discardBatches  bool
 	createdTextures []render.TextureDescriptor
 	createdBytes    []int
+	submits         int
+	viewport        render.Rect
+	nextID          uint32
+	nextShaderID    uint32
+	discardBatches  bool
 }
 
 func (d *canvasTestDriver) RendererInfo() render.RendererInfo { return render.RendererInfo{} }

@@ -34,21 +34,28 @@ var (
 // workspaceTilemap drives the docked palette and in-canvas painting for the
 // selected tilemap. Painting is committed as one undoable edit per stroke.
 type workspaceTilemap struct {
-	mod                                              project.ModID
-	element                                          string
-	entity                                           ecs.Entity
-	tilemap                                          *scene.Tilemap2D
-	texture                                          *graphics.Texture
-	cols, rows, width, height, tileWidth, tileHeight int
-	matrix                                           mgl32.Mat4
-	anchor                                           scene.Anchor
-	ui, painting                                     bool
-	armed                                            int
-	stroke                                           map[int]int
-	palette                                          rect
-	exit                                             rect
-	exitText                                         scene.Text2D
-	paletteCols, total                               int
+	tilemap     *scene.Tilemap2D
+	texture     *graphics.Texture
+	stroke      map[int]int
+	mod         project.ModID
+	element     string
+	exitText    scene.Text2D
+	tileHeight  int
+	cols        int
+	height      int
+	tileWidth   int
+	rows        int
+	total       int
+	paletteCols int
+	entity      ecs.Entity
+	width       int
+	armed       int
+	matrix      mgl32.Mat4
+	palette     rect
+	exit        rect
+	anchor      scene.Anchor
+	painting    bool
+	ui          bool
 }
 
 func (t *workspaceTilemap) inactive() {

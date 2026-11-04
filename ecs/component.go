@@ -41,19 +41,19 @@ type column interface {
 }
 
 type typedColumn[T any] struct {
-	columnState
 	values []T
+	columnState
 }
 
 // columnState keeps change tracking independent of the component value type.
 // Query access can hold this metadata and an already resolved value pointer.
 type columnState struct {
 	world         *World
-	id            componentID
 	added         []Tick
 	changed       []Tick
 	addedRanges   []tickRange
 	changedRanges []tickRange
+	id            componentID
 }
 
 const queryTickBlockSize = 64

@@ -202,10 +202,10 @@ func (a *ModuleEditor) drawPreview3DAxes(c *graphics.Canvas2D, projection *scene
 	viewport := a.canvasBounds()
 	clipFromWorld := projection.Matrix(viewport.W, max(viewport.H, 1)).Mul4(cameraTransform.Inv())
 	for _, axis := range [...]struct {
-		vector mgl32.Vec3
 		key    string
 		label  string
 		color  graphics.ColorRGBA
+		vector mgl32.Vec3
 	}{
 		{vector: mgl32.Vec3{1, 0, 0}, key: "preview3d/axis/x", label: "X", color: editorTheme.axisX},
 		{vector: mgl32.Vec3{0, 1, 0}, key: "preview3d/axis/y", label: "Y", color: editorTheme.axisY},

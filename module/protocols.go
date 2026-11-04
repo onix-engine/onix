@@ -18,13 +18,13 @@ type TextRenderResult struct {
 	Width, Height float32
 }
 type SceneSwitchRequest struct {
-	Scene project.SceneID
+	Scene   project.SceneID
+	Startup project.SlotValue
 	// Retain applies when the departing scene has no explicit ExitPolicy.
 	Retain bool
 	// Overlay keeps retained scenes visible beneath the new foreground scene.
 	// The background scenes are paused and cannot receive input.
 	Overlay bool
-	Startup project.SlotValue
 }
 
 type ScenePreloadRequest struct {
@@ -33,14 +33,14 @@ type ScenePreloadRequest struct {
 }
 
 type SceneActivationOptions struct {
-	Retain, Overlay bool
 	Startup         project.SlotValue
+	Retain, Overlay bool
 }
 type SceneStartup struct {
 	From  project.SceneID
 	Value project.SlotValue
 }
 type SceneSwitchResult struct {
-	From, To project.SceneID
 	Err      error
+	From, To project.SceneID
 }

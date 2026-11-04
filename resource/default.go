@@ -9,10 +9,10 @@ import (
 )
 
 var defaultSource struct {
-	sync.RWMutex
 	source  fs.FS
-	root    string
 	manager *Manager
+	root    string
+	sync.RWMutex
 }
 
 func SetDefault(source fs.FS, root string) error {

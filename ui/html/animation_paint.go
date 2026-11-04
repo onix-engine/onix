@@ -75,7 +75,7 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 			if animation.PaintSource != computed {
 				*paint = *computed
 				animation.PaintSource = computed
-				if raster := state.Textures.paint[htmlTextureKey{node: node, variant: "background"}]; raster != nil {
+				if raster := state.Textures.paint(htmlTextureKey{node: node, variant: "background"}); raster != nil {
 					raster.style = nil
 				}
 			}
@@ -93,7 +93,7 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 		}
 		fill = htmlAnimationColor(value.Colors[style.AnimationBackground].Resolve(foreground))
 		if child.role == htmlRoleSurface {
-			if box := state.BoxesByNode[node]; box != nil && (htmlPropagatesCanvasBackground(box) || htmlOverflowBackgroundCovered(box)) {
+			if box := state.boxForNode(node); box != nil && (htmlPropagatesCanvasBackground(box) || htmlOverflowBackgroundCovered(box)) {
 				fill = graphics.ColorRGBA{}
 			}
 		}

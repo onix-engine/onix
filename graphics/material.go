@@ -13,38 +13,38 @@ const (
 // StandardMaterial uses metallic/roughness PBR. Emissive is linear RGB in nits
 // before EmissiveStrength. Construct it with NewStandardMaterial for defaults.
 type StandardMaterial struct {
-	Surface                  MaterialSurface
+	MetallicRoughnessTexture *Texture
 	Shader                   *MeshShader
-	BaseColor                ColorRGBA
 	BaseColorTexture         *Texture
 	NormalTexture            *Texture
-	MetallicRoughnessTexture *Texture
+	Surface                  MaterialSurface
 	Emissive                 ColorRGBA
+	BaseColor                ColorRGBA
 	EmissiveStrength         float32 // unitless multiplier, defaults to 1
 	Metallic                 float32
 	PerceptualRoughness      float32
 	IOR                      float32 // index of refraction; 0 means positive infinity
-	AlphaMode                AlphaMode
 	AlphaCutoff              float32
+	AlphaMode                AlphaMode
 }
 
 // Material3DData is the fixed GPU-facing material contract shared by built-in
 // and user-defined materials. Custom values map to shader inputs 11 through 14.
 type Material3DData struct {
-	Surface                  MaterialSurface
 	Shader                   *MeshShader
-	BaseColor                ColorRGBA
 	BaseColorTexture         *Texture
 	NormalTexture            *Texture
 	MetallicRoughnessTexture *Texture
+	Surface                  MaterialSurface
+	Custom                   [4][4]float32
 	Emissive                 ColorRGBA
+	BaseColor                ColorRGBA
 	EmissiveStrength         float32
 	Metallic                 float32
 	PerceptualRoughness      float32
 	IOR                      float32
-	AlphaMode                AlphaMode
 	AlphaCutoff              float32
-	Custom                   [4][4]float32
+	AlphaMode                AlphaMode
 }
 
 type Material3D interface {
@@ -110,27 +110,27 @@ func (m *StandardMaterial) SetEmission(color ColorRGBA, intensity float32, unit 
 // MaterialSurface contains glTF surface properties. Color factors are linear;
 // color textures use sRGB and data textures use UNORM.
 type MaterialSurface struct {
-	NormalScale               float32
-	OcclusionStrength         float32
-	SpecularFactor            float32
-	SpecularColor             ColorRGBA
+	ClearcoatTexture          *Texture
+	ClearcoatRoughnessTexture *Texture
+	AnisotropyTexture         *Texture
+	SheenRoughnessTexture     *Texture
 	OcclusionTexture          *Texture
 	EmissiveTexture           *Texture
 	SpecularTexture           *Texture
-	SpecularColorTexture      *Texture
-	ClearcoatFactor           float32
-	ClearcoatRoughness        float32
-	ClearcoatNormalScale      float32
-	SheenColor                ColorRGBA
-	SheenRoughness            float32
-	AnisotropyStrength        float32
-	AnisotropyRotation        float32 // radians in tangent space
-	ClearcoatTexture          *Texture
-	ClearcoatRoughnessTexture *Texture
-	ClearcoatNormalTexture    *Texture
 	SheenColorTexture         *Texture
-	SheenRoughnessTexture     *Texture
-	AnisotropyTexture         *Texture
+	ClearcoatNormalTexture    *Texture
+	SpecularColorTexture      *Texture
+	SheenColor                ColorRGBA
+	SpecularColor             ColorRGBA
+	AnisotropyStrength        float32
+	NormalScale               float32
+	AnisotropyRotation        float32 // radians in tangent space
+	ClearcoatRoughness        float32
+	OcclusionStrength         float32
+	SheenRoughness            float32
+	ClearcoatFactor           float32
+	SpecularFactor            float32
+	ClearcoatNormalScale      float32
 	Unlit                     bool
 	DoubleSided               bool
 }

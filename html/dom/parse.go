@@ -16,24 +16,24 @@ import (
 // parser storage; they are immutable until the next Parse or Reset call.
 type Parser struct {
 	builder treeBuilder
-	scanner htmlScanner
+	names   map[string]struct{}
 	blocks  [][]parsedNode
-	used    int
 	decoded []byte
 	attrs   []htmlAttribute
-	names   map[string]struct{}
+	scanner htmlScanner
+	used    int
 }
 
 type parsedNode struct {
-	node Node
 	text []byte // Only used when adjacent text tokens must be joined.
+	node Node
 }
 
 type htmlAttribute struct{ Key, Val string }
 type htmlToken struct {
-	Type TokenType
 	Data string
 	Attr []htmlAttribute
+	Type TokenType
 }
 
 // ErrNestingDepth reports HTML nesting beyond the parser's 512-element limit.

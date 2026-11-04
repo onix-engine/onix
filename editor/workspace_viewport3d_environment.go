@@ -13,23 +13,23 @@ import (
 )
 
 type viewport3DSettings struct {
-	SceneLighting     bool    `json:"sceneLighting,omitempty"`
 	EnvironmentCamera string  `json:"environmentCamera,omitempty"`
-	Background        uint8   `json:"background,omitempty"` // gradient, solid, environment, scene
 	IntensityEV       int     `json:"intensityEV,omitempty"`
 	ExposureEV        int     `json:"exposureEV,omitempty"`
-	Rotation          uint8   `json:"rotation,omitempty"` // eighth turns
-	Shadows           uint8   `json:"shadows,omitempty"`  // off, 1024, 2048
+	SnapStep          float32 `json:"snapStep,omitempty"` // zero follows the visible grid
+	SceneLighting     bool    `json:"sceneLighting,omitempty"`
+	Background        uint8   `json:"background,omitempty"` // gradient, solid, environment, scene
+	Rotation          uint8   `json:"rotation,omitempty"`   // eighth turns
+	Shadows           uint8   `json:"shadows,omitempty"`    // off, 1024, 2048
 	Ground            bool    `json:"ground,omitempty"`
 	HideGrid          bool    `json:"hideGrid,omitempty"`
 	GridPlane         uint8   `json:"gridPlane,omitempty"` // auto, XZ, XY, YZ
-	SnapStep          float32 `json:"snapStep,omitempty"`  // zero follows the visible grid
 	Supersample       bool    `json:"supersample,omitempty"`
 }
 
 type workspace3DCamera struct {
-	camera      render3d.Camera
 	environment render3d.Environment
+	camera      render3d.Camera
 	clearColor  graphics.ColorRGBA
 }
 

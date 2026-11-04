@@ -8,9 +8,9 @@ import (
 
 func TestWebViewBridgeResponseIsValidJSON(t *testing.T) {
 	for _, test := range []struct {
+		err    error
 		name   string
 		result string
-		err    error
 	}{
 		{name: "result", result: "hello\n\x01世界"},
 		{name: "error", err: errors.New("bad \"request\"")},
@@ -21,10 +21,10 @@ func TestWebViewBridgeResponseIsValidJSON(t *testing.T) {
 				t.Fatalf("invalid JSON response: %q", encoded)
 			}
 			var response struct {
-				ID     uint64 `json:"id"`
-				OK     bool   `json:"ok"`
 				Result string `json:"result"`
 				Error  string `json:"error"`
+				ID     uint64 `json:"id"`
+				OK     bool   `json:"ok"`
 			}
 			if err := json.Unmarshal(encoded, &response); err != nil {
 				t.Fatal(err)

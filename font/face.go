@@ -10,35 +10,34 @@ import (
 )
 
 type Face struct {
-	Data        []byte
-	SFNT        *sfnt
-	Head        Head
-	Hhea        Hhea
-	Maxp        Maxp
-	Metrics     []LongHorMetric
-	Loca        []uint32
-	Cmap        cmap
-	Glyf        []byte
-	CFF         *cffFont
-	Kern        kernTable
-	pairLookups []pairLookup
-	capHeight   int16
-	xHeight     int16
-	weight      int
-	italic      bool
-	fallback    *fallbackSet
-	color       colorGlyphTables
-
+	Cmap             cmap
+	outlineCache     map[uint16]weak.Pointer[Outline]
+	Kern             kernTable
+	backing          *fontBacking
+	glyphBitmapCache map[glyphBitmapCacheKey]*GlyphBitmap
+	glyphIndexCache  map[rune]uint16
+	SFNT             *sfnt
+	fallback         *fallbackSet
+	CFF              *cffFont
+	color            colorGlyphTables
+	Glyf             []byte
+	Data             []byte
+	bitmapOrder      []glyphBitmapCacheKey
+	Loca             []uint32
+	pairLookups      []pairLookup
+	Metrics          []LongHorMetric
+	cacheKey         uint64
+	weight           int
+	bitmapBytes      int
+	bitmapHead       int
 	cacheMu          sync.RWMutex
 	asciiGlyphs      [128]uint16
-	glyphIndexCache  map[rune]uint16
-	outlineCache     map[uint16]weak.Pointer[Outline]
-	glyphBitmapCache map[glyphBitmapCacheKey]*GlyphBitmap
-	bitmapOrder      []glyphBitmapCacheKey
-	bitmapHead       int
-	bitmapBytes      int
-	cacheKey         uint64
-	backing          *fontBacking
+	Hhea             Hhea
+	Head             Head
+	Maxp             Maxp
+	xHeight          int16
+	capHeight        int16
+	italic           bool
 }
 
 func (f *Face) attachBacking(backing *fontBacking) {

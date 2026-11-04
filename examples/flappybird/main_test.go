@@ -17,10 +17,10 @@ type flappyFixture struct {
 	app          *onix.App
 	entry        *module.Scene
 	runtime      *module.Runtime
-	target       ecs.Entity
-	resultTarget ecs.Entity
 	result       *module.Scene
 	elements     map[string]ecs.Entity
+	target       ecs.Entity
+	resultTarget ecs.Entity
 }
 
 func loadFlappy(t *testing.T) flappyFixture {

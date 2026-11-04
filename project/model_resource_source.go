@@ -70,17 +70,12 @@ type gltfPrimitive struct {
 	Attributes map[string]int   `json:"attributes"`
 	Indices    *int             `json:"indices"`
 	Mode       *uint32          `json:"mode"`
-	Targets    []map[string]int `json:"targets"`
 	Material   *int             `json:"material"`
+	Targets    []map[string]int `json:"targets"`
 }
 
 type gltfMaterial struct {
-	AlphaMode        string          `json:"alphaMode"`
-	AlphaCutoff      *float32        `json:"alphaCutoff"`
-	DoubleSided      bool            `json:"doubleSided"`
-	OcclusionTexture *gltfTextureRef `json:"occlusionTexture"`
-	EmissiveTexture  *gltfTextureRef `json:"emissiveTexture"`
-	Extensions       struct {
+	Extensions struct {
 		Unlit *struct{} `json:"KHR_materials_unlit"`
 		IOR   *struct {
 			IOR *float32 `json:"ior"`
@@ -113,23 +108,28 @@ type gltfMaterial struct {
 			Texture  *gltfTextureRef `json:"anisotropyTexture"`
 		} `json:"KHR_materials_anisotropy"`
 	} `json:"extensions"`
-	Name string `json:"name"`
-	PBR  struct {
+	PBR struct {
 		BaseColorFactor          *[]float32      `json:"baseColorFactor"`
 		BaseColorTexture         *gltfTextureRef `json:"baseColorTexture"`
 		MetallicFactor           *float32        `json:"metallicFactor"`
 		RoughnessFactor          *float32        `json:"roughnessFactor"`
 		MetallicRoughnessTexture *gltfTextureRef `json:"metallicRoughnessTexture"`
 	} `json:"pbrMetallicRoughness"`
-	EmissiveFactor [3]float32      `json:"emissiveFactor"`
-	NormalTexture  *gltfTextureRef `json:"normalTexture"`
+	AlphaCutoff      *float32        `json:"alphaCutoff"`
+	OcclusionTexture *gltfTextureRef `json:"occlusionTexture"`
+	EmissiveTexture  *gltfTextureRef `json:"emissiveTexture"`
+	NormalTexture    *gltfTextureRef `json:"normalTexture"`
+	AlphaMode        string          `json:"alphaMode"`
+	Name             string          `json:"name"`
+	EmissiveFactor   [3]float32      `json:"emissiveFactor"`
+	DoubleSided      bool            `json:"doubleSided"`
 }
 
 type gltfTextureRef struct {
-	Index    int      `json:"index"`
-	TexCoord int      `json:"texCoord"`
 	Scale    *float32 `json:"scale"`
 	Strength *float32 `json:"strength"`
+	Index    int      `json:"index"`
+	TexCoord int      `json:"texCoord"`
 }
 type gltfTexture struct {
 	Sampler *int `json:"sampler"`
@@ -191,32 +191,32 @@ type gltfAnimation struct {
 	Channels []gltfAnimationChannel `json:"channels"`
 }
 type gltfAnimationSampler struct {
+	Interpolation string `json:"interpolation"`
 	Input         int    `json:"input"`
 	Output        int    `json:"output"`
-	Interpolation string `json:"interpolation"`
 }
 type gltfAnimationChannel struct {
-	Sampler int                 `json:"sampler"`
 	Target  gltfAnimationTarget `json:"target"`
+	Sampler int                 `json:"sampler"`
 }
 type gltfAnimationTarget struct {
 	Node *int   `json:"node"`
 	Path string `json:"path"`
 }
 type gltfSkin struct {
+	InverseBindMatrices *int   `json:"inverseBindMatrices"`
 	Name                string `json:"name"`
 	Joints              []int  `json:"joints"`
-	InverseBindMatrices *int   `json:"inverseBindMatrices"`
 }
 
 type gltfAccessor struct {
 	BufferView    *int            `json:"bufferView"`
-	ByteOffset    uint64          `json:"byteOffset"`
-	ComponentType uint32          `json:"componentType"`
-	Normalized    bool            `json:"normalized"`
-	Count         uint64          `json:"count"`
 	Type          string          `json:"type"`
 	Sparse        json.RawMessage `json:"sparse"`
+	ByteOffset    uint64          `json:"byteOffset"`
+	Count         uint64          `json:"count"`
+	ComponentType uint32          `json:"componentType"`
+	Normalized    bool            `json:"normalized"`
 }
 
 type gltfBufferView struct {

@@ -19,9 +19,9 @@ const (
 )
 
 type paint struct {
+	reference string
 	kind      paintKind
 	color     color.NRGBA
-	reference string
 }
 
 type strokeLineCap uint8
@@ -43,13 +43,13 @@ const (
 type computedStyle struct {
 	fill             paint
 	stroke           paint
-	color            color.NRGBA
 	strokeWidth      float64
 	strokeMiterLimit float64
-	strokeLineCap    strokeLineCap
-	strokeLineJoin   strokeLineJoin
 	fillOpacity      float64
 	strokeOpacity    float64
+	color            color.NRGBA
+	strokeLineCap    strokeLineCap
+	strokeLineJoin   strokeLineJoin
 	hidden           bool
 }
 
@@ -66,25 +66,25 @@ func defaultStyle() computedStyle {
 }
 
 type stylePatch struct {
-	fill                paint
-	fillSet             bool
 	stroke              paint
-	strokeSet           bool
-	color               color.NRGBA
-	colorSet            bool
-	strokeWidth         float64
-	strokeWidthSet      bool
+	fill                paint
 	strokeMiterLimit    float64
-	strokeMiterLimitSet bool
+	strokeOpacity       float64
+	fillOpacity         float64
+	opacity             float64
+	strokeWidth         float64
+	color               color.NRGBA
 	strokeLineCap       strokeLineCap
+	opacitySet          bool
+	strokeWidthSet      bool
 	strokeLineCapSet    bool
 	strokeLineJoin      strokeLineJoin
 	strokeLineJoinSet   bool
-	opacity             float64
-	opacitySet          bool
-	fillOpacity         float64
+	colorSet            bool
+	strokeMiterLimitSet bool
+	strokeSet           bool
 	fillOpacitySet      bool
-	strokeOpacity       float64
+	fillSet             bool
 	strokeOpacitySet    bool
 	hidden              bool
 	hiddenSet           bool

@@ -3,11 +3,11 @@ package font
 import "sync"
 
 type fontBacking struct {
-	data    []byte
-	release func() error
+	closeErr error
+	release  func() error
+	data     []byte
 
 	closeOnce sync.Once
-	closeErr  error
 }
 
 func closeFontBacking(backing *fontBacking) {

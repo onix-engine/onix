@@ -16,12 +16,12 @@ func main() {
 	}
 	compiler := editor.NagaShaderCompiler{}
 	for _, output := range []struct {
-		target project.ShaderTarget
 		path   string
+		target project.ShaderTarget
 	}{
-		{project.ShaderTargetVulkan, "ui/html/shaders/blur.spv"},
-		{project.ShaderTargetMetal, "ui/html/shaders/blur.metal"},
-		{project.ShaderTargetWebGL2, "ui/html/shaders/blur.glsl"},
+		{target: project.ShaderTargetVulkan, path: "ui/html/shaders/blur.spv"},
+		{target: project.ShaderTargetMetal, path: "ui/html/shaders/blur.metal"},
+		{target: project.ShaderTargetWebGL2, path: "ui/html/shaders/blur.glsl"},
 	} {
 		compiled, err := compiler.CompileShader(project.ShaderCompileRequest{ID: "html-blur", SourcePath: path, Source: source, Target: output.target})
 		if err != nil {

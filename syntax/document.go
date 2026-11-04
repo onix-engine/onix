@@ -61,11 +61,11 @@ func (d *Definitions) Scope(capture string) string {
 }
 
 type Token struct {
-	Start, End int
 	Capture    string
 	Scopes     string // Space-separated TextMate scopes, outermost first.
-	Style      Style
 	CSS        string
+	Start, End int
+	Style      Style
 }
 
 type tokenKey struct {
@@ -73,36 +73,37 @@ type tokenKey struct {
 }
 
 type tokenStyle struct {
-	style Style
 	css   string
+	style Style
 }
 
 // Capture is a render-neutral UTF-8 byte range. Scopes preserves the full
 // TextMate scope stack; Capture is its coarse category for editor behavior.
 type Capture struct {
-	StartByte, EndByte uint32
 	Capture, Scopes    string
+	StartByte, EndByte uint32
 }
 
 type lexicalLine struct {
-	start, tokenStart int
 	endState          *textmate.StateStack
+	start, tokenStart int
 }
 
 // Document caches each line's ending state and tokens. Updates tokenize from
 // the first changed line until the unchanged suffix has the same start state.
 // Its buffers are reused; a Document belongs to one worker.
 type Document struct {
-	filename, source, language string
-	initialized                bool
 	grammar                    *textmate.Grammar
-	lines, lineScratch         []lexicalLine
-	ranges, scratch            []Capture
 	scopes                     map[*textmate.ScopeStack]tokenKey
+	filename, source, language string
 	painter                    Painter
+	lineScratch                []lexicalLine
+	ranges, scratch            []Capture
+	lines                      []lexicalLine
 	tokens                     []Token
-	styled                     bool
 	retokenized                int
+	initialized                bool
+	styled                     bool
 }
 
 func (d *Document) Language() string { return d.language }
@@ -252,10 +253,10 @@ func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
 				key = tokenKey{capture: lexicalCategory(token), scopes: strings.Join(token.Scopes, " ")}
 				d.scopes[token.ScopeStack] = key
 			}
-			ranges = append(ranges, Capture{uint32(pos + begin), uint32(pos + finish), key.capture, key.scopes})
+			ranges = append(ranges, Capture{StartByte: uint32(pos + begin), EndByte: uint32(pos + finish), Capture: key.capture, Scopes: key.scopes})
 		}
 		state = result.RuleStack
-		lines = append(lines, lexicalLine{pos, tokenStart, state})
+		lines = append(lines, lexicalLine{start: pos, tokenStart: tokenStart, endState: state})
 		if end == len(source) {
 			break
 		}

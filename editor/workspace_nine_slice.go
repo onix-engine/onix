@@ -16,11 +16,11 @@ import (
 )
 
 type workspaceNineSlice struct {
+	texture, owner *graphics.Texture
 	target         DocumentID
 	pointer, file  string
-	texture, owner *graphics.Texture
-	slice          project.NineSlice
 	drag           string
+	slice          project.NineSlice
 }
 
 func (a *ModuleEditor) openWorkspaceNineSlice(field workspaceField) error {

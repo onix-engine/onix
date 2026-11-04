@@ -8,13 +8,13 @@ import (
 
 type hotState struct{ received, results, updates int64 }
 type hotFixture struct {
-	runtime    *Runtime
-	emitter    Emitter[int64]
 	requester  Requester[string, int64]
-	slot       Slot
+	emitter    Emitter[int64]
 	writer     SlotWriter
-	structured project.SlotValue
+	runtime    *Runtime
 	state      *hotState
+	slot       Slot
+	structured project.SlotValue
 }
 
 func setupHot(t testing.TB) hotFixture {
@@ -102,10 +102,10 @@ func hotRequest(f *hotFixture) {
 
 func TestHotPathsDoNotAllocateAfterWarmup(t *testing.T) {
 	for _, test := range []struct {
-		name string
 		run  func(*hotFixture)
+		name string
 	}{
-		{"dispatch", hotDispatch}, {"slot-update", hotSlotUpdate}, {"structured-slot-event", hotSlotEvent}, {"request-reply", hotRequest},
+		{name: "dispatch", run: hotDispatch}, {name: "slot-update", run: hotSlotUpdate}, {name: "structured-slot-event", run: hotSlotEvent}, {name: "request-reply", run: hotRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			f := setupHot(t)

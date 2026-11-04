@@ -10,12 +10,12 @@ import (
 )
 
 type webSynthesizer struct {
-	mu        sync.Mutex
+	status    Status
 	engine    js.Value
 	utterance js.Value
 	end       js.Func
 	failure   js.Func
-	status    Status
+	mu        sync.Mutex
 }
 
 func newPlatformSynthesizer() platformSynthesizer {

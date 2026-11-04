@@ -11,38 +11,38 @@ const (
 )
 
 type Pointer struct {
-	Device         PointerDevice
 	X, Y           float32
 	PressX, PressY float32
 	DeltaX, DeltaY float32
 	WheelX, WheelY float32
+	Device         PointerDevice
 	Down           bool
 	Pressed        bool
 	Released       bool
 }
 
 type State struct {
-	downKeys        map[KeyCode]struct{}
-	pressedKeys     map[KeyCode]struct{}
+	compositionKeys map[KeyCode]struct{}
+	consumedEvents  map[uint64]struct{}
 	releasedKeys    map[KeyCode]struct{}
 	downMouse       map[MouseButton]struct{}
 	pressedMouse    map[MouseButton]struct{}
 	releasedMouse   map[MouseButton]struct{}
-	pointer         Pointer
-	textEdits       []TextEdit
-	composition     string
-	composing       bool
-	compositionKeys map[KeyCode]struct{}
-	textConfig      TextInputConfig
-	textRevision    uint64
-	clipboardWrite  func(string) bool
 	clipboardRead   func() (string, bool)
-	textSelection   TextSelection
-	hasSelection    bool
-	textBuffer      TextBuffer
+	clipboardWrite  func(string) bool
+	downKeys        map[KeyCode]struct{}
+	pressedKeys     map[KeyCode]struct{}
+	composition     string
 	events          []Event
+	textEdits       []TextEdit
+	textConfig      TextInputConfig
+	textBuffer      TextBuffer
+	textSelection   TextSelection
+	textRevision    uint64
 	nextEventSeq    uint64
-	consumedEvents  map[uint64]struct{}
+	pointer         Pointer
+	hasSelection    bool
+	composing       bool
 }
 
 func (s *State) SetClipboard(write func(string) bool, read func() (string, bool)) {

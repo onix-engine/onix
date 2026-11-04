@@ -383,9 +383,9 @@ func (a *ModuleEditor) contentAtlasFrame(b *editorVNodeView, target DocumentID, 
 
 // workspaceAtlasFrames caches one atlas file's region names by its disk identity.
 type workspaceAtlasFrames struct {
-	size     int64
 	modified time.Time
 	names    []string
+	size     int64
 }
 
 func (a *ModuleEditor) atlasFrameNames(target DocumentID, atlas string) []string {

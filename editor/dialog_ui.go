@@ -14,12 +14,12 @@ import (
 
 type editorDialogUI struct {
 	font                 *onixtext.Font
-	rootRect             rect
 	htmlDialogs          map[string]ecs.Entity
 	htmlDialogComponents map[string]ecs.Entity
 	htmlDialogFrames     map[string]*editorDialogFrame
 	htmlDialogPanels     map[string]rect
 	active               map[ecs.Entity]struct{}
+	rootRect             rect
 }
 
 const (

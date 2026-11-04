@@ -105,7 +105,7 @@ func (state *RenderWorld) RegisterCameraRenderer[T any](pipeline CameraPipeline,
 			}
 			return describe(component), true
 		},
-		revision: (*ecs.World).ComponentVersion[T],
+		revision: componentValueVersion[T],
 	}
 	state.registry2D++
 	state.cameraRenderers[pipeline] = draw
@@ -132,12 +132,17 @@ func extractRender2D(context *ecs.SystemContext) error {
 }
 
 func collectRenderItems2D(c *graphics.Canvas2D, world *ecs.World, cull bool) []renderItem2D {
+	return collectRenderSnapshots2D(c, world, cull, false)
+}
+
+func collectRenderSnapshots2D(c *graphics.Canvas2D, world *ecs.World, cull, borrow bool) []renderItem2D {
 	state := RenderWorldFor(world)
 	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
 	snapshots.reset()
+	snapshots.borrow = borrow
 	hierarchy := frameRenderHierarchy2DCachePtr(world)
 	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
-	items := scratch.Reserve(world.EntityCount())
+	items := scratch.Values
 	for _, collect := range state.collectors2D {
 		if collect != nil {
 			items = collect(c, world, snapshots, hierarchy, items, cull)

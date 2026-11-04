@@ -9,15 +9,15 @@ import (
 func TestCSSValueIteratorBoundaries(t *testing.T) {
 	for _, test := range []struct {
 		input  string
-		fields bool
 		want   []string
+		fields bool
 	}{
-		{``, true, nil},
-		{" \t\n", false, nil},
-		{`calc(1px + (2px))  "two words" a\ b`, true, []string{`calc(1px + (2px))`, `"two words"`, `a\ b`}},
-		{"1px\t2px\r\n3px\f4px", true, []string{"1px", "2px", "3px", "4px"}},
-		{`rgb(1, 2, 3), "a,b", a\,b,,`, false, []string{`rgb(1, 2, 3)`, `"a,b"`, `a\,b`, "", ""}},
-		{`"a\" b" c`, true, []string{`"a\" b"`, "c"}},
+		{input: ``, fields: true, want: nil},
+		{input: " \t\n", fields: false, want: nil},
+		{input: `calc(1px + (2px))  "two words" a\ b`, fields: true, want: []string{`calc(1px + (2px))`, `"two words"`, `a\ b`}},
+		{input: "1px\t2px\r\n3px\f4px", fields: true, want: []string{"1px", "2px", "3px", "4px"}},
+		{input: `rgb(1, 2, 3), "a,b", a\,b,,`, fields: false, want: []string{`rgb(1, 2, 3)`, `"a,b"`, `a\,b`, "", ""}},
+		{input: `"a\" b" c`, fields: true, want: []string{`"a\" b"`, "c"}},
 	} {
 		seq := cssValues(test.input, test.fields)
 		for range 2 {

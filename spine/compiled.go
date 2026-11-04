@@ -10,20 +10,20 @@ import (
 )
 
 type compiledResource struct {
-	Mipmapped   bool
-	Width       float32
-	Height      float32
+	IK          []compiledIKConstraint
+	Animations  []compiledNamedAnimation
+	Atlas       []compiledAtlasRegion
 	Bones       []compiledBone
 	Children    [][]int
 	Slots       []compiledSlot
-	IK          []compiledIKConstraint
-	Transforms  []compiledTransformConstraint
 	Paths       []compiledPathConstraint
+	Transforms  []compiledTransformConstraint
+	Skins       []compiledSkin
 	UpdateCache []compiledUpdateOperation
 	Attachments []compiledAttachment
-	Skins       []compiledSkin
-	Animations  []compiledNamedAnimation
-	Atlas       []compiledAtlasRegion
+	Width       float32
+	Height      float32
+	Mipmapped   bool
 }
 
 type compiledBone struct {
@@ -37,32 +37,36 @@ type compiledBone struct {
 
 type compiledIKConstraint struct {
 	Name                       string
-	Order                      int
 	Bones                      []int
+	Order                      int
 	Target                     int
 	BendDirection              int
-	Compress, Stretch, Uniform bool
 	Mix                        float32
+	Compress, Stretch, Uniform bool
 }
 
 type compiledTransformConstraint struct {
-	Name                                        string
-	Order                                       int
-	Bones                                       []int
-	Target                                      int
-	Local, Relative                             bool
-	OffsetRotation, OffsetX, OffsetY            float32
-	OffsetScaleX, OffsetScaleY, OffsetShearY    float32
-	RotateMix, TranslateMix, ScaleMix, ShearMix float32
+	Name                                     string
+	Bones                                    []int
+	Order                                    int
+	Target                                   int
+	RotateMix                                float32
+	OffsetRotation, OffsetX, OffsetY         float32
+	OffsetScaleX, OffsetScaleY, OffsetShearY float32
+	TranslateMix                             float32
+	ScaleMix                                 float32
+	ShearMix                                 float32
+	Relative                                 bool
+	Local                                    bool
 }
 
 type compiledPathConstraint struct {
 	Name                             string
-	Order                            int
-	Bones                            []int
-	Target                           int
 	PositionMode, SpacingMode        string
 	RotateMode                       string
+	Bones                            []int
+	Order                            int
+	Target                           int
 	OffsetRotation, Position         float32
 	Spacing, RotateMix, TranslateMix float32
 }
@@ -74,27 +78,37 @@ type compiledUpdateOperation struct {
 
 type compiledSlot struct {
 	Name       string
-	Bone       int
 	Attachment string
+	Bone       int
 	Color      [4]float32
 	Dark       [3]float32
 	Blend      render.MeshBlendMode
 }
 
 type compiledAttachment struct {
-	Name, Path, Parent, ParentSkin                string
-	Kind                                          string
-	X, Y, Rotation, ScaleX, ScaleY, Width, Height float32
-	Color                                         [4]float32
-	UVs                                           []float32
-	Triangles                                     []uint32
-	Vertices                                      []float32
-	Weighted                                      bool
-	ParentMesh                                    uint32
-	InheritDeform                                 bool
-	VertexCount, EndSlot                          int
-	Closed, ConstantSpeed                         bool
-	Lengths                                       []float32
+	Path                  string
+	Parent                string
+	ParentSkin            string
+	Kind                  string
+	Name                  string
+	Lengths               []float32
+	Vertices              []float32
+	Triangles             []uint32
+	UVs                   []float32
+	EndSlot               int
+	VertexCount           int
+	Color                 [4]float32
+	Y                     float32
+	Height                float32
+	Width                 float32
+	ScaleY                float32
+	ParentMesh            uint32
+	ScaleX                float32
+	Rotation              float32
+	X                     float32
+	Weighted              bool
+	InheritDeform         bool
+	Closed, ConstantSpeed bool
 }
 
 type compiledSkin struct {
@@ -103,8 +117,8 @@ type compiledSkin struct {
 }
 
 type compiledSkinSlot struct {
-	Slot    int
 	Entries []compiledSkinEntry
+	Slot    int
 }
 
 type compiledSkinEntry struct {
@@ -113,43 +127,43 @@ type compiledSkinEntry struct {
 }
 
 type compiledKeyframe struct {
+	Name      string
+	Color     [4]float32
+	Curve     [4]float32
+	Dark      [3]float32
 	Time      float32
 	X, Y      float32
-	Color     [4]float32
-	Dark      [3]float32
-	Name      string
-	Curve     [4]float32
 	CurveKind uint8
 }
 
 type compiledBoneTimeline struct {
-	Bone   int
 	Kind   string
 	Frames []compiledKeyframe
+	Bone   int
 }
 
 type compiledSlotTimeline struct {
-	Slot   int
 	Kind   string
 	Frames []compiledKeyframe
+	Slot   int
 }
 
 type compiledDrawOrderFrame struct {
-	Time  float32
 	Order []int
+	Time  float32
 }
 
 type compiledDeformFrame struct {
-	Time      float32
 	Vertices  []float32
 	Curve     [4]float32
+	Time      float32
 	CurveKind uint8
 }
 
 type compiledDeformTimeline struct {
+	Frames     []compiledDeformFrame
 	Slot       int
 	Attachment uint32
-	Frames     []compiledDeformFrame
 }
 
 type compiledIKKeyframe struct {
@@ -162,8 +176,8 @@ type compiledIKKeyframe struct {
 }
 
 type compiledIKTimeline struct {
-	Constraint int
 	Frames     []compiledIKKeyframe
+	Constraint int
 }
 
 type compiledTransformKeyframe struct {
@@ -174,8 +188,8 @@ type compiledTransformKeyframe struct {
 }
 
 type compiledTransformTimeline struct {
-	Constraint int
 	Frames     []compiledTransformKeyframe
+	Constraint int
 }
 
 type compiledPathKeyframe struct {
@@ -185,13 +199,12 @@ type compiledPathKeyframe struct {
 }
 
 type compiledPathTimeline struct {
-	Constraint int
 	Kind       string
 	Frames     []compiledPathKeyframe
+	Constraint int
 }
 
 type compiledAnimation struct {
-	Duration  float32
 	Bones     []compiledBoneTimeline
 	Slots     []compiledSlotTimeline
 	Deform    []compiledDeformTimeline
@@ -199,6 +212,7 @@ type compiledAnimation struct {
 	Transform []compiledTransformTimeline
 	Paths     []compiledPathTimeline
 	DrawOrder []compiledDrawOrderFrame
+	Duration  float32
 }
 
 type compiledNamedAnimation struct {

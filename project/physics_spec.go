@@ -266,8 +266,8 @@ func NewCollider3DSettingsSpec() Collider3DSettingsSpec {
 }
 
 type TriangleMeshCollider3DSpec struct {
-	Collider3DSettingsSpec
 	Model string `json:"model,omitempty"`
+	Collider3DSettingsSpec
 }
 
 func NewTriangleMeshCollider3DSpec() TriangleMeshCollider3DSpec {
@@ -275,8 +275,8 @@ func NewTriangleMeshCollider3DSpec() TriangleMeshCollider3DSpec {
 }
 
 type ConvexHullCollider3DSpec struct {
-	Collider3DSettingsSpec
 	Model string `json:"model,omitempty"`
+	Collider3DSettingsSpec
 }
 
 func NewConvexHullCollider3DSpec() ConvexHullCollider3DSpec {
@@ -284,8 +284,8 @@ func NewConvexHullCollider3DSpec() ConvexHullCollider3DSpec {
 }
 
 type CompoundCollider3DSpec struct {
-	Collider3DSettingsSpec
 	Model string `json:"model,omitempty"`
+	Collider3DSettingsSpec
 }
 
 func NewCompoundCollider3DSpec() CompoundCollider3DSpec {

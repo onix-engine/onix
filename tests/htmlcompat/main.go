@@ -19,8 +19,8 @@ import (
 )
 
 type fixtureImageProvider struct {
-	base     string
 	textures map[string]*graphics.Texture
+	base     string
 }
 
 func (p *fixtureImageProvider) ResolveHTMLImage(source string, width, height float32) (*graphics.Texture, bool) {

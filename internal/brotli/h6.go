@@ -35,14 +35,14 @@ func hashBytesH6(data []byte, mask uint64, shift int) uint32 {
 }
 
 type h6 struct {
+	num     []uint16
+	buckets []uint32
 	hasherCommon
 	bucket_size_ uint
 	block_size_  uint
 	hash_shift_  int
 	hash_mask_   uint64
 	block_mask_  uint32
-	num          []uint16
-	buckets      []uint32
 }
 
 func (h *h6) Initialize(params *encoderParams) {

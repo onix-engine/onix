@@ -11,16 +11,15 @@ import (
 // SpriteTrail2D records resolved transform snapshots and renders them as fading afterimages.
 // Component presence enables the effect; remove it to disable and discard the trail.
 type SpriteTrail2D struct {
-	Lifetime    float32
-	Interval    float32
-	MinDistance float32
-	AlphaStart  float32
-	AlphaEnd    float32
-	MaxSamples  int
-
 	samples      []spriteTrailSample2D
-	elapsed      float32
+	MaxSamples   int
 	lastPosition mgl32.Vec2
+	Lifetime     float32
+	Interval     float32
+	MinDistance  float32
+	AlphaStart   float32
+	AlphaEnd     float32
+	elapsed      float32
 	hasLast      bool
 }
 

@@ -15,33 +15,43 @@ import (
 // Context deliberately exposes neither the global World nor foreign entities.
 // One stable context is allocated at mount and reused for every callback.
 type Context struct {
-	runtime                                                          *Runtime
-	scene                                                            *Scene
-	definition                                                       *project.ModPlan
-	identity                                                         uint64
-	name                                                             string
-	index, end                                                       int
-	ui, visible, enabled, live, installing, disposing, disposeQueued bool
-	root, placement                                                  ecs.Entity
-	entities                                                         []ecs.Entity
-	ownedEntities                                                    []ecs.Entity
-	entitiesDirty                                                    bool
-	orderDirty                                                       bool
-	elements                                                         map[string]ecs.Entity
-	resources                                                        *privateResources
-	managed                                                          []ManagedResource
-	slots                                                            []slotState
-	message                                                          func(Message) error
-	delivery                                                         uint64
-	update                                                           func(Tick) error
-	frameUpdate                                                      func(Tick) error
-	destroy                                                          func() error
-	enter, resume                                                    func(SceneStartup) error
-	exit, suspend                                                    func() error
-	pausedVisibility                                                 map[ecs.Entity]scene.Visibility
-	content                                                          *Content
-	nodeBundle                                                       ecs.PreparedBundle
-	nodePrepared                                                     bool
+	enter            func(SceneStartup) error
+	destroy          func() error
+	definition       *project.ModPlan
+	update           func(Tick) error
+	resume           func(SceneStartup) error
+	resources        *privateResources
+	elements         map[string]ecs.Entity
+	exit             func() error
+	content          *Content
+	runtime          *Runtime
+	pausedVisibility map[ecs.Entity]scene.Visibility
+	frameUpdate      func(Tick) error
+	scene            *Scene
+	message          func(Message) error
+	suspend          func() error
+	name             string
+	nodeBundle       ecs.PreparedBundle
+	entities         []ecs.Entity
+	ownedEntities    []ecs.Entity
+	managed          []ManagedResource
+	slots            []slotState
+	placement        ecs.Entity
+	root             ecs.Entity
+	end              int
+	index            int
+	delivery         uint64
+	identity         uint64
+	enabled          bool
+	orderDirty       bool
+	entitiesDirty    bool
+	disposeQueued    bool
+	disposing        bool
+	installing       bool
+	live             bool
+	visible          bool
+	ui               bool
+	nodePrepared     bool
 }
 
 type entityOwner struct {
@@ -300,12 +310,12 @@ func compareName(a, b string) int {
 
 // Input removes raw cross-module ECS identities from the engine input event.
 type Input struct {
-	Event    scene.InputEvent
 	Target   Entity
 	Element  string
 	HTMLID   string
 	HTMLKind htmlui.EventKind
 	Value    string
+	Event    scene.InputEvent
 }
 
 func (r *Runtime) HandleInput(event scene.InputEvent) error {

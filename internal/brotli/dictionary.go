@@ -8,10 +8,10 @@ package brotli
 
 /* Collection of static dictionary words. */
 type dictionary struct {
-	size_bits_by_length [32]byte
-	offsets_by_length   [32]uint32
-	data_size           uint
 	data                []byte
+	data_size           uint
+	offsets_by_length   [32]uint32
+	size_bits_by_length [32]byte
 }
 
 const minDictionaryWordLength = 4
@@ -122807,7 +122807,7 @@ var kBrotliDictionaryData = []byte{
 
 var kBrotliDictionary = dictionary{
 	/* size_bits_by_length */
-	[32]byte{
+	size_bits_by_length: [32]byte{
 		0,
 		0,
 		0,
@@ -122843,7 +122843,7 @@ var kBrotliDictionary = dictionary{
 	},
 
 	/* offsets_by_length */
-	[32]uint32{
+	offsets_by_length: [32]uint32{
 		0,
 		0,
 		0,
@@ -122879,10 +122879,10 @@ var kBrotliDictionary = dictionary{
 	},
 
 	/* data_size ==  sizeof(kBrotliDictionaryData) */
-	122784,
+	data_size: 122784,
 
 	/* data */
-	kBrotliDictionaryData,
+	data: kBrotliDictionaryData,
 }
 
 func getDictionary() *dictionary {

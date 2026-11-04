@@ -23,32 +23,32 @@ import (
 
 type SceneInstance struct {
 	World                *ecs.World
+	Entities             map[string]ecs.Entity
 	project              *Bundle
-	sceneID              SceneID
 	nodes                map[ecs.Entity]sceneSpawnNode
-	scriptRegistry       ScriptRegistry
 	scriptBindings       map[ecs.Entity][]ScriptBinding
 	inputBindings        map[ecs.Entity][]scriptInputBinding
-	globalInputBindings  scriptGlobalInputBindings
-	inputScriptContext   ScriptContext
-	inputEventContext    sceneapi.InputEventContext
-	scriptSystems        []scriptSystem
-	scriptSystemsDirty   bool
-	scriptUpdateContexts []*ScriptContext
-	scriptUpdateDepth    int
-	scriptsBound         bool
-	Entities             map[string]ecs.Entity
 	EntityIDs            map[ecs.Entity]string
+	sceneID              SceneID
+	globalInputBindings  scriptGlobalInputBindings
+	scriptRegistry       ScriptRegistry
+	scriptSystems        []scriptSystem
+	scriptUpdateContexts []*ScriptContext
 	Roots                []ecs.Entity
+	inputEventContext    sceneapi.InputEventContext
+	inputScriptContext   ScriptContext
+	scriptUpdateDepth    int
+	scriptSystemsDirty   bool
+	scriptsBound         bool
 }
 
 type SceneRenderItem struct {
 	Entity    ecs.Entity
-	UI        bool
 	SortIndex int
-	Depth     float32
 	Sequence  uint64
 	Material  uint64
+	Depth     float32
+	UI        bool
 }
 
 // sceneUISync keeps optional UI operations behind the selected load profile.
@@ -2532,8 +2532,8 @@ const (
 )
 
 type runtimeAnimationChildKey struct {
-	parent ecs.Entity
 	id     string
+	parent ecs.Entity
 }
 
 type runtimeAnimationChild struct {
@@ -2542,14 +2542,14 @@ type runtimeAnimationChild struct {
 }
 
 type runtimeAnimationClaim struct {
-	entity ecs.Entity
 	target sceneapi.AnimationTarget
+	entity ecs.Entity
 }
 
 type runtimeAnimationSeen struct {
+	target sceneapi.AnimationTarget
 	owner  ecs.Entity
 	entity ecs.Entity
-	target sceneapi.AnimationTarget
 }
 
 func (s *SceneInstance) runtimeAnimationChildIndex() map[runtimeAnimationChildKey]runtimeAnimationChild {

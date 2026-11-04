@@ -183,7 +183,7 @@ func TestHTMLOverlayScrollbarKeepsContentAndPaintsAboveDescendants(t *testing.T)
 		}
 		menu, _ := ControlByID(world, owner, "menu")
 		menuNode := incrementalHTMLNode(t, world, owner, "menu")
-		menuRect := state.BoxesByNode[menuNode.node].BorderBox()
+		menuRect := state.boxForNode(menuNode.node).BorderBox()
 		if menuRect.X+menuRect.Width != 120 {
 			t.Fatalf("right-aligned menu moved: %+v", menuRect)
 		}

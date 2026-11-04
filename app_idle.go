@@ -11,13 +11,13 @@ import (
 )
 
 type appIdleState struct {
-	sync.Mutex
-	enabled        bool
 	deadline       time.Time
 	caretDeadline  time.Time
 	bufferDeadline time.Time
 	version        uint64
-	started        bool
+	sync.Mutex
+	enabled bool
+	started bool
 }
 
 // SetIdleEnabled allows an on-demand app to suspend its schedules between

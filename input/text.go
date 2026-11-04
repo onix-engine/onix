@@ -17,14 +17,14 @@ const (
 )
 
 type TextInputConfig struct {
-	Revision       uint64
-	Kind           TextInputKind
 	InitialValue   string
+	Revision       uint64
 	SelectionStart int
 	SelectionEnd   int
+	Caret          TextInputRect
+	Kind           TextInputKind
 	Active         bool
 	Multiline      bool
-	Caret          TextInputRect
 }
 
 type TextInputRect struct {
@@ -65,10 +65,10 @@ const (
 
 type TextEdit struct {
 	Text              string
-	Command           TextCommand
-	DuringComposition bool
 	SelectionStart    int
 	SelectionEnd      int
+	Command           TextCommand
+	DuringComposition bool
 	HasSelection      bool
 }
 
@@ -90,13 +90,13 @@ func (s *State) ApplyTextEditsInRange(value string, selectionStart, selectionEnd
 // TextBuffer owns a document's piece tree and reusable input scratch space.
 // Keep one per editor document; String snapshots are immutable. Do not copy it.
 type TextBuffer struct {
+	value   piecetree.Snapshot
+	before  piecetree.Snapshot
+	scratch []byte
 	piecetree.Tree
-	value                                   piecetree.Snapshot
-	scratch                                 []byte
+	changeStart, changeOldEnd, changeNewEnd int
 	initialized, valid                      bool
 	segmented                               bool
-	before                                  piecetree.Snapshot
-	changeStart, changeOldEnd, changeNewEnd int
 	changed                                 bool
 }
 

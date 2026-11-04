@@ -106,10 +106,10 @@ func TestWorkspace3DModelsPrivateTransformsAndRetainedEntities(t *testing.T) {
 
 type workspace3DTestDriver struct {
 	*viewport3DTestDriver
-	draws          int
 	sprites        []render.Instance2D
 	spriteTextures []render.TextureHandle
 	grid           render.MeshBatch3D
+	draws          int
 }
 
 func (d *workspace3DTestDriver) DrawSprites(batch render.SpriteBatch) error {

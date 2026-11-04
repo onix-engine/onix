@@ -100,9 +100,9 @@ func (source *subBlobFS) OpenBlob(name string) (*Blob, error) {
 
 // mappedFileOwner unmaps one file-backed blob when its last holder closes it.
 type mappedFileOwner struct {
+	err    error
 	source PackageSource
 	once   sync.Once
-	err    error
 }
 
 func (owner *mappedFileOwner) releaseBlob(int64) error {
@@ -114,11 +114,11 @@ func (owner *mappedFileOwner) releaseBlob(int64) error {
 // observation. Mapped blobs stay unhashed while a resource is only decoded,
 // which keeps the largest project assets off the startup path.
 type lazyAssetIdentity struct {
-	once   sync.Once
 	source io.ReaderAt
-	size   int64
 	name   string
 	info   AssetInfo
+	size   int64
+	once   sync.Once
 }
 
 func (identity *lazyAssetIdentity) resolve() AssetInfo {

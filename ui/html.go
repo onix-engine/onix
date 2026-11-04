@@ -14,16 +14,16 @@ import (
 )
 
 type htmlControlState struct {
+	CommittedValue string
 	RenderRevision uint64
 	SpacePressed   bool
-	CommittedValue string
 	FocusVisible   bool
 }
 
 type htmlEditableState struct {
-	RenderRevision uint64
 	InputType      string
 	Data           string
+	RenderRevision uint64
 }
 
 type htmlEventReaders struct {
@@ -43,12 +43,12 @@ type htmlEditableTextsScratch struct{}
 type htmlEditableVisualsScratch struct{}
 type htmlSelectorElementsScratch struct{}
 type htmlFocusRebuildState struct {
-	Entity       ecs.Entity
-	Focusable    htmlui.Focusable
-	Ordinal      int
 	Field        TextField
-	Textarea     Textarea
 	ControlState htmlControlState
+	Focusable    htmlui.Focusable
+	Textarea     Textarea
+	Entity       ecs.Entity
+	Ordinal      int
 	HasField     bool
 	HasTextarea  bool
 	HasState     bool
@@ -56,11 +56,11 @@ type htmlFocusRebuildState struct {
 }
 type htmlSelectorRuntime struct {
 	Options       []htmlui.SelectOption
-	Width, Height float32
-	Shape         scene.Shape2D
-	List          ecs.Entity
 	Items         []ecs.Entity
 	Elements      []ecs.Entity
+	List          ecs.Entity
+	Shape         scene.Shape2D
+	Width, Height float32
 }
 type htmlSelectorElement struct {
 	Owner ecs.Entity
@@ -206,7 +206,7 @@ func captureHTMLFocusRebuildState(world *ecs.World) (htmlFocusRebuildState, bool
 		var found bool
 		ordinal, found = lookup.ordinals[entity]
 		if !found {
-			ordinal = len(lookup.groups[htmlFocusGroup{focusable.Owner, focusable.Tag, focusable.Type}])
+			ordinal = len(lookup.groups[htmlFocusGroup{owner: focusable.Owner, tag: focusable.Tag, kind: focusable.Type}])
 		}
 	}
 	state := htmlFocusRebuildState{Entity: entity, Focusable: focusable, Ordinal: ordinal, FocusVisible: input.FocusVisible}
@@ -307,7 +307,7 @@ func restoreHTMLFocusRebuildState(world *ecs.World, state htmlFocusRebuildState)
 func matchingHTMLFocusable(world *ecs.World, previous htmlui.Focusable, ordinal int) (ecs.Entity, bool) {
 	if previous.ID == "" {
 		lookup := htmlFocusLookup(world)
-		entities := lookup.groups[htmlFocusGroup{previous.Owner, previous.Tag, previous.Type}]
+		entities := lookup.groups[htmlFocusGroup{owner: previous.Owner, tag: previous.Tag, kind: previous.Type}]
 		if ordinal >= 0 && ordinal < len(entities) {
 			return entities[ordinal], true
 		}

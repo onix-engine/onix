@@ -60,40 +60,40 @@ type MarkdownStyle struct {
 // component on the same entity.
 type Markdown struct {
 	Value       string
+	Style       MarkdownStyle
 	Width       float32
 	PassThrough bool
-	Style       MarkdownStyle
 }
 
 type MarkdownOptions struct {
+	Style       *MarkdownStyle
+	Value       string
+	Theme       ui.Theme
 	X, Y        float32
 	Width       float32
-	Value       string
 	PassThrough bool
-	Theme       ui.Theme
-	Style       *MarkdownStyle
 }
 
 type MarkdownLayout = htmlui.Layout
 
 type markdownRenderState struct {
-	Key Markdown
-	CSS string
 	DOM *dom.Node
+	CSS string
+	Key Markdown
 }
 
 type markdownSyncEntry struct {
-	Entity ecs.Entity
 	Value  Markdown
+	Entity ecs.Entity
 }
 
 type markdownEntriesScratch struct{}
 
 type markdownRuntime struct {
+	document   goldmark.Markdown
 	style      *syntax.Theme
 	background string
 	css        string
-	document   goldmark.Markdown
 }
 
 var markdownRuntimeOnce sync.Once
@@ -357,8 +357,8 @@ func (markdownHTMLNodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegis
 }
 
 type markdownInlineMath struct {
-	ast.BaseInline
 	Content []byte
+	ast.BaseInline
 }
 
 var kindMarkdownInlineMath = ast.NewNodeKind("MarkdownInlineMath")

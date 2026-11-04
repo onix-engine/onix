@@ -50,13 +50,13 @@ Rolling hash for long distance long string matches. Stores one position
 	per bucket, bucket key is computed over a long region.
 */
 type hashRolling struct {
+	table []uint32
 	hasherCommon
 
-	jump int
+	jump    int
+	next_ix uint
 
 	state         uint32
-	table         []uint32
-	next_ix       uint
 	factor        uint32
 	factor_remove uint32
 }

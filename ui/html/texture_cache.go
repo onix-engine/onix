@@ -17,30 +17,30 @@ import (
 )
 
 type htmlTextureKey struct {
-	gradient htmlGradientKey
 	node     *dom.Node
 	variant  string
+	gradient htmlGradientKey
 }
 
 type htmlOwnedTexture struct {
-	key     htmlTextureKey
 	texture *graphics.Texture
 	target  *render.RenderTarget
+	paint   *htmlPaintRaster
+	key     htmlTextureKey
 	refs    int
 	queued  bool
 }
 
 type htmlTextureCache struct {
+	blurScratch    htmlGPUBlurScratch
 	face, boldFace *font.Face
 	entries        map[htmlTextureKey]*htmlOwnedTexture
 	textures       map[*graphics.Texture]*htmlOwnedTexture
 	entities       map[ecs.Entity]*htmlOwnedTexture
-	unused         []*htmlOwnedTexture
 	rasters        map[*dom.Node]*htmlOpacityRaster
-	paint          map[htmlTextureKey]*htmlPaintRaster
 	gpuBlur        map[htmlTextureKey]*htmlGPUBlur
 	blurShader     *graphics.Material2DShader
-	blurScratch    htmlGPUBlurScratch
+	unused         []*htmlOwnedTexture
 }
 
 func (cache *htmlTextureCache) add(key htmlTextureKey, texture *graphics.Texture) *htmlOwnedTexture {
@@ -53,6 +53,15 @@ func (cache *htmlTextureCache) add(key htmlTextureKey, texture *graphics.Texture
 	cache.entries[key], cache.textures[texture] = entry, entry
 	cache.unused = append(cache.unused, entry)
 	return entry
+}
+
+// Paint metadata has the same key and lifetime as its owned texture. Keep it
+// on that entry instead of maintaining a second index and invalidation path.
+func (cache *htmlTextureCache) paint(key htmlTextureKey) *htmlPaintRaster {
+	if entry := cache.entries[key]; entry != nil {
+		return entry.paint
+	}
+	return nil
 }
 
 func (cache *htmlTextureCache) bind(entity ecs.Entity, texture *graphics.Texture) {
@@ -98,9 +107,6 @@ func (cache *htmlTextureCache) sweep() {
 				delete(cache.entries, entry.key)
 			}
 			delete(cache.textures, entry.texture)
-			if raster := cache.paint[entry.key]; raster != nil && raster.texture == entry.texture {
-				delete(cache.paint, entry.key)
-			}
 		}
 	}
 	clear(cache.unused[len(retained):])
@@ -128,23 +134,22 @@ func (cache *htmlTextureCache) dispose() {
 	clear(cache.unused)
 	cache.unused = cache.unused[:0]
 	clear(cache.rasters)
-	clear(cache.paint)
 	clear(cache.gpuBlur)
 }
 
 type htmlPaintRaster struct {
-	colors                      [5]style.Color
-	image                       image.RGBA
 	style                       *style.ComputedStyle
-	width                       int
-	height                      int
 	texture                     *graphics.Texture
 	gradients                   []htmlRasterGradient
-	logicalWidth, logicalHeight float32
-	version                     uint64
-	shadow                      style.Shadow
 	radii                       style.Corners
+	shadow                      style.Shadow
+	image                       image.RGBA
+	width                       int
+	version                     uint64
+	height                      int
+	logicalWidth, logicalHeight float32
 	padding                     float32
+	colors                      [5]style.Color
 }
 
 func cleanupHTMLTextures(_ *ecs.World, _ ecs.Entity, state *htmlRenderState) {
@@ -197,21 +202,22 @@ type htmlOpacityInline struct {
 }
 
 type htmlOpacityRaster struct {
-	image               image.RGBA
-	rect                layout.Rect
-	boxRect             layout.Rect
-	background          style.Value
-	opacity             style.Value
-	radius              float32
-	radii               style.Corners
+	boldFace            *font.Face
+	face                *font.Face
+	style               *style.ComputedStyle
 	children            []htmlOpacityChild
+	gradients           []htmlRasterGradient
 	inline              []htmlOpacityInline
+	radii               style.Corners
+	opacity             style.Value
+	background          style.Value
+	image               image.RGBA
+	boxRect             layout.Rect
+	rect                layout.Rect
 	version             uint64
 	uploaded            uint64
-	style               *style.ComputedStyle
 	geometry, textPaint uint64
-	face, boldFace      *font.Face
-	gradients           []htmlRasterGradient
+	radius              float32
 	cached              bool
 	gpuBlur             bool
 }

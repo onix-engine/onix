@@ -43,10 +43,10 @@ type SimpleGlyph struct {
 }
 
 type CompositeComponent struct {
+	Transform [4]float64
 	GlyphID   uint16
 	Arg1      int16
 	Arg2      int16
-	Transform [4]float64
 	UseXY     bool
 }
 
@@ -56,11 +56,11 @@ type CompositeGlyph struct {
 }
 
 type Glyph struct {
-	GlyphID          uint16
-	NumberOfContours int16
-	Bounds           Bounds
 	Simple           *SimpleGlyph
 	Composite        *CompositeGlyph
+	Bounds           Bounds
+	GlyphID          uint16
+	NumberOfContours int16
 }
 
 func parseGlyph(data []byte, glyphID uint16) (*Glyph, error) {

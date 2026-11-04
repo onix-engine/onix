@@ -147,8 +147,7 @@ func recomputeInputStateBranch(node *dom.Node, stylesheet *css.Stylesheet, previ
 	if node == nil {
 		return nil
 	}
-	scratch.candidates = scratch.compiled.candidatesInto(node, scratch.candidates)
-	for _, ref := range scratch.candidates {
+	for ref := range scratch.compiled.candidates(node) {
 		if !ref.inputDependent {
 			continue
 		}
@@ -169,12 +168,12 @@ func recomputeInputStateBranch(node *dom.Node, stylesheet *css.Stylesheet, previ
 // NodeChange records the result of the cascade, rather than the mutation that
 // triggered it. The caller owns and reuses the output slice.
 type NodeChange struct {
+	Node *dom.Node
 	// Tree changes box membership, order or positioning dependencies.
 	Tree bool
 	// Reorder means order is the only changed tree property; other non-tree
 	// style changes may be present and still require normal layout/paint work.
 	Reorder bool
-	Node    *dom.Node
 	Impact  ChangeImpact
 }
 
@@ -259,8 +258,8 @@ type MutationCache struct {
 	definitions      filterDefinitions
 	stylesheet       *css.Stylesheet
 	compiled         *compiledStylesheet
-	styles           styleIndex
 	ContainerMetrics map[*dom.Node]ContainerMetrics
+	styles           styleIndex
 }
 
 const maxDocumentStyleInterned = 2048

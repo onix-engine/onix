@@ -23,16 +23,16 @@ type node struct {
 // Tree's zero value is an empty document. Do not copy a populated Tree.
 // Nodes use arena indices so rotations and free-list reuse do not allocate.
 type Tree struct {
-	original   string
-	added      []byte
-	nodes      []node
-	root, free int
-	snapshot   string
-	cached     bool
+	original       string
+	snapshot       string
+	appendSnapshot strings.Builder
+	added          []byte
+	nodes          []node
+	root, free     int
 	// prefix is the unchanged prefix of snapshot after pending edits. The
 	// builder only appends: previously published strings are never overwritten.
-	prefix         int
-	appendSnapshot strings.Builder
+	prefix int
+	cached bool
 }
 
 func (t *Tree) Len() int   { return t.bytes(t.root) }

@@ -10,12 +10,12 @@ import (
 
 type Runtime2D struct {
 	Simulation    *World
-	frame         uint64
-	syncedInputs  physicsInputs
 	syncedWorld   *World
-	syncedTick    ecs.Tick
 	changes       physicsBodyChanges
+	syncedInputs  physicsInputs
+	frame         uint64
 	managedBodies int
+	syncedTick    ecs.Tick
 }
 
 func NewRuntime2D() *Runtime2D {

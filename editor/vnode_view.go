@@ -11,9 +11,9 @@ type editorVNodeView struct {
 	used   int
 }
 type editorVNodeGroup struct {
-	node     html.VNode
 	children []html.VNode
 	attrs    []html.VNodeAttribute
+	node     html.VNode
 }
 
 func editorVNodeKey(tag, value string) uint64 {

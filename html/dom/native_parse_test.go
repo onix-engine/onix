@@ -126,19 +126,19 @@ func TestCharacterReferences(t *testing.T) {
 
 func TestTokenizerHTMLRecovery(t *testing.T) {
 	for _, test := range []struct {
-		source string
-		kind   TokenType
-		data   string
 		attrs  map[string]string
+		source string
+		data   string
+		kind   TokenType
 	}{
-		{`<DIV A=first a=second>`, TokenStartTag, "div", map[string]string{"a": "first"}},
-		{`<img src=http://example.test/icon.png/>`, TokenStartTag, "img", map[string]string{"src": "http://example.test/icon.png/"}},
-		{"<div\u00a0id=x>", TokenStartTag, "div\u00a0id=x", nil},
-		{`<div`, TokenEOF, "", nil},
-		{`<p a="unterminated`, TokenEOF, "", nil},
-		{`<`, TokenText, "<", nil},
-		{`1 < 2`, TokenText, "1 < 2", nil},
-		{`<!--unfinished`, TokenEOF, "", nil},
+		{source: `<DIV A=first a=second>`, kind: TokenStartTag, data: "div", attrs: map[string]string{"a": "first"}},
+		{source: `<img src=http://example.test/icon.png/>`, kind: TokenStartTag, data: "img", attrs: map[string]string{"src": "http://example.test/icon.png/"}},
+		{source: "<div\u00a0id=x>", kind: TokenStartTag, data: "div\u00a0id=x", attrs: nil},
+		{source: `<div`, kind: TokenEOF, data: "", attrs: nil},
+		{source: `<p a="unterminated`, kind: TokenEOF, data: "", attrs: nil},
+		{source: `<`, kind: TokenText, data: "<", attrs: nil},
+		{source: `1 < 2`, kind: TokenText, data: "1 < 2", attrs: nil},
+		{source: `<!--unfinished`, kind: TokenEOF, data: "", attrs: nil},
 	} {
 		token, err := NewTokenizer(test.source).Next()
 		if err != nil || token.Type != test.kind || token.Data != test.data {

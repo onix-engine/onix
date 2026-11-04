@@ -3,10 +3,10 @@ package scene
 import "time"
 
 type Time struct {
+	last    time.Time
 	Delta   time.Duration
 	Elapsed time.Duration
 	Frame   uint64
-	last    time.Time
 }
 
 func NewTime() *Time {

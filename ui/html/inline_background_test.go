@@ -55,7 +55,7 @@ func TestHTMLInlineBackgroundWrapsAndRetainsPaint(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="text" style="width:90px;line-height:22px"><span id="match" style="background:#ffaa0080">one <b>two three</b> four five six</span> outside</div>`)
 	state, _ := world.Get[htmlRenderState](owner)
 	text := incrementalHTMLNode(t, world, owner, "text")
-	box := state.BoxesByNode[text.node]
+	box := state.boxForNode(text.node)
 	if len(box.InlineBackgrounds) < 2 {
 		t.Fatalf("missing wrapped backgrounds: %+v", box.InlineBackgrounds)
 	}
@@ -133,7 +133,7 @@ func TestHTMLInlineBackgroundSurvivesOpacityComposite(t *testing.T) {
 			}
 		}
 		if !found {
-			box := state.BoxesByNode[group.node]
+			box := state.boxForNode(group.node)
 			t.Fatalf("inline background missing from opacity raster: backgrounds=%+v rect=%+v pixels=%v", box.InlineBackgrounds, raster.rect, raster.image.Pix[:min(64, len(raster.image.Pix))])
 		}
 	}

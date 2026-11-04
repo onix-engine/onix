@@ -239,13 +239,13 @@ func parseXMP(fields map[string][]string) (metadata, error) {
 		return m, fmt.Errorf("ultrahdr: HDR primary image is unsupported")
 	}
 	targets := []struct {
-		name     string
 		value    *[3]float64
+		name     string
 		fallback float64
 		required bool
 	}{
-		{"GainMapMin", &m.min, 0, false}, {"GainMapMax", &m.max, 0, true}, {"Gamma", &m.gamma, 1, false},
-		{"OffsetSDR", &m.sdr, 1.0 / 64, false}, {"OffsetHDR", &m.hdr, 1.0 / 64, false},
+		{name: "GainMapMin", value: &m.min, fallback: 0, required: false}, {name: "GainMapMax", value: &m.max, fallback: 0, required: true}, {name: "Gamma", value: &m.gamma, fallback: 1, required: false},
+		{name: "OffsetSDR", value: &m.sdr, fallback: 1.0 / 64, required: false}, {name: "OffsetHDR", value: &m.hdr, fallback: 1.0 / 64, required: false},
 	}
 	for _, target := range targets {
 		values := fields[target.name]
@@ -265,10 +265,10 @@ func parseXMP(fields map[string][]string) (metadata, error) {
 		}
 	}
 	for _, target := range []struct {
-		name     string
 		value    *float64
+		name     string
 		required bool
-	}{{"HDRCapacityMin", &m.capacityMin, false}, {"HDRCapacityMax", &m.capacityMax, true}} {
+	}{{name: "HDRCapacityMin", value: &m.capacityMin, required: false}, {name: "HDRCapacityMax", value: &m.capacityMax, required: true}} {
 		v := fields[target.name]
 		if len(v) == 0 && !target.required {
 			continue

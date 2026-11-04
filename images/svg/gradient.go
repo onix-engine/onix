@@ -63,37 +63,45 @@ type gradientStop struct {
 // which attributes were present, so an element can inherit the rest from the
 // gradient it references with href.
 type gradientDef struct {
-	linear bool
-	href   string
-
-	object       bool
-	unitsSet     bool
-	transform    matrix
-	transformSet bool
-	spread       gradientSpread
-	spreadSet    bool
-	stops        []gradientStop
-	stopsSet     bool
-
-	x1, y1, x2, y2                   gradientLength
+	href                             string
+	stops                            []gradientStop
+	transform                        matrix
+	x2                               gradientLength
+	fy                               gradientLength
+	fx                               gradientLength
+	r                                gradientLength
+	cy                               gradientLength
+	cx                               gradientLength
+	y2                               gradientLength
+	x1                               gradientLength
+	y1                               gradientLength
+	spreadSet                        bool
+	spread                           gradientSpread
 	x1Set, y1Set, x2Set, y2Set       bool
-	cx, cy, r, fx, fy                gradientLength
+	linear                           bool
+	stopsSet                         bool
+	transformSet                     bool
+	unitsSet                         bool
+	object                           bool
 	cxSet, cySet, rSet, fxSet, fySet bool
 }
 
 // gradient is a paint server resolved against the document viewport. transform
 // maps gradient space to the user space of the shape that references it.
 type gradient struct {
-	linear bool
-
-	x1, y1, x2, y2 float64
-	cx, cy, r      float64
-	fx, fy         float64
-
 	stops     []gradientStop
+	transform matrix
+	cy        float64
+	x2        float64
+	y2        float64
+	cx        float64
+	r         float64
+	fx, fy    float64
+	y1        float64
+	x1        float64
+	linear    bool
 	spread    gradientSpread
 	object    bool
-	transform matrix
 }
 
 // colorAt resolves the color of a point in gradient space.
@@ -187,10 +195,10 @@ func blendColor(from, to color.NRGBA, fraction float64) color.NRGBA {
 // fillPaint resolves the color of a device-space pixel. A nil gradient keeps the
 // solid fill path free of extra work.
 type fillPaint struct {
-	color    color.NRGBA
 	gradient *gradient
 	inverse  matrix
 	opacity  float64
+	color    color.NRGBA
 	valid    bool
 }
 

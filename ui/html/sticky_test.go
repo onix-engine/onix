@@ -239,7 +239,7 @@ func TestHTMLStickyTableHeaders(t *testing.T) {
 func TestHTMLStickyCreatesStackingAndAbsoluteContainingBlock(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div style="height:30px"></div><div id="target" style="position:sticky;top:10px;height:80px"><div id="absolute" style="position:absolute;top:5px;width:10px;height:10px"></div></div><div id="next" style="height:20px"></div>`)
 	state := world.GetRef[htmlRenderState](owner)
-	box := state.BoxesByNode[incrementalHTMLNode(t, world, owner, "target").node]
+	box := state.boxForNode(incrementalHTMLNode(t, world, owner, "target").node)
 	if !htmlBoxCreatesStackContext(box) || box.Style.ZIndex != style.Keyword("auto") {
 		t.Fatal("sticky with auto z-index must create a stacking context")
 	}

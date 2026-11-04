@@ -19,41 +19,46 @@ import (
 
 // Authoring state stays outside runtime clips; idle playback reuses the bound animator.
 type workspaceAnimation struct {
-	Open, Active, Playing   bool
+	PreviewWorld            *ecs.World
+	LastSegment             string
+	Space                   project.CoordinateSpace
 	Mod                     project.ModID
 	Element, Instance, Kind string
-	Track, Key              int
-	Segment                 bool
-	CurveOpen               bool
-	CurveFocus              ecs.Entity
-	LastSegment             string
-	LastSegmentClick        float64
-	Time                    float32
 	Target                  string
+	Playheads               []htmlui.Node
+	Detail                  workspaceAnimationDetail
+	TrackCounts             [3]int
+	CurveFocus              ecs.Entity
+	LastSegmentClick        float64
+	ElementIndex            int
+	Track                   int
 	PreviewEntity           ecs.Entity
-	PreviewWorld            *ecs.World
+	Key                     int
 	DragHandle              int
 	CurveBounds             rect
-	CurveMinY, CurveMaxY    float32
-	UITime                  float32
-	DragTime                bool
-	Playheads               []htmlui.Node
-	TrackCounts             [3]int
-	ElementIndex            int
-	Space                   project.CoordinateSpace
-	Detail                  workspaceAnimationDetail
-	Zoom                    float32
-	RangeStart, RangeEnd    float32
 	ScrollPosition          [2]float32
+	UITime                  float32
+	CurveMaxY               float32
+	CurveMinY               float32
+	RangeEnd                float32
+	RangeStart              float32
+	Zoom                    float32
+	Time                    float32
+	Segment                 bool
+	Active                  bool
+	Playing                 bool
+	Open                    bool
+	DragTime                bool
+	CurveOpen               bool
 	ScrollPending           bool
 }
 
 type workspaceAnimationDetail struct {
+	Animation                               *project.AnimationComponentSpec
 	Target                                  DocumentID
 	Pointer, ValuePointer, AnimationPointer string
 	Value                                   string
 	Texture                                 project.TextureSpec
-	Animation                               *project.AnimationComponentSpec
 	Axis                                    int
 	Time                                    float32
 }

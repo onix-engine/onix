@@ -24,14 +24,14 @@ const (
 )
 
 type resourceBuildReport struct {
-	Version        int                          `json:"version"`
 	Fingerprint    string                       `json:"fingerprint"`
 	Platform       BuildPlatform                `json:"platform"`
 	Mode           BuildMode                    `json:"mode"`
+	Packages       []resourcePackageBuildReport `json:"packages"`
+	Totals         resourceBuildReportTotals    `json:"totals"`
+	Version        int                          `json:"version"`
 	CatalogVersion int                          `json:"catalogVersion"`
 	PackageVersion int                          `json:"packageVersion"`
-	Totals         resourceBuildReportTotals    `json:"totals"`
-	Packages       []resourcePackageBuildReport `json:"packages"`
 }
 
 type resourceBuildReportTotals struct {
@@ -56,9 +56,9 @@ type resourcePackageBuildReport struct {
 }
 
 type resourceBuildCacheManifest struct {
-	Version     int                 `json:"version"`
 	Fingerprint string              `json:"fingerprint"`
 	Report      resourceBuildReport `json:"report"`
+	Version     int                 `json:"version"`
 }
 
 func newResourceBuildReport(fingerprint string, options resourcePackageOptions, capacity int) resourceBuildReport {
@@ -138,16 +138,16 @@ func fingerprintResourceBuild(files map[string]resourceInput, config resourcePac
 // resourceDigestCache reuses content digests for sources whose size and
 // modification time are unchanged, so repeat builds never re-read every asset.
 type resourceDigestCache struct {
-	path    string
 	known   map[string]resourceDigestEntry
 	entries map[string]resourceDigestEntry
+	path    string
 	dirty   bool
 }
 
 type resourceDigestEntry struct {
+	Digest   string `json:"digest"`
 	Size     int64  `json:"size"`
 	Modified int64  `json:"modified"`
-	Digest   string `json:"digest"`
 }
 
 func loadResourceDigestCache(projectDir string) *resourceDigestCache {

@@ -60,32 +60,33 @@ func (tree *workspaceElementTree) reset(elements []project.ModElementSpec) {
 }
 
 type workspaceOutliner struct {
-	collapsedScenes    map[project.SceneID]bool
-	collapsedModules   map[workspaceModuleKey]bool
-	expandedElements   map[workspaceElementKey]bool
-	elementTreeIndex   workspaceElementTree
-	editingModule      workspaceModuleKey // non-empty scene while the double-clicked module owns the tree
-	lastRow            workspaceModuleKey
-	lastRowTime        float64
-	contextOpen        bool
-	contextX, contextY float32
-	contextScene       project.SceneID
-	contextParent      string
-	contextElement     string
-	contextResource    string
-	contextSlot        string
-	contextMod         project.ModID
-	fileMenuOpen       bool
-	contextFile        string
-	resourceMenuOpen   bool
-	selectedElement    string // element row the Details panel edits
-	selectedResource   string
-	selectedSlot       string
-	slotCreating       bool
-	declarationNames   []string // reused while rendering each module's declarations
-	scrollPosition     [2]float32
-	scrollPending      bool
-	resetScroll        bool
+	collapsedModules map[workspaceModuleKey]bool
+	expandedElements map[workspaceElementKey]bool
+	collapsedScenes  map[project.SceneID]bool
+	lastRow          workspaceModuleKey
+	editingModule    workspaceModuleKey // non-empty scene while the double-clicked module owns the tree
+	selectedSlot     string
+	contextFile      string
+	selectedResource string
+	contextScene     project.SceneID
+	contextParent    string
+	contextElement   string
+	contextResource  string
+	contextSlot      string
+	contextMod       project.ModID
+	selectedElement  string // element row the Details panel edits
+	elementTreeIndex workspaceElementTree
+	declarationNames []string // reused while rendering each module's declarations
+	lastRowTime      float64
+	scrollPosition   [2]float32
+	contextY         float32
+	contextX         float32
+	resourceMenuOpen bool
+	fileMenuOpen     bool
+	slotCreating     bool
+	contextOpen      bool
+	scrollPending    bool
+	resetScroll      bool
 }
 
 func (a *ModuleEditor) outlinerScroll(world *ecs.World) *scene.UIScroll {

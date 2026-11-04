@@ -22,8 +22,8 @@ type proxyGeometry struct {
 
 type proxyKey struct {
 	proxyGeometry
-	bodyType BodyType
 	filter   Filter
+	bodyType BodyType
 	sensor   bool
 }
 type broadphaseProxy struct {
@@ -140,7 +140,7 @@ func (world *World) buildBroadphase() {
 			continue
 		}
 		body := &world.bodies[collider.bodyIndex]
-		key := proxyKey{proxyGeometry{collider.generation, body.generation, collider.bodyIndex, collider.kind, collider.a, collider.b, body.position, collider.radius, collider.rotation, body.rotation}, body.bodyType, collider.filter, collider.sensor}
+		key := proxyKey{proxyGeometry: proxyGeometry{collider.generation, body.generation, collider.bodyIndex, collider.kind, collider.a, collider.b, body.position, collider.radius, collider.rotation, body.rotation}, bodyType: body.bodyType, filter: collider.filter, sensor: collider.sensor}
 		if !proxy.alive || key != proxy.key || resized {
 			next := broadphaseProxy{key: key, alive: true, dirty: true}
 			bounds := world.aabbs[i]

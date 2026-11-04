@@ -1316,9 +1316,9 @@ func TestWorkspaceAnimationDisplayRangePreviewPlayhead(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sample := range []struct {
-		time  float32
 		style string
-	}{{.24, "display:none"}, {.25, "left:0%"}, {.5, "left:50%"}, {.75, "left:100%"}, {.76, "display:none"}} {
+		time  float32
+	}{{time: .24, style: "display:none"}, {time: .25, style: "left:0%"}, {time: .5, style: "left:50%"}, {time: .75, style: "left:100%"}, {time: .76, style: "display:none"}} {
 		a.animation.Time = sample.time
 		a.syncAnimationPreview(0)
 		a.updateAnimationPlaybackUI()

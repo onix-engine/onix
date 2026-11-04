@@ -13,8 +13,8 @@ import (
 
 type visual struct {
 	entity    module.Entity
-	transform scene.UITransform
 	sprite    scene.Sprite2D
+	transform scene.UITransform
 	visible   bool
 }
 
@@ -47,20 +47,28 @@ func (v *visual) pose(c *module.Context, x, y, r, sx, sy float32) error {
 }
 
 type Mod struct {
+	nodes       [len(nodeIDs)]module.HTMLNode
+	lastWeather string
+	lastNotice  string
+	templates   [5]scene.Sprite2D
+	objects     [20]visual
+	particles   [12]visual
+	windLines   [3]visual
+	coast, road [2]visual
+	rear        visual
+	wing        visual
+	pouch       visual
+	crank       visual
+	front       visual
+	shadow      visual
+	delivery    visual
+	rider       visual
 	game
-	delivery                                       visual
-	coast, road                                    [2]visual
-	rider, rear, front, crank, pouch, wing, shadow visual
-	objects                                        [20]visual
-	templates                                      [5]scene.Sprite2D
-	particles                                      [12]visual
-	windLines                                      [3]visual
-	nodes                                          [len(nodeIDs)]module.HTMLNode
-	keys                                           [9]bool
-	pointerHeld, skipJumpClick                     bool
-	lastPhase                                      phase
-	hudStamp                                       [7]int
-	lastNotice, lastWeather                        string
+	hudStamp      [7]int
+	keys          [9]bool
+	lastPhase     phase
+	skipJumpClick bool
+	pointerHeld   bool
 }
 
 const (
@@ -105,11 +113,11 @@ var progressStyles = func() [101]string {
 
 func (m *Mod) Install(c *module.Context) error {
 	for _, b := range []struct {
-		id string
 		v  *visual
+		id string
 	}{
-		{"rider", &m.rider}, {"rear-wheel", &m.rear}, {"front-wheel", &m.front}, {"crank", &m.crank},
-		{"pouch", &m.pouch}, {"wing", &m.wing}, {"shadow", &m.shadow}, {"delivery", &m.delivery},
+		{id: "rider", v: &m.rider}, {id: "rear-wheel", v: &m.rear}, {id: "front-wheel", v: &m.front}, {id: "crank", v: &m.crank},
+		{id: "pouch", v: &m.pouch}, {id: "wing", v: &m.wing}, {id: "shadow", v: &m.shadow}, {id: "delivery", v: &m.delivery},
 	} {
 		v, err := bind(c, b.id)
 		if err != nil {

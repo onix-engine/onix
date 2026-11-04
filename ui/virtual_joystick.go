@@ -36,6 +36,8 @@ type VirtualJoystick struct {
 // VirtualJoystickOptions configures a generated virtual joystick. Size is the
 // diameter of its touch area and visual track. A non-positive size uses 120.
 type VirtualJoystickOptions struct {
+	Style       *VirtualJoystickStyle
+	Theme       Theme
 	X, Y        float32
 	Size        float32
 	KnobSize    float32
@@ -44,8 +46,6 @@ type VirtualJoystickOptions struct {
 	Floating    bool
 	Disabled    bool
 	PassThrough bool
-	Theme       Theme
-	Style       *VirtualJoystickStyle
 }
 
 // VirtualJoystickActiveEvent is emitted when a joystick is engaged or reset.

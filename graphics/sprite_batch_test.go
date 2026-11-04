@@ -99,19 +99,19 @@ func TestSpriteMultiTextureSteadyStateAllocations(t *testing.T) {
 
 func TestSpriteMultiTextureStateBoundaries(t *testing.T) {
 	for _, test := range []struct {
-		name   string
 		change func(*Canvas2D)
+		name   string
 	}{
-		{"projection", func(c *Canvas2D) { c.SetProjectionMatrix(mgl32.Ident4()) }},
-		{"view", func(c *Canvas2D) { c.SetViewMatrix(mgl32.Translate3D(1, 0, 0)) }},
-		{"clip", func(c *Canvas2D) { c.PushClipRect(0, 0, 16, 16) }},
-		{"blend", func(c *Canvas2D) {
+		{name: "projection", change: func(c *Canvas2D) { c.SetProjectionMatrix(mgl32.Ident4()) }},
+		{name: "view", change: func(c *Canvas2D) { c.SetViewMatrix(mgl32.Translate3D(1, 0, 0)) }},
+		{name: "clip", change: func(c *Canvas2D) { c.PushClipRect(0, 0, 16, 16) }},
+		{name: "blend", change: func(c *Canvas2D) {
 			c.BlendSeparate(render.Blend{Src: render.BlendOne, Dst: render.BlendOne}, render.Blend{Src: render.BlendOne, Dst: render.BlendOne})
 		}},
-		{"shape", func(c *Canvas2D) {
+		{name: "shape", change: func(c *Canvas2D) {
 			c.DrawShapeMatrices(mgl32.Ident4(), mgl32.Ident3(), 16, 16, render.ShapeRoundedRect, White, ColorRGBA{}, 0, 0, 1)
 		}},
-		{"flush", func(c *Canvas2D) { c.DrawFrame() }},
+		{name: "flush", change: func(c *Canvas2D) { c.DrawFrame() }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			driver := &canvasTestDriver{viewport: render.Rect{Width: 320, Height: 240}}

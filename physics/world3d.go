@@ -17,26 +17,26 @@ const (
 )
 
 type bodyState3D struct {
-	generation      uint32
-	alive           bool
-	bodyType        BodyType
-	position        Vector3D
 	rotation        Quaternion
-	velocity        Vector3D
 	angularVelocity Vector3D
-	force           Vector3D
 	torque          Vector3D
-	mass            float64
+	force           Vector3D
+	position        Vector3D
+	velocity        Vector3D
 	inertia         float64
+	angularDamping  float64
+	touched         uint64
+	mass            float64
+	userData        uint64
 	inverseMass     float64
 	inverseInertia  float64
 	gravityScale    float64
 	linearDamping   float64
-	angularDamping  float64
+	generation      uint32
 	fixedRotation   bool
-	userData        uint64
+	bodyType        BodyType
 	managed         bool
-	touched         uint64
+	alive           bool
 }
 
 func (body *bodyState3D) updateInverseMass() {
@@ -57,25 +57,25 @@ func (body *bodyState3D) updateInverseMass() {
 }
 
 type colliderState3D struct {
-	generation    uint32
-	alive         bool
-	bodyIndex     uint32
-	kind          shapeKind3D
-	center        Vector3D
-	half          Vector3D
-	rotation      Quaternion
-	radius        float64
-	halfHeight    float64
 	mesh          TriangleMesh
 	hull          ConvexHull
 	compound      Compound
+	rotation      Quaternion
+	filter        Filter
+	center        Vector3D
+	half          Vector3D
+	halfHeight    float64
+	radius        float64
 	friction      float64
 	restitution   float64
-	sensor        bool
-	filter        Filter
-	collisionType uint32
-	managed       bool
 	touched       uint64
+	generation    uint32
+	bodyIndex     uint32
+	collisionType uint32
+	kind          shapeKind3D
+	sensor        bool
+	alive         bool
+	managed       bool
 }
 
 type aabb3D struct {
@@ -131,28 +131,28 @@ type broadphaseEntry3D struct {
 }
 
 type World3D struct {
-	Gravity       Vector3D
-	Iterations    int
-	Damping       float64
-	CollisionSlop float64
-	CellSize      float64
+	bucketHeads []int
+	pairs       []colliderPair
+	events      []CollisionEvent3D
+	nextActive  []activeCollision3D
+	active      []activeCollision3D
 
-	bodies        []bodyState3D
-	freeBodies    []uint32
-	colliders     []colliderState3D
-	freeColliders []uint32
+	bodies     []bodyState3D
+	freeBodies []uint32
+	colliders  []colliderState3D
 
 	aabbs            []aabb3D
-	bucketHeads      []int
-	gridEntries      []broadphaseEntry3D
-	large            []int
-	pairs            []colliderPair
-	contacts         []manifold3D
 	velocityContacts []manifold3D
+	large            []int
+	gridEntries      []broadphaseEntry3D
+	contacts         []manifold3D
+	freeColliders    []uint32
+	Gravity          Vector3D
+	Iterations       int
 	contactDelta     float64
-	active           []activeCollision3D
-	nextActive       []activeCollision3D
-	events           []CollisionEvent3D
+	CellSize         float64
+	CollisionSlop    float64
+	Damping          float64
 }
 
 func NewWorld3D() *World3D {

@@ -44,8 +44,8 @@ func androidFontReference(reader io.Reader, directories []string) (systemFontRef
 				}
 				var entry struct {
 					File   string `xml:",chardata"`
-					Weight int    `xml:"weight,attr"`
 					Style  string `xml:"style,attr"`
+					Weight int    `xml:"weight,attr"`
 					Index  int    `xml:"index,attr"`
 				}
 				if err := decoder.DecodeElement(&entry, &element); err != nil {

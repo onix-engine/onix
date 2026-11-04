@@ -22,6 +22,9 @@ const (
 
 // transform holds the parameters for an invertible transform.
 type transform struct {
+	// pix is the tile values, for the predictor and cross-color
+	// transforms, and the color palette, for the color-index transform.
+	pix []byte
 	// transformType is the type of the transform.
 	transformType uint32
 	// oldWidth is the width of the image before transformation (or
@@ -34,9 +37,6 @@ type transform struct {
 	// and cross-color transforms. 8>>bits is the number of bits per
 	// color index, for the color-index transform.
 	bits uint32
-	// pix is the tile values, for the predictor and cross-color
-	// transforms, and the color palette, for the color-index transform.
-	pix []byte
 }
 
 var inverseTransforms = [nTransformTypes]func(*transform, []byte, int32) []byte{

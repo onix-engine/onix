@@ -242,16 +242,16 @@ func preprocessModelResources(source iofs.FS, root string, models []ModelSpec, t
 			for materialIndex := range resource.Materials {
 				material := &resource.Materials[materialIndex]
 				type textureInput struct {
-					name    string
 					data    *[]byte
 					path    *string
 					mime    *string
+					name    string
 					options graphics.TextureOptions
 				}
 				textures := [...]textureInput{
-					{"base color", &material.BaseColorTextureData, &material.BaseColorTexture, &material.BaseColorTextureMime, material.BaseColorSampling},
-					{"normal", &material.NormalTextureData, &material.NormalTexture, &material.NormalTextureMime, material.NormalSampling},
-					{"metallic roughness", &material.MetallicRoughnessData, &material.MetallicRoughness, &material.MetallicRoughnessMime, material.MetallicRoughnessSampling},
+					{name: "base color", data: &material.BaseColorTextureData, path: &material.BaseColorTexture, mime: &material.BaseColorTextureMime, options: material.BaseColorSampling},
+					{name: "normal", data: &material.NormalTextureData, path: &material.NormalTexture, mime: &material.NormalTextureMime, options: material.NormalSampling},
+					{name: "metallic roughness", data: &material.MetallicRoughnessData, path: &material.MetallicRoughness, mime: &material.MetallicRoughnessMime, options: material.MetallicRoughnessSampling},
 				}
 				surfaceNames := [...]string{"occlusion", "emissive", "specular", "specular color", "clearcoat", "clearcoat roughness", "clearcoat normal", "sheen color", "sheen roughness", "anisotropy"}
 				for slot := range len(textures) + len(material.Surface.Textures) {
@@ -261,7 +261,7 @@ func preprocessModelResources(source iofs.FS, root string, models []ModelSpec, t
 					} else {
 						index := slot - len(textures)
 						t := &material.Surface.Textures[index]
-						texture = textureInput{surfaceNames[index], &t.Data, &t.Path, &t.Mime, t.Sampling}
+						texture = textureInput{name: surfaceNames[index], data: &t.Data, path: &t.Path, mime: &t.Mime, options: t.Sampling}
 					}
 					data := *texture.data
 					texturePath := strings.TrimSpace(*texture.path)

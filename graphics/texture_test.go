@@ -259,14 +259,14 @@ func TestUpdateRegionsUsesOneDriverBatch(t *testing.T) {
 }
 
 type textureTestDriver struct {
-	descriptor         render.TextureDescriptor
 	createdPixels      []byte
-	next               uint32
+	externalDescriptor render.ExternalTextureDescriptor
+	descriptor         render.TextureDescriptor
 	destroyedTextures  int
 	updateCalls        int
 	updateCount        int
-	externalDescriptor render.ExternalTextureDescriptor
 	externalRefreshes  int
+	next               uint32
 }
 
 func (d *textureTestDriver) RendererInfo() render.RendererInfo { return render.RendererInfo{} }

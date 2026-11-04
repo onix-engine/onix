@@ -29,17 +29,17 @@ type Tick struct {
 }
 
 type Result[T any] struct {
-	ID RequestID
 	// Output leases in Value are borrowed until the callback returns. Retain or
 	// install them in a slot to keep them. Reply transfers its lease to the queue
 	// only on success; on error the provider still owns it.
 	Value T
 	Err   error
+	ID    RequestID
 }
 type RequestOptions struct {
+	Revision SlotRevision
 	// Zero selects the Runtime default; timeouts count fixed logic ticks.
 	TimeoutTicks uint64
-	Revision     SlotRevision
 }
 
 // SceneTarget addresses the sender's scene. All other targets are instance IDs
@@ -50,13 +50,13 @@ const InputTopic = "input"
 // Message is borrowed for the duration of OnMessage. Payloads remain typed in
 // preallocated buffers. Use Value, RequestValue or ResultValue to inspect them.
 type Message struct {
+	Err      error
 	Topic    string
 	From     string
-	ID       RequestID
-	Err      error
-	kind     eventKind
 	envelope envelope
+	ID       RequestID
 	delivery uint64
+	kind     eventKind
 }
 
 func (m Message) valid() bool {
@@ -118,9 +118,9 @@ type valueStore interface {
 }
 
 type store[T any] struct {
-	values [4][]T
 	drop   func(T)
 	retain func(T) (T, error)
+	values [4][]T
 }
 
 func newStore[T any](capacity int) *store[T] {
@@ -170,8 +170,8 @@ func (s *store[T]) forward(r *Runtime, e envelope) error {
 // EmitTo addresses any scene module without a declared receive port.
 type Emitter[T any] struct {
 	context *Context
-	topic   string
 	store   *store[T]
+	topic   string
 }
 
 func (r *Runtime) typedStore[T any]() *store[T] {
@@ -297,9 +297,9 @@ func (c *Context) ForwardAs(target, topic string, m Message) error {
 
 type Requester[Q, R any] struct {
 	context  *Context
-	topic    string
 	request  *store[Q]
 	response *store[R]
+	topic    string
 }
 
 func (c *Context) BindRequester[Q, R any](topic string) (Requester[Q, R], error) {
@@ -386,11 +386,11 @@ func (p Requester[Q, R]) Cancel(id RequestID) error {
 // Request carries an opaque reply address, never the requester's Context/entity.
 // Retaining it for deferred work is safe; Reply validates its identity again.
 type Request[Q, R any] struct {
-	ID       RequestID
 	Value    Q
 	runtime  *Runtime
-	pending  int
 	response *store[R]
+	ID       RequestID
+	pending  int
 }
 
 func (q Request[Q, R]) Reply(c *Context, value R) error {
@@ -477,30 +477,30 @@ const (
 )
 
 type envelope struct {
-	kind           eventKind
-	source, target *Context
-	topic          string
+	err            error
 	store          valueStore
-	buffer         uint8
-	value          int
+	source, target *Context
+	observer       *slotObserver
+	slotBuffer     *slotBuffer
+	topic          string
+	slot           Slot
 	id             RequestID
 	pending        int
-	err            error
-	slot           Slot
-	slotBuffer     *slotBuffer
-	observer       *slotObserver
+	value          int
+	buffer         uint8
+	kind           eventKind
 }
 type pendingRequest struct {
-	id                RequestID
+	failure           error
+	response          valueStore
 	source            *Context
 	target            *Context
 	topic             string
-	response          valueStore
-	deadline          uint64
 	revision          SlotRevision
-	replied           bool
-	failure           error
+	id                RequestID
+	deadline          uint64
 	failureTick       uint64
 	forwardedDelivery uint64
 	previous, next    int
+	replied           bool
 }

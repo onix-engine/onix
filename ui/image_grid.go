@@ -25,29 +25,30 @@ type ImageGridItem struct {
 // ImageGrid owns a fixed collection of image cards. Recreate it when the
 // item list or layout changes; moving its entity updates the whole grid.
 type ImageGrid struct {
-	Width       float32
+	DeleteIcon  IconStyle
+	Items       []ImageGridItem
 	Columns     int
+	Width       float32
 	Gap         float32
 	Padding     float32
 	LabelHeight float32
-	DeleteIcon  IconStyle
-	Items       []ImageGridItem
 }
 
 // ImageGridOptions configures an ImageGrid.
 type ImageGridOptions struct {
-	X, Y        float32
-	Width       float32
-	Columns     int
-	Gap         float32
-	Padding     float32
-	LabelHeight float32
+	Style       *ImageGridStyle
 	DeleteIcon  IconStyle
 	Items       []ImageGridItem
-	Radius      CornerRadius
-	PassThrough bool
 	Theme       Theme
-	Style       *ImageGridStyle
+	Columns     int
+	LabelHeight float32
+	X           float32
+	Padding     float32
+	Gap         float32
+	Radius      CornerRadius
+	Width       float32
+	Y           float32
+	PassThrough bool
 }
 
 // ImageGridEvent reports a remove request for a card.

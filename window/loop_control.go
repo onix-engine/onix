@@ -7,9 +7,9 @@ import (
 )
 
 type loopControl struct {
-	wakeMutex    sync.Mutex
 	wake         func()
 	idleDeadline func() (time.Time, bool)
+	wakeMutex    sync.Mutex
 	frameRequest atomic.Bool
 }
 

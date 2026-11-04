@@ -21,9 +21,9 @@ type htmlComponentChildProps struct {
 }
 
 type htmlComponentParentState struct {
+	Label  string
 	Show   bool
 	Second bool
-	Label  string
 }
 
 func TestHTMLComponentVNodeReconcilesTypedChildren(t *testing.T) {
@@ -719,8 +719,8 @@ type htmlComponentCounterState struct {
 }
 
 type htmlComponentListEntry struct {
-	Key  uint64
 	Text string
+	Key  uint64
 }
 
 type htmlComponentListState struct {
@@ -923,7 +923,7 @@ func TestHTMLComponentKeyedNodesReuseDOMIdentity(t *testing.T) {
 	bundle.Put(page)
 	owner := world.Spawn(bundle)
 	component, err := definition.MountComponent(world, owner, struct{}{}, htmlComponentListState{
-		Items: []htmlComponentListEntry{{1, "one"}, {2, "two"}, {3, "three"}},
+		Items: []htmlComponentListEntry{{Key: 1, Text: "one"}, {Key: 2, Text: "two"}, {Key: 3, Text: "three"}},
 	}, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -941,7 +941,7 @@ func TestHTMLComponentKeyedNodesReuseDOMIdentity(t *testing.T) {
 		t.Fatalf("initial second item = %q", got)
 	}
 	if !UpdateComponentState[struct{}, htmlComponentListState](world, component, func(state *htmlComponentListState) {
-		state.Items = []htmlComponentListEntry{{3, "three updated"}, {1, "one"}, {4, "four"}}
+		state.Items = []htmlComponentListEntry{{Key: 3, Text: "three updated"}, {Key: 1, Text: "one"}, {Key: 4, Text: "four"}}
 	}) {
 		t.Fatal("state update failed")
 	}
@@ -986,7 +986,7 @@ func TestHTMLComponentKeyedVNodeChildrenReuseDOMIdentity(t *testing.T) {
 	bundle.Put(page)
 	owner := world.Spawn(bundle)
 	component, err := definition.MountComponent(world, owner, struct{}{}, listState{
-		Items: []htmlComponentListEntry{{1, "one"}, {2, "two"}},
+		Items: []htmlComponentListEntry{{Key: 1, Text: "one"}, {Key: 2, Text: "two"}},
 	}, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -1003,7 +1003,7 @@ func TestHTMLComponentKeyedVNodeChildrenReuseDOMIdentity(t *testing.T) {
 	}
 
 	if !UpdateComponentState[struct{}, listState](world, component, func(state *listState) {
-		state.Items = []htmlComponentListEntry{{2, "two updated"}, {1, "one"}, {3, "three"}}
+		state.Items = []htmlComponentListEntry{{Key: 2, Text: "two updated"}, {Key: 1, Text: "one"}, {Key: 3, Text: "three"}}
 	}) {
 		t.Fatal("state update failed")
 	}
@@ -1044,7 +1044,7 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 	bundle.Put(page)
 	owner := world.Spawn(bundle)
 	component, err := definition.MountComponent(world, owner, struct{}{}, listState{
-		Items: []htmlComponentListEntry{{1, strings.Repeat("old", 1024)}, {2, "keep"}},
+		Items: []htmlComponentListEntry{{Key: 1, Text: strings.Repeat("old", 1024)}, {Key: 2, Text: "keep"}},
 	}, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -1060,7 +1060,7 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 	}
 	removed := list.Items[0].Node
 	if !UpdateComponentState[struct{}, listState](world, component, func(state *listState) {
-		state.Items = []htmlComponentListEntry{{2, "keep"}}
+		state.Items = []htmlComponentListEntry{{Key: 2, Text: "keep"}}
 	}) {
 		t.Fatal("state update failed")
 	}
@@ -1186,8 +1186,8 @@ func TestHTMLComponentEventsBubbleThroughDOMAncestors(t *testing.T) {
 
 func TestHTMLComponentReceivesNativeEventsAndBindsMultipleKinds(t *testing.T) {
 	type eventState struct {
-		Count int
 		Value string
+		Count int
 	}
 	calls := make([]EventKind, 0, 2)
 	definition, err := Define[struct{}, eventState](

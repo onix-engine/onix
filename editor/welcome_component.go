@@ -10,22 +10,22 @@ import (
 )
 
 type welcomeComponentProps struct {
+	Rows      []recentProjectRow
 	Root      rect
 	Panel     rect
 	CloseRect rect
 	NewRect   rect
 	OpenRect  rect
-	Rows      []recentProjectRow
 }
 
 type welcomeComponentState struct{}
 
 type welcomeRecentProjectProps struct {
+	Path       string
 	Index      int
 	Panel      rect
 	Row        rect
 	RemoveRect rect
-	Path       string
 }
 
 var (

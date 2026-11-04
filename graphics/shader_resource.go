@@ -11,21 +11,21 @@ import (
 var shaderBatchCounter atomic.Uint64
 
 type shaderResource[R any] struct {
-	descriptor  render.ShaderDescriptor
-	handle      render.Handle[R]
-	residencies render.DeviceValues[render.Handle[R]]
-	batchKey    uint64
-	disposed    bool
 	err         error
 	ops         *shaderResourceOps[R]
+	residencies render.DeviceValues[render.Handle[R]]
+	descriptor  render.ShaderDescriptor
+	batchKey    uint64
+	handle      render.Handle[R]
+	disposed    bool
 }
 
 type shaderResourceOps[R any] struct {
+	create      func(render.Driver, render.ShaderDescriptor) (render.Handle[R], bool, error)
+	destroy     func(render.Driver, render.Handle[R]) (bool, error)
 	kind        string
 	unsupported string
 	disposed    string
-	create      func(render.Driver, render.ShaderDescriptor) (render.Handle[R], bool, error)
-	destroy     func(render.Driver, render.Handle[R]) (bool, error)
 }
 
 type shaderResourceKind uint8

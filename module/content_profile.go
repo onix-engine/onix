@@ -18,7 +18,6 @@ type ContentProfile interface {
 }
 
 type contentSupport struct {
-	features     project.ModContentFeatures
 	append       func(*project.Resources, *ecs.Bundle, project.ModComponents) error
 	syncHTML     func(*ecs.World) error
 	layout       func(*ecs.World) error
@@ -26,6 +25,7 @@ type contentSupport struct {
 	release      func(*ecs.World, ecs.Entity)
 	controlID    func(*ecs.World, ecs.Entity) string
 	queueUploads func(*graphics.UploadQueue, *ecs.World, ecs.Entity)
+	features     project.ModContentFeatures
 }
 
 // Render2D supports sprites, text, cameras, materials and pointer input.

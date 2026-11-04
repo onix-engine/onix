@@ -60,12 +60,12 @@ func setProjectImageDecoder(decoders []project.ImageDecoderID, id project.ImageD
 }
 
 type projectRuntimeFeatureDescriptor struct {
-	Content    []string
 	ID         project.RuntimeFeatureID
 	Label      string
 	GoType     string
 	ImportName string
 	ImportPath string
+	Content    []string
 	Register   bool
 }
 

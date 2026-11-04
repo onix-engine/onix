@@ -89,16 +89,17 @@ func hashComponentID(hash uint64, id componentID) uint64 {
 }
 
 type archetype struct {
-	id uint32
-	// ids is sorted and columns is aligned with it. Single-column lookups use
-	// a short linear scan; bulk bindings can merge the sorted IDs directly.
-	mask        componentMask
-	ids         []componentID
-	columns     []column
-	entities    []Entity
 	addEdges    map[componentID]uint32
 	removeEdges map[componentID]uint32
-	hasCleanup  bool // conservative: may remain true after a hook is disabled
+	// ids is sorted and columns is aligned with it. Single-column lookups use
+	// a short linear scan; bulk bindings can merge the sorted IDs directly.
+	mask       componentMask
+	ids        []componentID
+	columns    []column
+	entities   []Entity
+	rowVersion uint64 // world structure version of the last removal
+	id         uint32
+	hasCleanup bool // conservative: may remain true after a hook is disabled
 }
 
 func (a *archetype) has(id componentID) bool {

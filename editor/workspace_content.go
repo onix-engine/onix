@@ -17,20 +17,21 @@ import (
 // Cache authoring metadata once. Rendering reuses the editor's VNodes and field
 // maps; an unchanged frame never walks types or serializes component objects.
 type workspaceContentProperty struct {
-	Name, Label string
-	Index       int
-	Type        reflect.Type
-	Seed        reflect.Value
-	Initial     string
-	Fields      []workspaceContentProperty
-	Axes        []string
-	Options     []string
-	Values      []string
-	Kind        string
-	Resource    string
-	Segmented   bool
-	Optional    bool
-	Embedded    bool
+	Type      reflect.Type
+	Seed      reflect.Value
+	Kind      string
+	Label     string
+	Resource  string
+	Initial   string
+	Name      string
+	Fields    []workspaceContentProperty
+	Options   []string
+	Values    []string
+	Axes      []string
+	Index     int
+	Segmented bool
+	Optional  bool
+	Embedded  bool
 }
 
 func contentDefault[T any](defaults map[reflect.Type]reflect.Value, value T) {

@@ -152,11 +152,11 @@ func TestObjectBoundingBoxGradientFollowsShapeTransform(t *testing.T) {
 			strokeX, strokeY int
 			want             color.NRGBA
 		}{
-			{"identity", "", Options{}, 6, 4, 6, 2, color.NRGBA{R: 183, B: 72, A: 255}},
-			{"translate", "translate(10 10)", Options{}, 16, 14, 16, 12, color.NRGBA{R: 183, B: 72, A: 255}},
-			{"rotate", "rotate(90 20 20)", Options{}, 35, 6, 37, 6, color.NRGBA{R: 183, B: 72, A: 255}},
-			{"scale", "scale(2 3)", Options{}, 12, 12, 12, 6, color.NRGBA{R: 187, B: 68, A: 255}},
-			{"viewport", "", Options{Width: 80, Height: 80}, 12, 8, 12, 4, color.NRGBA{R: 187, B: 68, A: 255}},
+			{name: "identity", transform: "", opts: Options{}, fillX: 6, fillY: 4, strokeX: 6, strokeY: 2, want: color.NRGBA{R: 183, B: 72, A: 255}},
+			{name: "translate", transform: "translate(10 10)", opts: Options{}, fillX: 16, fillY: 14, strokeX: 16, strokeY: 12, want: color.NRGBA{R: 183, B: 72, A: 255}},
+			{name: "rotate", transform: "rotate(90 20 20)", opts: Options{}, fillX: 35, fillY: 6, strokeX: 37, strokeY: 6, want: color.NRGBA{R: 183, B: 72, A: 255}},
+			{name: "scale", transform: "scale(2 3)", opts: Options{}, fillX: 12, fillY: 12, strokeX: 12, strokeY: 6, want: color.NRGBA{R: 187, B: 68, A: 255}},
+			{name: "viewport", transform: "", opts: Options{Width: 80, Height: 80}, fillX: 12, fillY: 8, strokeX: 12, strokeY: 4, want: color.NRGBA{R: 187, B: 68, A: 255}},
 		} {
 			t.Run(mode+"/"+test.name, func(t *testing.T) {
 				fill, stroke := "url(#g)", "none"

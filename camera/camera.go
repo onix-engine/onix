@@ -11,9 +11,9 @@ var (
 )
 
 type Options struct {
+	FacingMode string
 	Width      int
 	Height     int
-	FacingMode string
 }
 
 type frameSource interface {

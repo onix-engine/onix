@@ -9,18 +9,18 @@ package brotli
 /* Greedy block splitter for one block category (literal, command or distance).
  */
 type blockSplitterDistance struct {
-	alphabet_size_     uint
-	min_block_size_    uint
-	split_threshold_   float64
-	num_blocks_        uint
+	histograms_size_   *uint
 	split_             *blockSplit
 	histograms_        []histogramDistance
-	histograms_size_   *uint
+	last_entropy_      [2]float64
+	last_histogram_ix_ [2]uint
+	num_blocks_        uint
+	alphabet_size_     uint
 	target_block_size_ uint
 	block_size_        uint
 	curr_histogram_ix_ uint
-	last_histogram_ix_ [2]uint
-	last_entropy_      [2]float64
+	split_threshold_   float64
+	min_block_size_    uint
 	merge_last_count_  uint
 }
 

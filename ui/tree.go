@@ -20,8 +20,8 @@ type Tree[T comparable] struct {
 
 type treeIconWidthCache struct {
 	font                          *onixtext.Font
-	fontSize, dpi                 float64
 	collapsed, expanded, leaf     IconStyle
+	fontSize, dpi                 float64
 	collapsedWidth, expandedWidth float32
 	leafWidth                     float32
 	valid                         bool
@@ -61,15 +61,15 @@ func cachedTreeIconWidth(world *ecs.World, tree ecs.Entity, theme Theme, style T
 }
 
 type TreeNode[T comparable] struct {
-	Tree      ecs.Entity
-	Order     int
 	ID        T
 	Parent    T
-	HasParent bool
 	Label     string
+	Tree      ecs.Entity
+	Order     int
+	Depth     int
+	HasParent bool
 	Expanded  bool
 	Leaf      bool
-	Depth     int
 	Disabled  bool
 	Selected  bool
 }
@@ -77,39 +77,39 @@ type TreeNode[T comparable] struct {
 type TreeNodeSpec[T comparable] struct {
 	ID        T
 	Parent    T
-	HasParent bool
 	Label     string
+	HasParent bool
 	Expanded  bool
 	Leaf      bool
 }
 
 type TreeOptions[T comparable] struct {
+	Style       *TreeStyle
+	Nodes       []TreeNodeSpec[T]
+	Theme       Theme
 	X, Y        float32
 	Width       float32
 	RowHeight   float32
-	Nodes       []TreeNodeSpec[T]
 	Radius      CornerRadius
 	PassThrough bool
-	Theme       Theme
-	Style       *TreeStyle
 }
 
 type TreeEvent[T comparable] struct {
-	Tree  ecs.Entity
-	Node  ecs.Entity
 	ID    T
 	Label string
+	Tree  ecs.Entity
+	Node  ecs.Entity
 }
 
 type treeNodeKey[T comparable] struct {
-	tree ecs.Entity
 	id   T
+	tree ecs.Entity
 }
 
 type treeNodeState[T comparable] struct {
-	entity ecs.Entity
 	key    treeNodeKey[T]
 	node   TreeNode[T]
+	entity ecs.Entity
 }
 
 type treeNodesScratch[T comparable] struct{}

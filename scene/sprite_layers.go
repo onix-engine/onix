@@ -31,8 +31,8 @@ func (t SpriteLayerTransform2D) LocalMatrix() mgl32.Mat4 {
 
 type SpriteLayer2D struct {
 	ID        string
-	Order     int
 	Sprite    Sprite2D
+	Order     int
 	Transform SpriteLayerTransform2D
 	Anchor    Anchor
 	Visible   bool

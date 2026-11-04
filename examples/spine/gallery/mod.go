@@ -19,12 +19,12 @@ type galleryItem struct {
 }
 
 type Mod struct {
-	items               [8]galleryItem
-	resource, animation module.Slot
 	option              module.Emitter[contracts.AnimationOption]
 	selection           module.Emitter[contracts.GallerySelection]
-	selected, playing   int
+	resource, animation module.Slot
+	items               [8]galleryItem
 	animationRevision   module.SlotRevision
+	selected, playing   int
 }
 
 func (m *Mod) Install(c *module.Context) error {

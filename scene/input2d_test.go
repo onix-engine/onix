@@ -11,25 +11,25 @@ import (
 )
 
 type previousInputEventLayout struct {
-	Seq         uint64
-	Entity      ecs.Entity
-	Path        []ecs.Entity
-	Handled     bool
+	File        string
 	Kind        string
-	Device      input.PointerDevice
+	Text        string
+	Path        []ecs.Entity
+	Composition input.TextComposition
+	Selection   input.TextSelection
+	Entity      ecs.Entity
 	Key         input.KeyCode
-	Button      input.MouseButton
+	Seq         uint64
 	X           float32
-	Y           float32
 	DeltaX      float32
 	DeltaY      float32
 	WheelX      float32
 	WheelY      float32
-	File        string
-	Text        string
-	Composition input.TextComposition
+	Y           float32
+	Button      input.MouseButton
+	Device      input.PointerDevice
 	Command     input.TextCommand
-	Selection   input.TextSelection
+	Handled     bool
 }
 
 func TestInputEventUsesCompactLayout(t *testing.T) {

@@ -16,44 +16,44 @@ import (
 
 type workspace3DMod struct {
 	workspaceModResources
+	cameras  map[*project.Camera3DSpec]workspace3DCamera
 	revision uint64
 	used     uint64
-	cameras  map[*project.Camera3DSpec]workspace3DCamera
 }
 
 type workspace3DPart struct {
-	entity     ecs.Entity
-	matrix     mgl32.Mat4
-	visible    bool
-	selected   bool
-	low, high  mgl32.Vec3
 	cameraSpec *project.Camera3DSpec
 	cameraID   string
+	entity     ecs.Entity
+	matrix     mgl32.Mat4
+	low, high  mgl32.Vec3
+	visible    bool
+	selected   bool
 	helper     bool
 }
 
 type workspace3DRow struct {
 	id       string
 	mod      project.ModID
-	revision uint64
 	parts    []workspace3DPart
+	revision uint64
 	selected bool
 }
 
 // Authored meshes, lights and camera transforms enter this world. No module
 // behavior, simulation, event routes or project cameras run in the viewport.
 type workspaceViewport3D struct {
+	err         error
 	world       *ecs.World
-	view        editorViewport3D
 	mods        map[project.ModID]workspace3DMod
+	local       project.ModID
 	retired     []*project.Resources
 	rows        []workspace3DRow
+	view        editorViewport3D
 	structure   uint64
 	generation  uint64
 	revision    uint64
 	dragVersion uint64
-	local       project.ModID
-	err         error
 	navigating  bool
 }
 

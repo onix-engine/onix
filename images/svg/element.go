@@ -13,9 +13,9 @@ type element interface {
 }
 
 type renderState struct {
+	context   *renderContext
 	style     computedStyle
 	transform matrix
-	context   *renderContext
 	clipping  bool
 }
 
@@ -39,9 +39,9 @@ func (s renderState) paint(p paint, bounds Rect, current color.NRGBA, opacity fl
 }
 
 type elementProperties struct {
+	clipPath  string
 	style     stylePatch
 	transform matrix
-	clipPath  string
 }
 
 func parseElementProperties(start xml.StartElement) elementProperties {
@@ -74,8 +74,8 @@ func (p elementProperties) render(r *renderer, state renderState, content func(*
 }
 
 type groupElement struct {
-	properties elementProperties
 	children   []element
+	properties elementProperties
 }
 
 func (g groupElement) render(r *renderer, state renderState) {
@@ -87,8 +87,8 @@ func (g groupElement) render(r *renderer, state renderState) {
 }
 
 type shapeElement struct {
-	properties elementProperties
 	path       vectorPath
+	properties elementProperties
 	fillable   bool
 	strokable  bool
 }
@@ -122,8 +122,8 @@ func (s shapeElement) render(r *renderer, state renderState) {
 }
 
 type useElement struct {
-	properties elementProperties
 	reference  string
+	properties elementProperties
 	x          float64
 	y          float64
 }

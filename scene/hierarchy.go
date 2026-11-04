@@ -17,15 +17,16 @@ type hierarchyNode struct {
 // Hierarchy is the world-owned parent/child index shared by scene systems.
 // It includes suspended scenes and never retains component storage pointers.
 type Hierarchy struct {
-	nodes                   []hierarchyNode
-	entities, queue, path   []ecs.Entity
-	versions, members       [3]uint64
-	version, entityVersion  uint64
-	mutationVersion         uint64
-	lastRun                 ecs.Tick
 	changes                 ecs.SystemContext
-	initialized             bool
+	entities, queue, path   []ecs.Entity
+	nodes                   []hierarchyNode
+	versions, members       [3]uint64
+	version                 uint64
+	mutationVersion         uint64
+	entityVersion           uint64
 	invalidated, recomputed int
+	lastRun                 ecs.Tick
+	initialized             bool
 }
 
 // HierarchyFor synchronizes topology and invalidates inherited state only in

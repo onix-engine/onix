@@ -14,28 +14,37 @@ import (
 )
 
 type workspaceChrome struct {
-	titlebar                                                          editorTitlebar
-	dialogUI                                                          editorDialogUI
-	settings                                                          editorSettings
-	dialog, submenu, projectMode, projectName, projectParent          string
-	projectWidth, projectHeight                                       int
-	preferencesCategory                                               preferencesCategory
-	projectCategory                                                   projectSettingsCategory
-	preferencesDraft                                                  editorSettings
-	projectEngine                                                     project.EngineConfig
-	projectEngineDirty, packageDirty                                  bool
-	dialogValues                                                      map[string]string
-	dialogFields                                                      map[string]workspaceDialogField
-	selection                                                         map[string]bool
-	packages                                                          resourcePackageConfig
-	packageIndex                                                      int
-	buildState                                                        BuildProgress
-	buildLog                                                          string
-	buildArtifact, buildDirectory, buildError, runOutput, dialogError string
-	dialogCopied                                                      bool
-	windowContext                                                     *window.Context
-	openNativeFolder                                                  func(window.FileDialogOptions) (string, error)
-	openNativeFile                                                    func(window.FileDialogOptions) (string, error)
+	dialogUI                    editorDialogUI
+	dialogValues                map[string]string
+	openNativeFile              func(window.FileDialogOptions) (string, error)
+	openNativeFolder            func(window.FileDialogOptions) (string, error)
+	windowContext               *window.Context
+	selection                   map[string]bool
+	dialogFields                map[string]workspaceDialogField
+	buildDirectory              string
+	buildError                  string
+	buildArtifact               string
+	dialog                      string
+	submenu                     string
+	buildLog                    string
+	projectMode                 string
+	dialogError                 string
+	runOutput                   string
+	projectParent               string
+	projectName                 string
+	projectEngine               project.EngineConfig
+	packages                    resourcePackageConfig
+	buildState                  BuildProgress
+	titlebar                    editorTitlebar
+	preferencesDraft            editorSettings
+	settings                    editorSettings
+	packageIndex                int
+	projectWidth, projectHeight int
+	packageDirty                bool
+	projectEngineDirty          bool
+	dialogCopied                bool
+	projectCategory             projectSettingsCategory
+	preferencesCategory         preferencesCategory
 }
 
 func (a *ModuleEditor) modalVisible() bool {

@@ -19,11 +19,10 @@ import (
 
 // Encoder configures encoding PNG images.
 type Encoder struct {
-	CompressionLevel CompressionLevel
-
 	// BufferPool optionally specifies a buffer pool to get temporary
 	// EncoderBuffers when encoding an image.
-	BufferPool EncoderBufferPool
+	BufferPool       EncoderBufferPool
+	CompressionLevel CompressionLevel
 }
 
 // EncoderBufferPool is an interface for getting and returning temporary
@@ -38,19 +37,19 @@ type EncoderBufferPool interface {
 type EncoderBuffer encoder
 
 type encoder struct {
-	enc     *Encoder
 	w       io.Writer
 	m       image.Image
-	cb      int
 	err     error
-	header  [8]byte
-	footer  [4]byte
-	tmp     [4 * 256]byte
+	enc     *Encoder
+	bw      *bufio.Writer
+	zw      *zlib.Writer
 	cr      [nFilter][]uint8
 	pr      []uint8
-	zw      *zlib.Writer
+	cb      int
 	zwLevel int
-	bw      *bufio.Writer
+	tmp     [4 * 256]byte
+	header  [8]byte
+	footer  [4]byte
 }
 
 // CompressionLevel indicates the compression level.

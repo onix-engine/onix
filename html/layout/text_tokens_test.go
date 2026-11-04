@@ -9,16 +9,16 @@ import (
 func TestTextTokensStreamingModes(t *testing.T) {
 	for _, test := range []struct {
 		name, input, mode string
-		breakAll          bool
 		want              []textToken
+		breakAll          bool
 	}{
-		{"empty", "", "normal", false, nil},
-		{"only whitespace", " \t\r\n", "normal", false, nil},
-		{"break-all UTF-8", "éA界 e\u0301", "normal", true, []textToken{{Text: "é"}, {Text: "A"}, {Text: "界"}, {Text: " ", IsSpace: true}, {Text: "e"}, {Text: "\u0301"}}},
-		{"invalid UTF-8", "a\xffb 中", "normal", false, []textToken{{Text: "a\xffb"}, {Text: " ", IsSpace: true}, {Text: "中"}}},
-		{"preserved CR", "a\rb\r\nc\t ", "pre-wrap", true, []textToken{{Text: "a"}, {Text: "b"}, {IsBreak: true}, {Text: "c"}, {IsTab: true}, {Text: " ", IsSpace: true}}},
-		{"blank pre-lines", "\r\n\n \t\r\nend\n", "pre-line", false, []textToken{{IsBreak: true}, {IsBreak: true}, {IsBreak: true}, {Text: "end"}, {IsBreak: true}}},
-		{"nowrap", " A\t中文  B ", "nowrap", false, []textToken{{Text: "A"}, {Text: " ", IsSpace: true}, {Text: "中"}, {Text: "文"}, {Text: " ", IsSpace: true}, {Text: "B"}}},
+		{name: "empty", input: "", mode: "normal", breakAll: false, want: nil},
+		{name: "only whitespace", input: " \t\r\n", mode: "normal", breakAll: false, want: nil},
+		{name: "break-all UTF-8", input: "éA界 e\u0301", mode: "normal", breakAll: true, want: []textToken{{Text: "é"}, {Text: "A"}, {Text: "界"}, {Text: " ", IsSpace: true}, {Text: "e"}, {Text: "\u0301"}}},
+		{name: "invalid UTF-8", input: "a\xffb 中", mode: "normal", breakAll: false, want: []textToken{{Text: "a\xffb"}, {Text: " ", IsSpace: true}, {Text: "中"}}},
+		{name: "preserved CR", input: "a\rb\r\nc\t ", mode: "pre-wrap", breakAll: true, want: []textToken{{Text: "a"}, {Text: "b"}, {IsBreak: true}, {Text: "c"}, {IsTab: true}, {Text: " ", IsSpace: true}}},
+		{name: "blank pre-lines", input: "\r\n\n \t\r\nend\n", mode: "pre-line", breakAll: false, want: []textToken{{IsBreak: true}, {IsBreak: true}, {IsBreak: true}, {Text: "end"}, {IsBreak: true}}},
+		{name: "nowrap", input: " A\t中文  B ", mode: "nowrap", breakAll: false, want: []textToken{{Text: "A"}, {Text: " ", IsSpace: true}, {Text: "中"}, {Text: "文"}, {Text: " ", IsSpace: true}, {Text: "B"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := slices.Collect(textTokens(test.input, test.mode, true, test.breakAll)); !slices.Equal(got, test.want) {

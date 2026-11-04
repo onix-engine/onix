@@ -298,8 +298,8 @@ func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entit
 type textSelectionSpan struct{ start, end int }
 
 type textSelectionScratch struct {
-	rows   []selectionRect
 	owners map[ecs.Entity]textSelectionSpan
+	rows   []selectionRect
 }
 
 func textSelectionRects[V piecetree.Value](text *scene.Text2D, transform scene.UITransform, value V, start, end int, viewportHeight float32) iter.Seq[selectionRect] {
@@ -351,12 +351,15 @@ type textFieldMaskCache struct {
 }
 
 type textFieldDisplayCache struct {
-	value, placeholder, composition  string
 	source, visual                   piecetree.Snapshot
+	prefix                           string
+	composition                      string
+	placeholder                      string
+	display                          string
+	value                            string
 	anchor                           int
 	caret                            int
 	focused                          bool
-	display, prefix                  string
 	valid, displayValid, prefixValid bool
 }
 

@@ -19,13 +19,13 @@ const (
 // in nits before exposure. Distances are meters; Density is inverse meters.
 // Sky, UI and custom fragment stages retain their own atmosphere behavior.
 type FogSettings struct {
-	Enabled    bool
 	Mode       FogMode
 	Color      graphics.ColorRGBA
 	Brightness float32
 	Start      float32
 	End        float32
 	Density    float32
+	Enabled    bool
 }
 
 func NewFogSettings() FogSettings {

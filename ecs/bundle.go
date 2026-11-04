@@ -50,8 +50,8 @@ type PreparedBundle struct {
 }
 
 type preparedBundleEntry struct {
-	id    componentID
 	entry bundleEntry
+	id    componentID
 }
 
 func NewBundle(capacity int) Bundle {

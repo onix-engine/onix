@@ -10,10 +10,10 @@ import (
 // ModelAnimationSource is a named collection of vector/quaternion keyframe
 // tracks. Paths identify imported nodes; unique node names are also accepted.
 type ModelAnimationSource struct {
-	BlendMode int                         `json:"blendMode,omitempty"`
 	Name      string                      `json:"name"`
-	Duration  float32                     `json:"duration"`
 	Tracks    []ModelAnimationTrackSource `json:"tracks"`
+	BlendMode int                         `json:"blendMode,omitempty"`
+	Duration  float32                     `json:"duration"`
 }
 
 type ModelAnimationTrackSource struct {

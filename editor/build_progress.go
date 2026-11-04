@@ -15,12 +15,12 @@ import (
 // of the render rate. A busy compiler cannot block on the UI or lose its newest
 // update when many resources finish between frames.
 type buildProgressFeed struct {
-	mu      sync.Mutex
+	started time.Time
+	wake    func()
 	state   BuildProgress
 	log     runOutputCapture
+	mu      sync.Mutex
 	dirty   bool
-	wake    func()
-	started time.Time
 }
 
 func newBuildProgressFeed(wake func()) *buildProgressFeed {

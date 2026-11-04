@@ -37,9 +37,9 @@ const windowsWebViewBridgeScript = `(function(){
 })();`
 
 type webViewBridgeRequest struct {
-	ID      uint64 `json:"id"`
 	Name    string `json:"name"`
 	Payload string `json:"payload"`
+	ID      uint64 `json:"id"`
 }
 
 func decodeWebViewBridgeRequest(message string, request *webViewBridgeRequest) error {

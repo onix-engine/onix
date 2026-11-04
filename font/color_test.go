@@ -6,6 +6,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -117,7 +119,7 @@ func TestInstalledEmojiFontLoadsWithoutOutlines(t *testing.T) {
 		}
 		defer face.Close()
 		scaled, _ := NewFace(face, &FaceOptions{Size: 16})
-		for _, r := range "🙂🎉🚀" {
+		for _, r := range "✅❌🙂🎉🚀" {
 			id := face.GlyphIndex(r)
 			bitmap, err := face.RasterizeGlyph(id, 16)
 			if err != nil || id == 0 || bitmap == nil || bitmap.Color == nil {
@@ -132,6 +134,65 @@ func TestInstalledEmojiFontLoadsWithoutOutlines(t *testing.T) {
 		return
 	}
 	t.Skip("no installed color emoji font")
+}
+
+func TestUnicodeSbixFontFallback(t *testing.T) {
+	// Exercise loading, coverage discovery, fallback and rasterization together:
+	// a bitmap-only font with Unicode-platform cmap records, as used on Apple.
+	tables := []struct {
+		tag  string
+		data []byte
+	}{
+		{"head", buildTestHeadTable()}, {"hhea", buildTestHheaTable()},
+		{"maxp", buildTestMaxpTable()}, {"hmtx", buildTestHmtxTable()},
+		{"cmap", testUnicodeEmojiCmap()}, {"sbix", testColorTables(t, "sbix").sbix},
+	}
+	data := make([]byte, 12+len(tables)*16)
+	binary.BigEndian.PutUint32(data, 0x00010000)
+	binary.BigEndian.PutUint16(data[4:], uint16(len(tables)))
+	for i, table := range tables {
+		record := data[12+i*16:]
+		copy(record, table.tag)
+		binary.BigEndian.PutUint32(record[8:], uint32(len(data)))
+		binary.BigEndian.PutUint32(record[12:], uint32(len(table.data)))
+		data = append(data, table.data...)
+		data = append(data, make([]byte, align4(len(data))-len(data))...)
+	}
+	path := filepath.Join(t.TempDir(), "unicode-sbix.ttf")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	primary, _ := fallbackFixtureFace(t)
+	source := &fallbackSource{font: SystemFont{Path: path}}
+	primary.fallback.sources = []*fallbackSource{source}
+	t.Cleanup(func() {
+		if source.face != nil {
+			_ = source.face.Close()
+		}
+	})
+	scaled, _ := NewFace(primary, &FaceOptions{Size: 16})
+	for _, r := range "✅❌🙂" {
+		owner, id := primary.ResolveGlyph(r)
+		if owner == primary || id == 0 {
+			t.Fatalf("%U resolved to the primary missing-character glyph", r)
+		}
+		dr, mask, _, advance, ok := scaled.Glyph(Point26_6{}, r)
+		bitmap, colored := mask.(*image.RGBA)
+		if !ok || !colored || dr.Empty() || advance == 0 {
+			t.Fatalf("%U lost its sbix bitmap or metrics", r)
+		}
+		pixel := bitmap.RGBAAt(bitmap.Rect.Dx()/2, bitmap.Rect.Dy()/2)
+		if pixel.R == 0 || pixel.R <= pixel.G || pixel.A == 0 {
+			t.Fatalf("%U lost its bitmap colors: %v", r, pixel)
+		}
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		for _, r := range "✅❌🙂" {
+			scaled.Glyph(Point26_6{}, r)
+		}
+	}); allocations != 0 {
+		t.Fatalf("cached Unicode sbix fallback allocated %g", allocations)
+	}
 }
 
 func TestLayeredColorGlyphUsesPaletteAndOutlineBounds(t *testing.T) {

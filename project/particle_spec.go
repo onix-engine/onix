@@ -24,18 +24,18 @@ type EmitterSpec struct {
 }
 
 type ParticleSpec struct {
-	ID         string       `json:"id"`
-	Width      float32      `json:"width"`
-	Height     float32      `json:"height"`
 	Texture    *TextureSpec `json:"texture"`
+	ID         string       `json:"id"`
 	Colors     []string     `json:"colors"`
 	Count      int          `json:"count"`
+	SpeedMin   float32      `json:"speedMin"`
+	SizeMax    float32      `json:"sizeMax"`
 	Rate       float32      `json:"rate"`
 	Lifetime   float32      `json:"lifetime"`
-	SpeedMin   float32      `json:"speedMin"`
+	Width      float32      `json:"width"`
 	SpeedMax   float32      `json:"speedMax"`
 	SizeMin    float32      `json:"sizeMin"`
-	SizeMax    float32      `json:"sizeMax"`
+	Height     float32      `json:"height"`
 	Direction  float32      `json:"direction"`
 	Spread     float32      `json:"spread"`
 	GravityX   float32      `json:"gravityX"`

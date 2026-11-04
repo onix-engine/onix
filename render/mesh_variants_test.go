@@ -14,22 +14,22 @@ func TestMeshBuiltinVariants(t *testing.T) {
 	anisotropic.Custom[3][0] = .3
 	tests := []struct {
 		name      string
-		pass      int
 		instances []Instance3D
+		pass      int
 		want      int
 	}{
-		{"basic", MeshPassLit, []Instance3D{base}, meshVariantBasic},
-		{"unlit", MeshPassLit, []Instance3D{unlit}, meshVariantUnlit},
-		{"mixed", MeshPassLit, []Instance3D{base, unlit}, meshVariantFull},
-		{"coat", MeshPassLit, []Instance3D{base, coat}, meshVariantFull},
-		{"sheen", MeshPassLit, []Instance3D{sheen, base}, meshVariantFull},
-		{"anisotropy", MeshPassLit, []Instance3D{anisotropic}, meshVariantFull},
-		{"depth", MeshPassOcclusionDepth, []Instance3D{base, coat}, meshVariantDepth},
-		{"unlit depth", MeshPassShadowDepth, []Instance3D{unlit}, meshVariantDepth},
-		{"SSR", MeshPassReflectionResolve, []Instance3D{base}, meshVariantFull},
-		{"radiance", MeshPassReflectionCapture, []Instance3D{base}, meshVariantBasic},
-		{"AO", MeshPassReflectionOcclusion, []Instance3D{base}, meshVariantBasic},
-		{"FXAA", MeshPassFXAA, []Instance3D{base}, meshVariantUnlit},
+		{name: "basic", pass: MeshPassLit, instances: []Instance3D{base}, want: meshVariantBasic},
+		{name: "unlit", pass: MeshPassLit, instances: []Instance3D{unlit}, want: meshVariantUnlit},
+		{name: "mixed", pass: MeshPassLit, instances: []Instance3D{base, unlit}, want: meshVariantFull},
+		{name: "coat", pass: MeshPassLit, instances: []Instance3D{base, coat}, want: meshVariantFull},
+		{name: "sheen", pass: MeshPassLit, instances: []Instance3D{sheen, base}, want: meshVariantFull},
+		{name: "anisotropy", pass: MeshPassLit, instances: []Instance3D{anisotropic}, want: meshVariantFull},
+		{name: "depth", pass: MeshPassOcclusionDepth, instances: []Instance3D{base, coat}, want: meshVariantDepth},
+		{name: "unlit depth", pass: MeshPassShadowDepth, instances: []Instance3D{unlit}, want: meshVariantDepth},
+		{name: "SSR", pass: MeshPassReflectionResolve, instances: []Instance3D{base}, want: meshVariantFull},
+		{name: "radiance", pass: MeshPassReflectionCapture, instances: []Instance3D{base}, want: meshVariantBasic},
+		{name: "AO", pass: MeshPassReflectionOcclusion, instances: []Instance3D{base}, want: meshVariantBasic},
+		{name: "FXAA", pass: MeshPassFXAA, instances: []Instance3D{base}, want: meshVariantUnlit},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

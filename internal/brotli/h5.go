@@ -35,13 +35,13 @@ func hashBytesH5(data []byte, shift int) uint32 {
 }
 
 type h5 struct {
+	num     []uint16
+	buckets []uint32
 	hasherCommon
 	bucket_size_ uint
 	block_size_  uint
 	hash_shift_  int
 	block_mask_  uint32
-	num          []uint16
-	buckets      []uint32
 }
 
 func (h *h5) Initialize(params *encoderParams) {

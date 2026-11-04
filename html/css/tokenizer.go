@@ -28,14 +28,14 @@ const (
 )
 
 type Token struct {
-	Type  TokenType
 	Value string
+	Type  TokenType
 }
 
 type Tokenizer struct {
 	input   string
-	pos     int
 	peek    Token
+	pos     int
 	hasPeek bool
 }
 

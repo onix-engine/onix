@@ -11,8 +11,8 @@ type tasks3D struct{}
 // Input revisions include the execution scope: hiding the last managed body
 // still requires a fixed step to remove it from the simulation.
 type physicsInputs struct {
-	versions         [11]uint64
 	scope            *ecs.QueryScope
+	versions         [11]uint64
 	scopeVersion     uint64
 	bodyMembers      uint64
 	transformMembers uint64

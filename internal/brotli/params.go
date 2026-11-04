@@ -24,6 +24,9 @@ type distanceParams struct {
 
 /* Encoding parameters */
 type encoderParams struct {
+	dictionary                       encoderDictionary
+	hasher                           hasherParams
+	dist                             distanceParams
 	mode                             int
 	quality                          int
 	lgwin                            uint
@@ -31,7 +34,4 @@ type encoderParams struct {
 	size_hint                        uint
 	disable_literal_context_modeling bool
 	large_window                     bool
-	hasher                           hasherParams
-	dist                             distanceParams
-	dictionary                       encoderDictionary
 }

@@ -106,18 +106,18 @@ func TestFileIconsUploadAfterDeviceInitializationAndRecreation(t *testing.T) {
 func TestFileIconStructuredPathsAndFallback(t *testing.T) {
 	for _, test := range []struct {
 		path string
-		dir  bool
 		want string
+		dir  bool
 	}{
-		{"assets.json", true, "folder"},
-		{"button/mod.json", false, "prefab"},
-		{"resources/scenes/main.json", false, "scene"},
-		{"levels/main.scene.json", false, "scene"},
-		{"button/private/data.json", false, "json"},
-		{"assets/TEXTURE.PNG", false, "image"},
-		{"assets/walk.anim.json", false, "animation"},
-		{"assets/terrain.tileset.json", false, "tile"},
-		{"assets/no-extension", false, "binary"},
+		{path: "assets.json", dir: true, want: "folder"},
+		{path: "button/mod.json", dir: false, want: "prefab"},
+		{path: "resources/scenes/main.json", dir: false, want: "scene"},
+		{path: "levels/main.scene.json", dir: false, want: "scene"},
+		{path: "button/private/data.json", dir: false, want: "json"},
+		{path: "assets/TEXTURE.PNG", dir: false, want: "image"},
+		{path: "assets/walk.anim.json", dir: false, want: "animation"},
+		{path: "assets/terrain.tileset.json", dir: false, want: "tile"},
+		{path: "assets/no-extension", dir: false, want: "binary"},
 	} {
 		if got := FileIconName(test.path, test.dir); got != test.want {
 			t.Errorf("%s: got %s, want %s", test.path, got, test.want)

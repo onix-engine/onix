@@ -17,11 +17,11 @@ import (
 // piece indices are optional because the hull is reconstructed from support
 // vertices, but are validated when present.
 type CollisionResourceSpec struct {
+	Cooked   *enginephysics.CookedCollision `json:"-"`
 	Mode     enginephysics.CollisionMode    `json:"mode"`
 	Vertices [][3]float64                   `json:"vertices,omitempty"`
 	Indices  []uint32                       `json:"indices,omitempty"`
 	Pieces   []CollisionPieceSpec           `json:"pieces,omitempty"`
-	Cooked   *enginephysics.CookedCollision `json:"-"`
 }
 
 type CollisionPieceSpec struct {

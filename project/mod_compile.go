@@ -30,13 +30,13 @@ type modIndices struct {
 
 type modCompiler struct {
 	source fs.FS
-	plan   ProjectPlan
+	hasher hash.Hash
 	mods   map[ModID]uint32
-	index  []modIndices
 	cache  *CompileCache
 	files  map[string]struct{}
-	hasher hash.Hash
+	index  []modIndices
 	buffer []byte
+	plan   ProjectPlan
 }
 
 // CompileCache retains immutable module plans between authoring transactions.
@@ -48,10 +48,10 @@ type CompileCache struct {
 }
 
 type cachedModPlan struct {
-	digest [sha256.Size]byte
-	plan   ModPlan
 	index  modIndices
 	files  []string
+	plan   ModPlan
+	digest [sha256.Size]byte
 }
 
 func (cache *CompileCache) Compile(source fs.FS, root string, definitions []ModID) (*ProjectPlan, error) {
@@ -865,10 +865,10 @@ func (compiler *modCompiler) compileScene(id SceneID, spec SceneSpec) (ScenePlan
 func compileModTransform(spec ModTransformSpec) (ModTransform, error) {
 	result := ModTransform{Scale: [3]float32{1, 1, 1}}
 	for _, field := range []struct {
+		dst  *[3]float32
 		name string
 		data []float32
-		dst  *[3]float32
-	}{{"position", spec.Position, &result.Position}, {"scale", spec.Scale, &result.Scale}} {
+	}{{name: "position", data: spec.Position, dst: &result.Position}, {name: "scale", data: spec.Scale, dst: &result.Scale}} {
 		if len(field.data) != 0 && len(field.data) != 2 && len(field.data) != 3 || !finiteModValues(field.data) {
 			return result, fmt.Errorf("%s must contain two or three finite numbers", field.name)
 		}

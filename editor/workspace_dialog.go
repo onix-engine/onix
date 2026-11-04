@@ -35,8 +35,8 @@ var (
 // dialogPathPicker describes a dialog field that holds a file or folder path.
 type dialogPathPicker struct {
 	title   string
-	folder  bool
 	filters []window.FileDialogFilter
+	folder  bool
 	// underResources authors the value relative to the project's resources
 	// directory, which is how the packaged runtime reads the window icon.
 	underResources bool

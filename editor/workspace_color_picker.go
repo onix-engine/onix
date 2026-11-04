@@ -15,12 +15,12 @@ import (
 )
 
 type workspaceColorPicker struct {
+	sv, hues                           *graphics.Texture
 	field, mode, drag                  string
+	pixels                             []byte
+	hue, saturation, value, textureHue float64
 	anchor                             rect
 	rgba                               [4]uint8
-	hue, saturation, value, textureHue float64
-	sv, hues                           *graphics.Texture
-	pixels                             []byte
 }
 
 func (a *ModuleEditor) openWorkspaceColorPicker(id string) error {

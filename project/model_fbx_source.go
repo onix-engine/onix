@@ -15,10 +15,10 @@ import (
 )
 
 type fbxLayer[T any] struct {
-	values    []T
-	indices   []int32
 	mapping   string
 	reference string
+	values    []T
+	indices   []int32
 	present   bool
 }
 
@@ -58,13 +58,13 @@ func importFBX(data []byte) (resource compiledModelResource, err error) {
 }
 
 type fbxAnimationCurveTarget struct {
-	axis string
 	fbxAnimationNodeTarget
+	axis string
 }
 
 type fbxAnimationNodeTarget struct {
-	target string
 	model  *fbx.Model
+	target string
 }
 
 func appendFBXAnimations(document *fbx.Document, resource *compiledModelResource) error {

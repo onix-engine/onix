@@ -58,9 +58,9 @@ func TestHTMLConcurrentRasterScratchDoesNotOverwriteResults(t *testing.T) {
 }
 
 type sharedRasterDriver struct {
-	textureTestDriver
-	pixels []byte
 	source *byte
+	pixels []byte
+	textureTestDriver
 }
 
 func (d *sharedRasterDriver) CreateTexture(descriptor render.TextureDescriptor, pixels []byte) (render.TextureHandle, error) {
@@ -108,12 +108,12 @@ func TestHTMLRasterTextureSharesPixelsAndDetachesOnResize(t *testing.T) {
 			if shadow {
 				texture = htmlBoxShadowTextureFor(&state, box.Node, computed, 0, size, size, size-8, size-8, 4)
 			}
-			if !texture.RenderHandle().Valid() || driver.source != &state.Textures.paint[htmlTextureKey{node: box.Node, variant: variant}].image.Pix[0] {
+			if !texture.RenderHandle().Valid() || driver.source != &state.Textures.paint(htmlTextureKey{node: box.Node, variant: variant}).image.Pix[0] {
 				t.Fatal("paint texture copied its retained raster")
 			}
 		}
 		paint(32)
-		old := state.Textures.paint[htmlTextureKey{node: box.Node, variant: variant}].image.Pix
+		old := state.Textures.paint(htmlTextureKey{node: box.Node, variant: variant}).image.Pix
 		copyOfOld := bytes.Clone(old)
 		paint(16)
 		if !bytes.Equal(old, copyOfOld) {

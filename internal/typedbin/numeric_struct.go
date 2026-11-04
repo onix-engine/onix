@@ -17,8 +17,8 @@ const (
 )
 
 type numericField struct {
-	name   string
 	elem   reflect.Type
+	name   string
 	offset uintptr
 	length int
 	kind   numericFieldKind

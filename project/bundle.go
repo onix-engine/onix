@@ -27,30 +27,27 @@ import (
 )
 
 type Bundle struct {
-	resources       *Resources
-	resourceSpecMu  sync.RWMutex
-	clearColor      graphics.ColorRGBA
-	hasClear        bool
-	appConfig       AppConfig
-	engineConfig    EngineConfig
-	components      sceneComponentBuilder
-	clearComponents sceneComponentClearer
-	uiSync          sceneUISync
-
-	windowIcon []byte
-
-	entrySceneID    SceneID
-	scenePlansByID  map[SceneID]sceneSpawnPlan
-	sceneIDs        []SceneID
-	prefabPlansByID map[PrefabID]*prefabPlan
-	prefabIDs       []PrefabID
-
-	particleSpecs        map[string]ParticleSpec
-	tilemapSpecs         map[string]TilemapSpec
-	modelSpecs           map[string]ModelSpec
+	uiSync               sceneUISync
 	modelResources       modelResourceStore
-	spineSpecs           map[string]SpineSpec
+	scenePlansByID       map[SceneID]sceneSpawnPlan
+	particleSpecs        map[string]ParticleSpec
+	modelSpecs           map[string]ModelSpec
+	prefabPlansByID      map[PrefabID]*prefabPlan
+	clearComponents      sceneComponentClearer
 	inlineAnimationClips *resourceCache[string, *scene.AnimationClip]
+	tilemapSpecs         map[string]TilemapSpec
+	resources            *Resources
+	components           sceneComponentBuilder
+	spineSpecs           map[string]SpineSpec
+	entrySceneID         SceneID
+	engineConfig         EngineConfig
+	prefabIDs            []PrefabID
+	sceneIDs             []SceneID
+	windowIcon           []byte
+	appConfig            AppConfig
+	resourceSpecMu       sync.RWMutex
+	clearColor           graphics.ColorRGBA
+	hasClear             bool
 }
 
 type modelResourceStore interface {
@@ -92,7 +89,6 @@ func (value modelResource) dispose() error {
 }
 
 type resourceManifest struct {
-	Prepared bool                 `json:"-"`
 	Fonts    []FileResource       `json:"fonts"`
 	Audio    []FileResource       `json:"audio"`
 	Videos   []FileResource       `json:"videos"`
@@ -103,48 +99,49 @@ type resourceManifest struct {
 	Shaders  []ShaderSpec         `json:"shaders"`
 	HTML     []FileResource       `json:"html"`
 	Prefabs  []PrefabResourceSpec `json:"prefabs"`
+	Prepared bool                 `json:"-"`
 }
 
 type gameManifest struct {
 	ClearColor string       `json:"clearColor"`
-	Window     WindowConfig `json:"window"`
-	Viewport   SizeConfig   `json:"viewport"`
 	Engine     EngineConfig `json:"engine"`
+	Viewport   SizeConfig   `json:"viewport"`
+	Window     WindowConfig `json:"window"`
 }
 
 type AppConfig struct {
-	Window   WindowConfig
 	Viewport SizeConfig
+	Window   WindowConfig
 }
 
 type WindowConfig struct {
-	Width               int                   `json:"width"`
-	Height              int                   `json:"height"`
-	Title               string                `json:"title"`
-	Icon                string                `json:"icon"`
-	TitleBarHeight      float64               `json:"titleBarHeight,omitempty"`
-	CornerRadius        int                   `json:"cornerRadius,omitempty"`
-	Transparent         bool                  `json:"transparent,omitempty"`
-	Decorations         window.DecorationMode `json:"decorations,omitempty"`
+	TPS                 *int                  `json:"tps"`
+	Vsync               *bool                 `json:"vsync"`
+	Antialias           *bool                 `json:"antialias,omitempty"`
+	AlwaysOnTop         *bool                 `json:"alwaysOnTop,omitempty"`
 	Border              *bool                 `json:"border,omitempty"`
 	Shadow              *bool                 `json:"shadow,omitempty"`
-	Resizable           *bool                 `json:"resizable,omitempty"`
-	ShowInTaskbar       *bool                 `json:"showInTaskbar,omitempty"`
-	AlwaysOnTop         *bool                 `json:"alwaysOnTop,omitempty"`
-	Vsync               *bool                 `json:"vsync"`
 	FPS                 *int                  `json:"fps"`
-	TPS                 *int                  `json:"tps"`
-	RenderScale         float64               `json:"renderScale,omitempty"`
-	MaxDevicePixelRatio float64               `json:"maxDevicePixelRatio,omitempty"`
-	Antialias           *bool                 `json:"antialias,omitempty"`
+	ShowInTaskbar       *bool                 `json:"showInTaskbar,omitempty"`
+	Resizable           *bool                 `json:"resizable,omitempty"`
+	Title               string                `json:"title"`
+	Icon                string                `json:"icon"`
 	DRMDevice           string                `json:"drmDevice,omitempty"`
+	Decorations         window.DecorationMode `json:"decorations,omitempty"`
+	RenderScale         float64               `json:"renderScale,omitempty"`
+	Height              int                   `json:"height"`
+	Width               int                   `json:"width"`
+	MaxDevicePixelRatio float64               `json:"maxDevicePixelRatio,omitempty"`
+	CornerRadius        int                   `json:"cornerRadius,omitempty"`
+	TitleBarHeight      float64               `json:"titleBarHeight,omitempty"`
 	DRMConnectorID      uint32                `json:"drmConnectorId,omitempty"`
+	Transparent         bool                  `json:"transparent,omitempty"`
 }
 
 type SizeConfig struct {
+	Mode   window.ViewportMode `json:"mode,omitempty"`
 	Width  int                 `json:"width"`
 	Height int                 `json:"height"`
-	Mode   window.ViewportMode `json:"mode,omitempty"`
 }
 
 type FileResource struct {
@@ -166,9 +163,9 @@ type SceneCatalogEntry struct {
 }
 
 type sceneManifest struct {
-	Prepared  bool            `json:"-"`
-	SpawnPlan sceneSpawnPlan  `json:"-"`
 	Nodes     []SceneNodeSpec `json:"nodes"`
+	SpawnPlan sceneSpawnPlan  `json:"-"`
+	Prepared  bool            `json:"-"`
 }
 
 type CoordinateSpace string
@@ -237,8 +234,8 @@ type SceneComponents struct {
 // fields discovered from the user's Go source without coupling the project
 // package to that source package.
 type ScriptComponentSpec struct {
-	Name   string                     `json:"name"`
 	Values map[string]json.RawMessage `json:"values,omitempty"`
+	Name   string                     `json:"name"`
 }
 
 func (c SceneComponents) IsZero() bool {
@@ -335,19 +332,19 @@ type AnimationComponentSpec struct {
 }
 
 type TextComponentSpec struct {
-	Value         string      `json:"value,omitempty"`
-	Font          string      `json:"font,omitempty"`
-	FontSize      float64     `json:"fontSize,omitempty"`
-	WrapMode      string      `json:"wrapMode,omitempty"`
-	WrapWidth     float32     `json:"wrapWidth,omitempty"`
-	LetterSpacing float32     `json:"letterSpacing,omitempty"`
-	LineHeight    float32     `json:"lineHeight,omitempty"`
-	TextAlignment string      `json:"textAlignment,omitempty"`
-	Color         string      `json:"color,omitempty"`
-	OutlineWidth  float32     `json:"outlineWidth,omitempty"`
-	OutlineColor  string      `json:"outlineColor,omitempty"`
-	MaxWidth      float32     `json:"maxWidth,omitempty"`
 	Shadow        *TextShadow `json:"shadow,omitempty"`
+	Color         string      `json:"color,omitempty"`
+	Font          string      `json:"font,omitempty"`
+	WrapMode      string      `json:"wrapMode,omitempty"`
+	OutlineColor  string      `json:"outlineColor,omitempty"`
+	Value         string      `json:"value,omitempty"`
+	TextAlignment string      `json:"textAlignment,omitempty"`
+	FontSize      float64     `json:"fontSize,omitempty"`
+	LineHeight    float32     `json:"lineHeight,omitempty"`
+	OutlineWidth  float32     `json:"outlineWidth,omitempty"`
+	LetterSpacing float32     `json:"letterSpacing,omitempty"`
+	MaxWidth      float32     `json:"maxWidth,omitempty"`
+	WrapWidth     float32     `json:"wrapWidth,omitempty"`
 }
 
 type ResourceComponentSpec struct {
@@ -510,51 +507,51 @@ func (s SceneNodeSpec) IsEmpty() bool {
 // SceneNodeSpec is the authoring representation of one entity in a scene.
 // Runtime code operates on ecs.Entity values produced from these nodes.
 type SceneNodeSpec struct {
-	ID              string                `json:"id"`
 	Components      SceneComponents       `json:"components,omitzero"`
-	Scripts         []ScriptComponentSpec `json:"scripts,omitempty"`
 	Control         *ControlSpec          `json:"control,omitempty"`
 	Layout          *engineui.Layout      `json:"layout,omitempty"`
 	Widget          *engineui.Widget      `json:"widget,omitempty"`
+	Visible         *bool                 `json:"visible,omitempty"`
+	ID              string                `json:"id"`
 	CoordinateSpace CoordinateSpace       `json:"coordinateSpace,omitempty"`
-	Order           int                   `json:"order,omitempty"`
-	RenderLayers    []uint                `json:"renderLayers,omitempty"`
 	TargetCamera    string                `json:"targetCamera,omitempty"`
-	X               float32               `json:"x"`
-	Y               float32               `json:"y"`
-	Z               float32               `json:"z,omitempty"`
-	Width           int                   `json:"width"`
+	Scripts         []ScriptComponentSpec `json:"scripts,omitempty"`
+	Children        []SceneNodeSpec       `json:"children,omitempty"`
+	RenderLayers    []uint                `json:"renderLayers,omitempty"`
 	Height          int                   `json:"height"`
+	Width           int                   `json:"width"`
+	Order           int                   `json:"order,omitempty"`
 	Anchor          scene.Anchor          `json:"anchor"`
-	ScaleX          float32               `json:"scaleX,omitempty"`
+	RotationY       float32               `json:"rotationY,omitempty"`
+	Alpha           float32               `json:"alpha,omitempty"`
 	ScaleY          float32               `json:"scaleY,omitempty"`
 	Rotation        float32               `json:"rotation,omitempty"`
 	RotationX       float32               `json:"rotationX,omitempty"`
-	RotationY       float32               `json:"rotationY,omitempty"`
+	Z               float32               `json:"z,omitempty"`
 	RotationZ       float32               `json:"rotationZ,omitempty"`
-	Alpha           float32               `json:"alpha,omitempty"`
-	Visible         *bool                 `json:"visible,omitempty"`
-	Disabled        bool                  `json:"disabled,omitempty"`
-	PassThrough     bool                  `json:"passThrough,omitempty"`
-	BlockInput      bool                  `json:"blockInput,omitempty"`
+	ScaleX          float32               `json:"scaleX,omitempty"`
+	X               float32               `json:"x"`
+	Y               float32               `json:"y"`
 	ScaleZ          float32               `json:"scaleZ,omitempty"`
-	Children        []SceneNodeSpec       `json:"children,omitempty"`
+	BlockInput      bool                  `json:"blockInput,omitempty"`
+	PassThrough     bool                  `json:"passThrough,omitempty"`
+	Disabled        bool                  `json:"disabled,omitempty"`
 }
 
 type Camera3DSpec struct {
-	Fog         *FogSpec             `json:"fog,omitempty"`
-	ToneMapping graphics.ToneMapping `json:"toneMapping,omitempty"`
-	Quality     render3d.Quality     `json:"quality,omitempty"`
-	FXAA        bool                 `json:"fxaa,omitempty"`
 	SSAO        *SSAOSpec            `json:"ssao,omitempty"`
 	SSR         *SSRSpec             `json:"ssr,omitempty"`
-	Exposure    graphics.Exposure    `json:"exposure"`
 	Environment *EnvironmentSpec     `json:"environment,omitempty"`
-	Fov         float32              `json:"fov"`
-	Near        float32              `json:"near"`
+	Fog         *FogSpec             `json:"fog,omitempty"`
 	ClearColor  string               `json:"clearColor"`
+	ToneMapping graphics.ToneMapping `json:"toneMapping,omitempty"`
+	Quality     render3d.Quality     `json:"quality,omitempty"`
+	Exposure    graphics.Exposure    `json:"exposure"`
 	Order       int                  `json:"order"`
 	Viewport    CameraViewport3DSpec `json:"viewport"`
+	Near        float32              `json:"near"`
+	Fov         float32              `json:"fov"`
+	FXAA        bool                 `json:"fxaa,omitempty"`
 }
 
 type CameraViewport3DSpec struct {
@@ -622,37 +619,37 @@ func NewAmbientLightSpec() AmbientLightSpec {
 }
 
 type TextShadow struct {
+	Color   string  `json:"color"`
 	OffsetX float32 `json:"offsetX"`
 	OffsetY float32 `json:"offsetY"`
-	Color   string  `json:"color"`
 }
 
 type Resources struct {
-	modShaders        *resourceCache[ShaderSources, *modShaderResource]
-	modModels         *resourceCache[string, modelResource]
-	modClips          map[*AnimationComponentSpec]*scene.AnimationClip
-	modHTMLBases      map[string]string
-	modRigs           map[string]*ModelRig
-	modParticles      map[string]*TextureSpec
+	videos            optionalResourceStore
+	iconDecoder       window.IconDecoder
+	fontDecoder       FontDecoder
+	imageDecoder      ImageDecoder
+	spines            spineResourceStore
+	html              optionalResourceStore
 	source            iofs.FS
-	baseDir           string
-	textures          *resourceCache[textureResourceKey, *graphics.Texture]
+	fonts             *resourceCache[string, fontResource]
+	shaders           *resourceCache[string, shaderResource]
 	environments      *resourceCache[resource.ContentID, environmentResource]
 	atlasMetadata     *resourceCache[resource.ContentID, *graphics.AtlasMetadata]
 	atlases           *resourceCache[atlasResourceKey, *graphics.Atlas]
-	fonts             *resourceCache[string, fontResource]
-	videos            optionalResourceStore
-	html              optionalResourceStore
-	spines            spineResourceStore
-	shaders           *resourceCache[string, shaderResource]
+	modShaders        *resourceCache[ShaderSources, *modShaderResource]
+	modModels         *resourceCache[string, modelResource]
+	modParticles      map[string]*TextureSpec
+	modRigs           map[string]*ModelRig
+	textures          *resourceCache[textureResourceKey, *graphics.Texture]
 	material2DShaders *resourceCache[string, *graphics.Material2DShader]
 	meshShaders       *resourceCache[string, *graphics.MeshShader]
-	namedMu           sync.RWMutex
+	modClips          map[*AnimationComponentSpec]*scene.AnimationClip
 	named             map[string]any
-	imageDecoder      ImageDecoder
-	fontDecoder       FontDecoder
-	iconDecoder       window.IconDecoder
+	modHTMLBases      map[string]string
+	baseDir           string
 	prefabSpecs       []PrefabResourceSpec
+	namedMu           sync.RWMutex
 }
 
 type textureResourceKey struct {
@@ -725,8 +722,8 @@ func (allFeaturesLoader) uiSystems() sceneUISync { return fullSceneUISync() }
 // configuredLoader composes resource validation, scene components, and UI
 // synchronization from an explicit EngineConfig.
 type configuredLoader struct {
-	Config  EngineConfig
 	Feature ResourceFeature
+	Config  EngineConfig
 }
 
 func (loader configuredLoader) loadResources(source iofs.FS, projectDir, path string, _ ResourceFeature) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error) {
@@ -776,18 +773,18 @@ func validateConfiguredResourceManifest(source iofs.FS, path string, config Engi
 	}
 	checks := [...]struct {
 		id    ResourceID
-		count int
 		name  string
+		count int
 	}{
-		{ResourceFonts, len(manifest.Fonts), "font"},
-		{ResourceAudio, len(manifest.Audio), "audio"},
-		{ResourceVideos, len(manifest.Videos), "video"},
-		{ResourceParticles, len(manifest.Effects), "particle"},
-		{ResourceTilemaps, len(manifest.Tilemaps), "tilemap"},
-		{ResourceModels, len(manifest.Models), "model"},
-		{ResourceSpine, len(manifest.Spines), "Spine"},
-		{ResourceShaders, len(manifest.Shaders), "shader"},
-		{ResourceHTML, len(manifest.HTML), "html"},
+		{id: ResourceFonts, count: len(manifest.Fonts), name: "font"},
+		{id: ResourceAudio, count: len(manifest.Audio), name: "audio"},
+		{id: ResourceVideos, count: len(manifest.Videos), name: "video"},
+		{id: ResourceParticles, count: len(manifest.Effects), name: "particle"},
+		{id: ResourceTilemaps, count: len(manifest.Tilemaps), name: "tilemap"},
+		{id: ResourceModels, count: len(manifest.Models), name: "model"},
+		{id: ResourceSpine, count: len(manifest.Spines), name: "Spine"},
+		{id: ResourceShaders, count: len(manifest.Shaders), name: "shader"},
+		{id: ResourceHTML, count: len(manifest.HTML), name: "html"},
 	}
 	for _, check := range checks {
 		if err := unsupported(check.id, check.count, check.name); err != nil {

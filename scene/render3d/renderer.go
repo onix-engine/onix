@@ -116,38 +116,38 @@ type extractedView3D struct {
 }
 
 type extractedMesh3D struct {
-	noReflection                   bool
-	noOcclusion                    bool
-	noShadow                       bool
-	surfaceTextures                [render.MeshSurfaceTextureSlots]render.TextureHandle
-	surfaceTextureFlags            uint32
-	entity                         ecs.Entity
+	deformation                    *Deformation
 	mesh                           *graphics.Mesh
-	meshHandle                     render.MeshHandle
+	vertices                       []render.Vertex3D
+	material                       graphics.Material3DData
+	entity                         ecs.Entity
+	surfaceTextures                [render.MeshSurfaceTextureSlots]render.TextureHandle
+	transform                      mgl32.Mat4
+	normalTextureHandle            render.TextureHandle
 	shaderHandle                   render.MeshShaderHandle
 	textureHandle                  render.TextureHandle
-	normalTextureHandle            render.TextureHandle
 	metallicRoughnessTextureHandle render.TextureHandle
+	meshHandle                     render.MeshHandle
 	meshKey                        uint32
-	material                       graphics.Material3DData
-	transform                      mgl32.Mat4
+	surfaceTextureFlags            uint32
 	distance                       float32
-	vertices                       []render.Vertex3D
-	deformation                    *Deformation
 	firstIndex                     uint32
 	indexCount                     uint32
+	noReflection                   bool
+	noShadow                       bool
+	noOcclusion                    bool
 }
 
 type extractedMeshCandidate3D struct {
-	scene        uint64
-	entity       ecs.Entity
 	mesh         *graphics.Mesh
-	material     graphics.Material3DData
-	transform    mgl32.Mat4
-	bounds       graphics.BoundingSphere
-	layers       scene.RenderLayers
 	deformation  *Deformation
 	cpuVertices  []render.Vertex3D
+	layers       scene.RenderLayers
+	material     graphics.Material3DData
+	scene        uint64
+	entity       ecs.Entity
+	transform    mgl32.Mat4
+	bounds       graphics.BoundingSphere
 	cpuBounds    graphics.BoundingSphere
 	cpuReady     bool
 	customShader bool
@@ -165,45 +165,45 @@ type renderPhase3D struct {
 }
 
 type renderView3D struct {
-	frustum            frustum3D
-	scene              uint64
-	fxaa               *antialiasing3D
-	fxaaActive         bool
-	budget             qualityBudget3D
-	selectedLights     [render.MaxMeshLights]render.Light3D
-	reflection         *screenReflection3D
-	reflectionActive   bool
 	occlusion          *renderView3D
-	occlusionActive    bool
+	deformationIndices map[meshGeometryKey3D]uint32
+	fxaa               *antialiasing3D
+	dynamicGeometry    map[meshGeometryKey3D]uint32
+	meshKeys           map[*graphics.Mesh]uint32
+	reflection         *screenReflection3D
 	shadow             *shadowAtlas3D
-	shadowActive       bool
+	environment        Environment
+	vertices           []render.Vertex3D
+	opaque             renderPhase3D
+	deformations       []render.MeshDeformationData
+	indices            []uint32
+	draws              []render.MeshDraw3D
+	instances          []render.Instance3D
+	transparent        renderPhase3D
+	extracted          []extractedMesh3D
+	lights             []render.Light3D
+	frame              render.RenderView[extractedView3D]
+	budget             qualityBudget3D
+	deformRetention    reuse.Retention
+	indexRetention     reuse.Retention
+	vertexRetention    reuse.Retention
+	drawRetention      reuse.Retention
+	instanceRetention  reuse.Retention
+	extractedRetention reuse.Retention
+	scene              uint64
+	previousExtracted  int
+	lighting           render.MeshLighting
+	selectedLights     [render.MaxMeshLights]render.Light3D
+	overrideLights     [2]render.Light3D
+	frustum            frustum3D
 	ground             GroundPlane
 	ambient            [4]float32
 	lightDir           [4]float32
 	lightColor         [4]float32
-	lights             []render.Light3D
-	overrideLights     [2]render.Light3D
-	environment        Environment
-	lighting           render.MeshLighting
-	frame              render.RenderView[extractedView3D]
-	extracted          []extractedMesh3D
-	previousExtracted  int
-	opaque             renderPhase3D
-	transparent        renderPhase3D
-	instances          []render.Instance3D
-	draws              []render.MeshDraw3D
-	vertices           []render.Vertex3D
-	indices            []uint32
-	deformations       []render.MeshDeformationData
-	meshKeys           map[*graphics.Mesh]uint32
-	dynamicGeometry    map[meshGeometryKey3D]uint32
-	deformationIndices map[meshGeometryKey3D]uint32
-	extractedRetention reuse.Retention
-	instanceRetention  reuse.Retention
-	drawRetention      reuse.Retention
-	vertexRetention    reuse.Retention
-	indexRetention     reuse.Retention
-	deformRetention    reuse.Retention
+	fxaaActive         bool
+	occlusionActive    bool
+	reflectionActive   bool
+	shadowActive       bool
 }
 
 func (view *renderView3D) resetExtracted() {
@@ -253,14 +253,14 @@ type World struct {
 	skyMesh    *graphics.Mesh
 	groundMesh *graphics.Mesh
 	views      map[ecs.Entity]*renderView3D
+	white      *graphics.Texture
+	registered map[reflect.Type]struct{}
 	viewOrder  []ecs.Entity
+	lights     []extractedLight3D
+	materials  []material3DReader
 	ambient    [4]float32
 	lightDir   [4]float32
 	lightColor [4]float32
-	lights     []extractedLight3D
-	white      *graphics.Texture
-	materials  []material3DReader
-	registered map[reflect.Type]struct{}
 }
 
 type activeRenderViews3DScratch struct{}

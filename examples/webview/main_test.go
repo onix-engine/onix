@@ -14,8 +14,8 @@ import (
 )
 
 type browserHandle struct {
-	visible   bool
 	bounds    scene.WebViewBounds
+	visible   bool
 	destroyed bool
 }
 

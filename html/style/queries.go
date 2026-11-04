@@ -12,15 +12,15 @@ import (
 // once per stylesheet instead of re-parsing the prelude string for every
 // matched node.
 type compiledCondition struct {
-	kind css.RuleConditionKind
+	// container name filter plus the AND-ed feature clauses.
+	containerName string
+	// media alternatives are evaluated as OR.
+	media            []compiledQueryAlternative
+	containerClauses []compiledQueryClause
+	kind             css.RuleConditionKind
 	// never marks conditions with an unknown kind: the original matcher
 	// rejects them, so the rule can never match.
 	never bool
-	// media alternatives are evaluated as OR.
-	media []compiledQueryAlternative
-	// container name filter plus the AND-ed feature clauses.
-	containerName    string
-	containerClauses []compiledQueryClause
 }
 
 // HasContainerQueries reports whether a stylesheet contains rules whose
@@ -42,10 +42,10 @@ func HasContainerQueries(stylesheet *css.Stylesheet) bool {
 }
 
 type compiledQueryAlternative struct {
+	clauses []compiledQueryClause
 	negated bool
 	// matchesAll marks bodies that match unconditionally ("", "all", "screen").
 	matchesAll bool
-	clauses    []compiledQueryClause
 }
 
 type queryFeatureKind uint8
@@ -70,11 +70,11 @@ const (
 // with the numeric value already parsed. The zero kind is an always-false
 // clause, which is how unknown or unparseable features evaluated before.
 type compiledQueryClause struct {
+	value       float64
+	requirement containerRequirement
 	kind        queryFeatureKind
 	op          queryCompareOp
-	value       float64
 	portrait    bool
-	requirement containerRequirement
 }
 
 func (c *compiledQueryClause) matches(width, height float64) bool {

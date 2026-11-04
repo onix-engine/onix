@@ -102,8 +102,8 @@ type StyleOverride[T any] struct {
 
 // SurfaceStyle describes the independently rendered background, image and border layers.
 type SurfaceStyle struct {
-	Background scene.Shape2D
 	Image      scene.UIImage2D
+	Background scene.Shape2D
 	Border     scene.Shape2D
 }
 
@@ -253,15 +253,15 @@ type TextFieldStyle struct {
 }
 
 type NumberInputStyle struct {
-	Field TextFieldStyle
 	Step  StateStyle[SurfaceStyle]
+	Field TextFieldStyle
 }
 
 type MenuStyle struct {
 	Trigger   ButtonStyle
-	Popup     SurfaceStyle
 	Item      StateStyle[SurfaceStyle]
 	Indicator IconStyle
+	Popup     SurfaceStyle
 }
 
 type CheckboxStyle struct {
@@ -271,8 +271,8 @@ type CheckboxStyle struct {
 
 type SelectorStyle struct {
 	Body  StateStyle[SurfaceStyle]
-	Popup SurfaceStyle
 	Item  StateStyle[SurfaceStyle]
+	Popup SurfaceStyle
 }
 
 type TabStyle struct {
@@ -283,8 +283,8 @@ type TabStyle struct {
 
 type ProgressStyle struct {
 	Track StateStyle[SurfaceStyle]
-	Fill  SurfaceStyle
 	Thumb StateStyle[SurfaceStyle]
+	Fill  SurfaceStyle
 }
 
 // VirtualJoystickStyle controls the track and thumb of a virtual joystick.
@@ -295,45 +295,45 @@ type VirtualJoystickStyle struct {
 }
 
 type ScrollStyle struct {
-	Track SurfaceStyle
 	Thumb StateStyle[SurfaceStyle]
+	Track SurfaceStyle
 }
 
 type TreeStyle struct {
-	Background SurfaceStyle
 	Row        ToggleStyle[SurfaceStyle]
 	Collapsed  IconStyle
 	Expanded   IconStyle
 	Leaf       IconStyle
+	Background SurfaceStyle
 }
 
 type ImageGridStyle struct {
-	Cell   SurfaceStyle
 	Remove StateStyle[SurfaceStyle]
+	Cell   SurfaceStyle
 }
 
 // Skin contains the visual styles used by all built-in widgets.
 type Skin struct {
-	Panel           PanelStyle
 	Button          ButtonStyles
-	ButtonGroup     ButtonGroupStyle
-	TextField       TextFieldStyle
 	NumberInput     NumberInputStyle
-	Menu            MenuStyle
-	ContextMenu     MenuStyle
 	Checkbox        CheckboxStyle
 	Selector        SelectorStyle
-	Tab             TabStyle
 	Progress        ProgressStyle
 	VirtualJoystick VirtualJoystickStyle
-	Scroll          ScrollStyle
-	Tree            TreeStyle
 	ImageGrid       ImageGridStyle
+	Scroll          ScrollStyle
+	Menu            MenuStyle
+	ContextMenu     MenuStyle
+	Tree            TreeStyle
+	Tab             TabStyle
+	ButtonGroup     ButtonGroupStyle
+	TextField       TextFieldStyle
+	Panel           PanelStyle
 }
 
 type defaultSkinCache struct {
-	Theme Theme
 	Skin  Skin
+	Theme Theme
 }
 
 func DefaultSkin(theme Theme) Skin {

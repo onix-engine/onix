@@ -98,16 +98,16 @@ func FormatFromPath(path string) (Format, error) {
 }
 
 type Clip struct {
-	mu           sync.Mutex
+	source       Source
+	openStream   func(Source) (io.ReadSeekCloser, error)
 	format       Format
+	streamSource string
 	pcm          []byte
 	samples      []float32
 	length       int64
 	duration     time.Duration
-	streamSource string
-	source       Source
-	openStream   func(Source) (io.ReadSeekCloser, error)
 	readers      int
+	mu           sync.Mutex
 	closed       bool
 	closePending bool
 }
@@ -275,9 +275,9 @@ func (c *Clip) releaseSource() error {
 
 type clipStreamReader struct {
 	io.ReadSeekCloser
+	err  error
 	clip *Clip
 	once sync.Once
-	err  error
 }
 
 func (r *clipStreamReader) Close() error {

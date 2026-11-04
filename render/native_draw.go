@@ -33,19 +33,18 @@ func nativeMeshUniformData(uniforms *nativeMeshUniforms) []float32 {
 // Native records are pointer-free and retained between draws. Sharing their C
 // definitions lets both backends pass the packed storage without conversion.
 type nativeDrawState struct {
-	textures         GenerationPool[TextureResource, uint32]
-	targets          GenerationPool[RenderTargetResource, nativeRenderTarget]
-	meshes           GenerationPool[MeshResource, nativeMesh]
-	shaders          GenerationPool[MeshShaderResource, uint32]
-	shaders2D        GenerationPool[Material2DShaderResource, uint32]
-	spriteBytes      uint64
-	draws            []C.OnixNativeSpriteDraw
-	draws3D          []C.OnixNativeMeshDraw3D
-	deformationWords []uint32
-
+	draws                []C.OnixNativeSpriteDraw
+	draws3D              []C.OnixNativeMeshDraw3D
+	deformationWords     []uint32
+	textures             GenerationPool[TextureResource, uint32]
+	targets              GenerationPool[RenderTargetResource, nativeRenderTarget]
+	meshes               GenerationPool[MeshResource, nativeMesh]
+	shaders              GenerationPool[MeshShaderResource, uint32]
+	shaders2D            GenerationPool[Material2DShaderResource, uint32]
 	drawRetention        scratchRetention
 	meshDrawRetention    scratchRetention
 	deformationRetention scratchRetention
+	spriteBytes          uint64
 }
 
 func (d *nativeDrawState) trimScratch() {

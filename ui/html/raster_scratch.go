@@ -8,8 +8,8 @@ import (
 // Only intermediates belong here. Raster results and texture pixels outlive a
 // paint operation and must never be returned to this pool.
 type htmlRasterScratch struct {
-	htmlFilterScratch
 	paint image.RGBA
+	htmlFilterScratch
 }
 
 const htmlRasterScratchByteLimit = 32 << 20

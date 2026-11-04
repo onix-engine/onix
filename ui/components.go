@@ -206,9 +206,9 @@ type ButtonGroup struct {
 }
 
 type ButtonGroupValue[T any] struct {
+	Value T
 	Group ecs.Entity
 	Index int
-	Value T
 }
 
 type buttonGroupItem struct {
@@ -228,31 +228,32 @@ type buttonGroupDivider struct {
 type Danger struct{}
 
 type TextField struct {
-	// Buffer optionally binds native input to a document-owned piece tree.
-	Buffer      *input.TextBuffer
-	Source      piecetree.Snapshot
-	Value       string
-	Placeholder string
-	Password    bool
-	Composition string
-	// ScrollX is the signed horizontal text offset. Positive values move the
-	// text right; negative values reveal the caret in overflowing values.
-	ScrollX   float32
-	Caret     int
-	Anchor    int
-	Selecting bool
-	Focused   bool
-	MaxRunes  int
-	Submitted bool
-	FontSize  float64
-	DPI       float64
+	Source piecetree.Snapshot
 
-	lastScrollValue       piecetree.Snapshot
+	lastScrollValue piecetree.Snapshot
+	// Buffer optionally binds native input to a document-owned piece tree.
+	Buffer                *input.TextBuffer
+	history               *textFieldHistory
+	Composition           string
+	Placeholder           string
+	Value                 string
 	lastScrollComposition string
 	lastScrollCaret       int
-	lastScrollFocused     bool
-	lastScrollViewport    float32
-	scrollInitialized     bool
+	Caret                 int
+	MaxRunes              int
+	FontSize              float64
+	DPI                   float64
+	Anchor                int
+	// ScrollX is the signed horizontal text offset. Positive values move the
+	// text right; negative values reveal the caret in overflowing values.
+	ScrollX            float32
+	lastScrollViewport float32
+	Submitted          bool
+	Password           bool
+	lastScrollFocused  bool
+	Selecting          bool
+	scrollInitialized  bool
+	Focused            bool
 }
 
 // TextFieldKeyHandler intercepts keyboard editing before native text input and
@@ -265,12 +266,12 @@ type TextFieldKeyHandler struct {
 type Input struct{}
 
 type NumberInput struct {
-	Changed         bool
-	Step            float64
-	Integer         bool
-	StepButtonWidth float32
 	UpIcon          IconStyle
 	DownIcon        IconStyle
+	Step            float64
+	StepButtonWidth float32
+	Changed         bool
+	Integer         bool
 }
 
 type NumberInputStep struct {
@@ -281,42 +282,41 @@ type NumberInputStep struct {
 // Textarea stores multiline text behavior, content padding, and the current content offset.
 // Scroll offsets use positive coordinates from the content's top-left corner.
 type Textarea struct {
-	Wrap    bool
-	Padding float32
-	// WrapTokens preserves words and identifiers, allowing long tokens to overflow.
-	WrapTokens bool
-	// SelectTokens selects a code word, operator or quoted contents on a mouse double-click.
-	SelectTokens bool
+	lastValue            piecetree.Snapshot
+	lastCaret            int
+	lastWrapWidthPercent float32
+	lastViewportHeight   float32
 	// WrapWidthPercent scales the available content width; zero uses the full width.
-	WrapWidthPercent float32
-	// FollowTail reveals the end when the value or viewport changes, even without focus.
-	FollowTail bool
-	// CaptureTab lets a code editor handle Tab without moving focus.
-	CaptureTab bool
+	WrapWidthPercent  float32
+	lastViewportWidth float32
+	scrollDragPointer float32
 	// BarSize is the scrollbar width; zero uses the default and a negative value hides the bar while keeping scrolling.
 	BarSize float32
 	// WheelStep is the distance per wheel unit; zero uses the UI default.
-	WheelStep               float32
+	WheelStep        float32
+	Padding          float32
+	ScrollX          float32
+	ScrollY          float32
+	scrollDragOffset float32
+	// CaptureTab lets a code editor handle Tab without moving focus.
+	CaptureTab bool
+	// FollowTail reveals the end when the value or viewport changes, even without focus.
+	FollowTail bool
+
+	scrollDragging          bool
+	preserveScroll          bool
 	DisableHorizontalScroll bool
-	ScrollX                 float32
-	ScrollY                 float32
-
-	scrollDragging    bool
-	scrollDragAxis    uint8
-	scrollDragPointer float32
-	scrollDragOffset  float32
-	preserveScroll    bool
-
-	lastValue            piecetree.Snapshot
-	lastCaret            int
-	lastFocused          bool
-	lastViewportWidth    float32
-	lastViewportHeight   float32
-	lastWrapWidthPercent float32
-	lastWrapTokens       bool
-	lastWrap             bool
-	lastFollowTail       bool
-	scrollInitialized    bool
+	Wrap                    bool
+	lastFocused             bool
+	scrollDragAxis          uint8
+	// SelectTokens selects a code word, operator or quoted contents on a mouse double-click.
+	SelectTokens bool
+	// WrapTokens preserves words and identifiers, allowing long tokens to overflow.
+	WrapTokens        bool
+	lastWrapTokens    bool
+	lastWrap          bool
+	lastFollowTail    bool
+	scrollInitialized bool
 }
 
 // ResetScroll returns the viewport to its origin and releases scrollbar dragging.
@@ -355,30 +355,30 @@ type TextControl[T TextControlMode] struct {
 
 type Menu struct {
 	Label      string
-	Open       bool
 	Selected   int
+	StackIndex int
 	Width      float32
 	ItemHeight float32
 	Padding    float32
-	StackIndex int
+	Open       bool
 }
 
 type Item[Kind any] struct {
+	Label    string
 	Owner    ecs.Entity
 	Index    int
-	Label    string
 	Disabled bool
 }
 
 type MenuItem = Item[Menu]
 
 type ContextMenu struct {
-	Open       bool
 	Selected   int
+	StackIndex int
 	Width      float32
 	ItemHeight float32
 	Padding    float32
-	StackIndex int
+	Open       bool
 }
 
 type ContextMenuItem = Item[ContextMenu]
@@ -392,13 +392,13 @@ type Toggle[T comparable] struct {
 
 type Selector struct {
 	Label      string
-	Open       bool
-	Selected   int
 	Icon       IconStyle
+	Selected   int
+	StackIndex int
 	ItemHeight float32
 	ListHeight float32
+	Open       bool
 	Upward     bool
-	StackIndex int
 }
 
 type SelectorList struct {
@@ -430,11 +430,11 @@ type TabItemBorder struct {
 }
 
 type TabItem struct {
+	Label    string
+	Icon     IconStyle
 	Tabs     ecs.Entity
 	Index    int
 	Width    float32
-	Label    string
-	Icon     IconStyle
 	Disabled bool
 }
 
@@ -503,24 +503,24 @@ type ScrollContent struct {
 }
 
 type ChangedEvent[T any] struct {
-	Entity ecs.Entity
 	Value  T
+	Entity ecs.Entity
 }
 
 type InputEvent[T any] struct {
-	Entity ecs.Entity
 	Value  T
+	Entity ecs.Entity
 }
 
 type SubmittedEvent[T any] struct {
-	Entity ecs.Entity
 	Value  T
+	Entity ecs.Entity
 }
 
 type SelectedEvent[T any] struct {
+	Value  T
 	Entity ecs.Entity
 	Index  int
-	Value  T
 }
 
 type FocusChangedEvent struct {
@@ -530,19 +530,19 @@ type FocusChangedEvent struct {
 }
 
 type LinkActivatedEvent struct {
-	Entity ecs.Entity
 	Target string
+	Entity ecs.Entity
 }
 
 type uiEventState struct {
+	LastInputClickAt time.Time
 	Focused          ecs.Entity
-	FocusVisible     bool
 	ActivatedOnPress ecs.Entity
 	LastInputClick   ecs.Entity
-	LastInputClickAt time.Time
+	InputEvents      ecs.MessageReader[scene.InputEvent]
 	LastInputClickX  float32
 	LastInputClickY  float32
-	InputEvents      ecs.MessageReader[scene.InputEvent]
+	FocusVisible     bool
 }
 
 type caretBlinkState struct {

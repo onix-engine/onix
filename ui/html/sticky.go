@@ -62,7 +62,7 @@ func bindHTMLStickyContent(world *ecs.World, state *htmlRenderState) {
 	}
 	world.FrameValue[htmlStickyWorkTag, htmlStickyWork]().revision++
 	for node, binding := range state.StickyBindings {
-		box := state.BoxesByNode[node]
+		box := state.boxForNode(node)
 		if box == nil || box.Style.Position != style.Keyword("sticky") {
 			delete(state.StickyBindings, node)
 			continue

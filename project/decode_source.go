@@ -276,11 +276,11 @@ func (s *AreaLightSpec) UnmarshalJSON(data []byte) error {
 func (s *ModelMaterialSpec) UnmarshalJSON(data []byte) error {
 	type alias ModelMaterialSpec
 	var value struct {
-		alias
 		Metallic         *float32 `json:"metallic"`
 		Roughness        *float32 `json:"roughness"`
 		IOR              *float32 `json:"ior"`
 		EmissiveStrength *float32 `json:"emissiveStrength"`
+		alias
 	}
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
@@ -304,11 +304,11 @@ func (s *ModelMaterialSpec) UnmarshalJSON(data []byte) error {
 func (s ModelMaterialSpec) MarshalJSON() ([]byte, error) {
 	type alias ModelMaterialSpec
 	value := struct {
-		alias
 		Metallic         *float32 `json:"metallic,omitempty"`
 		Roughness        *float32 `json:"roughness,omitempty"`
 		IOR              *float32 `json:"ior,omitempty"`
 		EmissiveStrength *float32 `json:"emissiveStrength,omitempty"`
+		alias
 	}{alias: alias(s)}
 	if s.MetallicSet || s.Metallic != 0 {
 		value.Metallic = &s.Metallic

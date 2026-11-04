@@ -22,12 +22,12 @@ type PreviewItem struct {
 }
 
 type DataPreview struct {
+	source         *WorkspaceDocument
 	Scene          project.SceneID
 	Local          project.ModID
 	Items          []PreviewItem
 	Revision       uint64
 	sourceRevision uint64
-	source         *WorkspaceDocument
 	structure      uint64
 }
 

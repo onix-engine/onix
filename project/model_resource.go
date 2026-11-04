@@ -132,50 +132,50 @@ func unwrapModelAngle(reference, value float32) float32 {
 }
 
 type compiledModelMaterial struct {
-	Surface                   compiledMaterialSurface
-	BaseColorSampling         graphics.TextureOptions
-	NormalSampling            graphics.TextureOptions
-	MetallicRoughnessSampling graphics.TextureOptions
+	NormalTexture             string
+	BaseColorTexture          string
+	MetallicRoughnessMime     string
+	MetallicRoughness         string
 	Name                      string
+	NormalTextureMime         string
+	BaseColorTextureMime      string
+	NormalTextureData         []byte
+	BaseColorTextureData      []byte
+	MetallicRoughnessData     []byte
+	Surface                   compiledMaterialSurface
 	BaseColor                 [4]float32
 	Emissive                  [3]float32
 	Metallic                  float32
 	Roughness                 float32
-	BaseColorTexture          string
-	BaseColorTextureData      []byte
-	BaseColorTextureMime      string
-	NormalTexture             string
-	NormalTextureData         []byte
-	NormalTextureMime         string
-	MetallicRoughness         string
-	MetallicRoughnessData     []byte
-	MetallicRoughnessMime     string
+	BaseColorSampling         graphics.TextureOptions
+	MetallicRoughnessSampling graphics.TextureOptions
+	NormalSampling            graphics.TextureOptions
 }
 
 type compiledMaterialTexture struct {
 	Path     string
-	Data     []byte
 	Mime     string
+	Data     []byte
 	Sampling graphics.TextureOptions
 }
 
 type compiledMaterialSurface struct {
-	IOR                  float32
-	EmissiveStrength     float32
-	NormalScale          float32
-	OcclusionStrength    float32
-	SpecularFactor       float32
+	Textures             [render.MeshSurfaceTextureSlots]compiledMaterialTexture
 	SpecularColor        [3]float32
+	SheenColor           [3]float32
+	ClearcoatNormalScale float32
+	SheenRoughness       float32
+	OcclusionStrength    float32
 	ClearcoatFactor      float32
 	ClearcoatRoughness   float32
-	ClearcoatNormalScale float32
-	SheenColor           [3]float32
-	SheenRoughness       float32
+	IOR                  float32
+	NormalScale          float32
+	SpecularFactor       float32
 	AnisotropyStrength   float32
 	AnisotropyRotation   float32
-	Textures             [render.MeshSurfaceTextureSlots]compiledMaterialTexture
-	AlphaMode            graphics.AlphaMode
+	EmissiveStrength     float32
 	AlphaCutoff          float32
+	AlphaMode            graphics.AlphaMode
 	Unlit                bool
 	DoubleSided          bool
 }
@@ -191,17 +191,17 @@ type compiledModelJoint struct {
 
 type compiledModelAnimation struct {
 	Name     string
-	Duration float32
 	Tracks   []compiledModelAnimationTrack
+	Duration float32
 }
 
 type compiledModelAnimationTrack struct {
 	Path          string
 	Target        string
-	Components    uint8
-	Component     uint8
 	Interpolation string
 	Keyframes     []compiledModelAnimationKeyframe
+	Components    uint8
+	Component     uint8
 }
 
 type compiledModelAnimationKeyframe struct {

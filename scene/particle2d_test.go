@@ -160,8 +160,8 @@ type particleDrawRecord struct {
 }
 
 type particleDrawDriver struct {
-	canvasTestDriver
 	particles []particleDrawRecord
+	canvasTestDriver
 }
 
 func (d *particleDrawDriver) DrawSprites(batch render.SpriteBatch) error {

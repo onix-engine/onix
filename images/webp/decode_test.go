@@ -10,11 +10,11 @@ import (
 
 func TestDecodeWebPVariants(t *testing.T) {
 	tests := []struct {
+		imageType any
 		name      string
 		path      string
 		width     int
 		height    int
-		imageType any
 	}{
 		{name: "vp8", path: "testdata/vp8-lossy.webp", width: 150, height: 100, imageType: &image.YCbCr{}},
 		{name: "vp8l", path: "testdata/vp8l-lossless.webp", width: 75, height: 100, imageType: &image.NRGBA{}},

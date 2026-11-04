@@ -13,10 +13,10 @@ import (
 
 // PointLight is an isotropic source. Range, Radius and LuxDistance are meters.
 type PointLight struct {
+	Unit        graphics.LightUnit
 	Shadows     PunctualShadowSettings
 	Color       graphics.ColorRGBA
 	Intensity   float32
-	Unit        graphics.LightUnit
 	LuxDistance float32
 	Range       float32
 	Radius      float32
@@ -37,14 +37,14 @@ const (
 // SpotLight emits along local -Z. Cone angles are full angles in radians,
 // matching HDRP's Inner/Outer Angle after converting degrees to radians.
 type SpotLight struct {
+	Shape            SpotLightShape
+	Unit             graphics.LightUnit
 	Shadows          PunctualShadowSettings
 	Color            graphics.ColorRGBA
-	Intensity        float32
-	Unit             graphics.LightUnit
-	LuxDistance      float32
-	Range            float32
 	Radius           float32
-	Shape            SpotLightShape
+	Range            float32
+	LuxDistance      float32
+	Intensity        float32
 	InnerConeAngle   float32
 	OuterConeAngle   float32
 	AspectRatio      float32
@@ -70,10 +70,10 @@ const (
 // tube emits in all directions along local X. Width is tube length; Radius
 // is disc radius. Dimensions are independent of the entity's transform scale.
 type AreaLight struct {
-	Color     graphics.ColorRGBA
-	Intensity float32
 	Unit      graphics.LightUnit
 	Shape     AreaLightShape
+	Color     graphics.ColorRGBA
+	Intensity float32
 	Range     float32
 	Width     float32
 	Height    float32

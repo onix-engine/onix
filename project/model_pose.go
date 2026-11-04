@@ -17,17 +17,17 @@ type ModelRig struct {
 	joints     []compiledModelJoint
 	bind       []scene.Transform
 	bindEuler  []mgl32.Vec3
-	morphCount int
 	order      []int
 	clips      []ModelPoseClip
+	morphCount int
 }
 
 type ModelPoseClip struct {
-	Name     string
-	Duration float32
 	rig      *ModelRig
+	Name     string
 	tracks   []compiledModelAnimationTrack
 	targets  []int
+	Duration float32
 }
 
 type ModelPose struct {

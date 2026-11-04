@@ -22,21 +22,21 @@ import (
 type DocumentID string
 
 type SceneDocument struct {
+	Plan     *project.ScenePlan
 	ID       project.SceneID
 	Spec     project.SceneSpec
-	Plan     *project.ScenePlan
-	Dirty    bool
 	Revision uint64
+	Dirty    bool
 }
 
 type ModDocument struct {
+	Plan            *project.ModPlan
 	ID              project.ModID
 	Spec            project.ModSpec
-	Plan            *project.ModPlan
-	Dirty           bool
 	Revision        uint64
-	Deleted         bool
 	contentRevision uint64
+	Dirty           bool
+	Deleted         bool
 }
 
 type WorkspaceFile struct {
@@ -47,8 +47,8 @@ type WorkspaceFile struct {
 type documentState struct {
 	// JSON versions are immutable; current and saved baselines can share bytes.
 	data, saved []byte
-	disk        documentDiskState
 	revision    uint64
+	disk        documentDiskState
 	// dirty caches data != saved so idle frames never rescan document bytes.
 	dirty bool
 }
@@ -78,21 +78,21 @@ type workspaceCommand struct {
 // WorkspaceDocument loads the new format exclusively. Files and plans are
 // retained; idle frames never read or rediscover the project.
 type WorkspaceDocument struct {
-	ProjectDir string
-	Spec       project.ProjectSpec
+	compiler   project.CompileCache
+	assets     map[string]string // private file snapshots in staging or editor trash
+	states     map[DocumentID]*documentState
 	Scenes     map[project.SceneID]*SceneDocument
 	Mods       map[project.ModID]*ModDocument
-	Active     project.SceneID
-	Revision   uint64
-	Plan       *project.ProjectPlan
-	Files      []WorkspaceFile
-	states     map[DocumentID]*documentState
-	dirtyCount int
-	assets     map[string]string // private file snapshots in staging or editor trash
 	assetDirs  map[string]bool
+	Plan       *project.ProjectPlan
+	Active     project.SceneID
 	stagingDir string
-	compiler   project.CompileCache
+	ProjectDir string
+	Files      []WorkspaceFile
 	undo, redo []workspaceCommand
+	Spec       project.ProjectSpec
+	dirtyCount int
+	Revision   uint64
 }
 
 func LoadWorkspaceDocument(directory string) (*WorkspaceDocument, error) {
@@ -812,8 +812,8 @@ func (s workspaceFS) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 type workspaceMemoryFile struct {
-	bytes.Reader
 	name string
+	bytes.Reader
 	size int64
 }
 

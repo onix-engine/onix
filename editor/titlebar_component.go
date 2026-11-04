@@ -12,9 +12,9 @@ import (
 type titlebarComponentState struct{ Recent editorVNodeView }
 
 var titlebarDefinitionCache struct {
-	once       sync.Once
-	definition *html.Definition[editorTitlebarView, titlebarComponentState]
 	err        error
+	definition *html.Definition[editorTitlebarView, titlebarComponentState]
+	once       sync.Once
 }
 
 func editorTitlebarDefinition() (*html.Definition[editorTitlebarView, titlebarComponentState], error) {

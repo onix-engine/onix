@@ -23,45 +23,50 @@ type Work struct {
 // Styles and DOM mutations are explicit inputs; callers must supply all nodes
 // whose content or geometry changed, including inherited style changes.
 type Cache struct {
-	// ReserveScrollbarSpace selects classic scrollbars for this document.
-	ReserveScrollbarSpace bool
-	Root                  *Box
-	nodes                 map[*dom.Node]*Box
-	document              *dom.Node
-	generation            uint64
-	pass                  uint64
-	face, boldFace        *font.Face
-	viewport              Rect
-	context               layoutContext
-	Work                  Work
+	Root           *Box
+	nodes          map[*dom.Node]*Box
+	document       *dom.Node
+	face, boldFace *font.Face
 	// Changed contains boxes needing render synchronization: reflowed or
 	// translated boxes, plus ancestors whose descendant bounds may have changed.
 	// Each box appears once per pass; callers can sort by current tree depth.
 	Changed []*Box
-	// Reordered contains flex containers whose child order actually changed.
-	Reordered      []*Box
-	localFlexRoots []*Box
 	// Removed contains boxes retired by this topology pass.
-	Removed     []*Box
+	Removed        []*Box
+	localFlexRoots []*Box
+	// Reordered contains flex containers whose child order actually changed.
+	Reordered   []*Box
+	context     layoutContext
+	Work        Work
+	viewport    Rect
+	pass        uint64
+	generation  uint64
 	restylePass uint64
+	// ReserveScrollbarSpace selects classic scrollbars for this document.
+	ReserveScrollbarSpace bool
 }
 
 type boxLayoutCache struct {
-	pass                              uint64
-	orderPass                         uint64
-	restylePass                       uint64
-	reorderChangedPass, localFlexPass uint64
-	changedPass                       uint64
-	dirtyPass                         uint64
-	containing, absolute              Rect
-	valid, dirty, shiftable           bool
-	placementReusable                 bool
-	measurement                       *style.ComputedStyle
-	width, height                     style.Value
-	placementX, placementY            float64
-	generation                        uint64
-	parentID                          string
-	index                             int
+	measurement          *style.ComputedStyle
+	parentID             string
+	height               style.Value
+	width                style.Value
+	containing, absolute Rect
+	changedPass          uint64
+	placementX           float64
+	pass                 uint64
+	index                int
+	orderPass            uint64
+	generation           uint64
+	placementY           float64
+	localFlexPass        uint64
+	reorderChangedPass   uint64
+	restylePass          uint64
+	dirtyPass            uint64
+	placementReusable    bool
+	shiftable            bool
+	dirty                bool
+	valid                bool
 }
 
 // Update reconciles topology only when needed, then propagates changed layout

@@ -16,14 +16,14 @@ import (
 // The zero value is empty. Snapshot and its nodes must never be pooled: readers
 // may retain any published version independently of the editing buffer.
 type Snapshot struct {
-	flat  string
 	state *snapshotState
+	flat  string
 }
 type snapshotState struct {
 	root         *snapshotNode
+	flat         string
 	once         sync.Once
 	materialized atomic.Bool
-	flat         string
 }
 type snapshotNode struct {
 	left, right                  *snapshotNode

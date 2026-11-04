@@ -8,8 +8,8 @@ type webGPUDataKey struct {
 }
 
 type webGPUDataBinding struct {
-	groups         [webGPUFramesInFlight]webGPUTextureBindGroup
 	previous, next *frameCacheEntry[webGPUDataKey, webGPUDataBinding]
+	groups         [webGPUFramesInFlight]webGPUTextureBindGroup
 }
 
 func unlinkWebGPUData(key webGPUDataKey, binding *webGPUDataBinding) {

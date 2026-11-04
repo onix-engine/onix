@@ -8,20 +8,20 @@ const (
 )
 
 type Options struct {
+	DRMDevice           string
+	Decorations         DecorationMode
 	RenderScale         float64
 	MaxDevicePixelRatio float64
-	Antialias           bool
-	DRMDevice           string
-	DRMConnectorID      uint32
-	Transparent         bool
-	Decorations         DecorationMode
 	TitleBarHeight      float64
 	// CornerRadius controls renderer-owned window corners in logical pixels.
 	// Windows uses alpha composition for radii larger than its native 8 DIP.
-	CornerRadius int
-	Border       bool
-	Shadow       bool
-	Resizable    bool
+	CornerRadius   int
+	DRMConnectorID uint32
+	Antialias      bool
+	Transparent    bool
+	Border         bool
+	Shadow         bool
+	Resizable      bool
 }
 
 const DefaultCornerRadius = 10

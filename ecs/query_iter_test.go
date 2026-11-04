@@ -140,13 +140,13 @@ func TestMustMutRejectsStaleEmptyAndMissingComponents(t *testing.T) {
 	world.Despawn(entity)
 	missing := world.Slot(world.Spawn(NewBundle(0)))
 	for _, check := range []struct {
-		entity Entity
 		access func()
+		entity Entity
 	}{
-		{entity, func() { world.MustMut[testPosition](entity) }},
-		{entity, func() { slot.MustMut[testPosition]() }},
-		{0, func() { EntitySlot{}.MustMut[testPosition]() }},
-		{missing.Entity(), func() { missing.MustMut[testPosition]() }},
+		{entity: entity, access: func() { world.MustMut[testPosition](entity) }},
+		{entity: entity, access: func() { slot.MustMut[testPosition]() }},
+		{entity: 0, access: func() { EntitySlot{}.MustMut[testPosition]() }},
+		{entity: missing.Entity(), access: func() { missing.MustMut[testPosition]() }},
 	} {
 		func() {
 			defer func() {

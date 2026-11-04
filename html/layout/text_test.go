@@ -301,9 +301,9 @@ func TestSelectedOptionTextFollowsLiveSelection(t *testing.T) {
 	}
 	selectNode := document.Children[0]
 	for _, test := range []struct {
-		index int
 		want  string
-	}{{0, "内置"}, {1, "Material Design Icons"}, {2, ""}, {3, "Unavailable"}, {-1, ""}} {
+		index int
+	}{{index: 0, want: "内置"}, {index: 1, want: "Material Design Icons"}, {index: 2, want: ""}, {index: 3, want: "Unavailable"}, {index: -1, want: ""}} {
 		dom.SetSelectedIndex(selectNode, test.index)
 		if got := selectedOptionText(selectNode); got != test.want {
 			t.Fatalf("selected index %d: text=%q, want %q", test.index, got, test.want)

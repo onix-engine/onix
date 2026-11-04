@@ -14,42 +14,56 @@ import (
 // A box owns only the primitives it emits, excluding its child boxes. This
 // index lets local updates retire missing fragments without sweeping all groups.
 type htmlBoxRendering struct {
-	GeometryHash         uint64
-	PaintDirty           bool
 	Box                  *layout.Box
 	Parent               *layout.Box
-	Stack                int
-	PaintEnd             int
 	ContextParent        *htmlBoxRendering
-	OwnsContext          bool
-	Control, FocusOwner  ecs.Entity
-	ControlRect          layout.Rect
 	Groups               []htmlRenderIdentity
 	Entities             []ecs.Entity
-	OwnerStart, OwnerEnd int
-	OwnerReordered       bool
-	ZIndex               style.Value
 	Visibility           style.Value
 	OverflowX, OverflowY style.Value
-	Clip                 ecs.Entity
-	Depth                int
-	ExtentRect           layout.Rect
+	ZIndex               style.Value
 	Window               htmlPaintWindow
 	OuterWindow          htmlPaintWindow
+	ControlRect          layout.Rect
+	ExtentRect           layout.Rect
 	CullRect             layout.Rect
 	PaintBounds          layout.Rect
 	EffectBounds         layout.Rect
+	Clip                 ecs.Entity
+	Generation           uint64
+	OwnerEnd             int
+	OwnerStart           int
+	GeometryHash         uint64
+	Depth                int
+	FocusOwner           ecs.Entity
+	Control              ecs.Entity
 	StyleGeneration      uint64
+	PaintEnd             int
+	Stack                int
+	SharedRendering      bool
+	ClipMoved            bool
+	OwnerReordered       bool
 	CompositeRoot        bool
 	CullChanged          bool
 	ExtentDirty          bool
-	SharedRendering      bool
-	Composite            bool
 	Retiring             bool
+	PaintDirty           bool
+	OwnsContext          bool
 	Queued               bool
 	ClipChanged          bool
 	StackChanged         bool
-	ClipMoved, Expanded  bool
+	Composite            bool
+	Expanded             bool
+}
+
+// Full emission starts a new membership generation without clearing a second
+// node index. Local emission keeps unvisited boxes from earlier generations.
+func (state *htmlPaintState) boxForNode(node *dom.Node) *layout.Box {
+	rendered := state.BoxRenderings[node]
+	if rendered == nil || state.Reconciling && !state.LocalReconcile && rendered.Generation != state.RenderGeneration {
+		return nil
+	}
+	return rendered.Box
 }
 
 func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedControl, inheritedFocus ecs.Entity) *htmlBoxRendering {
@@ -73,6 +87,7 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 		}
 		rendered.SharedRendering = false
 	}
+	rendered.Generation = state.RenderGeneration
 	rendered.GeometryHash = box.OwnGeometryHash()
 	rendered.Visibility = box.Style.Visibility
 	rendered.OwnsContext = false
@@ -293,7 +308,6 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		for _, removed := range state.RemovedBoxes {
 			finishHTMLBoxReconcile(world, state, removed)
 			delete(state.BoxRenderings, removed.Box.Node)
-			delete(state.BoxesByNode, removed.Box.Node)
 			delete(state.EventTargets, removed.Box.Node)
 			delete(state.OverflowExtents, removed.Box)
 			delete(state.OverflowBindings, removed.Box.Node)

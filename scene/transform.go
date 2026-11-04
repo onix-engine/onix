@@ -85,20 +85,20 @@ type transformNode struct {
 }
 
 type transformWorkspace struct {
-	global          ecs.ComponentBinding[GlobalTransform]
-	bound           bool
 	scope           *ecs.QueryScope
-	scopeVersion    uint64
+	changes         ecs.SystemContext
+	global          ecs.ComponentBinding[GlobalTransform]
 	nodes           entitycache.Store[transformNode]
 	active          []ecs.Entity
 	queue           []ecs.Entity
-	structures      [2]uint64
 	versions        [3]uint64
-	lastRun         ecs.Tick
-	changes         ecs.SystemContext
+	structures      [2]uint64
+	scopeVersion    uint64
 	parentStructure uint64
-	initialized     bool
 	recomputed      int
+	lastRun         ecs.Tick
+	bound           bool
+	initialized     bool
 }
 
 func transformRevisions(world *ecs.World) (versions [3]uint64, structures [2]uint64) {

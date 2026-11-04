@@ -22,12 +22,12 @@ func TestHTMLNeedsFrameTracksPendingSurface(t *testing.T) {
 		t.Fatal("settled surface kept scheduling frames")
 	}
 	for _, change := range []struct {
-		name  string
 		apply func()
+		name  string
 	}{
-		{"DOM", func() { incrementalHTMLNode(t, world, owner, "label").SetText("after") }},
-		{"CSS", func() { world.GetMut[Surface](owner).CSS = "div { color:red }" }},
-		{"viewport", func() { world.GetMut[Surface](owner).Width = 300 }},
+		{name: "DOM", apply: func() { incrementalHTMLNode(t, world, owner, "label").SetText("after") }},
+		{name: "CSS", apply: func() { world.GetMut[Surface](owner).CSS = "div { color:red }" }},
+		{name: "viewport", apply: func() { world.GetMut[Surface](owner).Width = 300 }},
 	} {
 		t.Run(change.name, func(t *testing.T) {
 			change.apply()

@@ -17,38 +17,39 @@ var (
 )
 
 type Texture struct {
-	wrapU, wrapV       render.TextureAddressMode
-	U, V               float32
-	MaxU               float32
-	MaxV               float32
-	Width              int
-	Height             int
-	SourceWidth        int
-	SourceHeight       int
-	OffsetX            int
-	OffsetY            int
-	Angle              float32
-	rasterScaleX       float32
-	rasterScaleY       float32
-	batchKey           uint64
-	mipmap             bool
-	mipLevels          int
-	premultipliedAlpha bool
-	usage              ResourceUsage
-	format             render.TextureFormat
-	zeroInitialized    bool
-	source             *Texture
-	pix                []byte
-	handle             render.TextureHandle
-	device             *render.Device
-	residencies        render.DeviceValues[render.TextureHandle]
 	err                error
-	updates            []render.TextureUpdate
-	external           bool
 	externalDevice     *render.Device
 	renderTarget       *render.RenderTarget
+	source             *Texture
+	device             *render.Device
+	residencies        render.DeviceValues[render.TextureHandle]
+	updates            []render.TextureUpdate
+	pix                []byte
+	Width              int
 	contentRevision    uint64
+	OffsetX            int
+	SourceHeight       int
 	geometryRevision   uint64
+	SourceWidth        int
+	Height             int
+	batchKey           uint64
+	OffsetY            int
+	mipLevels          int
+	handle             render.TextureHandle
+	MaxV               float32
+	rasterScaleY       float32
+	U, V               float32
+	Angle              float32
+	MaxU               float32
+	rasterScaleX       float32
+	mipmap             bool
+	external           bool
+	usage              ResourceUsage
+	format             render.TextureFormat
+	wrapU              render.TextureAddressMode
+	premultipliedAlpha bool
+	zeroInitialized    bool
+	wrapV              render.TextureAddressMode
 }
 
 var textureRevision atomic.Uint64
@@ -308,11 +309,11 @@ func (t *Texture) Dispose() error {
 }
 
 type TextureRegionUpdate struct {
+	Pixels []byte
 	X      int
 	Y      int
 	Width  int
 	Height int
-	Pixels []byte
 }
 
 func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {

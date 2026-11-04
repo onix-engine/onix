@@ -9,10 +9,10 @@ package brotli
 /* Block split point selection utilities. */
 
 type blockSplit struct {
-	num_types          uint
-	num_blocks         uint
 	types              []byte
 	lengths            []uint32
+	num_types          uint
+	num_blocks         uint
 	types_alloc_size   uint
 	lengths_alloc_size uint
 }

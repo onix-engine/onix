@@ -39,8 +39,8 @@ func TestLayoutContextResetReleasesDocument(t *testing.T) {
 func TestBuildContextReusePreservesLayout(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div style="width:140px">Mixed 文本 <span>inline text</span><span style="display:inline-block;width:25px">box</span><input value="hello"></div>`)
 	type snapshot struct {
-		content   Rect
 		fragments []TextFragment
+		content   Rect
 	}
 	var capture func(*Box) []snapshot
 	capture = func(box *Box) []snapshot {

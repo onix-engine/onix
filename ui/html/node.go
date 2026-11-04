@@ -15,8 +15,8 @@ import (
 // by the next HTML synchronization pass.
 type Node struct {
 	world *ecs.World
-	owner ecs.Entity
 	node  *dom.Node
+	owner ecs.Entity
 }
 
 // Root returns the retained document root for an HTML surface.
@@ -218,6 +218,14 @@ func (n Node) SetText(value string) bool {
 	dom.SynchronizeTextContent(n.node)
 	n.markMutation(kind)
 	return true
+}
+
+// Attribute returns an element's current authored attribute without serializing it.
+func (n Node) Attribute(name string) (string, bool) {
+	if !n.valid() || n.node.Type != dom.ElementNode {
+		return "", false
+	}
+	return n.node.Attr(name)
 }
 
 // SetAttribute sets an element attribute.

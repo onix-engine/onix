@@ -95,7 +95,7 @@ func TestHTMLRasterizesLayeredBackgroundsIndependentCornersAndShadows(t *testing
 	if !ok {
 		t.Fatal("missing box")
 	}
-	if state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}] == nil {
+	if state.Textures.paint(htmlTextureKey{node: node.node, variant: "background"}) == nil {
 		t.Fatal("layered background did not create a retained box raster")
 	}
 	shadow := state.EntityGroups[htmlRenderIdentity{Node: node.node, Role: htmlRoleShadow, Variant: "shadow-0"}]
@@ -120,11 +120,11 @@ func TestHTMLPaintTexturesResizeAndReleaseDetachedNodes(t *testing.T) {
 	child := incrementalHTMLNode(t, world, owner, "child")
 	state, _ := world.Get[htmlRenderState](owner)
 	key := htmlTextureKey{node: box.node, variant: "background"}
-	old := state.Textures.paint[key].texture
+	old := state.Textures.paint(key).texture
 	box.SetAttribute("style", "width:70px;height:25px;background:linear-gradient(to right,red,blue);box-shadow:0 2px 3px black")
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
-	replacement := state.Textures.paint[key].texture
+	replacement := state.Textures.paint(key).texture
 	if old == replacement || replacement.Width != 70 || replacement.Height != 25 || old.Valid() {
 		t.Fatalf("texture did not resize/release: old valid=%v new=%dx%d", old.Valid(), replacement.Width, replacement.Height)
 	}
@@ -132,8 +132,8 @@ func TestHTMLPaintTexturesResizeAndReleaseDetachedNodes(t *testing.T) {
 	group.Remove()
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
-	if replacement.Valid() || state.Textures.paint[key] != nil || state.Textures.rasters[group.node] != nil || state.Textures.rasters[child.node] != nil || len(state.Textures.entries) != 0 || len(state.Textures.entities) != 0 {
-		t.Fatalf("detached paint retained resources: entries=%d entities=%d rasters=%d paint=%d", len(state.Textures.entries), len(state.Textures.entities), len(state.Textures.rasters), len(state.Textures.paint))
+	if replacement.Valid() || state.Textures.paint(key) != nil || state.Textures.rasters[group.node] != nil || state.Textures.rasters[child.node] != nil || len(state.Textures.entries) != 0 || len(state.Textures.entities) != 0 {
+		t.Fatalf("detached paint retained resources: entries=%d entities=%d rasters=%d", len(state.Textures.entries), len(state.Textures.entities), len(state.Textures.rasters))
 	}
 }
 

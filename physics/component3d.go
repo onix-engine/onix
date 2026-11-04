@@ -8,23 +8,22 @@ import (
 
 // RigidBody3D binds a world-space transform to a simulated body.
 type RigidBody3D struct {
-	Type            BodyType
-	Mass            float64
-	Inertia         float64
-	GravityScale    float64
-	LinearDamping   float64
-	AngularDamping  float64
-	Velocity        Vector3D
-	AngularVelocity Vector3D
+	body            Body3D
+	lastRotation    Quaternion
 	Force           Vector3D
 	Torque          Vector3D
+	lastPosition    Vector3D
 	Impulse         Vector3D
+	Velocity        Vector3D
+	AngularVelocity Vector3D
+	GravityScale    float64
+	AngularDamping  float64
+	Inertia         float64
+	LinearDamping   float64
+	Mass            float64
+	Type            BodyType
 	FixedRotation   bool
-
-	body         Body3D
-	defaultsSet  bool
-	lastPosition Vector3D
-	lastRotation Quaternion
+	defaultsSet     bool
 }
 
 func NewRigidBody3D(bodyType BodyType) RigidBody3D {
@@ -72,13 +71,12 @@ func (body *RigidBody3D) normalize() {
 
 type Collider3D[S Shape3D] struct {
 	Shape         S
+	handle        ColliderHandle3D[S]
+	Filter        Filter
 	Friction      float64
 	Restitution   float64
-	Sensor        bool
-	Filter        Filter
 	CollisionType uint32
-
-	handle ColliderHandle3D[S]
+	Sensor        bool
 }
 
 type SphereCollider3D = Collider3D[Sphere]

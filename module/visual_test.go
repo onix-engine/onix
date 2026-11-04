@@ -11,16 +11,18 @@ import (
 )
 
 type visualFixture struct {
-	r                    *Runtime
-	s                    *Scene
-	client, provider     *Context
-	requester            Requester[string, RenderOutputHandle]
-	request              Request[string, RenderOutputHandle]
-	label, text          Slot
-	pool                 *scene.RenderOutputPool
-	output               RenderOutputHandle
-	destroyed, callbacks int
 	lastError            error
+	provider             *Context
+	pool                 *scene.RenderOutputPool
+	s                    *Scene
+	client               *Context
+	r                    *Runtime
+	requester            Requester[string, RenderOutputHandle]
+	label                Slot
+	output               RenderOutputHandle
+	text                 Slot
+	request              Request[string, RenderOutputHandle]
+	destroyed, callbacks int
 }
 
 func visualTestFixture(t testing.TB, bind bool) *visualFixture {

@@ -8,8 +8,8 @@ import (
 )
 
 type entry[T any] struct {
-	entity ecs.Entity
 	value  T
+	entity ecs.Entity
 }
 
 // Store validates full entity generations. Record pointers are borrowed until

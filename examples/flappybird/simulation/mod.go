@@ -6,9 +6,9 @@ import (
 )
 
 type Mod struct {
+	frame     module.Emitter[contracts.FlappyFrame]
 	state     *flappyState
 	start     module.Slot
-	frame     module.Emitter[contracts.FlappyFrame]
 	last      contracts.FlappyFrame
 	published bool
 }

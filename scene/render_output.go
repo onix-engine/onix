@@ -25,17 +25,17 @@ type RenderOutput2D struct{ Handle RenderOutputHandle }
 var renderOutputRevision2D uint64
 
 type renderOutput struct {
+	release               func() error
 	text                  Text2D
+	refs                  int
 	width, height         float32
 	clipWidth, clipHeight float32
 	hasClip               bool
-	refs                  int
-	release               func() error
 }
 
 type outputLease struct {
-	id     uint64
 	output *renderOutput
+	id     uint64
 }
 
 // Fixed storage makes cached-output Retain/Release allocation-free and rejects

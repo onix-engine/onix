@@ -12,16 +12,16 @@ import (
 
 type fontResource struct {
 	runtime         *Runtime
-	key             [32]byte
 	font            *onixtext.Font
-	providers, refs int
 	outputs         map[TextRenderRequest]*fontOutput
 	first, last     *fontOutput
+	providers, refs int
+	key             [32]byte
 }
 type fontOutput struct {
-	key            TextRenderRequest
-	handle         RenderOutputHandle
 	previous, next *fontOutput
+	handle         RenderOutputHandle
+	key            TextRenderRequest
 }
 
 func (f *fontResource) touch(o *fontOutput) {

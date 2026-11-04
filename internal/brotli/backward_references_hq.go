@@ -61,12 +61,12 @@ func zopfliNodeCommandLength(self *zopfliNode) uint32 {
 
 /* Histogram based cost model for zopflification. */
 type zopfliCostModel struct {
-	cost_cmd_               [numCommandSymbols]float32
 	cost_dist_              []float32
-	distance_histogram_size uint32
 	literal_costs_          []float32
-	min_cost_cmd_           float32
 	num_bytes_              uint
+	cost_cmd_               [numCommandSymbols]float32
+	distance_histogram_size uint32
+	min_cost_cmd_           float32
 }
 
 func initZopfliCostModel(self *zopfliCostModel, dist *distanceParams, num_bytes uint) {

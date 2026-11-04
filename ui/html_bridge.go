@@ -7,11 +7,11 @@ import (
 )
 
 type htmlBridgeState struct {
+	context      ecs.SystemContext
 	versions     [5]uint64
 	scopeVersion uint64
 	lastRun      ecs.Tick
 	initialized  bool
-	context      ecs.SystemContext
 }
 
 // The first input may change per entity. Remaining inputs invalidate membership

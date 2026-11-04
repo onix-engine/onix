@@ -66,14 +66,14 @@ type EngineConfig struct {
 	Features      []RuntimeFeatureID `json:"features,omitempty"`
 	Resources     []ResourceID       `json:"resources,omitempty"`
 	ImageDecoders []ImageDecoderID   `json:"imageDecoders,omitempty"`
-	// TextureCompression enables build-time block compression. When an engine
-	// section is present and the field is omitted, project loading defaults it to
-	// true; set it to false for source-texture builds.
-	TextureCompression bool `json:"textureCompression,omitempty"`
 	// TextureCompressionExcludes lists project-relative resources that must keep
 	// their source pixels, for example "resources/ui.png". This is useful for
 	// pixel-art and other assets where block compression is visibly lossy.
 	TextureCompressionExcludes []string `json:"textureCompressionExcludes,omitempty"`
+	// TextureCompression enables build-time block compression. When an engine
+	// section is present and the field is omitted, project loading defaults it to
+	// true; set it to false for source-texture builds.
+	TextureCompression bool `json:"textureCompression,omitempty"`
 }
 
 // ReadEngineConfig reads the engine section of a project manifest. A project

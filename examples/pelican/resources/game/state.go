@@ -41,17 +41,34 @@ type particle struct{ X, Y, VX, VY, Life float32 }
 
 // All moving state is bounded. Course construction and simulation allocate nothing.
 type game struct {
-	Phase                                               phase
-	Distance, Height, Velocity, Speed, Elapsed          float32
-	Boost, Invincible, NoticeTime, DeliveryTime         float32
-	Cargo, Delivered, Score, Best, Hearts, Combo, Stops int
-	Held, Flapped, Gliding                              bool
-	Notice                                              string
-	Objects                                             [112]object
-	Count, First                                        int
-	Particles                                           [12]particle
-	particleNext                                        int
-	DeliveryX, DeliveryY                                float32
+	Notice       string
+	Delivered    int
+	particleNext int
+	First        int
+	Count        int
+	Stops        int
+	Combo        int
+	Hearts       int
+	Best         int
+	Score        int
+	Cargo        int
+	Objects      [112]object
+	Particles    [12]particle
+	Elapsed      float32
+	Speed        float32
+	Boost        float32
+	DeliveryTime float32
+	DeliveryY    float32
+	DeliveryX    float32
+	Invincible   float32
+	Height       float32
+	Distance     float32
+	Velocity     float32
+	NoticeTime   float32
+	Phase        phase
+	Gliding      bool
+	Flapped      bool
+	Held         bool
 }
 
 func (g *game) reset() {

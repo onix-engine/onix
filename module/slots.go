@@ -10,11 +10,11 @@ import (
 )
 
 type slotState struct {
+	output    RenderOutputHandle
+	observers []*slotObserver
 	value     project.SlotValue
 	revision  uint64
 	entity    ecs.Entity
-	output    RenderOutputHandle
-	observers []*slotObserver
 }
 type Slot struct {
 	context *Context
@@ -32,8 +32,8 @@ type slotVersion struct {
 	revision uint64
 }
 type slotObserver struct {
-	queued  bool
 	handler func(*Context) error
+	queued  bool
 }
 
 func (s *slotState) observerCapacity(r *Runtime) bool {
@@ -201,16 +201,16 @@ func initVisualSlot(world *ecs.World, state *slotState) error {
 // SlotWriter is resolved by the application/scene orchestrator. Modules obtain
 // no other instance handles; their external slot changes use messages.
 type SlotWriter struct {
-	slot   Slot
 	buffer *slotBuffer
+	slot   Slot
 }
 
 // Every declared slot type has its own prepared storage, so alternating
 // differently shaped structures cannot force allocations at queue positions.
 type slotBuffer struct {
 	values  [4][]project.SlotValue
-	lengths [4]int
 	shape   project.SlotValue
+	lengths [4]int
 }
 
 func (b *slotBuffer) truncate(buffer uint8, length int) {

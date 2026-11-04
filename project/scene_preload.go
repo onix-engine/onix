@@ -26,16 +26,16 @@ const (
 // ScenePreloader incrementally builds a scene in the active world. Its nodes
 // remain hidden and its cameras inactive until Activate is called.
 type ScenePreloader struct {
+	uploads    graphics.UploadQueue
 	bundle     *Bundle
 	scene      *SceneInstance
-	plan       sceneSpawnPlan
-	entities   []ecs.Entity
-	phase      scenePreloadPhase
-	index      int
 	cpu        *resource.Preparation[[]ecs.Bundle]
-	components []ecs.Bundle
-	uploads    graphics.UploadQueue
 	wake       func()
+	entities   []ecs.Entity
+	components []ecs.Bundle
+	plan       sceneSpawnPlan
+	index      int
+	phase      scenePreloadPhase
 }
 
 // BeginPreloadScene starts an incremental scene preload. Advance must be

@@ -25,16 +25,16 @@ type DirectionalLight struct {
 // 2–4 cascades fit camera frustum slices out to Distance. Depth adds coverage
 // for off-camera casters. Resolution is the requested size of each atlas tile.
 type ShadowSettings struct {
-	Enabled      bool
 	Resolution   int
+	Cascades     int
 	Radius       float32
 	Depth        float32
 	Bias         float32
 	NormalBias   float32
-	Cascades     int
 	Distance     float32
 	SplitLambda  float32
 	CascadeBlend float32
+	Enabled      bool
 }
 
 func NewShadowSettings() ShadowSettings {
@@ -43,11 +43,11 @@ func NewShadowSettings() ShadowSettings {
 
 // PunctualShadowSettings configures point and spot shadow projections in meters.
 type PunctualShadowSettings struct {
-	Enabled    bool
 	Resolution int
 	Near       float32
 	Bias       float32
 	NormalBias float32
+	Enabled    bool
 }
 
 func NewPunctualShadowSettings() PunctualShadowSettings {
@@ -62,24 +62,24 @@ type Environment struct {
 	Atlas *graphics.Texture
 	// Panorama displays the original RGBE image independently of the IBL atlas.
 	Panorama *graphics.Texture
-	Encoding render.EnvironmentEncoding
 	// Sky replaces only the visible background; Atlas still supplies lighting.
 	Sky        *graphics.SkyRadiance
 	Intensity  float32
 	Rotation   float32
 	Exposure   float32
+	Encoding   render.EnvironmentEncoding
 	Background bool
 }
 
 // ViewLighting optionally replaces scene lights for a single camera, without
 // modifying entities in the scene. The zero value uses the scene's lights.
 type ViewLighting struct {
-	Override         bool
-	DisableShadows   bool
+	Sun              DirectionalLight
 	ShadowResolution int // zero keeps the light's resolution
 	Ambient          AmbientLight
-	Sun              DirectionalLight
 	Direction        mgl32.Vec3
+	Override         bool
+	DisableShadows   bool
 }
 
 // GroundPlane adds a shadow-receiving ground to one view. It is excluded from

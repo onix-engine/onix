@@ -63,9 +63,9 @@ func TestImageDecoderWithPreservesContainerAndFormatDispatch(t *testing.T) {
 	type base = ImageDecoderSet[testPNGDecoder, NoImageDecoder, NoImageDecoder, NoImageDecoder, NoImageDecoder]
 	decoder := ImageDecoderWith[base, testContainerDecoder]{}
 	for _, test := range []struct {
-		data, name string
 		want       error
-	}{{"CTR1payload", "texture.png", errTestContainerDecoder}, {"payload", "texture.CTR", errTestContainerDecoder}, {"CT", "texture.PNG", errTestPNGDecoder}} {
+		data, name string
+	}{{data: "CTR1payload", name: "texture.png", want: errTestContainerDecoder}, {data: "payload", name: "texture.CTR", want: errTestContainerDecoder}, {data: "CT", name: "texture.PNG", want: errTestPNGDecoder}} {
 		if _, err := decoder.DecodeImage([]byte(test.data), test.name, TextureOptions{}); !errors.Is(err, test.want) {
 			t.Fatalf("%s: %v", test.name, err)
 		}

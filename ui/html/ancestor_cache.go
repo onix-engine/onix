@@ -10,12 +10,12 @@ func htmlBoxParent(box *layout.Box) *layout.Box { return box.Parent }
 
 func htmlNearestBox(state *htmlRenderState, node *dom.Node) *layout.Box {
 	ancestor := state.NodeAncestors.resolve(node, htmlNodeParent, func(node, inherited *dom.Node) *dom.Node {
-		if state.BoxesByNode[node] != nil {
+		if state.boxForNode(node) != nil {
 			return node
 		}
 		return inherited
 	})
-	return state.BoxesByNode[ancestor]
+	return state.boxForNode(ancestor)
 }
 
 // Resolve shared ancestor paths once per operation. The path and index retain

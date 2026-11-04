@@ -48,10 +48,13 @@ func parseCmap(data []byte) (cmap, error) {
 			continue
 		}
 		format := binary.BigEndian.Uint16(data[subtableOffset : subtableOffset+2])
-		if platformID == 3 && encodingID == 10 && format == 12 {
+		// Apple fonts can expose only Unicode-platform subtables. Prefer full
+		// Unicode coverage to BMP coverage regardless of the platform record.
+		unicode := platformID == 0 && encodingID <= 4
+		if (unicode || platformID == 3 && encodingID == 10) && format == 12 {
 			format12Offset = subtableOffset
 		}
-		if platformID == 3 && (encodingID == 1 || encodingID == 0) && format == 4 {
+		if (unicode || platformID == 3 && (encodingID == 1 || encodingID == 0)) && format == 4 {
 			format4Offset = subtableOffset
 		}
 	}

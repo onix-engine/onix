@@ -24,16 +24,18 @@ func (config SleepConfig) normalized() SleepConfig {
 }
 
 type sleepBodyInput struct {
-	generation                                                                                    uint32
-	alive                                                                                         bool
-	bodyType                                                                                      BodyType
-	position, velocity, force                                                                     Vector
+	position                                                                                      Vector
+	force                                                                                         Vector
+	velocity                                                                                      Vector
 	rotation, angularVelocity, torque, mass, inertia, gravityScale, linearDamping, angularDamping float64
+	generation                                                                                    uint32
+	bodyType                                                                                      BodyType
+	alive                                                                                         bool
 	fixedRotation                                                                                 bool
 }
 
 func sleepInput(body *bodyState) sleepBodyInput {
-	return sleepBodyInput{body.generation, body.alive, body.bodyType, body.position, body.velocity, body.force, body.rotation, body.angularVelocity, body.torque, body.mass, body.inertia, body.gravityScale, body.linearDamping, body.angularDamping, body.fixedRotation}
+	return sleepBodyInput{generation: body.generation, alive: body.alive, bodyType: body.bodyType, position: body.position, velocity: body.velocity, force: body.force, rotation: body.rotation, angularVelocity: body.angularVelocity, torque: body.torque, mass: body.mass, inertia: body.inertia, gravityScale: body.gravityScale, linearDamping: body.linearDamping, angularDamping: body.angularDamping, fixedRotation: body.fixedRotation}
 }
 
 type sleepWakeNode struct {

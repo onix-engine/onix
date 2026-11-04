@@ -32,10 +32,10 @@ type switchCommand struct {
 type SceneManager struct {
 	runtime   *Runtime
 	active    *Scene
-	switches  []switchCommand
-	switching bool
-	nextLayer uint64
 	preload   *ScenePreloader
+	switches  []switchCommand
+	nextLayer uint64
+	switching bool
 }
 
 func (r *Runtime) Manager() *SceneManager { return &r.manager }

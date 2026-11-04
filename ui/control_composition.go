@@ -19,10 +19,10 @@ const (
 // CompositionNode describes one static, visual node available to a control.
 // Behavior is selected exclusively by components installed on the control root.
 type CompositionNode struct {
-	Kind          CompositionNodeKind
+	Text          string
 	X, Y          float32
 	Width, Height float32
-	Text          string
+	Kind          CompositionNodeKind
 	Visible       bool
 }
 

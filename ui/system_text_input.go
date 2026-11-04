@@ -188,7 +188,14 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	previous := *field
 	next := previous
 	var submits int
-	if next.Buffer != nil {
+	undo, redo := textHistoryShortcut(uiInputState)
+	historyIndex := 0
+	if next.history != nil {
+		historyIndex = next.history.index
+	}
+	if undo || redo {
+		next.restoreEdit(redo)
+	} else if next.Buffer != nil {
 		next.Source, next.Caret, next.Anchor, submits = editTextValue(next.Source, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, next.Buffer)
 	} else {
 		next.Value, next.Caret, next.Anchor, submits = editTextValue(next.Value, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, nil)
@@ -196,7 +203,15 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	submits += textareaSubmits
 	if editable && next.Text() != previous.Text() {
 		inputType, data := htmlInputEditMetadata(edits.Values)
+		if undo {
+			inputType, data = "historyUndo", ""
+		} else if redo {
+			inputType, data = "historyRedo", ""
+		}
 		if dispatchHTMLEditableBeforeInput(world, entity, inputType, data) {
+			if next.history != nil {
+				next.history.index = historyIndex
+			}
 			if next.Buffer != nil {
 				next.Buffer.SyncSnapshot(previous.Text())
 			}
@@ -209,6 +224,11 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 		}
 	}
 	*field = next
+	if !undo && !redo {
+		field.RecordEdit(previous)
+	}
+	selectionStart, selectionEnd := orderedSelection(field.Anchor, field.Caret)
+	uiInputState.SetTextInputSelection(selectionStart, selectionEnd)
 	if field.Text() != previous.Text() {
 		if number := world.GetMut[NumberInput](entity); number != nil {
 			number.Changed = true
@@ -245,26 +265,11 @@ func editReadOnlyField(field *TextField, state *input.State) {
 		}
 		return
 	}
-	extend := state.KeyHeld(input.KeyLeftShift) || state.KeyHeld(input.KeyRightShift)
+	if !state.Composing() {
+		field.Caret, field.Anchor = moveTextCaret(field.Text(), field.Caret, field.Anchor, state)
+	}
 	start, end := orderedSelection(field.Anchor, field.Caret)
-	if state.KeyPressed(input.KeyLeft) {
-		if start != end && !extend {
-			field.Caret = start
-		} else {
-			field.Caret = max(0, field.Caret-1)
-		}
-	} else if state.KeyPressed(input.KeyRight) {
-		if start != end && !extend {
-			field.Caret = end
-		} else {
-			field.Caret = min(field.Text().Runes(), field.Caret+1)
-		}
-	} else {
-		return
-	}
-	if !extend {
-		field.Anchor = field.Caret
-	}
+	state.SetTextInputSelection(start, end)
 }
 
 func htmlInputEditMetadata(edits []input.TextEdit) (inputType, data string) {
@@ -350,7 +355,7 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 	anchor = max(0, min(anchor, length))
 	shortcut := state.KeyHeld(input.KeyLeftControl) || state.KeyHeld(input.KeyRightControl) || state.KeyHeld(input.KeyLeftSuper) || state.KeyHeld(input.KeyRightSuper)
 	start, end := orderedSelection(anchor, caret)
-	if shortcut && state.KeyPressed(input.KeyA) {
+	if shortcut && !state.Composing() && state.KeyPressed(input.KeyA) {
 		return value, length, 0, 0
 	}
 	if shortcut && state.KeyPressed(input.KeyC) {
@@ -386,28 +391,16 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 		}
 		return value, caret, caret, submits
 	}
-	extend := state.KeyHeld(input.KeyLeftShift) || state.KeyHeld(input.KeyRightShift)
-	if state.KeyPressed(input.KeyLeft) {
-		if start != end && !extend {
-			caret = start
-		} else {
-			caret = max(caret-1, 0)
-		}
-		if !extend {
-			anchor = caret
-		}
-	}
-	if state.KeyPressed(input.KeyRight) {
-		if start != end && !extend {
-			caret = end
-		} else {
-			caret = min(caret+1, length)
-		}
-		if !extend {
-			anchor = caret
-		}
-	}
+	caret, anchor = moveTextCaret(source, caret, anchor, state)
 	start, end = orderedSelection(anchor, caret)
+	if state.KeyPressed(input.KeyDelete) {
+		if start == end {
+			end = min(start+1, length)
+		}
+		if start != end {
+			edits = prependTextEdit(edits, input.TextEdit{Command: input.TextCommandBackspace})
+		}
+	}
 	next, editedCaret, submits := apply(value, start, end, maxRunes, multiline, edits)
 	value = next
 	if textEditsChangeValue(edits) {

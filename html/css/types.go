@@ -43,8 +43,8 @@ type Declaration struct {
 }
 
 type RuleCondition struct {
-	Kind    RuleConditionKind
 	Prelude string
+	Kind    RuleConditionKind
 }
 
 type Selector struct {

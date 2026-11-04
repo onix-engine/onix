@@ -22,12 +22,12 @@ type Color struct {
 }
 
 type Value struct {
-	Kind     ValueKind
-	Color    Color
 	Keyword  string
 	LengthPx float64
 	Percent  float64
 	Number   float64
+	Color    Color
+	Kind     ValueKind
 }
 
 type Viewport struct {
@@ -80,10 +80,10 @@ const (
 )
 
 type Filter struct {
+	Shadow Shadow
+	Matrix [20]float64
 	Kind   FilterKind
 	Amount float64
-	Matrix [20]float64
-	Shadow Shadow
 }
 
 type TransformEasing uint8
@@ -97,67 +97,64 @@ const (
 )
 
 type TransformTransition struct {
-	Enabled  bool
+	Timing   TimingFunction
 	Duration float64
 	Delay    float64
+	Enabled  bool
 	Easing   TransformEasing
-	Timing   TimingFunction
 }
 
 type BackgroundLayer struct {
 	Image      string
+	PosXOrigin string
+	PosYOrigin string
+	Origin     string
+	Clip       string
+	Attachment string
 	SizeX      Value
 	SizeY      Value
 	PosX       Value
 	PosY       Value
-	PosXOrigin string
-	PosYOrigin string
 	RepeatX    Value
 	RepeatY    Value
-	Origin     string
-	Clip       string
-	Attachment string
 }
 
 // styleCore holds the comparable part of a resolved style so instances
 // can be interned by value; slice-valued properties live outside it.
 type styleCore struct {
-	// Derived paint context, propagated during the existing cascade traversal.
-	TextOpaqueBackdrop       bool
-	TextInOpacityGroup       bool
-	Display                  Value
-	TableLayout              Value
-	BorderSpacingX           Value
-	BorderSpacingY           Value
-	VerticalAlign            Value
-	Visibility               Value
-	PointerEvents            Value
-	Appearance               Value
-	BoxSizing                Value
-	Width                    Value
-	Height                   Value
-	MinWidth                 Value
-	MinHeight                Value
-	MaxWidth                 Value
-	MaxHeight                Value
 	BackgroundImage          string
-	BackgroundSizeX          Value
+	BackgroundAttachment     string
+	BackgroundPosYOrigin     string
+	ObjectPosYOrigin         string
+	ObjectPosXOrigin         string
+	ContainerName            string
+	GridTemplateRows         string
+	GridTemplateColumns      string
+	BackgroundPosXOrigin     string
+	BackgroundClip           string
+	BackgroundOrigin         string
+	BorderRadius             Corners
+	BorderWidth              Edges
+	Padding                  Edges
+	Margin                   Edges
+	BorderColor              Edges
+	BorderStyle              Edges
+	TextOverflow             Value
+	JustifyItems             Value
 	BackgroundSizeY          Value
 	BackgroundPosX           Value
 	BackgroundPosY           Value
-	BackgroundPosXOrigin     string
-	BackgroundPosYOrigin     string
 	BackgroundRepeatX        Value
 	BackgroundRepeatY        Value
-	BackgroundOrigin         string
-	BackgroundClip           string
-	BackgroundAttachment     string
-	Margin                   Edges
-	Padding                  Edges
-	BorderWidth              Edges
-	BorderColor              Edges
-	BorderStyle              Edges
-	BorderRadius             Corners
+	MaxHeight                Value
+	MaxWidth                 Value
+	MinHeight                Value
+	MinWidth                 Value
+	Height                   Value
+	Width                    Value
+	BoxSizing                Value
+	Appearance               Value
+	PointerEvents            Value
 	BackgroundColor          Value
 	Color                    Value
 	PlaceholderColor         Value
@@ -170,24 +167,26 @@ type styleCore struct {
 	TabSize                  Value
 	FontSize                 Value
 	LineHeight               Value
-	LineHeightNormal         bool
+	Display                  Value
+	TableLayout              Value
+	ObjectPosY               Value
 	FontFamily               Value
 	FontWeight               Value
 	ListStyleType            Value
 	WhiteSpace               Value
 	WordBreak                Value
 	OverflowWrap             Value
-	TextOverflow             Value
+	Visibility               Value
 	FlexDirection            Value
 	FlexWrap                 Value
-	GridTemplateColumns      string
-	GridTemplateRows         string
+	VerticalAlign            Value
+	BorderSpacingY           Value
 	GridColumnStart          Value
 	GridColumnEnd            Value
 	GridRowStart             Value
 	GridRowEnd               Value
 	JustifyContent           Value
-	JustifyItems             Value
+	BackgroundSizeX          Value
 	JustifySelf              Value
 	AlignItems               Value
 	AlignSelf                Value
@@ -199,49 +198,50 @@ type styleCore struct {
 	RowGap                   Value
 	ColumnGap                Value
 	ContainerType            Value
-	ContainerName            string
+	BorderSpacingX           Value
 	Position                 Value
 	Float                    Value
 	Clear                    Value
 	ZIndex                   Value
 	Opacity                  Value
-	TransformRotation        float64
+	ObjectPosX               Value
 	TransformTranslateX      Value
 	TransformTranslateY      Value
-	TransformScaleX          float64
-	TransformScaleY          float64
-	TransformSkewX           float64
-	TransformTranslateCrossX float64
-	TransformTranslateCrossY float64
+	ObjectFit                Value
+	Left                     Value
+	Bottom                   Value
+	Right                    Value
+	Top                      Value
 	TransformOriginX         Value
 	TransformOriginY         Value
-	AnimationImportant       AnimatedProperties
-	AnimatedOpacity          bool
-	AnimatedPaint            AnimatedProperties
-	ColorInherited           bool
+	ScrollbarThumbHoverColor Value
+	ScrollbarThumbColor      Value
+	ScrollbarTrackColor      Value
+	ScrollbarWidth           Value
 	OverflowX                Value
 	OverflowY                Value
-	ScrollbarWidth           Value
-	ScrollbarTrackColor      Value
-	ScrollbarThumbColor      Value
-	ScrollbarThumbHoverColor Value
-	Top                      Value
-	Right                    Value
-	Bottom                   Value
-	Left                     Value
-	ObjectFit                Value
-	ObjectPosX               Value
-	ObjectPosY               Value
-	ObjectPosXOrigin         string
-	ObjectPosYOrigin         string
+	TransformRotation        float64
+	TransformTranslateCrossY float64
+	TransformTranslateCrossX float64
+	TransformSkewX           float64
+	TransformScaleY          float64
+	TransformScaleX          float64
+	AnimatedPaint            AnimatedProperties
+	AnimatedOpacity          bool
+	AnimationImportant       AnimatedProperties
+	ColorInherited           bool
+	LineHeightNormal         bool
+	TextInOpacityGroup       bool
+	// Derived paint context, propagated during the existing cascade traversal.
+	TextOpaqueBackdrop bool
 }
 
 type ComputedStyle struct {
-	styleCore
+	motion           *motionStyle
 	BackgroundLayers []BackgroundLayer
 	BoxShadow        []Shadow
 	Filters          []Filter
-	motion           *motionStyle
+	styleCore
 }
 
 // Map stores one computed style per node. ComputedStyle is a large (~5.5KB)

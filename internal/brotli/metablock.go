@@ -14,18 +14,18 @@ import (
    block types and contexts. */
 
 type metaBlockSplit struct {
-	literal_split             blockSplit
+	command_histograms        []histogramCommand
+	literal_context_map       []uint32
+	distance_context_map      []uint32
+	literal_histograms        []histogramLiteral
+	distance_histograms       []histogramDistance
 	command_split             blockSplit
 	distance_split            blockSplit
-	literal_context_map       []uint32
+	literal_split             blockSplit
 	literal_context_map_size  uint
-	distance_context_map      []uint32
 	distance_context_map_size uint
-	literal_histograms        []histogramLiteral
 	literal_histograms_size   uint
-	command_histograms        []histogramCommand
 	command_histograms_size   uint
-	distance_histograms       []histogramDistance
 	distance_histograms_size  uint
 }
 
@@ -274,20 +274,20 @@ Greedy block splitter for one block category (literal, command or distance).
 	Gathers histograms for all context buckets.
 */
 type contextBlockSplitter struct {
-	alphabet_size_     uint
-	num_contexts_      uint
-	max_block_types_   uint
-	min_block_size_    uint
-	split_threshold_   float64
-	num_blocks_        uint
 	split_             *blockSplit
-	histograms_        []histogramLiteral
 	histograms_size_   *uint
+	histograms_        []histogramLiteral
+	last_entropy_      [2 * maxStaticContexts]float64
+	last_histogram_ix_ [2]uint
+	min_block_size_    uint
+	num_blocks_        uint
+	split_threshold_   float64
+	alphabet_size_     uint
 	target_block_size_ uint
 	block_size_        uint
 	curr_histogram_ix_ uint
-	last_histogram_ix_ [2]uint
-	last_entropy_      [2 * maxStaticContexts]float64
+	max_block_types_   uint
+	num_contexts_      uint
 	merge_last_count_  uint
 }
 

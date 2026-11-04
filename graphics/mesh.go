@@ -12,19 +12,18 @@ import (
 // consumed by Onix's 3D render pipelines. Geometry and static deformation streams
 // must be set before the first upload; changing them requires a new mesh.
 type Mesh struct {
+	err          error
+	residencies  render.DeviceValues[render.MeshHandle]
 	Vertices     []render.Vertex3D
 	Indices      []uint32
 	Submeshes    []Submesh
 	Skin         []SkinVertex
 	MorphTargets []MorphTarget
-	Bounds       BoundingSphere
 	gpuSkin      []render.MeshSkinVertex
 	gpuMorph     []render.MeshMorphVertex
-
-	handle      render.MeshHandle
-	residencies render.DeviceValues[render.MeshHandle]
-	disposed    bool
-	err         error
+	Bounds       BoundingSphere
+	handle       render.MeshHandle
+	disposed     bool
 }
 
 // Submesh selects one material and an optional animated rigid node. Node is

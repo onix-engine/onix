@@ -8,10 +8,10 @@ import (
 
 // TimingFunction is a compiled CSS easing function. Sampling allocates nothing.
 type TimingFunction struct {
-	Kind           TransformEasing
+	Jump           string
 	X1, Y1, X2, Y2 float64
 	Steps          int
-	Jump           string
+	Kind           TransformEasing
 }
 
 const (

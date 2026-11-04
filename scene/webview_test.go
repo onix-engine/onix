@@ -41,10 +41,10 @@ func (h *webViewTestHandle) Destroy() error {
 }
 
 type webViewTestBackend struct {
+	handle  *webViewTestHandle
 	options []WebViewOptions
 	invoke  []WebViewInvoke
 	events  []func(WebViewEvent)
-	handle  *webViewTestHandle
 }
 
 func (b *webViewTestBackend) Create(options WebViewOptions, invoke WebViewInvoke, events func(WebViewEvent)) (WebViewHandle, error) {

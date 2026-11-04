@@ -153,8 +153,8 @@ func (world *World) AdvanceMessages() {
 type messageScratchKey[Tag, T any] struct{}
 
 type messageScratch[T any] struct {
-	scratch Scratch[T]
 	older   []T
+	scratch Scratch[T]
 }
 
 func (s *messageScratch[T]) advance() {

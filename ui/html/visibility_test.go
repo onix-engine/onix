@@ -65,7 +65,7 @@ func TestHTMLVisibilityPreservesLayoutAndVisibleDescendants(t *testing.T) {
 	shown := incrementalHTMLNode(t, world, owner, "shown")
 	after := incrementalHTMLNode(t, world, owner, "after")
 	state := world.GetRef[htmlRenderState](owner)
-	parentBox, afterRect := state.BoxesByNode[parent.node], state.BoxesByNode[after.node].BorderBox()
+	parentBox, afterRect := state.boxForNode(parent.node), state.boxForNode(after.node).BorderBox()
 	clip := state.OverflowBindings[parent.node].entity
 	scroll, _ := world.Get[scene.UIScroll](clip)
 	if !scroll.DisableInput || !scene.IsVisible(world, clip) {
@@ -87,7 +87,7 @@ func TestHTMLVisibilityPreservesLayoutAndVisibleDescendants(t *testing.T) {
 		incrementalSync(t, world)
 		state = world.GetRef[htmlRenderState](owner)
 		current, _ := world.Get[scene.UIScroll](clip)
-		if state.SyncStats.Layouts != 0 || state.BoxesByNode[parent.node] != parentBox || state.BoxesByNode[after.node].BorderBox() != afterRect || current.ContentSize != scroll.ContentSize {
+		if state.SyncStats.Layouts != 0 || state.boxForNode(parent.node) != parentBox || state.boxForNode(after.node).BorderBox() != afterRect || current.ContentSize != scroll.ContentSize {
 			t.Fatalf("visibility changed geometry or scroll extent: %+v", state.SyncStats)
 		}
 		if current.DisableInput != (class == "hidden") {

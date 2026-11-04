@@ -61,12 +61,12 @@ type testSpriteScript struct {
 }
 
 type testInputScript struct {
+	Text          string
+	File          string
 	PointerEvents int
 	GlobalEvents  int
 	Current       ecs.Entity
 	Key           input.KeyCode
-	Text          string
-	File          string
 }
 
 func (script *testInputScript) OnInput(_ *ScriptContext, event *sceneapi.InputEventContext) error {

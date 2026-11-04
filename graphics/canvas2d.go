@@ -13,35 +13,35 @@ import (
 const initialBatchInstances = 256
 
 type Canvas2D struct {
-	device      *render.Device
-	width       float32
-	height      float32
-	rasterScale float64
-	viewMatrix  mgl32.Mat4
-	projection  mgl32.Mat4
-	projected   bool
-
-	clearColor  ColorRGBA
-	blend       render.BlendState
-	clipStack   []clipRect
-	targetClips []clipRect
-	scissorRect render.Rect
-	frameActive bool
-	err         error
+	err              error
+	material2DShader *Material2DShader
+	device           *render.Device
+	scratch          scratchValues
+	texture          *Texture
+	retained         []any
 
 	instances         []render.Instance2D
-	draws             []render.SpriteDraw
-	drawStart         int
-	texture           *Texture
-	material2DShader  *Material2DShader
-	material2DCustom  [4][4]float32
 	shapes            []render.ShapeInstance2D
-	retained          []any
-	scratch           scratchValues
-	instanceRetention reuse.Retention
-	drawRetention     reuse.Retention
+	draws             []render.SpriteDraw
+	clipStack         []clipRect
+	targetClips       []clipRect
 	shapeRetention    reuse.Retention
+	drawRetention     reuse.Retention
+	instanceRetention reuse.Retention
 	retainedRetention reuse.Retention
+	rasterScale       float64
+	drawStart         int
+	projection        mgl32.Mat4
+	material2DCustom  [4][4]float32
+	viewMatrix        mgl32.Mat4
+	blend             render.BlendState
+	scissorRect       render.Rect
+
+	clearColor  ColorRGBA
+	height      float32
+	width       float32
+	projected   bool
+	frameActive bool
 }
 
 // RetainUntilFlush keeps a resource owner alive while its draw commands are

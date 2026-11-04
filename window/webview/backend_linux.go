@@ -47,11 +47,11 @@ const linuxWebViewBridgeScript = `(function(){
 })();`
 
 type linuxWebViewBackend struct {
-	mu      sync.Mutex
 	handles map[*linuxWebViewHandle]struct{}
-	closed  bool
 	done    chan struct{}
 	parent  uintptr
+	mu      sync.Mutex
+	closed  bool
 }
 
 var (
@@ -214,8 +214,8 @@ func (b *linuxWebViewBackend) Close() error {
 }
 
 type linuxWebViewCreateResult struct {
-	view uintptr
 	err  error
+	view uintptr
 }
 
 type linuxWebViewDestroyRequest struct {
@@ -224,19 +224,19 @@ type linuxWebViewDestroyRequest struct {
 }
 
 type linuxWebViewHandle struct {
-	backend *linuxWebViewBackend
-	invoke  scene.WebViewInvoke
-	events  func(scene.WebViewEvent)
-	created chan linuxWebViewCreateResult
-	token   cgo.Handle
+	backend     *linuxWebViewBackend
+	invoke      scene.WebViewInvoke
+	events      func(scene.WebViewEvent)
+	created     chan linuxWebViewCreateResult
+	destroyDone chan struct{}
+	response    []byte
+	token       cgo.Handle
+	view        uintptr
 
 	mu             sync.Mutex
 	responseMu     sync.Mutex
-	view           uintptr
 	closed         bool
 	destroyStarted bool
-	destroyDone    chan struct{}
-	response       []byte
 }
 
 func (h *linuxWebViewHandle) queueString(value string, call func(C.uintptr_t, *C.char) *C.char) error {

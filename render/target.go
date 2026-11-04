@@ -69,11 +69,11 @@ type RenderTargetReadbackDriver interface {
 // RenderTarget owns a renderer-neutral offscreen color attachment and optional
 // depth attachment. Resize is deferred until the target is next used.
 type RenderTarget struct {
+	active      *Device
+	residencies DeviceValues[targetResidency]
 	descriptor  RenderTargetDescriptor
 	handle      RenderTargetHandle
 	color       TextureHandle
-	residencies DeviceValues[targetResidency]
-	active      *Device
 	disposed    bool
 }
 

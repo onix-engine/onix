@@ -21,11 +21,11 @@ type renderPhaseReader2D[T any] interface {
 type renderSortKey2D struct {
 	scene     uint64
 	group     uint64
-	ui        bool
 	sortIndex int
-	depth     float32
 	order     uint64
+	depth     float32
 	sequence  uint32
+	ui        bool
 }
 
 type renderBatch2D struct {

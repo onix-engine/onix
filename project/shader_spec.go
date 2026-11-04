@@ -34,8 +34,8 @@ type ShaderSources struct {
 type ShaderComponentSpec struct {
 	WGSLVertex   string        `json:"wgslVertex,omitempty"`
 	WGSLFragment string        `json:"wgslFragment,omitempty"`
-	Custom       [4][4]float32 `json:"custom,omitzero"`
 	Compiled     ShaderSources `json:"-"`
+	Custom       [4][4]float32 `json:"custom,omitzero"`
 }
 
 func (s ShaderComponentSpec) SourcePaths() [2]string {

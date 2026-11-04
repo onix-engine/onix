@@ -12,9 +12,9 @@ type modShaderTarget struct {
 }
 
 type modShaderPreprocessor struct {
+	indices map[[2]string]int
 	specs   []ShaderSpec
 	targets []modShaderTarget
-	indices map[[2]string]int
 }
 
 func (p *modShaderPreprocessor) add(index int, element ModElementPlan) {

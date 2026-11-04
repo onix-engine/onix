@@ -14,28 +14,28 @@ const (
 )
 
 type bodyState struct {
-	generation      uint32
-	alive           bool
-	bodyType        BodyType
 	position        Vector
-	rotation        float64
-	velocity        Vector
-	angularVelocity float64
 	force           Vector
+	velocity        Vector
+	inertia         float64
+	inverseInertia  float64
+	quietTime       float64
+	angularVelocity float64
+	touched         uint64
 	torque          float64
 	mass            float64
-	inertia         float64
+	userData        uint64
 	inverseMass     float64
-	inverseInertia  float64
+	rotation        float64
 	gravityScale    float64
 	linearDamping   float64
 	angularDamping  float64
+	generation      uint32
 	fixedRotation   bool
-	userData        uint64
 	managed         bool
-	touched         uint64
+	alive           bool
 	sleeping        bool
-	quietTime       float64
+	bodyType        BodyType
 	wakeContacts    bool
 }
 
@@ -57,21 +57,21 @@ func (body *bodyState) updateInverseMass() {
 }
 
 type colliderState struct {
-	generation    uint32
-	alive         bool
-	bodyIndex     uint32
-	kind          shapeKind
+	filter        Filter
 	a             Vector
 	b             Vector
+	restitution   float64
 	radius        float64
 	rotation      float64
 	friction      float64
-	restitution   float64
-	sensor        bool
-	filter        Filter
-	collisionType uint32
-	managed       bool
 	touched       uint64
+	bodyIndex     uint32
+	generation    uint32
+	collisionType uint32
+	kind          shapeKind
+	sensor        bool
+	alive         bool
+	managed       bool
 }
 
 type colliderPair struct {
@@ -121,34 +121,34 @@ type activeCollision struct {
 }
 
 type World struct {
-	Gravity       Vector
-	Iterations    int
-	Damping       float64
-	CollisionSlop float64
-	CellSize      float64
-	Sleep         SleepConfig
-	sleep         sleepState
+	staticSensors    []int
+	pairs            []colliderPair
+	events           []CollisionEvent
+	nextActive       []activeCollision
+	active           []activeCollision
+	velocityContacts []manifold
+	contacts         []manifold
 
 	bodies        []bodyState
 	freeBodies    []uint32
 	colliders     []colliderState
 	freeColliders []uint32
 
-	aabbs            []aabb
-	proxies          []broadphaseProxy
-	staticGrid       spatialGrid
-	dynamicGrid      spatialGrid
-	gridCellSize     float64
-	stats            StepStatistics
-	large            []int
-	staticSensors    []int
-	pairs            []colliderPair
-	contacts         []manifold
-	velocityContacts []manifold
-	contactDelta     float64
-	active           []activeCollision
-	nextActive       []activeCollision
-	events           []CollisionEvent
+	aabbs         []aabb
+	proxies       []broadphaseProxy
+	large         []int
+	dynamicGrid   spatialGrid
+	staticGrid    spatialGrid
+	sleep         sleepState
+	stats         StepStatistics
+	Sleep         SleepConfig
+	Gravity       Vector
+	gridCellSize  float64
+	contactDelta  float64
+	Iterations    int
+	CellSize      float64
+	CollisionSlop float64
+	Damping       float64
 }
 
 func NewWorld() *World {

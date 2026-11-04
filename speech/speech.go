@@ -18,9 +18,9 @@ type Options struct {
 }
 
 type Status struct {
+	Err      error
 	Speaking bool
 	Paused   bool
-	Err      error
 }
 
 type platformSynthesizer interface {

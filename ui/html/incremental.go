@@ -115,9 +115,9 @@ func (n Node) markAttributeDirty(name string) {
 	// These attributes only affect selector matching/cascade. Other attributes
 	// may also change native controls, image sources or intrinsic measurements.
 	switch name {
-	case "class", "style":
+	case "class", "style", "title":
 		n.markMutation(htmlMutationStyle)
-	case "id", "src", "alt", "title", "hidden":
+	case "id", "src", "alt", "hidden":
 		kind := htmlMutationAttribute
 		for ancestor := n.node; ancestor != nil; ancestor = ancestor.Parent {
 			if htmlDefinesFilter(ancestor) {

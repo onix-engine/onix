@@ -10,11 +10,11 @@ import (
 )
 
 type extractedLight3D struct {
-	render.Light3D
-	entity  ecs.Entity
-	scene   uint64
 	layers  scene.RenderLayers
 	shadows extractedShadowLight3D
+	entity  ecs.Entity
+	scene   uint64
+	render.Light3D
 }
 
 // Select a fixed-size ordered set in one scan. Directional lights precede

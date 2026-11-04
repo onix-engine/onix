@@ -7,10 +7,10 @@ import (
 )
 
 type fileInfo struct {
+	modTime time.Time
 	name    string
 	size    int64
 	mode    iofs.FileMode
-	modTime time.Time
 }
 
 func (i fileInfo) Name() string        { return i.name }

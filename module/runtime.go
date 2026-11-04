@@ -15,95 +15,97 @@ import (
 )
 
 type Options struct {
-	EventCapacity int
-	// PayloadCapacity is the initial capacity per payload type and bank.
-	// Zero selects min(8, EventCapacity); storage grows on demand while
-	// EventCapacity continues to bound the total event queue.
-	PayloadCapacity   int
-	RequestCapacity   int
+	Source            fs.FS
+	Resources         project.ResourceFeature
+	Host              *Host
+	Wake              func()
 	CommandCapacity   int
-	TimeoutTicks      uint64
 	OutputCapacity    int
 	TextCacheCapacity int
 	StartupBatches    int
 	StartupEvents     int
-	Source            fs.FS
-	Resources         project.ResourceFeature
-	Wake              func()
-	Host              *Host
+	TimeoutTicks      uint64
+	EventCapacity     int
+	RequestCapacity   int
+	// PayloadCapacity is the initial capacity per payload type and bank.
+	// Zero selects min(8, EventCapacity); storage grows on demand while
+	// EventCapacity continues to bound the total event queue.
+	PayloadCapacity int
 }
 
 // Runtime is single-threaded. Plans and registration are immutable for its life.
 type Runtime struct {
-	world                     *ecs.World
-	plan                      *project.ProjectPlan
-	options                   Options
-	content                   contentSupport
-	transforms                *transformSpawners
-	registry                  Registry
-	typedStores               map[reflect.Type]valueStore
-	nextDelivery              uint64
-	inputStore                *store[Input]
-	usedStores                [4][]valueStore
-	usedSlots                 [4][]*slotBuffer
-	scenes                    []*Scene
-	queues                    [2][]envelope
-	slotBuffers               map[project.ValueType]*slotBuffer
-	write                     uint8
-	tick                      uint64
-	nextIdentity              uint64
-	nextRequest               RequestID
-	pending                   []pendingRequest
-	freePending               []int
-	pendingFirst, pendingLast int
-	commands                  []structuralCommand
-	busy, closed              bool
-	queryDepth                int
-	despawnEntities           []ecs.Entity
-	dirtyEntities             []*Context
-	loading                   bool
-	privateCommands           int
-	privateSpawns             map[ecs.Entity]privateSpawn
-	orderDirty                bool
-	disposedDirty             bool
-	manager                   SceneManager
-	outputs                   *scene.RenderOutputPool
-	fonts                     map[[32]byte]*fontResource
-	contentResources          map[project.ModID]*privateResources
-	preparedContent           *preparedSceneContent
-	collisions2D              ecs.MessageReader[physics.CollisionMessage2D]
-	collisions3D              ecs.MessageReader[physics.CollisionMessage3D]
-	preparation               *preparation
-	prepareWorkspace          preparation
-	runningScope              ecs.QueryScope
-	renderScope               ecs.QueryScope
-	runningEntities           []ecs.Entity
-	runningUpdates            []*Context
-	runningFrameUpdates       []*Context
-	renderEntities            []ecs.Entity
-	scopeNodes                []sceneScopeNode
-	scopeHierarchy            uint64
-	scopeOwners               uint64
-	scopeEntities             uint64
-	scopeDirty                bool
-	renderBackground          bool
+	registry            Registry
+	inputStore          *store[Input]
+	contentResources    map[project.ModID]*privateResources
+	plan                *project.ProjectPlan
+	typedStores         map[reflect.Type]valueStore
+	transforms          *transformSpawners
+	world               *ecs.World
+	privateSpawns       map[ecs.Entity]privateSpawn
+	outputs             *scene.RenderOutputPool
+	preparation         *preparation
+	fonts               map[[32]byte]*fontResource
+	slotBuffers         map[project.ValueType]*slotBuffer
+	preparedContent     *preparedSceneContent
+	content             contentSupport
+	prepareWorkspace    preparation
+	usedSlots           [4][]*slotBuffer
+	usedStores          [4][]valueStore
+	queues              [2][]envelope
+	dirtyEntities       []*Context
+	despawnEntities     []ecs.Entity
+	scopeNodes          []sceneScopeNode
+	commands            []structuralCommand
+	renderEntities      []ecs.Entity
+	runningFrameUpdates []*Context
+	runningUpdates      []*Context
+	scenes              []*Scene
+	freePending         []int
+	runningEntities     []ecs.Entity
+	pending             []pendingRequest
+	manager             SceneManager
+	renderScope         ecs.QueryScope
+	runningScope        ecs.QueryScope
+	options             Options
+	tick                uint64
+	scopeHierarchy      uint64
+	nextIdentity        uint64
+	pendingFirst        int
+	scopeEntities       uint64
+	collisions2D        ecs.MessageReader[physics.CollisionMessage2D]
+	collisions3D        ecs.MessageReader[physics.CollisionMessage3D]
+	scopeOwners         uint64
+	nextDelivery        uint64
+	nextRequest         RequestID
+	privateCommands     int
+	pendingLast         int
+	queryDepth          int
+	closed              bool
+	busy                bool
+	loading             bool
+	orderDirty          bool
+	disposedDirty       bool
+	write               uint8
+	scopeDirty          bool
+	renderBackground    bool
 }
 
 type Scene struct {
 	uploads           graphics.UploadQueue
 	runtime           *Runtime
 	plan              *project.ScenePlan
-	context           Context
-	modules           []Context
 	instances         map[string]int
+	startup           SceneStartup
+	modules           []Context
+	entities          []ecs.Entity
+	context           Context
+	layer             scene.SceneLayer
 	uiRoot, worldRoot ecs.Entity
-	disposeQueued     bool
-	state             SceneState
 	rendered          bool
 	foreground        bool
-	layer             scene.SceneLayer
-	startup           SceneStartup
-	entities          []ecs.Entity
+	state             SceneState
+	disposeQueued     bool
 }
 
 // New creates a runtime with statically selected content capabilities.

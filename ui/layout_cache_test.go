@@ -10,39 +10,39 @@ import (
 
 func TestUILayoutHierarchyCacheInvalidation(t *testing.T) {
 	for _, test := range []struct {
+		mutate  func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity)
 		name    string
 		rebuild bool
-		mutate  func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity)
 	}{
-		{"unchanged", false, func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity) {}},
-		{"size", false, func(world *ecs.World, _, child, _ ecs.Entity) { _ = world.Insert(child, scene.Size2D{Width: 25}) }},
-		{"layout_values", false, func(world *ecs.World, parent, _, _ ecs.Entity) {
+		{name: "unchanged", rebuild: false, mutate: func(*ecs.World, ecs.Entity, ecs.Entity, ecs.Entity) {}},
+		{name: "size", rebuild: false, mutate: func(world *ecs.World, _, child, _ ecs.Entity) { _ = world.Insert(child, scene.Size2D{Width: 25}) }},
+		{name: "layout_values", rebuild: false, mutate: func(world *ecs.World, parent, _, _ ecs.Entity) {
 			layout := world.GetMut[Layout](parent)
 			layout.SpacingX++
 		}},
-		{"transform_values", false, func(world *ecs.World, _, child, _ ecs.Entity) {
+		{name: "transform_values", rebuild: false, mutate: func(world *ecs.World, _, child, _ ecs.Entity) {
 			transform := world.GetMut[scene.UITransform](child)
 			transform.Translation.X.Value++
 		}},
-		{"reparent", true, func(world *ecs.World, _, child, other ecs.Entity) {
+		{name: "reparent", rebuild: true, mutate: func(world *ecs.World, _, child, other ecs.Entity) {
 			parent := world.GetMut[scene.Parent](child)
 			parent.Entity = other
 		}},
-		{"remove_parent", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.Parent](child) }},
-		{"order", true, func(world *ecs.World, _, child, _ ecs.Entity) {
+		{name: "remove_parent", rebuild: true, mutate: func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.Parent](child) }},
+		{name: "order", rebuild: true, mutate: func(world *ecs.World, _, child, _ ecs.Entity) {
 			order := world.GetMut[scene.SiblingOrder](child)
 			*order = -10
 		}},
-		{"remove_order", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.SiblingOrder](child) }},
-		{"remove_layout", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[Layout](parent) }},
-		{"remove_transform", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[scene.UITransform](parent) }},
-		{"despawn_child", true, func(world *ecs.World, _, child, _ ecs.Entity) { world.Despawn(child) }},
-		{"despawn_parent", true, func(world *ecs.World, parent, _, _ ecs.Entity) { world.Despawn(parent) }},
-		{"spawn_child", true, func(world *ecs.World, parent, _, _ ecs.Entity) {
+		{name: "remove_order", rebuild: true, mutate: func(world *ecs.World, _, child, _ ecs.Entity) { world.Remove[scene.SiblingOrder](child) }},
+		{name: "remove_layout", rebuild: true, mutate: func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[Layout](parent) }},
+		{name: "remove_transform", rebuild: true, mutate: func(world *ecs.World, parent, _, _ ecs.Entity) { world.Remove[scene.UITransform](parent) }},
+		{name: "despawn_child", rebuild: true, mutate: func(world *ecs.World, _, child, _ ecs.Entity) { world.Despawn(child) }},
+		{name: "despawn_parent", rebuild: true, mutate: func(world *ecs.World, parent, _, _ ecs.Entity) { world.Despawn(parent) }},
+		{name: "spawn_child", rebuild: true, mutate: func(world *ecs.World, parent, _, _ ecs.Entity) {
 			spawner := world.NewSpawner2[scene.Parent, scene.UITransform]()
 			spawner.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform())
 		}},
-		{"reuse_slot", true, func(world *ecs.World, parent, child, _ ecs.Entity) {
+		{name: "reuse_slot", rebuild: true, mutate: func(world *ecs.World, parent, child, _ ecs.Entity) {
 			world.Despawn(child)
 			spawner := world.NewSpawner2[scene.Parent, scene.UITransform]()
 			spawner.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform())

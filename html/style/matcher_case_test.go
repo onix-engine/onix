@@ -1,6 +1,7 @@
 package style
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/diiyw/onix/html/css"
@@ -18,7 +19,7 @@ func TestCompiledMatcherPreservesClassAndIDCase(t *testing.T) {
 	}
 
 	compiled := compileStylesheet(stylesheet)
-	candidates := compiled.candidates(doc.Children[0])
+	candidates := slices.Collect(compiled.candidates(doc.Children[0]))
 	if len(candidates) != 1 || !css.Match(candidates[0].selector, doc.Children[0]) {
 		t.Fatalf("case-sensitive selector was not indexed and matched: %#v", candidates)
 	}

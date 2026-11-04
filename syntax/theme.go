@@ -87,13 +87,13 @@ func (s Style) CSS() string {
 }
 
 type themeSettings struct {
-	Foreground string  `json:"foreground"`
 	FontStyle  *string `json:"fontStyle"`
+	Foreground string  `json:"foreground"`
 }
 
 type themeRule struct {
-	Scope    json.RawMessage `json:"scope"`
 	Settings themeSettings   `json:"settings"`
+	Scope    json.RawMessage `json:"scope"`
 }
 
 type themeFile struct {

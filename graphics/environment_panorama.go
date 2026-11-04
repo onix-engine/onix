@@ -14,8 +14,8 @@ import (
 type EnvironmentImages struct{ Panorama, Atlas *image.NRGBA }
 
 type panoramaLevel struct {
-	width, height int
 	pixels        []mgl32.Vec3
+	width, height int
 }
 
 func (p panoramaLevel) Size() (int, int)       { return p.width, p.height }
@@ -42,7 +42,7 @@ func BakePanoramaEnvironment[S LinearPanorama](source S, width, samples int) (En
 	filtered := &filteredPanorama[S]{source: source, width: w, height: h}
 	for mw, mh := w, h; mw > 1 || mh > 1; {
 		mw, mh = max(1, (mw+1)/2), max(1, (mh+1)/2)
-		filtered.levels = append(filtered.levels, panoramaLevel{mw, mh, make([]mgl32.Vec3, mw*mh)})
+		filtered.levels = append(filtered.levels, panoramaLevel{width: mw, height: mh, pixels: make([]mgl32.Vec3, mw*mh)})
 	}
 	// Encode the original image while accumulating its first filtered level.
 	// Spherical row areas preserve energy at the poles and under downsampling.

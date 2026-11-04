@@ -23,8 +23,8 @@ func (b *GlyphBitmap) bytes() int {
 }
 
 type glyphBitmapCacheKey struct {
-	glyphID        uint16
 	sizeBits       uint64
+	glyphID        uint16
 	phaseX, phaseY uint8
 }
 

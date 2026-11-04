@@ -42,14 +42,14 @@ func TestSnapshotsRetainOldVersionsAcrossTailEdits(t *testing.T) {
 	tree.Reset(value)
 	snapshots, expected := []string{tree.String()}, []string{value}
 	for _, edit := range []struct {
-		start, end int
 		value      string
+		start, end int
 	}{
-		{len(value), len(value), "tail"},
-		{len(value) + 4, len(value) + 4, "more"},
-		{len(value) + 2, len(value) + 8, ""},
-		{len(value) + 2, len(value) + 2, "replace"},
-		{0, 3, "首"},
+		{start: len(value), end: len(value), value: "tail"},
+		{start: len(value) + 4, end: len(value) + 4, value: "more"},
+		{start: len(value) + 2, end: len(value) + 8, value: ""},
+		{start: len(value) + 2, end: len(value) + 2, value: "replace"},
+		{start: 0, end: 3, value: "首"},
 	} {
 		tree.Replace(edit.start, edit.end, edit.value)
 		value = value[:edit.start] + edit.value + value[edit.end:]

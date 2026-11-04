@@ -306,7 +306,7 @@ func TestHTMLCSSAnimatedRasterPaintReusesTexture(t *testing.T) {
 	value, _ := world.Get[scene.Sprite2D](visual)
 	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "item")
-	raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
+	raster := state.Textures.paint(htmlTextureKey{node: node.node, variant: "background"})
 	if value.Texture != initial.Texture || raster.image.RGBAAt(15, 10).B != 255 || raster.image.RGBAAt(15, 10).A != 128 || raster.image.RGBAAt(15, 0).R != 128 || raster.image.RGBAAt(15, 0).B != 128 {
 		t.Fatalf("animated raster stale: center=%v border=%v texture reused=%v", raster.image.RGBAAt(15, 10), raster.image.RGBAAt(15, 0), value.Texture == initial.Texture)
 	}

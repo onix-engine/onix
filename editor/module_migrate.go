@@ -25,8 +25,8 @@ type ModuleMigrationIssue struct {
 type ModuleMigrationReport struct {
 	Source string                 `json:"source"`
 	Output string                 `json:"output"`
-	Ready  bool                   `json:"ready"`
 	Issues []ModuleMigrationIssue `json:"issues,omitempty"`
+	Ready  bool                   `json:"ready"`
 }
 
 // These source-only readers belong to the one-time migration tool. Neither the
@@ -42,16 +42,19 @@ type migrationResources struct {
 }
 
 type moduleMigration struct {
-	source, output             string
-	report                     ModuleMigrationReport
-	resources                  migrationResources
-	assets                     map[string][]byte
-	fonts, audio, videos, html map[string]project.FileResource
-	particles                  map[string]project.ParticleSpec
-	tilemaps                   map[string]project.TilemapSpec
-	models                     map[string]project.ModelSpec
-	spines                     map[string]project.SpineSpec
-	shaders                    map[string]project.ShaderSpec
+	particles      map[string]project.ParticleSpec
+	spines         map[string]project.SpineSpec
+	shaders        map[string]project.ShaderSpec
+	videos         map[string]project.FileResource
+	assets         map[string][]byte
+	fonts          map[string]project.FileResource
+	html           map[string]project.FileResource
+	audio          map[string]project.FileResource
+	models         map[string]project.ModelSpec
+	tilemaps       map[string]project.TilemapSpec
+	source, output string
+	resources      migrationResources
+	report         ModuleMigrationReport
 }
 
 func migrationIndex[T any](entries []T, id func(T) string) map[string]T {

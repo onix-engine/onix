@@ -26,8 +26,8 @@ const (
 var magic = [8]byte{'O', 'N', 'I', 'X', 'B', 'I', 'N', '1'}
 
 type schemaResult struct {
-	fingerprint uint64
 	err         error
+	fingerprint uint64
 }
 
 var schemaCache sync.Map
@@ -157,8 +157,8 @@ type visit struct {
 }
 
 type valueEncoder struct {
-	data     []byte
 	pointers map[visit]struct{}
+	data     []byte
 }
 
 func (e *valueEncoder) encode(value reflect.Value, typeOf reflect.Type) error {
@@ -255,8 +255,8 @@ func (e *valueEncoder) encode(value reflect.Value, typeOf reflect.Type) error {
 }
 
 type encodedMapEntry struct {
-	keyStart, keyEnd int
 	value            reflect.Value
+	keyStart, keyEnd int
 }
 
 type mapEncodeScratch struct {

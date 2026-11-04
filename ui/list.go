@@ -25,53 +25,53 @@ const (
 // replaced at runtime; changing the viewport or item size requires recreating
 // the list so its item pool remains correctly sized.
 type List[T any] struct {
-	Items      []T
-	Axis       ListAxis
-	ItemSize   float32
-	Overscan   int
-	First      int
-	Last       int
 	BindItem   func(*ecs.World, ecs.Entity, int, T)
 	UnbindItem func(*ecs.World, ecs.Entity)
+	Items      []T
 
 	itemEntities []ecs.Entity
+	Overscan     int
+	First        int
+	Last         int
+	ItemSize     float32
+	Axis         ListAxis
 }
 
 // ListItem identifies the item currently represented by a pooled item entity.
 // Index is -1 while the entity is not in use.
 type ListItem[T any] struct {
+	Value T
 	List  ecs.Entity
 	Index int
-	Value T
 }
 
 type ListOptions[T any] struct {
-	ReserveScrollbarSpace bool
-	X, Y                  float32
-	Width, Height         float32
-	Items                 []T
-	Axis                  ListAxis
-	ItemSize              float32
-	Overscan              int
-	Controlled            bool
-	ScrollX               float32
-	ScrollY               float32
-	BarSize               float32
-	MinThumbSize          float32
-	ThumbBarSize          float32
-	HoverBarSize          float32
-	Radius                CornerRadius
-	PassThrough           bool
-	Theme                 Theme
-	Style                 *ScrollStyle
+	UnbindItem func(*ecs.World, ecs.Entity)
+	BindItem   func(*ecs.World, ecs.Entity, int, T)
 
 	// BuildItem initializes each pooled entity once. Add custom visuals as its
 	// children; BindItem then updates them whenever it represents an item.
 	// UnbindItem resets those visuals when a pooled entity stops representing an
 	// item. It is also called once after BuildItem so empty lists start cleanly.
-	BuildItem  func(*ecs.World, ecs.Entity)
-	BindItem   func(*ecs.World, ecs.Entity, int, T)
-	UnbindItem func(*ecs.World, ecs.Entity)
+	BuildItem             func(*ecs.World, ecs.Entity)
+	Style                 *ScrollStyle
+	Items                 []T
+	Theme                 Theme
+	Overscan              int
+	ScrollX               float32
+	ThumbBarSize          float32
+	X, Y                  float32
+	ScrollY               float32
+	BarSize               float32
+	MinThumbSize          float32
+	ItemSize              float32
+	HoverBarSize          float32
+	Radius                CornerRadius
+	Width, Height         float32
+	Axis                  ListAxis
+	PassThrough           bool
+	ReserveScrollbarSpace bool
+	Controlled            bool
 }
 
 type listEntitiesScratch[T any] struct{}

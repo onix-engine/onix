@@ -16,15 +16,15 @@ import (
 )
 
 type workspaceField struct {
-	Target               DocumentID
 	Pointer, Kind, Value string
-	Axis                 int
+	Target               DocumentID
 	Vector               [4]float64
 	VectorBits           int
+	Axis                 int
 	VectorSize           int
+	NumberStep           float64
 	CommitOnChange       bool
 	Selected             bool
-	NumberStep           float64
 	SlotValue            bool
 	Unset                bool
 	Animation            bool
@@ -35,12 +35,12 @@ func (f workspaceField) modified(value string) bool { return f.Unset || value !=
 type workspaceTreeRow struct {
 	Scene        project.SceneID
 	ID, Parent   string
-	Index, Depth int
 	Mod          project.ModID
 	Element      string // non-empty for private module element rows
 	Resource     string
 	Slot         string
 	Group        string
+	Index, Depth int
 }
 
 func workspaceRectStyle(bounds rect) string {
@@ -637,9 +637,9 @@ func (a *ModuleEditor) stagePatches(patches map[DocumentID][]DocumentPatch) erro
 // stagedViewEntry caches one decoded staged document, keyed by source identity.
 // Staged JSON is replaced wholesale, never edited in place, so this cannot go stale.
 type stagedViewEntry[T any] struct {
+	spec T
 	// source is retained so a freed buffer's address cannot be reused by a newer one.
 	source []byte
-	spec   T
 }
 
 func stagedView[T any](cache map[DocumentID]stagedViewEntry[T], target DocumentID, data []byte) (T, bool) {

@@ -378,9 +378,9 @@ func romanMarker(value int, upper bool) string {
 	}
 	var result strings.Builder
 	for _, item := range [...]struct {
-		value int
 		text  string
-	}{{1000, "m"}, {900, "cm"}, {500, "d"}, {400, "cd"}, {100, "c"}, {90, "xc"}, {50, "l"}, {40, "xl"}, {10, "x"}, {9, "ix"}, {5, "v"}, {4, "iv"}, {1, "i"}} {
+		value int
+	}{{value: 1000, text: "m"}, {value: 900, text: "cm"}, {value: 500, text: "d"}, {value: 400, text: "cd"}, {value: 100, text: "c"}, {value: 90, text: "xc"}, {value: 50, text: "l"}, {value: 40, text: "xl"}, {value: 10, text: "x"}, {value: 9, text: "ix"}, {value: 5, text: "v"}, {value: 4, text: "iv"}, {value: 1, text: "i"}} {
 		for value >= item.value {
 			result.WriteString(item.text)
 			value -= item.value

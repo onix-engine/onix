@@ -6,11 +6,11 @@ import (
 )
 
 type TextureSpec struct {
+	Slice  *NineSlice `json:"slice,omitempty"`
 	Image  string     `json:"image,omitempty"`
 	Atlas  string     `json:"atlas,omitempty"`
 	Frame  string     `json:"frame,omitempty"`
 	Color  string     `json:"color,omitempty"`
-	Slice  *NineSlice `json:"slice,omitempty"`
 	Mipmap bool       `json:"mipmap,omitempty"`
 }
 

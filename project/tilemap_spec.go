@@ -4,13 +4,13 @@ import "fmt"
 
 type TilemapSpec struct {
 	ID         string    `json:"id"`
+	Tileset    string    `json:"tileset,omitempty"`
+	Tiles      []int     `json:"tiles"`
+	TileRuns   []TileRun `json:"-"`
 	Width      int       `json:"width"`
 	Height     int       `json:"height"`
 	TileWidth  int       `json:"tileWidth"`
 	TileHeight int       `json:"tileHeight"`
-	Tileset    string    `json:"tileset,omitempty"`
-	Tiles      []int     `json:"tiles"`
-	TileRuns   []TileRun `json:"-"`
 }
 
 type TileRun struct {

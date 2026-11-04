@@ -152,6 +152,39 @@ func TestQueryPlanCanonicalizesMasksAndOwnsStorage(t *testing.T) {
 	}
 }
 
+func TestQueryEntrypointsSharePlan(t *testing.T) {
+	for _, filteredFirst := range []bool{false, true} {
+		world := NewWorld()
+		spawn := world.NewSpawner1[testPosition]()
+		spawn.Spawn(testPosition{})
+		changes := world.ChangesSince(0)
+		var plain, filtered QueryView1[testPosition]
+		if filteredFirst {
+			filtered = world.Query[testPosition](changes.Changed[testPosition]())
+			plain = world.Query[testPosition]()
+		} else {
+			plain = world.Query[testPosition]()
+			filtered = world.Query[testPosition](changes.Changed[testPosition]())
+		}
+		if plain.view.plan != filtered.view.plan || plain.view.plan != world.Query[testPosition](Unscoped()).view.plan {
+			t.Fatal("equivalent queries retained duplicate plans")
+		}
+		// A different shape and nested query must not overwrite the shared masks.
+		moving := world.NewSpawner2[testPosition, testVelocity]()
+		moving.Spawn(testPosition{}, testVelocity{})
+		count := 0
+		for range plain.All {
+			count++
+			for range world.Query[testVelocity](Without[testPosition]()).All {
+				t.Fatal("nested query corrupted its required mask")
+			}
+		}
+		if count != 2 {
+			t.Fatalf("shared plan missed new archetype: got %d rows", count)
+		}
+	}
+}
+
 func BenchmarkFilteredQueryTenThousand(b *testing.B) {
 	world := NewWorld()
 	spawner := world.NewSpawner2[benchmarkPosition, benchmarkVelocity]()

@@ -142,10 +142,10 @@ func TestGLTFImporterLoadsDataURIAndBufferViewImages(t *testing.T) {
 	}
 	plainDataURIDocument.Materials[0].PBR.BaseColorTexture = &gltfTextureRef{Index: 0}
 	for _, test := range []struct {
+		check func(t *testing.T, material compiledModelMaterial)
 		name  string
 		doc   gltfDocument
 		data  []byte
-		check func(t *testing.T, material compiledModelMaterial)
 	}{
 		{
 			name: "data URI",
@@ -383,9 +383,9 @@ func TestImportedGLTFMeshIsCachedAndCooksCollision(t *testing.T) {
 func TestImportGLTFRejectsInvalidGeometry(t *testing.T) {
 	tests := []struct {
 		name   string
-		buffer []byte
 		mode   string
 		want   string
+		buffer []byte
 	}{
 		{name: "index range", buffer: testIndexedTriangleBuffer(3), want: "exceeds 3 vertices"},
 		{name: "non-finite position", buffer: testNonFiniteTriangleBuffer(), want: "not finite"},

@@ -14,30 +14,30 @@ import (
 const textInputSentinel = "\u200B"
 
 type Context struct {
-	renderContext
-	loopControl
-	mouseCaptureSupport
 	textInputSupport
+	js.Value
+	canvas js.Value
+	renderContext
 	closeRequestSupport
 	iconDecoderSupport
-	Width, Height int
-	js.Value
-	document           js.Value
-	canvas             js.Value
 	textInput          js.Value
-	devicePixelRatio   float64
+	document           js.Value
 	animationFrameChan chan struct{}
-	logicalWidth       int
-	logicalHeight      int
-	viewport           viewportState
-	options            Options
-	composing          bool
-
+	mouseCaptureMove   js.Func
+	mouseCaptureError  js.Func
+	loopControl
+	mouseCaptureClick  js.Func
+	mouseCaptureChange js.Func
+	mouseCaptureSupport
+	options               Options
+	viewport              viewportState
+	devicePixelRatio      float64
+	logicalHeight         int
+	logicalWidth          int
+	Height                int
+	Width                 int
+	composing             bool
 	mouseCaptureRequested bool
-	mouseCaptureChange    js.Func
-	mouseCaptureClick     js.Func
-	mouseCaptureMove      js.Func
-	mouseCaptureError     js.Func
 }
 
 // NativeHandle is zero for browser contexts.

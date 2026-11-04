@@ -16,11 +16,11 @@ type resolvedGlyph struct {
 // lifetime. Coverage is read first so a missing character never loads every
 // installed font's outlines and metrics.
 type fallbackSource struct {
+	coverage cmap
+	face     *Face
 	font     SystemFont
 	cmapOnce sync.Once
-	coverage cmap
 	faceOnce sync.Once
-	face     *Face
 }
 
 func (s *fallbackSource) glyph(r rune) resolvedGlyph {
@@ -56,11 +56,11 @@ type fallbackStyle struct {
 }
 
 type fallbackSet struct {
-	once    sync.Once
-	style   fallbackStyle
-	sources []*fallbackSource
-	mu      sync.RWMutex
 	glyphs  map[rune]resolvedGlyph
+	sources []*fallbackSource
+	style   fallbackStyle
+	mu      sync.RWMutex
+	once    sync.Once
 }
 
 var fallbackSources = sync.OnceValue(func() []*fallbackSource {
@@ -73,8 +73,8 @@ var fallbackSources = sync.OnceValue(func() []*fallbackSource {
 })
 
 var systemFallbacks = struct {
-	sync.Mutex
 	styles map[fallbackStyle]*fallbackSet
+	sync.Mutex
 }{styles: make(map[fallbackStyle]*fallbackSet)}
 
 // UseSystemFallback enables lazy, shared system glyph fallback. Configure the

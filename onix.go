@@ -16,57 +16,57 @@ import (
 )
 
 type App struct {
-	World *ecs.World
+	idleTaskCounts      [7]func(*ecs.World) int
+	scriptRegistry      project.ScriptRegistry
+	webViewBackend      any
+	windowInitError     error
+	htmlNeedsFrame      func(*ecs.World) bool
+	scriptScene         *project.SceneInstance
+	webViewDestroy      func()
+	render3DDispose     func(*ecs.World)
+	wakeContext         atomic.Pointer[window.Context]
+	fixedTime           *scene.FixedTime
+	now                 func() time.Time
+	uiLayoutPending     func(*ecs.World) bool
+	World               *ecs.World
+	moduleHTMLInput     ecs.System
+	webViewAfterResize  func()
+	htmlDispose         func(*ecs.World)
+	moduleRuntime       *module.Runtime
+	uiCaretBlinkDelay   func(*ecs.World) (time.Duration, bool)
+	schedules           map[Stage]*ecs.Schedule
+	webViewBeforeResize func()
+	clipboardContext    *window.Context
+	clipboardState      *input.State
 	*window.Context
-	schedules                         map[Stage]*ecs.Schedule
-	renderPacer                       ratePacer
-	renderMode                        RenderMode
-	renderRequested                   atomic.Bool
-	idle                              appIdleState
-	idleTaskCounts                    [7]func(*ecs.World) int
-	wakeContext                       atomic.Pointer[window.Context]
-	fixedTime                         *scene.FixedTime
-	now                               func() time.Time
-	contextWidth                      int
-	contextHeight                     int
-	viewportWidth                     int
-	viewportHeight                    int
-	cameraVersion                     uint64
-	initialWindowWidth                int
-	initialWindowHeight               int
-	startupRan                        bool
-	inputBound                        bool
-	clipboardContext                  *window.Context
-	clipboardState                    *input.State
-	inputSystemInstalled              bool
-	webViewSystemInstalled            bool
-	webViewBackendConfigured          bool
-	webViewBackend                    any
-	webViewBeforeResize               func()
-	webViewAfterResize                func()
-	webViewDestroy                    func()
-	windowInitError                   error
-	inputHandlers                     map[input.Phase][]func(*input.Dispatch)
-	installedSystemSets               uint32
 	windowDragRegion                  func(x, y float64) bool
+	inputHandlers                     map[input.Phase][]func(*input.Dispatch)
+	idle                              appIdleState
+	renderPacer                       ratePacer
 	windowDragClick                   windowDragClick
 	windowOptions                     window.Options
-	scriptRegistry                    project.ScriptRegistry
-	scriptScene                       *project.SceneInstance
+	contextHeight                     int
+	initialWindowWidth                int
+	contextWidth                      int
+	viewportWidth                     int
+	viewportHeight                    int
+	initialWindowHeight               int
 	scriptInputEvents                 ecs.MessageReader[scene.InputEvent]
-	scriptSystemInstalled             bool
-	scriptGlobalInputSystemInstalled  bool
-	scriptPointerInputSystemInstalled bool
-	moduleRuntime                     *module.Runtime
-	moduleInputEvents                 ecs.MessageReader[scene.InputEvent]
+	cameraVersion                     uint64
 	moduleHTMLEvents                  ecs.MessageReader[html.Event]
+	moduleInputEvents                 ecs.MessageReader[scene.InputEvent]
+	installedSystemSets               uint32
+	renderRequested                   atomic.Bool
+	startupRan                        bool
+	scriptPointerInputSystemInstalled bool
+	scriptGlobalInputSystemInstalled  bool
 	moduleSystemsInstalled            bool
-	htmlDispose                       func(*ecs.World)
-	htmlNeedsFrame                    func(*ecs.World) bool
-	moduleHTMLInput                   ecs.System
-	uiLayoutPending                   func(*ecs.World) bool
-	uiCaretBlinkDelay                 func(*ecs.World) (time.Duration, bool)
-	render3DDispose                   func(*ecs.World)
+	scriptSystemInstalled             bool
+	webViewBackendConfigured          bool
+	inputBound                        bool
+	inputSystemInstalled              bool
+	webViewSystemInstalled            bool
+	renderMode                        RenderMode
 }
 
 // SetScriptRegistry installs generated scene script bindings. The registry is

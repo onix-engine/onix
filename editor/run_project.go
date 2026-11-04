@@ -14,16 +14,16 @@ const (
 )
 
 type preparedRun struct {
+	err   error
 	cmd   *exec.Cmd
 	build DevelopmentBuild
-	err   error
 }
 
 type runProcessResult struct {
 	err      error
-	exitCode int
 	stdout   string
 	stderr   string
+	exitCode int
 }
 
 type runOutputCapture struct {

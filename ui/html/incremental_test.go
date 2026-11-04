@@ -202,24 +202,24 @@ func TestHTMLMutationStructurePreservesSiblingsAndIndex(t *testing.T) {
 // oracle has no retained components, styles or layout caches to mask stale data.
 func TestHTMLMutationMatchesFreshRender(t *testing.T) {
 	cases := []struct {
-		name, before, after string
 		change              func(Node)
+		name, before, after string
 	}{
-		{"inherited color", `<div id="target"><span>A</span>B</div>`, `<div id="target" style="color:red"><span>A</span>B</div>`, func(n Node) { n.SetAttribute("style", "color:red") }},
-		{"background added", `<div id="target">A</div>`, `<div id="target" style="background:red">A</div>`, func(n Node) { n.SetAttribute("style", "background:red") }},
-		{"background removed", `<div id="target" style="background:red">A</div>`, `<div id="target">A</div>`, func(n Node) { n.RemoveAttribute("style") }},
-		{"decoration added", `<div id="target">A</div>`, `<div id="target" style="text-decoration:line-through">A</div>`, func(n Node) { n.SetAttribute("style", "text-decoration:line-through") }},
-		{"mixed borders", `<div id="target" style="border-top:2px solid red">A</div>`, `<div id="target" style="border-top:2px solid blue">A</div>`, func(n Node) { n.SetAttribute("style", "border-top:2px solid blue") }},
+		{name: "inherited color", before: `<div id="target"><span>A</span>B</div>`, after: `<div id="target" style="color:red"><span>A</span>B</div>`, change: func(n Node) { n.SetAttribute("style", "color:red") }},
+		{name: "background added", before: `<div id="target">A</div>`, after: `<div id="target" style="background:red">A</div>`, change: func(n Node) { n.SetAttribute("style", "background:red") }},
+		{name: "background removed", before: `<div id="target" style="background:red">A</div>`, after: `<div id="target">A</div>`, change: func(n Node) { n.RemoveAttribute("style") }},
+		{name: "decoration added", before: `<div id="target">A</div>`, after: `<div id="target" style="text-decoration:line-through">A</div>`, change: func(n Node) { n.SetAttribute("style", "text-decoration:line-through") }},
+		{name: "mixed borders", before: `<div id="target" style="border-top:2px solid red">A</div>`, after: `<div id="target" style="border-top:2px solid blue">A</div>`, change: func(n Node) { n.SetAttribute("style", "border-top:2px solid blue") }},
 
-		{"transparent border added", `<div id="target" style="border:2px solid transparent">A</div>`, `<div id="target" style="border:2px solid red">A</div>`, func(n Node) { n.SetAttribute("style", "border:2px solid red") }},
-		{"border and text color", `<div id="target" style="border-top:2px solid red;color:red">A</div>`, `<div id="target" style="border-top:2px solid blue;color:blue">A</div>`, func(n Node) { n.SetAttribute("style", "border-top:2px solid blue;color:blue") }},
-		{"transparent decoration", `<div id="target" style="color:transparent;text-decoration:line-through">A</div>`, `<div id="target" style="color:red;text-decoration:line-through">A</div>`, func(n Node) { n.SetAttribute("style", "color:red;text-decoration:line-through") }},
-		{"text wrapping", `<div id="target" style="width:40px">A</div>`, `<div id="target" style="width:40px">Longer wrapping text</div>`, func(n Node) { n.SetText("Longer wrapping text") }},
-		{"hidden", `<div id="target"><input value="A"/></div><div>B</div>`, `<div id="target" hidden><input value="A"/></div><div>B</div>`, func(n Node) { n.SetHidden(true) }},
-		{"flex redistribution", `<div style="display:flex"><div id="target" style="width:20px">A</div><div style="flex:1">B</div></div>`, `<div style="display:flex"><div id="target" style="width:80px">A</div><div style="flex:1">B</div></div>`, func(n Node) { n.SetAttribute("style", "width:80px") }},
-		{"overflow removed", `<div id="target" style="height:30px;overflow:auto"><div style="height:100px">A</div></div>`, `<div id="target" style="height:30px"><div style="height:100px">A</div></div>`, func(n Node) { n.SetAttribute("style", "height:30px") }},
-		{"focusability removed", `<div id="target" tabindex="0"><span>A</span></div>`, `<div id="target"><span>A</span></div>`, func(n Node) { n.RemoveAttribute("tabindex") }},
-		{"control type", `<input id="target" type="text" value="A"/>`, `<input id="target" type="checkbox" value="A"/>`, func(n Node) { n.SetAttribute("type", "checkbox") }},
+		{name: "transparent border added", before: `<div id="target" style="border:2px solid transparent">A</div>`, after: `<div id="target" style="border:2px solid red">A</div>`, change: func(n Node) { n.SetAttribute("style", "border:2px solid red") }},
+		{name: "border and text color", before: `<div id="target" style="border-top:2px solid red;color:red">A</div>`, after: `<div id="target" style="border-top:2px solid blue;color:blue">A</div>`, change: func(n Node) { n.SetAttribute("style", "border-top:2px solid blue;color:blue") }},
+		{name: "transparent decoration", before: `<div id="target" style="color:transparent;text-decoration:line-through">A</div>`, after: `<div id="target" style="color:red;text-decoration:line-through">A</div>`, change: func(n Node) { n.SetAttribute("style", "color:red;text-decoration:line-through") }},
+		{name: "text wrapping", before: `<div id="target" style="width:40px">A</div>`, after: `<div id="target" style="width:40px">Longer wrapping text</div>`, change: func(n Node) { n.SetText("Longer wrapping text") }},
+		{name: "hidden", before: `<div id="target"><input value="A"/></div><div>B</div>`, after: `<div id="target" hidden><input value="A"/></div><div>B</div>`, change: func(n Node) { n.SetHidden(true) }},
+		{name: "flex redistribution", before: `<div style="display:flex"><div id="target" style="width:20px">A</div><div style="flex:1">B</div></div>`, after: `<div style="display:flex"><div id="target" style="width:80px">A</div><div style="flex:1">B</div></div>`, change: func(n Node) { n.SetAttribute("style", "width:80px") }},
+		{name: "overflow removed", before: `<div id="target" style="height:30px;overflow:auto"><div style="height:100px">A</div></div>`, after: `<div id="target" style="height:30px"><div style="height:100px">A</div></div>`, change: func(n Node) { n.SetAttribute("style", "height:30px") }},
+		{name: "focusability removed", before: `<div id="target" tabindex="0"><span>A</span></div>`, after: `<div id="target"><span>A</span></div>`, change: func(n Node) { n.RemoveAttribute("tabindex") }},
+		{name: "control type", before: `<input id="target" type="text" value="A"/>`, after: `<input id="target" type="checkbox" value="A"/>`, change: func(n Node) { n.SetAttribute("type", "checkbox") }},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -261,31 +261,38 @@ func compareHTMLLayout(t *testing.T, got, want *layout.Box) {
 }
 
 type htmlPrimitiveKey struct {
-	order   uint32
-	role    htmlRenderRole
 	variant string
 	slot    int
+	order   uint32
+	role    htmlRenderRole
 }
 type htmlPrimitiveValue struct {
-	TargetReceiver, BlockerReceiver, FocusOwner, EditableOwner htmlPrimitiveKey
-	Stack                                                      scene.UIStackIndex
-	Transform                                                  scene.UITransform
-	Size                                                       scene.Size2D
-	Shape                                                      scene.Shape2D
-	HasSprite, HasText, HasTarget, HasBlocker, HasClip         bool
-	Text                                                       string
-	Color                                                      graphics.ColorRGBA
-	Clip                                                       scene.ClipRect2D
-	Target                                                     scene.InputTarget2D
-	Blocker                                                    scene.InputBlocker2D
-	Parent                                                     htmlPrimitiveKey
+	Text            string
+	Parent          htmlPrimitiveKey
+	FocusOwner      htmlPrimitiveKey
+	EditableOwner   htmlPrimitiveKey
+	TargetReceiver  htmlPrimitiveKey
+	BlockerReceiver htmlPrimitiveKey
+	Blocker         scene.InputBlocker2D
+	Target          scene.InputTarget2D
+	Stack           scene.UIStackIndex
+	Transform       scene.UITransform
+	Shape           scene.Shape2D
+	Color           graphics.ColorRGBA
+	Clip            scene.ClipRect2D
+	Size            scene.Size2D
+	HasSprite       bool
+	HasClip         bool
+	HasBlocker      bool
+	HasTarget       bool
+	HasText         bool
 }
 
 func htmlPrimitiveSnapshot(world *ecs.World, state htmlRenderState) map[htmlPrimitiveKey]htmlPrimitiveValue {
 	keys := make(map[ecs.Entity]htmlPrimitiveKey)
 	for identity, group := range state.EntityGroups {
 		for slot, binding := range group.Bindings {
-			keys[binding.Entity] = htmlPrimitiveKey{identity.Node.Order, identity.Role, identity.Variant, slot}
+			keys[binding.Entity] = htmlPrimitiveKey{order: identity.Node.Order, role: identity.Role, variant: identity.Variant, slot: slot}
 		}
 	}
 	result := make(map[htmlPrimitiveKey]htmlPrimitiveValue)
@@ -420,7 +427,7 @@ func TestHTMLTextUpdateRetainsUnaffectedLayout(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	sibling := incrementalHTMLNode(t, world, owner, "sibling")
 	before, _ := world.Get[htmlRenderState](owner)
-	root, siblingBox := before.Boxes, before.BoxesByNode[sibling.node]
+	root, siblingBox := before.Boxes, before.boxForNode(sibling.node)
 	glyph := &siblingBox.TextFragments[0].Glyphs[0]
 	for i := 0; i < 20; i++ {
 		value := "After"
@@ -430,7 +437,7 @@ func TestHTMLTextUpdateRetainsUnaffectedLayout(t *testing.T) {
 		target.SetText(value)
 		incrementalSync(t, world)
 		state, _ := world.Get[htmlRenderState](owner)
-		if state.Boxes != root || state.BoxesByNode[sibling.node] != siblingBox || &siblingBox.TextFragments[0].Glyphs[0] != glyph {
+		if state.Boxes != root || state.boxForNode(sibling.node) != siblingBox || &siblingBox.TextFragments[0].Glyphs[0] != glyph {
 			t.Fatal("unrelated layout/text storage replaced")
 		}
 		if state.SyncStats.Styled != 2 || state.SyncStats.LayoutWork.Reflowed != 2 || state.SyncStats.LayoutWork.Created != 0 || state.SyncStats.LayoutWork.Reused != 101 {

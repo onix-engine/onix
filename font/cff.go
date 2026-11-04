@@ -35,12 +35,12 @@ type cffFontDict struct {
 }
 
 type cffType2State struct {
-	x         float64
-	y         float64
 	stack     []float64
-	hintCount int
 	current   OutlineContour
 	contours  []OutlineContour
+	x         float64
+	y         float64
+	hintCount int
 }
 
 func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {

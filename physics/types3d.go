@@ -4,18 +4,18 @@ type BodyID3D uint64
 type ColliderID3D uint64
 
 type BodyDef3D struct {
-	Type            BodyType
-	Position        Vector3D
 	Rotation        Quaternion
-	Velocity        Vector3D
 	AngularVelocity Vector3D
-	Mass            float64
+	Position        Vector3D
+	Velocity        Vector3D
 	Inertia         float64
+	Mass            float64
 	GravityScale    float64
 	LinearDamping   float64
 	AngularDamping  float64
-	FixedRotation   bool
 	UserData        uint64
+	Type            BodyType
+	FixedRotation   bool
 	gravitySet      bool
 }
 

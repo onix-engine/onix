@@ -179,8 +179,8 @@ type compositeTile2D struct {
 	candidates     []int // all overlapping items, including occluded content
 	items          []int // front to back, replayed in reverse
 	hash, previous uint64
-	covered        bool
 	slot           int
+	covered        bool
 	dirty          bool
 	changed        bool
 }
@@ -213,25 +213,28 @@ type CompositeStatistics2D struct {
 }
 
 type compositor2D struct {
-	target                 *render.RenderTarget
-	texture                *graphics.Texture
-	tiles                  []compositeTile2D
-	width, height, columns int
-	clear                  graphics.ColorRGBA
-	generation             uint64
-	device                 *render.Device
-	valid, prepared        bool
-	stats                  CompositeStatistics2D
-	seen                   uint64
-	cameraKey              uint64
-	reuse                  []compositeReuse2D
-	usedSlots              []bool
-	occluded               int
-	coverage               []compositeCoverage2D
-	damageTiles            []int
-	retained               *retainedRender2D
-	spatial                bool
-	replay                 renderItem2D
+	texture     *graphics.Texture
+	retained    *retainedRender2D
+	target      *render.RenderTarget
+	device      *render.Device
+	tiles       []compositeTile2D
+	damageTiles []int
+	coverage    []compositeCoverage2D
+	usedSlots   []bool
+	reuse       []compositeReuse2D
+	replay      renderItem2D
+	stats       CompositeStatistics2D
+	columns     int
+	seen        uint64
+	cameraKey   uint64
+	occluded    int
+	generation  uint64
+	height      int
+	width       int
+	clear       graphics.ColorRGBA
+	prepared    bool
+	valid       bool
+	spatial     bool
 }
 
 // compositeUI2D consumes a full UI output. Other camera pipelines, transparent

@@ -17,8 +17,8 @@ func TestStateStyleResolutionAndFallback(t *testing.T) {
 		WithDisabled("disabled")
 	tests := []struct {
 		name  string
-		state ControlState
 		want  string
+		state ControlState
 	}{
 		{name: "normal", want: "normal"},
 		{name: "focused", state: ControlState{Focused: true}, want: "focused"},
@@ -65,9 +65,9 @@ func TestAllWidgetStylesAcceptNineSliceSurfaces(t *testing.T) {
 	button := ButtonStyle{Body: state, JoinedEdge: state}
 
 	tests := []struct {
-		name   string
 		spawn  func(*ecs.World) ecs.Entity
 		target func(*ecs.World, ecs.Entity) ecs.Entity
+		name   string
 		tree   bool
 	}{
 		{name: "panel", spawn: func(world *ecs.World) ecs.Entity {

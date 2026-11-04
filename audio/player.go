@@ -21,9 +21,9 @@ type platformPlayer interface {
 }
 
 type Player struct {
-	mu       sync.Mutex
-	clip     *Clip
 	platform platformPlayer
+	clip     *Clip
+	mu       sync.Mutex
 }
 
 func (c *Clip) NewPlayer() (*Player, error) {

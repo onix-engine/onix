@@ -8,12 +8,12 @@ import (
 )
 
 type transformValue struct {
+	TranslateX                       Value
+	TranslateY                       Value
 	Rotation                         float64
 	ScaleX, ScaleY                   float64
 	SkewX                            float64
 	TranslateCrossX, TranslateCrossY float64
-	TranslateX                       Value
-	TranslateY                       Value
 }
 
 func parseTransform(input string, ctx parseContext) (transformValue, error) {

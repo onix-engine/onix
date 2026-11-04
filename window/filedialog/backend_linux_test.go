@@ -18,10 +18,10 @@ func TestPortalResponsePaths(t *testing.T) {
 		"uris": dbus.MakeVariant([]string{"file:///tmp/100%25%20ready.png", "file:///tmp/second.jpg"}),
 	}
 	for _, test := range []struct {
+		wantErr  error
 		name     string
 		response portalResponse
 		want     []string
-		wantErr  error
 	}{
 		{name: "selected files", response: portalResponse{Results: results}, want: []string{"/tmp/100% ready.png", "/tmp/second.jpg"}},
 		{name: "no selection"},

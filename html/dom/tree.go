@@ -12,22 +12,24 @@ import (
 
 // A treeBuilder implements the HTML5 parsing algorithm:
 type treeBuilder struct {
-	arena                 *Parser
 	tokenizer             *htmlScanner
-	tok                   htmlToken
-	hasSelfClosingToken   bool
-	ignoreLF              bool
-	doc                   *Node
-	oe, afe               nodeStack
-	head, form            *Node
-	scripting, framesetOK bool
-	templateStack         insertionModeStack
-	im                    insertionMode
+	context               *Node
 	originalIM            insertionMode
+	doc                   *Node
+	im                    insertionMode
+	arena                 *Parser
+	head                  *Node
+	form                  *Node
+	oe                    nodeStack
+	templateStack         insertionModeStack
+	afe                   nodeStack
+	tok                   htmlToken
+	scripting, framesetOK bool
+	ignoreLF              bool
 	fosterParenting       bool
 	quirks                bool
 	fragment              bool
-	context               *Node
+	hasSelfClosingToken   bool
 }
 
 func (p *treeBuilder) top() *Node {

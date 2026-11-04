@@ -262,12 +262,12 @@ func TestFontDisposeEvictsGlyphCachesAndDisposesAtlases(t *testing.T) {
 }
 
 type glyphUploadDriver struct {
-	next          uint32
-	createCalls   int
 	createdPixels []byte
+	createCalls   int
 	updateCalls   int
 	updateCount   int
 	destroyCalls  int
+	next          uint32
 }
 
 func (d *glyphUploadDriver) RendererInfo() render.RendererInfo { return render.RendererInfo{} }

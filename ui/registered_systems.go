@@ -12,10 +12,10 @@ type RuntimeFeature interface {
 }
 
 type runtimeSystems struct {
-	features    uint8
 	update      [runtimeSystemCapacity]ecs.System
 	sync        [runtimeSystemCapacity]ecs.System
 	afterLayout [runtimeSystemCapacity]ecs.System
+	features    uint8
 }
 
 const (

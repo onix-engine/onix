@@ -219,8 +219,8 @@ func TestCompileSceneSpawnPlanAcceptsComposedComponentSets(t *testing.T) {
 func TestSceneNodeComponentsHaveNoSingularRole(t *testing.T) {
 	tests := []struct {
 		name      string
-		spec      SceneNodeSpec
 		component SceneComponent
+		spec      SceneNodeSpec
 	}{
 		{name: "empty", spec: SceneNodeSpec{ID: "empty"}},
 		{name: "control", spec: SceneNodeSpec{ID: "control", Control: &ControlSpec{}}},

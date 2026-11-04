@@ -21,65 +21,65 @@ type editorDialogAttr struct {
 }
 
 type editorDialogElement struct {
-	ID          string
+	Type        string
 	Text        string
-	TextSet     bool
-	Button      bool
-	Authored    bool
+	Selected    string
+	Step        string
+	ID          string
 	Icon        string
 	IconSource  string
 	IconRef     string
 	LabelRef    string
-	Children    []html.VNode
+	Value       string
 	Style       string
 	Class       string
 	Source      string
 	Name        string
 	AriaLabel   string
 	AriaPressed string
-	Type        string
-	Value       string
-	ValueSet    bool
-	Step        string
-	Hidden      bool
+	Children    []html.VNode
+	Attrs       []editorDialogAttr
+	RemoveAttrs []string
+	CheckedSet  bool
+	TextSet     bool
 	HiddenSet   bool
 	Disabled    bool
 	DisabledSet bool
 	Checked     bool
-	CheckedSet  bool
-	Selected    string
+	ValueSet    bool
+	Hidden      bool
 	SelectedSet bool
 	ReadOnly    bool
 	ReadOnlySet bool
 	FollowTail  bool
-	Attrs       []editorDialogAttr
-	RemoveAttrs []string
+	Button      bool
+	Authored    bool
 }
 
 type editorDialogDynamic struct {
-	Key      uint64
 	Tag      string
 	Text     string
 	Attrs    []editorDialogAttr
 	Children []html.VNode
+	Key      uint64
 }
 
 type editorDialogSelect struct {
 	ID       string
-	Options  []string
 	Selected string
+	Options  []string
 }
 
 // editorDialogFrame is the retained data model for one dialog render. The UI
 // layout code only records values here; HTML component reconciliation owns the
 // DOM writes and control lifetime.
 type editorDialogFrame struct {
-	Root     rect
-	Panel    rect
 	Elements map[string]*editorDialogElement
 	Dynamic  []editorDialogDynamic
 	Selects  []editorDialogSelect
 	Scratch  []html.VNode
+	Root     rect
+	Panel    rect
 }
 
 func (f *editorDialogFrame) reset(root, panel rect) {
@@ -315,9 +315,9 @@ func editorDialogVNode(dynamic editorDialogDynamic) html.VNode {
 }
 
 type editorDialogDefinitionCache struct {
-	once       sync.Once
-	definition *html.Definition[editorDialogComponentProps, editorDialogComponentState]
 	err        error
+	definition *html.Definition[editorDialogComponentProps, editorDialogComponentState]
+	once       sync.Once
 }
 
 var editorDialogDefinitions [len(editorDialogNames)]editorDialogDefinitionCache

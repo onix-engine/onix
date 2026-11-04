@@ -93,57 +93,57 @@ type mb struct {
 // calling Init, DecodeFrameHeader and then DecodeFrame in that order.
 // A Decoder can be re-used to decode multiple frames.
 type Decoder struct {
-	// r is the input bitsream.
-	r limitReader
-	// scratch is a scratch buffer.
-	scratch [8]byte
 	// img is the YCbCr image to decode into.
 	img *image.YCbCr
-	// mbw and mbh are the number of 16x16 macroblocks wide and high the image is.
-	mbw, mbh int
+	// r is the input bitsream.
+	r                 limitReader
+	perMBFilterParams []filterParam
+	upMB              []mb
+	op                [8]partition
+	// The image data is divided into a number of independent partitions.
+	// There is 1 "first partition" and between 1 and 8 "other partitions"
+	// for coefficient data.
+	fp partition
 	// frameHeader is the frame header. When decoding multiple frames,
 	// frames that aren't key frames will inherit the Width, Height,
 	// XScale and YScale of the most recent key frame.
 	frameHeader FrameHeader
-	// Other headers.
-	segmentHeader segmentHeader
-	filterHeader  filterHeader
-	// The image data is divided into a number of independent partitions.
-	// There is 1 "first partition" and between 1 and 8 "other partitions"
-	// for coefficient data.
-	fp  partition
-	op  [8]partition
+	mbh         int
+	// mbw and mbh are the number of 16x16 macroblocks wide and high the image is.
+	mbw int
 	nOP int
-	// Quantization factors.
-	quant [nSegment]quant
-	// DCT/WHT coefficient decoding probabilities.
-	tokenProb   [nPlane][nBand][nContext][nProb]uint8
-	useSkipProb bool
-	skipProb    uint8
-	// Loop filter parameters.
-	filterParams      [nSegment][2]filterParam
-	perMBFilterParams []filterParam
-
 	// The eight fields below relate to the current macroblock being decoded.
 	//
 	// Segment-based adjustments.
-	segment int
+	segment  int
+	nzACMask uint32
+	// Bitmasks for which 4x4 regions of coeff contain non-zero coefficients.
+	nzDCMask uint32
+	// The two fields below form a workspace for reconstructing a macroblock.
+	// Their specific sizes are documented in reconstruct.go.
+	coeff [1*16*16 + 2*8*8 + 1*4*4]int16
+	// Quantization factors.
+	quant [nSegment]quant
+	// DCT/WHT coefficient decoding probabilities.
+	tokenProb [nPlane][nBand][nContext][nProb]uint8
+	ybr       [1 + 16 + 1 + 8][32]uint8
+	// Loop filter parameters.
+	filterParams [nSegment][2]filterParam
+	filterHeader filterHeader
+	predY4       [4][4]uint8
+	// Other headers.
+	segmentHeader segmentHeader
+	// scratch is a scratch buffer.
+	scratch [8]byte
 	// Per-macroblock state for the macroblock immediately left of and those
 	// macroblocks immediately above the current macroblock.
-	leftMB mb
-	upMB   []mb
-	// Bitmasks for which 4x4 regions of coeff contain non-zero coefficients.
-	nzDCMask, nzACMask uint32
+	leftMB      mb
+	skipProb    uint8
+	useSkipProb bool
 	// Predictor modes.
 	usePredY16 bool // The libwebp C code calls this !is_i4x4_.
 	predY16    uint8
 	predC8     uint8
-	predY4     [4][4]uint8
-
-	// The two fields below form a workspace for reconstructing a macroblock.
-	// Their specific sizes are documented in reconstruct.go.
-	coeff [1*16*16 + 2*8*8 + 1*4*4]int16
-	ybr   [1 + 16 + 1 + 8][32]uint8
 }
 
 // NewDecoder returns a new Decoder.

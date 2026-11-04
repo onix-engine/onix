@@ -14,29 +14,29 @@ import (
 // editorViewport3D owns state whose lifetime belongs to the scene viewport,
 // independently from the editor application and project document.
 type editorViewport3D struct {
-	camera ecs.Entity
 	editorRenderTarget
-	yaw           float32
-	pitch         float32
-	distance      float32
-	target        mgl32.Vec3
-	gridTexture   *graphics.Texture
-	axisTexture   *graphics.Texture
+	labels        map[string]*scene.Text2D
 	studioTexture *graphics.Texture
-	gridVertices  [4]render.Vertex3D
-	gridIndices   [6]uint32
-	gridInstances [1]render.Instance3D
-	gridDraws     [1]render.MeshDraw3D
+	axisTexture   *graphics.Texture
+	gridTexture   *graphics.Texture
+	orientation   preview3DOrientationState
+	settingsPage  int
+	camera        ecs.Entity
 	axisVertices  [24 * preview3DAxisFadeSegments]render.Vertex3D
 	axisIndices   [36 * preview3DAxisFadeSegments]uint32
 	axisInstances [3]render.Instance3D
 	axisDraws     [3]render.MeshDraw3D
-	labels        map[string]*scene.Text2D
+	gridVertices  [4]render.Vertex3D
+	gridInstances [1]render.Instance3D
+	gridDraws     [1]render.MeshDraw3D
 	sky           graphics.SkyRadiance
+	gridIndices   [6]uint32
+	target        mgl32.Vec3
+	distance      float32
+	pitch         float32
+	yaw           float32
 	orthographic  bool
-	orientation   preview3DOrientationState
 	settingsOpen  bool
-	settingsPage  int
 }
 
 type editorRenderTarget struct {

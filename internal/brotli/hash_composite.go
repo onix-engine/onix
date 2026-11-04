@@ -32,10 +32,10 @@ Composite hasher: This hasher allows to combine two other hashers, HASHER_A
 	and HASHER_B.
 */
 type hashComposite struct {
-	hasherCommon
 	ha     hasherHandle
 	hb     hasherHandle
 	params *encoderParams
+	hasherCommon
 }
 
 func (h *hashComposite) Initialize(params *encoderParams) {

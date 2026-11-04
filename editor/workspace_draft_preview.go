@@ -11,10 +11,10 @@ import (
 // Invalid input keeps the last valid preview; unchanged forms allocate nothing.
 type workspaceDraftPreview struct {
 	source   *WorkspaceDocument
-	revision uint64
 	drafts   map[string]string
 	staged   map[DocumentID][]byte
 	document *WorkspaceDocument
+	revision uint64
 	version  uint64
 }
 

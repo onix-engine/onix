@@ -29,78 +29,91 @@ import (
 
 // ModuleEditor edits module definitions and scene instances without running project behavior.
 type ModuleEditor struct {
-	workspaceChrome
+	requestWake           func(time.Time)
+	additions             map[string]string
+	buildDone             chan buildResult
+	Document              *WorkspaceDocument
+	textureModes          map[string]string
+	sectionsCollapsed     map[string]bool
+	runPrepared           chan preparedRun
+	runDone               chan runProcessResult
+	font                  *onixtext.Font
+	world                 *ecs.World
+	runCmd                *exec.Cmd
+	requestToggleMaximize func()
+	requestMinimize       func()
+	requestClose          func()
+	buildProgress         *buildProgressFeed
+	atlasFrames           map[string]workspaceAtlasFrames
+	fields                map[string]workspaceField
+	rowByID               map[string]workspaceTreeRow
+	controlValues         map[string]string
+	requestRender         func()
+	viewScenes            map[DocumentID]stagedViewEntry[project.SceneSpec]
+	viewMods              map[DocumentID]stagedViewEntry[project.ModSpec]
+	staged                map[DocumentID][]byte
+	drafts                map[string]string
+	runResources          DevelopmentBuild
+	fileBrowser           workspaceFileBrowser
+	sceneDraft            string
+	Selected              string
+	componentMenu         string
+	lastFile              string
+	menuOpen              string
+	panelResizeHover      string
+	panelResizeMode       string
+	pendingAction         string
+	folderDraft           string
+	instanceDraft         string
+	modDraft              string
+	Local                 project.ModID
+	pathDraft             string
+	status                string
+	dragID                string
+	runExecutable         string
+	dimension             previewDimension
+	runDirectory          string
+	buildOptions          BuildOptions
+	draftPreview          workspaceDraftPreview
+	definitionMatrices    []mgl32.Mat4
+	files                 []WorkspaceFile
+	rows                  []workspaceTreeRow
+	elementPicker         workspaceElementPicker
+	nineSlice             workspaceNineSlice
+	Preview               DataPreview
 	workspaceOutliner
-	animation                                                   workspaceAnimation
-	Document                                                    *WorkspaceDocument
-	Preview                                                     DataPreview
-	draftPreview                                                workspaceDraftPreview
-	Selected                                                    string
-	Local                                                       project.ModID
-	font                                                        *onixtext.Font
-	world                                                       *ecs.World
-	shell, canvas                                               ecs.Entity
-	shellComponent                                              ecs.Entity
-	events                                                      ecs.MessageReader[htmlui.Event]
-	width, height                                               float32
-	dirty                                                       bool
-	canvasDirty                                                 bool
-	canvasImageVersion                                          uint64
-	status                                                      string
-	pathDraft, sceneDraft, modDraft, instanceDraft, folderDraft string
-	fields                                                      map[string]workspaceField
-	definitionMatrices                                          []mgl32.Mat4
-	sectionsCollapsed                                           map[string]bool
-	componentPickerOpen                                         bool
-	componentPickerAnchor                                       rect
-	componentMenu                                               string
-	elementPicker                                               workspaceElementPicker
-	colorPicker                                                 workspaceColorPicker
-	nineSlice                                                   workspaceNineSlice
-	tilemap                                                     workspaceTilemap
-	textureModes                                                map[string]string
-	atlasFrames                                                 map[string]workspaceAtlasFrames
-	controlValues                                               map[string]string
-	drafts                                                      map[string]string
-	staged                                                      map[DocumentID][]byte
-	viewMods                                                    map[DocumentID]stagedViewEntry[project.ModSpec]
-	viewScenes                                                  map[DocumentID]stagedViewEntry[project.SceneSpec]
-	additions                                                   map[string]string
-	files                                                       []WorkspaceFile
-	fileBrowser                                                 workspaceFileBrowser
-	rows                                                        []workspaceTreeRow
-	rowByID                                                     map[string]workspaceTreeRow
-	zoom                                                        float32
-	dimension                                                   previewDimension
-	viewport2D                                                  workspaceViewport2D
-	viewport3D                                                  workspaceViewport3D
-	leftPanelWidth, rightPanelWidth, contentPanelHeight         float32
-	panelResizeMode, panelResizeHover, menuOpen                 string
-	lastFile                                                    string
-	lastFileClick                                               float64
-	time                                                        float64
-	dragID                                                      string
-	dragX, dragY                                                float32
-	dragMoved                                                   bool
-	canvasScale                                                 float32
-	canvasDrag                                                  workspacePlacementDrag
-	pendingAction                                               string
-	closeConfirmed                                              bool
-	requestRender                                               func()
-	requestWake                                                 func(time.Time)
-	requestClose                                                func()
-	requestMinimize, requestToggleMaximize                      func()
-	runCmd                                                      *exec.Cmd
-	runDone                                                     chan runProcessResult
-	runPrepared                                                 chan preparedRun
-	runExecutable, runDirectory                                 string
-	runResources                                                DevelopmentBuild
-	runBuilding, runStopping                                    bool
-	buildOpen                                                   bool
-	buildOptions                                                BuildOptions
-	buildDone                                                   chan buildResult
-	buildProgress                                               *buildProgressFeed
-	progressDirty                                               bool
+	colorPicker workspaceColorPicker
+	workspaceChrome
+	animation                workspaceAnimation
+	canvasDrag               workspacePlacementDrag
+	viewport2D               workspaceViewport2D
+	tilemap                  workspaceTilemap
+	viewport3D               workspaceViewport3D
+	lastFileClick            float64
+	shell                    ecs.Entity
+	canvasImageVersion       uint64
+	canvas                   ecs.Entity
+	shellComponent           ecs.Entity
+	time                     float64
+	events                   ecs.MessageReader[htmlui.Event]
+	componentPickerAnchor    rect
+	dragX                    float32
+	height                   float32
+	width                    float32
+	contentPanelHeight       float32
+	canvasScale              float32
+	zoom                     float32
+	rightPanelWidth          float32
+	leftPanelWidth           float32
+	dragY                    float32
+	closeConfirmed           bool
+	canvasDirty              bool
+	runBuilding, runStopping bool
+	buildOpen                bool
+	dirty                    bool
+	componentPickerOpen      bool
+	dragMoved                bool
+	progressDirty            bool
 }
 
 func NewModuleEditor(directory string) (*ModuleEditor, error) {

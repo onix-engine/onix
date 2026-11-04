@@ -13,14 +13,14 @@ import (
 // Bound compiled grammar retention independently of live documents. Each entry
 // owns a registry so evicting a language also releases its compiled includes.
 var grammarCache struct {
-	sync.Mutex
 	entries [4]grammarEntry
 	next    int
+	sync.Mutex
 }
 
 type grammarEntry struct {
-	scope   string
 	grammar *textmate.Grammar
+	scope   string
 }
 
 func detectLanguage(filename string) (string, string) {
@@ -70,7 +70,7 @@ func loadGrammar(scope string) (*textmate.Grammar, error) {
 		return nil, fmt.Errorf("syntax grammar %s: %w", scope, err)
 	}
 	// The grammar retains the registry for lazy compilation of included rules.
-	grammarCache.entries[grammarCache.next] = grammarEntry{scope, grammar}
+	grammarCache.entries[grammarCache.next] = grammarEntry{scope: scope, grammar: grammar}
 	grammarCache.next = (grammarCache.next + 1) % len(grammarCache.entries)
 	return grammar, nil
 }

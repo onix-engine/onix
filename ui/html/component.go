@@ -45,42 +45,40 @@ type Behavior[P, S any] struct {
 
 // Definition is a compiled, reusable component definition.
 type Definition[P, S any] struct {
+	Behavior Behavior[P, S]
+	runtime  *htmlDefinitionRuntime
 	Template Template
 	CSS      string
 	// ScopedCSS isolates this definition's selectors and template elements.
 	ScopedCSS bool
-	Behavior  Behavior[P, S]
-
-	runtime *htmlDefinitionRuntime
 }
 
 // RenderContext is passed by value to Render. Props and State point to the
 // component instance; copying the context does not copy its props or state.
 type RenderContext[P, S any] struct {
 	World     *ecs.World
-	Component ecs.Entity
 	Props     *P
 	State     *S
+	Component ecs.Entity
 }
 
 // ComponentContext is passed to component lifecycle callbacks.
 type ComponentContext[P, S any] struct {
 	World     *ecs.World
-	Component ecs.Entity
 	Props     *P
 	State     *S
+	Component ecs.Entity
 }
 
 // ComponentEventContext is passed to a typed component event handler.
 type ComponentEventContext[P, S any] struct {
-	World     *ecs.World
-	Component ecs.Entity
-	Ref       string
-	Event     Event
-	Pointer   *PointerEvent
-	Props     *P
-	State     *S
-
+	World            *ecs.World
+	Pointer          *PointerEvent
+	Props            *P
+	State            *S
+	Ref              string
+	Event            Event
+	Component        ecs.Entity
 	defaultPrevented bool
 	stopPropagation  bool
 }
@@ -294,19 +292,19 @@ type VNodeAttribute struct {
 // VNode describes one keyed element child. Children may contain nested
 // keyed elements and are reconciled in place with the same DOM identity rules.
 type VNode struct {
-	Key        uint64
 	Tag        string
 	Text       string
 	Attributes []VNodeAttribute
 	Children   []VNode
+	Key        uint64
 }
 
 // ComponentVNode describes one typed child component in a component VDOM.
 // Values are snapshots; mount/update operations are shared by the definition.
 type ComponentVNode struct {
-	Key        uint64
-	definition *htmlDefinitionRuntime
 	values     any
+	definition *htmlDefinitionRuntime
+	Key        uint64
 	owned      bool // Only the View's private buffers may reuse this payload.
 }
 
@@ -486,29 +484,29 @@ type htmlDefinitionRuntime struct {
 	updateChild func(*ecs.World, ecs.Entity, any)
 	clearChild  func(any)
 	template    *htmlComponentTemplate
-	scopeClass  string
 	render      func(*ecs.World, ecs.Entity, *htmlComponentInstance)
 	event       func(*ecs.World, ecs.Entity, string, Event, *PointerEvent, bool) (Event, bool)
 	mount       func(*ecs.World, ecs.Entity)
 	update      func(*ecs.World, ecs.Entity)
 	unmount     func(*ecs.World, ecs.Entity)
+	scopeClass  string
 }
 
 type htmlComponentInstance struct {
-	renderView        View
-	Page              ecs.Entity
-	Parent            ecs.Entity
-	Key               uint64
+	Next              htmlComponentVNodeState
+	Current           htmlComponentVNodeState
+	Keyed             map[string]*htmlComponentKeyedList
+	ComponentChildren map[string]*htmlComponentChildList
 	Definition        *htmlDefinitionRuntime
-	Roots             []*dom.Node
 	Refs              map[string]*dom.Node
 	Handlers          map[string]ClickHandler
 	EventNodes        map[htmlComponentEventKey]*dom.Node
+	renderView        View
+	Roots             []*dom.Node
 	Children          []ecs.Entity
-	Keyed             map[string]*htmlComponentKeyedList
-	ComponentChildren map[string]*htmlComponentChildList
-	Current           htmlComponentVNodeState
-	Next              htmlComponentVNodeState
+	Key               uint64
+	Parent            ecs.Entity
+	Page              ecs.Entity
 	Dirty             bool
 	queued            bool
 	Mounted           bool
@@ -544,50 +542,50 @@ type htmlComponentEventKey struct {
 }
 
 type htmlComponentEventBinding struct {
-	Component ecs.Entity
 	Ref       string
 	Kind      EventKind
+	Component ecs.Entity
 }
 
 type htmlComponentKeyedItem struct {
-	Key  uint64
 	Node *dom.Node
+	Key  uint64
 }
 
 type htmlComponentKeyedList struct {
-	htmlComponentVNodeChildren
 	Children map[*dom.Node]*htmlComponentVNodeChildren
 	Nodes    map[*dom.Node]bool
 	Anchor   *dom.Node
+	htmlComponentVNodeChildren
 }
 
 type htmlComponentChildItem struct {
-	Key        uint64
 	Definition *htmlDefinitionRuntime
+	Key        uint64
 	Entity     ecs.Entity
 }
 
 type htmlComponentChildList struct {
-	Items    []htmlComponentChildItem
-	Scratch  []htmlComponentChildItem
 	OldIndex map[uint64]int
 	Seen     map[uint64]bool
 	Nodes    map[*dom.Node]bool
+	Items    []htmlComponentChildItem
+	Scratch  []htmlComponentChildItem
 }
 
 type htmlComponentVNodeChildren struct {
-	Items    []htmlComponentKeyedItem
-	Scratch  []htmlComponentKeyedItem
 	OldIndex map[uint64]int
 	Seen     map[uint64]bool
 	Used     map[uint64]bool
 	Removed  map[*dom.Node]struct{}
+	Items    []htmlComponentKeyedItem
+	Scratch  []htmlComponentKeyedItem
 }
 
 type htmlComponentTemplate struct {
 	Root        *dom.Node
-	EmbeddedCSS string
 	Refs        map[string]struct{}
+	EmbeddedCSS string
 }
 
 func compileHTMLComponentTemplate(source string) (*htmlComponentTemplate, error) {
@@ -1935,10 +1933,10 @@ func bindHTMLComponentClick(world *ecs.World, entity ecs.Entity, instance *htmlC
 }
 
 type htmlComponentPageCSS struct {
-	Base   string
-	Order  []*htmlDefinitionRuntime
 	Values map[*htmlDefinitionRuntime]string
 	Counts map[*htmlDefinitionRuntime]int
+	Base   string
+	Order  []*htmlDefinitionRuntime
 }
 
 // SetBaseCSS replaces the page stylesheet while preserving mounted component

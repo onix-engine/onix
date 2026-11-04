@@ -77,21 +77,21 @@ type resolvedUITransform struct {
 }
 
 type uiTransformNode struct {
-	entity           ecs.Entity
-	transform        UITransform
-	parent           ecs.Entity
-	localClip        ClipRect2D
-	hasClip          bool
-	localRoundedClip RoundedClip2D
-	hasRoundedClip   bool
-	clipExempt       bool
-	parentClipExempt bool
-	state            uint8
 	resolved         resolvedUITransform
-	local            mgl32.Mat4
-	baseSize         mgl32.Vec2
-	parentRevision   uint64
+	parent           ecs.Entity
+	entity           ecs.Entity
 	seen             uint64
+	parentRevision   uint64
+	transform        UITransform
+	local            mgl32.Mat4
+	localRoundedClip RoundedClip2D
+	localClip        ClipRect2D
+	baseSize         mgl32.Vec2
+	hasClip          bool
+	state            uint8
+	parentClipExempt bool
+	clipExempt       bool
+	hasRoundedClip   bool
 	dirty            bool
 }
 
@@ -125,21 +125,21 @@ func (b *uiTransformBindings) bind(world *ecs.World) {
 }
 
 type uiTransformWorkspace struct {
-	bindings     uiTransformBindings
 	scope        *ecs.QueryScope
-	scopeVersion uint64
+	bindings     uiTransformBindings
+	changes      ecs.SystemContext
 	nodes        entitycache.Store[uiTransformNode]
 	active       []ecs.Entity
-	versions     [9]uint64
-	structures   [9]uint64
 	queue        []ecs.Entity
-	changes      ecs.SystemContext
-	lastRun      ecs.Tick
-	viewport     mgl32.Vec2
-	scaleFactor  float32
+	structures   [9]uint64
+	versions     [9]uint64
+	scopeVersion uint64
 	generation   uint64
-	initialized  bool
 	recomputed   int
+	viewport     mgl32.Vec2
+	lastRun      ecs.Tick
+	scaleFactor  float32
+	initialized  bool
 }
 
 func uiTransformRevisions(world *ecs.World) (versions, structures [9]uint64) {

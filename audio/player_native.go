@@ -13,15 +13,15 @@ import (
 )
 
 var nativeDevice struct {
+	err  error
+	ctx  *oto.Context
 	once sync.Once
 	mu   sync.Mutex
-	ctx  *oto.Context
-	err  error
 }
 
 type nativeSource struct {
-	mu     sync.Mutex
 	reader io.ReadSeekCloser
+	mu     sync.Mutex
 }
 
 func (s *nativeSource) Read(buffer []byte) (int, error) {

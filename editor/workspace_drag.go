@@ -14,25 +14,26 @@ type workspacePlacementDrag struct {
 	ID             string
 	Element        string
 	Mod            project.ModID
-	Definition     bool
-	WorldSpace     bool
+	Version        uint64
 	Entity         ecs.Entity
-	Transform      project.ModTransform
-	ThreeD         bool
+	End            int
+	Index          int
 	Inverse3D      mgl32.Mat4
-	PlanePoint     mgl32.Vec3
+	Transform      project.ModTransform
+	Inverse        [4]float32
+	WorldDelta     mgl32.Vec3
+	Position       [3]float32
 	PlaneNormal    mgl32.Vec3
 	StartWorld     mgl32.Vec3
-	WorldDelta     mgl32.Vec3
-	DeltaZ         float32
-	Index, End     int
-	StartX, StartY float32
-	Position       [3]float32
-	Inverse        [4]float32
+	PlanePoint     mgl32.Vec3
 	Delta          [2]float32
 	DisplayDelta   [2]float32
+	StartX, StartY float32
+	DeltaZ         float32
+	ThreeD         bool
+	WorldSpace     bool
 	Moved          bool
-	Version        uint64
+	Definition     bool
 }
 
 func (a *ModuleEditor) beginPlacementDrag(id string, x, y float32) {

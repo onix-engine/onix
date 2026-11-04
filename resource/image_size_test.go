@@ -101,12 +101,12 @@ func packedContainerHeader(t *testing.T, width, height int) []byte {
 func TestDecodeImageConfigSniffsRasterHeaders(t *testing.T) {
 	pixels := image.NewRGBA(image.Rect(0, 0, 17, 9))
 	for _, test := range []struct {
-		name   string
 		encode func(*bytes.Buffer) error
+		name   string
 	}{
-		{"png", func(out *bytes.Buffer) error { return stdpng.Encode(out, pixels) }},
-		{"gif", func(out *bytes.Buffer) error { return gif.Encode(out, pixels, nil) }},
-		{"jpeg", func(out *bytes.Buffer) error { return jpeg.Encode(out, pixels, nil) }},
+		{name: "png", encode: func(out *bytes.Buffer) error { return stdpng.Encode(out, pixels) }},
+		{name: "gif", encode: func(out *bytes.Buffer) error { return gif.Encode(out, pixels, nil) }},
+		{name: "jpeg", encode: func(out *bytes.Buffer) error { return jpeg.Encode(out, pixels, nil) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var out bytes.Buffer

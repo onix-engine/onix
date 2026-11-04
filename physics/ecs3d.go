@@ -8,12 +8,12 @@ import (
 
 type Runtime3D struct {
 	Simulation    *World3D
-	frame         uint64
-	syncedInputs  physicsInputs
 	syncedWorld   *World3D
-	syncedTick    ecs.Tick
 	changes       physicsBodyChanges
+	syncedInputs  physicsInputs
+	frame         uint64
 	managedBodies int
+	syncedTick    ecs.Tick
 }
 
 func NewRuntime3D() *Runtime3D {

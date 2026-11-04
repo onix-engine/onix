@@ -10,24 +10,23 @@ import (
 // bodies write their pose back to Transform; static and kinematic bodies read
 // their pose from Transform before each fixed step.
 type RigidBody2D struct {
-	Type            BodyType
-	Mass            float64
-	Inertia         float64
-	GravityScale    float64
-	LinearDamping   float64
-	AngularDamping  float64
-	Velocity        Vector
-	AngularVelocity float64
+	body            Body
 	Force           Vector
-	Torque          float64
+	Velocity        Vector
+	lastPosition    Vector
 	Impulse         Vector
+	AngularDamping  float64
+	AngularVelocity float64
+	Inertia         float64
+	LinearDamping   float64
+	Torque          float64
+	Mass            float64
+	GravityScale    float64
+	lastRotation    float64
+	Type            BodyType
 	FixedRotation   bool
-
-	body         Body
-	defaultsSet  bool
-	initialized  bool
-	lastPosition Vector
-	lastRotation float64
+	defaultsSet     bool
+	initialized     bool
 }
 
 func NewRigidBody2D(bodyType BodyType) RigidBody2D {
@@ -75,13 +74,12 @@ func (body *RigidBody2D) normalize() {
 
 type Collider2D[S Shape2D] struct {
 	Shape         S
+	handle        ColliderHandle[S]
+	Filter        Filter
 	Friction      float64
 	Restitution   float64
-	Sensor        bool
-	Filter        Filter
 	CollisionType uint32
-
-	handle ColliderHandle[S]
+	Sensor        bool
 }
 
 type CircleCollider2D = Collider2D[Circle]

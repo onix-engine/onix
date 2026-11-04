@@ -8,15 +8,15 @@ import (
 )
 
 type recursiveValue struct {
-	Name     string
-	Count    int
-	Enabled  bool
-	Ratio    float32
 	Optional *string
+	Lookup   map[string][]int
+	Name     string
 	Values   []uint16
 	Empty    []byte
-	Lookup   map[string][]int
 	Children []recursiveValue
+	Count    int
+	Ratio    float32
+	Enabled  bool
 }
 
 func TestRoundTrip(t *testing.T) {

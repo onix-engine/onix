@@ -18,9 +18,9 @@ const (
 )
 
 type buildResult struct {
+	err       error
 	artifact  string
 	outputDir string
-	err       error
 }
 
 func buildPlatforms() []BuildPlatform {

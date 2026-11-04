@@ -22,17 +22,17 @@ const (
 )
 
 type ExtractedCamera struct {
+	Target       *render.RenderTarget
+	RenderLayers RenderLayers
+	Camera       Camera
 	Scene        SceneLayer
 	Entity       ecs.Entity
-	Camera       Camera
 	Projection   Projection
 	Transform    GlobalTransform
-	Pipeline     CameraPipeline
-	RenderLayers RenderLayers
-	Target       *render.RenderTarget
-	ViewMode     render.RenderViewMode
-	DepthClear   float32
 	OutputSize   mgl32.Vec2
+	DepthClear   float32
+	Pipeline     CameraPipeline
+	ViewMode     render.RenderViewMode
 }
 
 // CameraRenderOptions contains the output settings shared by camera pipelines.
@@ -52,25 +52,25 @@ type cameraSettingsReader struct {
 }
 
 type RenderWorld struct {
-	Cameras               []ExtractedCamera
-	Items2D               []renderItem2D
-	materials2D           []material2DReader
-	registeredMaterials2D map[reflect.Type]struct{}
+	cameraSettings        [cameraPipelineCount]cameraSettingsReader
 	collectors2D          [renderCollector2DCount]renderCollector2D
 	drawers2D             [renderItemKind2DCount]renderItemDrawer2D
 	batchDrawers2D        [renderItemKind2DCount]renderBatchDrawer2D
 	cameraRenderers       [cameraPipelineCount]CameraRenderer
-	cameraSettings        [cameraPipelineCount]cameraSettingsReader
-	camera2DLayer         registeredCameraRenderer
-	activeCamera2D        ExtractedCamera
-	activeCamera2DSet     bool
 	whiteTexture2D        *graphics.Texture
-	registry2D            uint64
+	camera2DLayer         registeredCameraRenderer
+	registeredMaterials2D map[reflect.Type]struct{}
 	compositors2D         map[compositeViewKey2D]*compositor2D
-	compositeFrame2D      uint64
-	compositeAllowed2D    bool
-	Preparation2D         RenderPreparation2D
+	materials2D           []material2DReader
+	Cameras               []ExtractedCamera
+	Items2D               []renderItem2D
+	activeCamera2D        ExtractedCamera
 	Composite2D           CompositeStatistics2D
+	Preparation2D         RenderPreparation2D
+	registry2D            uint64
+	compositeFrame2D      uint64
+	activeCamera2DSet     bool
+	compositeAllowed2D    bool
 }
 
 type compositeViewKey2D struct {

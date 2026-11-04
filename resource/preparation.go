@@ -20,13 +20,13 @@ const (
 // Preparation transfers one CPU result to its caller. Load must not access ECS
 // or render devices. Wake may be called by the worker and must be thread-safe.
 type Preparation[T any] struct {
-	mu      sync.Mutex
-	state   PreparationState
 	value   T
 	err     error
 	cancel  context.CancelFunc
 	discard func(T)
 	done    chan struct{}
+	mu      sync.Mutex
+	state   PreparationState
 }
 
 func BeginPreparation[T any](load func(context.Context) (T, error), discard func(T), wake func()) *Preparation[T] {

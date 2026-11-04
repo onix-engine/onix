@@ -18,17 +18,11 @@ type MatchContext struct {
 type nodeMatchData struct {
 	previousElement   *dom.Node
 	focusWithinState  *State
-	id                string
-	classValue        string
 	childIndex        int32
 	childReverse      int32
 	typeIndex         int32
 	typeReverse       int32
 	indexFlags        uint8
-	previousLoaded    bool
-	idLoaded          bool
-	classLoaded       bool
-	hasClassAttr      bool
 	focusWithinLoaded bool
 	focusWithin       bool
 }
@@ -115,57 +109,21 @@ func matchesCompound(part CompoundSelector, node *dom.Node, state *State, ctx *M
 		return false
 	}
 
+	// Attributes already live in a hash map on the DOM node. Copying id/class
+	// into the match context adds another lookup and per-node retained state.
 	if part.ID != "" {
-		if ctx == nil {
-			id, ok := node.Attr("id")
-			if !ok || id != part.ID {
-				return false
-			}
-		} else {
-			data := ctx.nodes[node]
-			if !data.idLoaded {
-				id, ok := node.Attr("id")
-				data.idLoaded = true
-				if ok {
-					data.id = id
-				}
-				ctx.store(node, data)
-			}
-			if data.id != part.ID {
-				return false
-			}
+		if id, ok := node.Attr("id"); !ok || id != part.ID {
+			return false
 		}
 	}
-
 	if len(part.Classes) > 0 {
-		if ctx == nil {
-			classValue, ok := node.Attr("class")
-			if !ok {
+		classValue, ok := node.Attr("class")
+		if !ok {
+			return false
+		}
+		for _, name := range part.Classes {
+			if !hasClassToken(classValue, name) {
 				return false
-			}
-			for _, name := range part.Classes {
-				if !hasClassToken(classValue, name) {
-					return false
-				}
-			}
-		} else {
-			data := ctx.nodes[node]
-			if !data.classLoaded {
-				classValue, ok := node.Attr("class")
-				data.classLoaded = true
-				data.hasClassAttr = ok
-				if ok {
-					data.classValue = classValue
-				}
-				ctx.store(node, data)
-			}
-			if !data.hasClassAttr {
-				return false
-			}
-			for _, name := range part.Classes {
-				if !hasClassToken(data.classValue, name) {
-					return false
-				}
 			}
 		}
 	}
@@ -469,6 +427,7 @@ func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext
 		}
 		return
 	}
+	var previous *dom.Node
 	for _, child := range parent.Children {
 		if child == nil || child.Type != dom.ElementNode {
 			continue
@@ -477,7 +436,9 @@ func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext
 		data := ctx.nodes[child]
 		data.indexFlags |= childIndexLoaded
 		data.childIndex = int32(index)
+		data.previousElement = previous
 		ctx.store(child, data)
+		previous = child
 	}
 }
 
@@ -651,28 +612,22 @@ func previousElement(node *dom.Node, ctx *MatchContext) *dom.Node {
 		return nil
 	}
 	if ctx != nil {
-		if data := ctx.nodes[node]; data.previousLoaded {
+		// The forward sibling pass also supplies nth-child indices.
+		if data := ctx.nodes[node]; data.indexFlags&childIndexLoaded != 0 {
 			return data.previousElement
 		}
+		cacheChildIndices(node.Parent, false, false, ctx)
+		return ctx.nodes[node].previousElement
 	}
-	var previous, result *dom.Node
+	var previous *dom.Node
 	for _, sibling := range node.Parent.Children {
-		if sibling.Type != dom.ElementNode {
+		if sibling == nil || sibling.Type != dom.ElementNode {
 			continue
 		}
 		if sibling == node {
-			result = previous
-			if ctx == nil {
-				return result
-			}
-		}
-		if ctx != nil {
-			data := ctx.nodes[sibling]
-			data.previousLoaded = true
-			data.previousElement = previous
-			ctx.store(sibling, data)
+			return previous
 		}
 		previous = sibling
 	}
-	return result
+	return nil
 }

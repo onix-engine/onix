@@ -100,14 +100,14 @@ func (kind InputEventKind) String() string {
 // Entity and Path are populated for hit-tested pointer input and remain zero
 // for global keyboard, text, and file input.
 type InputEvent struct {
-	Seq    uint64
-	Entity ecs.Entity
+	File string
+	Text string
 	// Path contains the receiver followed by its parents for bubbling.
 	Path        []ecs.Entity
-	File        string
-	Text        string
 	Composition input.TextComposition
 	Selection   input.TextSelection
+	Seq         uint64
+	Entity      ecs.Entity
 	Key         input.KeyCode
 	X           float32
 	Y           float32

@@ -31,23 +31,23 @@ const (
 
 type flappyState struct {
 	space      *enginephysics.World
+	pipeShapes [2]enginephysics.ColliderHandle[enginephysics.Box]
 	bird       enginephysics.Body
-	birdStart  enginephysics.Vector
 	pipeTop    enginephysics.Body
 	pipeBottom enginephysics.Body
-	pipeShapes [2]enginephysics.ColliderHandle[enginephysics.Box]
-	collided   bool
-	phase      flappyPhase
-	pipeX      float64
+	birdStart  enginephysics.Vector
 	gapCenter  float64
+	pipeX      float64
 	groundX    float64
 	score      int
+	phase      flappyPhase
+	collided   bool
 	passed     bool
 }
 
 type flappySnapshot struct {
-	birdX, birdY, pipeX, gapCenter, groundX float32
 	score                                   int
+	birdX, birdY, pipeX, gapCenter, groundX float32
 	phase                                   flappyPhase
 }
 

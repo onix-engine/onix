@@ -65,23 +65,23 @@ const (
 // PaddingLeft/Right/Top/Bottom are in logical pixels. Padding can be used when
 // percentage or viewport-relative padding is desired.
 type Layout struct {
-	Type                LayoutType                `json:"type,omitempty"`
-	ResizeMode          LayoutResizeMode          `json:"resizeMode,omitempty"`
-	PaddingLeft         float32                   `json:"paddingLeft,omitempty"`
-	PaddingRight        float32                   `json:"paddingRight,omitempty"`
+	ConstraintNum       int                       `json:"constraintNum,omitempty"`
+	Padding             scene.UIRect              `json:"padding,omitzero"`
+	CellSize            mgl32.Vec2                `json:"cellSize,omitzero"`
+	SpacingY            float32                   `json:"spacingY,omitempty"`
 	PaddingTop          float32                   `json:"paddingTop,omitempty"`
 	PaddingBottom       float32                   `json:"paddingBottom,omitempty"`
-	Padding             scene.UIRect              `json:"padding,omitzero"`
+	PaddingRight        float32                   `json:"paddingRight,omitempty"`
 	SpacingX            float32                   `json:"spacingX,omitempty"`
-	SpacingY            float32                   `json:"spacingY,omitempty"`
-	HorizontalDirection LayoutHorizontalDirection `json:"horizontalDirection,omitempty"`
+	PaddingLeft         float32                   `json:"paddingLeft,omitempty"`
 	VerticalDirection   LayoutVerticalDirection   `json:"verticalDirection,omitempty"`
-	CellSize            mgl32.Vec2                `json:"cellSize,omitzero"`
+	HorizontalDirection LayoutHorizontalDirection `json:"horizontalDirection,omitempty"`
+	Type                LayoutType                `json:"type,omitempty"`
 	StartAxis           LayoutStartAxis           `json:"startAxis,omitempty"`
 	AffectedByScale     bool                      `json:"affectedByScale,omitempty"`
 	AutoAlignment       bool                      `json:"autoAlignment,omitempty"`
 	Constraint          LayoutConstraint          `json:"constraint,omitempty"`
-	ConstraintNum       int                       `json:"constraintNum,omitempty"`
+	ResizeMode          LayoutResizeMode          `json:"resizeMode,omitempty"`
 }
 
 func NewLayout() Layout {
@@ -102,17 +102,17 @@ const (
 // TargetID is the stable scene-facing form of Target. Margins use Val, so Px,
 // Percent and viewport units can be mixed.
 type Widget struct {
-	AlignLeft   bool            `json:"alignLeft,omitempty"`
-	AlignRight  bool            `json:"alignRight,omitempty"`
-	AlignTop    bool            `json:"alignTop,omitempty"`
-	AlignBottom bool            `json:"alignBottom,omitempty"`
+	TargetID    string          `json:"target,omitempty"`
+	Target      ecs.Entity      `json:"-"`
 	Left        scene.Val       `json:"left,omitzero"`
 	Right       scene.Val       `json:"right,omitzero"`
 	Top         scene.Val       `json:"top,omitzero"`
 	Bottom      scene.Val       `json:"bottom,omitzero"`
+	AlignLeft   bool            `json:"alignLeft,omitempty"`
+	AlignRight  bool            `json:"alignRight,omitempty"`
+	AlignTop    bool            `json:"alignTop,omitempty"`
+	AlignBottom bool            `json:"alignBottom,omitempty"`
 	AlignMode   WidgetAlignMode `json:"alignMode,omitempty"`
-	Target      ecs.Entity      `json:"-"`
-	TargetID    string          `json:"target,omitempty"`
 	Enabled     bool            `json:"enabled,omitempty"`
 }
 
@@ -132,26 +132,26 @@ type uiLayoutNode struct {
 }
 
 type uiLayoutScratch struct {
+	depths             map[ecs.Entity]int
+	runtime            map[ecs.Entity]*uiLayoutRuntimeState
 	scope              *ecs.QueryScope
-	scopeVersion       uint64
-	initialized        bool
-	childInputs        []uiLayoutChild
-	nodeInputs         []ecs.Entity
+	visitingDepths     map[ecs.Entity]bool
+	depthPath          []ecs.Entity
 	children           []uiLayoutChild
 	nodes              []uiLayoutNode
 	layoutChildren     []ecs.Entity
-	depths             map[ecs.Entity]int
-	visitingDepths     map[ecs.Entity]bool
-	depthPath          []ecs.Entity
+	nodeInputs         []ecs.Entity
+	childInputs        []uiLayoutChild
+	versions           [10]uint64
 	hierarchyVersions  [4]uint64
 	hierarchyStructure uint64
-	versions           [10]uint64
 	structure          uint64
+	scopeVersion       uint64
+	recomputed         int
 	viewport           scene.ViewportSize
-	runtime            map[ecs.Entity]*uiLayoutRuntimeState
+	initialized        bool
 	runtimeInitialized bool
 	pending            bool
-	recomputed         int
 }
 
 type uiLayoutSizeInput struct {
@@ -163,9 +163,9 @@ type uiLayoutSizeInput struct {
 }
 
 type uiLayoutRuntimeState struct {
-	layout      Layout
-	parent      uiLayoutSizeInput
 	children    []uiLayoutSizeInput
+	parent      uiLayoutSizeInput
+	layout      Layout
 	viewport    scene.ViewportSize
 	initialized bool
 }

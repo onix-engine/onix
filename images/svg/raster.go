@@ -182,12 +182,12 @@ const (
 )
 
 type strokePrimitive struct {
-	kind   strokePrimitiveKind
 	points [4]point
-	count  uint8
+	bounds Rect
 	center point
 	radius float64
-	bounds Rect
+	kind   strokePrimitiveKind
+	count  uint8
 }
 
 type strokeRaster struct {

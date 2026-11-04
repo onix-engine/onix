@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"iter"
+	"math/bits"
 	"reflect"
 	"slices"
 )
@@ -11,38 +12,56 @@ import (
 // Ordinary queries use table order; explicit Query.In lists preserve order.
 // Membership is compiled at structural boundaries; warm iteration does not allocate.
 type QueryScope struct {
-	entities  []Entity
-	version   uint64
-	values    map[reflect.Type]any
-	world     *World
-	compiled  uint64
-	structure uint64
-	tables    []scopeTable
+	values     map[reflect.Type]any
+	world      *World
+	entities   []Entity
+	tables     []scopeTable
+	version    uint64
+	compiled   uint64
+	structure  uint64
+	firstTable uint32 // linked nonempty scope tables, using table ID + 1
+	pending    bool   // a currently non-live handle may become live after binding
 }
 
 type scopeTable struct {
 	rows   []uint64
 	blocks []uint32
-	count  int
+	count  uint32
+	next   uint32
 }
 
 func (s *QueryScope) bind(world *World) {
-	if s.world == world && s.compiled == s.version && s.structure == world.structureVersion {
-		return
-	}
-	for i := range s.tables {
-		for _, block := range s.tables[i].blocks {
-			s.tables[i].rows[block] = 0
+	if s.world == world && s.compiled == s.version {
+		if s.structure == world.structureVersion {
+			return
 		}
-		s.tables[i].blocks = s.tables[i].blocks[:0]
-		s.tables[i].count = 0
+		if !s.pending && s.rowsUnchanged(world) {
+			s.structure = world.structureVersion
+			return
+		}
 	}
+	for link := s.firstTable; link != 0; {
+		table := &s.tables[link-1]
+		for _, block := range table.blocks {
+			table.rows[block] = 0
+		}
+		link = table.next
+		table.blocks = table.blocks[:0]
+		table.count, table.next = 0, 0
+	}
+	s.firstTable = 0
 	if len(s.tables) < len(world.archetypes) {
 		s.tables = append(s.tables, make([]scopeTable, len(world.archetypes)-len(s.tables))...)
 	}
+	s.pending = false
 	for _, entity := range s.entities {
 		_, meta, alive := world.entityMeta(entity)
 		if !alive {
+			// Retired generations cannot rejoin; reserved or not-yet-issued
+			// handles still require a full check after structural changes.
+			if index, valid := entity.Index(); valid && (int(index) >= len(world.entities) || world.entities[index].generation == entity.generation()) {
+				s.pending = true
+			}
 			continue
 		}
 		table := &s.tables[meta.archetypeID]
@@ -53,6 +72,9 @@ func (s *QueryScope) bind(world *World) {
 		}
 		bit := uint64(1) << (meta.row % 64)
 		if table.rows[word] == 0 {
+			if table.count == 0 {
+				table.next, s.firstTable = s.firstTable, meta.archetypeID+1
+			}
 			table.blocks = append(table.blocks, uint32(word))
 		}
 		if table.rows[word]&bit == 0 {
@@ -60,10 +82,21 @@ func (s *QueryScope) bind(world *World) {
 			table.count++
 		}
 	}
-	for i := range s.tables {
-		slices.Sort(s.tables[i].blocks)
+	for link := s.firstTable; link != 0; link = s.tables[link-1].next {
+		slices.Sort(s.tables[link-1].blocks)
 	}
 	s.world, s.compiled, s.structure = world, s.version, world.structureVersion
+}
+
+// Appending outsiders preserves existing row identities. Only removals from
+// a table containing members can invalidate this scope's compiled row bits.
+func (s *QueryScope) rowsUnchanged(world *World) bool {
+	for link := s.firstTable; link != 0; link = s.tables[link-1].next {
+		if world.archetypes[link-1].rowVersion > s.structure {
+			return false
+		}
+	}
+	return true
 }
 
 // ScopeValue keeps long-lived system caches separate for execution and
@@ -95,6 +128,9 @@ func (w *World) InQueryScope(entity Entity) bool {
 	}
 	scope := w.queryScope
 	scope.bind(w)
+	if int(meta.archetypeID) >= len(scope.tables) {
+		return false
+	}
 	table := &scope.tables[meta.archetypeID]
 	word := int(meta.row) / 64
 	return word < len(table.rows) && table.rows[word]&(uint64(1)<<(meta.row%64)) != 0
@@ -125,10 +161,14 @@ func (w *World) Entities() iter.Seq[Entity] {
 	return func(yield func(Entity) bool) {
 		w.activeQueryIterators++
 		defer func() { w.activeQueryIterators-- }()
-		for _, table := range w.archetypes {
-			for _, entity := range table.entities {
-				if !yield(entity) {
-					return
+		for block, word := range w.occupiedArchetypes {
+			for word != 0 {
+				table := w.archetypes[block*64+bits.TrailingZeros64(word)]
+				word &= word - 1
+				for _, entity := range table.entities {
+					if !yield(entity) {
+						return
+					}
 				}
 			}
 		}

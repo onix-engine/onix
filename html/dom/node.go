@@ -15,14 +15,14 @@ const (
 )
 
 type Node struct {
-	Type       NodeType
-	Data       string
 	Attributes map[string]string
 	Parent     *Node
-	Children   []*Node
-	States     StateSet[ElementState]
-	Order      uint32
+	Data       string
 	namespace  string
+	Children   []*Node
+	Type       NodeType
+	Order      uint32
+	States     StateSet[ElementState]
 }
 
 func NewDocument() *Node {

@@ -1243,10 +1243,10 @@ func TestInputArrowKeysMoveCaretAndInsertText(t *testing.T) {
 
 func TestAllTextInputsPlaceCaretFromMouseOrTouch(t *testing.T) {
 	tests := []struct {
-		name  string
-		value string
 		spawn func(*ecs.World) ecs.Entity
 		get   func(*ecs.World, ecs.Entity) (string, int)
+		name  string
+		value string
 	}{
 		{name: "input", value: "abcd", spawn: func(world *ecs.World) ecs.Entity {
 			return SpawnInput(world, TextOptions{Width: 180, Height: 36, Value: "abcd"})
@@ -1338,8 +1338,8 @@ func TestFocusedInputCaretBlinks(t *testing.T) {
 	component.Focused = true
 
 	for _, test := range []struct {
-		elapsed time.Duration
 		want    string
+		elapsed time.Duration
 	}{
 		{elapsed: 0, want: "stable"},
 		{elapsed: 499 * time.Millisecond, want: "stable"},
@@ -2061,9 +2061,9 @@ func TestNumberInputEditingEmitsInputEvent(t *testing.T) {
 func TestNumberInputStepUsesStableDecimalPrecision(t *testing.T) {
 	tests := []struct {
 		value     string
+		want      string
 		step      float64
 		direction int
-		want      string
 	}{
 		{value: "-28", step: 0.1, direction: 1, want: "-27.9"},
 		{value: "-27.9", step: 0.1, direction: 1, want: "-27.8"},
@@ -3647,10 +3647,10 @@ func caretVisibleState(world *ecs.World, owner ecs.Entity) bool {
 }
 
 type uiSurface struct {
+	Texture *graphics.Texture
+	Shape   scene.Shape2D
 	Width   float32
 	Height  float32
-	Shape   scene.Shape2D
-	Texture *graphics.Texture
 }
 
 func uiSurfaceSnapshot(world *ecs.World, entity ecs.Entity) *uiSurface {

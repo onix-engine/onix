@@ -73,7 +73,27 @@ func TestMatchContextOversizedWorkspaceReleased(t *testing.T) {
 
 func TestMatchContextRecordLayout(t *testing.T) {
 	// The cache copies no extra strings; this is a regression guard for padding.
-	if unsafe.Sizeof(uintptr(0)) == 8 && unsafe.Sizeof(nodeMatchData{}) > 72 {
+	if unsafe.Sizeof(uintptr(0)) == 8 && unsafe.Sizeof(nodeMatchData{}) > 40 {
 		t.Fatalf("matcher record grew to %d bytes", unsafe.Sizeof(nodeMatchData{}))
+	}
+}
+
+func TestAttributeOnlyMatchingNeedsNoWorkspace(t *testing.T) {
+	node := dom.NewElement("div", map[string]string{"id": "target", "class": "item selected"})
+	sheet, err := Parse(`#target.item.selected {color:red}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := NewMatchContext()
+	if allocs := testing.AllocsPerRun(100, func() {
+		if !MatchWithStateAndContext(sheet.Rules[0].Selectors[0], node, nil, ctx) {
+			panic("attribute selector failed")
+		}
+		ctx.Reset()
+	}); allocs != 0 {
+		t.Fatalf("attribute matching allocated %g objects", allocs)
+	}
+	if ctx.nodes != nil {
+		t.Fatal("attribute matching created a redundant node index")
 	}
 }

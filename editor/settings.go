@@ -18,8 +18,8 @@ const (
 type editorSettings struct {
 	FilePickerDirectory string             `json:"filePickerDirectory,omitempty"`
 	RecentProjects      []string           `json:"recentProjects,omitempty"`
-	SnapToGrid          bool               `json:"snapToGrid,omitempty"`
 	Viewport3D          viewport3DSettings `json:"viewport3D,omitempty"`
+	SnapToGrid          bool               `json:"snapToGrid,omitempty"`
 }
 
 func editorSettingsPath() (string, error) {

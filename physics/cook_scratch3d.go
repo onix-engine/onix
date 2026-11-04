@@ -7,9 +7,9 @@ import "sync"
 const maxCachedCookEntries = 64 << 10
 
 type triangleMeshCookScratch struct {
+	unique map[Vector3D]uint32
 	remap  []uint32
 	refs   []triangleMeshRef
-	unique map[Vector3D]uint32
 }
 
 var triangleMeshCookPool = sync.Pool{New: func() any { return new(triangleMeshCookScratch) }}
@@ -30,10 +30,10 @@ func releaseTriangleMeshCookScratch(scratch *triangleMeshCookScratch) {
 type horizonEdge struct{ a, b, count uint32 }
 
 type convexHullCookScratch struct {
-	faces       []ConvexFace
 	horizon     map[[2]uint32]horizonEdge
-	horizonPeak int
 	seen        map[[2]uint32]struct{}
+	faces       []ConvexFace
+	horizonPeak int
 }
 
 var convexHullCookPool = sync.Pool{New: func() any { return new(convexHullCookScratch) }}

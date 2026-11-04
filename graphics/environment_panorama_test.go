@@ -8,8 +8,8 @@ import (
 )
 
 type testLinearPanorama struct {
-	width, height int
 	pixels        []mgl32.Vec3
+	width, height int
 }
 
 func (p testLinearPanorama) Size() (int, int)       { return p.width, p.height }
@@ -24,7 +24,7 @@ func testRGBERadiance(atlas []byte) mgl32.Vec3 {
 }
 
 func TestPanoramaEnvironmentPreservesBackgroundResolutionAndDetail(t *testing.T) {
-	p := testLinearPanorama{512, 256, make([]mgl32.Vec3, 512*256)}
+	p := testLinearPanorama{width: 512, height: 256, pixels: make([]mgl32.Vec3, 512*256)}
 	for y := range p.height {
 		for x := range p.width {
 			// Adjacent sub-atlas-resolution texels carry distinct red/blue details.
@@ -56,7 +56,7 @@ func TestPanoramaEnvironmentPreservesBackgroundResolutionAndDetail(t *testing.T)
 }
 
 func TestPanoramaDiffuseConvolutionMatchesLinearGradient(t *testing.T) {
-	p := testLinearPanorama{128, 64, make([]mgl32.Vec3, 128*64)}
+	p := testLinearPanorama{width: 128, height: 64, pixels: make([]mgl32.Vec3, 128*64)}
 	for y := range p.height {
 		for x := range p.width {
 			n := environmentDirection((float32(x)+.5)/float32(p.width), (float32(y)+.5)/float32(p.height))
@@ -81,7 +81,7 @@ func TestPanoramaDiffuseConvolutionMatchesLinearGradient(t *testing.T) {
 }
 
 func TestPanoramaPrefilterIntegratesSmallHDRLight(t *testing.T) {
-	p := testLinearPanorama{256, 128, make([]mgl32.Vec3, 256*128)}
+	p := testLinearPanorama{width: 256, height: 128, pixels: make([]mgl32.Vec3, 256*128)}
 	p.pixels[64*256+128] = mgl32.Vec3{60000, 60000, 60000}
 	images, err := BakePanoramaEnvironment(p, 64, 256)
 	if err != nil {

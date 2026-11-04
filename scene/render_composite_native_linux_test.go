@@ -22,8 +22,8 @@ type compositeNativeDriver struct {
 	render.Driver
 	render.RenderTargetDriver
 	created  []render.RenderTargetHandle
-	inTarget bool
 	output   []render.SpriteBatch
+	inTarget bool
 }
 
 func (d *compositeNativeDriver) BeginRenderTarget(handle render.RenderTargetHandle, clear render.RenderTargetClear) error {

@@ -33,13 +33,13 @@ type titlebarMenu struct {
 
 type editorTitlebar struct {
 	world          *ecs.World
-	entity         ecs.Entity
 	nodes          map[string]htmlui.Node
 	menus          []titlebarMenu
 	recentPaths    []string
+	entity         ecs.Entity
 	component      ecs.Entity
-	hoverKnown     bool
 	hoverX, hoverY float32
+	hoverKnown     bool
 }
 
 // Editor HTML assets are independent of the widget theme. Dialog previews and
@@ -188,12 +188,17 @@ func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBou
 }
 
 type editorTitlebarView struct {
-	font                                                 *onixtext.Font
-	root, top                                            rect
-	menu, submenu                                        string
-	recent                                               []string
-	modal, customControls, project, dirty, running, snap bool
-	dimension                                            previewDimension
+	font           *onixtext.Font
+	dimension      previewDimension
+	menu, submenu  string
+	recent         []string
+	root, top      rect
+	modal          bool
+	project        bool
+	dirty          bool
+	running        bool
+	snap           bool
+	customControls bool
 }
 
 func (t *editorTitlebar) syncView(world *ecs.World, view editorTitlebarView) error {

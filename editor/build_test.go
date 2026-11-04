@@ -99,8 +99,8 @@ func TestLinuxBuildEnvironmentUsesVcpkgDirectories(t *testing.T) {
 
 func TestWithResourceOverlayCleansGeneratedFiles(t *testing.T) {
 	for _, test := range []struct {
-		name     string
 		buildErr error
+		name     string
 	}{
 		{name: "success"},
 		{name: "failure", buildErr: errors.New("compile failed")},
@@ -538,8 +538,8 @@ func TestWASMArtifactCompressionFollowsPlatformAndMode(t *testing.T) {
 		name       string
 		platform   BuildPlatform
 		mode       BuildMode
-		compressed bool
 		filename   string
+		compressed bool
 	}{
 		{name: "web debug", platform: BuildPlatformWeb, mode: BuildModeDebug, filename: wasmFilename},
 		{name: "web release", platform: BuildPlatformWeb, mode: BuildModeRelease, compressed: true, filename: wasmBrotliFilename},

@@ -35,12 +35,16 @@ var tileViews = func() [32]struct{ text, class, spawned string } {
 // Mod keeps the board and DOM handles for one independent game instance.
 // Input drives updates; there is no per-frame polling or board rebuilding.
 type Mod struct {
-	game
-	tiles, tileParents                        [16]module.HTMLNode
-	score, best, moves, undoButton            module.HTMLNode
+	tileParents                               [16]module.HTMLNode
+	tiles                                     [16]module.HTMLNode
+	undoButton                                module.HTMLNode
+	score                                     module.HTMLNode
+	best                                      module.HTMLNode
+	moves                                     module.HTMLNode
 	overlay, title, description, keep, status module.HTMLNode
-	pressX, pressY                            float32
-	dragging                                  bool
+	game
+	pressX, pressY float32
+	dragging       bool
 }
 
 func (m *Mod) Install(c *module.Context) error {
@@ -61,12 +65,12 @@ func (m *Mod) Install(c *module.Context) error {
 		m.tileParents[i], m.tiles[i] = parent, value
 	}
 	for _, binding := range []struct {
-		id   string
 		node *module.HTMLNode
+		id   string
 	}{
-		{"score", &m.score}, {"best", &m.best}, {"moves", &m.moves},
-		{"undo", &m.undoButton}, {"overlay", &m.overlay}, {"result-title", &m.title},
-		{"result-description", &m.description}, {"continue", &m.keep}, {"status", &m.status},
+		{id: "score", node: &m.score}, {id: "best", node: &m.best}, {id: "moves", node: &m.moves},
+		{id: "undo", node: &m.undoButton}, {id: "overlay", node: &m.overlay}, {id: "result-title", node: &m.title},
+		{id: "result-description", node: &m.description}, {id: "continue", node: &m.keep}, {id: "status", node: &m.status},
 	} {
 		node, ok := document.FindByID(binding.id)
 		if !ok {

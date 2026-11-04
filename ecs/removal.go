@@ -18,15 +18,15 @@ type PreparedRemoval struct {
 
 type removalPlan struct {
 	world       *World
-	mask        componentMask
 	transitions map[uint32]*removalTransition
+	mask        componentMask
 }
 
 type removalColumn struct {
-	id          componentID
-	overwritten bool
 	source      column
 	target      column // nil for a removed component
+	id          componentID
+	overwritten bool
 }
 
 // moveColumns transfers one source row into the prepared targets, dropping the

@@ -8,14 +8,14 @@ import (
 // Camera adds 3D output and lighting settings to the common scene.Camera.
 // Register enables extraction and input routing for this component.
 type Camera struct {
-	Fog         FogSettings
+	Target      *render.RenderTarget
 	ToneMapping graphics.ToneMapping
 	Quality     Quality
-	FXAA        bool
+	Exposure    graphics.Exposure
+	Fog         FogSettings
 	SSAO        SSAOSettings
 	SSR         SSRSettings
-	Exposure    graphics.Exposure
 	DepthClear  float32
-	Target      *render.RenderTarget
+	FXAA        bool
 	ViewMode    render.RenderViewMode
 }

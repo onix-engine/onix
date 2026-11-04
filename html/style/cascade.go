@@ -8,16 +8,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/diiyw/onix/html/css"
 	"github.com/diiyw/onix/html/dom"
 )
 
 type cascadedValue struct {
+	parsed *preparedValue
 	value  string
 	weight cascadeWeight
 	order  cascadePropertyOrder
-	parsed *preparedValue
 }
 
 type cascadeWeight struct {
@@ -31,15 +32,14 @@ type cascadeWeight struct {
 
 type cascadeScratch struct {
 	changes    *[]NodeChange
-	visited    int
 	values     map[string]cascadedValue
-	candidates []compiledSelectorRef
-	ordered    []specifiedProperty
 	matcher    *css.MatchContext
 	compiled   *compiledStylesheet
+	persistent *styleIndex
+	ordered    []specifiedProperty
 	styles     styleIndex
 	motion     motionStyle
-	persistent *styleIndex
+	visited    int
 }
 
 type specifiedProperty struct {
@@ -94,8 +94,6 @@ func acquireCascadeScratch() *cascadeScratch {
 
 func releaseCascadeScratch(scratch *cascadeScratch) {
 	clear(scratch.values)
-	clear(scratch.candidates)
-	scratch.candidates = scratch.candidates[:0]
 	clear(scratch.ordered)
 	scratch.ordered = scratch.ordered[:0]
 	scratch.matcher.Reset()
@@ -122,9 +120,9 @@ type ContainerMetrics struct {
 }
 
 type QueryEnvironment struct {
-	Viewport         Viewport
 	ContainerMetrics map[*dom.Node]ContainerMetrics
 	Styles           Map
+	Viewport         Viewport
 }
 
 func Compute(root *dom.Node, stylesheet *css.Stylesheet) (Map, error) {
@@ -521,9 +519,7 @@ func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, inpu
 			compiled = compiledMatcher(stylesheet)
 			scratch.compiled = compiled
 		}
-		candidates := compiled.candidatesInto(node, scratch.candidates)
-		scratch.candidates = candidates
-		for _, ref := range candidates {
+		for ref := range compiled.candidates(node) {
 			if !compiledConditionsMatch(compiled.conditions[ref.ruleIndex], node, queries) {
 				continue
 			}
@@ -749,30 +745,37 @@ func compareWeights(left, right cascadeWeight) int {
 }
 
 type inlineDeclaration struct {
+	parsed        *preparedValue
 	property      string
 	value         string
-	important     bool
 	order         int
 	propertyOrder cascadePropertyOrder
-	parsed        *preparedValue
+	important     bool
 }
 
 type cachedInlineStyle struct {
-	declarations []inlineDeclaration
 	err          error
+	declarations []inlineDeclaration
 }
 
-// Parsed inline style attributes are memoized by their exact attribute
-// string: elements repeat the same style markup across nodes and frames.
-var inlineStyleCache = struct {
-	sync.Mutex
+// Parsed inline styles own their source and share immutable declarations.
+// Both entry count and retained payload are bounded; table storage is reused.
+type inlineDeclarationCache struct {
 	entries map[string]cachedInlineStyle
-}{entries: make(map[string]cachedInlineStyle, 64)}
+	bytes   int
+	sync.Mutex
+}
 
-const inlineStyleCacheLimit = 4096
+var inlineStyleCache inlineDeclarationCache
+
+const (
+	inlineStyleCacheLimit       = 4096
+	inlineStyleCacheBytesLimit  = 4 << 20
+	inlineStyleCacheSourceLimit = 64 << 10
+)
 
 func applyInlineDeclarations(values map[string]cascadedValue, input string) error {
-	declarations, err := parseInlineStyleCached(input)
+	declarations, err := inlineStyleCache.parse(input)
 	if err != nil {
 		return err
 	}
@@ -783,24 +786,64 @@ func applyInlineDeclarations(values map[string]cascadedValue, input string) erro
 	return nil
 }
 
-func parseInlineStyleCached(input string) ([]inlineDeclaration, error) {
-	inlineStyleCache.Lock()
-	cached, ok := inlineStyleCache.entries[input]
-	inlineStyleCache.Unlock()
+func (cache *inlineDeclarationCache) parse(input string) ([]inlineDeclaration, error) {
+	if len(input) > inlineStyleCacheSourceLimit {
+		declarations, _, err := parseInlineDeclarations(input)
+		return declarations, err
+	}
+	cache.Lock()
+	cached, ok := cache.entries[input]
+	cache.Unlock()
 	if ok {
 		return cached.declarations, cached.err
 	}
-	declarations, err := parseInlineDeclarations(input)
-	inlineStyleCache.Lock()
-	if len(inlineStyleCache.entries) >= inlineStyleCacheLimit {
-		inlineStyleCache.entries = make(map[string]cachedInlineStyle, 64)
+	// DOM attributes may borrow a whole HTML source or a reusable parser's
+	// decoding buffer. Clone before parsing so every substring is also owned.
+	input = strings.Clone(input)
+	declarations, bytes, err := parseInlineDeclarations(input)
+	if bytes > inlineStyleCacheBytesLimit {
+		return declarations, err
 	}
-	inlineStyleCache.entries[input] = cachedInlineStyle{declarations: declarations, err: err}
-	inlineStyleCache.Unlock()
+	cache.Lock()
+	defer cache.Unlock()
+	// Another miss may have finished while this input was being parsed.
+	if cached, ok := cache.entries[input]; ok {
+		return cached.declarations, cached.err
+	}
+	if cache.entries == nil {
+		cache.entries = make(map[string]cachedInlineStyle, 64)
+	}
+	if len(cache.entries) >= inlineStyleCacheLimit || cache.bytes+bytes > inlineStyleCacheBytesLimit {
+		clear(cache.entries)
+		cache.bytes = 0
+	}
+	cache.entries[input] = cachedInlineStyle{declarations: declarations, err: err}
+	cache.bytes += bytes
 	return declarations, err
 }
 
-func parseInlineDeclarations(input string) ([]inlineDeclaration, error) {
+// Count backing storage conservatively: borrowed strings can be counted more
+// than once, but normalized names, stripped comments and prepared motion values
+// must not disappear from the budget merely because they are separately owned.
+func inlineDeclarationBytes(declaration inlineDeclaration) int {
+	bytes := len(declaration.property) + len(declaration.value)
+	if parsed := declaration.parsed; parsed != nil {
+		bytes += int(unsafe.Sizeof(*parsed)) + len(parsed.property) + len(parsed.value.Keyword)
+		if motion := parsed.motion; motion != nil {
+			bytes += int(unsafe.Sizeof(*motion))
+			for _, value := range motion.transition {
+				bytes += len(value)
+			}
+			for _, value := range motion.animation {
+				bytes += len(value)
+			}
+		}
+	}
+	return bytes
+}
+
+func parseInlineDeclarations(input string) ([]inlineDeclaration, int, error) {
+	bytes := len(input)
 	var declarations []inlineDeclaration
 	start := 0
 	declarationOrder := 0
@@ -827,14 +870,16 @@ func parseInlineDeclarations(input string) ([]inlineDeclaration, error) {
 		if !validateDeclaration(property, value) {
 			return nil
 		}
-		declarations = append(declarations, inlineDeclaration{
+		declaration := inlineDeclaration{
 			property:      property,
 			value:         value,
 			important:     important,
 			order:         declarationOrder,
 			propertyOrder: cascadePropertyIndex[property],
 			parsed:        preparePropertyValue(property, value),
-		})
+		}
+		declarations = append(declarations, declaration)
+		bytes += inlineDeclarationBytes(declaration)
 		return nil
 	}
 	for index := 0; index < len(input); index++ {
@@ -882,20 +927,19 @@ func parseInlineDeclarations(input string) ([]inlineDeclaration, error) {
 		case ';':
 			if parenDepth == 0 && bracketDepth == 0 {
 				if err := flush(index); err != nil {
-					return nil, err
+					return nil, 0, err
 				}
 				declarationOrder++
 				start = index + 1
 			}
 		}
 	}
-	if inComment {
-		return declarations, nil
+	if !inComment {
+		if err := flush(len(input)); err != nil {
+			return nil, 0, err
+		}
 	}
-	if err := flush(len(input)); err != nil {
-		return nil, err
-	}
-	return declarations, nil
+	return declarations, bytes + cap(declarations)*int(unsafe.Sizeof(inlineDeclaration{})), nil
 }
 
 // cascadePropertyIndex maps each known property to its group and position
@@ -2581,25 +2625,25 @@ func parseFilterURLReference(input string) (string, error) {
 
 type backgroundValue struct {
 	Color           *Value
+	Origin          string
 	Image           string
-	PositionX       Value
-	PositionY       Value
+	Attachment      string
+	Clip            string
 	PositionXOrigin string
 	PositionYOrigin string
 	RepeatX         Value
-	RepeatY         Value
 	SizeX           Value
 	SizeY           Value
-	Origin          string
-	Clip            string
-	Attachment      string
+	RepeatY         Value
+	PositionY       Value
+	PositionX       Value
 }
 
 type backgroundPositionValue struct {
-	X       Value
-	Y       Value
 	XOrigin string
 	YOrigin string
+	X       Value
+	Y       Value
 }
 
 type backgroundRepeatValue struct {

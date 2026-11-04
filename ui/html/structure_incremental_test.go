@@ -14,15 +14,15 @@ func TestHTMLStructureStylesStayWithinParent(t *testing.T) {
 	const before = `<div id="parent"><span id="first">First</span><span id="second">Second</span></div>`
 	const siblings = `<div id="other"><input value="Unchanged"/></div>`
 	cases := []struct {
-		name, after string
 		mutate      func(*testing.T, *ecs.World, ecs.Entity)
+		name, after string
 	}{
-		{"remove", `<div id="parent"><span id="second">Second</span></div>`, func(t *testing.T, w *ecs.World, o ecs.Entity) { incrementalHTMLNode(t, w, o, "first").Remove() }},
-		{"append", `<div id="parent"><span id="first">First</span><span id="second">Second</span><span id="first">First</span></div>`, func(t *testing.T, w *ecs.World, o ecs.Entity) {
+		{name: "remove", after: `<div id="parent"><span id="second">Second</span></div>`, mutate: func(t *testing.T, w *ecs.World, o ecs.Entity) { incrementalHTMLNode(t, w, o, "first").Remove() }},
+		{name: "append", after: `<div id="parent"><span id="first">First</span><span id="second">Second</span><span id="first">First</span></div>`, mutate: func(t *testing.T, w *ecs.World, o ecs.Entity) {
 			incrementalHTMLNode(t, w, o, "parent").Append(incrementalHTMLNode(t, w, o, "first").Clone())
 		}},
-		{"clear", `<div id="parent"></div>`, func(t *testing.T, w *ecs.World, o ecs.Entity) { incrementalHTMLNode(t, w, o, "parent").Clear() }},
-		{"replace", `<div id="parent">Replacement</div>`, func(t *testing.T, w *ecs.World, o ecs.Entity) {
+		{name: "clear", after: `<div id="parent"></div>`, mutate: func(t *testing.T, w *ecs.World, o ecs.Entity) { incrementalHTMLNode(t, w, o, "parent").Clear() }},
+		{name: "replace", after: `<div id="parent">Replacement</div>`, mutate: func(t *testing.T, w *ecs.World, o ecs.Entity) {
 			incrementalHTMLNode(t, w, o, "parent").SetText("Replacement")
 		}},
 	}

@@ -20,11 +20,11 @@ import (
 )
 
 type resourcePackageOptions struct {
+	ShaderCompiler project.ShaderCompiler
+	Progress       func(BuildProgress)
 	Mode           BuildMode
 	Platform       BuildPlatform
 	Backend        render.Backend
-	ShaderCompiler project.ShaderCompiler
-	Progress       func(BuildProgress)
 }
 
 type resourcePreprocessContext struct {
@@ -393,11 +393,11 @@ const (
 )
 
 type pixelView struct {
-	format   pixelFormat
 	pixels   []byte
 	palette  color.Palette
 	stride   int
 	rowBytes int
+	format   pixelFormat
 }
 
 func imagePixelView(source image.Image) (pixelView, bool) {

@@ -19,14 +19,13 @@ type FileBrowserEntry struct {
 }
 
 type FileBrowser struct {
-	CurrentDir   string
-	SelectedPath string
-	Extensions   []string
-	Truncated    bool
-
+	CurrentDir       string
+	SelectedPath     string
 	loadedDir        string
+	Extensions       []string
 	loadedExtensions []string
 	entries          []FileBrowserEntry
+	Truncated        bool
 }
 
 func NewFileBrowser(start string, extensions ...string) (FileBrowser, error) {

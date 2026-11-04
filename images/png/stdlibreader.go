@@ -108,22 +108,22 @@ const (
 const pngHeader = "\x89PNG\r\n\x1a\n"
 
 type decoder struct {
-	r             io.Reader
-	img           image.Image
-	crc           hash.Hash32
-	width, height int
-	depth         int
-	palette       color.Palette
-	cb            int
-	stage         int
-	idatLength    uint32
-	tmp           [3 * 256]byte
-	interlace     int
-
+	img         image.Image
+	crc         hash.Hash32
+	r           io.Reader
+	palette     color.Palette
+	width       int
+	depth       int
+	height      int
+	cb          int
+	stage       int
+	interlace   int
+	idatLength  uint32
+	tmp         [3 * 256]byte
+	transparent [6]byte
 	// useTransparent and transparent are used for grayscale and truecolor
 	// transparency, as opposed to palette transparency.
 	useTransparent bool
-	transparent    [6]byte
 }
 
 // A FormatError reports that the input is not a valid PNG.

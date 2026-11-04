@@ -34,11 +34,11 @@ A (forgetful) hash table where each hash bucket contains a binary tree of
 	starting positions.
 */
 type h10 struct {
+	forest []uint32
 	hasherCommon
 	window_mask_ uint
 	buckets_     [1 << 17]uint32
 	invalid_pos_ uint32
-	forest       []uint32
 }
 
 func (h *h10) Initialize(params *encoderParams) {

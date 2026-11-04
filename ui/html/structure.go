@@ -15,7 +15,7 @@ func prepareHTMLStructure(state *htmlRenderState, root *layout.Box) bool {
 		return false
 	}
 	for _, change := range state.StyleChanges {
-		if change.Tree && !change.Reorder && (state.BoxesByNode[change.Node] != nil || state.RenderNodes[change.Node] != nil) {
+		if change.Tree && !change.Reorder && (state.boxForNode(change.Node) != nil || state.RenderNodes[change.Node] != nil) {
 			return false
 		}
 	}
@@ -60,7 +60,6 @@ func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 			return false
 		}
 	}
-	state.BoxesByNode[box.Node] = box
 	for _, child := range box.Children {
 		if !prepareHTMLStructureBox(state, child) {
 			return false

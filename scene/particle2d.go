@@ -16,32 +16,33 @@ type ParticleAppearance2D struct {
 }
 
 type ParticleEmitter2D struct {
-	Width       float32
-	Height      float32
 	Texture     *graphics.Texture
+	particles   []particleState2D
 	Colors      []graphics.ColorRGBA
 	Appearances []ParticleAppearance2D
 	Count       int
-	Rate        float32
+	SizeMin     float32
+	GravityX    float32
 	Lifetime    float32
 	SpeedMin    float32
 	SpeedMax    float32
-	SizeMin     float32
+	Width       float32
 	SizeMax     float32
 	Direction   float32
 	Spread      float32
-	GravityX    float32
+	Rate        float32
 	GravityY    float32
 	AlphaStart  float32
 	AlphaEnd    float32
-	Loop        bool
-
-	particles   []particleState2D
 	accumulator float32
+	Height      float32
+	Loop        bool
 	burstDone   bool
 }
 
 type particleState2D struct {
+	texture  *graphics.Texture
+	clr      graphics.ColorRGBA
 	x, y     float32
 	vx, vy   float32
 	size     float32
@@ -49,8 +50,6 @@ type particleState2D struct {
 	lifetime float32
 	rotation float32
 	spin     float32
-	clr      graphics.ColorRGBA
-	texture  *graphics.Texture
 }
 
 func NewParticleEmitter2D() ParticleEmitter2D {

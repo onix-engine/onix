@@ -99,7 +99,7 @@ func TestHTMLFocusLocalBoundsShrinkAndInlineTargetCleanup(t *testing.T) {
 			t.Fatal("focus subtree fell back")
 		}
 		binding := state.FocusTargets[state.FocusByNode[outer.node]]
-		if binding.Rect != state.BoxesByNode[outer.node].BorderBox() {
+		if binding.Rect != state.boxForNode(outer.node).BorderBox() {
 			t.Fatal("focus bounds retained previous geometry")
 		}
 		assertHTMLPartialMatchesFresh(t, world, owner, fmt.Sprintf(`<div id="outer" tabindex="0"><div id="target" style="width:%dpx">Child</div></div><div><a id="link" href="#">Long link text</a><a id="other" href="#">Other</a></div>`, width))

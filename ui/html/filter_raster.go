@@ -12,11 +12,11 @@ import (
 type htmlFilterScratch struct {
 	rows     [][4]float64
 	kernel   []float64
-	sigma    float64
 	matrices [][20]float64
-	shadow   image.RGBA
 	mask     []float64
 	maskLine []float64
+	shadow   image.RGBA
+	sigma    float64
 }
 
 func htmlFilterBounds(filters []style.Filter, minX, minY, maxX, maxY float64) (float64, float64, float64, float64) {

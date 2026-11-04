@@ -7,8 +7,8 @@ import (
 )
 
 type AnimationOption struct {
-	Index int64  `json:"index"`
 	Label string `json:"label"`
+	Index int64  `json:"index"`
 }
 
 func DecodeAnimationOption(v project.SlotValue) (AnimationOption, error) {

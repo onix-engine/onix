@@ -80,12 +80,12 @@ type Reader struct {
 	r   io.Reader
 	err error
 
+	chunkReader *chunkReader
+
 	totalLen uint32
 	chunkLen uint32
-
-	chunkReader *chunkReader
-	buf         [chunkHeaderSize]byte
-	padded      bool
+	buf      [chunkHeaderSize]byte
+	padded   bool
 }
 
 // Next returns the next chunk's ID, length and data. It returns io.EOF if there

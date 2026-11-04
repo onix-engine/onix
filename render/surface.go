@@ -14,13 +14,13 @@ const (
 )
 
 type NativeSurface struct {
-	Kind           NativeSurfaceKind
 	Display        unsafe.Pointer
+	Kind           NativeSurfaceKind
 	Window         uintptr
 	Width          int
 	Height         int
-	Transparent    bool
 	DRMFD          int
 	DRMConnectorID uint32
 	DRMRefreshRate uint32 // Millihertz; zero selects the highest rate at Width x Height.
+	Transparent    bool
 }

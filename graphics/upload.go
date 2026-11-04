@@ -33,10 +33,10 @@ type uploadTask struct {
 // UploadQueue deduplicates CPU-ready assets. All methods belong to the render
 // thread, and all uploads use the explicitly supplied device.
 type UploadQueue struct {
-	tasks  []uploadTask
 	seen   map[uploadResource]struct{}
-	index  int
 	device *render.Device
+	tasks  []uploadTask
+	index  int
 }
 
 func (q *UploadQueue) add(value uploadResource) {

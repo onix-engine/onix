@@ -996,17 +996,17 @@ func storeTrivialContextMap(num_types uint, context_bits uint, tree []huffmanTre
 
 /* Manages the encoding of one block category (literal, command or distance). */
 type blockEncoder struct {
-	histogram_length_ uint
-	num_block_types_  uint
 	block_types_      []byte
 	block_lengths_    []uint32
-	num_blocks_       uint
+	depths_           []byte
+	bits_             []uint16
 	block_split_code_ blockSplitCode
+	histogram_length_ uint
+	num_block_types_  uint
+	num_blocks_       uint
 	block_ix_         uint
 	block_len_        uint
 	entropy_ix_       uint
-	depths_           []byte
-	bits_             []uint16
 }
 
 var blockEncoderPool sync.Pool

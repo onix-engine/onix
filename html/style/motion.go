@@ -14,8 +14,8 @@ type motionInputs struct {
 // unrelated layout/paint styles can share the same resolved motion values.
 type motionStyle struct {
 	motionInputs
-	transitions [AnimatedPropertyCount]TransformTransition
 	animations  []CSSAnimation
+	transitions [AnimatedPropertyCount]TransformTransition
 	shared      bool
 }
 

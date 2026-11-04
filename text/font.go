@@ -9,10 +9,10 @@ import (
 
 type Font struct {
 	*font.Face
-	mu        sync.Mutex
 	caches    map[glyphCacheKey]*GlyphCache
-	cacheTick uint64
 	atlasPool *glyphAtlasPool
+	cacheTick uint64
+	mu        sync.Mutex
 }
 
 var defaultFont = sync.OnceValue(func() *Font {

@@ -5,9 +5,9 @@ import "time"
 const DefaultTargetFPS = 30
 
 type framePacer struct {
+	nextFrame time.Time
 	targetFPS int
 	interval  time.Duration
-	nextFrame time.Time
 	started   bool
 }
 

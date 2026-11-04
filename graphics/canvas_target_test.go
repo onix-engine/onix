@@ -9,9 +9,9 @@ import (
 )
 
 type canvasTargetTestDriver struct {
-	canvasTestDriver
 	beginTargetErr error
-	targets, ends  int
+	canvasTestDriver
+	targets, ends int
 }
 
 func (d *canvasTargetTestDriver) CreateRenderTarget(render.RenderTargetDescriptor) (render.RenderTargetHandle, render.TextureHandle, error) {

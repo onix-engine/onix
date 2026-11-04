@@ -9,8 +9,8 @@ import (
 
 // Variant associates an entity with one strongly typed owner state.
 type Variant[T comparable] struct {
-	Entity  ecs.Entity
 	State   T
+	Entity  ecs.Entity
 	Enabled bool
 }
 

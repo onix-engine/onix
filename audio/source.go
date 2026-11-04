@@ -18,8 +18,8 @@ type Source interface {
 
 // MemorySource owns one immutable encoded audio byte slice.
 type MemorySource struct {
-	mu   sync.RWMutex
 	data []byte
+	mu   sync.RWMutex
 }
 
 // NewMemorySource takes ownership of data. It must not be mutated afterward.

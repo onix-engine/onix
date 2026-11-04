@@ -34,8 +34,8 @@ const entryAliasFlag = 1 << 0
 // empty for in-memory data. Callers retain ownership until Pack returns.
 type PackInput struct {
 	Path   string
-	Data   []byte
 	Source string
+	Data   []byte
 }
 
 func BytesInput(path string, data []byte) PackInput {
@@ -58,8 +58,8 @@ type PackStats struct {
 }
 
 type PackResult struct {
-	Stats  PackStats
 	Assets []AssetInfo
+	Stats  PackStats
 }
 
 type packedEntry struct {
@@ -356,13 +356,13 @@ type byteViewer interface {
 }
 
 type Reader struct {
-	mu         sync.RWMutex
 	source     io.ReaderAt
 	viewer     byteViewer
-	dataOffset int64
 	assets     []AssetInfo
 	offsets    []uint64
 	verified   []atomic.Bool
+	dataOffset int64
+	mu         sync.RWMutex
 }
 
 func NewReader(source io.ReaderAt, size int64, assets []AssetInfo) (*Reader, error) {
@@ -668,22 +668,20 @@ type blobReleaser interface {
 // direct package view; callers must not mutate it. Close releases the package
 // pin and invalidates all views obtained from the Blob.
 type Blob struct {
-	source   io.ReaderAt
-	viewer   byteViewer
-	offset   int64
-	info     AssetInfo
-	verified *atomic.Bool
-	release  blobReleaser
-
+	source    io.ReaderAt
+	viewer    byteViewer
+	verifyErr error
+	loadErr   error
+	release   blobReleaser
+	verified  *atomic.Bool
 	// identity supplies checksum and content ID on first observation. Mapped
 	// blobs leave it set so a resource that is only decoded is never hashed.
-	identity *lazyAssetIdentity
-
-	loadOnce   sync.Once
-	verifyOnce sync.Once
+	identity   *lazyAssetIdentity
 	data       []byte
-	loadErr    error
-	verifyErr  error
+	info       AssetInfo
+	offset     int64
+	verifyOnce sync.Once
+	loadOnce   sync.Once
 	closed     atomic.Bool
 }
 

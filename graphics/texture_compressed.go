@@ -10,11 +10,11 @@ import (
 // layout the device samples. The build produces these; nothing at runtime
 // re-encodes them.
 type CompressedTextureDescriptor struct {
-	Format        render.TextureFormat
 	Width, Height int
 	// Levels is the mip depth carried by the payload. Compressed textures
 	// always ship a chain because a device cannot generate mips for block data.
 	Levels int
+	Format render.TextureFormat
 	// Mipmap controls sampler filtering independently from the carried chain.
 	Mipmap bool
 	// Premultiplied reports colour channels already scaled by alpha, which the

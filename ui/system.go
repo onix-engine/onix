@@ -34,8 +34,8 @@ type tabChildRange struct {
 
 type tabHierarchyScratch struct{}
 type tabHierarchy struct {
-	children    []tabParentChild
 	ranges      map[ecs.Entity]tabChildRange
+	children    []tabParentChild
 	versions    [2]uint64
 	initialized bool
 }

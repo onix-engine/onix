@@ -11,9 +11,9 @@ import (
 // Video owns a pinned encoded video blob. Bytes returns an immutable borrowed
 // view; ReadAll returns an independent mutable copy.
 type Video struct {
-	mu           sync.Mutex
 	blob         *resource.Blob
 	readers      int
+	mu           sync.Mutex
 	closed       bool
 	closePending bool
 }
@@ -119,9 +119,9 @@ func (v *Video) releaseReader() error {
 
 type videoReader struct {
 	io.ReadSeekCloser
+	err   error
 	video *Video
 	once  sync.Once
-	err   error
 }
 
 func (r *videoReader) Close() error {

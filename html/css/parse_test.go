@@ -377,8 +377,8 @@ func TestMatchStaticPseudoClasses(t *testing.T) {
 	solo := html.Children[1].Children[3].Children[0]
 
 	tests := []struct {
-		selector string
 		node     *dom.Node
+		selector string
 		want     bool
 	}{
 		{selector: "html:root", node: html, want: true},

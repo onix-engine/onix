@@ -23,15 +23,15 @@ const (
 )
 
 type Glyph struct {
-	Rune    rune
-	OffsetX float32
-	OffsetY float32
-	Advance float32
+	page    *glyphAtlas
 	Atlas   int
 	X, Y    int
 	Width   int
 	Height  int
-	page    *glyphAtlas
+	Rune    rune
+	OffsetX float32
+	OffsetY float32
+	Advance float32
 }
 
 // RGBA reports whether the atlas retains RGB channels (color or LCD glyphs).
@@ -52,8 +52,8 @@ func (g Glyph) KeepAlive(canvas *graphics.Canvas2D) {
 // Cached records do not pin pages. Returned glyphs do, so evicting a page from
 // the LRU never invalidates geometry held by live text or render snapshots.
 type cachedGlyph struct {
-	glyph Glyph
 	page  weak.Pointer[glyphAtlas]
+	glyph Glyph
 	slot  uint16
 }
 
@@ -65,16 +65,16 @@ func cacheGlyph(g Glyph) cachedGlyph {
 
 type glyphAtlas struct {
 	texture    *graphics.Texture
-	lcd        bool
+	prev, next *glyphAtlas
+	pending    []graphics.TextureRegionUpdate
 	size       int
 	cursorX    int
 	cursorY    int
 	rowH       int
-	pending    []graphics.TextureRegionUpdate
 	index      int
+	lcd        bool
 	cached     bool
 	queued     bool
-	prev, next *glyphAtlas
 }
 
 type glyphAtlasSlot struct {
@@ -83,16 +83,16 @@ type glyphAtlasSlot struct {
 }
 
 type glyphAtlasPool struct {
-	mu             sync.Mutex
-	atlases        []glyphAtlasSlot
+	err            error
 	oldest, newest *glyphAtlas
+	atlases        []glyphAtlasSlot
+	dirtyPages     []int
 	cachedBytes    int
 	cachedPages    int
 	pages          int
 	byteLimit      int
-	err            error
-	dirtyPages     []int
 	sweep          int
+	mu             sync.Mutex
 }
 
 func newGlyphAtlas(size int) *glyphAtlas {
@@ -186,19 +186,18 @@ func (a *glyphAtlas) flushUploads() {
 }
 
 type GlyphCache struct {
-	mu sync.Mutex
-
 	face           *font.ScaledFace
 	pool           *glyphAtlasPool
-	ownsPool       bool
 	glyphs         map[rune]cachedGlyph
 	phasedGlyphs   map[phasedGlyphKey]cachedGlyph
 	outlinedGlyphs map[outlinedGlyphKey]cachedGlyph
-	entries        int
 	clock          []glyphRecordKey
 	referenced     [glyphCacheEntryLimit / 64]uint64
-	hand           uint16
+	entries        int
 	lastUse        uint64 // guarded by the owning Font's mutex
+	mu             sync.Mutex
+	hand           uint16
+	ownsPool       bool
 }
 
 // The clock ring stores keys once; hits set one bit instead of moving linked records.

@@ -21,15 +21,15 @@ type InputCapture2D struct {
 
 // FocusedInputEvent routes one keyboard or text event to the focused entity.
 type FocusedInputEvent struct {
-	Entity  ecs.Entity
 	Event   input.Event
+	Entity  ecs.Entity
 	Handled bool
 }
 
 type FocusedInputContext struct {
 	World   *ecs.World
-	Entity  ecs.Entity
 	Event   input.Event
+	Entity  ecs.Entity
 	Handled bool
 }
 

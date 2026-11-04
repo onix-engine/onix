@@ -3,8 +3,8 @@ package scene
 import "github.com/diiyw/onix/graphics"
 
 type retainedTexture2D struct {
-	content, geometry uint64
 	positions         []int
+	content, geometry uint64
 }
 
 func (cache *retainedRender2D) trackTexture(position int) {

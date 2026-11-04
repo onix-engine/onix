@@ -33,9 +33,9 @@ type TextureBlock struct {
 }
 
 type textureFormatInfo struct {
+	name  string
 	block TextureBlock
 	srgb  bool
-	name  string
 }
 
 var textureFormats = [...]textureFormatInfo{

@@ -21,73 +21,75 @@ const (
 )
 
 type PanelOptions struct {
+	Style         *PanelStyle
+	Title         string
+	Theme         Theme
+	Border        graphics.ColorRGBA
 	X, Y          float32
 	Width, Height float32
-	Title         string
 	Radius        CornerRadius
-	Border        graphics.ColorRGBA
 	BorderWidth   float32
 	PassThrough   bool
-	Theme         Theme
-	Style         *PanelStyle
 }
 
 const WindowTitleBarButtonWidth float32 = 46
 
 // WindowTitleBarItem configures one standard title-bar control.
 type WindowTitleBarItem struct {
-	Action WindowTitleBarAction
+	Style  *ButtonStyle
 	Icon   IconStyle
 	Width  float32
-	Style  *ButtonStyle
+	Action WindowTitleBarAction
 }
 
 type WindowTitleBarOptions struct {
+	Items       []WindowTitleBarItem
+	Theme       Theme
+	StackIndex  int
 	X, Y        float32
 	Width       float32
 	Height      float32
-	Items       []WindowTitleBarItem
 	Radius      CornerRadius
-	StackIndex  int
 	PassThrough bool
-	Theme       Theme
 }
 
 type DialogOptions = PanelOptions
 
 type LabelOptions struct {
-	X, Y        float32
 	Value       string
-	Color       graphics.ColorRGBA
+	Theme       Theme
 	FontSize    float64
 	DPI         float64
+	Color       graphics.ColorRGBA
+	X, Y        float32
 	PassThrough bool
-	Theme       Theme
 }
 
 type ButtonOptions struct {
-	X, Y          float32
-	Width, Height float32
-	Label         string
-	Icon          IconStyle
-	ContentAlign  ButtonContentAlignment
-	Variant       ButtonVariant
-	Radius        CornerRadius
-	JoinLeft      bool
-	JoinRight     bool
-	Disabled      bool
-	PassThrough   bool
-	FontSize      float64
-	DPI           float64
-	Theme         Theme
-	Style         *ButtonStyle
+	Style        *ButtonStyle
+	Label        string
+	Icon         IconStyle
+	Theme        Theme
+	FontSize     float64
+	DPI          float64
+	Radius       CornerRadius
+	X            float32
+	Height       float32
+	Width        float32
+	Y            float32
+	Variant      ButtonVariant
+	JoinLeft     bool
+	JoinRight    bool
+	Disabled     bool
+	PassThrough  bool
+	ContentAlign ButtonContentAlignment
 }
 
 type ButtonGroupItem[T any] struct {
 	Value    T
-	Width    float32
 	Label    string
 	Icon     IconStyle
+	Width    float32
 	Disabled bool
 }
 
@@ -98,114 +100,121 @@ type ButtonGroupDividerOptions struct {
 }
 
 type ButtonGroupOptions[T any] struct {
-	X, Y        float32
-	Height      float32
-	Items       []ButtonGroupItem[T]
-	Radius      CornerRadius
 	Divider     *ButtonGroupDividerOptions
-	PassThrough bool
+	Style       *ButtonGroupStyle
+	Items       []ButtonGroupItem[T]
+	Theme       Theme
 	FontSize    float64
 	DPI         float64
-	Theme       Theme
-	Style       *ButtonGroupStyle
+	X, Y        float32
+	Height      float32
+	Radius      CornerRadius
+	PassThrough bool
 }
 
 type TextOptions struct {
-	X, Y          float32
-	Width, Height float32
-	Value         string
-	Placeholder   string
-	Password      bool
-	Wrap          bool
-	MaxRunes      int
-	Radius        CornerRadius
-	JoinLeft      bool
-	JoinRight     bool
-	Disabled      bool
-	PassThrough   bool
-	FontSize      float64
-	DPI           float64
-	Theme         Theme
-	Style         *TextFieldStyle
+	Style       *TextFieldStyle
+	Value       string
+	Placeholder string
+	Theme       Theme
+	MaxRunes    int
+	FontSize    float64
+	DPI         float64
+	X           float32
+	Height      float32
+	Radius      CornerRadius
+	Width       float32
+	Y           float32
+	JoinLeft    bool
+	JoinRight   bool
+	Disabled    bool
+	PassThrough bool
+	Wrap        bool
+	Password    bool
 }
 
 type NumberInputOptions struct {
-	X, Y            float32
-	Width, Height   float32
+	Style           *NumberInputStyle
 	Value           string
 	Placeholder     string
-	MaxRunes        int
-	Disabled        bool
-	PassThrough     bool
-	Step            float64
-	Integer         bool
-	StepButtonWidth float32
 	UpIcon          IconStyle
 	DownIcon        IconStyle
-	Radius          CornerRadius
-	FontSize        float64
-	DPI             float64
 	Theme           Theme
-	Style           *NumberInputStyle
+	DPI             float64
+	MaxRunes        int
+	Step            float64
+	FontSize        float64
+	Width, Height   float32
+	Y               float32
+	StepButtonWidth float32
+	X               float32
+	Radius          CornerRadius
+	Disabled        bool
+	Integer         bool
+	PassThrough     bool
 }
 
 type MenuOptions struct {
-	X, Y          float32
-	Width, Height float32
+	Style         *MenuStyle
 	Label         string
 	Items         []string
+	Theme         Theme
+	X, Y          float32
+	Width, Height float32
 	Padding       float32
 	Radius        CornerRadius
 	PassThrough   bool
-	Theme         Theme
-	Style         *MenuStyle
 }
 
 type ContextMenuOptions struct {
+	Style       *MenuStyle
+	Items       []string
+	Theme       Theme
 	X, Y        float32
 	Width       float32
 	ItemHeight  float32
-	Items       []string
-	Open        bool
 	Padding     float32
 	Radius      CornerRadius
+	Open        bool
 	PassThrough bool
-	Theme       Theme
-	Style       *MenuStyle
 }
 
 type CheckboxOptions struct {
-	X, Y          float32
-	Width, Height float32
-	Label         string
-	Checked       bool
-	Radius        CornerRadius
-	Disabled      bool
-	PassThrough   bool
-	FontSize      float64
-	DPI           float64
-	Theme         Theme
-	Style         *CheckboxStyle
+	Style       *CheckboxStyle
+	Label       string
+	Theme       Theme
+	FontSize    float64
+	DPI         float64
+	Height      float32
+	Radius      CornerRadius
+	X           float32
+	Width       float32
+	Y           float32
+	Disabled    bool
+	PassThrough bool
+	Checked     bool
 }
 
 type SelectorOptions struct {
-	X, Y          float32
-	Width, Height float32
-	Label         string
-	Options       []string
-	Selected      int
-	Disabled      bool
-	PassThrough   bool
-	Icon          IconStyle
-	ItemHeight    float32
-	ListHeight    float32
-	ScrollY       float32
-	Upward        bool
-	Radius        CornerRadius
-	JoinLeft      bool
-	JoinRight     bool
-	Theme         Theme
-	Style         *SelectorStyle
+	Style       *SelectorStyle
+	Label       string
+	Icon        IconStyle
+	Options     []string
+	Theme       Theme
+	Selected    int
+	ScrollY     float32
+	Height      float32
+	ItemHeight  float32
+	ListHeight  float32
+	X           float32
+	Radius      CornerRadius
+	Width       float32
+	Y           float32
+	Disabled    bool
+	PassThrough bool
+	Upward      bool
+	JoinLeft    bool
+	JoinRight   bool
 }
 
 type TabItemSpec struct {
@@ -215,60 +224,67 @@ type TabItemSpec struct {
 }
 
 type TabOptions struct {
-	X, Y          float32
-	Width, Height float32
-	HeaderHeight  float32
-	Items         []TabItemSpec
-	Selected      int
-	Highlight     graphics.ColorRGBA
-	Radius        CornerRadius
-	PassThrough   bool
-	ItemBorders   bool
-	Theme         Theme
-	Style         *TabStyle
+	Style        *TabStyle
+	Items        []TabItemSpec
+	Theme        Theme
+	Selected     int
+	Highlight    graphics.ColorRGBA
+	Height       float32
+	HeaderHeight float32
+	X            float32
+	Radius       CornerRadius
+	Width        float32
+	Y            float32
+	PassThrough  bool
+	ItemBorders  bool
 }
 
 type TabPanelOptions struct {
+	Style       *TabStyle
+	Theme       Theme
 	Index       int
 	Radius      CornerRadius
 	PassThrough bool
-	Theme       Theme
-	Style       *TabStyle
 }
 
 type ProgressOptions struct {
-	X, Y            float32
-	Width, Height   float32
-	Min, Max, Value float32
-	Indeterminate   bool
-	Slider          bool
-	ThumbSize       float32
-	Radius          CornerRadius
-	PassThrough     bool
-	Theme           Theme
-	Style           *ProgressStyle
+	Style         *ProgressStyle
+	Theme         Theme
+	Value         float32
+	Height        float32
+	Min           float32
+	Max           float32
+	X             float32
+	ThumbSize     float32
+	Radius        CornerRadius
+	Width         float32
+	Y             float32
+	Indeterminate bool
+	Slider        bool
+	PassThrough   bool
 }
 
 type ScrollAreaOptions struct {
-	ReserveScrollbarSpace bool
-	X, Y                  float32
-	Width, Height         float32
+	Style                 *ScrollStyle
+	Theme                 Theme
+	ScrollBarStackIndex   int
+	ScrollX               float32
+	Width                 float32
 	ContentWidth          float32
 	ContentHeight         float32
-	Controlled            bool
-	DisableDrag           bool
+	X, Y                  float32
 	WheelStep             float32
-	ScrollX               float32
+	Radius                CornerRadius
 	ScrollY               float32
 	BarSize               float32
 	MinThumbSize          float32
 	ThumbBarSize          float32
 	HoverBarSize          float32
-	ScrollBarStackIndex   int
-	Radius                CornerRadius
+	Height                float32
+	ReserveScrollbarSpace bool
 	PassThrough           bool
-	Theme                 Theme
-	Style                 *ScrollStyle
+	DisableDrag           bool
+	Controlled            bool
 }
 
 func SpawnPanel(world *ecs.World, opts PanelOptions) ecs.Entity {

@@ -12,11 +12,11 @@ const (
 )
 
 type ratePacer struct {
+	next       time.Time
 	targetRate int
 	interval   time.Duration
-	next       time.Time
-	started    bool
 	maxSteps   int
+	started    bool
 }
 
 func newRatePacer(targetRate int, maxSteps int) ratePacer {

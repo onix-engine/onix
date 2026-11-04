@@ -30,10 +30,10 @@ type viewportLayout struct {
 }
 
 type viewportState struct {
-	baseWidth  int
-	baseHeight int
 	mode       ViewportMode
 	layout     viewportLayout
+	baseWidth  int
+	baseHeight int
 }
 
 func newViewportState(width, height int) viewportState {

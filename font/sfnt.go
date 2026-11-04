@@ -13,9 +13,9 @@ type tableRecord struct {
 }
 
 type sfnt struct {
-	ScalerType uint32
 	Tables     map[string]tableRecord
 	Data       []byte
+	ScalerType uint32
 }
 
 func parseSFNT(data []byte, index int) (*sfnt, error) {

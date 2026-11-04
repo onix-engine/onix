@@ -19,30 +19,29 @@ type Rect struct {
 }
 
 type Document struct {
+	definitions         map[string]element
+	clipPaths           map[string]groupElement
+	gradients           map[string]*gradient
+	children            []element
+	style               stylePatch
+	transform           matrix
+	ViewBox             Rect
+	PreserveAspectRatio PreserveAspectRatio
 	Width               float64
 	Height              float64
-	ViewBox             Rect
 	HasViewBox          bool
-	PreserveAspectRatio PreserveAspectRatio
-
-	style       stylePatch
-	transform   matrix
-	children    []element
-	definitions map[string]element
-	clipPaths   map[string]groupElement
-	gradients   map[string]*gradient
 }
 
 type Options struct {
+	Background color.Color
 	Width      int
 	Height     int
-	Background color.Color
 }
 
 type PreserveAspectRatio struct {
-	None  bool
 	X     float64
 	Y     float64
+	None  bool
 	Slice bool
 }
 

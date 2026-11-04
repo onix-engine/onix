@@ -20,41 +20,6 @@ type sceneSpawnPlan struct {
 }
 
 type sceneSpawnNode struct {
-	Spec            SceneNodeSpec
-	Has3DComponents bool
-	HasSprite       bool
-	HasAnimation    bool
-	HasText         bool
-	HasHTML         bool
-	HasParticle     bool
-	HasTilemap      bool
-	HasSpine        bool
-	HasModel        bool
-	HasCamera       bool
-	HasAmbientLight bool
-	HasLight        bool
-	HasPointLight   bool
-	HasSpotLight    bool
-	HasAreaLight    bool
-	HasPhysics2D    bool
-	HasPhysics3D    bool
-	Parent          uint32
-	TargetCamera    uint32
-	LayoutOrder     int
-	UI              bool
-	Visible         bool
-	Transform       scene.Transform
-	UITransform     sceneUITransform
-	// WidgetTarget stores a one-based plan node index for the authored Widget
-	// target. The runtime component receives the actual Entity after spawning.
-	WidgetTarget uint32
-	TextStyle    sceneTextStyle
-	Camera       sceneCamera
-	AmbientLight render3d.AmbientLight
-	Light        render3d.DirectionalLight
-	PointLight   render3d.PointLight
-	SpotLight    render3d.SpotLight
-	AreaLight    render3d.AreaLight
 	// Target arrays store one-based plan node indices, matching Parent and
 	// TargetCamera references and avoiding path parsing at playback. Animation
 	// clips themselves live in Bundle's immutable cache because spawn plans are
@@ -64,9 +29,44 @@ type sceneSpawnNode struct {
 	// are authored with these hierarchy-local IDs, while Spec.ID may be
 	// namespaced for a mounted or cloned instance.
 	LocalID                 string
-	AnimationFloatTargets   []uint32
-	AnimationTextureTargets []uint32
 	AnimationBoolTargets    []uint32
+	AnimationTextureTargets []uint32
+	AnimationFloatTargets   []uint32
+	PointLight              render3d.PointLight
+	AreaLight               render3d.AreaLight
+	SpotLight               render3d.SpotLight
+	Spec                    SceneNodeSpec
+	Camera                  sceneCamera
+	Light                   render3d.DirectionalLight
+	LayoutOrder             int
+	TextStyle               sceneTextStyle
+	UITransform             sceneUITransform
+	Transform               scene.Transform
+	AmbientLight            render3d.AmbientLight
+	Parent                  uint32
+	TargetCamera            uint32
+	// WidgetTarget stores a one-based plan node index for the authored Widget
+	// target. The runtime component receives the actual Entity after spawning.
+	WidgetTarget    uint32
+	HasAmbientLight bool
+	HasCamera       bool
+	UI              bool
+	Visible         bool
+	HasSpotLight    bool
+	HasPointLight   bool
+	HasPhysics2D    bool
+	HasLight        bool
+	HasPhysics3D    bool
+	HasAreaLight    bool
+	HasModel        bool
+	HasSpine        bool
+	HasTilemap      bool
+	HasParticle     bool
+	HasHTML         bool
+	HasText         bool
+	HasAnimation    bool
+	HasSprite       bool
+	Has3DComponents bool
 }
 
 type sceneTextStyle struct {
@@ -235,13 +235,13 @@ func compileSceneAnimationBindings(plan *sceneSpawnPlan) error {
 }
 
 type animationResolvedBinding struct {
-	node   uint32
 	target scene.AnimationTarget
+	node   uint32
 }
 
 type sceneAnimationChildKey struct {
-	parent uint32
 	id     string
+	parent uint32
 }
 
 func sceneAnimationChildIndex(plan *sceneSpawnPlan) map[sceneAnimationChildKey]int {

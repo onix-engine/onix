@@ -35,8 +35,8 @@ func (e *PackageNotLoadedError) Unwrap() error { return ErrPackageNotLoaded }
 
 type PackageSource struct {
 	ReaderAt io.ReaderAt
-	Size     int64
 	Closer   io.Closer
+	Size     int64
 }
 
 // PackageLoader opens one package. It runs without the Manager mutex held and
@@ -52,46 +52,45 @@ const (
 )
 
 type packageState struct {
-	info       PackageInfo
-	status     packageStatus
 	wait       chan struct{}
 	mounted    *mountedPackage
-	explicit   bool
+	info       PackageInfo
 	dependents int
+	status     packageStatus
+	explicit   bool
 }
 
 type mountedPackage struct {
-	manager      *Manager
-	name         string
-	reader       *Reader
 	closer       io.Closer
+	manager      *Manager
+	reader       *Reader
+	name         string
 	pins         int
 	pendingClose bool
 	closed       bool
 }
 
 type ownedAsset struct {
-	info         AssetInfo
 	packageName  string
+	info         AssetInfo
 	packageIndex int
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	catalog  Catalog
-	packages map[string]*packageState
-	assets   []ownedAsset
-	loader   PackageLoader
-	closed   bool
-
-	loadedPackages int
-	residentBytes  int64
+	loader         PackageLoader
+	packages       map[string]*packageState
+	assets         []ownedAsset
+	catalog        Catalog
 	pinnedBlobs    int
+	residentBytes  int64
+	loadedPackages int
 	pinnedBytes    int64
 	loads          atomic.Uint64
 	unloads        atomic.Uint64
 	blobAcquires   atomic.Uint64
 	loadNanos      atomic.Uint64
+	mu             sync.Mutex
+	closed         bool
 }
 
 type ManagerStatistics struct {

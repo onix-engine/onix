@@ -14,32 +14,32 @@ import (
 
 type Resource struct {
 	Texture     *graphics.Texture
-	Width       float32
-	Height      float32
-	bones       []boneData
-	children    [][]int
-	slots       []slotData
+	atlas       map[string]atlasRegion
+	animations  map[string]animation
+	skins       map[string]skin
 	ik          []ikConstraintData
+	slots       []slotData
+	children    [][]int
 	transforms  []transformConstraintData
 	paths       []pathConstraintData
 	updateCache []updateOperation
-	skins       map[string]skin
-	animations  map[string]animation
-	atlas       map[string]atlasRegion
+	bones       []boneData
+	Height      float32
+	Width       float32
 }
 
 type Player struct {
 	Resource  *Resource
+	pose      *pose
+	bounds    map[animationBoundsKey]animationBounds
 	Animation string
 	Skin      string
-	Loop      bool
+	path      pathWorkspace
+	mesh      meshWorkspace
 	Speed     float32
 	Alpha     float32
 	time      float32
-	pose      *pose
-	bounds    map[animationBoundsKey]animationBounds
-	path      pathWorkspace
-	mesh      meshWorkspace
+	Loop      bool
 }
 
 type pathWorkspace struct {
@@ -88,32 +88,36 @@ const (
 
 type ikConstraintData struct {
 	name                       string
-	order                      int
 	bones                      []int
+	order                      int
 	target                     int
 	bendDirection              int
-	compress, stretch, uniform bool
 	mix                        float32
+	compress, stretch, uniform bool
 }
 
 type transformConstraintData struct {
-	name                                        string
-	order                                       int
-	bones                                       []int
-	target                                      int
-	local, relative                             bool
-	offsetRotation, offsetX, offsetY            float32
-	offsetScaleX, offsetScaleY, offsetShearY    float32
-	rotateMix, translateMix, scaleMix, shearMix float32
+	name                                     string
+	bones                                    []int
+	order                                    int
+	target                                   int
+	rotateMix                                float32
+	offsetRotation, offsetX, offsetY         float32
+	offsetScaleX, offsetScaleY, offsetShearY float32
+	translateMix                             float32
+	scaleMix                                 float32
+	shearMix                                 float32
+	relative                                 bool
+	local                                    bool
 }
 
 type pathConstraintData struct {
 	name                             string
-	order                            int
-	bones                            []int
-	target                           int
 	positionMode, spacingMode        string
 	rotateMode                       string
+	bones                            []int
+	order                            int
+	target                           int
 	offsetRotation, position         float32
 	spacing, rotateMix, translateMix float32
 }
@@ -140,38 +144,48 @@ type orderedConstraint struct {
 
 type slotData struct {
 	name       string
-	bone       int
 	attachment string
+	bone       int
 	color      [4]float32
 	dark       [3]float32
 	blend      render.MeshBlendMode
 }
 
 type attachment struct {
-	name, path, parent, parentSkin                string
-	kind                                          string
-	x, y, rotation, scaleX, scaleY, width, height float32
-	color                                         [4]float32
-	uvs                                           []float32
-	triangles                                     []uint32
-	vertices                                      []float32
-	weighted                                      bool
-	parentMesh                                    *attachment
-	inheritDeform                                 bool
-	vertexCount, endSlot                          int
-	closed, constantSpeed                         bool
-	lengths                                       []float32
+	parentMesh            *attachment
+	parentSkin            string
+	parent                string
+	kind                  string
+	name                  string
+	path                  string
+	uvs                   []float32
+	lengths               []float32
+	vertices              []float32
+	triangles             []uint32
+	endSlot               int
+	vertexCount           int
+	color                 [4]float32
+	y                     float32
+	height                float32
+	width                 float32
+	scaleY                float32
+	scaleX                float32
+	rotation              float32
+	x                     float32
+	weighted              bool
+	inheritDeform         bool
+	closed, constantSpeed bool
 }
 
 type skin map[int]map[string]*attachment
 
 type keyframe struct {
+	name      string
+	color     [4]float32
+	curve     [4]float32
+	dark      [3]float32
 	time      float32
 	x, y      float32
-	color     [4]float32
-	dark      [3]float32
-	name      string
-	curve     [4]float32
 	curveKind uint8
 }
 
@@ -179,23 +193,23 @@ func (f keyframe) timelineTime() float32              { return f.time }
 func (f keyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type boneTimeline struct {
-	bone   int
 	kind   string
 	frames []keyframe
+	bone   int
 }
 type slotTimeline struct {
-	slot   int
 	kind   string
 	frames []keyframe
+	slot   int
 }
 type drawOrderFrame struct {
-	time  float32
 	order []int
+	time  float32
 }
 type deformFrame struct {
-	time      float32
 	vertices  []float32
 	curve     [4]float32
+	time      float32
 	curveKind uint8
 }
 
@@ -203,9 +217,9 @@ func (f deformFrame) timelineTime() float32              { return f.time }
 func (f deformFrame) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type deformTimeline struct {
-	slot       int
 	attachment *attachment
 	frames     []deformFrame
+	slot       int
 }
 type ikKeyframe struct {
 	time              float32
@@ -220,8 +234,8 @@ func (f ikKeyframe) timelineTime() float32              { return f.time }
 func (f ikKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type ikTimeline struct {
-	constraint int
 	frames     []ikKeyframe
+	constraint int
 }
 type transformKeyframe struct {
 	time                                        float32
@@ -234,8 +248,8 @@ func (f transformKeyframe) timelineTime() float32              { return f.time }
 func (f transformKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type transformTimeline struct {
-	constraint int
 	frames     []transformKeyframe
+	constraint int
 }
 type pathKeyframe struct {
 	time, value, rotateMix, translateMix float32
@@ -247,12 +261,11 @@ func (f pathKeyframe) timelineTime() float32              { return f.time }
 func (f pathKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type pathTimeline struct {
-	constraint int
 	kind       string
 	frames     []pathKeyframe
+	constraint int
 }
 type animation struct {
-	duration  float32
 	bones     []boneTimeline
 	slots     []slotTimeline
 	deform    []deformTimeline
@@ -260,6 +273,7 @@ type animation struct {
 	transform []transformTimeline
 	paths     []pathTimeline
 	drawOrder []drawOrderFrame
+	duration  float32
 }
 
 type bonePose struct {
@@ -271,9 +285,9 @@ type bonePose struct {
 }
 type slotPose struct {
 	attachment string
+	deform     []float32
 	color      [4]float32
 	dark       [3]float32
-	deform     []float32
 }
 type ikPose struct {
 	bendDirection     int
@@ -302,56 +316,76 @@ const radToDeg = float32(180 / math.Pi)
 const degToRad = float32(math.Pi / 180)
 
 type rawSkeleton struct {
+	Skins      map[string]map[string]map[string]sourcejson.RawMessage `json:"skins"`
+	Animations map[string]sourcejson.RawMessage                       `json:"animations"`
+	Bones      []struct {
+		ScaleX, ScaleY          *float32
+		Name, Parent, Transform string
+		Length, X, Y, Rotation  float32
+		ShearX, ShearY          float32
+	} `json:"bones"`
+	IK []struct {
+		BendPositive               *bool
+		Mix                        *float32
+		Name, Target               string
+		Bones                      []string
+		Order                      int
+		Compress, Stretch, Uniform bool
+	} `json:"ik"`
+	Transform []struct {
+		ShearMix     *float32
+		ScaleMix     *float32
+		TranslateMix *float32
+		RotateMix    *float32
+		Name, Target string
+		Bones        []string
+		Order        int
+		Y            float32
+		ScaleX       float32
+		ScaleY       float32
+		ShearY       float32
+		X            float32
+		Rotation     float32
+		Relative     bool
+		Local        bool
+	} `json:"transform"`
+	Path []struct {
+		RotateMix, TranslateMix                             *float32
+		Name, Target, PositionMode, SpacingMode, RotateMode string
+		Bones                                               []string
+		Order                                               int
+		Rotation, Position, Spacing                         float32
+	} `json:"path"`
+	Slots    []struct{ Name, Bone, Attachment, Color, Dark, Blend string } `json:"slots"`
 	Skeleton struct {
 		Width  float32 `json:"width"`
 		Height float32 `json:"height"`
 	} `json:"skeleton"`
-	Bones []struct {
-		Name, Parent, Transform string
-		Length, X, Y, Rotation  float32
-		ScaleX, ScaleY          *float32
-		ShearX, ShearY          float32
-	} `json:"bones"`
-	IK []struct {
-		Name, Target               string
-		Order                      int
-		Bones                      []string
-		BendPositive               *bool
-		Compress, Stretch, Uniform bool
-		Mix                        *float32
-	} `json:"ik"`
-	Transform []struct {
-		Name, Target                                string
-		Order                                       int
-		Bones                                       []string
-		Local, Relative                             bool
-		Rotation, X, Y, ScaleX, ScaleY, ShearY      float32
-		RotateMix, TranslateMix, ScaleMix, ShearMix *float32
-	} `json:"transform"`
-	Path []struct {
-		Name, Target, PositionMode, SpacingMode, RotateMode string
-		Order                                               int
-		Bones                                               []string
-		Rotation, Position, Spacing                         float32
-		RotateMix, TranslateMix                             *float32
-	} `json:"path"`
-	Slots      []struct{ Name, Bone, Attachment, Color, Dark, Blend string } `json:"slots"`
-	Skins      map[string]map[string]map[string]sourcejson.RawMessage        `json:"skins"`
-	Animations map[string]sourcejson.RawMessage                              `json:"animations"`
 }
 
 type rawAttachment struct {
-	Type, Name, Path, Parent, Skin, Color, End string
-	X, Y, Rotation, Width, Height              float32
-	VertexCount                                int
-	ScaleX, ScaleY                             *float32
-	UVs                                        []float32 `json:"uvs"`
-	Vertices                                   []float32 `json:"vertices"`
-	Triangles                                  []uint32  `json:"triangles"`
-	Deform                                     *bool     `json:"deform"`
-	Closed                                     bool      `json:"closed"`
-	ConstantSpeed                              *bool     `json:"constantSpeed"`
-	Lengths                                    []float32 `json:"lengths"`
+	ScaleX        *float32
+	ConstantSpeed *bool `json:"constantSpeed"`
+	Deform        *bool `json:"deform"`
+	ScaleY        *float32
+	Name          string
+	Path          string
+	Parent        string
+	Skin          string
+	Color         string
+	End           string
+	Type          string
+	UVs           []float32 `json:"uvs"`
+	Vertices      []float32 `json:"vertices"`
+	Triangles     []uint32  `json:"triangles"`
+	Lengths       []float32 `json:"lengths"`
+	VertexCount   int
+	Height        float32
+	Width         float32
+	Rotation      float32
+	Y             float32
+	X             float32
+	Closed        bool `json:"closed"`
 }
 
 func Decode(skeletonJSON, atlasData, textureData []byte, texturePath string, options graphics.TextureOptions, decoder graphics.ImageDecoder) (*Resource, error) {
@@ -1867,12 +1901,12 @@ func transform(a affine, x, y float32) (float32, float32) {
 }
 
 type drawableGeometry struct {
-	slotIndex int
-	slot      slotPose
 	attach    *attachment
 	positions []float32
 	uvs       []float32
 	indices   []uint32
+	slot      slotPose
+	slotIndex int
 }
 
 func (p *Player) forEachDrawable(yield func(drawableGeometry)) {
@@ -2211,8 +2245,6 @@ type clipPoint struct{ x, y float32 }
 type clipVertex struct{ x, y, u, v float32 }
 
 type skeletonClipper struct {
-	started          bool
-	endSlot          int
 	points           []clipPoint
 	polygons         [][]clipPoint
 	trianglePoints   []clipPoint
@@ -2222,6 +2254,8 @@ type skeletonClipper struct {
 	clippedPositions []float32
 	clippedUVs       []float32
 	clippedIndices   []uint32
+	endSlot          int
+	started          bool
 }
 
 func (c *skeletonClipper) active() bool { return c.started }
@@ -2756,7 +2790,7 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 		}
 		for kind, rawFrames := range timelines {
 			frames := parseFrames(rawFrames, kind)
-			result.bones = append(result.bones, boneTimeline{bi, kind, frames})
+			result.bones = append(result.bones, boneTimeline{bone: bi, kind: kind, frames: frames})
 			result.duration = max(result.duration, lastTime(frames))
 		}
 	}
@@ -2769,7 +2803,7 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 		}
 		for kind, rawFrames := range timelines {
 			frames := parseFrames(rawFrames, kind)
-			result.slots = append(result.slots, slotTimeline{si, kind, frames})
+			result.slots = append(result.slots, slotTimeline{slot: si, kind: kind, frames: frames})
 			result.duration = max(result.duration, lastTime(frames))
 		}
 	}
@@ -2839,11 +2873,11 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 		key = "draworder"
 	}
 	var orders []struct {
-		Time    float32
 		Offsets []struct {
 			Slot   string
 			Offset int
 		}
+		Time float32
 	}
 	_ = sourcejson.Unmarshal(root[key], &orders)
 	for _, f := range orders {
@@ -2878,7 +2912,7 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 				unchanged = unchanged[:len(unchanged)-1]
 			}
 		}
-		result.drawOrder = append(result.drawOrder, drawOrderFrame{f.Time, order})
+		result.drawOrder = append(result.drawOrder, drawOrderFrame{time: f.Time, order: order})
 		result.duration = max(result.duration, f.Time)
 	}
 	return result, nil

@@ -38,11 +38,11 @@ var magic = texcontainer.Magic
 // Image is a container payload. Data holds every mip level concatenated from the
 // largest down to 1x1, which is the order the device uploads them in.
 type Image struct {
-	Format        render.TextureFormat
+	Data          []byte
 	Width, Height int
 	Levels        int
+	Format        render.TextureFormat
 	Premultiplied bool
-	Data          []byte
 }
 
 // Marshal encodes a container. It rejects payloads whose length does not match

@@ -15,8 +15,8 @@ func TestMessagesAddressAnySceneInstanceWithoutDeclarations(t *testing.T) {
 		"box/mod.json":               `{}`, "empty/mod.json": `{}`,
 	})
 	type packet struct {
-		Count int
 		Label string
+		Count int
 	}
 	registry := Registry{}
 	var got []string

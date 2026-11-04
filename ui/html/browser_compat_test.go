@@ -325,7 +325,7 @@ func TestHTMLAdjacentMutationRefreshesSibling(t *testing.T) {
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
 	node := incrementalHTMLNode(t, world, owner, "second")
-	if got := state.BoxesByNode[node.node].Content.Width; got != 90 {
+	if got := state.boxForNode(node.node).Content.Width; got != 90 {
 		t.Fatalf("sibling width = %v", got)
 	}
 }
@@ -353,7 +353,7 @@ func TestHTMLAutoPositionedPaintOrder(t *testing.T) {
 	state, _ := world.Get[htmlRenderState](owner)
 	stack := func(id string) int {
 		node := incrementalHTMLNode(t, world, owner, id)
-		return htmlBoxStackIndex(state.BoxesByNode[node.node], 0)
+		return htmlBoxStackIndex(state.boxForNode(node.node), 0)
 	}
 	if stack("later") <= stack("deep") || stack("deep") <= stack("ordinary") {
 		t.Fatal("positioned auto paint order differs from document order")
@@ -463,8 +463,8 @@ func TestHTMLFlexConstraintMutationRedistributesSiblings(t *testing.T) {
 		incrementalHTMLNode(t, world, owner, "limited").SetAttribute("style", limit.css)
 		incrementalSync(t, world)
 		state, _ := world.Get[htmlRenderState](owner)
-		first := state.BoxesByNode[incrementalHTMLNode(t, world, owner, "limited").node].Content
-		second := state.BoxesByNode[incrementalHTMLNode(t, world, owner, "remaining").node].Content
+		first := state.boxForNode(incrementalHTMLNode(t, world, owner, "limited").node).Content
+		second := state.boxForNode(incrementalHTMLNode(t, world, owner, "remaining").node).Content
 		if first.Width != limit.first || second.Width != limit.second || second.X != first.X+first.Width {
 			t.Fatalf("%s: first=%+v second=%+v", limit.css, first, second)
 		}

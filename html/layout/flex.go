@@ -11,38 +11,41 @@ import (
 )
 
 type flexConfig struct {
-	isRow            bool
-	reverseMain      bool
-	reverseCross     bool
-	wrap             bool
 	justifyContent   string
 	alignItems       string
 	alignContent     string
 	mainGap          float64
+	crossSize        float64
+	mainSize         float64
 	crossGap         float64
+	wrap             bool
+	isRow            bool
 	hasDefiniteMain  bool
 	hasDefiniteCross bool
-	mainSize         float64
-	crossSize        float64
+	reverseCross     bool
+	reverseMain      bool
 }
 
 type flexItem struct {
-	baseSize, minMain, maxMain, violation float64
-	frozen                                bool
-	box                                   *Box
-	mainSize                              float64
-	outerMain                             float64
-	outerCross                            float64
-	mainExtras                            float64
-	crossExtras                           float64
-	grow                                  float64
-	shrink                                float64
-	alignSelf                             string
-	baseline                              float64
-	measured                              bool
-	measureMain                           float64
-	measureCross                          float64
-	measureAutoCross                      bool
+	box              *Box
+	alignSelf        string
+	shrink           float64
+	grow             float64
+	measureCross     float64
+	maxMain          float64
+	mainSize         float64
+	outerMain        float64
+	outerCross       float64
+	mainExtras       float64
+	crossExtras      float64
+	violation        float64
+	baseSize         float64
+	minMain          float64
+	baseline         float64
+	measureMain      float64
+	measured         bool
+	frozen           bool
+	measureAutoCross bool
 }
 
 type flexLine struct {
@@ -67,9 +70,9 @@ type flexScratch struct {
 // Keep it separately: stretch/final sizing may replace that geometry before an
 // outer flex container asks for the same intrinsic height again in this pass.
 type flexBasisMeasurement struct {
-	pass                 uint64
-	containing, absolute Rect
 	width, height        style.Value
+	containing, absolute Rect
+	pass                 uint64
 	result               float64
 }
 

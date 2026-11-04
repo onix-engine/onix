@@ -116,22 +116,22 @@ type AnimationQuaternionSpline struct {
 }
 
 type AnimationKeyframe[T any] struct {
-	Time             float32
 	Value            T
 	InTangent        T
 	OutTangent       T
 	Tween            AnimationTween
-	Curve            AnimationCurve
-	InverseSpan      float32
 	QuaternionSpline AnimationQuaternionSpline
+	Curve            AnimationCurve
+	Time             float32
+	InverseSpan      float32
 }
 
 type AnimationTrack[T any] struct {
-	Binding   AnimationBinding
-	Keyframes []AnimationKeyframe[T]
+	Binding AnimationBinding
 	// TimeTween remaps elapsed time over the first-to-last keyframe interval.
 	// Discrete tracks still select frames; the curve changes their playback pace.
 	TimeTween AnimationTween
+	Keyframes []AnimationKeyframe[T]
 	TimeCurve AnimationCurve
 	target    animationTargetCode
 	root      bool
@@ -360,17 +360,16 @@ func sampleAnimationProgress(tween AnimationTween, curve AnimationCurve, progres
 }
 
 type AnimationClip struct {
-	Duration      float32
-	FloatTracks   []AnimationTrack[float32]
-	TextureTracks []AnimationTrack[*graphics.Texture]
-	BoolTracks    []AnimationTrack[bool]
-	Events        []AnimationEvent
-
-	prepared              bool
 	prepareErr            error
+	BoolTracks            []AnimationTrack[bool]
+	TextureTracks         []AnimationTrack[*graphics.Texture]
+	Events                []AnimationEvent
+	FloatTracks           []AnimationTrack[float32]
 	rootFloatTracks       []int
 	rootTextureTracks     []int
 	rootBoolTracks        []int
+	Duration              float32
+	prepared              bool
 	rootRequirements      uint8
 	hasRotationTracks     bool
 	hasRootRotationTracks bool
@@ -528,48 +527,46 @@ func animationRequirement(target animationTargetCode) uint8 {
 }
 
 type AnimationEvent struct {
-	Time  float32
 	Name  string
 	Value string
+	Time  float32
 }
 
 type AnimationEventMessage struct {
-	Entity ecs.Entity
 	Name   string
 	Value  string
+	Entity ecs.Entity
 }
 
 type Animator struct {
-	Clip    *AnimationClip
-	Loop    bool
-	Playing bool
-	Speed   float32
-
-	time         float64
-	previousTime float64
-	loops        uint64
-	advanced     bool
-	emitStart    bool
-	dirty        bool
-	cursorClip   *AnimationClip
-	cursors      []int
-
-	// Bound target entities are compiled by the scene/prefab plan.  They are
-	// indexed by the corresponding typed track and let playback touch real
-	// nodes without resolving a path or consulting a map each frame.
-	owner ecs.Entity
-	// Bound targets share one backing slice. Track counts recover the three
-	// typed views without retaining three independent allocations per animator.
-	boundTargets       []ecs.Entity
-	floatTargetCount   int
-	textureTargetCount int
-	boolTargetCount    int
+	cursorClip         *AnimationClip
+	Clip               *AnimationClip
+	rotationGroupNext  []int
+	rotationGroupFirst []int
 	// Rotation baselines preserve authored axes when a clip animates only a
 	// subset of X/Y/Z. They are initialized once per bound target and reused
 	// by every subsequent sample.
-	rotationBaselines     []animationRotationValues
-	rotationGroupFirst    []int
-	rotationGroupNext     []int
+	rotationBaselines []animationRotationValues
+	// Bound targets share one backing slice. Track counts recover the three
+	// typed views without retaining three independent allocations per animator.
+	boundTargets       []ecs.Entity
+	cursors            []int
+	previousTime       float64
+	floatTargetCount   int
+	boolTargetCount    int
+	textureTargetCount int
+	loops              uint64
+	// Bound target entities are compiled by the scene/prefab plan.  They are
+	// indexed by the corresponding typed track and let playback touch real
+	// nodes without resolving a path or consulting a map each frame.
+	owner                 ecs.Entity
+	time                  float64
+	Speed                 float32
+	emitStart             bool
+	advanced              bool
+	dirty                 bool
+	Playing               bool
+	Loop                  bool
 	rotationBindingsReady bool
 }
 

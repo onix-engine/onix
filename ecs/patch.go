@@ -8,9 +8,9 @@ import (
 
 type patchPlan struct {
 	world       *World
+	transitions map[uint32]*patchTransition
 	writes      []patchWrite // sorted IDs with their caller argument positions
 	removed     componentMask
-	transitions map[uint32]*patchTransition
 }
 
 type patchWrite struct {
@@ -31,9 +31,9 @@ type patchColumn struct {
 
 type patchRow struct {
 	transition *patchTransition
-	index      uint32
 	sourceRow  int
 	targetRow  int
+	index      uint32
 	tick       Tick
 }
 

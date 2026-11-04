@@ -18,36 +18,36 @@ import (
 )
 
 type TextLayoutOptions struct {
-	Reuse              *Box
+	Context            *layoutContext
 	Face               *font.Face
 	StyleMap           style.Map
-	Width              float64
-	OriginX            float64
-	OriginY            float64
-	ContentHeight      float64
-	FlowHeight         float64
-	Node               *dom.Node
-	Context            *layoutContext
+	Reuse              *Box
 	InlineBoxes        map[*dom.Node]*Box
-	InlineBoxFragments []inlineBoxFragment
+	Node               *dom.Node
 	FlowBoxes          []*Box
+	InlineBoxFragments []inlineBoxFragment
 	AbsoluteContaining Rect
+	Width              float64
+	FlowHeight         float64
+	ContentHeight      float64
+	OriginY            float64
+	OriginX            float64
 }
 
 type layoutContext struct {
-	reserveScrollbarSpace bool
+	err                   error
+	imageSizes            map[string]imageSizeResult
+	retained              *Cache
+	boldFace              *font.Face
 	floatContext          *floatContext
 	lineItems             []lineItem
-	retained              *Cache
-	uncached              int
-	boldFace              *font.Face
-	imageSizes            map[string]imageSizeResult
 	inlineSegments        []inlineSegment
 	controlTokens         []controlToken
 	shapeGlyphs           []shapedGlyph
 	textScratch           []textLayoutScratch
+	uncached              int
 	textDepth             int
-	err                   error
+	reserveScrollbarSpace bool
 }
 
 type textLayoutScratch struct {
@@ -708,22 +708,22 @@ type inlineBoxFragment struct {
 }
 
 type lineItem struct {
-	Kind        inlineSegmentKind
 	Node        *dom.Node
 	Style       *style.ComputedStyle
 	Box         *Box
 	Text        string
 	Glyphs      []shapedGlyph
-	GlyphOffset float64       // Read-only subruns keep their original shaping coordinates.
 	Ellipsis    []shapedGlyph // Read-only shaped cache entry, emitted after the prefix.
+	Margin      Edges
+	Border      Edges
+	Padding     Edges
 	EllipsisX   float64
-	Width       float64
 	Height      float64
 	Ascent      float64
 	Descent     float64
-	Margin      Edges
-	Padding     Edges
-	Border      Edges
+	Width       float64
+	Kind        inlineSegmentKind
+	GlyphOffset float64 // Read-only subruns keep their original shaping coordinates.
 }
 
 type inlineSegmentKind int
@@ -739,8 +739,8 @@ type inlineSegment struct {
 	Node               *dom.Node
 	Style              *style.ComputedStyle
 	Box                *Box
-	Kind               inlineSegmentKind
 	Text               string
+	Kind               inlineSegmentKind
 	PreserveWhitespace bool
 }
 
@@ -1532,9 +1532,9 @@ const (
 )
 
 var textShapeCache = struct {
-	sync.Mutex
 	entries map[textShapeKey]textShapeResult
 	bytes   int
+	sync.Mutex
 }{entries: make(map[textShapeKey]textShapeResult, 256)}
 
 func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float64, ctx *layoutContext) ([]shapedGlyph, float64, error) {

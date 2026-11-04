@@ -28,9 +28,9 @@ var animationInitial = [...]string{"none", "0s", "ease", "0s", "1", "normal", "n
 
 type CSSAnimation struct {
 	Name                        string
-	Duration, Delay, Iterations float64
-	Timing                      TimingFunction
 	Direction, Fill             string
+	Timing                      TimingFunction
+	Duration, Delay, Iterations float64
 	Paused                      bool
 }
 
@@ -230,12 +230,12 @@ const (
 )
 
 type AnimationValue struct {
-	Rotation                                float64
 	TranslateX, TranslateY                  Value
+	Colors                                  [AnimatedColorCount]AnimationColor
+	Rotation                                float64
 	ScaleX, ScaleY                          float64
 	SkewX, TranslateCrossX, TranslateCrossY float64
 	Opacity                                 float64
-	Colors                                  [AnimatedColorCount]AnimationColor
 }
 
 func BaseAnimationValue(computed *ComputedStyle) AnimationValue {
@@ -250,16 +250,16 @@ func BaseAnimationValue(computed *ComputedStyle) AnimationValue {
 }
 
 type AnimationPoint struct {
-	Offset     float64
-	Value      AnimationValue
-	Properties AnimatedProperties
 	Timing     TimingFunction
+	Value      AnimationValue
+	Offset     float64
+	Properties AnimatedProperties
 	HasTiming  bool
 }
 
 type AnimationTrack struct {
-	Definition CSSAnimation
 	Points     []AnimationPoint
+	Definition CSSAnimation
 	Properties AnimatedProperties
 }
 

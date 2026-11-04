@@ -21,8 +21,8 @@ type textInputSupport struct {
 	composition callback[input.TextComposition]
 	command     callback[input.TextCommand]
 	selection   callback[input.TextSelection]
-	config      input.TextInputConfig
 	applyConfig func(previous, current input.TextInputConfig)
+	config      input.TextInputConfig
 }
 
 func (s *textInputSupport) OnTextInput(handler func(string)) {

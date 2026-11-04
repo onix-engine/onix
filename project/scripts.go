@@ -19,11 +19,11 @@ type ScriptContext struct {
 	Scene        *SceneInstance
 	World        *ecs.World
 	Commands     *ecs.Commands
-	Entity       ecs.Entity
-	bindingName  string
 	inputHandler func(*ScriptContext, *scene.InputEventContext) error
-	inputMask    scene.InputMask
+	bindingName  string
 	entities     []ecs.Entity
+	Entity       ecs.Entity
+	inputMask    scene.InputMask
 }
 
 // Hooks supplies statically typed lifecycle methods. Only registration creates
@@ -117,14 +117,14 @@ func (context *ScriptContext) ListenInput(target ecs.Entity) error {
 // Input and Destroy are optional. Remove clears the typed component when a
 // binding is replaced while a scene remains alive.
 type ScriptBinding struct {
-	Name   string
-	Bind   func(*ScriptContext, ScriptComponentSpec) error
-	Update func(*ScriptContext) error
-	Input  func(*ScriptContext, *scene.InputEventContext) error
+	Bind    func(*ScriptContext, ScriptComponentSpec) error
+	Update  func(*ScriptContext) error
+	Input   func(*ScriptContext, *scene.InputEventContext) error
+	Destroy func(*ScriptContext) error
+	Remove  func(*ScriptContext) error
+	Name    string
 	// InputMask limits which input categories reach Input. Zero subscribes to all categories.
 	InputMask scene.InputMask
-	Destroy   func(*ScriptContext) error
-	Remove    func(*ScriptContext) error
 }
 
 type scriptSystem struct {
@@ -133,9 +133,9 @@ type scriptSystem struct {
 }
 
 type scriptInputBinding struct {
-	owner  ecs.Entity
-	name   string
 	handle func(*ScriptContext, *scene.InputEventContext) error
+	name   string
+	owner  ecs.Entity
 }
 
 type scriptGlobalInputBindings struct {
@@ -186,8 +186,8 @@ func (bindings *scriptGlobalInputBindings) clear() {
 
 // ScriptRegistry contains generated script bindings in deterministic order.
 type ScriptRegistry struct {
-	bindings []ScriptBinding
 	byName   map[string]int
+	bindings []ScriptBinding
 }
 
 // NewScriptRegistry creates a registry from generated bindings.

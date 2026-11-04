@@ -21,17 +21,17 @@ const (
 )
 
 type webBackend struct {
+	db   js.Value
 	root string
 	mu   sync.Mutex
-	db   js.Value
 }
 
 type webRecord struct {
 	path      string
-	directory bool
 	data      []byte
 	size      int64
 	modified  int64
+	directory bool
 }
 
 func platformDefaultRoot() (string, error) {

@@ -23,46 +23,45 @@ type Edges struct {
 }
 
 type Box struct {
-	reflow            boxLayoutCache
+	gridMeasureStyle  *style.ComputedStyle
 	flex              *flexScratch
 	grid              *gridScratch
 	table             *tableScratch
 	flow              *flowScratch
 	flexMeasureStyle  *style.ComputedStyle
-	gridMeasureStyle  *style.ComputedStyle
+	inlinePaintIndex  map[inlineBackgroundKey]int
 	tableMeasureStyle *style.ComputedStyle
-	markerText        string
-	markerOrdinal     int
-	markerType        style.Value
-	markerValid       bool
-	listOrdinal       int
-	listOrdinalValid  bool
-	floats            *floatContext
-	hasFloats         bool
 	intrinsicScratch  *layoutContext
-	StableID          string
-	Node              *dom.Node
-	Parent            *Box
-	Viewport          Rect
 	Style             *style.ComputedStyle
-	Content           Rect
+	Parent            *Box
+	Node              *dom.Node
+	floats            *floatContext
+	markerText        string
+	StableID          string
+	ControlFragments  []ControlFragment
+	InlineBackgrounds []InlineBackground
+	ImageFragments    []ImageFragment
+	TextFragments     []TextFragment
+	Children          []*Box
+	markerType        style.Value
+	reflow            boxLayoutCache
+	Padding           Edges
+	FlowMarginBox     Rect
 	// ScrollbarGutter is reserved between the padding edge and border.
 	ScrollbarGutter   Edges
-	ScrollWidth       float64
-	ScrollHeight      float64
-	Padding           Edges
+	Viewport          Rect
 	Border            Edges
+	Content           Rect
 	Margin            Edges
-	FlowMarginBox     Rect
-	TextFragments     []TextFragment
-	InlineBackgrounds []InlineBackground
-	inlinePaintIndex  map[inlineBackgroundKey]int
-	ImageFragments    []ImageFragment
-	ControlFragments  []ControlFragment
+	listOrdinal       int
+	ScrollHeight      float64
 	TextHeight        float64
-	Children          []*Box
-
+	ScrollWidth       float64
+	markerOrdinal     int
 	ownPaintHash      uint64
+	hasFloats         bool
+	listOrdinalValid  bool
+	markerValid       bool
 	ownPaintHashValid bool
 }
 
@@ -74,32 +73,32 @@ type flowScratch struct {
 
 type TextFragment struct {
 	Node   *dom.Node
-	Rect   Rect
-	Text   string
 	Style  *style.ComputedStyle
-	Line   int
+	Text   string
 	Glyphs []GlyphFragment
+	Rect   Rect
+	Line   int
 }
 
 type GlyphFragment = font.PositionedGlyph
 
 type ImageFragment struct {
 	Node  *dom.Node
-	Rect  Rect
 	Style *style.ComputedStyle
+	Rect  Rect
 	Line  int
 }
 
 type ControlFragment struct {
 	Node           *dom.Node
+	Style          *style.ComputedStyle
+	TextFragments  []TextFragment
+	ImageFragments []ImageFragment
 	Rect           Rect
 	Content        Rect
 	Padding        Edges
 	Border         Edges
-	Style          *style.ComputedStyle
 	Line           int
-	TextFragments  []TextFragment
-	ImageFragments []ImageFragment
 }
 
 func (b *Box) PaddingBox() Rect {

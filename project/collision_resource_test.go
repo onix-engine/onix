@@ -76,9 +76,9 @@ func TestExternalCollisionResourceLoadsCompoundPieces(t *testing.T) {
 func TestExternalCollisionResourceRejectsInvalidData(t *testing.T) {
 	tests := []struct {
 		name     string
-		spec     CollisionResourceSpec
 		expected enginephysics.CollisionMode
 		want     string
+		spec     CollisionResourceSpec
 	}{
 		{
 			name: "invalid index",

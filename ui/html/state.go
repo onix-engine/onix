@@ -11,108 +11,108 @@ import (
 
 type htmlDocumentState struct {
 	Mutations       map[*dom.Node]htmlMutation
-	MutationRoots   []*dom.Node
+	NodeByID        map[string]*dom.Node
 	MutationRootSet map[*dom.Node]struct{}
-	NodeFlags       htmlAncestorCache[*dom.Node, bool]
-	NodeAncestors   htmlAncestorCache[*dom.Node, *dom.Node]
-	IndexDirty      bool
-	Source          string
-	SourceDocument  *dom.Node
-	EmbeddedCSS     string
 	Root            *dom.Node
+	SourceDocument  *dom.Node
+	Source          string
+	EmbeddedCSS     string
+	NodeAncestors   htmlAncestorCache[*dom.Node, *dom.Node]
+	NodeFlags       htmlAncestorCache[*dom.Node, bool]
+	MutationRoots   []*dom.Node
 	Revision        uint64
 	EventRevision   uint64
-	NodeByID        map[string]*dom.Node
+	IndexDirty      bool
 }
 
 type htmlStyleState struct {
-	RestyleNodes            []*dom.Node
-	StyleCache              style.MutationCache
-	StyleChanges            []style.NodeChange
+	Stylesheet              *css.Stylesheet
+	AnimationTrackHeads     map[string]int
+	ContainerMetricsScratch map[*dom.Node]style.ContainerMetrics
 	AnimationBaselines      map[*dom.Node]htmlAnimationBaseline
 	Animations              map[*dom.Node]*htmlNodeAnimation
-	ActiveAnimations        []*dom.Node
-	AnimationTime           float64
+	Styles                  style.Map
+	StylesheetKey           htmlStylesheetKey
 	AnimationRoots          []*dom.Node
-	AnimationTrackHeads     map[string]int
+	RestyleNodes            []*dom.Node
+	ActiveAnimations        []*dom.Node
+	StyleChanges            []style.NodeChange
+	AnimationComposition    htmlAnimationComposition
+	StyleCache              style.MutationCache
+	Viewport                style.Viewport
+	AnimationTime           float64
 	TransformFrame          uint64
 	TransformFrameSet       bool
-	Stylesheet              *css.Stylesheet
-	StylesheetKey           htmlStylesheetKey
-	Styles                  style.Map
-	Viewport                style.Viewport
-	ContainerMetricsScratch map[*dom.Node]style.ContainerMetrics
 }
 
 type htmlLayoutState struct {
-	LayoutCache      layout.Cache
+	Boxes            *layout.Box
 	LayoutNodes      []*dom.Node
 	LayoutOrderNodes []*dom.Node
-	LayoutTopology   bool
-	BoxesByNode      map[*dom.Node]*layout.Box
+	LayoutCache      layout.Cache
 	Layout           Layout
-	Boxes            *layout.Box
+	LayoutTopology   bool
 }
 
 type htmlPaintState struct {
-	StickyBindings    map[*dom.Node]*htmlStickyBinding
-	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
-	StickyDirty       bool
+	Textures          htmlTextureCache
 	BoxRenderings     map[*dom.Node]*htmlBoxRendering
 	EmittingBox       *htmlBoxRendering
-	RenderQueue       []*htmlBoxRendering
-	RemovedBoxes      []*htmlBoxRendering
-	LocalReconcile    bool
-	PartialValid      bool
-	OwnerSpansValid   bool
-	BoxFlags          htmlAncestorCache[*layout.Box, bool]
-	EntityGroups      map[htmlRenderIdentity]*htmlEntityGroup
-	RenderNodes       map[*dom.Node]*htmlNodeRendering
-	RenderGeneration  uint64
-	Reconciling       bool
-	Children          []ecs.Entity
-	OverflowExtents   map[*layout.Box]htmlOverflowExtent
+	StickyBindings    map[*dom.Node]*htmlStickyBinding
 	PaintCullOffsets  map[*dom.Node]mgl32.Vec2
+	OverflowExtents   map[*layout.Box]htmlOverflowExtent
+	RenderNodes       map[*dom.Node]*htmlNodeRendering
+	EntityGroups      map[htmlRenderIdentity]*htmlEntityGroup
+	BoxFlags          htmlAncestorCache[*layout.Box, bool]
+	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
+	RenderQueue       []*htmlBoxRendering
+	Children          []ecs.Entity
+	RemovedBoxes      []*htmlBoxRendering
 	PaintCullRoots    []*htmlBoxRendering
+	RenderGeneration  uint64
+	OwnerSpansValid   bool
+	PartialValid      bool
+	Reconciling       bool
+	LocalReconcile    bool
 	PaintCullDisabled bool
-	Textures          htmlTextureCache
+	StickyDirty       bool
 }
 
 type htmlInputState struct {
-	ControlStylesChanged bool
-	Input                css.State
-	PreviousInput        css.State
 	StateRoots           [2]*dom.Node
-	SnapshotGeneration   uint32
-	ControlSnapshots     map[*dom.Node]htmlControlSnapshot
-	FocusTargets         []htmlFocusTargetBinding
-	FocusByNode          map[*dom.Node]int
-	NodeOffsets          []htmlNodeOffset
-	NodeScrolls          []htmlNodeScroll
 	NodeScrollBindings   map[*dom.Node]struct{}
-	NodeBindingLocals    map[*dom.Node]htmlBindingIndices
-	NodeBindingRoutes    htmlAncestorCache[*dom.Node, htmlBindingIndices]
-	NodeBindingKey       htmlNodeBindingKey
-	NodeBindingsPrepared bool
-	NodeOffsetIDs        map[string]int
-	NodeScrollIDs        map[string]int
 	OverflowBindings     map[*dom.Node]htmlOverflowClipBinding
-	OverflowEntities     map[ecs.Entity]htmlOverflowClipBinding
-	OverflowRoutes       map[*dom.Node]htmlOverflowClipBinding
-	NodeEvents           map[*dom.Node]htmlNodeEventBinding
-	ComponentEvents      map[*dom.Node][]htmlComponentEventBinding
 	EventTargets         map[*dom.Node]ecs.Entity
+	ComponentEvents      map[*dom.Node][]htmlComponentEventBinding
+	ControlSnapshots     map[*dom.Node]htmlControlSnapshot
+	NodeEvents           map[*dom.Node]htmlNodeEventBinding
+	FocusByNode          map[*dom.Node]int
+	OverflowRoutes       map[*dom.Node]htmlOverflowClipBinding
+	OverflowEntities     map[ecs.Entity]htmlOverflowClipBinding
+	NodeBindingLocals    map[*dom.Node]htmlBindingIndices
+	NodeScrollIDs        map[string]int
+	NodeOffsetIDs        map[string]int
+	PreviousInput        css.State
+	Input                css.State
+	NodeBindingRoutes    htmlAncestorCache[*dom.Node, htmlBindingIndices]
+	NodeScrolls          []htmlNodeScroll
+	NodeOffsets          []htmlNodeOffset
+	FocusTargets         []htmlFocusTargetBinding
+	NodeBindingKey       htmlNodeBindingKey
+	SnapshotGeneration   uint32
+	ControlStylesChanged bool
+	NodeBindingsPrepared bool
 }
 
 type htmlUpdateState struct {
 	Diagnostics              SyncDiagnostics
+	Key                      htmlRenderKey
+	SyncStats                htmlSyncStats
+	ImageProviderChanged     ecs.Tick
 	PendingLayout            bool
 	PendingVisual            bool
 	Visible, VisibilityKnown bool
-	SyncStats                htmlSyncStats
-	Key                      htmlRenderKey
 	Rendered                 bool
-	ImageProviderChanged     ecs.Tick
 	LayoutDirty              bool
 }
 

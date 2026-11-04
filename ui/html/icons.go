@@ -17,8 +17,8 @@ import (
 var htmlSelectIconData []byte
 
 var htmlSelectIcon struct {
-	sync.Once
 	texture *graphics.Texture
+	sync.Once
 }
 
 func defaultHTMLSelectIcon() *graphics.Texture {

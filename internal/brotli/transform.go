@@ -30,13 +30,13 @@ const (
 const transformsMaxCutOff = transformOmitLast9
 
 type transforms struct {
-	prefix_suffix_size uint16
 	prefix_suffix      []byte
 	prefix_suffix_map  []uint16
-	num_transforms     uint32
 	transforms         []byte
 	params             []byte
+	num_transforms     uint32
 	cutOffTransforms   [transformsMaxCutOff + 1]int16
+	prefix_suffix_size uint16
 }
 
 func transformPrefixId(t *transforms, I int) byte {
@@ -483,13 +483,13 @@ var kTransformsData = []byte{
 }
 
 var kBrotliTransforms = transforms{
-	217,
-	[]byte(kPrefixSuffix),
-	kPrefixSuffixMap[:],
-	121,
-	kTransformsData,
-	nil, /* no extra parameters */
-	[transformsMaxCutOff + 1]int16{0, 12, 27, 23, 42, 63, 56, 48, 59, 64},
+	prefix_suffix_size: 217,
+	prefix_suffix:      []byte(kPrefixSuffix),
+	prefix_suffix_map:  kPrefixSuffixMap[:],
+	num_transforms:     121,
+	transforms:         kTransformsData,
+	params:             nil, /* no extra parameters */
+	cutOffTransforms:   [transformsMaxCutOff + 1]int16{0, 12, 27, 23, 42, 63, 56, 48, 59, 64},
 }
 
 func getTransforms() *transforms {

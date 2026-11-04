@@ -18,7 +18,7 @@ func TestHTMLReservedScrollbarLayoutAndPainting(t *testing.T) {
 	}
 	state := world.GetRef[htmlRenderState](owner)
 	area := incrementalHTMLNode(t, world, owner, "area")
-	box := state.BoxesByNode[area.node]
+	box := state.boxForNode(area.node)
 	binding := state.OverflowBindings[area.node]
 	scroll, _ := world.Get[scene.UIScroll](binding.entity)
 	if scroll.ScrollbarOverlay || scroll.ViewportSize != (mgl32.Vec2{90, 70}) || !scroll.Horizontal || !scroll.Vertical {
@@ -75,7 +75,7 @@ func TestHTMLReservedScrollbarRelayoutAndIncremental(t *testing.T) {
 	area := incrementalHTMLNode(t, world, owner, "area")
 	child := incrementalHTMLNode(t, world, owner, "child")
 	state := world.GetRef[htmlRenderState](owner)
-	if width := state.BoxesByNode[child.node].Content.Width; width != 90 {
+	if width := state.boxForNode(child.node).Content.Width; width != 90 {
 		t.Fatalf("auto-width child=%v, want 90", width)
 	}
 	for _, height := range []string{"20px", "200px", "80px", "81px"} {
@@ -90,7 +90,7 @@ func TestHTMLReservedScrollbarRelayoutAndIncremental(t *testing.T) {
 		if state.Boxes.GeometryHash() != fresh.Root.GeometryHash() {
 			t.Fatalf("incremental layout differs at child height %s", height)
 		}
-		box := state.BoxesByNode[area.node]
+		box := state.boxForNode(area.node)
 		scroll, _ := world.Get[scene.UIScroll](state.OverflowBindings[area.node].entity)
 		if scroll.ViewportSize != (mgl32.Vec2{float32(box.ScrollportBox().Width), float32(box.ScrollportBox().Height)}) {
 			t.Fatalf("incremental scrollport=%v, box=%+v", scroll.ViewportSize, box.ScrollportBox())

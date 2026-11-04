@@ -6,15 +6,15 @@ import (
 )
 
 type valueSlot[T any] struct {
-	hash  uint64
 	value *T
+	hash  uint64
 }
 
 // valueIndex interns immutable values in a bounded document cache or a pooled
 // pass. Equal values share one allocation; reset keeps only table storage.
 type valueIndex[T any] struct {
-	seed  maphash.Seed
 	slots []valueSlot[T]
+	seed  maphash.Seed
 	used  int
 	limit int // Zero keeps pass-local interning unlimited.
 }
@@ -114,11 +114,21 @@ func (index *styleIndex) resolveMotion(current *motionStyle) *motionStyle {
 
 func styleHash(seed maphash.Seed, computed *ComputedStyle) uint64 {
 	hash := maphash.Comparable(seed, computed.styleCore) ^
-		styleSliceCode(computed.BackgroundLayers)*0x9e3779b97f4a7c15 ^
-		styleSliceCode(computed.BoxShadow)*0xbf58476d1ce4e5b9 ^
-		styleSliceCode(computed.Filters)*0x94d049bb133111eb
+		styleSliceHash(seed, computed.BackgroundLayers)*0x9e3779b97f4a7c15 ^
+		styleSliceHash(seed, computed.BoxShadow)*0xbf58476d1ce4e5b9 ^
+		styleSliceHash(seed, computed.Filters)*0x94d049bb133111eb
 	if computed.motion != nil {
 		hash ^= motionHash(seed, computed.motion)
+	}
+	return hash
+}
+
+// Hash contents as well as length: same-length shadows, filters and background
+// layers otherwise share one probe chain, making interning quadratic.
+func styleSliceHash[T comparable](seed maphash.Seed, values []T) uint64 {
+	hash := styleSliceCode(values)
+	for _, value := range values {
+		hash = (hash ^ maphash.Comparable(seed, value)) * 0x9e3779b97f4a7c15
 	}
 	return hash
 }

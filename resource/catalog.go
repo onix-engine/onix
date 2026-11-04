@@ -30,18 +30,18 @@ func contentID(data []byte) ContentID {
 }
 
 type Catalog struct {
-	Version  int
 	Packages []PackageInfo
+	Version  int
 }
 
 type PackageInfo struct {
 	Name         string
 	File         string
-	SHA256       [sha256.Size]byte
-	Size         int64
-	Required     bool
 	Dependencies []string
 	Assets       []AssetInfo
+	Size         int64
+	SHA256       [sha256.Size]byte
+	Required     bool
 }
 
 // AssetInfo is the catalog-owned metadata for one logical resource. Assets in

@@ -579,23 +579,23 @@ func TestUpdateMeshDeformationResolvesJointEntities(t *testing.T) {
 }
 
 type meshTestDriver struct {
+	batches       []render.MeshBatch3D
+	meshViewports []render.Rect
+	meshUploads   int
+	sprites       int
+	shapes        int
+	targetBegins  int
+	targetEnds    int
 	viewport      render.Rect
 	nextID        uint32
 	nextMeshID    uint32
 	nextShaderID  uint32
-	meshUploads   int
-	sprites       int
-	shapes        int
-	batches       []render.MeshBatch3D
-	meshViewports []render.Rect
-	targetBegins  int
-	targetEnds    int
 }
 
 type gpuMeshTestDriver struct {
 	*meshTestDriver
-	staticUploads int
 	static        render.MeshDeformationDescriptor
+	staticUploads int
 }
 
 func (d *gpuMeshTestDriver) SetMeshDeformation(_ render.MeshHandle, descriptor render.MeshDeformationDescriptor) error {

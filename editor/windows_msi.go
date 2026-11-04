@@ -31,9 +31,9 @@ const (
 )
 
 type windowsInstallerTool struct {
-	kind   windowsInstallerToolKind
 	build  string
 	linker string
+	kind   windowsInstallerToolKind
 }
 
 type installerFile struct {

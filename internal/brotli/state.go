@@ -87,95 +87,95 @@ const (
 )
 
 type Reader struct {
-	src io.Reader
-	buf []byte // scratch space for reading from src
-	in  []byte // current chunk to decode; usually aliases buf
-
-	state        int
-	loop_counter int
-	br           bitReader
-	buffer       struct {
+	src                    io.Reader
+	transforms             *transforms
+	dictionary             *dictionary
+	dist_context_map       []byte
+	block_type_trees       []huffmanCode
+	context_lookup         []byte
+	htree_command          []huffmanCode
+	context_modes          []byte
+	context_map            []byte
+	buf                    []byte // scratch space for reading from src
+	next                   []huffmanCode
+	ringbuffer_end         []byte
+	in                     []byte // current chunk to decode; usually aliases buf
+	literal_htree          []huffmanCode
+	dist_context_map_slice []byte
+	context_map_slice      []byte
+	block_len_trees        []huffmanCode
+	ringbuffer             []byte
+	literal_hgroup         huffmanTreeGroup
+	insert_copy_hgroup     huffmanTreeGroup
+	distance_hgroup        huffmanTreeGroup
+	symbol_lists           symbolList
+	br                     bitReader
+	next_symbol            [32]int
+	dist_rb                [4]int
+	buffer                 struct {
 		u64 uint64
 		u8  [8]byte
 	}
-	buffer_length               uint32
-	pos                         int
-	max_backward_distance       int
-	max_distance                int
-	ringbuffer_size             int
-	ringbuffer_mask             int
-	dist_rb_idx                 int
-	dist_rb                     [4]int
-	error_code                  int
-	sub_loop_counter            uint32
-	ringbuffer                  []byte
-	ringbuffer_end              []byte
-	htree_command               []huffmanCode
-	context_lookup              []byte
-	context_map_slice           []byte
-	dist_context_map_slice      []byte
-	literal_hgroup              huffmanTreeGroup
-	insert_copy_hgroup          huffmanTreeGroup
-	distance_hgroup             huffmanTreeGroup
-	block_type_trees            []huffmanCode
-	block_len_trees             []huffmanCode
+	substate_tree_group         int
+	canny_ringbuffer_allocation uint
 	trivial_literal_context     int
 	distance_context            int
 	meta_block_remaining_len    int
-	block_length_index          uint32
-	block_length                [3]uint32
-	num_block_types             [3]uint32
-	block_type_rb               [6]uint32
-	distance_postfix_bits       uint32
-	num_direct_distance_codes   uint32
-	distance_postfix_mask       int
-	num_dist_htrees             uint32
-	dist_context_map            []byte
-	literal_htree               []huffmanCode
-	dist_htree_index            byte
-	repeat_code_len             uint32
-	prev_code_len               uint32
-	copy_length                 int
-	distance_code               int
-	rb_roundtrips               uint
-	partial_pos_out             uint
-	symbol                      uint32
-	repeat                      uint32
-	space                       uint32
-	table                       [32]huffmanCode
-	symbol_lists                symbolList
-	symbols_lists_array         [huffmanMaxCodeLength + 1 + numCommandSymbols]uint16
-	next_symbol                 [32]int
-	code_length_code_lengths    [codeLengthCodes]byte
-	code_length_histo           [16]uint16
-	htree_index                 int
-	next                        []huffmanCode
-	context_index               uint32
-	max_run_length_prefix       uint32
-	code                        uint32
-	context_map_table           [huffmanMaxSize272]huffmanCode
-	substate_metablock_header   int
-	substate_tree_group         int
+	max_backward_distance       int
 	substate_context_map        int
 	substate_uncompressed       int
-	substate_huffman            int
-	substate_decode_uint8       int
-	substate_read_block_length  int
-	is_last_metablock           uint
-	is_uncompressed             uint
-	is_metadata                 uint
-	should_wrap_ringbuffer      uint
-	canny_ringbuffer_allocation uint
-	large_window                bool
-	size_nibbles                uint
-	window_bits                 uint32
-	new_ringbuffer_size         int
-	num_literal_htrees          uint32
-	context_map                 []byte
-	context_modes               []byte
-	dictionary                  *dictionary
-	transforms                  *transforms
-	trivial_literal_contexts    [8]uint32
+	max_distance                int
+
+	state                      int
+	loop_counter               int
+	distance_postfix_mask      int
+	pos                        int
+	error_code                 int
+	dist_rb_idx                int
+	new_ringbuffer_size        int
+	size_nibbles               uint
+	substate_metablock_header  int
+	copy_length                int
+	distance_code              int
+	rb_roundtrips              uint
+	partial_pos_out            uint
+	should_wrap_ringbuffer     uint
+	is_metadata                uint
+	is_uncompressed            uint
+	is_last_metablock          uint
+	ringbuffer_mask            int
+	substate_read_block_length int
+	ringbuffer_size            int
+	substate_decode_uint8      int
+	substate_huffman           int
+	htree_index                int
+	trivial_literal_contexts   [8]uint32
+	block_type_rb              [6]uint32
+	num_block_types            [3]uint32
+	block_length               [3]uint32
+	repeat_code_len            uint32
+	block_length_index         uint32
+	code                       uint32
+	max_run_length_prefix      uint32
+	context_index              uint32
+	buffer_length              uint32
+	num_dist_htrees            uint32
+	num_literal_htrees         uint32
+	distance_postfix_bits      uint32
+	space                      uint32
+	repeat                     uint32
+	symbol                     uint32
+	prev_code_len              uint32
+	num_direct_distance_codes  uint32
+	sub_loop_counter           uint32
+	window_bits                uint32
+	context_map_table          [huffmanMaxSize272]huffmanCode
+	symbols_lists_array        [huffmanMaxCodeLength + 1 + numCommandSymbols]uint16
+	table                      [32]huffmanCode
+	code_length_histo          [16]uint16
+	code_length_code_lengths   [codeLengthCodes]byte
+	dist_htree_index           byte
+	large_window               bool
 }
 
 func decoderStateInit(s *Reader) bool {

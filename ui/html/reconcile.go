@@ -41,9 +41,9 @@ const (
 
 type htmlRenderIdentity struct {
 	Node    *dom.Node
-	Role    htmlRenderRole
 	Variant string
 	Context ecs.Entity
+	Role    htmlRenderRole
 }
 
 type htmlEntityBinding struct {
@@ -53,8 +53,8 @@ type htmlEntityBinding struct {
 
 type htmlEntityGroup struct {
 	Box               *htmlBoxRendering
-	TrackedGeneration uint64
 	Bindings          []htmlEntityBinding
+	TrackedGeneration uint64
 	Generation        uint64
 	Used              int
 }
@@ -69,13 +69,13 @@ type htmlEntityWriter struct {
 	world       *ecs.World
 	state       *htmlRenderState
 	node        *dom.Node
-	role        htmlRenderRole
 	group       *htmlEntityGroup
+	bundle      ecs.Bundle
 	slot        int
 	entity      ecs.Entity
-	bundle      ecs.Bundle
 	optional    uint16
 	oldOptional uint16
+	role        htmlRenderRole
 }
 
 func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, context ecs.Entity, capacity int) htmlEntityWriter {
@@ -309,14 +309,14 @@ func finishHTMLReconcile(world *ecs.World, state *htmlRenderState) {
 			delete(state.RenderNodes, node)
 		}
 	}
-	for node := range state.BoxRenderings {
-		if state.BoxesByNode[node] == nil {
+	for node, rendered := range state.BoxRenderings {
+		if rendered.Generation != state.RenderGeneration {
 			delete(state.BoxRenderings, node)
 			delete(state.Textures.rasters, node)
 		}
 	}
 	for node := range state.Textures.rasters {
-		if state.BoxesByNode[node] == nil {
+		if state.BoxRenderings[node] == nil {
 			delete(state.Textures.rasters, node)
 		}
 	}

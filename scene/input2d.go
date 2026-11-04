@@ -107,41 +107,41 @@ type inputEventArena2D struct {
 }
 
 type inputPickTarget2D struct {
-	entity    ecs.Entity
-	sequence  uint32
+	layers    RenderLayers
+	receiver  ecs.Entity
 	sortIndex int
 	group     uint64
-	depth     float32
-	width     float32
-	height    float32
-	inverse   mgl32.Mat4
-	anchor    Anchor
-	layers    RenderLayers
-	target    ecs.Entity
 	camera    ecs.Entity
+	target    ecs.Entity
+	entity    ecs.Entity
+	inverse   mgl32.Mat4
 	clip      clipRect2D
+	anchor    Anchor
+	height    float32
+	width     float32
+	depth     float32
+	sequence  uint32
 	ui        bool
 	blocked   bool
-	receiver  ecs.Entity
 }
 
 type inputCamera2D struct {
-	entity     ecs.Entity
+	layers     RenderLayers
 	camera     Camera
+	entity     ecs.Entity
 	projection Projection
 	transform  GlobalTransform
 	pipeline   CameraPipeline
-	layers     RenderLayers
 }
 
 // Resolve the captured target while collecting the frame's pick snapshot.
 // Multiple records can share an entity; capture uses the first visible record
 // in pick sort order, just as targetByEntity2D does.
 type inputCaptureLookup2D struct {
-	entity, cameraEntity ecs.Entity
-	defaultUICamera      ecs.Entity
 	camera               inputCamera2D
 	target               inputPickTarget2D
+	entity, cameraEntity ecs.Entity
+	defaultUICamera      ecs.Entity
 	cameraFound          bool
 	targetFound          bool
 }
@@ -178,6 +178,10 @@ func compareInputCamera2D(a, b inputCamera2D) int {
 }
 
 func compareInputPickTarget2D(a, b inputPickTarget2D) int {
+	return compareInputPickTargetKeys2D(&a, &b)
+}
+
+func compareInputPickTargetKeys2D(a, b *inputPickTarget2D) int {
 	if a.ui != b.ui {
 		if a.ui {
 			return 1

@@ -35,10 +35,10 @@ type webGPUBuffer struct {
 
 type webGPUFrame struct {
 	buffer     webGPUBuffer
-	offset     int
-	generation uint64
 	retired    []js.Value
 	retention  bufferRetention
+	offset     int
+	generation uint64
 }
 
 func (frame *webGPUFrame) destroyRetired() {
@@ -52,8 +52,8 @@ func (frame *webGPUFrame) destroyRetired() {
 }
 
 type webGPUTextureBindGroup struct {
-	generation uint64
 	value      js.Value
+	generation uint64
 }
 
 type webGPUTexturePair struct {
@@ -72,8 +72,8 @@ func (pair webGPUTexturePair) textures() [3 + MeshExtraTextureSlots]*webGPUTextu
 // Each cached material owns its texture links; no per-texture maps or separate
 // adjacency nodes are allocated. Removing a material unlinks all fixed slots.
 type webGPUMaterialBinding struct {
-	groups [webGPUFramesInFlight]webGPUTextureBindGroup
 	links  [3 + MeshExtraTextureSlots]webGPUMaterialLink
+	groups [webGPUFramesInFlight]webGPUTextureBindGroup
 }
 
 type webGPUMaterialLink struct {
@@ -82,27 +82,27 @@ type webGPUMaterialLink struct {
 }
 
 type webGPUShapeBindGroup struct {
-	generation uint64
 	value      js.Value
+	generation uint64
 }
 
 type webGPUTexture struct {
 	value      js.Value
 	view       js.Value
 	sampler    js.Value
-	format     TextureFormat
-	bindGroups [webGPUFramesInFlight]webGPUTextureBindGroup
 	materials  *webGPUMaterialLink
+	bindGroups [webGPUFramesInFlight]webGPUTextureBindGroup
+	format     TextureFormat
 }
 
 type webGPUMesh struct {
-	bindGroups        *frameCacheEntry[webGPUDataKey, webGPUDataBinding]
-	deformation       meshDeformationLayout
 	deformationBuffer js.Value
-	vertexCount       int
 	vertexBuffer      js.Value
 	indexBuffer       js.Value
+	bindGroups        *frameCacheEntry[webGPUDataKey, webGPUDataBinding]
+	vertexCount       int
 	indexCount        int
+	deformation       meshDeformationLayout
 }
 
 type webGPUPipelineKey struct {
@@ -111,11 +111,11 @@ type webGPUPipelineKey struct {
 }
 
 type webGPUShader struct {
+	meshPipelines  [2][5]js.Value
 	vertex         js.Value
 	fragment       js.Value
-	pipelineKind   Pipeline
 	blendPipelines map[webGPUPipelineKey]js.Value
-	meshPipelines  [2][5]js.Value
+	pipelineKind   Pipeline
 }
 
 type webGPUDepthBuffer struct {
@@ -133,86 +133,85 @@ type webGPUColorBuffer struct {
 }
 
 type webGPURenderTarget struct {
-	descriptor           RenderTargetDescriptor
-	color                TextureHandle
-	multisample          webGPUColorBuffer
-	depth                webGPUDepthBuffer
 	clearValue           js.Value
 	colorAttachment      js.Value
 	depthAttachment      js.Value
 	renderPassDescriptor js.Value
 	readback             webGPUBuffer
+	multisample          webGPUColorBuffer
+	depth                webGPUDepthBuffer
+	descriptor           RenderTargetDescriptor
+	color                TextureHandle
 }
 
 type webGPUDriver struct {
-	driverStatistics
-	device                js.Value
-	queue                 js.Value
-	astcSupported         bool
-	context               js.Value
-	format                string
-	deviceName            string
-	sampleCount           int
-	width                 int
-	height                int
-	viewport              Rect
-	scissor               Rect
-	scissorSet            bool
-	scissorEmpty          bool
-	viewportEmpty         bool
-	blend                 BlendState
-	blendSet              bool
-	blendConstant         js.Value
-	frame                 js.Value
-	frameActive           bool
-	depth                 webGPUDepthBuffer
-	surfaceDepthEnabled   bool
-	multisample           webGPUColorBuffer
-	frames                [webGPUFramesInFlight]webGPUFrame
-	frameIndex            int
-	textureData           js.Value
-	uploadData            js.Value
-	dynamicOffsets        js.Value
-	clearValue            js.Value
-	colorAttachment       js.Value
+	programs              [3]*webGPUShader
+	meshBuiltins          [meshVariantCount - 1]*webGPUShader
 	depthAttachment       js.Value
 	renderPassDescriptor  js.Value
-	shapeBindGroups       [webGPUFramesInFlight]webGPUShapeBindGroup
-	quadBuffer            js.Value
-	quadIndex             js.Value
-	textureLayout         js.Value
-	shapeLayout           js.Value
-	texturePipelineLayout js.Value
-	meshDataLayout        js.Value
 	emptyDeformation      js.Value
-	meshDataGroups        frameCache[webGPUDataKey, webGPUDataBinding]
-	meshTextureLayout     js.Value
-	meshPipelineLayout    js.Value
-	spritePipelineLayout  js.Value
-	shapePipelineLayout   js.Value
-	textures              GenerationPool[TextureResource, *webGPUTexture]
-	targets               GenerationPool[RenderTargetResource, *webGPURenderTarget]
-	activeTarget          RenderTargetHandle
-	meshBindGroups        frameCache[webGPUTexturePair, webGPUMaterialBinding]
-	meshes                GenerationPool[MeshResource, *webGPUMesh]
-	meshBuiltins          [meshVariantCount - 1]*webGPUShader
-	meshShaders           GenerationPool[MeshShaderResource, *webGPUShader]
-	material2DShaders     GenerationPool[Material2DShaderResource, *webGPUShader]
-	programs              [3]*webGPUShader
+	meshDataLayout        js.Value
+	texturePipelineLayout js.Value
+	shapeLayout           js.Value
 	pickingPipeline       js.Value
+	textureLayout         js.Value
+	quadIndex             js.Value
+	quadBuffer            js.Value
+	queue                 js.Value
+	device                js.Value
+	spritePipelineLayout  js.Value
+	meshTextureLayout     js.Value
+	blendConstant         js.Value
+	frame                 js.Value
+	shapePipelineLayout   js.Value
+	colorAttachment       js.Value
+	context               js.Value
+	clearValue            js.Value
+	dynamicOffsets        js.Value
+	meshPipelineLayout    js.Value
+	textureData           js.Value
+	uploadData            js.Value
+	shapeBindGroups       [webGPUFramesInFlight]webGPUShapeBindGroup
+	format                string
+	deviceName            string
+	multisample           webGPUColorBuffer
+	depth                 webGPUDepthBuffer
 	deformationWords      []uint32
 	deformationUniforms   []int
-	deformationOffset     int
-	deformationSize       int
-	spriteUniformData     [16 * 64]float32
 	spriteUniformOffsets  []int
-
-	cacheFrame                    uint64
+	textures              GenerationPool[TextureResource, *webGPUTexture]
+	material2DShaders     GenerationPool[Material2DShaderResource, *webGPUShader]
+	targets               GenerationPool[RenderTargetResource, *webGPURenderTarget]
+	meshShaders           GenerationPool[MeshShaderResource, *webGPUShader]
+	meshes                GenerationPool[MeshResource, *webGPUMesh]
+	meshBindGroups        frameCache[webGPUTexturePair, webGPUMaterialBinding]
+	meshDataGroups        frameCache[webGPUDataKey, webGPUDataBinding]
+	frames                [webGPUFramesInFlight]webGPUFrame
+	driverStatistics
+	deformationWordsRetention     scratchRetention
+	spriteUniformOffsetsRetention scratchRetention
+	deformationUniformsRetention  scratchRetention
 	textureDataRetention          scratchRetention
 	uploadDataRetention           scratchRetention
-	deformationWordsRetention     scratchRetention
-	deformationUniformsRetention  scratchRetention
-	spriteUniformOffsetsRetention scratchRetention
+	cacheFrame                    uint64
+	deformationOffset             int
+	deformationSize               int
+	frameIndex                    int
+	height                        int
+	width                         int
+	sampleCount                   int
+	spriteUniformData             [16 * 64]float32
+	blend                         BlendState
+	viewport                      Rect
+	scissor                       Rect
+	activeTarget                  RenderTargetHandle
+	scissorSet                    bool
+	astcSupported                 bool
+	scissorEmpty                  bool
+	viewportEmpty                 bool
+	blendSet                      bool
+	frameActive                   bool
+	surfaceDepthEnabled           bool
 }
 
 // NewWebGPUDriver creates the browser renderer. Device acquisition is awaited

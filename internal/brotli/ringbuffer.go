@@ -19,14 +19,14 @@ A ringBuffer(window_bits, tail_bits) contains `1 << window_bits' bytes of
 	  buffer_[-2] == buffer_[(1 << window_bits) - 2].
 */
 type ringBuffer struct {
+	data_       []byte
+	buffer_     []byte
 	size_       uint32
 	mask_       uint32
 	tail_size_  uint32
 	total_size_ uint32
 	cur_size_   uint32
 	pos_        uint32
-	data_       []byte
-	buffer_     []byte
 }
 
 func ringBufferInit(rb *ringBuffer) {

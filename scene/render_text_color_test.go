@@ -11,8 +11,8 @@ import (
 
 type colorTextDriver struct {
 	canvasTestDriver
-	blend     render.BlendState
 	instances int
+	blend     render.BlendState
 	invalid   bool
 }
 

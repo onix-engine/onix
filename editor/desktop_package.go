@@ -465,9 +465,9 @@ func artifactName(value, fallback string) string {
 }
 
 type archiveEntry struct {
+	info     fs.FileInfo
 	absolute string
 	relative string
-	info     fs.FileInfo
 }
 
 func collectArchiveEntries(sourceDir string) ([]archiveEntry, error) {

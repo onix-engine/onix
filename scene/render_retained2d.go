@@ -14,19 +14,19 @@ import (
 // Content snapshots belong to their entity, so extracting one changed entity
 // cannot overwrite a snapshot still used by an unchanged entity.
 type retainedEntity2D struct {
+	sourceText      *Text2D
 	snapshots       *renderSnapshots2D
+	text            *Text2D
 	sprites         []Sprite2D
 	nineSlices      []NineSlice2D
-	previousSprites int
-	first           int
 	extra           []int
+	previousSprites int
 	count           int
-	queued          bool
-	dynamic         uint8
-	sourceText      *Text2D
-	text            *Text2D
+	first           int
 	matrix          mgl32.Mat4
 	clip            clipRect2D
+	queued          bool
+	dynamic         uint8
 	ui              bool
 	properties      bool
 }
@@ -102,6 +102,7 @@ func (node *retainedEntity2D) positions(yield func(int) bool) {
 }
 
 func (node *retainedEntity2D) releaseUnused() {
+	node.sourceText = nil
 	clearSnapshotTail(node.sprites, node.previousSprites)
 	if node.snapshots != nil {
 		node.snapshots.releaseUnused()
@@ -142,7 +143,7 @@ type renderInput2D struct {
 
 func retainedInput2D[T any]() renderInput2D {
 	return renderInput2D{
-		revision: (*ecs.World).ComponentRevision[T],
+		revision: (*ecs.World).ComponentValueRevision[T],
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
 			for entity := range world.Query[T](changes.Changed[T]()).All {
 				cache.mark(entity)
@@ -151,31 +152,54 @@ func retainedInput2D[T any]() renderInput2D {
 	}
 }
 
+// Local ordering cannot make an entity drawable. Ignore writes to ancestors
+// and other entities that have no retained output.
+func localRetainedInput2D[T any]() renderInput2D {
+	input := retainedInput2D[T]()
+	input.changed = func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
+		for entity := range world.Query[T](changes.Changed[T]()).All {
+			if cache.nodes[entity] != nil {
+				cache.mark(entity)
+			}
+		}
+	}
+	return input
+}
+
 func inheritedRetainedInput2D[T any]() renderInput2D {
 	return renderInput2D{
 		revision: (*ecs.World).ComponentValueRevision[T],
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
-			hierarchy := HierarchyFor(world)
-			cache.hierarchyQueue = cache.hierarchyQueue[:0]
-			cache.hierarchyMarks = reuse.Resize(cache.hierarchyMarks, world.EntitySlots())
-			cache.hierarchyGeneration++
-			if cache.hierarchyGeneration == 0 {
-				clear(cache.hierarchyMarks)
-				cache.hierarchyGeneration++
-			}
 			for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
 				cache.enqueueHierarchy(entity)
 			}
-			for i := 0; i < len(cache.hierarchyQueue); i++ {
-				entity := cache.hierarchyQueue[i]
-				if cache.nodes[entity] != nil {
-					cache.mark(entity)
-				}
-				for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
-					cache.enqueueHierarchy(child)
-				}
-			}
 		},
+	}
+}
+
+func (cache *retainedRender2D) beginHierarchyChanges(world *ecs.World) {
+	cache.hierarchyQueue = cache.hierarchyQueue[:0]
+	cache.hierarchyMarks = reuse.Resize(cache.hierarchyMarks, world.EntitySlots())
+	cache.hierarchyGeneration++
+	if cache.hierarchyGeneration == 0 {
+		clear(cache.hierarchyMarks)
+		cache.hierarchyGeneration++
+	}
+}
+
+func (cache *retainedRender2D) markHierarchyChanges(world *ecs.World) {
+	if len(cache.hierarchyQueue) == 0 {
+		return
+	}
+	hierarchy := HierarchyFor(world)
+	for i := 0; i < len(cache.hierarchyQueue); i++ {
+		entity := cache.hierarchyQueue[i]
+		if cache.nodes[entity] != nil {
+			cache.mark(entity)
+		}
+		for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
+			cache.enqueueHierarchy(child)
+		}
 	}
 }
 
@@ -231,7 +255,7 @@ func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T,
 var retainedInputs2D = [...]renderInput2D{
 	inheritedRetainedInput2D[PainterGroup2D](), inheritedRetainedInput2D[Parent](), inheritedRetainedInput2D[SceneLayer](),
 	inheritedRetainedInput2D[RenderLayers](), inheritedRetainedInput2D[UITargetCamera](),
-	inheritedRetainedInput2D[UIStackIndex](), inheritedRetainedInput2D[RenderOrder2D](),
+	inheritedRetainedInput2D[UIStackIndex](), localRetainedInput2D[RenderOrder2D](),
 	retainedInput2D[Sprite2D](), retainedInput2D[Text2D](),
 	retainedInput2D[GlobalTransform](), retainedInput2D[UIGlobalTransform](),
 	retainedInput2D[Visibility](), retainedInput2D[Anchor](),
@@ -259,43 +283,45 @@ var retainedInputs2D = [...]renderInput2D{
 var dynamicCollectors2D = [...]renderCollector2DKind{renderCollectorSpriteTrail2D, renderCollectorSpriteLayers2D, renderCollectorParticle2D, renderCollectorTilemap2D, renderCollectorSpine2D}
 
 const retainedRenderInputCount2D = 24
-const inheritedRenderInputs2D = 7
+const inheritedRenderInputs2D = 6
 const dynamicRenderInputs2D = 19
 
 type retainedRender2D struct {
-	nodes                map[ecs.Entity]*retainedEntity2D
-	nodeBlocks           [][]retainedEntity2D
-	freeNodes            []*retainedEntity2D
-	paints               []paintItem2D
-	items                []renderItem2D
-	dirty                []ecs.Entity
-	dirtyNodes           int
-	damage               []renderDamage2D
-	damageFlags          []bool
-	damageValid          bool
-	hierarchyQueue       []ecs.Entity
-	hierarchyMarks       []uint64
-	hierarchyGeneration  uint64
-	scope                ecs.QueryScope
-	changes              ecs.SystemContext
-	versions, structures [retainedRenderInputCount2D]uint64
-	lastRun              ecs.Tick
-	width, height        float32
-	rasterScale          float64
-	device               *render.Device
-	registry             uint64
-	textureRevision      uint64
-	textures             map[*graphics.Texture]*retainedTexture2D
-	initialized          bool
-	missing              bool
-	direct               bool
-	queryScope           *ecs.QueryScope
-	scopeVersion         uint64
-	outputRevision       uint64
-	materialStructure    uint64
+	nodes               map[ecs.Entity]*retainedEntity2D
+	queryScope          *ecs.QueryScope
+	textures            map[*graphics.Texture]*retainedTexture2D
+	device              *render.Device
+	changes             ecs.SystemContext
+	damageFlags         []bool
+	damage              []renderDamage2D
+	freeNodes           []*retainedEntity2D
+	hierarchyQueue      []ecs.Entity
+	hierarchyMarks      []uint64
+	paints              []paintItem2D
+	dirty               []ecs.Entity
+	items               []renderItem2D
+	nodeBlocks          [][]retainedEntity2D
+	scope               ecs.QueryScope
+	structures          [retainedRenderInputCount2D]uint64
+	versions            [retainedRenderInputCount2D]uint64
+	stats               RenderPreparation2D
+	dirtyNodes          int
+	outputRevision      uint64
+	rasterScale         float64
+	hierarchyGeneration uint64
+	registry            uint64
+	textureRevision     uint64
 	// Changed is a generation, independent of ECS writes during drawing.
-	generation uint64
-	stats      RenderPreparation2D
+	generation        uint64
+	materialStructure uint64
+	scopeVersion      uint64
+	height            float32
+	width             float32
+	lastRun           ecs.Tick
+	direct            bool
+	missing           bool
+	initialized       bool
+	damageValid       bool
 }
 
 type renderDamage2D struct {
@@ -491,10 +517,18 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			since--
 		}
 		cache.changes = world.ChangesSince(since)
+		hierarchyChanged := false
 		for i := range retainedInputs2D {
 			if cache.versions[i] != versions[i] {
+				if i < inheritedRenderInputs2D && !hierarchyChanged {
+					cache.beginHierarchyChanges(world)
+					hierarchyChanged = true
+				}
 				retainedInputs2D[i].changed(world, &cache.changes, cache)
 			}
+		}
+		if hierarchyChanged {
+			cache.markHierarchyChanges(world)
 		}
 		// Dense changes use the sequential collector path; sparse changes reuse
 		// the retained order and touch only matching rows in the ECS tables.
@@ -525,7 +559,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 	if !full {
 		cache.scope.Reset(cache.dirty)
 		previous := world.SetQueryScope(&cache.scope)
-		items := collectRenderItems2D(c, world, false)
+		items := collectRenderSnapshots2D(c, world, false, true)
 		world.SetQueryScope(previous)
 		for _, entity := range cache.dirty {
 			cache.recordDamage(cache.nodes[entity])
@@ -559,10 +593,11 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 		if !full {
 			cache.stats.Extracted, cache.stats.Reused = len(items), len(cache.items)-len(items)
 		}
+		clear(items) // Do not retain borrowed component pointers in frame scratch.
 	}
 	if full {
 		cache.damageValid = false
-		items := collectRenderItems2D(c, world, false)
+		items := collectRenderSnapshots2D(c, world, false, true)
 		if len(items) < len(cache.items) {
 			clear(cache.items[len(items):])
 		}
@@ -620,6 +655,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			}
 		}
 		cache.stats.Extracted, cache.stats.Sorted = len(items), true
+		clear(items)
 	}
 	cache.capture(c, world, state)
 	if full || cache.stats.Extracted != 0 || cache.stats.PaintUpdated != 0 {

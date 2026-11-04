@@ -33,9 +33,9 @@ func NewBrowserWebViewBackend(context *Context) (scene.WebViewBackend, error) {
 
 type browserWebViewBackend struct {
 	context     *Context
-	next        uint64
 	channels    map[string]*browserWebViewHandle
 	listener    js.Func
+	next        uint64
 	listenerSet bool
 	closed      bool
 }

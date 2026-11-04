@@ -72,41 +72,40 @@ const (
 )
 
 type Writer struct {
-	dst     io.Writer
-	options WriterOptions
-	err     error
-
-	params              encoderParams
-	hasher_             hasherHandle
-	input_pos_          uint64
-	ringbuffer_         ringBuffer
-	commands            []command
-	num_literals_       uint
-	last_insert_len_    uint
-	last_flush_pos_     uint64
-	last_processed_pos_ uint64
-	dist_cache_         [numDistanceShortCodes]int
-	saved_dist_cache_   [4]int
-	last_bytes_         uint16
-	last_bytes_bits_    byte
-	prev_byte_          byte
-	prev_byte2_         byte
-	storage             []byte
-	small_table_        [1 << 10]int
-	large_table_        []int
-	large_table_size_   uint
-	cmd_depths_         [128]byte
-	cmd_bits_           [128]uint16
-	cmd_code_           [512]byte
-	cmd_code_numbits_   uint
-	command_buf_        []uint32
-	literal_buf_        []byte
-	tiny_buf_           struct {
+	hasher_      hasherHandle
+	dst          io.Writer
+	err          error
+	ringbuffer_  ringBuffer
+	storage      []byte
+	commands     []command
+	literal_buf_ []byte
+	large_table_ []int
+	command_buf_ []uint32
+	params       encoderParams
+	small_table_ [1 << 10]int
+	dist_cache_  [numDistanceShortCodes]int
+	tiny_buf_    struct {
 		u64 [2]uint64
 		u8  [16]byte
 	}
-	remaining_metadata_bytes_ uint32
+	saved_dist_cache_         [4]int
+	options                   WriterOptions
+	last_flush_pos_           uint64
 	stream_state_             int
+	last_processed_pos_       uint64
+	input_pos_                uint64
+	large_table_size_         uint
+	last_insert_len_          uint
+	num_literals_             uint
+	cmd_code_numbits_         uint
+	remaining_metadata_bytes_ uint32
+	cmd_bits_                 [128]uint16
+	last_bytes_               uint16
+	cmd_code_                 [512]byte
+	cmd_depths_               [128]byte
+	prev_byte2_               byte
+	prev_byte_                byte
+	last_bytes_bits_          byte
 	is_last_block_emitted_    bool
 	is_initialized_           bool
 }

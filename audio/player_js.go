@@ -10,11 +10,11 @@ import (
 )
 
 var webDevice struct {
-	mu              sync.Mutex
 	ctx             js.Value
 	err             error
 	waiting         map[deferredWebPlayer]struct{}
 	unlock          js.Func
+	mu              sync.Mutex
 	unlockInstalled bool
 }
 
@@ -23,21 +23,21 @@ type deferredWebPlayer interface {
 }
 
 type webPlayer struct {
-	mu            sync.Mutex
-	samples       []float32
+	source        js.Value
+	err           error
 	context       js.Value
 	buffer        js.Value
 	gain          js.Value
-	source        js.Value
 	onEnded       js.Func
+	samples       []float32
 	duration      float64
 	offset        float64
 	started       float64
 	volume        float64
+	mu            sync.Mutex
 	playing       bool
 	sourceStarted bool
 	closed        bool
-	err           error
 }
 
 func webAudioContext() (js.Value, error) {

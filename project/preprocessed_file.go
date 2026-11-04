@@ -16,8 +16,6 @@ type PreprocessedFile struct {
 // PreprocessOptions selects the project root and build target for resource
 // compilation.
 type PreprocessOptions struct {
-	Root           string
-	ShaderTarget   ShaderTarget
 	ShaderCompiler ShaderCompiler
 	// Progress reports the module and asset family about to be compiled.
 	Progress func(module, asset string, completed, total int)
@@ -25,6 +23,8 @@ type PreprocessOptions struct {
 	// External glTF images are read during model preprocessing so their material
 	// sampling options select the same compression profile as embedded images.
 	TextureEncoder func([]byte, string, graphics.TextureOptions) ([]byte, error)
+	Root           string
+	ShaderTarget   ShaderTarget
 }
 
 // ShaderCompiler converts one WGSL module into the native representation for

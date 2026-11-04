@@ -99,7 +99,7 @@ func BenchmarkAuditTransitionBinding(b *testing.B) {
 }
 
 // Keep one live entity while increasing the number of historical matching
-// archetypes. Empty tables remain cached in queryPlan.archetypes.
+// archetypes. Matching metadata remains in the query plan after tables empty.
 func BenchmarkAuditQueryHistoricalArchetypes(b *testing.B) {
 	for _, count := range []int{1, 256, 4096} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {

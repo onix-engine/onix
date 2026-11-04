@@ -222,11 +222,11 @@ func TestChangeFilterMethodsRejectNilAndForeignContexts(t *testing.T) {
 	world := ecs.NewWorld()
 	foreign := ecs.NewWorld().ChangesSince(0)
 	for _, filter := range []struct {
-		name  string
 		build func(*ecs.SystemContext) ecs.QueryOption
+		name  string
 	}{
-		{"added", (*ecs.SystemContext).Added[boundaryPosition]},
-		{"changed", (*ecs.SystemContext).Changed[boundaryPosition]},
+		{name: "added", build: (*ecs.SystemContext).Added[boundaryPosition]},
+		{name: "changed", build: (*ecs.SystemContext).Changed[boundaryPosition]},
 	} {
 		for _, check := range []struct {
 			name    string

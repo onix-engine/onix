@@ -44,13 +44,9 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 	scale := max(state.Key.RasterScale, 1)
 	w, h := max(1, int(math.Ceil(float64(width)*scale))), max(1, int(math.Ceil(float64(height)*scale)))
 	key := htmlTextureKey{node: node, variant: "background"}
-	raster := state.Textures.paint[key]
+	raster := state.Textures.paint(key)
 	if raster == nil {
-		if state.Textures.paint == nil {
-			state.Textures.paint = make(map[htmlTextureKey]*htmlPaintRaster)
-		}
 		raster = &htmlPaintRaster{}
-		state.Textures.paint[key] = raster
 	}
 	colors := [5]style.Color{computed.BackgroundColor.Color, computed.BorderColor.Top.Color, computed.BorderColor.Right.Color, computed.BorderColor.Bottom.Color, computed.BorderColor.Left.Color}
 	if raster.style != computed || raster.colors != colors || raster.logicalWidth != width || raster.logicalHeight != height || raster.width != w || raster.height != h {
@@ -67,7 +63,7 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 				return nil
 			}
 			raster.texture.SetLogicalSize(int(math.Ceil(float64(width))), int(math.Ceil(float64(height))))
-			state.Textures.add(key, raster.texture)
+			state.Textures.add(key, raster.texture).paint = raster
 		} else {
 			raster.texture.UpdateRegions([]graphics.TextureRegionUpdate{{Width: w, Height: h, Pixels: raster.image.Pix}})
 		}
@@ -319,13 +315,9 @@ func htmlBoxShadowTextureForMode(state *htmlRenderState, node *dom.Node, compute
 		variant = "shadow-mask-" + strconv.Itoa(shadowIndex)
 	}
 	key := htmlTextureKey{node: node, variant: variant}
-	raster := state.Textures.paint[key]
+	raster := state.Textures.paint(key)
 	if raster == nil {
-		if state.Textures.paint == nil {
-			state.Textures.paint = make(map[htmlTextureKey]*htmlPaintRaster)
-		}
 		raster = &htmlPaintRaster{}
-		state.Textures.paint[key] = raster
 	}
 	shadow := computed.BoxShadow[shadowIndex]
 	if raster.version == 0 || raster.shadow != shadow || raster.radii != computed.BorderRadius || raster.padding != padding || raster.width != w || raster.height != h || raster.logicalWidth != boxWidth || raster.logicalHeight != boxHeight {
@@ -348,7 +340,7 @@ func htmlBoxShadowTextureForMode(state *htmlRenderState, node *dom.Node, compute
 			if raster.texture == nil {
 				return nil, 0
 			}
-			state.Textures.add(key, raster.texture)
+			state.Textures.add(key, raster.texture).paint = raster
 		} else {
 			raster.texture.UpdateRegions([]graphics.TextureRegionUpdate{{Width: w, Height: h, Pixels: raster.image.Pix}})
 		}

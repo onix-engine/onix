@@ -53,7 +53,7 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 	if background == 0 || htmlCullRole(world, owner, head, htmlRoleSurface) == 0 || htmlCullRole(world, owner, tail, htmlRoleSurface) != 0 {
 		t.Fatal("initial surface window did not cull the tail")
 	}
-	if state.Textures.paint[htmlTextureKey{node: tail.node, variant: "background"}] != nil {
+	if state.Textures.paint(htmlTextureKey{node: tail.node, variant: "background"}) != nil {
 		t.Fatal("offscreen background was rasterized")
 	}
 	initial := slices.Clone(state.Children)
@@ -82,7 +82,7 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 	if htmlCullRole(world, owner, head, htmlRoleSurface) != 0 || htmlCullRole(world, owner, tail, htmlRoleSurface) == 0 {
 		t.Fatal("scroll did not retire the head and mount the tail")
 	}
-	paint := state.Textures.paint[htmlTextureKey{node: tail.node, variant: "background"}]
+	paint := state.Textures.paint(htmlTextureKey{node: tail.node, variant: "background"})
 	if paint == nil {
 		t.Fatal("visible gradient background and borders were not rasterized")
 	}

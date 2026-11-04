@@ -18,8 +18,8 @@ var fileIconsPNG []byte
 var fileIconsMetadata []byte
 
 var fileIcons struct {
-	sync.Mutex
 	atlas *graphics.Atlas
+	sync.Mutex
 }
 
 // FileIconTexture reuses regions of one shared texture; warmed lookups allocate

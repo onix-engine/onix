@@ -35,9 +35,9 @@ func (c *preparedSceneContent) discard() {
 // run on the caller's thread and remain indivisible work units.
 type ScenePreloader struct {
 	manager *SceneManager
-	request ScenePreloadRequest
 	cpu     *resource.Preparation[*preparedSceneContent]
 	scene   *Scene
+	request ScenePreloadRequest
 	closed  bool
 }
 

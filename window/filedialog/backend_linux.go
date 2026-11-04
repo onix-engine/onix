@@ -18,8 +18,8 @@ const (
 )
 
 type portalFilterRule struct {
-	Kind    uint32
 	Pattern string
+	Kind    uint32
 }
 
 type portalFilter struct {
@@ -28,8 +28,8 @@ type portalFilter struct {
 }
 
 type portalResponse struct {
-	Code    uint32
 	Results map[string]dbus.Variant
+	Code    uint32
 }
 
 func open(context *window.Context, options window.FileDialogOptions) ([]string, error) {

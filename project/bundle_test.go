@@ -1242,9 +1242,9 @@ func TestFileResourcesReadOnFirstAccess(t *testing.T) {
 	defer bundle.Dispose()
 
 	tests := []struct {
-		name  string
 		ready func() bool
 		load  func() error
+		name  string
 	}{
 		{name: "font", ready: func() bool { return bundle.resources.fonts.ready("body") }, load: func() error { _, err := bundle.Resources().Font("body"); return err }},
 		{name: "video", ready: func() bool { return bundle.resources.videos.ready("intro") }, load: func() error { _, err := bundle.Resources().Video("intro"); return err }},
@@ -1476,8 +1476,8 @@ func TestLoadRejectsInvalidAnimation(t *testing.T) {
 func TestNormalizeSceneCatalogRejectsInvalidRegistrations(t *testing.T) {
 	tests := []struct {
 		name    string
-		catalog sceneCatalog
 		want    string
+		catalog sceneCatalog
 	}{
 		{name: "missing entry", catalog: sceneCatalog{Scenes: []SceneCatalogEntry{{ID: "main", Path: "scenes/main.scene.json"}}}, want: "entry scene is required"},
 		{name: "unknown entry", catalog: sceneCatalog{Entry: "missing", Scenes: []SceneCatalogEntry{{ID: "main", Path: "scenes/main.scene.json"}}}, want: "is not registered"},

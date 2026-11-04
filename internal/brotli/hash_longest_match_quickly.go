@@ -43,14 +43,12 @@ A (forgetful) hash table to the data seen by the compressor, to
 	given index, 1 buckets are used to store values of a key.
 */
 type hashLongestMatchQuickly struct {
+	buckets []uint32
 	hasherCommon
-
 	bucketBits    uint
 	bucketSweep   int
 	hashLen       uint
 	useDictionary bool
-
-	buckets []uint32
 }
 
 func (h *hashLongestMatchQuickly) Initialize(params *encoderParams) {

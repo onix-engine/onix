@@ -47,15 +47,15 @@ const (
 )
 
 type mathNode struct {
-	kind       mathNodeKind
 	value      string
 	name       string
 	left       string
 	right      string
-	noBar      bool
 	children   []mathNode
 	rows       [][]mathNode
 	alignments []mathAlignment
+	kind       mathNodeKind
+	noBar      bool
 }
 
 type mathAlignment uint8

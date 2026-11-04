@@ -24,21 +24,21 @@ type WebViewMessageHandler func(name, payload string) (result string, err error)
 // The component is deliberately independent of any platform UI type. Install
 // a WebViewRuntime resource and WebViewSystem to materialize it.
 type WebView struct {
-	URL    string
-	HTML   string
-	X      float32
-	Y      float32
-	Width  float32
-	Height float32
+	OnMessage WebViewHandler
+	OnInvoke  WebViewMessageHandler
+	Bindings  map[string]WebViewHandler
+	HTML      string
+	URL       string
 	// Bounds is an alternate grouped form of X/Y/Width/Height. When it is
 	// non-zero it takes precedence over the scalar fields.
 	Bounds      WebViewBounds
+	Y           float32
+	Height      float32
+	Width       float32
+	X           float32
 	Visible     bool
 	DevTools    bool
 	Transparent bool
-	Bindings    map[string]WebViewHandler
-	OnInvoke    WebViewMessageHandler
-	OnMessage   WebViewHandler
 }
 
 // NewWebView creates a visible WebView that navigates to url.
@@ -110,13 +110,13 @@ const (
 // Message contains the raw JSON payload for WebViewEventMessage. Error is a
 // stable text copy so events remain safe after a backend callback returns.
 type WebViewEvent struct {
-	Entity  ecs.Entity
-	Kind    WebViewEventKind
 	Name    string
 	Payload string
 	Message string
 	URL     string
 	Error   string
+	Entity  ecs.Entity
+	Kind    WebViewEventKind
 }
 
 // WebViewHandle is the platform-owned browser surface.
@@ -151,8 +151,8 @@ type WebViewRuntime struct {
 	Backend WebViewBackend
 	entries map[ecs.Entity]webViewEntry
 	invokes map[ecs.Entity]webViewInvocation
-	mu      sync.Mutex
 	pending []WebViewEvent
+	mu      sync.Mutex
 	closed  bool
 }
 

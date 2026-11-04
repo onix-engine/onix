@@ -6,18 +6,18 @@ import (
 )
 
 type htmlFocusGroup struct {
-	owner     ecs.Entity
 	tag, kind string
+	owner     ecs.Entity
 }
 
 type htmlFocusLookupTag struct{}
 
 type htmlFocusLookupState struct {
-	version, scopeVersion uint64
-	initialized           bool
 	ordinals              map[ecs.Entity]int
 	groups                map[htmlFocusGroup][]ecs.Entity
 	autofocus             []ecs.Entity
+	version, scopeVersion uint64
+	initialized           bool
 }
 
 // Build autofocus candidates and anonymous-element ordinals in one pass.
@@ -45,7 +45,7 @@ func htmlFocusLookup(world *ecs.World) *htmlFocusLookupState {
 			lookup.autofocus = append(lookup.autofocus, entity)
 		}
 		if value.ID == "" {
-			key := htmlFocusGroup{value.Owner, value.Tag, value.Type}
+			key := htmlFocusGroup{owner: value.Owner, tag: value.Tag, kind: value.Type}
 			entities := lookup.groups[key]
 			lookup.ordinals[entity] = len(entities)
 			lookup.groups[key] = append(entities, entity)

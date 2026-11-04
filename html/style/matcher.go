@@ -1,7 +1,7 @@
 package style
 
 import (
-	"slices"
+	"iter"
 	"strings"
 	"sync"
 
@@ -10,18 +10,18 @@ import (
 )
 
 type compiledStylesheet struct {
-	documentMutation bool
-	siblingMutation  bool
-	byID             map[string][]compiledSelectorRef
-	byClass          map[string][]compiledSelectorRef
-	byTag            map[string][]compiledSelectorRef
-	universal        []compiledSelectorRef
+	byID      map[string][]compiledSelectorRef
+	byClass   map[string][]compiledSelectorRef
+	byTag     map[string][]compiledSelectorRef
+	keyframes map[string]compiledKeyframeGroup
+	universal []compiledSelectorRef
 	// Parallel to stylesheet.Rules: declarations with normalized property
 	// names and pre-parsed rule conditions, prepared once per stylesheet
 	// instead of per matched node.
-	declarations [][]preparedDeclaration
-	conditions   [][]compiledCondition
-	keyframes    map[string]compiledKeyframeGroup
+	declarations     [][]preparedDeclaration
+	conditions       [][]compiledCondition
+	documentMutation bool
+	siblingMutation  bool
 }
 
 type compiledKeyframeGroup struct {
@@ -35,11 +35,11 @@ type compiledKeyframes struct {
 }
 
 type preparedDeclaration struct {
+	parsed    *preparedValue
 	property  string
 	value     string
-	important bool
 	order     cascadePropertyOrder
-	parsed    *preparedValue
+	important bool
 }
 
 func prepareDeclarations(declarations []css.Declaration) []preparedDeclaration {
@@ -111,17 +111,17 @@ func validateDeclaration(property, value string) bool {
 }
 
 type compiledSelectorRef struct {
-	ruleIndex      int
 	selector       css.Selector
 	specificity    css.Specificity
+	ruleIndex      int
 	orderBase      int
 	inputDependent bool
 }
 
 var compiledStylesheetCache struct {
-	sync.Mutex
 	stylesheet *css.Stylesheet
 	compiled   *compiledStylesheet
+	sync.Mutex
 }
 
 // Stylesheets are immutable after parsing, so pointer identity is enough to
@@ -209,56 +209,40 @@ func (c *compiledStylesheet) add(selector css.Selector, ref compiledSelectorRef)
 	}
 }
 
-func (c *compiledStylesheet) candidates(node *dom.Node) []compiledSelectorRef {
-	return c.candidatesInto(node, nil)
-}
-
-func (c *compiledStylesheet) candidatesInto(node *dom.Node, candidates []compiledSelectorRef) []compiledSelectorRef {
-	candidates = candidates[:0]
-	if c == nil || node == nil || node.Type != dom.ElementNode {
-		return candidates
-	}
-
-	total := len(c.universal) + len(c.byTag[node.Data])
-	if id, ok := node.Attr("id"); ok {
-		total += len(c.byID[id])
-	}
-
-	classValue, _ := node.Attr("class")
-	classes := classTokenIter{value: classValue}
-	for className, ok := classes.next(); ok; className, ok = classes.next() {
-		total += len(c.byClass[className])
-	}
-	if total == 0 {
-		return candidates
-	}
-
-	if cap(candidates) < total {
-		candidates = make([]compiledSelectorRef, 0, total)
-	}
-	if id, ok := node.Attr("id"); ok {
-		candidates = append(candidates, c.byID[id]...)
-	}
-	classes.offset = 0
-	for className, ok := classes.next(); ok; className, ok = classes.next() {
-		candidates = append(candidates, c.byClass[className]...)
-	}
-	candidates = append(candidates, c.byTag[node.Data]...)
-	candidates = append(candidates, c.universal...)
-
-	if len(candidates) > 1 {
-		slices.SortStableFunc(candidates, func(left, right compiledSelectorRef) int {
-			switch {
-			case left.orderBase < right.orderBase:
-				return -1
-			case left.orderBase > right.orderBase:
-				return 1
-			default:
-				return 0
+// Candidate order is irrelevant: cascadeWeight includes source order. Stream
+// the indexed buckets without a per-node copy, sort or retained candidate slice.
+func (c *compiledStylesheet) candidates(node *dom.Node) iter.Seq[compiledSelectorRef] {
+	return func(yield func(compiledSelectorRef) bool) {
+		if c == nil || node == nil || node.Type != dom.ElementNode {
+			return
+		}
+		if id, ok := node.Attr("id"); ok {
+			for _, ref := range c.byID[id] {
+				if !yield(ref) {
+					return
+				}
 			}
-		})
+		}
+		classValue, _ := node.Attr("class")
+		classes := classTokenIter{value: classValue}
+		for name, ok := classes.next(); ok; name, ok = classes.next() {
+			for _, ref := range c.byClass[name] {
+				if !yield(ref) {
+					return
+				}
+			}
+		}
+		for _, ref := range c.byTag[node.Data] {
+			if !yield(ref) {
+				return
+			}
+		}
+		for _, ref := range c.universal {
+			if !yield(ref) {
+				return
+			}
+		}
 	}
-	return candidates
 }
 
 type classTokenIter struct {

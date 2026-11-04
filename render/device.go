@@ -104,15 +104,15 @@ func (m TextureAddressMode) webGPUName() string {
 func (m TextureAddressMode) glValue() int { return [...]int{0x812F, 0x2901, 0x8370}[m] }
 
 type TextureDescriptor struct {
-	WrapU, WrapV TextureAddressMode
-	Width        int
-	Height       int
-	Filter       TextureFilter
-	Format       TextureFormat
+	Width  int
+	Height int
 	// Levels is the number of mip levels described by the pixel payload.
 	// Zero and one both mean a single level. Compressed formats ship a
 	// prebuilt chain because the GPU cannot generate mips for block data.
-	Levels int
+	Levels       int
+	WrapU, WrapV TextureAddressMode
+	Filter       TextureFilter
+	Format       TextureFormat
 }
 
 // MipLevels reports the mip depth described by the descriptor.
@@ -186,14 +186,14 @@ const (
 // pipeline. Handle is opaque to the render package and is interpreted only by
 // a driver implementing ExternalTextureDriver.
 type ExternalTextureDescriptor struct {
-	Kind     ExternalTextureKind
 	Handle   uint64
 	Width    int
 	Height   int
-	Format   ExternalTextureFormat
+	Modifier uint64
 	Stride   uint32
 	Offset   uint32
-	Modifier uint64
+	Kind     ExternalTextureKind
+	Format   ExternalTextureFormat
 }
 
 func (d ExternalTextureDescriptor) Validate() error {
@@ -233,24 +233,24 @@ type TextureRegion struct {
 }
 
 type TextureUpdate struct {
-	Texture TextureHandle
-	Region  TextureRegion
 	Pixels  []byte
+	Region  TextureRegion
+	Texture TextureHandle
 }
 
 // ShaderDescriptor contains the native shader representation for each
 // renderer. A descriptor may target only the platforms shipped by the game;
 // an omitted vertex or fragment stage inherits the pipeline's built-in stage.
 type ShaderDescriptor struct {
-	VulkanVertexSPIRV    []byte
-	VulkanFragmentSPIRV  []byte
-	DirectXVertexHLSL    []byte
-	DirectXFragmentHLSL  []byte
 	MetalSource          string
 	WebGL2VertexSource   string
 	WebGL2FragmentSource string
 	WebGPUVertexSource   string
 	WebGPUFragmentSource string
+	VulkanVertexSPIRV    []byte
+	VulkanFragmentSPIRV  []byte
+	DirectXVertexHLSL    []byte
+	DirectXFragmentHLSL  []byte
 	WebGL2Generated      bool
 }
 
@@ -305,9 +305,9 @@ func (d SpriteDraw) TextureAt(slot int) TextureHandle {
 }
 
 type SpriteBatch struct {
-	Projection [16]float32
 	Instances  []Instance2D
 	Draws      []SpriteDraw
+	Projection [16]float32
 }
 
 type ShapeKind uint32
@@ -331,8 +331,8 @@ type ShapeInstance2D struct {
 }
 
 type ShapeBatch struct {
-	Projection [16]float32
 	Instances  []ShapeInstance2D
+	Projection [16]float32
 }
 
 type Vertex3D struct {
@@ -369,9 +369,9 @@ type MeshDeformationDescriptor struct {
 // MeshDeformationData borrows only the animated parameters for this submission.
 // Static skin and morph streams reside in Mesh until DestroyMesh.
 type MeshDeformationData struct {
-	Mesh          MeshHandle
 	JointMatrices [][16]float32
 	MorphWeights  []float32
+	Mesh          MeshHandle
 }
 
 type Instance3D struct {
@@ -456,18 +456,18 @@ const (
 )
 
 type MeshBatch3D struct {
-	Lighting         MeshLighting
-	ViewProjection   [16]float32
-	CameraPosition   [4]float32
-	AmbientLight     [4]float32
-	LightDirection   [4]float32
-	DirectionalLight [4]float32
 	Lights           []Light3D
 	Vertices         []Vertex3D
 	Indices          []uint32
 	Instances        []Instance3D
 	Draws            []MeshDraw3D
 	Deformations     []MeshDeformationData
+	Lighting         MeshLighting
+	ViewProjection   [16]float32
+	CameraPosition   [4]float32
+	AmbientLight     [4]float32
+	LightDirection   [4]float32
+	DirectionalLight [4]float32
 }
 
 // EnvironmentEncoding describes radiance in the first seven atlas tiles.
@@ -617,15 +617,15 @@ type Driver interface {
 // Device owns one driver. Activation only selects the immediate rendering
 // context; lifetime belongs to the window or host that created the device.
 type Device struct {
-	sync.RWMutex
 	driver     Driver
 	statistics *driverStatistics
+	sync.RWMutex
 }
 
 var activeDevice atomic.Pointer[Device]
 var defaultDevice struct {
-	sync.Mutex
 	device *Device
+	sync.Mutex
 }
 
 func NewDevice(driver Driver) (*Device, error) {

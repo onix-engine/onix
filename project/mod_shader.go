@@ -13,10 +13,10 @@ import (
 // Programs and their native source blobs are shared within the module's store.
 // Uniforms live in each entity's Shader component.
 type modShaderResource struct {
-	mu      sync.Mutex
-	sources shaderResource
 	sprite  *graphics.Material2DShader
 	mesh    *graphics.MeshShader
+	sources shaderResource
+	mu      sync.Mutex
 }
 
 func (s *modShaderResource) dispose() error {

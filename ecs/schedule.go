@@ -49,11 +49,11 @@ func (context *SystemContext) Local[Tag, T any]() *T {
 }
 
 type SystemConfig struct {
+	System System
 	Name   string
 	Before []string
 	After  []string
 	RunIf  []Condition
-	System System
 }
 
 type Schedule struct {
@@ -65,8 +65,8 @@ type Schedule struct {
 }
 
 type scheduledSystem struct {
-	config  SystemConfig
 	context *SystemContext
+	config  SystemConfig
 }
 
 func NewSchedule(name string) *Schedule {

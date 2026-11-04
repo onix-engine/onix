@@ -17,13 +17,13 @@ const (
 )
 
 type transformSpawners struct {
-	ready      uint8
-	uiRoot     ecs.Spawner6[scene.UITransform, scene.UIGlobalTransform, scene.Anchor, scene.SiblingOrder, scene.Visibility, scene.Activity]
-	worldRoot  ecs.Spawner5[scene.Transform, scene.GlobalTransform, scene.SiblingOrder, scene.Visibility, scene.Activity]
-	ui         ecs.Spawner7[scene.UITransform, scene.UIGlobalTransform, scene.Anchor, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent]
 	uiOwned    ecs.Spawner8[scene.UITransform, scene.UIGlobalTransform, scene.Anchor, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent, entityOwner]
-	world      ecs.Spawner6[scene.Transform, scene.GlobalTransform, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent]
+	ui         ecs.Spawner7[scene.UITransform, scene.UIGlobalTransform, scene.Anchor, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent]
 	worldOwned ecs.Spawner7[scene.Transform, scene.GlobalTransform, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent, entityOwner]
+	uiRoot     ecs.Spawner6[scene.UITransform, scene.UIGlobalTransform, scene.Anchor, scene.SiblingOrder, scene.Visibility, scene.Activity]
+	world      ecs.Spawner6[scene.Transform, scene.GlobalTransform, scene.SiblingOrder, scene.Visibility, scene.Activity, scene.Parent]
+	worldRoot  ecs.Spawner5[scene.Transform, scene.GlobalTransform, scene.SiblingOrder, scene.Visibility, scene.Activity]
+	ready      uint8
 }
 
 func (r *Runtime) transformFactories() *transformSpawners {

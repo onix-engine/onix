@@ -11,12 +11,12 @@ import (
 )
 
 type workspaceElementPicker struct {
+	Selected map[string]bool
 	Field    string
 	Trigger  string
-	Anchor   rect
 	Raw      string
 	Values   []string
-	Selected map[string]bool
+	Anchor   rect
 }
 
 func (p *workspaceElementPicker) read(value string) error {

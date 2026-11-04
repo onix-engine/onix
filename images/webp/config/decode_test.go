@@ -10,15 +10,15 @@ import (
 
 func TestDecodeVariants(t *testing.T) {
 	for _, test := range []struct {
+		model         color.Model
 		file          string
 		width, height int
-		model         color.Model
 	}{
-		{"vp8-lossy.webp", 150, 100, color.YCbCrModel},
-		{"vp8l-lossless.webp", 75, 100, color.NRGBAModel},
-		{"vp8x-alpha.webp", 400, 301, color.NYCbCrAModel},
-		{"animated-lossless.webp", 8, 6, color.NYCbCrAModel},
-		{"animated-alpha-lossy.webp", 16, 12, color.NYCbCrAModel},
+		{file: "vp8-lossy.webp", width: 150, height: 100, model: color.YCbCrModel},
+		{file: "vp8l-lossless.webp", width: 75, height: 100, model: color.NRGBAModel},
+		{file: "vp8x-alpha.webp", width: 400, height: 301, model: color.NYCbCrAModel},
+		{file: "animated-lossless.webp", width: 8, height: 6, model: color.NYCbCrAModel},
+		{file: "animated-alpha-lossy.webp", width: 16, height: 12, model: color.NYCbCrAModel},
 	} {
 		t.Run(test.file, func(t *testing.T) {
 			data, err := os.ReadFile("../testdata/" + test.file)

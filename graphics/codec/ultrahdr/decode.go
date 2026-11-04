@@ -18,8 +18,8 @@ import (
 // Panorama owns linear sRGB pixels. Decode restores the full HDR rendition,
 // independently of the output display's headroom; tone mapping happens later.
 type Panorama struct {
-	width, height int
 	pixels        []mgl32.Vec3
+	width, height int
 }
 
 func (p *Panorama) Size() (int, int) { return p.width, p.height }

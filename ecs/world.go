@@ -25,29 +25,30 @@ const (
 )
 
 type World struct {
-	entities                []entityMeta
-	free                    []uint32
-	entityCount             int
+	queryScope              *QueryScope
+	directSystemContexts    map[string]*SystemContext
 	componentTypes          map[reflect.Type]componentID
-	componentInfos          []componentInfo
-	archetypes              []*archetype
+	frameScratch            map[reflect.Type]any
+	messages                map[reflect.Type]messageStore
+	resources               map[reflect.Type]any
 	archetypesByHash        map[uint64][]uint32
 	queryPlans              map[uint64][]*queryPlan
 	simpleQueryPlans        map[simpleQueryKey]*queryPlan
-	queryMasks              querySpec
-	queryScope              *QueryScope
-	resources               map[reflect.Type]any
-	messages                map[reflect.Type]messageStore
-	frameScratch            map[reflect.Type]any
-	directSystemContexts    map[string]*SystemContext
 	commands                Commands
-	changeTick              Tick
-	activeChangeTick        Tick
+	queryMasks              querySpec
+	occupiedArchetypes      []uint64
+	entities                []entityMeta
+	archetypes              []*archetype
+	componentInfos          []componentInfo
+	free                    []uint32
+	entityCount             int
 	activeQueryIterators    int
 	activeComponentCleanups int
 	structureVersion        uint64
 	entityVersion           uint64
 	mutationVersion         uint64
+	changeTick              Tick
+	activeChangeTick        Tick
 }
 
 func (w *World) MutationVersion() uint64 {
@@ -242,6 +243,9 @@ func (w *World) commitSpawn(index uint32, archetype *archetype, row int) {
 	meta.archetypeID = archetype.id
 	meta.row = uint32(row)
 	meta.state = entityAlive
+	if row == 0 {
+		w.occupiedArchetypes[archetype.id/64] |= uint64(1) << (archetype.id % 64)
+	}
 	w.entityCount++
 	w.entityVersion++
 	w.structureVersion++
@@ -361,6 +365,9 @@ func (world *World) Insert[T any](entity Entity, value T) error {
 func (w *World) commitMigration(index uint32, target *archetype, row int) {
 	w.entities[index].archetypeID = target.id
 	w.entities[index].row = uint32(row)
+	if row == 0 {
+		w.occupiedArchetypes[target.id/64] |= uint64(1) << (target.id % 64)
+	}
 	w.structureVersion++
 }
 
@@ -634,6 +641,9 @@ func (w *World) createArchetype(hash uint64, ids []componentID) *archetype {
 		archetype.hasCleanup = archetype.hasCleanup || info.onRemove != nil
 	}
 	w.archetypes = append(w.archetypes, archetype)
+	if archetype.id%64 == 0 {
+		w.occupiedArchetypes = append(w.occupiedArchetypes, 0)
+	}
 	w.archetypesByHash[hash] = append(w.archetypesByHash[hash], archetype.id)
 	return archetype
 }
@@ -658,6 +668,10 @@ func (w *World) removeArchetypeEntity(archetype *archetype, row int) {
 	moved := archetype.entities[last]
 	archetype.entities[row] = moved
 	archetype.entities = archetype.entities[:last]
+	archetype.rowVersion = w.structureVersion + 1
+	if last == 0 {
+		w.occupiedArchetypes[archetype.id/64] &^= uint64(1) << (archetype.id % 64)
+	}
 	if row != last {
 		index, _ := moved.Index()
 		w.entities[index].row = uint32(row)

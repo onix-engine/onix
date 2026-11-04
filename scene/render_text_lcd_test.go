@@ -11,11 +11,11 @@ import (
 )
 
 type lcdBatchDriver struct {
+	colors []render.Color
 	canvasTestDriver
-	blend   render.BlendState
 	draws   int
 	uploads int
-	colors  []render.Color
+	blend   render.BlendState
 }
 
 func (d *lcdBatchDriver) SetBlend(value render.BlendState) error {

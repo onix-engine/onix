@@ -583,59 +583,55 @@ type glesMeshGeometry struct {
 }
 
 type openGLESDriver struct {
-	driverStatistics
 	glContext
-
-	deviceName   string
-	afterPresent func() error
-	width        int
-	height       int
-	viewport     Rect
-	scissor      Rect
-
-	meshBuiltins      [meshVariantCount - 1]glesProgram
-	programs          [3]glesProgram
-	pickingProgram    glesProgram
-	quadVertexBuffer  C.GLuint
-	quadIndexBuffer   C.GLuint
-	spriteGeometry    [glesFramesInFlight]glesGeometry
-	shapeGeometry     [glesFramesInFlight]glesGeometry
+	afterPresent      func() error
+	surfaceTarget     *glesRenderTarget
+	deviceName        string
+	spriteDraws       []C.OnixGLESSpriteDraw
+	updates           []C.OnixGLESTextureUpdate
+	pickingDraws      []C.OnixGLESPickingDraw
+	meshDraws         []C.OnixGLESMeshDraw
 	uploads           [glesFramesInFlight]C.OnixGLUploadPool
-	meshGeometry      glesMeshGeometry
+	meshes            GenerationPool[MeshResource, glesMesh]
+	material2DShaders GenerationPool[Material2DShaderResource, *glesProgram]
+	meshShaders       GenerationPool[MeshShaderResource, *glesProgram]
 	textures          GenerationPool[TextureResource, glesTexture]
 	targets           GenerationPool[RenderTargetResource, *glesRenderTarget]
-	meshes            GenerationPool[MeshResource, glesMesh]
-	meshShaders       GenerationPool[MeshShaderResource, *glesProgram]
-	material2DShaders GenerationPool[Material2DShaderResource, *glesProgram]
-	spriteDraws       []C.OnixGLESSpriteDraw
-	meshDraws         []C.OnixGLESMeshDraw
-	pickingDraws      []C.OnixGLESPickingDraw
-	updates           []C.OnixGLESTextureUpdate
 	textureUpload     nativeTextureUpload
-	lightUniforms     [meshLightUniformFloatCount]float32
-	uintClear         [4]C.GLuint
-
-	surfaceTarget  *glesRenderTarget
-	activeTarget   RenderTargetHandle
-	currentProgram C.GLuint
-	boundVAO       C.GLuint
-	boundBuffer    C.GLuint
-	boundTexture   C.GLuint
-	frameIndex     int
-	blend          BlendState
-	clear          Color
-	blendSet       bool
-	clearSet       bool
-	scissorSet     bool
-	scissorEnabled bool
-	blendEnabled   bool
-	depthEnabled   bool
-	destroyed      bool
-
+	driverStatistics
+	meshDrawsRetention    scratchRetention
+	meshGeometry          glesMeshGeometry
 	updateRetention       scratchRetention
 	spriteDrawsRetention  scratchRetention
-	meshDrawsRetention    scratchRetention
 	pickingDrawsRetention scratchRetention
+	frameIndex            int
+	height                int
+	width                 int
+	lightUniforms         [meshLightUniformFloatCount]float32
+	programs              [3]glesProgram
+	meshBuiltins          [meshVariantCount - 1]glesProgram
+	pickingProgram        glesProgram
+	blend                 BlendState
+	clear                 Color
+	scissor               Rect
+	uintClear             [4]C.GLuint
+	viewport              Rect
+	shapeGeometry         [glesFramesInFlight]glesGeometry
+	spriteGeometry        [glesFramesInFlight]glesGeometry
+	activeTarget          RenderTargetHandle
+	boundTexture          C.GLuint
+	quadIndexBuffer       C.GLuint
+	boundBuffer           C.GLuint
+	boundVAO              C.GLuint
+	currentProgram        C.GLuint
+	quadVertexBuffer      C.GLuint
+	clearSet              bool
+	depthEnabled          bool
+	destroyed             bool
+	blendEnabled          bool
+	scissorEnabled        bool
+	scissorSet            bool
+	blendSet              bool
 }
 
 func initializeGLDriver(driver *openGLESDriver) (Driver, error) {

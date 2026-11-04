@@ -88,81 +88,80 @@ type TextIndex interface {
 }
 
 type Text2D struct {
-	// Index optionally shares a document's indexed text buffer for caret lookup.
-	Index TextIndex
-	Value string
+	lastValue   piecetree.Snapshot
+	layoutValue piecetree.Snapshot
 	// Source supplies immutable document text; Value is used when Source is empty.
-	Source        piecetree.Snapshot
-	Font          *onixtext.Font
-	FontSize      float64
-	DPI           float64
-	WrapMode      TextWrapMode
-	WrapWidth     float32
-	LetterSpacing float32
-	LineHeight    float32
-	// InkOffsetY shifts painted glyphs without changing line or caret geometry.
-	InkOffsetY float32
-	// TabWidth is the distance between tab stops in logical pixels.
-	TabWidth      float32
-	TextAlignment TextAlignment
-	MaxWidth      float32
-	Color         graphics.ColorRGBA
-	Alpha         float32
-	// LCD enables RGB-stripe antialiasing on an opaque UI surface.
-	LCD          bool
-	ShadowX      float32
-	ShadowY      float32
-	ShadowColor  graphics.ColorRGBA
-	OutlineWidth float32
-	OutlineColor graphics.ColorRGBA
-	// Spans are sorted, non-overlapping UTF-8 byte ranges.
-	Spans         []TextSpan2D
-	InlineObjects []TextInlineObject2D
+	Source piecetree.Snapshot
+	// Index optionally shares a document's indexed text buffer for caret lookup.
+	Index          TextIndex
+	lastLineLayout *TextLineLayout2D
+	face           *font.ScaledFace
+	Font           *onixtext.Font
 	// LineLayout spaces visual lines without inserting characters into Value.
 	LineLayout *TextLineLayout2D
-	// Prelayout uses positions already computed by a layout engine for one line.
-	// Its producer increments Revision whenever those positions or Value change.
-	Prelayout TextPrelayout2D
+	lastFont   *onixtext.Font
 
-	cache               *onixtext.GlyphCache
-	face                *font.ScaledFace
-	rasterScale         float64
-	glyphs              []textGlyph2D
+	cache  *onixtext.GlyphCache
+	Value  string
+	glyphs []textGlyph2D
+	// Spans are sorted, non-overlapping UTF-8 byte ranges.
+	Spans               []TextSpan2D
+	lastInlineObjects   []TextInlineObject2D
 	outlineGlyphs       []onixtext.Glyph
 	inlineObjectLayouts []textInlineObjectLayout2D
 	lines               []textLineLayout2D
 	wrapRangeCache      []textWrapRange2D
-	changed             bool
-	glyphlessLayout     bool
-	glyphBand           textGlyphBand
-	lastGlyphBand       textGlyphBand
-	layoutValue         piecetree.Snapshot
-	glyphLineHeight     float32
-
-	lastValue              piecetree.Snapshot
-	lastFont               *onixtext.Font
-	lastFontSize           float64
+	InlineObjects       []TextInlineObject2D
+	// Prelayout uses positions already computed by a layout engine for one line.
+	// Its producer increments Revision whenever those positions or Value change.
+	Prelayout              TextPrelayout2D
 	lastDPI                float64
-	lastRasterScale        float64
-	lastWrapMode           TextWrapMode
-	lastWrapWidth          float32
-	lastLetterSpacing      float32
-	lastLineHeight         float32
-	lastTabWidth           float32
-	lastTextAlignment      TextAlignment
-	lastMaxWidth           float32
-	lastOutlineWidth       float32
-	lastInlineObjects      []TextInlineObject2D
-	lineCount              int
-	layoutWidth            float32
-	layoutHeight           float32
-	measuredWidth          float32
-	measuredLineHeight     float32
-	measurementValid       bool
-	lastLineLayout         *TextLineLayout2D
-	lastLineLayoutRevision uint64
+	DPI                    float64
 	lastPrelayoutRevision  uint64
-	prelayoutActive        bool
+	lastLineLayoutRevision uint64
+	FontSize               float64
+	lineCount              int
+	lastFontSize           float64
+	lastRasterScale        float64
+	rasterScale            float64
+	OutlineColor           graphics.ColorRGBA
+	Color                  graphics.ColorRGBA
+	ShadowColor            graphics.ColorRGBA
+	glyphBand              textGlyphBand
+	lastGlyphBand          textGlyphBand
+	ShadowX                float32
+	lastTabWidth           float32
+	WrapWidth              float32
+	OutlineWidth           float32
+	ShadowY                float32
+	glyphLineHeight        float32
+	LetterSpacing          float32
+	Alpha                  float32
+	MaxWidth               float32
+	measuredLineHeight     float32
+	// TabWidth is the distance between tab stops in logical pixels.
+	TabWidth          float32
+	measuredWidth     float32
+	lastWrapWidth     float32
+	lastLetterSpacing float32
+	lastLineHeight    float32
+	layoutHeight      float32
+	layoutWidth       float32
+	lastMaxWidth      float32
+	lastOutlineWidth  float32
+	// InkOffsetY shifts painted glyphs without changing line or caret geometry.
+	InkOffsetY        float32
+	LineHeight        float32
+	lastTextAlignment TextAlignment
+	glyphlessLayout   bool
+	lastWrapMode      TextWrapMode
+	TextAlignment     TextAlignment
+	measurementValid  bool
+	// LCD enables RGB-stripe antialiasing on an opaque UI surface.
+	LCD             bool
+	changed         bool
+	WrapMode        TextWrapMode
+	prelayoutActive bool
 }
 
 type TextPrelayout2D struct {
@@ -604,7 +603,7 @@ func (snapshots *renderSnapshots2D) appendSpriteRenderItems2D[T renderGlobalTran
 			continue
 		}
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
-		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(*sprite), material2DForEntity(world, entity), anchor, matrix, clip, width, height, ui, info.sortIndex)
+		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.capture(sprite, snapshots.addSprite), material2DForEntity(world, entity), anchor, matrix, clip, width, height, ui, info.sortIndex)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
@@ -674,7 +673,7 @@ func (snapshots *renderSnapshots2D) appendParticleRenderItems2D[T renderGlobalTr
 		if emitter.Texture == nil && fallbackTexture == nil {
 			fallbackTexture = particleFallbackTexture2D(world)
 		}
-		item := newParticleRenderItem2D(uint32(len(items)), entity, snapshots.addEmitter(*emitter), matrix, clip, ui, info.sortIndex, fallbackTexture)
+		item := newParticleRenderItem2D(uint32(len(items)), entity, snapshots.capture(emitter, snapshots.addEmitter), matrix, clip, ui, info.sortIndex, fallbackTexture)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
@@ -696,7 +695,7 @@ func (snapshots *renderSnapshots2D) appendTilemapRenderItems2D[T renderGlobalTra
 			continue
 		}
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
-		item := newTilemapRenderItem2D(uint32(len(items)), entity, snapshots.addTilemap(*tilemap), anchor, matrix, clip, ui, info.sortIndex)
+		item := newTilemapRenderItem2D(uint32(len(items)), entity, snapshots.capture(tilemap, snapshots.addTilemap), anchor, matrix, clip, ui, info.sortIndex)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
@@ -717,7 +716,7 @@ func (snapshots *renderSnapshots2D) appendSpineRenderItems2D[T renderGlobalTrans
 		item := renderItem2D{
 			entity: entity, layers: info.layers, scene: info.scene, group: info.group, order: renderOrder2D(entity), sequence: uint32(len(items)),
 			depth: matrix[14], ui: ui, sortIndex: info.sortIndex, material: renderMaterialKey{pipeline: render.PipelineMesh, textureID: component.Player.Resource.Texture.BatchKey()},
-			kind: renderItemSpine2D, spine: snapshots.addSpine(*component), texture: component.Player.Resource.Texture, transform: matrix, clip: clip, target: info.target,
+			kind: renderItemSpine2D, spine: snapshots.capture(component, snapshots.addSpine), texture: component.Player.Resource.Texture, transform: matrix, clip: clip, target: info.target,
 		}
 		items = append(items, item)
 	}
@@ -1061,6 +1060,24 @@ func TextCaretRect2D[V piecetree.Value](text *Text2D, inputValue V, caret int) (
 		lineIndex := min(sort.Search(len(text.lines), func(index int) bool { return byteIndex <= text.lines[index].end }), len(text.lines)-1)
 		line := text.lines[lineIndex]
 		prefixEnd := min(max(byteIndex, line.start), line.end)
+		if len(text.inlineObjectLayouts) > 0 {
+			advance := textAdvance2D{previous: -1}
+			objectIndex := sort.Search(len(text.inlineObjectLayouts), func(i int) bool { return text.inlineObjectLayouts[i].object.End > line.start })
+			cursor := value.Cursor(line.start, prefixEnd)
+			for cursor.Offset() < prefixEnd {
+				position := cursor.Offset()
+				character, size := cursor.DecodeRune()
+				var object *TextInlineObject2D
+				if objectIndex < len(text.inlineObjectLayouts) && text.inlineObjectLayouts[objectIndex].object.Start == position {
+					object = &text.inlineObjectLayouts[objectIndex].object
+					size = min(object.End, prefixEnd) - position
+					objectIndex++
+				}
+				advance.add(text.face, character, object, text.LetterSpacing, text.TabWidth)
+				cursor.Advance(size)
+			}
+			return line.x + advance.width, line.y, 1, line.height, true
+		}
 		prefixWidth, _, measured := MeasureTextValue2D(text, value.Slice(line.start, prefixEnd))
 		if !measured {
 			return 0, 0, 0, 0, false
@@ -1271,37 +1288,37 @@ const (
 )
 
 type renderItem2D struct {
+	sprite     *Sprite2D
+	paint      *paintItem2D
+	device     *render.Device
+	texture    *graphics.Texture
+	spine      *Spine2D
+	text       *Text2D
+	tilemap    *Tilemap2D
+	emitter    *ParticleEmitter2D
+	layers     RenderLayers
+	material2D graphics.Material2DData
 	scene      SceneLayer
+	material   renderMaterialKey
+	glyphStart int
+	order      uint64
+	sortIndex  int
 	group      uint64
 	entity     ecs.Entity
-	layers     RenderLayers
-	order      uint64
-	sequence   uint32
-	depth      float32
-	ui         bool
-	sortIndex  int
-	material   renderMaterialKey
-	material2D graphics.Material2DData
-	kind       renderItemKind2D
-	sprite     *Sprite2D
-	emitter    *ParticleEmitter2D
-	tilemap    *Tilemap2D
-	text       *Text2D
-	spine      *Spine2D
-	texture    *graphics.Texture
-	transform  mgl32.Mat4
-	anchor     Anchor
-	color      graphics.ColorRGBA
-	glyphStart int
+	target     ecs.Entity
 	glyphEnd   int
-	outlined   bool
-	lcdText    bool
+	transform  mgl32.Mat4
 	clip       clipRect2D
+	color      graphics.ColorRGBA
+	anchor     Anchor
 	width      float32
 	height     float32
-	target     ecs.Entity
-	device     *render.Device
-	paint      *paintItem2D
+	sequence   uint32
+	depth      float32
+	outlined   bool
+	lcdText    bool
+	kind       renderItemKind2D
+	ui         bool
 }
 
 func spriteDrawable2D(sprite *Sprite2D, device *render.Device) bool {
@@ -2563,12 +2580,12 @@ func textureMatrix(texture *graphics.Texture) mgl32.Mat3 {
 }
 
 type clipRect2D struct {
+	rounded    roundedClip2D
 	minX       float32
 	minY       float32
 	maxX       float32
 	maxY       float32
 	valid      bool
-	rounded    roundedClip2D
 	hasRounded bool
 }
 

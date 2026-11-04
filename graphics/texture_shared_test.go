@@ -9,8 +9,8 @@ import (
 )
 
 type sharedImageDriver struct {
-	textureTestDriver
 	updated []byte
+	textureTestDriver
 }
 
 func (d *sharedImageDriver) UpdateTextures(updates []render.TextureUpdate) error {

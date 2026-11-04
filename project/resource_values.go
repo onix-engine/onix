@@ -26,8 +26,8 @@ func (value fontResource) dispose() error {
 }
 
 type shaderResource struct {
-	descriptor render.ShaderDescriptor
 	sources    []*resource.Blob
+	descriptor render.ShaderDescriptor
 }
 
 func (value shaderResource) dispose() error {

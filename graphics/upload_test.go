@@ -69,8 +69,8 @@ func TestUploadQueueDeduplicatesAndBudgetsExplicitDevice(t *testing.T) {
 }
 
 type failedUploadDriver struct {
-	textureTestDriver
 	err error
+	textureTestDriver
 }
 
 func (d *failedUploadDriver) CreateTexture(render.TextureDescriptor, []byte) (render.TextureHandle, error) {

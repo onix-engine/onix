@@ -31,7 +31,7 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 	check := func(t *testing.T) {
 		t.Helper()
 		state := world.GetRef[htmlRenderState](owner)
-		box := state.BoxesByNode[node.node]
+		box := state.boxForNode(node.node)
 		r := box.BorderBox()
 		want := [...]layout.Rect{
 			{X: r.X, Y: r.Y, Width: r.Width, Height: box.Border.Top},
@@ -77,7 +77,7 @@ func TestHTMLTransparentRoundedElbowsCreatePaintSurface(t *testing.T) {
 			defer Dispose(world)
 			node := incrementalHTMLNode(t, world, owner, "elbow")
 			state := world.GetRef[htmlRenderState](owner)
-			paint := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
+			paint := state.Textures.paint(htmlTextureKey{node: node.node, variant: "background"})
 			if paint == nil || htmlCullRole(world, owner, node, htmlRoleSurface) == 0 {
 				t.Fatal("transparent rounded border was culled before its arc could be painted")
 			}
@@ -191,7 +191,7 @@ func TestHTMLToolbarRoundedBorderUpdatesRetainedPaint(t *testing.T) {
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "button")
 	state := world.GetRef[htmlRenderState](owner)
-	raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
+	raster := state.Textures.paint(htmlTextureKey{node: node.node, variant: "background"})
 	if raster == nil {
 		t.Fatal("toolbar button has no retained paint")
 	}
@@ -231,7 +231,7 @@ func TestHTMLRoundedBorderTextureFollowsCanvasDensity(t *testing.T) {
 		canvas.SetRasterScale(scale)
 		incrementalSync(t, world)
 		state := world.GetRef[htmlRenderState](owner)
-		raster := state.Textures.paint[htmlTextureKey{node: node.node, variant: "background"}]
+		raster := state.Textures.paint(htmlTextureKey{node: node.node, variant: "background"})
 		texture := raster.texture
 		if texture.Width != int(math.Ceil(36*scale)) || texture.Height != int(math.Ceil(24*scale)) {
 			t.Fatalf("texture at density %g has size %dx%d", scale, texture.Width, texture.Height)

@@ -3,8 +3,8 @@ package scene
 import "sync/atomic"
 
 type RenderRequest struct {
-	requested atomic.Bool
 	wake      func()
+	requested atomic.Bool
 }
 
 func NewRenderRequest(wake func()) *RenderRequest { return &RenderRequest{wake: wake} }

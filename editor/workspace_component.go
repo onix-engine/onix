@@ -23,20 +23,20 @@ type workspaceComponentState struct{ Inspector, Picker, Animation, AnimationCurv
 type workspaceListState struct{ View editorVNodeView }
 
 type workspaceFileTile struct {
-	File            WorkspaceFile
 	Label, ID, Icon string
+	File            WorkspaceFile
 }
 
 type workspaceFilesState struct {
-	View      editorVNodeView
 	Document  *WorkspaceDocument
 	Mod       project.ModID
-	Revision  uint64
+	Directory string
 	Inventory []WorkspaceFile
 	AllFiles  []WorkspaceFile
-	Directory string
 	Files     []WorkspaceFile
 	Tiles     []workspaceFileTile
+	View      editorVNodeView
+	Revision  uint64
 }
 
 func (state *workspaceFilesState) refresh(document *WorkspaceDocument, mod project.ModID, directory string) {
@@ -78,11 +78,11 @@ func (state *workspaceFilesState) refresh(document *WorkspaceDocument, mod proje
 }
 
 var workspaceDefinitions struct {
-	once              sync.Once
+	err               error
 	shell             *html.Definition[workspaceComponentProps, workspaceComponentState]
 	scenes, inspector *html.Definition[workspaceComponentProps, workspaceListState]
 	files             *html.Definition[workspaceComponentProps, workspaceFilesState]
-	err               error
+	once              sync.Once
 }
 
 func editorWorkspaceDefinition() (*html.Definition[workspaceComponentProps, workspaceComponentState], error) {

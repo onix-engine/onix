@@ -9,11 +9,11 @@ import (
 // create a visible top-left node at the origin; Hidden explicitly hides it.
 // A nil Anchor selects TopLeft; use &scene.AnchorCenter for a centered node.
 type NodeOptions struct {
-	Parent     ecs.Entity
-	X, Y       float32
-	StackIndex int
-	Hidden     bool
 	Anchor     *scene.Anchor
+	Parent     ecs.Entity
+	StackIndex int
+	X, Y       float32
+	Hidden     bool
 }
 
 func (o NodeOptions) anchor() scene.Anchor {

@@ -8,20 +8,18 @@ import (
 type renderSnapshots2DScratch struct{}
 
 type renderSnapshots2D struct {
-	sprites    []Sprite2D
-	emitters   []ParticleEmitter2D
-	tilemaps   []tilemapSnapshot2D
-	texts      []Text2D
-	spines     []Spine2D
-	nineSlices []NineSlice2D
-
-	particleColors      []graphics.ColorRGBA
-	particleAppearances []ParticleAppearance2D
-	particles           []particleState2D
 	textSpans           []TextSpan2D
-	inlineObjects       []TextInlineObject2D
+	sprites             []Sprite2D
+	emitters            []ParticleEmitter2D
+	tilemaps            []tilemapSnapshot2D
+	texts               []Text2D
+	spines              []Spine2D
+	nineSlices          []NineSlice2D
+	particleColors      []graphics.ColorRGBA
+	particles           []particleState2D
+	particleAppearances []ParticleAppearance2D
 	lastObjects         []TextInlineObject2D
-
+	inlineObjects       []TextInlineObject2D
 	previousSprites     int
 	previousEmitters    int
 	previousTilemaps    int
@@ -29,6 +27,16 @@ type renderSnapshots2D struct {
 	previousSpines      int
 	previousAppearances int
 	previousParticles   int
+	borrow              bool
+}
+
+// Borrow components only while a retained collector builds its temporary item
+// list. The retained owner copies them before any drawing or structural writes.
+func (s *renderSnapshots2D) capture[T any](value *T, snapshot func(T) *T) *T {
+	if s.borrow {
+		return value
+	}
+	return snapshot(*value)
 }
 
 func (s *renderSnapshots2D) reset() {
@@ -104,14 +112,18 @@ func (s *renderSnapshots2D) addTilemap(value Tilemap2D) *Tilemap2D {
 }
 
 type tilemapSnapshot2D struct {
-	value  Tilemap2D
 	source *int
+	value  Tilemap2D
 }
 
 func (s *renderSnapshots2D) addText(value Text2D) *Text2D {
-	value.Spans = appendSnapshotValues(&s.textSpans, value.Spans)
-	value.InlineObjects = appendSnapshotValues(&s.inlineObjects, value.InlineObjects)
-	value.lastInlineObjects = appendSnapshotValues(&s.lastObjects, value.lastInlineObjects)
+	// Layout can change between world/UI collectors on the same entity. Keep
+	// each occurrence's struct, but let the retained owner copy nested inputs.
+	if !s.borrow {
+		value.Spans = appendSnapshotValues(&s.textSpans, value.Spans)
+		value.InlineObjects = appendSnapshotValues(&s.inlineObjects, value.InlineObjects)
+		value.lastInlineObjects = appendSnapshotValues(&s.lastObjects, value.lastInlineObjects)
+	}
 	// glyphs, lines and inlineObjectLayouts are rebuilt by the text layout before
 	// the render stage and only read while drawing, so the snapshot borrows those
 	// arrays instead of duplicating a document-sized layout every frame.

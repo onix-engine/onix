@@ -11,12 +11,12 @@ import (
 )
 
 type AnimationKeyframeSpec[T any] struct {
-	Time       float32              `json:"time"`
 	Value      T                    `json:"value"`
 	InTangent  T                    `json:"inTangent,omitzero"`
 	OutTangent T                    `json:"outTangent,omitzero"`
 	Tween      scene.AnimationTween `json:"tween,omitempty"`
 	Curve      scene.AnimationCurve `json:"curve,omitzero"`
+	Time       float32              `json:"time"`
 }
 
 // EffectiveAnimationTween returns the curve used for the segment starting at
@@ -31,25 +31,25 @@ func (key AnimationKeyframeSpec[T]) EffectiveAnimationTween(defaultTween scene.A
 
 type AnimationTrackSpec[T any] struct {
 	Binding   scene.AnimationBinding     `json:"binding"`
-	Keyframes []AnimationKeyframeSpec[T] `json:"keyframes"`
 	TimeTween scene.AnimationTween       `json:"timeTween,omitempty"`
+	Keyframes []AnimationKeyframeSpec[T] `json:"keyframes"`
 	TimeCurve scene.AnimationCurve       `json:"timeCurve,omitzero"`
 }
 
 type AnimationEventSpec struct {
-	Time  float32 `json:"time"`
 	Name  string  `json:"name"`
 	Value string  `json:"value,omitempty"`
+	Time  float32 `json:"time"`
 }
 
 type AnimationClipSpec struct {
-	Duration      float32                           `json:"duration"`
-	SampleRate    float32                           `json:"sampleRate"`
-	Loop          bool                              `json:"loop"`
 	FloatTracks   []AnimationTrackSpec[float32]     `json:"floatTracks,omitempty"`
 	TextureTracks []AnimationTrackSpec[TextureSpec] `json:"textureTracks,omitempty"`
 	BoolTracks    []AnimationTrackSpec[bool]        `json:"boolTracks,omitempty"`
 	Events        []AnimationEventSpec              `json:"events,omitempty"`
+	Duration      float32                           `json:"duration"`
+	SampleRate    float32                           `json:"sampleRate"`
+	Loop          bool                              `json:"loop"`
 }
 
 // HasContent reports whether the clip contains authored animation data.

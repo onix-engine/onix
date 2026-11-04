@@ -53,19 +53,19 @@ func bitMask(n uint32) uint32 {
 }
 
 type bitReader struct {
-	val_      uint64
-	bit_pos_  uint32
 	input     []byte
+	val_      uint64
 	input_len uint
 	byte_pos  uint
+	bit_pos_  uint32
 }
 
 type bitReaderState struct {
-	val_      uint64
-	bit_pos_  uint32
 	input     []byte
+	val_      uint64
 	input_len uint
 	byte_pos  uint
+	bit_pos_  uint32
 }
 
 /* Initializes the BrotliBitReader fields. */

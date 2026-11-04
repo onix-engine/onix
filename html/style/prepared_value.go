@@ -3,9 +3,9 @@ package style
 import "strings"
 
 type preparedValue struct {
+	motion   *motionInputs
 	property string
 	value    Value
-	motion   *motionInputs
 }
 
 func preparePropertyValue(property, raw string) *preparedValue {

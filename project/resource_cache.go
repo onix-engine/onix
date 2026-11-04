@@ -23,23 +23,22 @@ const (
 )
 
 type cacheEntry[T any] struct {
-	mu      sync.Mutex
-	state   cacheEntryState
+	value   T
+	err     error
 	wait    chan struct{}
 	load    func() (T, error)
 	dispose func(T) error
-	value   T
-	err     error
+	mu      sync.Mutex
+	state   cacheEntryState
 }
 
 type resourceCache[K comparable, T any] struct {
-	mu      sync.RWMutex
-	entries map[K]*cacheEntry[T]
-	closed  bool
-
+	entries  map[K]*cacheEntry[T]
 	hits     atomic.Uint64
 	misses   atomic.Uint64
 	resident atomic.Uint64
+	mu       sync.RWMutex
+	closed   bool
 }
 
 func newResourceCache[K comparable, T any](capacity int) *resourceCache[K, T] {

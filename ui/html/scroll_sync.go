@@ -9,29 +9,29 @@ import (
 // Group retained consumers by every scroll container they depend on. Scopes
 // keep independent indexes; unchanged groups never traverse their consumers.
 type htmlScrollIndex[T any, S comparable] struct {
+	groups       map[ecs.Entity]*htmlScrollGroup[S]
+	seen         map[*htmlStickyBinding]bool
+	context      ecs.SystemContext
+	entries      []htmlScrollEntry[T]
+	pending      []ecs.Entity
 	versions     [7]uint64
+	outputs      [5]uint64
 	scopeVersion uint64
 	revision     uint64
-	initialized  bool
 	generation   uint64
-	entries      []htmlScrollEntry[T]
-	groups       map[ecs.Entity]*htmlScrollGroup[S]
-	pending      []ecs.Entity
-	seen         map[*htmlStickyBinding]bool
-	outputs      [5]uint64
 	lastRun      ecs.Tick
-	context      ecs.SystemContext
+	initialized  bool
 }
 
 type htmlScrollEntry[T any] struct {
-	entity  ecs.Entity
 	value   T
+	entity  ecs.Entity
 	applied uint64
 }
 
 type htmlScrollGroup[S comparable] struct {
-	indices  []int
 	snapshot S
+	indices  []int
 	dirty    bool
 }
 

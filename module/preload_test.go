@@ -15,10 +15,10 @@ import (
 )
 
 type preloadFeature struct {
+	err     error
 	started chan struct{}
 	release chan struct{}
 	once    sync.Once
-	err     error
 }
 
 func (f *preloadFeature) ConfigureResources(c project.ResourceLoadContext, _ project.ResourceEntries) error {
@@ -37,8 +37,8 @@ func (f *preloadFeature) DecodeImage(_ []byte, _ string, options graphics.Textur
 
 type preloadDriver struct {
 	render.Driver
-	uploads atomic.Uint32
 	err     error
+	uploads atomic.Uint32
 }
 
 func (d *preloadDriver) CreateTexture(render.TextureDescriptor, []byte) (render.TextureHandle, error) {

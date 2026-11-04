@@ -7,11 +7,11 @@ import (
 )
 
 type viewport3DTestDriver struct {
+	clears    []render.RenderTargetClear
+	shapes    []render.ShapeInstance2D
+	meshDraws int
 	viewport  render.Rect
 	nextID    uint32
-	clears    []render.RenderTargetClear
-	meshDraws int
-	shapes    []render.ShapeInstance2D
 }
 
 func (*viewport3DTestDriver) RendererInfo() render.RendererInfo { return render.RendererInfo{} }

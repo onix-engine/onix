@@ -32,9 +32,9 @@ type querySpec struct {
 const inlineQueryFilterCount = 8
 
 type queryFilters struct {
-	inline [inlineQueryFilterCount]rowFilter
 	extra  []rowFilter
 	count  int
+	inline [inlineQueryFilterCount]rowFilter
 }
 
 func (filters *queryFilters) append(filter rowFilter) {
@@ -54,9 +54,16 @@ func (filters *queryFilters) at(index int) rowFilter {
 }
 
 type queryPlan struct {
-	spec       querySpec
-	archetypes []uint32
-	scanned    int
+	spec    querySpec
+	blocks  []queryArchetypeBlock
+	scanned int
+}
+
+// Store only words containing matching tables. Dense matches use one bit per
+// table; sparse matches skip gaps instead of scanning the world's whole mask.
+type queryArchetypeBlock struct {
+	mask  uint64
+	index uint32
 }
 
 type simpleQueryKey struct {
@@ -67,7 +74,12 @@ type simpleQueryKey struct {
 func (p *queryPlan) update(world *World) {
 	for _, archetype := range world.archetypes[p.scanned:] {
 		if archetype.mask.contains(p.spec.required) && !archetype.mask.intersects(p.spec.without) {
-			p.archetypes = append(p.archetypes, archetype.id)
+			word, bit := archetype.id/64, uint64(1)<<(archetype.id%64)
+			if last := len(p.blocks) - 1; last >= 0 && p.blocks[last].index == word {
+				p.blocks[last].mask |= bit
+			} else {
+				p.blocks = append(p.blocks, queryArchetypeBlock{index: word, mask: bit})
+			}
 		}
 	}
 	p.scanned = len(world.archetypes)
@@ -134,8 +146,8 @@ func (world *World) resolveChangeFilter[T any](context *SystemContext, kind filt
 type queryView struct {
 	world    *World
 	plan     *queryPlan
-	filters  queryFilters
 	entities []Entity
+	filters  queryFilters
 	limited  bool
 	unscoped bool
 }
@@ -166,17 +178,19 @@ type filterBinding struct {
 // queryCursor shares query lifetime, table binding, tick filters and restricted
 // entity traversal. Typed adapters traverse ordinary table rows directly.
 type queryCursor struct {
-	view           queryView
 	archetype      *archetype
-	archetypeIndex int
-	row            int
-	entityIndex    int
-	scope          *QueryScope
-	scopeTable     *scopeTable
-	scopeBlock     int
-	tick           Tick
-	inline         [inlineQueryFilterCount]filterBinding
 	extra          *[]filterBinding
+	scopeTable     *scopeTable
+	scope          *QueryScope
+	inline         [inlineQueryFilterCount]filterBinding
+	view           queryView
+	entityIndex    int
+	row            int
+	scopeBlock     int
+	archetypeBits  uint64
+	archetypeIndex int
+	archetypeBase  uint32
+	tick           Tick
 }
 
 func (v queryView) cursor(callback bool) (queryCursor, bool) {
@@ -232,25 +246,33 @@ func (cursor *queryCursor) nextEntity() bool {
 // rows directly, keeping cursor calls and column binding out of the hot loop.
 func (cursor *queryCursor) nextArchetype() bool {
 	for {
-		cursor.archetypeIndex++
-		if cursor.archetypeIndex >= len(cursor.view.plan.archetypes) {
-			return false
-		}
-		archetype := cursor.view.world.archetypes[cursor.view.plan.archetypes[cursor.archetypeIndex]]
-		if len(archetype.entities) != 0 {
-			cursor.scopeTable = nil
-			if cursor.scope != nil {
-				table := &cursor.scope.tables[archetype.id]
-				if table.count == 0 {
-					continue
-				}
-				if table.count != len(archetype.entities) {
-					cursor.scopeTable, cursor.scopeBlock = table, 0
-				}
+		for cursor.archetypeBits == 0 {
+			cursor.archetypeIndex++
+			if cursor.archetypeIndex >= len(cursor.view.plan.blocks) {
+				return false
 			}
-			cursor.bindArchetype(archetype)
-			return true
+			block := cursor.view.plan.blocks[cursor.archetypeIndex]
+			cursor.archetypeBits = block.mask & cursor.view.world.occupiedArchetypes[block.index]
+			cursor.archetypeBase = block.index * 64
 		}
+		id := cursor.archetypeBase + uint32(bits.TrailingZeros64(cursor.archetypeBits))
+		cursor.archetypeBits &= cursor.archetypeBits - 1
+		archetype := cursor.view.world.archetypes[id]
+		cursor.scopeTable = nil
+		if cursor.scope != nil {
+			if int(id) >= len(cursor.scope.tables) {
+				continue
+			}
+			table := &cursor.scope.tables[id]
+			if table.count == 0 {
+				continue
+			}
+			if int(table.count) != len(archetype.entities) {
+				cursor.scopeTable, cursor.scopeBlock = table, 0
+			}
+		}
+		cursor.bindArchetype(archetype)
+		return true
 	}
 }
 
@@ -409,7 +431,8 @@ func (w *World) simpleQueryPlan(key simpleQueryKey) *queryPlan {
 		return plan
 	}
 	ids := key.ids[:key.count]
-	plan := &queryPlan{spec: querySpec{required: maskFor(ids)}}
+	w.queryMasks.required = maskForInto(w.queryMasks.required, ids)
+	plan := w.queryPlan(querySpec{required: w.queryMasks.required})
 	w.simpleQueryPlans[key] = plan
 	return plan
 }

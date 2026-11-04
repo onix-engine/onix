@@ -111,18 +111,18 @@ func validateResourcePackagePattern(pattern string) error {
 }
 
 type compiledPackageRule struct {
-	resourcePackageRule
 	include []compiledPackagePattern
 	exclude []compiledPackagePattern
+	resourcePackageRule
 }
 
 type compiledPackagePattern []string
 
 type resourceInput struct {
+	source string
+	data   []byte
 	// Environment files carry HDR metadata or encoded radiance.
 	preserveTexture bool
-	source          string
-	data            []byte
 	memory          bool
 }
 
@@ -145,10 +145,10 @@ func (input resourceInput) packInput(name string) resource.PackInput {
 }
 
 type writtenResourcePackage struct {
-	size   int64
-	digest [sha256.Size]byte
 	assets []resource.AssetInfo
 	stats  resource.PackStats
+	size   int64
+	digest [sha256.Size]byte
 }
 
 func writeResourcePackage(output string, files map[string]resourceInput) (writtenResourcePackage, error) {

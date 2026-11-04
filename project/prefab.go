@@ -23,14 +23,14 @@ type PrefabResourceSpec struct {
 // prefabManifest intentionally contains one root. A prefab is a mountable
 // scene fragment, rather than an independently switchable scene.
 type prefabManifest struct {
-	Prepared  bool           `json:"-"`
 	SpawnPlan sceneSpawnPlan `json:"-"`
 	Root      SceneNodeSpec  `json:"root"`
+	Prepared  bool           `json:"-"`
 }
 
 type prefabPlan struct {
-	plan        sceneSpawnPlan
 	nodeIndices map[string]uint32
+	plan        sceneSpawnPlan
 }
 
 // PrefabInstance owns one mounted prefab hierarchy. Entity resolves prefab
@@ -38,8 +38,8 @@ type prefabPlan struct {
 type PrefabInstance struct {
 	scene    *SceneInstance
 	prefab   *prefabPlan
-	entities []ecs.Entity
 	rootID   string
+	entities []ecs.Entity
 }
 
 // NormalizePrefabPath validates and canonicalizes a prefab resource path.

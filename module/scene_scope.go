@@ -7,9 +7,9 @@ import (
 )
 
 type sceneScopeNode struct {
-	entity             ecs.Entity
 	scene              *Scene
 	owner              *Context
+	entity             ecs.Entity
 	resolved, visiting bool
 	running, rendered  bool
 }

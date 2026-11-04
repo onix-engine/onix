@@ -3,18 +3,18 @@ package scene
 import "github.com/diiyw/onix/ecs"
 
 type renderHierarchy2DInfo struct {
+	layers   RenderLayers
 	scene    SceneLayer
 	group    uint64
-	layers   RenderLayers
 	target   ecs.Entity
 	stack    int
 	hasStack bool
 }
 
 type renderEntity2DInfo struct {
+	layers    RenderLayers
 	scene     SceneLayer
 	group     uint64
-	layers    RenderLayers
 	target    ecs.Entity
 	sortIndex int
 }
@@ -23,10 +23,9 @@ type renderHierarchy2DCacheScratch struct{}
 
 type renderHierarchy2DCache struct {
 	values    map[ecs.Entity]renderHierarchy2DInfo
-	visiting  map[ecs.Entity]bool
-	versions  [7]uint64
-	structure uint64
 	hierarchy *Hierarchy
+	versions  [6]uint64
+	structure uint64
 }
 
 func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
@@ -35,20 +34,18 @@ func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
 
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
 func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
-	cache := world.ScopeValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache]()
+	cache := world.FrameValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache]()
 	cache.hierarchy = HierarchyFor(world)
-	versions := [7]uint64{
+	versions := [6]uint64{
 		componentValueVersion[Parent](world), componentValueVersion[SceneLayer](world),
 		componentValueVersion[RenderLayers](world), componentValueVersion[UITargetCamera](world),
-		componentValueVersion[UIStackIndex](world), componentValueVersion[RenderOrder2D](world), componentValueVersion[PainterGroup2D](world),
+		componentValueVersion[UIStackIndex](world), componentValueVersion[PainterGroup2D](world),
 	}
 	if cache.values == nil {
 		cache.values = make(map[ecs.Entity]renderHierarchy2DInfo)
-		cache.visiting = make(map[ecs.Entity]bool)
 	}
 	if cache.versions != versions || cache.structure != world.EntityVersion() {
 		clear(cache.values)
-		clear(cache.visiting)
 		cache.versions, cache.structure = versions, world.EntityVersion()
 	}
 	return cache
@@ -70,13 +67,14 @@ func renderEntityInfo2D(world *ecs.World, entity ecs.Entity, ui bool, fallback i
 }
 
 func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) renderHierarchy2DInfo {
+	if entity == 0 {
+		return renderHierarchy2DInfo{}
+	}
 	if info, ok := c.values[entity]; ok {
 		return info
 	}
-	if entity == 0 || c.visiting[entity] {
-		return renderHierarchy2DInfo{layers: RenderLayers{}}
-	}
-	c.visiting[entity] = true
+	// A provisional default also terminates cycles, without a second map.
+	c.values[entity] = renderHierarchy2DInfo{}
 	info := renderHierarchy2DInfo{layers: RenderLayers{}}
 	if parent := c.hierarchy.Parent(entity); parent != 0 {
 		info = c.resolve(world, parent)
@@ -96,7 +94,6 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	if stack, ok := world.Get[UIStackIndex](entity); ok {
 		info.stack, info.hasStack = int(stack), true
 	}
-	delete(c.visiting, entity)
 	c.values[entity] = info
 	return info
 }

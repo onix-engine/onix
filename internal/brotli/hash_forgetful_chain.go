@@ -40,19 +40,17 @@ A (forgetful) hash table to the data seen by the compressor, to
 	oldest nodes are replaced; this way several chains may share a tail.
 */
 type hashForgetfulChain struct {
+	addr          []uint32
+	head          []uint16
+	banks         [][]slot
+	free_slot_idx []uint16
 	hasherCommon
-
 	bucketBits              uint
 	numBanks                uint
 	bankBits                uint
 	numLastDistancesToCheck int
-
-	addr          []uint32
-	head          []uint16
-	tiny_hash     [65536]byte
-	banks         [][]slot
-	free_slot_idx []uint16
-	max_hops      uint
+	max_hops                uint
+	tiny_hash               [65536]byte
 }
 
 func (h *hashForgetfulChain) Initialize(params *encoderParams) {
