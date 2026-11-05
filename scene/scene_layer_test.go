@@ -47,7 +47,7 @@ func TestSceneLayersOrderWorldAndUIAndIsolateCameras(t *testing.T) {
 	}
 	for _, camera := range state.Cameras {
 		items := visibleRenderItems2D(w, state.Items2D, camera, camera.Entity)
-		if len(items) != 1 || items[0].scene.ID != camera.Scene.ID {
+		if len(items) != 1 || state.Items2D[items[0]].scene.ID != camera.Scene.ID {
 			t.Fatal("camera collected another scene's content")
 		}
 	}

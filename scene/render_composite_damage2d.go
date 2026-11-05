@@ -1,6 +1,7 @@
 package scene
 
 import (
+	"cmp"
 	"image"
 	"iter"
 	"slices"
@@ -25,10 +26,20 @@ func (view *compositor2D) tileIndices(bounds image.Rectangle) iter.Seq[int] {
 	}
 }
 
-func compareCompositeIndex2D(a, b int) int { return b - a }
+func compareCompositeIndex2D(a, b uint32) int { return cmp.Compare(b, a) }
 
 func (view *compositor2D) damageTile(index int) {
 	if tile := &view.tiles[index]; !tile.changed {
+		// Remove the old visible prefix before any insertion/deletion shifts
+		// candidates. Each touched tile is retired once for the whole edit set.
+		for _, position := range tile.visibleItems() {
+			coverage := &view.coverage[position]
+			coverage.visible--
+			if coverage.visible == 0 && coverage.present {
+				view.occluded++
+			}
+		}
+		tile.visible = 0
 		tile.changed = true
 		view.damageTiles = append(view.damageTiles, index)
 	}
@@ -65,7 +76,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 				continue
 			}
 			tile := &view.tiles[index]
-			if position, found := slices.BinarySearchFunc(tile.candidates, change.position, compareCompositeIndex2D); found {
+			if position, found := slices.BinarySearchFunc(tile.candidates, uint32(change.position), compareCompositeIndex2D); found {
 				tile.candidates = slices.Delete(tile.candidates, position, position+1)
 			}
 		}
@@ -75,21 +86,13 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 				continue
 			}
 			tile := &view.tiles[index]
-			position, _ := slices.BinarySearchFunc(tile.candidates, change.position, compareCompositeIndex2D)
-			tile.candidates = slices.Insert(tile.candidates, position, change.position)
+			position, _ := slices.BinarySearchFunc(tile.candidates, uint32(change.position), compareCompositeIndex2D)
+			tile.candidates = slices.Insert(tile.candidates, position, uint32(change.position))
 		}
 	}
 	for _, index := range view.damageTiles {
 		view.stats.PreparedTiles++
 		tile := &view.tiles[index]
-		for _, position := range tile.items {
-			coverage := &view.coverage[position]
-			coverage.visible--
-			if coverage.visible == 0 && coverage.present {
-				view.occluded++
-			}
-		}
-		tile.items = tile.items[:0]
 		rect := view.tileRect(index)
 		tile.hash, tile.covered, tile.changed = paintMix2D(uint64(rect.Dx()), uint64(rect.Dy())), false, false
 		for _, position := range tile.candidates {
@@ -100,7 +103,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 				view.occluded--
 			}
 			coverage.visible++
-			tile.items = append(tile.items, position)
+			tile.visible++
 			tile.hash = paintMix2D(tile.hash, item.paint.tileHash(item, rect))
 			if rect.In(item.paint.opaque) {
 				tile.covered = true

@@ -8,6 +8,7 @@ import (
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/render"
+	onixtext "github.com/diiyw/onix/text"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -15,9 +16,29 @@ type standaloneTextScratchTag struct{}
 
 type standaloneTextScratch struct {
 	layers []renderItem2D
+	text   textPaint2D
 }
 
-func (t *Text2D) appendRenderItems(dst []renderItem2D, entity ecs.Entity, base mgl32.Mat4, clip clipRect2D, ui bool, sortIndex int) []renderItem2D {
+// Drawing snapshots share immutable positioned glyphs and retain their atlas
+// pages without copying document text, edit indices or layout invalidation state.
+type textPaint2D struct {
+	cache            *onixtext.GlyphCache
+	glyphs           []textGlyph2D
+	outlineGlyphs    []onixtext.Glyph
+	rasterScale      float64
+	Alpha            float32
+	OutlineWidth     float32
+	ShadowX, ShadowY float32
+	LCD              bool
+}
+
+func (t *Text2D) paintSnapshot() textPaint2D {
+	return textPaint2D{cache: t.cache, glyphs: t.glyphs, outlineGlyphs: t.outlineGlyphs,
+		rasterScale: t.rasterScale, Alpha: t.Alpha, OutlineWidth: t.OutlineWidth,
+		ShadowX: t.ShadowX, ShadowY: t.ShadowY, LCD: t.LCD}
+}
+
+func (t *Text2D) appendRenderItems(dst []renderItem2D, entity ecs.Entity, base mgl32.Mat4, clip clipRect2D, ui bool, sortIndex int, paint *textPaint2D) []renderItem2D {
 	if t == nil || t.cache == nil || len(t.glyphs) == 0 {
 		return dst
 	}
@@ -26,15 +47,15 @@ func (t *Text2D) appendRenderItems(dst []renderItem2D, entity ecs.Entity, base m
 	}
 	order := renderOrder2D(entity)
 	if t.shadowEnabled() {
-		dst = t.appendTextRuns(dst, order, base.Mul4(mgl32.Translate3D(t.ShadowX, t.ShadowY, 0)), t.ShadowColor, clip, ui, sortIndex, false)
+		dst = t.appendTextRuns(dst, order, base.Mul4(mgl32.Translate3D(t.ShadowX, t.ShadowY, 0)), t.ShadowColor, clip, ui, sortIndex, false, paint)
 	}
 	if t.outlineEnabled() {
-		dst = t.appendTextRuns(dst, order, base, t.OutlineColor, clip, ui, sortIndex, true)
+		dst = t.appendTextRuns(dst, order, base, t.OutlineColor, clip, ui, sortIndex, true, paint)
 	}
-	return t.appendStyledTextRuns(dst, order, base, clip, ui, sortIndex)
+	return t.appendStyledTextRuns(dst, order, base, clip, ui, sortIndex, paint)
 }
 
-func (t *Text2D) appendStyledTextRuns(dst []renderItem2D, order uint64, transform mgl32.Mat4, clip clipRect2D, ui bool, sortIndex int) []renderItem2D {
+func (t *Text2D) appendStyledTextRuns(dst []renderItem2D, order uint64, transform mgl32.Mat4, clip clipRect2D, ui bool, sortIndex int, paint *textPaint2D) []renderItem2D {
 	spanIndex := 0
 	colorAt := func(index int) graphics.ColorRGBA {
 		byteIndex := int(t.glyphs[index].byteIndex)
@@ -56,7 +77,7 @@ func (t *Text2D) appendStyledTextRuns(dst []renderItem2D, order uint64, transfor
 		if color.A > 0 {
 			texture, ok := t.cache.Atlas(atlas)
 			if ok && texture != nil {
-				item := t.newTextRenderItem(order, start, end, transform, color, texture, clip, ui, sortIndex, false)
+				item := t.newTextRenderItem(order, start, end, transform, color, texture, clip, ui, sortIndex, false, paint)
 				item.lcdText = !t.glyphs[start].raster.RGBA()
 				item.sequence = uint32(len(dst))
 				dst = append(dst, item)
@@ -75,11 +96,11 @@ func (t *Text2D) spanColor(byteIndex int) graphics.ColorRGBA {
 	return t.Color
 }
 
-func (t *Text2D) appendTextRuns(dst []renderItem2D, order uint64, transform mgl32.Mat4, clr graphics.ColorRGBA, clip clipRect2D, ui bool, sortIndex int, outlined bool) []renderItem2D {
+func (t *Text2D) appendTextRuns(dst []renderItem2D, order uint64, transform mgl32.Mat4, clr graphics.ColorRGBA, clip clipRect2D, ui bool, sortIndex int, outlined bool, paint *textPaint2D) []renderItem2D {
 	if clr.A <= 0 {
 		return dst
 	}
-	atlasAt := func(index int) int {
+	atlasAt := func(index int) int32 {
 		if outlined {
 			return t.outlineGlyphs[index].Atlas
 		}
@@ -93,7 +114,7 @@ func (t *Text2D) appendTextRuns(dst []renderItem2D, order uint64, transform mgl3
 		}
 		texture, ok := t.cache.Atlas(atlas)
 		if ok && texture != nil {
-			item := t.newTextRenderItem(order, start, end, transform, clr, texture, clip, ui, sortIndex, outlined)
+			item := t.newTextRenderItem(order, start, end, transform, clr, texture, clip, ui, sortIndex, outlined, paint)
 			item.sequence = uint32(len(dst))
 			dst = append(dst, item)
 		}
@@ -102,7 +123,7 @@ func (t *Text2D) appendTextRuns(dst []renderItem2D, order uint64, transform mgl3
 	return dst
 }
 
-func (t *Text2D) newTextRenderItem(order uint64, start, end int, transform mgl32.Mat4, clr graphics.ColorRGBA, texture *graphics.Texture, clip clipRect2D, ui bool, sortIndex int, outlined bool) renderItem2D {
+func (t *Text2D) newTextRenderItem(order uint64, start, end int, transform mgl32.Mat4, clr graphics.ColorRGBA, texture *graphics.Texture, clip clipRect2D, ui bool, sortIndex int, outlined bool, paint *textPaint2D) renderItem2D {
 	return renderItem2D{
 		order:      order,
 		depth:      transform[14],
@@ -110,7 +131,7 @@ func (t *Text2D) newTextRenderItem(order uint64, start, end int, transform mgl32
 		sortIndex:  sortIndex,
 		material:   textureMaterialKey(texture, nil),
 		kind:       renderItemTextLayer2D,
-		text:       t,
+		text:       paint,
 		texture:    texture,
 		transform:  transform,
 		color:      clr,

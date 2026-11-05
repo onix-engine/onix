@@ -20,8 +20,11 @@ import (
 // A laid-out glyph is stored once per character of every document a code editor
 // keeps open, so its size is the engine's dominant text memory cost.
 func TestTextGlyph2DStaysCompact(t *testing.T) {
-	if size := unsafe.Sizeof(textGlyph2D{}); size != 88 {
-		t.Fatalf("textGlyph2D size = %d bytes, want 88", size)
+	if size := unsafe.Sizeof(textGlyph2D{}); size > 72 {
+		t.Fatalf("textGlyph2D size = %d bytes, want at most 72", size)
+	}
+	if size := unsafe.Sizeof(textPaint2D{}); size > 88 {
+		t.Fatalf("textPaint2D size = %d bytes, want at most 88", size)
 	}
 }
 
@@ -345,7 +348,8 @@ func TestText2DOutlineUsesExpandedGlyphLayerBehindFill(t *testing.T) {
 	if outline := text.outlineGlyphs[0]; outline.Width <= glyph.raster.Width || outline.Height <= glyph.raster.Height {
 		t.Fatalf("outline glyph was not expanded: fill=%+v outline=%+v", glyph.raster, outline)
 	}
-	items := text.appendRenderItems(nil, 7, mgl32.Ident4(), clipRect2D{}, true, 3)
+	paint := text.paintSnapshot()
+	items := text.appendRenderItems(nil, 7, mgl32.Ident4(), clipRect2D{}, true, 3, &paint)
 	if len(items) != 2 || !items[0].outlined || items[1].outlined {
 		t.Fatalf("outline and fill render layers = %+v", items)
 	}
@@ -595,7 +599,8 @@ func TestDynamic2DItemBoundsRejectOffscreenTextAndSpine(t *testing.T) {
 	viewport := renderViewport2D{clipFromLayer: mgl32.Ortho2D(0, 100, 80, 0), active: true}
 	text := NewText2D("bounds")
 	text.OutlineWidth = 2
-	textItem := renderItem2D{text: &text, transform: mgl32.Translate3D(10, 10, 0), width: 30, height: 12}
+	paint := text.paintSnapshot()
+	textItem := renderItem2D{text: &paint, transform: mgl32.Translate3D(10, 10, 0), width: 30, height: 12}
 	if !textRenderItemVisible2D(viewport, &textItem) {
 		t.Fatal("onscreen text bounds were culled")
 	}
@@ -803,7 +808,8 @@ func TestText2DRenderItemsSkipTransparentColorRuns(t *testing.T) {
 	if !text.ensureLayout() {
 		t.Fatal("expected transparent text layout")
 	}
-	if items := text.appendRenderItems(nil, 1, mgl32.Ident4(), clipRect2D{}, true, 0); len(items) != 0 {
+	paint := text.paintSnapshot()
+	if items := text.appendRenderItems(nil, 1, mgl32.Ident4(), clipRect2D{}, true, 0, &paint); len(items) != 0 {
 		t.Fatalf("transparent text render items = %d, want 0", len(items))
 	}
 }
@@ -1024,12 +1030,12 @@ func TestVisibleRenderItems2DRespectsLayersPipelineAndUITarget(t *testing.T) {
 	}
 	camera2D := ExtractedCamera{Entity: defaultUI, Pipeline: CameraPipeline2D, RenderLayers: RenderLayer(2)}
 	visible := visibleRenderItems2D(world, items, camera2D, defaultUI)
-	if len(visible) != 2 || visible[0].entity != 1 || visible[1].entity != 3 {
+	if len(visible) != 2 || items[visible[0]].entity != 1 || items[visible[1]].entity != 3 {
 		t.Fatalf("default 2D camera items = %+v", visible)
 	}
 	camera3D := ExtractedCamera{Entity: otherCamera, Pipeline: CameraPipeline3D, RenderLayers: RenderLayer(2)}
 	visible = visibleRenderItems2D(world, items, camera3D, defaultUI)
-	if len(visible) != 1 || visible[0].entity != 4 {
+	if len(visible) != 1 || items[visible[0]].entity != 4 {
 		t.Fatalf("targeted 3D camera UI items = %+v", visible)
 	}
 }

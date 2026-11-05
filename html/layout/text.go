@@ -451,6 +451,8 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			ascent := bounds.Height
 			if segment.Style.Display.Keyword == "inline-flex" {
 				ascent = firstBoxBaseline(segment.Box) - bounds.Y
+			} else if segment.Style.Display.Keyword == "inline-block" {
+				ascent = lastBoxBaseline(segment.Box) - bounds.Y
 			}
 			currentLine = append(currentLine, lineItem{Kind: inlineSegmentBox, Node: segment.Node, Style: segment.Style, Box: segment.Box, Width: bounds.Width, Height: bounds.Height, Ascent: ascent, Descent: bounds.Height - ascent})
 			currentWidth += bounds.Width

@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -80,14 +81,14 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 	if isAbsolutePositioned(box) && box.Style.Width.Kind == style.ValueAuto && style.IsLength(box.Style.Left) && style.IsLength(box.Style.Right) {
 		contentWidth = layoutContaining.Width - resolveLength(box.Style.Left, layoutContaining.Width) - resolveLength(box.Style.Right, layoutContaining.Width) - horizontalBoxExtras(box.Padding, box.Border) - box.Margin.Left - box.Margin.Right
 		contentWidth = maxFloat(contentWidth, 0)
-	} else if isAbsolutePositioned(box) && box.Style.Width.Kind == style.ValueAuto && intrinsicWidth == 0 {
-		// CSS 2.1 10.3.7: auto width with an auto horizontal inset uses
-		// shrink-to-fit sizing, bounded by the space beside the definite inset.
+	} else if (isAbsolutePositioned(box) || box.Style.Display.Keyword == "inline-block") && box.Style.Width.Kind == style.ValueAuto && intrinsicWidth == 0 {
+		// CSS 2.1 10.3.7/10.3.9: absolute and inline-block auto widths use
+		// shrink-to-fit sizing against the actual containing block.
 		extras := horizontalBoxExtras(box.Padding, box.Border)
 		available := layoutContaining.Width - box.Margin.Left - box.Margin.Right - extras
-		if style.IsLength(box.Style.Left) {
+		if isAbsolutePositioned(box) && style.IsLength(box.Style.Left) {
 			available -= resolveLength(box.Style.Left, layoutContaining.Width)
-		} else if style.IsLength(box.Style.Right) {
+		} else if isAbsolutePositioned(box) && style.IsLength(box.Style.Right) {
 			available -= resolveLength(box.Style.Right, layoutContaining.Width)
 		}
 		minimum, preferred := tableCellIntrinsicWidths(box, face, styles, ctx)
@@ -199,6 +200,9 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			ctx.err = err
 		}
 	} else {
+		for _, fragment := range inlineBoxFragments {
+			translateBox(fragment.Box, fragment.Rect.X-fragment.Box.FlowMarginBox.X, fragment.Rect.Y-fragment.Box.FlowMarginBox.Y, ctx)
+		}
 		textFragments = appendListMarker(textFragments, box, face, ctx)
 		if ctx != nil && establishesFloatContext(box) {
 			textHeight = maxFloat(textHeight, ctx.floatContext.clearance(box.Content.Y, "both")-box.Content.Y)
@@ -220,9 +224,6 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			box.flow.inlineBoxFragments = inlineBoxFragments
 		}
 		scrollTextInputFragmentsIntoView(box)
-		for _, fragment := range inlineBoxFragments {
-			translateBox(fragment.Box, fragment.Rect.X-fragment.Box.FlowMarginBox.X, fragment.Rect.Y-fragment.Box.FlowMarginBox.Y, ctx)
-		}
 		cursorY += textHeight
 	}
 
@@ -306,7 +307,32 @@ func appendListMarker(fragments []TextFragment, box *Box, face *font.Face, ctx *
 	if markerFace != nil {
 		glyphs, _, err := shapeToken(markerFace, textToken{Text: marker}, fontSize, box.Style.LetterSpacing.LengthPx, ctx)
 		if err == nil {
-			baseline := box.Content.Y + float64(markerFace.Hhea.Ascent)*fontSize/float64(markerFace.Head.UnitsPerEm)
+			scale := fontSize / float64(markerFace.Head.UnitsPerEm)
+			ascent, descent := float64(markerFace.Hhea.Ascent)*scale, math.Abs(float64(markerFace.Hhea.Descent))*scale
+			halfLeading := (lineHeight - ascent - descent) / 2
+			baseline := box.Content.Y + ascent + halfLeading
+			// Outside markers share the first line's baseline, including inline boxes.
+			found := false
+			for _, text := range fragments {
+				if len(text.Glyphs) != 0 {
+					baseline, found = text.Glyphs[0].Y, true
+					break
+				}
+			}
+			for _, child := range box.Children {
+				if isAbsolutePositioned(child) || isFloated(child) {
+					continue
+				}
+				candidate := firstBoxBaseline(child)
+				if child.Style.Display.Keyword == "inline-block" {
+					candidate = lastBoxBaseline(child)
+				}
+				if !found || candidate < baseline {
+					baseline = candidate
+				}
+				break
+			}
+			fragment.Rect.Y = baseline - ascent - halfLeading
 			for _, glyph := range glyphs {
 				fragment.Glyphs = append(fragment.Glyphs, GlyphFragment{Rune: glyph.Rune, X: x + glyph.X, Y: baseline, PenX: float32(x + float64(glyph.PenX)), Advance: glyph.Advance})
 			}
@@ -444,19 +470,22 @@ func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Re
 			flow = &flowScratch{inlineBoxIndex: make(map[*dom.Node]*Box)}
 			box.flow = flow
 		}
-		contentWidth := intrinsicFlexContentWidth(child, face, ctx, styles)
-		if style.IsLength(child.Style.Width) {
-			contentWidth = resolveLength(child.Style.Width, box.Content.Width)
-			if isBorderBox(child.Style) {
-				contentWidth -= horizontalBoxExtras(resolveEdges(child.Style.Padding, box.Content.Width), resolveBorderEdges(child.Style.BorderWidth, child.Style.BorderStyle, box.Content.Width))
+		containing := Rect{X: box.Content.X, Y: box.Content.Y, Width: box.Content.Width, Height: layoutContaining.Height}
+		if child.Style.Display.Keyword != "inline-block" {
+			contentWidth := intrinsicFlexContentWidth(child, face, ctx, styles)
+			if style.IsLength(child.Style.Width) {
+				contentWidth = resolveLength(child.Style.Width, box.Content.Width)
+				if isBorderBox(child.Style) {
+					contentWidth -= horizontalBoxExtras(resolveEdges(child.Style.Padding, box.Content.Width), resolveBorderEdges(child.Style.BorderWidth, child.Style.BorderStyle, box.Content.Width))
+				}
+				contentWidth = maxFloat(contentWidth, 0)
 			}
-			contentWidth = maxFloat(contentWidth, 0)
+			margin := resolveEdges(child.Style.Margin, box.Content.Width)
+			padding := resolveEdges(child.Style.Padding, box.Content.Width)
+			border := resolveBorderEdges(child.Style.BorderWidth, child.Style.BorderStyle, box.Content.Width)
+			outerWidth := contentWidth + margin.Left + margin.Right + padding.Left + padding.Right + border.Left + border.Right
+			containing.Width = maxFloat(outerWidth, 1)
 		}
-		margin := resolveEdges(child.Style.Margin, box.Content.Width)
-		padding := resolveEdges(child.Style.Padding, box.Content.Width)
-		border := resolveBorderEdges(child.Style.BorderWidth, child.Style.BorderStyle, box.Content.Width)
-		outerWidth := contentWidth + margin.Left + margin.Right + padding.Left + padding.Right + border.Left + border.Right
-		containing := Rect{X: box.Content.X, Y: box.Content.Y, Width: maxFloat(outerWidth, 1), Height: layoutContaining.Height}
 		layoutBlock(child, containing, absoluteContaining, face, styles, ctx)
 		flow.inlineBoxes = append(flow.inlineBoxes, child)
 		flow.inlineBoxIndex[child.Node] = child

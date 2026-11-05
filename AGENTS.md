@@ -7,6 +7,7 @@
 - HTML rendering changes must follow W3C standards and align with Chromium.
 - Combine traversals when possible instead of repeating O(n) passes.
 - Fix unreasonable designs directly rather than preserving them unnecessarily.
+- All struct type fields must be aligned.(use the `fieldalignment` tool to check).
 
 ## Mobile testing
 

@@ -244,7 +244,7 @@ func TestComposite2DConservativeOpaqueBounds(t *testing.T) {
 		t.Fatal("new rounded clip retained opaque coverage")
 	}
 	item.kind = renderItemTextLayer2D
-	item.text = &Text2D{rasterScale: 1.1}
+	item.text = &textPaint2D{rasterScale: 1.1}
 	if preparePaintItem2D(&item).cacheable {
 		t.Fatal("unsafe glyph raster phase accepted")
 	}

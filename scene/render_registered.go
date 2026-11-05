@@ -5,12 +5,13 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/internal/smallsort"
 )
 
 type renderCollector2D func(*graphics.Canvas2D, *ecs.World, *renderSnapshots2D, *renderHierarchy2DCache, []renderItem2D, bool) []renderItem2D
 type renderItemDrawer2D func(*graphics.Canvas2D, *renderItem2D, renderViewport2D)
-type renderBatchDrawer2D func(*graphics.Canvas2D, *ecs.World, []renderItem2D, renderViewport2D)
+type renderBatchDrawer2D func(*graphics.Canvas2D, *ecs.World, renderItemList2D, renderViewport2D)
 type registeredCameraRenderer func(*graphics.Canvas2D, *ecs.World, *RenderWorld, ExtractedCamera, ecs.Entity) error
 
 type renderCollector2DKind uint8
@@ -136,23 +137,28 @@ func collectRenderItems2D(c *graphics.Canvas2D, world *ecs.World, cull bool) []r
 }
 
 func collectRenderSnapshots2D(c *graphics.Canvas2D, world *ecs.World, cull, borrow bool) []renderItem2D {
+	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
+	scratch.Values = collectRenderSnapshotsInto2D(c, world, scratch.Values, cull, borrow)
+	scratch.ReleaseUnused()
+	world.FrameValue[renderItemsRetention2DScratch, reuse.Retention]().Record(len(scratch.Values))
+	return scratch.Values
+}
+
+func collectRenderSnapshotsInto2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, cull, borrow bool) []renderItem2D {
 	state := RenderWorldFor(world)
 	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
 	snapshots.reset()
 	snapshots.borrow = borrow
 	hierarchy := frameRenderHierarchy2DCachePtr(world)
-	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
-	items := scratch.Values
 	for _, collect := range state.collectors2D {
 		if collect != nil {
 			items = collect(c, world, snapshots, hierarchy, items, cull)
 		}
 	}
 	smallsort.SortFunc(items, compareRenderPhaseItem2D[renderItem2D])
-	scratch.Values = items
-	scratch.ReleaseUnused()
 	snapshots.releaseUnused()
-	return scratch.Values
+	world.FrameValue[renderSnapshots2DScratch, reuse.Retention]().Record(snapshots.length())
+	return items
 }
 
 // RenderCamerasSystem submits every registered camera pipeline in camera order.
@@ -269,7 +275,7 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 	state.Composite2D.Direct = true
 	items := visibleRenderItems2D(world, state.Items2D, camera, defaultUICamera)
 	if camera.Pipeline == CameraPipeline2D || len(items) > 0 {
-		drawRenderItems2D(c, world, items, DrawViews2D{}, true)
+		drawRenderItemList2D(c, world, renderItemList2D{items: state.Items2D, indices: items, count: len(items)}, DrawViews2D{}, true)
 	}
 	state.activeCamera2DSet = false
 	return nil
@@ -318,13 +324,17 @@ func entityInSubtree2D(world *ecs.World, entity, root ecs.Entity) bool {
 }
 
 func drawRenderItems2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, views DrawViews2D, cull bool) {
+	drawRenderItemList2D(c, world, renderItemList2D{items: items, count: len(items)}, views, cull)
+}
+
+func drawRenderItemList2D(c *graphics.Canvas2D, world *ecs.World, items renderItemList2D, views DrawViews2D, cull bool) {
 	state := RenderWorldFor(world)
-	drawRenderPhase2D(c, world, items, views, cull, func(item *renderItem2D) bool {
+	drawRenderPhaseList2D[renderItem2D, *renderItem2D](c, world, items, views, cull, func(item *renderItem2D) bool {
 		return state.batchDrawers2D[item.kind] != nil
 	}, func(batch renderBatch2D, viewport renderViewport2D, begin bool) {
-		first := &items[batch.start]
+		first := items.at(batch.start)
 		if draw := state.batchDrawers2D[first.kind]; draw != nil {
-			draw(c, world, items[batch.start:batch.end], viewport)
+			draw(c, world, items.slice(batch.start, batch.end), viewport)
 			return
 		}
 		if state.drawers2D[first.kind] == nil {

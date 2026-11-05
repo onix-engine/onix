@@ -15,6 +15,7 @@ import (
 // index lets local updates retire missing fragments without sweeping all groups.
 type htmlBoxRendering struct {
 	Box                  *layout.Box
+	Overflow             *htmlOverflowClipBinding
 	Parent               *layout.Box
 	ContextParent        *htmlBoxRendering
 	Groups               []htmlRenderIdentity
@@ -430,7 +431,7 @@ func updateHTMLOverflowExtent(state *htmlRenderState, rendered *htmlBoxRendering
 
 func refreshHTMLBoxOverflow(world *ecs.World, owner ecs.Entity, state *htmlRenderState, rendered *htmlBoxRendering, stackIndex int, visible bool) {
 	box := rendered.Box
-	var parent htmlOverflowClipBinding
+	var parent *htmlOverflowClipBinding
 	for ancestor := box.Parent; ancestor != nil; ancestor = ancestor.Parent {
 		if binding, exists := state.OverflowBindings[ancestor.Node]; exists {
 			parent = binding
@@ -449,10 +450,14 @@ func refreshHTMLBoxOverflow(world *ecs.World, owner ecs.Entity, state *htmlRende
 		delete(state.OverflowBindings, box.Node)
 		delete(state.OverflowEntities, rendered.Clip)
 		rendered.Clip = 0
+		rendered.Overflow = nil
 		// The old overflow group is retired by finishHTMLBoxReconcile.
 	}
 	if isHTMLControlNode(box.Node) {
 		setHTMLOverflowRoute(state, box.Node, current)
+	}
+	for _, background := range box.InlineBackgrounds {
+		setHTMLOverflowRoute(state, background.Node, current)
 	}
 	for _, fragment := range box.TextFragments {
 		setHTMLOverflowRoute(state, fragment.Node, current)
@@ -494,8 +499,8 @@ func htmlBoxNeedsOverflowClip(state *htmlRenderState, box *layout.Box) bool {
 	return rect.Width > 0 && rect.Height > 0
 }
 
-func setHTMLOverflowRoute(state *htmlRenderState, node *dom.Node, binding htmlOverflowClipBinding) {
-	if binding.entity == 0 {
+func setHTMLOverflowRoute(state *htmlRenderState, node *dom.Node, binding *htmlOverflowClipBinding) {
+	if binding == nil {
 		delete(state.OverflowRoutes, node)
 	} else {
 		state.OverflowRoutes[node] = binding

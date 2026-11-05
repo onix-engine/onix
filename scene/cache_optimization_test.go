@@ -234,7 +234,7 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 	}
 	items := collectRenderSnapshots2D(canvas, world, false, true)
 	source := world.GetRef[Text2D](entities[0])
-	var worldText, uiText *Text2D
+	var worldText, uiText *textPaint2D
 	for _, item := range items {
 		if item.text == nil {
 			continue
@@ -245,11 +245,11 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 			worldText = item.text
 		}
 	}
-	if worldText == nil || uiText == nil || worldText == uiText || worldText == source || uiText == source {
+	if worldText == nil || uiText == nil || worldText == uiText {
 		t.Fatal("world/UI text collection must freeze each occurrence's layout state")
 	}
 	intermediate := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
-	if cap(intermediate.textSpans) != 0 || &worldText.Spans[0] != &source.Spans[0] {
+	if len(intermediate.texts) != 2 || worldText.cache != source.cache {
 		t.Fatal("intermediate text collection copied nested inputs")
 	}
 	clear(items)
@@ -257,8 +257,9 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 		t.Fatal(err)
 	}
 	source.Spans[0].Color = graphics.Black
+	source.Alpha = .25
 	for _, item := range RenderWorldFor(world).Items2D {
-		if item.text != nil && item.text.Spans[0].Color != graphics.White {
+		if item.text != nil && (item.color != graphics.White || item.text.Alpha != 1) {
 			t.Fatal("retained text aliases mutable component spans")
 		}
 	}

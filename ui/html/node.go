@@ -383,7 +383,11 @@ func (n Node) ScrollContainer() (ecs.Entity, bool) {
 	if state == nil {
 		return 0, false
 	}
-	entity := state.OverflowBindings[n.node].entity
+	binding := state.OverflowBindings[n.node]
+	if binding == nil {
+		return 0, false
+	}
+	entity := binding.entity
 	_, ok := n.world.Get[scene.UIScroll](entity)
 	return entity, ok
 }

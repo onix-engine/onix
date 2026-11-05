@@ -181,7 +181,7 @@ func (snapshots *renderSnapshots2D) appendOutputRenderItems2D[T renderGlobalTran
 		text := snapshots.addText(o.text)
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		start := len(items)
-		items = text.appendRenderItems(items, entity, base, clip, ui, info.sortIndex)
+		items = o.text.appendRenderItems(items, entity, base, clip, ui, info.sortIndex, text)
 		for i := start; i < len(items); i++ {
 			items[i].entity, items[i].layers, items[i].ui, items[i].target, items[i].scene, items[i].group = entity, info.layers, ui, info.target, info.scene, info.group
 			items[i].width, items[i].height = o.width, o.height

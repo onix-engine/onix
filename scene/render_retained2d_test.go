@@ -7,6 +7,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -156,11 +157,17 @@ func TestRetainedRender2DDenseDynamicReturnsToStatic(t *testing.T) {
 	}
 	incrementalFrame(t, world, canvas)
 	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
-	for range 3 {
+	for frame := range reuse.RetentionFrames * 2 {
 		incrementalFrame(t, world, canvas)
 		if !cache.direct || len(RenderWorldFor(world).Items2D) != 200 {
 			t.Fatal("dense dynamic content did not keep sequential extraction")
 		}
+		if frame >= reuse.RetentionFrames && (len(cache.nodes) != 0 || len(cache.items) != 0 || len(cache.paints) != 0 || len(cache.nodeBlocks) != 0) {
+			t.Fatal("direct frames rebuilt retired storage")
+		}
+	}
+	if allocations := testing.AllocsPerRun(60, func() { incrementalFrame(t, world, canvas) }); allocations != 0 {
+		t.Fatalf("sustained dynamic frames allocated %v times", allocations)
 	}
 	for _, entity := range entities {
 		world.GetRef[SpriteLayers2D](entity).Layers[0].Visible = false
@@ -170,6 +177,106 @@ func TestRetainedRender2DDenseDynamicReturnsToStatic(t *testing.T) {
 	}
 	if cache.direct || cache.stats.Extracted != 0 || cache.stats.Reused != 100 {
 		t.Fatalf("finished dynamic content did not restore static caching: %+v", cache.stats)
+	}
+	if allocations := testing.AllocsPerRun(60, func() { incrementalFrame(t, world, canvas) }); allocations != 0 {
+		t.Fatalf("restored static frames allocated %v times", allocations)
+	}
+}
+
+func TestRetainedRender2DReclaimsPeakStorage(t *testing.T) {
+	world, canvas, _, entities := incrementalRenderFixture(t, 10000, false)
+	incrementalFrame(t, world, canvas)
+	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
+	if cap(scratch.Values) != 0 {
+		t.Fatal("full retained collection allocated a second render item array")
+	}
+	// Warm buffers also used by direct drawing and camera filtering before
+	// returning to a small retained scene.
+	collectRenderItems2D(canvas, world, false)
+	state := RenderWorldFor(world)
+	visibleRenderItems2D(world, state.Items2D, state.Cameras[0], state.Cameras[0].Entity)
+	visible := world.FrameScratch[visibleRenderItems2DScratch, uint32]()
+	bufferBytes := func() uintptr {
+		return uintptr(cap(cache.items)+cap(scratch.Values))*unsafe.Sizeof(renderItem2D{}) +
+			uintptr(cap(cache.paints))*unsafe.Sizeof(paintItem2D{}) +
+			uintptr(len(cache.nodeBlocks)*64)*unsafe.Sizeof(retainedEntity2D{}) +
+			uintptr(cap(visible.Values))*unsafe.Sizeof(uint32(0))
+	}
+	peak := bufferBytes()
+	owner := cache.nodes[entities[0]]
+	for _, entity := range entities[100:] {
+		world.Despawn(entity)
+	}
+	for range reuse.RetentionFrames*2 + 4 {
+		incrementalFrame(t, world, canvas)
+	}
+	if len(cache.items) != 100 || cap(cache.items) > 200 || cap(cache.paints) > 200 || len(cache.nodeBlocks) > 5 || cap(scratch.Values) != 0 || cap(visible.Values) != 0 {
+		t.Fatalf("peak storage retained: items=%d/%d paints=%d blocks=%d scratch=%d camera=%d", len(cache.items), cap(cache.items), cap(cache.paints), len(cache.nodeBlocks), cap(scratch.Values), cap(visible.Values))
+	}
+	if snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D](); snapshots.capacity() != 0 {
+		t.Fatalf("idle snapshot storage retained %d slots", snapshots.capacity())
+	}
+	if cache.nodes[entities[0]] != owner || !owner.allocated {
+		t.Fatal("reclamation moved a live snapshot owner")
+	}
+	for i := range cache.items {
+		item := &cache.items[i]
+		if item.paint != &cache.paints[i] || *item.paint != preparePaintItem2D(item) {
+			t.Fatalf("item %d retained stale paint data after reclamation", i)
+		}
+	}
+	for _, view := range state.compositors2D {
+		if cap(view.coverage) > 200 {
+			t.Fatal("compositor retained peak coverage")
+		}
+		capacity := 0
+		for _, tile := range view.tiles {
+			capacity += cap(tile.candidates)
+		}
+		if capacity > len(view.tiles)*32 {
+			t.Fatalf("compositor retained %d candidate slots", capacity)
+		}
+	}
+	world.GetMut[Sprite2D](entities[0]).Shape.Fill = graphics.Black
+	incrementalFrame(t, world, canvas)
+	if state.Preparation2D.Extracted != 1 || state.Composite2D.DirtyTiles == 0 || state.Items2D[0].sprite.Shape.Fill != graphics.Black {
+		t.Fatal("reclaimed scene failed to repaint a sparse edit")
+	}
+	if allocations := testing.AllocsPerRun(60, func() { incrementalFrame(t, world, canvas) }); allocations != 0 {
+		t.Fatalf("reclaimed stable scene allocated %v times", allocations)
+	}
+	t.Logf("primary CPU buffers after 10000 -> 100 entities: %d -> %d bytes (excludes maps, nested snapshots and GPU storage)", peak, bufferBytes())
+}
+
+func TestRetainedRender2DDenseWritesReleaseAndRestore(t *testing.T) {
+	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
+	incrementalFrame(t, world, canvas)
+	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	frame := func() {
+		for _, entity := range entities {
+			sprite := world.GetMut[Sprite2D](entity)
+			sprite.Shape.Fill.R = 1 - sprite.Shape.Fill.R
+		}
+		incrementalFrame(t, world, canvas)
+	}
+	for range reuse.RetentionFrames * 2 {
+		frame()
+	}
+	if !cache.direct || cache.nodes != nil || cache.items != nil || cache.paints != nil || cache.nodeBlocks != nil {
+		t.Fatal("dense writes retained their obsolete scene")
+	}
+	if allocations := testing.AllocsPerRun(60, frame); allocations != 0 {
+		t.Fatalf("sustained dense writes allocated %v times", allocations)
+	}
+	for range reuse.RetentionFrames * 2 {
+		incrementalFrame(t, world, canvas)
+	}
+	if cache.direct || cache.stats.Extracted != 0 || cache.stats.Reused != 100 {
+		t.Fatal("finished dense writes failed to restore retention")
+	}
+	if snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D](); snapshots.capacity() != 0 {
+		t.Fatal("restored retained scene pinned direct collector snapshots")
 	}
 }
 

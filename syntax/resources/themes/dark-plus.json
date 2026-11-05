@@ -108,7 +108,8 @@
       "scope": [
         "constant.numeric",
         "constant.language",
-        "constant.character"
+        "constant.character",
+        "constant.other"
       ],
       "settings": {
         "foreground": "#b5cea8"
@@ -127,6 +128,7 @@
       "scope": [
         "entity.name.type",
         "support.type",
+        "support.class",
         "entity.name.namespace"
       ],
       "settings": {

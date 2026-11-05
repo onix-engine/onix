@@ -8,18 +8,15 @@ import (
 type renderSnapshots2DScratch struct{}
 
 type renderSnapshots2D struct {
-	textSpans           []TextSpan2D
 	sprites             []Sprite2D
 	emitters            []ParticleEmitter2D
 	tilemaps            []tilemapSnapshot2D
-	texts               []Text2D
+	texts               []textPaint2D
 	spines              []Spine2D
 	nineSlices          []NineSlice2D
 	particleColors      []graphics.ColorRGBA
 	particles           []particleState2D
 	particleAppearances []ParticleAppearance2D
-	lastObjects         []TextInlineObject2D
-	inlineObjects       []TextInlineObject2D
 	previousSprites     int
 	previousEmitters    int
 	previousTilemaps    int
@@ -28,6 +25,16 @@ type renderSnapshots2D struct {
 	previousAppearances int
 	previousParticles   int
 	borrow              bool
+}
+
+func (s *renderSnapshots2D) capacity() int {
+	return cap(s.sprites) + cap(s.emitters) + cap(s.tilemaps) + cap(s.texts) + cap(s.spines) +
+		cap(s.nineSlices) + cap(s.particleColors) + cap(s.particles) + cap(s.particleAppearances)
+}
+
+func (s *renderSnapshots2D) length() int {
+	return len(s.sprites) + len(s.emitters) + len(s.tilemaps) + len(s.texts) + len(s.spines) +
+		len(s.nineSlices) + len(s.particleColors) + len(s.particles) + len(s.particleAppearances)
 }
 
 // Borrow components only while a retained collector builds its temporary item
@@ -53,9 +60,6 @@ func (s *renderSnapshots2D) reset() {
 	s.particleColors = resetLayoutBuffer(s.particleColors, len(s.particleColors))
 	s.particleAppearances = resetLayoutBuffer(s.particleAppearances, len(s.particleAppearances))
 	s.particles = resetLayoutBuffer(s.particles, len(s.particles))
-	s.textSpans = resetLayoutBuffer(s.textSpans, len(s.textSpans))
-	s.inlineObjects = resetLayoutBuffer(s.inlineObjects, len(s.inlineObjects))
-	s.lastObjects = resetLayoutBuffer(s.lastObjects, len(s.lastObjects))
 }
 
 func (s *renderSnapshots2D) releaseUnused() {
@@ -116,18 +120,8 @@ type tilemapSnapshot2D struct {
 	value  Tilemap2D
 }
 
-func (s *renderSnapshots2D) addText(value Text2D) *Text2D {
-	// Layout can change between world/UI collectors on the same entity. Keep
-	// each occurrence's struct, but let the retained owner copy nested inputs.
-	if !s.borrow {
-		value.Spans = appendSnapshotValues(&s.textSpans, value.Spans)
-		value.InlineObjects = appendSnapshotValues(&s.inlineObjects, value.InlineObjects)
-		value.lastInlineObjects = appendSnapshotValues(&s.lastObjects, value.lastInlineObjects)
-	}
-	// glyphs, lines and inlineObjectLayouts are rebuilt by the text layout before
-	// the render stage and only read while drawing, so the snapshot borrows those
-	// arrays instead of duplicating a document-sized layout every frame.
-	s.texts = append(s.texts, value)
+func (s *renderSnapshots2D) addText(value Text2D) *textPaint2D {
+	s.texts = append(s.texts, value.paintSnapshot())
 	return &s.texts[len(s.texts)-1]
 }
 

@@ -19,6 +19,10 @@ func TestMetalMeshVariants(t *testing.T) {
 	testMetalNative(t, "metal_mesh_variants_test")
 }
 
+func TestMetalRoundedClip(t *testing.T) {
+	testMetalNative(t, "metal_rounded_clip_test")
+}
+
 func testMetalNative(t *testing.T, name string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

@@ -762,7 +762,7 @@ func (snapshots *renderSnapshots2D) appendTextRenderItems2D[T renderGlobalTransf
 		snapshot := snapshots.addText(*text)
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		start := len(items)
-		items = snapshot.appendRenderItems(items, entity, base, clip, ui, info.sortIndex)
+		items = text.appendRenderItems(items, entity, base, clip, ui, info.sortIndex, snapshot)
 		for index := start; index < len(items); index++ {
 			items[index].entity = entity
 			items[index].layers, items[index].scene, items[index].group = info.layers, info.scene, info.group
@@ -787,10 +787,12 @@ func DrawScreenText2D(c *graphics.Canvas2D, text *Text2D, transform mgl32.Mat4, 
 	width, height := text.layoutSize()
 	base := quadBaseTransform(transform, anchor, width, height, true)
 	scratch := c.ScratchValue[standaloneTextScratchTag, standaloneTextScratch]()
-	scratch.layers = text.appendRenderItems(scratch.layers[:0], 0, base, clipRect2D{}, true, 0)
+	scratch.text = text.paintSnapshot()
+	scratch.layers = text.appendRenderItems(scratch.layers[:0], 0, base, clipRect2D{}, true, 0, &scratch.text)
 	drawStandaloneTextLayers(c, scratch.layers)
 	clear(scratch.layers)
 	scratch.layers = scratch.layers[:0]
+	scratch.text = textPaint2D{}
 	return true
 }
 
@@ -1293,7 +1295,7 @@ type renderItem2D struct {
 	device     *render.Device
 	texture    *graphics.Texture
 	spine      *Spine2D
-	text       *Text2D
+	text       *textPaint2D
 	tilemap    *Tilemap2D
 	emitter    *ParticleEmitter2D
 	layers     RenderLayers
@@ -1583,8 +1585,8 @@ func logicalTextGlyph(glyph onixtext.Glyph, rasterScale float64) onixtext.Glyph 
 	if rasterScale == 1 {
 		return glyph
 	}
-	width := int(math.Round(float64(glyph.Width) / rasterScale))
-	height := int(math.Round(float64(glyph.Height) / rasterScale))
+	width := int32(math.Round(float64(glyph.Width) / rasterScale))
+	height := int32(math.Round(float64(glyph.Height) / rasterScale))
 	if glyph.Width > 0 {
 		width = max(width, 1)
 	}
@@ -2446,7 +2448,7 @@ func fittingTextPrefixWithInlineObjects(face *font.ScaledFace, value string, val
 	return best
 }
 
-func (t *Text2D) drawGlyph(c *graphics.Canvas2D, glyph onixtext.Glyph, base mgl32.Mat4, x, y float32, texture *graphics.Texture, clr graphics.ColorRGBA, clip clipRect2D) {
+func (t *textPaint2D) drawGlyph(c *graphics.Canvas2D, glyph onixtext.Glyph, base mgl32.Mat4, x, y float32, texture *graphics.Texture, clr graphics.ColorRGBA, clip clipRect2D) {
 	model := base.Mul4(mgl32.Translate3D(x, y, 0))
 	textureWidth, textureHeight := float32(texture.Width), float32(texture.Height)
 	rasterScale := float32(normalizeTextRasterScale(t.rasterScale))

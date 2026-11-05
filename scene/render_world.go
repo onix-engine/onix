@@ -6,6 +6,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/internal/smallsort"
 	"github.com/diiyw/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
@@ -322,14 +323,14 @@ func (viewport CameraViewport) PlacementMatrix(width, height float32) mgl32.Mat4
 	}
 }
 
-func visibleRenderItems2D(world *ecs.World, items []renderItem2D, camera ExtractedCamera, defaultUICamera ecs.Entity) []renderItem2D {
-	visible := world.FrameScratch[visibleRenderItems2DScratch, renderItem2D]()
-	visible.Values = visible.Values[:0]
-	for _, item := range items {
-		if renderItemForCamera2D(&item, camera, defaultUICamera) {
-			visible.Values = append(visible.Values, item)
+func visibleRenderItems2D(world *ecs.World, items []renderItem2D, camera ExtractedCamera, defaultUICamera ecs.Entity) []uint32 {
+	visible := world.FrameScratch[visibleRenderItems2DScratch, uint32]()
+	for i := range items {
+		if renderItemForCamera2D(&items[i], camera, defaultUICamera) {
+			visible.Values = append(visible.Values, uint32(i))
 		}
 	}
 	visible.ReleaseUnused()
+	world.FrameValue[visibleRenderItems2DScratch, reuse.Retention]().Record(len(visible.Values))
 	return visible.Values
 }

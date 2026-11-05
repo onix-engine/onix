@@ -29,7 +29,8 @@ func TestText2DInkOffsetAffectsPaintOnly(t *testing.T) {
 	if !ok || nextY != caretY || nextHeight != caretHeight {
 		t.Fatal("ink offset changed caret geometry")
 	}
-	items := text.appendRenderItems(nil, 1, mgl32.Ident4(), clipRect2D{}, true, 0)
+	paint := text.paintSnapshot()
+	items := text.appendRenderItems(nil, 1, mgl32.Ident4(), clipRect2D{}, true, 0, &paint)
 	if len(items) == 0 || items[0].transform[13] != -2 {
 		t.Fatalf("paint offset=%v, want -2", items)
 	}

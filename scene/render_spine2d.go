@@ -9,21 +9,21 @@ import (
 
 type spineRenderBatch2DScratch struct{}
 
-func drawSpineRenderBatch2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, viewport renderViewport2D) {
+func drawSpineRenderBatch2D(c *graphics.Canvas2D, world *ecs.World, items renderItemList2D, viewport renderViewport2D) {
 	batch := world.FrameValue[spineRenderBatch2DScratch, render.MeshBatch3D]()
 	*batch = render.MeshBatch3D{
 		Vertices: batch.Vertices[:0], Indices: batch.Indices[:0],
 		Instances: batch.Instances[:0], Draws: batch.Draws[:0],
 	}
 	projection, view := c.ProjectionMatrix(), c.ViewMatrix()
-	for index := range items {
-		item := &items[index]
+	for index := 0; index < items.len(); index++ {
+		item := items.at(index)
 		model := SpineModelMatrix2D(item.transform, item.ui)
 		minX, minY, maxX, maxY, valid := item.spine.Player.MeshBatchInto(&item.spine.batch, projection, view.Mul4(model))
 		if !spineRenderItemVisible2D(viewport, model, item.clip, minX, minY, maxX, maxY, valid) {
 			continue
 		}
-		if len(items) == 1 {
+		if items.len() == 1 {
 			_ = c.DrawMeshes(item.spine.batch)
 			return
 		}

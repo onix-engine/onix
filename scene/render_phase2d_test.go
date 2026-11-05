@@ -101,6 +101,48 @@ func TestStreamRenderPhase2DPreservesMixedBatchBoundaries(t *testing.T) {
 	}
 }
 
+func TestIndexedRenderPhase2DPreservesFilteredBatches(t *testing.T) {
+	items := []renderItem2D{
+		{order: 1, kind: renderItemSprite2D},
+		{order: 2, kind: renderItemShape2D},
+		{order: 3, kind: renderItemSpine2D},
+		{order: 4, kind: renderItemShape2D},
+		{order: 5, kind: renderItemSpine2D},
+		{order: 6, kind: renderItemSprite2D},
+		{order: 7, kind: renderItemSprite2D, ui: true},
+	}
+	for i := range items {
+		items[i].material.textureID = uint64(items[i].kind)
+	}
+	indices := []uint32{0, 2, 4, 5, 6}
+	filtered := renderItemList2D{items: items, indices: indices, count: len(indices)}
+	world, canvas := ecs.NewWorld(), graphics.Canvas2DContext(320, 180)
+	var orders []uint64
+	var sizes []int
+	batched := func(item *renderItem2D) bool { return item.kind == renderItemSpine2D }
+	drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, filtered, DrawViews2D{}, false, batched, func(batch renderBatch2D, _ renderViewport2D, _ bool) {
+		subset := filtered.slice(batch.start, batch.end)
+		sizes = append(sizes, subset.len())
+		for i := 0; i < subset.len(); i++ {
+			if subset.at(i) != &items[indices[batch.start+i]] {
+				t.Fatal("filtered batch copied a render item")
+			}
+			orders = append(orders, subset.at(i).order)
+		}
+	})
+	if !slices.Equal(orders, []uint64{1, 3, 5, 6, 7}) || !slices.Equal(sizes, []int{1, 2, 1, 1}) {
+		t.Fatalf("filtered orders=%v sizes=%v", orders, sizes)
+	}
+	drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, renderItemList2D{items: items}, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {
+		t.Fatal("empty camera filter drew an unfiltered item")
+	})
+	if allocations := testing.AllocsPerRun(100, func() {
+		drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, filtered, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {})
+	}); allocations != 0 {
+		t.Fatalf("filtered traversal allocated %v times", allocations)
+	}
+}
+
 func BenchmarkRenderPhase2DTraversal(b *testing.B) {
 	for _, alternating := range []bool{false, true} {
 		name := "shared"

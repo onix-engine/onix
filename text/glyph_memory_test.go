@@ -5,6 +5,7 @@ import (
 	"image"
 	"runtime"
 	"testing"
+	"unsafe"
 
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/graphics"
@@ -54,13 +55,37 @@ func TestGlyphRecordBudgetIncludesPhasesAndOutlines(t *testing.T) {
 	cache := NewGlyphCache(nil, 0, 0)
 	t.Cleanup(func() { _ = cache.Dispose() })
 	for character := rune(0); character < glyphCacheEntryLimit*2; character++ {
-		cache.Glyph(character)
-		cache.GlyphGrayAt(character, 1, 0, font.LCDColor(character&511))
-		cache.OutlineGlyph(character, 1)
+		if glyph := cache.Glyph(character); glyph.Rune != character {
+			t.Fatal("base glyph resolved another slot's record")
+		}
+		if glyph := cache.GlyphGrayAt(character, 1, 0, font.LCDColor(character&511)); glyph.Rune != character {
+			t.Fatal("phased glyph resolved another slot's record")
+		}
+		if glyph := cache.OutlineGlyph(character, 1); glyph.Rune != character {
+			t.Fatal("outline glyph resolved another slot's record")
+		}
 		entries := len(cache.glyphs) + len(cache.phasedGlyphs) + len(cache.outlinedGlyphs)
 		if entries > glyphCacheEntryLimit || entries != cache.entries {
 			t.Fatalf("glyph records = %d (tracked %d), limit %d", entries, cache.entries, glyphCacheEntryLimit)
 		}
+	}
+	occupied := [glyphCacheEntryLimit]bool{}
+	check := func(slot uint16, kind uint8, character rune) {
+		t.Helper()
+		record := cache.clock[slot]
+		if occupied[slot] || record.key.kind != kind || record.key.phase.character != character || record.value.glyph.Rune != character {
+			t.Fatal("clock record disagrees with its map index")
+		}
+		occupied[slot] = true
+	}
+	for character, slot := range cache.glyphs {
+		check(slot, 0, character)
+	}
+	for key, slot := range cache.phasedGlyphs {
+		check(slot, 1, key.character)
+	}
+	for key, slot := range cache.outlinedGlyphs {
+		check(slot, 2, key.rune)
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
 		cache.Glyph(glyphCacheEntryLimit*2 - 1)
@@ -68,6 +93,12 @@ func TestGlyphRecordBudgetIncludesPhasesAndOutlines(t *testing.T) {
 		cache.OutlineGlyph(glyphCacheEntryLimit*2-1, 1)
 	}); allocs != 0 {
 		t.Fatalf("warm bounded glyph lookup allocated %g times", allocs)
+	}
+}
+
+func TestGlyphStorageStaysCompact(t *testing.T) {
+	if glyph, record := unsafe.Sizeof(Glyph{}), unsafe.Sizeof(glyphRecord{}); glyph > 48 || record > 80 {
+		t.Fatalf("glyph/clock record sizes = %d/%d, want at most 48/80 bytes", glyph, record)
 	}
 }
 
@@ -147,7 +178,7 @@ func TestGlyphAtlasReclaimsColdPagesAndRegeneratesGlyphs(t *testing.T) {
 	cache.pool.byteLimit = defaultGlyphAtlasSize * defaultGlyphAtlasSize
 	original, texture := func() (Glyph, *graphics.Texture) {
 		glyph := cache.Glyph('A')
-		return cache.glyphs['A'].glyph, glyph.page.texture
+		return cache.clock[cache.glyphs['A']].value.glyph, glyph.page.texture
 	}()
 	bitmap, err := value.RasterizeGlyph(value.GlyphIndex('A'), 16)
 	if err != nil {

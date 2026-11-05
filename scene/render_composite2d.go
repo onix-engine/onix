@@ -176,14 +176,16 @@ func finitePaintBounds2D(values ...float32) bool {
 }
 
 type compositeTile2D struct {
-	candidates     []int // all overlapping items, including occluded content
-	items          []int // front to back, replayed in reverse
+	candidates     []uint32 // front to back, including occluded content
 	hash, previous uint64
 	slot           int
+	visible        uint32 // visible candidates form a prefix
 	covered        bool
 	dirty          bool
 	changed        bool
 }
+
+func (tile *compositeTile2D) visibleItems() []uint32 { return tile.candidates[:tile.visible] }
 
 type compositeCoverage2D struct {
 	visible uint32
@@ -213,28 +215,30 @@ type CompositeStatistics2D struct {
 }
 
 type compositor2D struct {
-	texture     *graphics.Texture
-	retained    *retainedRender2D
-	target      *render.RenderTarget
-	device      *render.Device
-	tiles       []compositeTile2D
-	damageTiles []int
-	coverage    []compositeCoverage2D
-	usedSlots   []bool
-	reuse       []compositeReuse2D
-	replay      renderItem2D
-	stats       CompositeStatistics2D
-	columns     int
-	seen        uint64
-	cameraKey   uint64
-	occluded    int
-	generation  uint64
-	height      int
-	width       int
-	clear       graphics.ColorRGBA
-	prepared    bool
-	valid       bool
-	spatial     bool
+	texture           *graphics.Texture
+	retained          *retainedRender2D
+	target            *render.RenderTarget
+	device            *render.Device
+	tiles             []compositeTile2D
+	damageTiles       []int
+	coverage          []compositeCoverage2D
+	usedSlots         []bool
+	reuse             []compositeReuse2D
+	replay            renderItem2D
+	indicesRetention  reuse.Retention
+	coverageRetention reuse.Retention
+	stats             CompositeStatistics2D
+	columns           int
+	seen              uint64
+	cameraKey         uint64
+	occluded          int
+	generation        uint64
+	height            int
+	width             int
+	clear             graphics.ColorRGBA
+	prepared          bool
+	valid             bool
+	spatial           bool
 }
 
 // compositeUI2D consumes a full UI output. Other camera pipelines, transparent
@@ -306,7 +310,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				tile := &view.tiles[i]
 				tile.candidates = tile.candidates[:0]
 				tile.changed = false
-				tile.items = tile.items[:0]
+				tile.visible = 0
 				r := view.tileRect(i)
 				tile.hash, tile.covered = paintMix2D(uint64(r.Dx()), uint64(r.Dy())), false
 			}
@@ -338,8 +342,8 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 					for x := x0; x <= x1; x++ {
 						index := y*view.columns + x
 						tile := &view.tiles[index]
-						if spatial {
-							tile.candidates = append(tile.candidates, i)
+						if spatial || !tile.covered {
+							tile.candidates = append(tile.candidates, uint32(i))
 						}
 						if tile.covered {
 							continue
@@ -348,7 +352,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 						if spatial {
 							view.coverage[i].visible++
 						}
-						tile.items = append(tile.items, i)
+						tile.visible++
 						tile.hash = paintMix2D(tile.hash, paint.tileHash(item, view.tileRect(index)))
 						if view.tileRect(index).In(paint.opaque) {
 							tile.covered = true
@@ -366,16 +370,34 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 		view.cameraKey = cameraKey
 	}
 	view.stats.Tiles, view.stats.CacheBytes, view.stats.Occluded = len(view.tiles), bytes, view.occluded
+	if !view.spatial {
+		view.coverage = view.coverage[:0]
+	}
+	view.coverage = view.coverageRetention.Trim(view.coverage, 64)
 	clear(view.usedSlots)
 	changed := 0
+	indexCapacity, indexCount := 0, 0
 	for i := range view.tiles {
 		tile := &view.tiles[i]
+		indexCapacity += cap(tile.candidates)
+		indexCount += len(tile.candidates)
 		tile.dirty = !view.valid || clearChanged || tile.hash != tile.previous
 		if tile.hash != tile.previous || clearChanged {
 			changed++
 		}
 		if !tile.dirty {
 			view.usedSlots[tile.slot] = true
+		}
+	}
+	if view.indicesRetention.TrimCapacity(indexCapacity, indexCount, len(view.tiles)*16) != 0 {
+		for i := range view.tiles {
+			tile := &view.tiles[i]
+			target := max(16, len(tile.candidates)*2)
+			if cap(tile.candidates) > target {
+				indices := make([]uint32, len(tile.candidates), target)
+				copy(indices, tile.candidates)
+				tile.candidates = indices
+			}
 		}
 	}
 	dirty := 0
@@ -455,8 +477,8 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 					model := mgl32.Translate3D(float32(r.Min.X), float32(r.Min.Y), 0).Mul4(mgl32.Scale3D(float32(r.Dx()), float32(r.Dy()), 1))
 					c.DrawShapeMatrices(model, mgl32.Ident3(), float32(r.Dx()), float32(r.Dy()), render.ShapeRoundedRect, view.clear, graphics.ColorRGBA{}, 0, 0, 1)
 				}
-				for j := len(tile.items) - 1; j >= 0; j-- {
-					view.replay = state.Items2D[tile.items[j]]
+				for j := int(tile.visible) - 1; j >= 0; j-- {
+					view.replay = state.Items2D[tile.candidates[j]]
 					item := &view.replay
 					item.transform[12] += dx
 					item.transform[13] += dy

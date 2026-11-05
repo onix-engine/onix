@@ -81,14 +81,14 @@ type htmlPaintState struct {
 type htmlInputState struct {
 	StateRoots           [2]*dom.Node
 	NodeScrollBindings   map[*dom.Node]struct{}
-	OverflowBindings     map[*dom.Node]htmlOverflowClipBinding
+	OverflowBindings     map[*dom.Node]*htmlOverflowClipBinding
 	EventTargets         map[*dom.Node]ecs.Entity
 	ComponentEvents      map[*dom.Node][]htmlComponentEventBinding
 	ControlSnapshots     map[*dom.Node]htmlControlSnapshot
 	NodeEvents           map[*dom.Node]htmlNodeEventBinding
 	FocusByNode          map[*dom.Node]int
-	OverflowRoutes       map[*dom.Node]htmlOverflowClipBinding
-	OverflowEntities     map[ecs.Entity]htmlOverflowClipBinding
+	OverflowRoutes       map[*dom.Node]*htmlOverflowClipBinding
+	OverflowEntities     map[ecs.Entity]*htmlOverflowClipBinding
 	NodeBindingLocals    map[*dom.Node]htmlBindingIndices
 	NodeScrollIDs        map[string]int
 	NodeOffsetIDs        map[string]int

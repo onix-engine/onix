@@ -169,8 +169,8 @@ func TestFontSizesShareAtlasPages(t *testing.T) {
 	second := value.GlyphCache(28, 72)
 	firstPage, _, _ := first.allocate(image.NewRGBA(image.Rect(0, 0, 20, 20)))
 	secondPage, _, _ := second.allocate(image.NewRGBA(image.Rect(0, 0, 40, 40)))
-	firstTexture, firstOK := first.Atlas(firstPage.index)
-	secondTexture, secondOK := second.Atlas(secondPage.index)
+	firstTexture, firstOK := first.Atlas(int32(firstPage.index))
+	secondTexture, secondOK := second.Atlas(int32(secondPage.index))
 	if !firstOK || !secondOK || firstTexture != secondTexture || first.pool != second.pool {
 		t.Fatalf("font-size atlas pages were not shared: first=%p second=%p", firstTexture, secondTexture)
 	}

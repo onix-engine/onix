@@ -3,9 +3,63 @@ package html
 import (
 	"testing"
 
+	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
 	"github.com/diiyw/onix/scene"
 )
+
+func TestHTMLInlineBackgroundFollowsOverflowScroll(t *testing.T) {
+	for name, text := range map[string]string{"single": "target", "wrapped": "one two three four five six"} {
+		t.Run(name, func(t *testing.T) {
+			world, owner := incrementalHTMLFixture(t, `<div style="overflow:auto;width:180px;height:100px"><div style="height:20px"></div><div id="scroll" style="overflow:auto;width:90px;height:60px"><p id="text"><code id="code" style="background:#333;border-radius:3px"><span>`+text+`</span></code></p><div style="height:1200px"></div></div><div style="height:1200px"></div></div>`)
+			defer Dispose(world)
+			scroller := incrementalHTMLNode(t, world, owner, "scroll")
+			code := incrementalHTMLNode(t, world, owner, "code")
+			check := func(offset float32) {
+				t.Helper()
+				state := world.GetRef[htmlRenderState](owner)
+				area := state.OverflowBindings[scroller.node].entity
+				world.GetMut[scene.UIScroll](area).Position[1] = offset
+				SyncScrollContent(world)
+				role := htmlRoleInlineBackground
+				if name == "wrapped" {
+					role = htmlRoleInlineBackgroundList
+				}
+				background := htmlAnimationRole(t, world, owner, "code", role)
+				for _, entity := range []ecs.Entity{background, state.RenderNodes[code.node.Children[0].Children[0]].Entities[0]} {
+					parent, _ := world.Get[scene.Parent](entity)
+					content, ok := world.Get[ScrollContent](entity)
+					if parent.Entity != area || !ok || content.Area != area {
+						t.Fatalf("inline paint lost its scroll and clip binding: entity=%v parent=%v content=%+v", entity, parent.Entity, content)
+					}
+					if y := world.GetRef[scene.UITransform](entity).Translation.Y.Value; y != content.Y+offset {
+						t.Fatalf("inline paint did not follow scroll: y=%g, want %g", y, content.Y+offset)
+					}
+				}
+			}
+			check(-10)
+			check(-25)
+			// Re-layout re-emits paint through the local overflow routing path.
+			incrementalHTMLNode(t, world, owner, "text").SetAttribute("style", "padding-left:1px")
+			incrementalSync(t, world)
+			if state := world.GetRef[htmlRenderState](owner); state.SyncStats.PartialReconciles != 1 {
+				t.Fatalf("layout did not use local reconciliation: %+v", state.SyncStats)
+			}
+			check(-15)
+			// Changing the clipping context clears and rebuilds inline routes.
+			scroller.SetAttribute("style", "overflow:scroll;width:90px;height:60px")
+			incrementalSync(t, world)
+			if state := world.GetRef[htmlRenderState](owner); state.SyncStats.PartialReconciles != 1 {
+				t.Fatalf("clip update did not use local reconciliation: %+v", state.SyncStats)
+			}
+			check(-15)
+			// Scrolling out of the paint buffer and back mounts new fragments.
+			htmlCullScroll(t, world, owner, "scroll", 0, -1000)
+			htmlCullScroll(t, world, owner, "scroll", 0, 0)
+			check(-20)
+		})
+	}
+}
 
 func TestHTMLInlineBackgroundPaintsExactTextInsideControl(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<button id="row" style="display:flex;flex-direction:column;width:280px"><span>file.go:1</span><span style="display:block;white-space:pre;color:white">before <span id="match" style="background:#ff800080">tar<span style="color:lime">get</span></span> after</span></button>`)

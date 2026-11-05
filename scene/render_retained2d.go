@@ -14,9 +14,10 @@ import (
 // Content snapshots belong to their entity, so extracting one changed entity
 // cannot overwrite a snapshot still used by an unchanged entity.
 type retainedEntity2D struct {
-	sourceText      *Text2D
+	sourceText      *textPaint2D
 	snapshots       *renderSnapshots2D
-	text            *Text2D
+	text            *textPaint2D
+	texts           []textPaint2D
 	sprites         []Sprite2D
 	nineSlices      []NineSlice2D
 	extra           []int
@@ -29,6 +30,7 @@ type retainedEntity2D struct {
 	dynamic         uint8
 	ui              bool
 	properties      bool
+	allocated       bool
 }
 
 func (node *retainedEntity2D) reset() {
@@ -36,6 +38,8 @@ func (node *retainedEntity2D) reset() {
 		node.snapshots.reset()
 	}
 	node.previousSprites = len(node.sprites)
+	clear(node.texts)
+	node.texts = node.texts[:0]
 	node.sprites = node.sprites[:0]
 	node.nineSlices = node.nineSlices[:0]
 	node.count = 0
@@ -52,13 +56,14 @@ func (node *retainedEntity2D) snapshot(item renderItem2D) renderItem2D {
 		node.sprites = append(node.sprites, sprite)
 		item.sprite = &node.sprites[len(node.sprites)-1]
 	}
-	if node.snapshots == nil && (item.text != nil || item.emitter != nil || item.tilemap != nil || item.spine != nil) {
+	if node.snapshots == nil && (item.emitter != nil || item.tilemap != nil || item.spine != nil) {
 		node.snapshots = &renderSnapshots2D{}
 	}
 	if item.text != nil {
 		if node.sourceText != item.text {
 			node.sourceText = item.text
-			node.text = node.snapshots.addText(*item.text)
+			node.texts = append(node.texts, *item.text)
+			node.text = &node.texts[len(node.texts)-1]
 		}
 		item.text = node.text
 	}
@@ -132,13 +137,14 @@ func (cache *retainedRender2D) allocateNode() *retainedEntity2D {
 	cache.freeNodes[last] = nil
 	cache.freeNodes = cache.freeNodes[:last]
 	node.first = -1
+	node.allocated = true
 	return node
 }
 
 type renderInput2D struct {
 	revision func(*ecs.World) (uint64, uint64)
 	changed  func(*ecs.World, *ecs.SystemContext, *retainedRender2D)
-	poll     func(*ecs.World, *retainedRender2D)
+	poll     func(*ecs.World, *retainedRender2D) int
 }
 
 func retainedInput2D[T any]() renderInput2D {
@@ -226,10 +232,17 @@ func (cache *retainedRender2D) mark(entity ecs.Entity) {
 func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T, *render.Device) bool) renderInput2D {
 	input := retainedInput2D[T]()
 	flag := uint8(1 << kind)
-	input.poll = func(world *ecs.World, cache *retainedRender2D) {
+	input.poll = func(world *ecs.World, cache *retainedRender2D) int {
+		active := 0
 		for entity, access := range world.Query2[T, Visibility]().All {
 			node := cache.nodes[entity]
 			visible := access.B.Ref().Visible && drawable(access.A.Ref(), graphics.DeviceFor(world)) && (world.Has[GlobalTransform](entity) || world.Has[UIGlobalTransform](entity))
+			if visible {
+				active++
+			}
+			if cache.nodes == nil {
+				continue
+			}
 			if visible || node != nil && node.dynamic&flag != 0 {
 				// A dynamic candidate can emit nothing (for example, clipped tiles
 				// or hidden sprite layers). Remember its empty result so polling it
@@ -246,6 +259,7 @@ func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T,
 				cache.mark(entity)
 			}
 		}
+		return active
 	}
 	return input
 }
@@ -302,10 +316,17 @@ type retainedRender2D struct {
 	items               []renderItem2D
 	nodeBlocks          [][]retainedEntity2D
 	scope               ecs.QueryScope
+	itemRetention       reuse.Retention
+	paintRetention      reuse.Retention
+	flagRetention       reuse.Retention
+	nodeRetention       reuse.Retention
+	damageRetention     reuse.Retention
+	dirtyRetention      reuse.Retention
 	structures          [retainedRenderInputCount2D]uint64
 	versions            [retainedRenderInputCount2D]uint64
 	stats               RenderPreparation2D
 	dirtyNodes          int
+	retiredNodes        int
 	outputRevision      uint64
 	rasterScale         float64
 	hierarchyGeneration uint64
@@ -322,6 +343,7 @@ type retainedRender2D struct {
 	missing           bool
 	initialized       bool
 	damageValid       bool
+	directFrames      uint8
 }
 
 type renderDamage2D struct {
@@ -453,7 +475,9 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 	for _, change := range cache.damage {
 		cache.damageFlags[change.position] = false
 	}
+	cache.damageRetention.Record(len(cache.damage))
 	cache.damage, cache.damageValid = cache.damage[:0], false
+	cache.trim(world)
 	versions, structures := cache.revisions(world)
 	width, height := c.Size()
 	scope, scopeVersion := world.QueryScopeKey()
@@ -475,10 +499,26 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			propertiesOnly = false
 		}
 	}
-	if cache.initialized && !propertiesOnly && writes > uint64(max(16, len(cache.nodes)/4)) {
+	nodeCount := len(cache.nodes)
+	if cache.direct && cache.nodes == nil {
+		nodeCount = cache.retiredNodes
+	}
+	if cache.initialized && !propertiesOnly && writes > uint64(max(16, nodeCount/4)) {
 		// Content that changes densely keeps the sequential extraction path.
 		// Do not copy it into per-entity retained storage or build paint hashes.
 		return cache.extractDirect(c, world, state)
+	}
+	if cache.direct && cache.nodes == nil && !full {
+		active := 0
+		for i, kind := range dynamicCollectors2D {
+			if state.collectors2D[kind] != nil {
+				active += retainedInputs2D[dynamicRenderInputs2D+i].poll(world, cache)
+			}
+		}
+		if active > max(16, cache.retiredNodes/4) {
+			return cache.extractDirect(c, world, state)
+		}
+		full = true
 	}
 	if cache.nodes == nil {
 		cache.nodes = make(map[ecs.Entity]*retainedEntity2D)
@@ -597,11 +637,10 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 	}
 	if full {
 		cache.damageValid = false
-		items := collectRenderSnapshots2D(c, world, false, true)
-		if len(items) < len(cache.items) {
-			clear(cache.items[len(items):])
-		}
-		cache.items = append(cache.items[:0], items...)
+		previousLen := len(cache.items)
+		cache.items = collectRenderSnapshotsInto2D(c, world, cache.items[:0], false, true)
+		clearSnapshotTail(cache.items, previousLen)
+		items := cache.items
 		cache.paints = reuse.Resize(cache.paints, len(items))
 		cache.damage = cache.damage[:0]
 		cache.damageFlags = reuse.Resize(cache.damageFlags, len(items))
@@ -655,13 +694,14 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			}
 		}
 		cache.stats.Extracted, cache.stats.Sorted = len(items), true
-		clear(items)
 	}
 	cache.capture(c, world, state)
 	if full || cache.stats.Extracted != 0 || cache.stats.PaintUpdated != 0 {
 		cache.generation++
 	}
 	cache.direct = false
+	cache.directFrames = 0
+	cache.retiredNodes = 0
 	return cache.items
 }
 
@@ -675,8 +715,84 @@ func (cache *retainedRender2D) extractDirect(c *graphics.Canvas2D, world *ecs.Wo
 	cache.capture(c, world, state)
 	cache.generation++
 	cache.direct = true
+	if cache.directFrames < reuse.RetentionFrames {
+		cache.directFrames++
+	}
+	if cache.directFrames == reuse.RetentionFrames && cache.nodes != nil {
+		// Direct extraction owns its frame snapshots. Retire the old retained
+		// scene once sustained animation no longer uses it.
+		cache.retiredNodes = len(cache.nodes)
+		cache.nodes, cache.textures = nil, nil
+		cache.nodeBlocks, cache.freeNodes = nil, nil
+		cache.items, cache.paints, cache.damageFlags = nil, nil, nil
+		cache.dirty, cache.damage = nil, nil
+	}
 	cache.stats = RenderPreparation2D{Extracted: len(items), Sorted: true}
 	return items
+}
+
+type renderItemsRetention2DScratch struct{}
+
+// Observe once per extraction, including clean frames where no collector runs.
+func (cache *retainedRender2D) trim(world *ecs.World) {
+	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
+	scratch.ReleaseUnused()
+	scratch.Values = world.FrameValue[renderItemsRetention2DScratch, reuse.Retention]().Trim(scratch.Values, 64)
+	visible := world.FrameScratch[visibleRenderItems2DScratch, uint32]()
+	visible.Values = world.FrameValue[visibleRenderItems2DScratch, reuse.Retention]().Trim(visible.Values, 64)
+	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
+	if world.FrameValue[renderSnapshots2DScratch, reuse.Retention]().TrimCapacity(snapshots.capacity(), 0, 64) != 0 {
+		// These are collector intermediates. Retained owners have copied their
+		// contents, and direct items keep their old backing arrays alive until
+		// the next extraction replaces them.
+		*snapshots = renderSnapshots2D{}
+	}
+	cache.items = cache.itemRetention.Trim(cache.items, 64)
+	previous := cap(cache.paints)
+	cache.paints = cache.paintRetention.Trim(cache.paints, 64)
+	if cap(cache.paints) != previous {
+		for i := range cache.items {
+			cache.items[i].paint = &cache.paints[i]
+		}
+	}
+	cache.damageFlags = cache.flagRetention.Trim(cache.damageFlags, 64)
+	cache.damage = cache.damageRetention.Trim(cache.damage, 16)
+	cache.dirtyRetention.Record(len(cache.dirty))
+	cache.dirty = cache.dirtyRetention.Trim(cache.dirty[:0], 16)
+	target := cache.nodeRetention.TrimCapacity(len(cache.nodeBlocks)*64, len(cache.nodes), 64)
+	if target == 0 {
+		return
+	}
+	// Only empty blocks can move out of the pool; surviving snapshot owners
+	// keep stable addresses even when their neighbours have been despawned.
+	blocks := cache.nodeBlocks[:0]
+	for _, block := range cache.nodeBlocks {
+		used := false
+		for i := range block {
+			used = used || block[i].allocated
+		}
+		if used || len(blocks)*64 < target {
+			blocks = append(blocks, block)
+		}
+	}
+	if len(blocks) == len(cache.nodeBlocks) {
+		return
+	}
+	clear(cache.nodeBlocks[len(blocks):])
+	cache.nodeBlocks = append([][]retainedEntity2D(nil), blocks...)
+	cache.freeNodes = make([]*retainedEntity2D, 0, len(blocks)*64-len(cache.nodes))
+	for _, block := range blocks {
+		for i := range block {
+			if !block[i].allocated {
+				cache.freeNodes = append(cache.freeNodes, &block[i])
+			}
+		}
+	}
+	nodes := make(map[ecs.Entity]*retainedEntity2D, max(0, target))
+	for entity, node := range cache.nodes {
+		nodes[entity] = node
+	}
+	cache.nodes = nodes
 }
 
 func (cache *retainedRender2D) capture(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) {

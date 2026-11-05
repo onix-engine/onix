@@ -43,11 +43,11 @@ func TestComposite2DSparsePreparationMatchesFullRebuild(t *testing.T) {
 		}
 		incrementalFrame(t, world, canvas)
 		hashes := make([]uint64, len(view.tiles))
-		items := make([][]int, len(view.tiles))
-		candidates := make([][]int, len(view.tiles))
+		items := make([][]uint32, len(view.tiles))
+		candidates := make([][]uint32, len(view.tiles))
 		for i := range view.tiles {
 			hashes[i] = view.tiles[i].hash
-			items[i] = slices.Clone(view.tiles[i].items)
+			items[i] = slices.Clone(view.tiles[i].visibleItems())
 			candidates[i] = slices.Clone(view.tiles[i].candidates)
 		}
 		coverage, occluded := slices.Clone(view.coverage), view.occluded
@@ -57,7 +57,7 @@ func TestComposite2DSparsePreparationMatchesFullRebuild(t *testing.T) {
 			t.Fatalf("step %d changed occlusion after full rebuild: %d -> %d", step, occluded, view.occluded)
 		}
 		for i := range view.tiles {
-			if view.tiles[i].hash != hashes[i] || !slices.Equal(items[i], view.tiles[i].items) || !slices.Equal(candidates[i], view.tiles[i].candidates) {
+			if view.tiles[i].hash != hashes[i] || !slices.Equal(items[i], view.tiles[i].visibleItems()) || !slices.Equal(candidates[i], view.tiles[i].candidates) {
 				t.Fatalf("step %d tile %d differs from full rebuild", step, i)
 			}
 		}
@@ -113,7 +113,7 @@ func TestComposite2DSparseWorkAndSkippedGenerations(t *testing.T) {
 		t.Fatal("skipped generation did not rebuild spatial bins")
 	}
 	for _, view := range state.compositors2D {
-		if position := world.ScopeValue[retainedRender2D, retainedRender2D]().nodes[entities[0]].first; !slices.Contains(view.tiles[4].candidates, position) {
+		if position := world.ScopeValue[retainedRender2D, retainedRender2D]().nodes[entities[0]].first; !slices.Contains(view.tiles[4].candidates, uint32(position)) {
 			t.Fatal("earlier movement was lost after a skipped generation")
 		}
 	}

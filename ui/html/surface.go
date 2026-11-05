@@ -3322,13 +3322,13 @@ func applyHTMLOverflowClips(world *ecs.World, owner ecs.Entity, state *htmlRende
 		return
 	}
 	if state.OverflowBindings == nil {
-		state.OverflowBindings = make(map[*dom.Node]htmlOverflowClipBinding)
+		state.OverflowBindings = make(map[*dom.Node]*htmlOverflowClipBinding)
 	}
 	if state.OverflowEntities == nil {
-		state.OverflowEntities = make(map[ecs.Entity]htmlOverflowClipBinding)
+		state.OverflowEntities = make(map[ecs.Entity]*htmlOverflowClipBinding)
 	}
 	if state.OverflowRoutes == nil {
-		state.OverflowRoutes = make(map[*dom.Node]htmlOverflowClipBinding)
+		state.OverflowRoutes = make(map[*dom.Node]*htmlOverflowClipBinding)
 	}
 	if state.OverflowExtents == nil {
 		state.OverflowExtents = make(map[*layout.Box]htmlOverflowExtent)
@@ -3343,15 +3343,15 @@ func applyHTMLOverflowClips(world *ecs.World, owner ecs.Entity, state *htmlRende
 	htmlOverflowContentExtents(root, state.OverflowExtents)
 	state.Children = state.Children[:0]
 	state.OwnerSpansValid = true
-	var build func(*layout.Box, htmlOverflowClipBinding)
-	build = func(box *layout.Box, parent htmlOverflowClipBinding) {
+	var build func(*layout.Box, *htmlOverflowClipBinding)
+	build = func(box *layout.Box, parent *htmlOverflowClipBinding) {
 		if box == nil {
 			return
 		}
 		rendered := state.BoxRenderings[box.Node]
 		beginHTMLOwnerSpan(state, rendered)
 		state.Children = append(state.Children, rendered.Entities...)
-		if box.Node != nil && parent.entity != 0 {
+		if box.Node != nil && parent != nil {
 			routes[box.Node] = parent
 		}
 		current := parent
@@ -3367,18 +3367,21 @@ func applyHTMLOverflowClips(world *ecs.World, owner ecs.Entity, state *htmlRende
 		if isHTMLControlNode(box.Node) {
 			setHTMLOverflowRoute(state, box.Node, current)
 		}
+		for _, background := range box.InlineBackgrounds {
+			setHTMLOverflowRoute(state, background.Node, current)
+		}
 		for _, fragment := range box.TextFragments {
-			if fragment.Node != nil && current.entity != 0 {
+			if fragment.Node != nil && current != nil {
 				routes[fragment.Node] = current
 			}
 		}
 		for _, fragment := range box.ImageFragments {
-			if fragment.Node != nil && current.entity != 0 {
+			if fragment.Node != nil && current != nil {
 				routes[fragment.Node] = current
 			}
 		}
 		for _, fragment := range box.ControlFragments {
-			if fragment.Node != nil && current.entity != 0 {
+			if fragment.Node != nil && current != nil {
 				routes[fragment.Node] = current
 			}
 		}
@@ -3387,14 +3390,14 @@ func applyHTMLOverflowClips(world *ecs.World, owner ecs.Entity, state *htmlRende
 		}
 		rendered.OwnerEnd = len(state.Children)
 	}
-	build(root, htmlOverflowClipBinding{})
+	build(root, nil)
 	if len(bindings) == 0 {
 		return
 	}
 	routeHTMLOverflowEntities(world, owner, state, state.Children)
 }
 
-func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, parent htmlOverflowClipBinding, stackIndex int, visible bool) htmlOverflowClipBinding {
+func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, parent *htmlOverflowClipBinding, stackIndex int, visible bool) *htmlOverflowClipBinding {
 	rect := box.PaddingBox()
 	port := box.ScrollportBox()
 	overlay := !state.LayoutCache.ReserveScrollbarSpace
@@ -3410,7 +3413,7 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	}
 	parentEntity := owner
 	origin := layout.Rect{}
-	if parent.entity != 0 {
+	if parent != nil {
 		parentEntity, origin = parent.entity, parent.rect
 	}
 	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleOverflow, "", 0, 10)
@@ -3469,7 +3472,14 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	(&bundle).putHTML(htmlOverflowClip{})
 	(&bundle).putHTML(htmlChild{Owner: owner, Node: box.Node})
 	entity := bundle.finish()
-	binding := htmlOverflowClipBinding{node: box.Node, entity: entity, rect: rect}
+	rendered := state.BoxRenderings[box.Node]
+	binding := rendered.Overflow
+	if binding == nil {
+		binding = &htmlOverflowClipBinding{}
+		rendered.Overflow = binding
+	}
+	clear(binding.parts)
+	*binding = htmlOverflowClipBinding{node: box.Node, entity: entity, rect: rect, parts: binding.parts[:0]}
 	if showHorizontal || showVertical {
 		style := htmlOverflowScrollbarColors(box.Style)
 		barStack := state.BoxRenderings[box.Node].PaintEnd - 1
@@ -3766,6 +3776,18 @@ func routeHTMLOverflowEntities(world *ecs.World, owner ecs.Entity, state *htmlRe
 		transform := world.GetMut[scene.UITransform](entity)
 		if (parent == nil) || (transform == nil) {
 			continue
+		}
+		// Inline focus targets belong to the containing layout box even when
+		// their element emits no background or fragment of its own.
+		if child.role == htmlRoleFocusable {
+			if rendered := state.RenderNodes[child.Node]; rendered != nil && rendered.Box != nil && rendered.Box.Box.Node != child.Node {
+				box := rendered.Box
+				route := box.Overflow
+				if route == nil {
+					route = state.OverflowRoutes[box.Box.Node]
+				}
+				setHTMLOverflowRoute(state, child.Node, route)
+			}
 		}
 		target, routed := state.OverflowRoutes[child.Node]
 		_, isClip := state.OverflowEntities[entity]
