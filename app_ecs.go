@@ -123,6 +123,7 @@ func (app *App) Step() (bool, error) {
 		app.renderRequested.Store(true)
 	}
 	defer app.recordIdleFrame()
+	defer app.World.Maintain()
 	renders, first := app.renderPacer.steps(now)
 	if renders == 0 {
 		return false, nil

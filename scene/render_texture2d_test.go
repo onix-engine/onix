@@ -17,7 +17,7 @@ func TestRetainedTextureChangesStayLocal(t *testing.T) {
 	sprite.Width, sprite.Height = 0, 0
 	incrementalFrame(t, w, canvas)
 	state := RenderWorldFor(w)
-	snapshot := state.Items2D[0].sprite
+	snapshot := state.Items2D[0].snapshot[Sprite2D]()
 	updates := []graphics.TextureRegionUpdate{{Width: 1, Height: 1, Pixels: []byte{255, 0, 0, 255}}}
 	other.UpdateRegions(updates)
 	incrementalFrame(t, w, canvas)
@@ -30,7 +30,7 @@ func TestRetainedTextureChangesStayLocal(t *testing.T) {
 		incrementalFrame(t, w, canvas)
 	}
 	step()
-	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PaintUpdated != 1 || state.Preparation2D.Sorted || state.Items2D[0].sprite != snapshot || state.Composite2D.DirtyTiles != 1 || state.Composite2D.PreparedTiles != 1 {
+	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PaintUpdated != 1 || state.Preparation2D.Sorted || state.Items2D[0].snapshot[Sprite2D]() != snapshot || state.Composite2D.DirtyTiles != 1 || state.Composite2D.PreparedTiles != 1 {
 		t.Fatal("pixel update rebuilt geometry or unrelated tiles", state.Preparation2D, state.Composite2D)
 	}
 	if allocs := testing.AllocsPerRun(20, step); allocs != 0 {

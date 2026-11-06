@@ -34,36 +34,35 @@ func init() {
 
 type Context struct {
 	renderContext
-	loopControl
-	mouseCaptureSupport
-	textInputSupport
 	closeRequestSupport
 	iconDecoderSupport
-	Width            int
-	Height           int
-	devicePixelRatio float64
-	nativeWindow     *C.OnixMacWindow
-	shouldClose      bool
-	onKeydown        func(input.KeyCode)
-	onKeyup          func(input.KeyCode)
-	onMouseDown      func(x, y float64, button input.MouseButton)
-	onMouseUp        func(x, y float64, button input.MouseButton)
-	onMouseMove      func(x, y float64)
-	onMouseWheel     func(xoff, yoff float64)
-	onTouchStart     func(x, y float64)
-	onTouchMove      func(x, y float64)
-	onTouchEnd       func(x, y float64)
-	onFilesDropped   func(x, y float64, files []string)
-	viewport         viewportState
-	framePacer       framePacer
-	renderErr        error
-	decorations      DecorationMode
-	shadow           bool
-	resizable        bool
-	inputRegion      []InputRegionRect
-	events           [256]C.OnixMacEvent
-
+	renderErr      error
+	nativeWindow   *C.OnixMacWindow
+	onKeydown      func(input.KeyCode)
+	onKeyup        func(input.KeyCode)
+	onMouseDown    func(x, y float64, button input.MouseButton)
+	onMouseUp      func(x, y float64, button input.MouseButton)
+	onMouseMove    func(x, y float64)
+	onMouseWheel   func(xoff, yoff float64)
+	onTouchStart   func(x, y float64)
+	onTouchMove    func(x, y float64)
+	onTouchEnd     func(x, y float64)
+	onFilesDropped func(x, y float64, files []string)
+	decorations    DecorationMode
+	loopControl
+	inputRegion []InputRegionRect
+	framePacer  framePacer
+	mouseCaptureSupport
+	textInputSupport
+	viewport          viewportState
+	events            [256]C.OnixMacEvent
+	Width             int
+	Height            int
+	devicePixelRatio  float64
 	nativeShouldClose C.int
+	shouldClose       bool
+	shadow            bool
+	resizable         bool
 }
 
 // NativeHandle returns the host NSWindow for embedding platform controls.
@@ -294,6 +293,7 @@ func (c *Context) LoopGame(frame func() (bool, error)) error {
 		// support and reuse the output field instead of passing a stack local.
 		count := int(C.onix_macos_poll_events_batch(c.nativeWindow, &c.events[0], C.int(len(c.events)), &c.nativeShouldClose))
 		if count != 0 {
+			// Includes redraw notifications from focus, exposure and Dock reopen.
 			c.RequestFrame()
 		}
 		for index := 0; index < count; index++ {
@@ -321,6 +321,9 @@ func (c *Context) LoopGame(frame func() (bool, error)) error {
 
 func (c *Context) handleEvent(event *C.OnixMacEvent) {
 	switch int(event.kind) {
+	case int(C.ONIX_MAC_EVENT_REDRAW):
+		// Restoring a window should not wait for the next paced frame.
+		c.framePacer.reset()
 	case int(C.ONIX_MAC_EVENT_CLOSE):
 		if c.acceptCloseRequest() {
 			c.shouldClose = true

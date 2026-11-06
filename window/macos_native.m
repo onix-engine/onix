@@ -36,6 +36,7 @@ struct OnixMacWindow {
     int decorations;
     double title_bar_height;
     int resizable;
+    int waiting;
     OnixMacInputRect *input_rects;
     OnixMacEvent events[ONIX_MAC_EVENT_CAPACITY];
 };
@@ -44,6 +45,7 @@ static _Thread_local char onix_macos_error[512];
 
 static void onix_macos_push(OnixMacWindow *window, int kind, int arg0, double x, double y, const char *text) {
     if (window == NULL) return;
+    int was_empty = window->event_head == window->event_tail;
     if (kind == ONIX_MAC_EVENT_MOUSE_DELTA && window->event_head != window->event_tail) {
         OnixMacEvent *previous = &window->events[(window->event_tail + ONIX_MAC_EVENT_CAPACITY - 1) % ONIX_MAC_EVENT_CAPACITY];
         if (previous->kind == kind) {
@@ -70,6 +72,9 @@ static void onix_macos_push(OnixMacWindow *window, int kind, int arg0, double x,
         event->text[length] = '\0';
     }
     window->event_tail = next;
+    // AppKit may deliver delegate callbacks inside nextEventMatchingMask
+    // without returning an NSEvent. Wake the wait when our queue gains work.
+    if (was_empty && window->waiting) onix_macos_wake();
 }
 
 static void onix_macos_push_text_input(OnixMacWindow *window, const char *text) {
@@ -405,6 +410,20 @@ static int onix_macos_key(NSEvent *event) {
 @end
 
 @implementation OnixMacWindowDelegate
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+    onix_macos_push(self.state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+}
+- (void)windowDidExpose:(NSNotification *)notification {
+    onix_macos_push(self.state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+}
+- (void)windowDidDeminiaturize:(NSNotification *)notification {
+    onix_macos_push(self.state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+}
+- (void)windowDidChangeOcclusionState:(NSNotification *)notification {
+    if (self.state->window.occlusionState & NSWindowOcclusionStateVisible) {
+        onix_macos_push(self.state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+    }
+}
 - (void)windowDidResignKey:(NSNotification *)notification {
     onix_macos_set_mouse_captured(self.state, 0);
 }
@@ -421,6 +440,39 @@ static int onix_macos_key(NSEvent *event) {
     [self windowDidResize:notification];
 }
 @end
+
+@interface OnixMacApplicationDelegate : NSObject <NSApplicationDelegate>
+@end
+
+@implementation OnixMacApplicationDelegate
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    NSApplication *app = notification.object;
+    for (NSWindow *window in app.windows) {
+        if (![window.contentView isKindOfClass:[OnixMacView class]]) continue;
+        onix_macos_push(((OnixMacView *)window.contentView).state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+    }
+}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)visible {
+    NSWindow *target = nil;
+    for (NSWindow *window in sender.windows) {
+        if (![window.contentView isKindOfClass:[OnixMacView class]]) continue;
+        OnixMacWindow *state = ((OnixMacView *)window.contentView).state;
+        if (state == NULL || state->should_close) continue;
+        if (target == nil || window.isMainWindow) target = window;
+        if (window.isKeyWindow) { target = window; break; }
+    }
+    if (target == nil) return YES;
+    [sender unhide:nil];
+    // AppKit counts miniaturized windows as visible for this callback.
+    if (target.isMiniaturized) [target deminiaturize:nil];
+    [target makeKeyAndOrderFront:nil];
+    onix_macos_push(((OnixMacView *)target.contentView).state, ONIX_MAC_EVENT_REDRAW, 0, 0, 0, NULL);
+    return NO;
+}
+@end
+
+// NSApplication does not retain its delegate; keep it for the app's lifetime.
+static OnixMacApplicationDelegate *onix_macos_app_delegate;
 
 const char *onix_macos_last_error(void) { return onix_macos_error; }
 
@@ -483,6 +535,10 @@ static void onix_macos_apply_style(OnixMacWindow *state) {
 OnixMacWindow *onix_macos_create(int width, int height, const char *title, int transparent, int decorations, double title_bar_height, int shadow, int resizable) {
     @autoreleasepool {
         [NSApplication sharedApplication];
+        if (onix_macos_app_delegate == nil) {
+            onix_macos_app_delegate = [[OnixMacApplicationDelegate alloc] init];
+            NSApp.delegate = onix_macos_app_delegate;
+        }
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         [NSApp finishLaunching];
         OnixMacWindow *state = calloc(1, sizeof(OnixMacWindow));
@@ -644,6 +700,7 @@ void onix_macos_destroy(OnixMacWindow *state) {
     state->window.delegate = nil;
     [state->window orderOut:nil];
     [state->window close];
+    state->window.contentView = nil;
     [state->delegate release];
     [state->view release];
     [state->window release];
@@ -668,7 +725,12 @@ void onix_macos_wait(OnixMacWindow *state, int timeout_ms) {
     if (state == NULL || state->should_close || state->event_head != state->event_tail) return;
     @autoreleasepool {
         NSDate *deadline = timeout_ms < 0 ? [NSDate distantFuture] : [NSDate dateWithTimeIntervalSinceNow:(double)timeout_ms / 1000.0];
-        [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:deadline inMode:NSDefaultRunLoopMode dequeue:NO];
+        state->waiting = 1;
+        // Peeking with dequeue:NO can leave AppKit's idle wait stuck. Consume
+        // and dispatch the event here, before the normal poll drains the rest.
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:deadline inMode:NSDefaultRunLoopMode dequeue:YES];
+        state->waiting = 0;
+        if (event != nil) [NSApp sendEvent:event];
     }
 }
 

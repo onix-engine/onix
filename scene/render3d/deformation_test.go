@@ -46,7 +46,7 @@ func TestInvalidDeformationDoesNotMutateBuffersAndReleasesQuery(t *testing.T) {
 				t.Fatal("invalid deformation was accepted")
 			}
 			value := world.GetRef[Deformation](entity)
-			if world.ComponentVersion[Deformation]() != version || len(value.JointMatrices) != 0 || len(value.NodeMatrices) != 0 || len(value.gpuJoints) != 0 {
+			if world.ComponentVersion[Deformation]() != version || len(value.JointMatrices) != 0 || len(value.NodeMatrices) != 0 {
 				t.Fatal("validation error mutated deformation buffers")
 			}
 			if !world.Despawn(entity) {

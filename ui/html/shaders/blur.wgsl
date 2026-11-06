@@ -37,8 +37,12 @@ fn insideRoundedBox(point: vec2<f32>, size: vec2<f32>, rx: vec4<f32>, ry: vec4<f
     let sampleUV = vec2<f32>(input.uv.x, select(input.uv.y, 1.0 - input.uv.y, input.parameters.w < 0.0));
     let gradientsX = dpdx(sampleUV);
     let gradientsY = dpdy(sampleUV);
-    if (mode > 2.5) {
+    if ((mode > 2.5 && mode < 3.5) || mode > 5.5) {
         let pixel = textureSampleGrad(source, sourceSampler, sampleUV, gradientsX, gradientsY);
+        if (mode > 5.5) {
+            let alpha = min(pixel.r, pixel.a) * input.color.a;
+            return vec4<f32>(input.color.rgb * alpha, alpha);
+        }
         return vec4<f32>(pixel.rgb * input.color.rgb * input.color.a, pixel.a * input.color.a);
     }
     let sigma = max(input.parameters.z, 0.001);
@@ -51,12 +55,12 @@ fn insideRoundedBox(point: vec2<f32>, size: vec2<f32>, rx: vec4<f32>, ry: vec4<f
         let weight = exp(-position * position / (2.0 * sigma * sigma));
         let uv = sampleUV + input.parameters.xy * position;
         let pixel = textureSampleGrad(source, sourceSampler, uv, gradientsX, gradientsY);
-        let premultiplied = select(vec4<f32>(pixel.rgb * pixel.a, pixel.a), pixel, mode > 0.5);
+        let premultiplied = select(select(vec4<f32>(pixel.rgb * pixel.a, pixel.a), pixel, mode > 0.5), vec4<f32>(min(pixel.r, pixel.a)), mode > 3.5);
         result = result + premultiplied * weight;
         total = total + weight;
     }
     result = result / total;
-    if (mode > 1.5) {
+    if ((mode > 1.5 && mode < 2.5) || mode > 4.5) {
         let pixel = input.uv * vec2<f32>(textureDimensions(source));
         if (insideRoundedBox(pixel - input.box.xy, input.box.zw, input.radiusX, input.radiusY)) {
             return vec4<f32>(0.0);

@@ -5,6 +5,8 @@ package render
 import (
 	"syscall/js"
 	"testing"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestBrowserMeshBatchesAndStaticDeformationPixels(t *testing.T) {
@@ -82,7 +84,7 @@ func TestBrowserMeshBatchesAndStaticDeformationPixels(t *testing.T) {
 			if frame%2 == 1 {
 				joint[12] = .125
 			}
-			batch.Deformations = []MeshDeformationData{{Mesh: mesh, JointMatrices: [][16]float32{joint}, MorphWeights: []float32{.5}}, {Mesh: mesh, JointMatrices: [][16]float32{joint}, MorphWeights: []float32{.5}}}
+			batch.Deformations = []MeshDeformationData{{Mesh: mesh, JointMatrices: []mgl32.Mat4{joint}, MorphWeights: []float32{.5}}, {Mesh: mesh, JointMatrices: []mgl32.Mat4{joint}, MorphWeights: []float32{.5}}}
 			for index := range batch.Draws {
 				batch.Draws[index].DeformationIndex = uint32(index + 1)
 			}

@@ -36,20 +36,31 @@ type htmlGPUBlur struct {
 type htmlGPUBlurScratch struct {
 	target  *render.RenderTarget
 	texture *graphics.Texture
+	effects int
 }
 
 func (scratch *htmlGPUBlurScratch) dispose() {
 	if scratch.target != nil {
 		_ = scratch.texture.Dispose()
 		_ = scratch.target.Dispose()
-		*scratch = htmlGPUBlurScratch{}
 	}
+	*scratch = htmlGPUBlurScratch{}
+}
+
+func (cache *htmlTextureCache) scratchForBlur(format render.RenderTargetColorFormat) *htmlGPUBlurScratch {
+	if format == render.RenderTargetR8 {
+		return &cache.shadowScratch
+	}
+	return &cache.blurScratch
 }
 
 // Cached render targets contain premultiplied pixels. Sampling a GL attachment
 // also needs a vertical flip; CPU image textures keep their existing origin.
-func htmlGPUBlurCompositeParameters(device *render.Device) [4][4]float32 {
+func htmlGPUBlurCompositeParameters(device *render.Device, texture *graphics.Texture) [4][4]float32 {
 	mode := float32(3)
+	if texture != nil && texture.Format() == render.TextureFormatR8 {
+		mode = 6
+	}
 	if device.RendererInfo().RenderTargetBottomLeft {
 		mode = -mode
 	}
@@ -118,9 +129,14 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 	if cache.gpuBlur == nil {
 		cache.gpuBlur = make(map[htmlTextureKey]*htmlGPUBlur)
 	}
+	format := render.RenderTargetRGBA8
+	if source.Format() == render.TextureFormatR8 {
+		format = render.RenderTargetR8
+	}
+	scratch := cache.scratchForBlur(format)
 	effect := cache.gpuBlur[key]
-	if effect == nil || effect.target.Descriptor().Width != w || effect.target.Descriptor().Height != h {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h})
+	if effect == nil || effect.target.Descriptor().Width != w || effect.target.Descriptor().Height != h || effect.target.Descriptor().ColorFormat != format {
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h, ColorFormat: format})
 		if err != nil {
 			return nil
 		}
@@ -131,8 +147,15 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 		}
 		entry := cache.add(htmlTextureKey{node: key.node, variant: "gpu-" + key.variant}, texture)
 		entry.target = target
+		if effect != nil {
+			cache.scratchForBlur(effect.target.Descriptor().ColorFormat).effects--
+		}
+		scratch.effects++
 		effect = &htmlGPUBlur{target: target, source: base, output: entry}
 		cache.gpuBlur[key] = effect
+	}
+	if format == render.RenderTargetR8 {
+		parameters[0][3] = 5
 	}
 	parameters[0][0], parameters[0][1] = 0, 1/float32(h)
 	if canvas.Device().RendererInfo().RenderTargetBottomLeft {
@@ -141,11 +164,10 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 	if effect.version == version && effect.source == base && effect.device == canvas.Device() && effect.parameters == parameters {
 		return effect.output.texture
 	}
-	// One shared intermediate serves all effects in this document. Only final
-	// two-dimensional results are retained per effect.
-	scratch := &cache.blurScratch
+	// Effects share one intermediate per format. Only final results are retained
+	// per effect; changing between color filters and shadows keeps both warm.
 	if scratch.target == nil {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h, ColorFormat: format})
 		if err != nil {
 			return nil
 		}
@@ -159,6 +181,9 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 		scratch.target.Resize(w, h)
 	}
 	horizontal := [4][4]float32{{1 / float32(w), 0, parameters[0][2], 0}}
+	if source.Format() == render.TextureFormatR8 {
+		horizontal[0][3] = 4
+	}
 	if err := cache.drawBlurPass(canvas, scratch.target, source, horizontal); err != nil {
 		return nil
 	}

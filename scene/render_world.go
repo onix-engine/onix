@@ -124,7 +124,7 @@ func (state *RenderWorld) RegisterMaterial2D[T graphics.Material2D]() {
 			if node := cache.nodes[entity]; node != nil && !node.queued {
 				material := material2DForEntity(world, entity)
 				for position := range node.positions {
-					if cache.items[position].material2D != material {
+					if cache.items[position].materialData() != material {
 						cache.mark(entity)
 						break
 					}

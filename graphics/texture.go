@@ -142,14 +142,17 @@ func CreateTextureFromRenderTarget(target *render.RenderTarget) (*Texture, error
 		return nil, errors.New("graphics: invalid render target")
 	}
 	descriptor := target.Descriptor()
-	if descriptor.ColorFormat != render.RenderTargetRGBA8 {
-		return nil, errors.New("graphics: only RGBA8 render targets can be sampled as canvas textures")
+	if descriptor.ColorFormat == render.RenderTargetUint32 {
+		return nil, errors.New("graphics: integer render targets cannot be sampled as canvas textures")
 	}
 	texture := &Texture{
 		Width: descriptor.Width, Height: descriptor.Height,
 		SourceWidth: descriptor.Width, SourceHeight: descriptor.Height,
 		MaxU: 1, MaxV: 1, batchKey: nextTextureBatchKey(), usage: ResourceUsageGPU,
 		renderTarget: target,
+	}
+	if descriptor.ColorFormat == render.RenderTargetR8 {
+		texture.format = render.TextureFormatR8
 	}
 	return texture, nil
 }

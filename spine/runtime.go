@@ -1963,10 +1963,32 @@ func (p *Player) MeshBatchInto(batch *render.MeshBatch3D, projection, model mgl3
 	*batch = initial
 	batch.Vertices, batch.Indices = vertices, indices
 	batch.Instances, batch.Draws = instances, draws
+	return p.appendMeshBatchInto(batch, projection, model, false)
+}
+
+// AppendMeshBatchInto appends directly to a shared batch, baking the model into
+// positions so adjacent players can use one identity instance. Bounds stay local.
+func (p *Player) AppendMeshBatchInto(batch *render.MeshBatch3D, projection, model mgl32.Mat4) (minX, minY, maxX, maxY float32, valid bool) {
+	if batch == nil {
+		return 0, 0, 0, 0, false
+	}
+	return p.appendMeshBatchInto(batch, projection, model, true)
+}
+
+func (p *Player) appendMeshBatchInto(batch *render.MeshBatch3D, projection, model mgl32.Mat4, bake bool) (minX, minY, maxX, maxY float32, valid bool) {
 	if p == nil || p.Alpha <= 0 || p.Resource == nil || p.pose == nil || p.Resource.Texture == nil {
 		return 0, 0, 0, 0, false
 	}
 	texture := p.Resource.Texture
+	instanceModel := model
+	if bake {
+		instanceModel = mgl32.Ident4()
+	}
+	if len(batch.Instances) == 0 {
+		batch.ViewProjection = [16]float32(projection)
+		batch.CameraPosition = [4]float32{0, 0, 1, 1}
+		batch.AmbientLight = [4]float32{1, 1, 1, 1}
+	}
 	p.forEachDrawable(func(geometry drawableGeometry) {
 		color := multiplyColor(geometry.slot.color, geometry.attach.color)
 		color[3] *= p.Alpha
@@ -1975,7 +1997,7 @@ func (p *Player) MeshBatchInto(batch *render.MeshBatch3D, projection, model mgl3
 		}
 		if len(batch.Instances) == 0 {
 			batch.Instances = append(batch.Instances, render.Instance3D{
-				Model:       [16]float32(model),
+				Model:       [16]float32(instanceModel),
 				BaseColor:   [4]float32{1, 1, 1, 1},
 				Material:    [4]float32{-2, 0, 0, 2},
 				UVTransform: [4]float32{1, 1, 0, 0},
@@ -1994,8 +2016,12 @@ func (p *Player) MeshBatchInto(batch *render.MeshBatch3D, projection, model mgl3
 				minX, minY = min(minX, x), min(minY, y)
 				maxX, maxY = max(maxX, x), max(maxY, y)
 			}
+			position := mgl32.Vec4{x, y, meshDepth, 1}
+			if bake {
+				position = model.Mul4x1(position)
+			}
 			batch.Vertices = append(batch.Vertices, render.Vertex3D{
-				Position: [3]float32{x, y, meshDepth},
+				Position: [3]float32{position[0], position[1], position[2]},
 				Normal:   [3]float32{encodedLight, color[3], encodedDark},
 				UV:       [2]float32{geometry.uvs[i], geometry.uvs[i+1]},
 			})

@@ -1182,16 +1182,19 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 				sprite.Shape.Fill = htmlColor(computed.BackgroundColor)
 				if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
 					sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+					sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 				}
 			} else if world.Has[htmlElementSurface](entity) || world.Has[Control](entity) {
 				if htmlNeedsRasterPaint(computed) {
 					if texture := htmlPaintTextureFor(state, child.Node, computed, sprite.Width, sprite.Height); texture != nil {
 						sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+						sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 					}
 				} else {
 					sprite.Shape = htmlShape(computed, float64(sprite.Width), float64(sprite.Height))
 					if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
 						sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+						sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 					} else {
 						sprite.Texture = nil
 					}
@@ -1754,6 +1757,9 @@ func syncHTML(context *ecs.SystemContext) error {
 				bindHTMLStickyContent(world, state)
 			}
 			state.Textures.sweep()
+			state.OverflowBindings = state.OverflowRetention[0].Trim(state.OverflowBindings, 16)
+			state.OverflowRoutes = state.OverflowRetention[1].Trim(state.OverflowRoutes, 64)
+			state.OverflowEntities = state.OverflowRetention[2].Trim(state.OverflowEntities, 16)
 		}
 	}
 	return nil
@@ -2455,6 +2461,9 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		}
 	}
 	rendered.Composite = flattened || suppressPaint
+	if !flattened && !suppressPaint {
+		state.Textures.retireOpacityRoot(box.Node)
+	}
 	if !suppressPaint && !flattened && paintVisible && htmlPropagatesCanvasBackground(box) {
 		color := htmlColor(box.Style.BackgroundColor)
 		if color.A > 0 || isHTMLLinearGradient(box.Style.BackgroundImage) || box.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 {
@@ -3860,6 +3869,7 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		if texture := htmlPaintTextureFor(state, box.Node, box.Style, float32(rect.Width), float32(rect.Height)); texture != nil {
 			if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
 				sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+				sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 				state.Textures.bind(entity, texture)
 			}
 		}
@@ -3989,13 +3999,14 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 			continue
 		}
 		if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
-			sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+			sprite.Texture, sprite.Tint, sprite.Shape = texture, htmlColor(style.ColorValue(shadow.Color)), scene.Shape2D{}
+			sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 			state.Textures.bind(entity, texture)
 		}
 		if gpu {
 			_ = world.Insert(entity, scene.Shader[graphics.Material2DShader]{
 				Program: state.Textures.blurShader,
-				Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world)),
+				Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world), texture),
 			})
 		} else {
 			world.Remove[scene.Shader[graphics.Material2DShader]](entity)
@@ -4144,7 +4155,7 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	if gpu {
 		(&bundle).putHTML(scene.Shader[graphics.Material2DShader]{
 			Program: state.Textures.blurShader,
-			Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world)),
+			Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world), texture),
 		})
 	}
 	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
@@ -4747,6 +4758,7 @@ func htmlSpawnControlVisuals(world *ecs.World, owner ecs.Entity, state *htmlRend
 		if sprite := world.GetMut[scene.Sprite2D](control); sprite != nil {
 			if texture := htmlPaintTextureFor(state, node, computed, sprite.Width, sprite.Height); texture != nil {
 				sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
+				sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 				state.Textures.bind(control, texture)
 			}
 		}
@@ -5180,14 +5192,23 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 			}
 		}
 		sprite.Width, sprite.Height = naturalWidth*scale, naturalHeight*scale
+	}
+	x := htmlObjectPosition(fragment.Style.ObjectPosX, fragment.Style.ObjectPosXOrigin, width-sprite.Width)
+	y := htmlObjectPosition(fragment.Style.ObjectPosY, fragment.Style.ObjectPosYOrigin, height-sprite.Height)
+	if sprite.Width != width || sprite.Height != height || x != 0 || y != 0 {
 		// Fit the pixels within the content box without changing layout or hit bounds.
-		(&bundle).putHTML(scene.SpriteLayers2D{Layers: []scene.SpriteLayer2D{{
+		layers, _ := world.Get[scene.SpriteLayers2D](bundle.entity)
+		if cap(layers.Layers) == 0 {
+			layers.Layers = make([]scene.SpriteLayer2D, 1)
+		} else {
+			layers.Layers = layers.Layers[:1]
+		}
+		layers.Layers[0] = scene.SpriteLayer2D{
 			Sprite: sprite, Anchor: scene.AnchorTopLeft, Visible: true,
-			Transform: scene.SpriteLayerTransform2D{
-				X: htmlObjectPosition(fragment.Style.ObjectPosX, fragment.Style.ObjectPosXOrigin, width-sprite.Width),
-				Y: htmlObjectPosition(fragment.Style.ObjectPosY, fragment.Style.ObjectPosYOrigin, height-sprite.Height),
-			},
-		}}})
+			Transform: scene.SpriteLayerTransform2D{X: x, Y: y},
+		}
+		layers.InvalidateMatrices()
+		(&bundle).putHTML(layers)
 		(&bundle).putHTML(scene.ClipRect2D{Width: width, Height: height})
 	} else {
 		(&bundle).putHTML(sprite)

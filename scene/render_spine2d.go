@@ -3,14 +3,27 @@ package scene
 import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type spineRenderBatch2DScratch struct{}
 
+type spineRenderScratch2D struct {
+	batch     render.MeshBatch3D
+	retention [4]reuse.Retention
+}
+
+func (s *spineRenderScratch2D) trim() {
+	s.batch.Vertices = s.retention[0].Trim(s.batch.Vertices[:0], 64)
+	s.batch.Indices = s.retention[1].Trim(s.batch.Indices[:0], 96)
+	s.batch.Instances = s.retention[2].Trim(s.batch.Instances[:0], 1)
+	s.batch.Draws = s.retention[3].Trim(s.batch.Draws[:0], 8)
+}
+
 func drawSpineRenderBatch2D(c *graphics.Canvas2D, world *ecs.World, items renderItemList2D, viewport renderViewport2D) {
-	batch := world.FrameValue[spineRenderBatch2DScratch, render.MeshBatch3D]()
+	scratch := world.FrameValue[spineRenderBatch2DScratch, spineRenderScratch2D]()
+	batch := &scratch.batch
 	*batch = render.MeshBatch3D{
 		Vertices: batch.Vertices[:0], Indices: batch.Indices[:0],
 		Instances: batch.Instances[:0], Draws: batch.Draws[:0],
@@ -19,63 +32,27 @@ func drawSpineRenderBatch2D(c *graphics.Canvas2D, world *ecs.World, items render
 	for index := 0; index < items.len(); index++ {
 		item := items.at(index)
 		model := SpineModelMatrix2D(item.transform, item.ui)
-		minX, minY, maxX, maxY, valid := item.spine.Player.MeshBatchInto(&item.spine.batch, projection, view.Mul4(model))
+		vertices, indices, instances, draws := len(batch.Vertices), len(batch.Indices), len(batch.Instances), len(batch.Draws)
+		var lastDraw render.MeshDraw3D
+		if draws != 0 {
+			lastDraw = batch.Draws[draws-1]
+		}
+		minX, minY, maxX, maxY, valid := item.snapshot[Spine2D]().Player.AppendMeshBatchInto(batch, projection, view.Mul4(model))
+		scratch.retention[0].Record(len(batch.Vertices))
+		scratch.retention[1].Record(len(batch.Indices))
+		scratch.retention[2].Record(len(batch.Instances))
+		scratch.retention[3].Record(len(batch.Draws))
 		if !spineRenderItemVisible2D(viewport, model, item.clip, minX, minY, maxX, maxY, valid) {
-			continue
+			// Appending can extend the preceding draw. Roll that change back too
+			// when the newly generated local bounds are outside this viewport.
+			batch.Vertices, batch.Indices = batch.Vertices[:vertices], batch.Indices[:indices]
+			batch.Instances, batch.Draws = batch.Instances[:instances], batch.Draws[:draws]
+			if draws != 0 {
+				batch.Draws[draws-1] = lastDraw
+			}
 		}
-		if items.len() == 1 {
-			_ = c.DrawMeshes(item.spine.batch)
-			return
-		}
-		appendSpineMeshBatch(batch, item.spine.batch)
 	}
 	if len(batch.Draws) != 0 {
 		_ = c.DrawMeshes(*batch)
-	}
-}
-
-// Player.MeshBatchInto produces dynamic geometry and one instance. Baking
-// affine positions lets adjacent players share that instance and index draw;
-// Normal holds packed Spine tint data and must remain unchanged.
-func appendSpineMeshBatch(dst *render.MeshBatch3D, src render.MeshBatch3D) {
-	if len(src.Draws) == 0 || len(src.Instances) == 0 {
-		return
-	}
-	if len(dst.Draws) == 0 {
-		dst.ViewProjection = src.ViewProjection
-		dst.CameraPosition = src.CameraPosition
-		dst.AmbientLight = src.AmbientLight
-		dst.LightDirection = src.LightDirection
-		dst.DirectionalLight = src.DirectionalLight
-		dst.Lights = src.Lights
-		instance := src.Instances[0]
-		instance.Model = [16]float32(mgl32.Ident4())
-		dst.Instances = append(dst.Instances, instance)
-	}
-	model := mgl32.Mat4(src.Instances[0].Model)
-	vertexBase := uint32(len(dst.Vertices))
-	indexBase := uint32(len(dst.Indices))
-	for _, vertex := range src.Vertices {
-		position := model.Mul4x1(mgl32.Vec4{vertex.Position[0], vertex.Position[1], vertex.Position[2], 1})
-		vertex.Position = [3]float32{position[0], position[1], position[2]}
-		dst.Vertices = append(dst.Vertices, vertex)
-	}
-	for _, index := range src.Indices {
-		dst.Indices = append(dst.Indices, vertexBase+index)
-	}
-	for _, draw := range src.Draws {
-		draw.FirstIndex += indexBase
-		draw.FirstInstance = 0
-		if len(dst.Draws) != 0 {
-			previous := &dst.Draws[len(dst.Draws)-1]
-			if previous.Mesh == draw.Mesh && previous.Shader == draw.Shader && previous.Texture == draw.Texture &&
-				previous.NormalTexture == draw.NormalTexture && previous.BaseVertex == draw.BaseVertex &&
-				previous.AlphaMode == draw.AlphaMode && previous.BlendMode == draw.BlendMode &&
-				previous.DeformationIndex == draw.DeformationIndex && previous.FirstIndex+previous.IndexCount == draw.FirstIndex {
-				previous.IndexCount += draw.IndexCount
-				continue
-			}
-		}
-		dst.Draws = append(dst.Draws, draw)
 	}
 }

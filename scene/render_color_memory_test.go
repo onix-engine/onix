@@ -19,7 +19,7 @@ func BenchmarkRoundedClipChangingColor(b *testing.B) {
 	canvas := graphics.Canvas2DContext(100, 80)
 	rounded := roundedClip2D{minX: 1, minY: 1, maxX: 99, maxY: 79, radius: 8}
 	sprite := Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Width: 98, Height: 78, Alpha: .7}
-	item := newSpriteRenderItem2D(0, 0, &sprite, graphics.Material2DData{}, AnchorTopLeft,
+	item := newSpriteRenderItem2D(0, 0, &sprite, nil, AnchorTopLeft,
 		mgl32.Translate3D(1, 1, 0),
 		clipRect2D{minX: 1, minY: 1, maxX: 99, maxY: 79, valid: true, hasRounded: true, rounded: rounded},
 		98, 78, true, 0)
@@ -32,7 +32,7 @@ func BenchmarkRoundedClipChangingColor(b *testing.B) {
 	for b.Loop() {
 		roundTwoClipColor++
 		value := roundTwoClipColor
-		item.sprite.Shape.Fill = graphics.ColorFromRGBA(byte(value), byte(value>>8), byte(value>>16), 173)
+		item.snapshot[Sprite2D]().Shape.Fill = graphics.ColorFromRGBA(byte(value), byte(value>>8), byte(value>>16), 173)
 		drawShapeRenderItem2D(canvas, &item, viewport)
 		if err := canvas.FinishFrame(); err != nil {
 			b.Fatal(err)

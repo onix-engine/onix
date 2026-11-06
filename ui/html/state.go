@@ -6,6 +6,7 @@ import (
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/layout"
 	"github.com/diiyw/onix/html/style"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -99,6 +100,7 @@ type htmlInputState struct {
 	NodeOffsets          []htmlNodeOffset
 	FocusTargets         []htmlFocusTargetBinding
 	NodeBindingKey       htmlNodeBindingKey
+	OverflowRetention    [3]reuse.MapRetention
 	SnapshotGeneration   uint32
 	ControlStylesChanged bool
 	NodeBindingsPrepared bool

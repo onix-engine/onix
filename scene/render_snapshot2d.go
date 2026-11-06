@@ -2,12 +2,12 @@ package scene
 
 import (
 	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
 )
 
 type renderSnapshots2DScratch struct{}
 
 type renderSnapshots2D struct {
+	materials           []graphics.Material2DData
 	sprites             []Sprite2D
 	emitters            []ParticleEmitter2D
 	tilemaps            []tilemapSnapshot2D
@@ -17,6 +17,7 @@ type renderSnapshots2D struct {
 	particleColors      []graphics.ColorRGBA
 	particles           []particleState2D
 	particleAppearances []ParticleAppearance2D
+	previousMaterials   int
 	previousSprites     int
 	previousEmitters    int
 	previousTilemaps    int
@@ -28,12 +29,12 @@ type renderSnapshots2D struct {
 }
 
 func (s *renderSnapshots2D) capacity() int {
-	return cap(s.sprites) + cap(s.emitters) + cap(s.tilemaps) + cap(s.texts) + cap(s.spines) +
+	return cap(s.materials) + cap(s.sprites) + cap(s.emitters) + cap(s.tilemaps) + cap(s.texts) + cap(s.spines) +
 		cap(s.nineSlices) + cap(s.particleColors) + cap(s.particles) + cap(s.particleAppearances)
 }
 
 func (s *renderSnapshots2D) length() int {
-	return len(s.sprites) + len(s.emitters) + len(s.tilemaps) + len(s.texts) + len(s.spines) +
+	return len(s.materials) + len(s.sprites) + len(s.emitters) + len(s.tilemaps) + len(s.texts) + len(s.spines) +
 		len(s.nineSlices) + len(s.particleColors) + len(s.particles) + len(s.particleAppearances)
 }
 
@@ -47,6 +48,8 @@ func (s *renderSnapshots2D) capture[T any](value *T, snapshot func(T) *T) *T {
 }
 
 func (s *renderSnapshots2D) reset() {
+	s.previousMaterials = len(s.materials)
+	s.materials = s.materials[:0]
 	s.previousSprites, s.previousEmitters = len(s.sprites), len(s.emitters)
 	s.previousTilemaps, s.previousTexts = len(s.tilemaps), len(s.texts)
 	s.previousSpines = len(s.spines)
@@ -63,6 +66,7 @@ func (s *renderSnapshots2D) reset() {
 }
 
 func (s *renderSnapshots2D) releaseUnused() {
+	clearSnapshotTail(s.materials, s.previousMaterials)
 	clearSnapshotTail(s.sprites, s.previousSprites)
 	clearSnapshotTail(s.emitters, s.previousEmitters)
 	clearSnapshotTail(s.tilemaps, s.previousTilemaps)
@@ -126,13 +130,7 @@ func (s *renderSnapshots2D) addText(value Text2D) *textPaint2D {
 }
 
 func (s *renderSnapshots2D) addSpine(value Spine2D) *Spine2D {
-	index := len(s.spines)
-	var batch render.MeshBatch3D
-	if index < cap(s.spines) {
-		batch = s.spines[:index+1][index].batch
-	}
 	s.spines = append(s.spines, value)
-	s.spines[index].batch = batch
 	return &s.spines[len(s.spines)-1]
 }
 
@@ -140,4 +138,15 @@ func appendSnapshotValues[T any](buffer *[]T, values []T) []T {
 	start := len(*buffer)
 	*buffer = append(*buffer, values...)
 	return (*buffer)[start:]
+}
+
+func (s *renderSnapshots2D) addMaterial(value graphics.Material2DData) *graphics.Material2DData {
+	if value == (graphics.Material2DData{}) {
+		return nil
+	}
+	if n := len(s.materials); n > 0 && s.materials[n-1] == value {
+		return &s.materials[n-1]
+	}
+	s.materials = append(s.materials, value)
+	return &s.materials[len(s.materials)-1]
 }

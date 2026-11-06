@@ -106,12 +106,12 @@ type webGPUMesh struct {
 }
 
 type webGPUPipelineKey struct {
-	blend BlendState
-	depth bool
+	blend           BlendState
+	depth, coverage bool
 }
 
 type webGPUShader struct {
-	meshPipelines  [2][5]js.Value
+	meshPipelines  [3][5]js.Value
 	vertex         js.Value
 	fragment       js.Value
 	blendPipelines map[webGPUPipelineKey]js.Value
@@ -735,7 +735,7 @@ func (d *webGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region Render
 	if texture == nil || !texture.value.Truthy() {
 		return errors.New("render: WebGPU render target color texture is unavailable")
 	}
-	rowBytes := region.Width * 4
+	rowBytes := region.Width * target.descriptor.ColorFormat.TexelBytes()
 	bytesPerRow := align(rowBytes, 256)
 	required := bytesPerRow * region.Height
 	if !target.readback.value.Truthy() || target.readback.capacity < required {
@@ -774,6 +774,8 @@ func (d *webGPUDriver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 	if descriptor.ColorFormat == RenderTargetUint32 {
 		format = "r32uint"
 		sampleCount = 1
+	} else if descriptor.ColorFormat == RenderTargetR8 {
+		format, sampleCount = "r8unorm", 1
 	}
 	colorValue := d.device.Call("createTexture", webGPUObject(
 		"size", webGPUArray(descriptor.Width, descriptor.Height, 1), "format", format,
@@ -783,6 +785,9 @@ func (d *webGPUDriver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 		return nil, errors.New("render: WebGPU could not create render target color texture")
 	}
 	colorTexture := &webGPUTexture{value: colorValue, view: colorValue.Call("createView")}
+	if descriptor.ColorFormat == RenderTargetR8 {
+		colorTexture.format = TextureFormatR8
+	}
 	filter := "linear"
 	if descriptor.ColorFormat == RenderTargetUint32 {
 		filter = "nearest"
@@ -1699,7 +1704,7 @@ func (d *webGPUDriver) createPipeline(descriptor js.Value) (pipeline js.Value, e
 func (d *webGPUDriver) pipeline(shader *webGPUShader, blend BlendState) (js.Value, error) {
 	// Blend constants are dynamic and must not create a pipeline per text color.
 	blend.Constant = Color{}
-	key := webGPUPipelineKey{blend: blend, depth: d.hasDepth()}
+	key := webGPUPipelineKey{blend: blend, depth: d.hasDepth(), coverage: d.r8Target()}
 	if value, ok := shader.blendPipelines[key]; ok && value.Truthy() {
 		return value, nil
 	}
@@ -1718,6 +1723,9 @@ func (d *webGPUDriver) meshPipeline(shader *webGPUShader, transparent int, mode 
 		index = int(mode) + 1
 	}
 	depth := boolInt(d.hasDepth())
+	if d.r8Target() {
+		depth = 2
+	}
 	if pipeline := shader.meshPipelines[depth][index]; pipeline.Truthy() {
 		return pipeline, nil
 	}
@@ -1772,7 +1780,11 @@ func (d *webGPUDriver) pipelineDescriptor(shader *webGPUShader, mesh bool, blend
 	}
 	fragment := webGPUObject("module", shader.fragment, "entryPoint", webGPUEntryPoint(shader.pipelineKind, false), "targets", webGPUArray(d.colorTarget(blend, transparent)))
 	descriptor := webGPUObject("layout", layout, "vertex", vertex, "fragment", fragment, "primitive", webGPUObject("topology", "triangle-list", "cullMode", "none"))
-	descriptor.Set("multisample", webGPUObject("count", d.sampleCount))
+	sampleCount := d.sampleCount
+	if d.r8Target() {
+		sampleCount = 1
+	}
+	descriptor.Set("multisample", webGPUObject("count", sampleCount))
 	if d.hasDepth() && mesh {
 		descriptor.Set("depthStencil", webGPUObject("format", "depth24plus", "depthWriteEnabled", transparent == 0, "depthCompare", "greater"))
 	} else if d.hasDepth() {
@@ -1801,11 +1813,20 @@ func webGPUEntryPoint(kind Pipeline, vertex bool) string {
 	}
 }
 
+func (d *webGPUDriver) r8Target() bool {
+	target, ok := d.targets.Get(d.activeTarget)
+	return ok && target != nil && target.descriptor.ColorFormat == RenderTargetR8
+}
+
 func (d *webGPUDriver) colorTarget(blend BlendState, transparent int) js.Value {
-	if transparent != 0 || blend != (BlendState{}) {
-		return webGPUObject("format", d.format, "blend", webGPUBlend(blend), "writeMask", 15)
+	format, mask := d.format, 15
+	if d.r8Target() {
+		format, mask = "r8unorm", 1
 	}
-	return webGPUObject("format", d.format, "writeMask", 15)
+	if transparent != 0 || blend != (BlendState{}) {
+		return webGPUObject("format", format, "blend", webGPUBlend(blend), "writeMask", mask)
+	}
+	return webGPUObject("format", format, "writeMask", mask)
 }
 
 func webGPUBlend(blend BlendState) js.Value {

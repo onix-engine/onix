@@ -1,15 +1,64 @@
 package render3d
 
 import (
+	"fmt"
 	"testing"
 	"unsafe"
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
+
+func TestExtractionReclaimsCandidateScratch(t *testing.T) {
+	w, _ := memoryPreparationFixture(t, 0)
+	cameras := w.NewSpawner4[scene.Camera, Camera, scene.Projection, scene.GlobalTransform]()
+	camera := cameras.Spawn(scene.NewCamera(), Camera{}, scene.PerspectiveProjection3D(), scene.GlobalTransform{Matrix: mgl32.Ident4()})
+	mesh := graphics.CubeMesh(1)
+	t.Cleanup(func() { _ = mesh.Dispose() })
+	meshes := w.NewSpawner2[Mesh, scene.GlobalTransform]()
+	entities := make([]ecs.Entity, 4096)
+	for i := range entities {
+		entities[i] = meshes.Spawn(Mesh{Mesh: mesh}, scene.GlobalTransform{Matrix: mgl32.Translate3D(0, 0, -5)})
+	}
+	scratch := w.FrameScratch[extractedMeshes3DScratch, extractedMeshCandidate3D]()
+	frame := func() {
+		if err := scene.ExtractCamerasSystem("").Run(w); err != nil {
+			t.Fatal(err)
+		}
+		if err := ExtractSystem("").Run(w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	frame()
+	if len(scratch.Values) != len(entities) {
+		t.Fatal("fixture did not fill the extraction workspace")
+	}
+	for _, entity := range entities[2:] {
+		w.Despawn(entity)
+	}
+	for range reuse.RetentionFrames*2 + 4 {
+		frame()
+	}
+	view := WorldFor(w).views[camera]
+	if len(scratch.Values) != 2 || cap(scratch.Values) > 64 || len(view.extracted) != 2 || cap(view.extracted) > 64 {
+		t.Fatalf("3D extraction retained peak storage: candidates=%d/%d extracted=%d/%d", len(scratch.Values), cap(scratch.Values), len(view.extracted), cap(view.extracted))
+	}
+	if blocks := len(WorldFor(w).snapshotBlocks); blocks > 1 {
+		t.Fatalf("shared snapshots retained %d peak blocks", blocks)
+	}
+	for _, item := range scratch.Values[2:cap(scratch.Values)] {
+		if item.mesh != nil {
+			t.Fatal("reclaimed candidate storage retained an unused mesh reference")
+		}
+	}
+	if allocations := testing.AllocsPerRun(100, frame); allocations != 0 {
+		t.Fatalf("reclaimed extraction allocated %v times", allocations)
+	}
+}
 
 func memoryPreparationFixture(t testing.TB, count int) (*ecs.World, *renderView3D) {
 	t.Helper()
@@ -29,7 +78,9 @@ func memoryPreparationFixture(t testing.TB, count int) (*ecs.World, *renderView3
 	state.viewOrder = []ecs.Entity{1}
 	view.extracted = make([]extractedMesh3D, count)
 	for i := range view.extracted {
-		view.extracted[i] = extractedMesh3D{entity: ecs.Entity(i + 1), vertices: []render.Vertex3D{{}}, material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}
+		snapshot := state.appendSnapshot()
+		*snapshot = meshSnapshot3D{entity: ecs.Entity(i + 1), material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}
+		view.extracted[i] = extractedMesh3D{meshSnapshot3D: snapshot, vertices: []render.Vertex3D{{}}}
 		if i%2 == 0 {
 			view.extracted[i].material.AlphaMode = graphics.AlphaBlend
 		}
@@ -94,8 +145,15 @@ func TestExtractionReleasesRemovedMeshReferences(t *testing.T) {
 		frame()
 		for _, items := range [][]extractedMesh3D{view.extracted, view.opaque.items, view.transparent.items} {
 			for _, item := range items[:cap(items)] {
-				if item.entity == removed || len(items) == 0 && item.mesh != nil {
+				if item.meshSnapshot3D != nil && (item.entity == removed || len(items) == 0 && item.mesh != nil) {
 					t.Fatal("unused render snapshot retains a removed mesh")
+				}
+			}
+		}
+		for _, block := range WorldFor(w).snapshotBlocks {
+			for _, snapshot := range block {
+				if snapshot.entity == removed {
+					t.Fatal("shared snapshots retain a removed mesh")
 				}
 			}
 		}
@@ -166,7 +224,7 @@ func TestExtractionCleansUpPartiallyInitializedShadows(t *testing.T) {
 func TestRenderViewReleasesUnusedDeformationData(t *testing.T) {
 	w, view := memoryPreparationFixture(t, 0)
 	view.frame.Camera.viewport = scene.CameraViewport{Width: 800, Height: 600}
-	view.deformations = []render.MeshDeformationData{{JointMatrices: make([][16]float32, 64), MorphWeights: []float32{1}}}
+	view.deformations = []render.MeshDeformationData{{JointMatrices: make([]mgl32.Mat4, 64), MorphWeights: []float32{1}}}
 	if err := render3DView(graphics.CurrentContext(), WorldFor(w), view); err != nil {
 		t.Fatal(err)
 	}
@@ -178,27 +236,44 @@ func TestRenderViewReleasesUnusedDeformationData(t *testing.T) {
 }
 
 func BenchmarkPreparedSnapshotMemory(b *testing.B) {
-	w, view := memoryPreparationFixture(b, 2048)
-	context := &ecs.SystemContext{World: w}
-	if err := prepareRenderResources3D(context); err != nil {
-		b.Fatal(err)
+	for _, views := range []int{1, 2, 5} {
+		b.Run(fmt.Sprint(views), func(b *testing.B) {
+			w, first := memoryPreparationFixture(b, 2048)
+			state := WorldFor(w)
+			for index := 1; index < views; index++ {
+				entity := ecs.Entity(index + 1)
+				view := state.viewFor(entity)
+				view.extracted = append(view.extracted, first.extracted...)
+				state.viewOrder = append(state.viewOrder, entity)
+			}
+			context := &ecs.SystemContext{World: w}
+			if err := prepareRenderResources3D(context); err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				if err := prepareRenderResources3D(context); err != nil {
+					b.Fatal(err)
+				}
+			}
+			bytes := uintptr(cap(state.snapshotBlocks)) * unsafe.Sizeof([]meshSnapshot3D{})
+			for _, block := range state.snapshotBlocks {
+				bytes += uintptr(cap(block)) * unsafe.Sizeof(meshSnapshot3D{})
+			}
+			for _, entity := range state.viewOrder {
+				view := state.views[entity]
+				capacity := uintptr(cap(view.extracted)) * unsafe.Sizeof(extractedMesh3D{})
+				bytes += capacity
+				start := uintptr(unsafe.Pointer(unsafe.SliceData(view.extracted)))
+				end := start + capacity
+				for _, phase := range []renderPhase3D{view.opaque, view.transparent} {
+					address := uintptr(unsafe.Pointer(unsafe.SliceData(phase.items)))
+					if address < start || address >= end {
+						bytes += uintptr(cap(phase.items)) * unsafe.Sizeof(extractedMesh3D{})
+					}
+				}
+			}
+			b.ReportMetric(float64(bytes), "snapshot-reserved-B")
+		})
 	}
-	b.ReportAllocs()
-	for b.Loop() {
-		view.opaque.items = view.opaque.items[:0]
-		view.transparent.items = view.transparent.items[:0]
-		if err := prepareRenderResources3D(context); err != nil {
-			b.Fatal(err)
-		}
-	}
-	bytes := uintptr(cap(view.extracted)) * unsafe.Sizeof(extractedMesh3D{})
-	start := uintptr(unsafe.Pointer(unsafe.SliceData(view.extracted)))
-	end := start + bytes
-	for _, phase := range []renderPhase3D{view.opaque, view.transparent} {
-		address := uintptr(unsafe.Pointer(unsafe.SliceData(phase.items)))
-		if address < start || address >= end {
-			bytes += uintptr(cap(phase.items)) * unsafe.Sizeof(extractedMesh3D{})
-		}
-	}
-	b.ReportMetric(float64(bytes), "snapshot-reserved-B")
 }

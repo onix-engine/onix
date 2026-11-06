@@ -660,6 +660,7 @@ func initializeGLDriver(driver *openGLESDriver) (Driver, error) {
 	}
 	C.glEnable(C.GL_BLEND)
 	C.glPixelStorei(C.GL_UNPACK_ALIGNMENT, 1)
+	C.glPixelStorei(C.GL_PACK_ALIGNMENT, 1)
 	driver.blendEnabled = true
 	C.glDepthFunc(C.GL_GREATER)
 	C.glViewport(0, 0, C.GLsizei(driver.width), C.GLsizei(driver.height))
@@ -1008,13 +1009,15 @@ func (d *openGLESDriver) ReadRenderTarget(handle RenderTargetHandle, region Rend
 	format, pixelType := C.GLenum(C.GL_RGBA), C.GLenum(C.GL_UNSIGNED_BYTE)
 	if target.descriptor.ColorFormat == RenderTargetUint32 {
 		format, pixelType = C.GL_RED_INTEGER, C.GL_UNSIGNED_INT
+	} else if target.descriptor.ColorFormat == RenderTargetR8 {
+		format = C.GL_RED
 	}
 	y := target.descriptor.Height - region.Y - region.Height
 	C.onix_gl_read_render_target(target.framebuffer, C.GLint(region.X), C.GLint(y), C.GLsizei(region.Width), C.GLsizei(region.Height), format, pixelType, sliceData(destination), d.surfaceFramebuffer())
 	if err := glError("read render target"); err != nil {
 		return err
 	}
-	flipRenderTargetRows(destination, region.Width*4, region.Height)
+	flipRenderTargetRows(destination, region.Width*target.descriptor.ColorFormat.TexelBytes(), region.Height)
 	return nil
 }
 
@@ -1038,6 +1041,13 @@ func (d *openGLESDriver) createRenderTarget(descriptor RenderTargetDescriptor) (
 		C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_S, C.GL_CLAMP_TO_EDGE)
 		C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_WRAP_T, C.GL_CLAMP_TO_EDGE)
 	} else {
+		if descriptor.ColorFormat == RenderTargetR8 {
+			internalFormat, format = C.GL_R8, C.GL_RED
+			C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_SWIZZLE_R, C.GL_ONE)
+			C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_SWIZZLE_G, C.GL_ONE)
+			C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_SWIZZLE_B, C.GL_ONE)
+			C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_SWIZZLE_A, C.GL_RED)
+		}
 		d.setTextureParameters(filter, TextureAddressClamp, TextureAddressClamp)
 	}
 	C.glTexImage2D(C.GL_TEXTURE_2D, 0, internalFormat, C.GLsizei(descriptor.Width), C.GLsizei(descriptor.Height), 0, format, pixelType, nil)
@@ -1062,7 +1072,11 @@ func (d *openGLESDriver) createRenderTarget(descriptor RenderTargetDescriptor) (
 		d.boundTexture = 0
 		return nil, err
 	}
-	color := d.textures.Insert(glesTexture{value: texture, filter: filter})
+	textureFormat := TextureFormatRGBA8
+	if descriptor.ColorFormat == RenderTargetR8 {
+		textureFormat = TextureFormatR8
+	}
+	color := d.textures.Insert(glesTexture{value: texture, filter: filter, format: textureFormat})
 	return &glesRenderTarget{framebuffer: framebuffer, depth: depth, color: color, descriptor: descriptor}, nil
 }
 

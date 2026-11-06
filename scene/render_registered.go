@@ -341,7 +341,7 @@ func drawRenderItemList2D(c *graphics.Canvas2D, world *ecs.World, items renderIt
 			return
 		}
 		if begin && first.kind != renderItemShape2D {
-			c.BindMaterial2D(first.material2D.Shader)
+			c.BindMaterial2D(first.materialData().Shader)
 			c.BindTexture(first.texture)
 		}
 		state.drawers2D[first.kind](c, first, viewport)

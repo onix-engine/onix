@@ -3,7 +3,6 @@ package module
 import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/scene"
-	"slices"
 )
 
 type sceneScopeNode struct {
@@ -21,6 +20,7 @@ func (r *Runtime) SyncScopes() {
 	if r.queryDepth != 0 {
 		return
 	}
+	r.maintainScopes()
 	w := r.world
 	hierarchy := scene.HierarchyFor(w)
 	owners, _ := w.ComponentValueRevision[entityOwner]()
@@ -28,9 +28,8 @@ func (r *Runtime) SyncScopes() {
 		return
 	}
 	r.scopeDirty = false
-	if len(r.scopeNodes) < w.EntitySlots() {
-		r.scopeNodes = append(r.scopeNodes, make([]sceneScopeNode, w.EntitySlots()-len(r.scopeNodes))...)
-	}
+	previousDistinct := r.renderDistinct
+
 	if r.scopeEntities != w.EntityVersion() {
 		for i := range r.scopeNodes {
 			if r.scopeNodes[i].entity != 0 && !w.IsAlive(r.scopeNodes[i].entity) {
@@ -40,9 +39,12 @@ func (r *Runtime) SyncScopes() {
 	}
 	for _, entity := range hierarchy.Entities() {
 		index, _ := entity.Index()
+		if int(index) >= len(r.scopeNodes) {
+			r.scopeNodes = append(r.scopeNodes, make([]sceneScopeNode, int(index)+1-len(r.scopeNodes))...)
+		}
 		r.scopeNodes[index].resolved, r.scopeNodes[index].visiting = false, false
 	}
-	r.despawnEntities = slices.Grow(r.despawnEntities[:0], w.EntityCount())
+
 	r.renderBackground = false
 	previousUpdates, previousFrameUpdates := len(r.runningUpdates), len(r.runningFrameUpdates)
 	r.runningUpdates = r.runningUpdates[:0]
@@ -85,6 +87,7 @@ func (r *Runtime) SyncScopes() {
 	if len(r.runningFrameUpdates) < previousFrameUpdates {
 		clear(r.runningFrameUpdates[len(r.runningFrameUpdates):previousFrameUpdates])
 	}
+	r.renderDistinct = r.renderBackground || r.preparation != nil
 	r.runningEntities = r.runningEntities[:0]
 	r.renderEntities = r.renderEntities[:0]
 	runningChanged, renderedChanged := r.scopeEntities != w.EntityVersion(), r.scopeEntities != w.EntityVersion()
@@ -109,7 +112,7 @@ func (r *Runtime) SyncScopes() {
 		if running {
 			r.runningEntities = append(r.runningEntities, e)
 		}
-		if rendered {
+		if rendered && r.renderDistinct {
 			r.renderEntities = append(r.renderEntities, e)
 		}
 		runningChanged = runningChanged || !known || n.running != running
@@ -119,7 +122,12 @@ func (r *Runtime) SyncScopes() {
 	if runningChanged {
 		r.runningScope.Reset(r.runningEntities)
 	}
-	if renderedChanged {
+	if !r.renderDistinct {
+		r.renderEntities = nil
+		if previousDistinct {
+			r.renderScope.Reset(nil)
+		}
+	} else if renderedChanged || !previousDistinct {
 		r.renderScope.Reset(r.renderEntities)
 	}
 	r.scopeHierarchy, r.scopeOwners, r.scopeEntities = hierarchy.Version(), owners, w.EntityVersion()
@@ -189,4 +197,23 @@ func (r *Runtime) RenderScope() *ecs.QueryScope {
 		return &r.runningScope
 	}
 	return &r.renderScope
+}
+
+func (r *Runtime) maintainScopes() {
+	previous := cap(r.runningEntities)
+	r.runningEntities = r.scopeRetention[0].Trim(r.runningEntities, 64)
+	if cap(r.runningEntities) != previous {
+		r.runningScope.Reset(r.runningEntities)
+	}
+	previous = cap(r.renderEntities)
+	r.renderEntities = r.scopeRetention[1].Trim(r.renderEntities, 64)
+	if r.renderDistinct && cap(r.renderEntities) != previous {
+		r.renderScope.Reset(r.renderEntities)
+	}
+	r.despawnEntities = r.scopeRetention[2].Trim(r.despawnEntities[:0], 64)
+	length := len(r.scopeNodes)
+	for length > 0 && r.scopeNodes[length-1].entity == 0 {
+		length--
+	}
+	r.scopeNodes = r.scopeRetention[3].Trim(r.scopeNodes[:length], 64)
 }

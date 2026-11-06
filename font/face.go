@@ -12,6 +12,7 @@ import (
 type Face struct {
 	italicSource     *Face
 	italicVariant    *Face
+	glyphFallback    *Face
 	Cmap             cmap
 	outlineCache     map[uint16]weak.Pointer[Outline]
 	Kern             kernTable
@@ -69,6 +70,7 @@ func (f *Face) Close() error {
 	f.Kern = nil
 	f.pairLookups = nil
 	f.fallback = nil
+	f.glyphFallback = nil
 	f.color = colorGlyphTables{}
 	clear(f.glyphIndexCache)
 	clear(f.outlineCache)

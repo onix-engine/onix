@@ -231,5 +231,9 @@ func compileNagaGLSL(module *ir.Module, entrypoint int) ([]byte, error) {
 		}
 		source = strings.ReplaceAll(source, webGLCoordinateEpilogue, webGLDepthOnlyEpilogue)
 	}
+	// GLSL ES 3.0 links interpolation qualifiers textually. Omit redundant
+	// smooth qualifiers so generated stages match the built-in stage interfaces.
+	source = strings.ReplaceAll(source, "smooth in ", "in ")
+	source = strings.ReplaceAll(source, "smooth out ", "out ")
 	return []byte(source), nil
 }

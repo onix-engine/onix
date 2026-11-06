@@ -34,8 +34,10 @@ func TestPrepareRenderResourcesQueuesMainViewsAndDiscardsFailure(t *testing.T) {
 	graphics.BindFrame(world, graphics.NewCanvas2D(render.ActiveDevice(), 320, 200))
 	Register(world)
 	state := WorldFor(world)
-	item := extractedMesh3D{vertices: []render.Vertex3D{{}}, material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}
+	item := extractedMesh3D{meshSnapshot3D: &meshSnapshot3D{material: graphics.Material3DData{AlphaMode: graphics.AlphaOpaque}}, vertices: []render.Vertex3D{{}}}
 	opaque, masked, blend := item, item, item
+	maskedData, blendData := *item.meshSnapshot3D, *item.meshSnapshot3D
+	masked.meshSnapshot3D, blend.meshSnapshot3D = &maskedData, &blendData
 	masked.material.AlphaMode = graphics.AlphaMask
 	blend.material.AlphaMode = graphics.AlphaBlend
 	main := state.viewFor(1)
@@ -46,6 +48,8 @@ func TestPrepareRenderResourcesQueuesMainViewsAndDiscardsFailure(t *testing.T) {
 	picking.frame.Mode = render.RenderViewPicking
 	picking.extracted = []extractedMesh3D{blend}
 	bad := item
+	badData := *item.meshSnapshot3D
+	bad.meshSnapshot3D = &badData
 	bad.material.BaseColorTexture = graphics.CreateTextureByColor(graphics.Black)
 	picking.extracted = append(picking.extracted, bad)
 	state.viewOrder = []ecs.Entity{1, 2}

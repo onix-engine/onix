@@ -156,8 +156,7 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 		return
 	}
 	if control, ok := world.Get[html.Control](entity); ok && control.ReadOnly {
-		if textarea := world.GetMut[Textarea](entity); textarea != nil && uiInputState.KeyPressed(input.KeyA) &&
-			(uiInputState.KeyHeld(input.KeyLeftControl) || uiInputState.KeyHeld(input.KeyRightControl) || uiInputState.KeyHeld(input.KeyLeftSuper) || uiInputState.KeyHeld(input.KeyRightSuper)) {
+		if textarea := world.GetMut[Textarea](entity); textarea != nil && textClipboardShortcut(uiInputState, input.KeyA) {
 			textarea.preserveScroll = true
 		}
 		editReadOnlyField(field, uiInputState)
@@ -167,8 +166,7 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	edits.Values = uiInputState.AppendTextEdits(edits.Values)
 	defer edits.ReleaseUnused()
 	field.Composition = uiInputState.CompositionText()
-	shortcut := uiInputState.KeyHeld(input.KeyLeftControl) || uiInputState.KeyHeld(input.KeyRightControl) || uiInputState.KeyHeld(input.KeyLeftSuper) || uiInputState.KeyHeld(input.KeyRightSuper)
-	if shortcut && uiInputState.KeyPressed(input.KeyA) {
+	if textClipboardShortcut(uiInputState, input.KeyA) {
 		if textarea := world.GetMut[Textarea](entity); textarea != nil {
 			textarea.preserveScroll = true
 		}
@@ -250,15 +248,18 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	}
 }
 
+func textClipboardShortcut(state *input.State, key input.KeyCode) bool {
+	return state.KeyPressed(key) && state.KeyModifiers(key)&(input.ModifierControl|input.ModifierSuper) != 0
+}
+
 // Readonly controls still allow selection, keyboard navigation and copying.
 // Mutation commands never change the value.
 func editReadOnlyField(field *TextField, state *input.State) {
-	shortcut := state.KeyHeld(input.KeyLeftControl) || state.KeyHeld(input.KeyRightControl) || state.KeyHeld(input.KeyLeftSuper) || state.KeyHeld(input.KeyRightSuper)
-	if shortcut && state.KeyPressed(input.KeyA) {
+	if textClipboardShortcut(state, input.KeyA) {
 		field.Anchor, field.Caret = 0, field.Text().Runes()
 		return
 	}
-	if shortcut && (state.KeyPressed(input.KeyC) || state.KeyPressed(input.KeyX)) {
+	if textClipboardShortcut(state, input.KeyC) || textClipboardShortcut(state, input.KeyX) {
 		start, end := orderedSelection(field.Anchor, field.Caret)
 		if start != end {
 			state.SetClipboardText(field.Text().Slice(field.Text().ByteOffset(start), field.Text().ByteOffset(end)))
@@ -353,23 +354,22 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 	}
 	caret = max(0, min(caret, length))
 	anchor = max(0, min(anchor, length))
-	shortcut := state.KeyHeld(input.KeyLeftControl) || state.KeyHeld(input.KeyRightControl) || state.KeyHeld(input.KeyLeftSuper) || state.KeyHeld(input.KeyRightSuper)
 	start, end := orderedSelection(anchor, caret)
-	if shortcut && !state.Composing() && state.KeyPressed(input.KeyA) {
+	if !state.Composing() && textClipboardShortcut(state, input.KeyA) {
 		return value, length, 0, 0
 	}
-	if shortcut && state.KeyPressed(input.KeyC) {
+	if textClipboardShortcut(state, input.KeyC) {
 		if start != end {
 			state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end)))
 		}
 		return value, caret, anchor, 0
 	}
-	if shortcut && state.KeyPressed(input.KeyX) {
+	if textClipboardShortcut(state, input.KeyX) {
 		if start != end && state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end))) {
 			edits = prependTextEdit(edits, input.TextEdit{Command: input.TextCommandBackspace})
 		}
 	}
-	if shortcut && state.KeyPressed(input.KeyV) {
+	if textClipboardShortcut(state, input.KeyV) {
 		if pasted, ok := state.ClipboardText(); ok {
 			edits = prependTextEdit(edits, input.TextEdit{Text: pasted})
 		}

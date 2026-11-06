@@ -18,9 +18,11 @@ func TestRenderViewReclaimsBurstStorageAndPreservesSnapshots(t *testing.T) {
 		deformations: make([]render.MeshDeformationData, 2048, 4096),
 	}
 	view.releaseUnusedExtracted()
+	var snapshot meshSnapshot3D
 	for frame := range reuse.RetentionFrames + 1 {
 		view.resetExtracted()
-		view.extracted = append(view.extracted, extractedMesh3D{entity: ecs.Entity(frame + 1)})
+		snapshot.entity = ecs.Entity(frame + 1)
+		view.extracted = append(view.extracted, extractedMesh3D{meshSnapshot3D: &snapshot})
 		view.instances = view.instances[:1]
 		view.draws = view.draws[:1]
 		view.vertices = view.vertices[:1]
@@ -36,7 +38,8 @@ func TestRenderViewReclaimsBurstStorageAndPreservesSnapshots(t *testing.T) {
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
 		view.resetExtracted()
-		view.extracted = append(view.extracted, extractedMesh3D{entity: 7})
+		snapshot.entity = 7
+		view.extracted = append(view.extracted, extractedMesh3D{meshSnapshot3D: &snapshot})
 		view.releaseUnusedExtracted()
 	}); allocs != 0 {
 		t.Fatalf("stable view allocated %g times", allocs)

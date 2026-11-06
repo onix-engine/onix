@@ -29,6 +29,22 @@ func (d *canvasTargetTestDriver) BeginRenderTarget(render.RenderTargetHandle, re
 }
 func (d *canvasTargetTestDriver) EndRenderTarget() error { d.ends++; return nil }
 
+func TestTargetTexturePreservesCoverageFormat(t *testing.T) {
+	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: 7, Height: 3, ColorFormat: render.RenderTargetR8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = target.Dispose() })
+	texture, err := CreateTextureFromRenderTarget(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = texture.Dispose() })
+	if texture.Format() != render.TextureFormatR8 {
+		t.Fatal("target texture lost the coverage format")
+	}
+}
+
 func TestTargetTextureValidationRefreshesBoundsWithoutGPUWork(t *testing.T) {
 	driver := &canvasTargetTestDriver{}
 	device, _ := render.NewDevice(driver)

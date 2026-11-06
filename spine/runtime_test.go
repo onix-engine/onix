@@ -7,8 +7,63 @@ import (
 	"testing"
 
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
+
+func TestAppendMeshBatchIntoPreservesGeometryAndMergesPlayers(t *testing.T) {
+	texture := graphics.CreateTextureByImageWithUsage(image.NewRGBA(image.Rect(0, 0, 10, 10)), false, graphics.ResourceUsageCPU)
+	t.Cleanup(func() { _ = texture.Dispose() })
+	skeleton := []byte(`{"bones":[{"name":"root"}],"slots":[{"name":"slot","bone":"root","attachment":"region","color":"804020cc","dark":"123456"}],"skins":{"default":{"slot":{"region":{"width":10,"height":10}}}}}`)
+	atlas := []byte("page.png\nsize: 10, 10\nregion\n  rotate: false\n  xy: 0, 0\n  size: 10, 10\n  orig: 10, 10\n  offset: 0, 0\n")
+	resource, err := Load(skeleton, atlas, texture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := NewPlayer(resource)
+	player.Alpha = .65
+	projection := mgl32.Ortho2D(0, 100, 100, 0)
+	model := mgl32.Translate3D(17, 29, 2).Mul4(mgl32.HomogRotate3DZ(.4)).Mul4(mgl32.Scale3D(2, 3, 1))
+	var local, shared render.MeshBatch3D
+	minX, minY, maxX, maxY, valid := player.MeshBatchInto(&local, projection, model)
+	x0, y0, x1, y1, appended := player.AppendMeshBatchInto(&shared, projection, model)
+	if !valid || !appended || [4]float32{minX, minY, maxX, maxY} != [4]float32{x0, y0, x1, y1} {
+		t.Fatal("shared submission changed local culling bounds")
+	}
+	if len(shared.Vertices) != 4 || len(shared.Instances) != 1 || shared.Instances[0].Model != [16]float32(mgl32.Ident4()) || shared.ViewProjection != local.ViewProjection || !slices.Equal(shared.Indices, local.Indices) {
+		t.Fatal("shared submission changed the projection, indices or instance transform")
+	}
+	for i, vertex := range local.Vertices {
+		position := model.Mul4x1(mgl32.Vec4{vertex.Position[0], vertex.Position[1], vertex.Position[2], 1})
+		if shared.Vertices[i].Position != [3]float32{position[0], position[1], position[2]} || shared.Vertices[i].Normal != vertex.Normal || shared.Vertices[i].UV != vertex.UV {
+			t.Fatalf("vertex %d lost its transformed position, packed tint or UV", i)
+		}
+	}
+	player.AppendMeshBatchInto(&shared, projection, mgl32.Ident4())
+	if len(shared.Draws) != 1 || shared.Draws[0].IndexCount != 12 || len(shared.Instances) != 1 {
+		t.Fatal("adjacent players did not share a draw and identity instance")
+	}
+	for i, index := range local.Indices {
+		if shared.Indices[len(local.Indices)+i] != index+4 {
+			t.Fatal("appended indices did not address the second player's vertices")
+		}
+	}
+	resource.slots[0].blend = render.MeshBlendAdditive
+	player.AppendMeshBatchInto(&shared, projection, model)
+	if len(shared.Draws) != 2 || shared.Draws[1].BlendMode != render.MeshBlendAdditive || shared.Draws[1].FirstIndex != 12 || shared.Draws[1].IndexCount != 6 {
+		t.Fatal("additive geometry did not retain its separate draw range")
+	}
+	frame := func() {
+		shared.Vertices, shared.Indices = shared.Vertices[:0], shared.Indices[:0]
+		shared.Instances, shared.Draws = shared.Instances[:0], shared.Draws[:0]
+		for range 3 {
+			player.AppendMeshBatchInto(&shared, projection, model)
+		}
+	}
+	if allocations := testing.AllocsPerRun(100, frame); allocations != 0 {
+		t.Fatalf("warm direct submission allocated %v times", allocations)
+	}
+}
 
 func TestPackRGBPreservesEightBitChannels(t *testing.T) {
 	if got := packRGB(0x12/255.0, 0x34/255.0, 0x56/255.0); got != float32(0x563412) {

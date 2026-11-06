@@ -103,17 +103,24 @@ func TestHTMLRasterTextureSharesPixelsAndDetachesOnResize(t *testing.T) {
 		} else {
 			variant = "background"
 		}
+		pixels := func() []byte {
+			entry := state.Textures.entries[htmlTextureKey{node: box.Node, variant: variant}]
+			if shadow {
+				return entry.shadow.image.Pix
+			}
+			return entry.paint.image.Pix
+		}
 		paint := func(size float32) {
 			var texture = htmlPaintTextureFor(&state, box.Node, computed, size, size)
 			if shadow {
 				texture = htmlBoxShadowTextureFor(&state, box.Node, computed, 0, size, size, size-8, size-8, 4)
 			}
-			if !texture.RenderHandle().Valid() || driver.source != &state.Textures.paint(htmlTextureKey{node: box.Node, variant: variant}).image.Pix[0] {
+			if !texture.RenderHandle().Valid() || driver.source != &pixels()[0] {
 				t.Fatal("paint texture copied its retained raster")
 			}
 		}
 		paint(32)
-		old := state.Textures.paint(htmlTextureKey{node: box.Node, variant: variant}).image.Pix
+		old := pixels()
 		copyOfOld := bytes.Clone(old)
 		paint(16)
 		if !bytes.Equal(old, copyOfOld) {

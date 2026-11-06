@@ -1,6 +1,9 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import (
+	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/internal/reuse"
+)
 
 const (
 	hierarchyActive uint8 = 1 << iota
@@ -20,6 +23,7 @@ type Hierarchy struct {
 	changes                 ecs.SystemContext
 	entities, queue, path   []ecs.Entity
 	nodes                   []hierarchyNode
+	retention               [4]reuse.Retention
 	versions, members       [3]uint64
 	version                 uint64
 	mutationVersion         uint64
@@ -127,12 +131,13 @@ func (h *Hierarchy) rebuild(world *ecs.World) {
 		index, _ := entity.Index()
 		h.nodes[index] = hierarchyNode{}
 	}
-	if len(h.nodes) < world.EntitySlots() {
-		h.nodes = append(h.nodes, make([]hierarchyNode, world.EntitySlots()-len(h.nodes))...)
-	}
+
 	h.entities = h.entities[:0]
 	for entity := range world.Entities() {
 		index, _ := entity.Index()
+		if int(index) >= len(h.nodes) {
+			h.nodes = append(h.nodes, make([]hierarchyNode, int(index)+1-len(h.nodes))...)
+		}
 		parent, _ := world.Get[Parent](entity)
 		h.nodes[index] = hierarchyNode{entity: entity, parent: parent.Entity, local: hierarchyLocalFlags(world, entity)}
 		h.entities = append(h.entities, entity)
@@ -237,4 +242,15 @@ func (h *Hierarchy) flags(entity ecs.Entity) uint8 {
 		h.recomputed++
 	}
 	return flags
+}
+
+func (h *Hierarchy) MaintainCache() {
+	h.entities = h.retention[0].Trim(h.entities, 64)
+	h.queue = h.retention[1].Trim(h.queue[:0], 64)
+	h.path = h.retention[2].Trim(h.path[:0], 64)
+	length := len(h.nodes)
+	for length > 0 && h.nodes[length-1].entity == 0 {
+		length--
+	}
+	h.nodes = h.retention[3].Trim(h.nodes[:length], 64)
 }

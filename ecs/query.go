@@ -260,10 +260,10 @@ func (cursor *queryCursor) nextArchetype() bool {
 		archetype := cursor.view.world.archetypes[id]
 		cursor.scopeTable = nil
 		if cursor.scope != nil {
-			if int(id) >= len(cursor.scope.tables) {
+			table := cursor.scope.table(id)
+			if table == nil {
 				continue
 			}
-			table := &cursor.scope.tables[id]
 			if table.count == 0 {
 				continue
 			}
@@ -313,14 +313,14 @@ func (cursor *queryCursor) groupMatches(group int) bool {
 // generated adapters only run row filters inside matching 64-row blocks.
 func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
 	for start < length {
-		if cursor.scopeTable != nil {
-			for cursor.scopeBlock < len(cursor.scopeTable.blocks) && int(cursor.scopeTable.blocks[cursor.scopeBlock]) < start/queryTickBlockSize {
+		if table := cursor.scopeTable; table != nil && len(table.sparse) != 0 {
+			for cursor.scopeBlock < len(table.sparse) && int(table.sparse[cursor.scopeBlock]) < start {
 				cursor.scopeBlock++
 			}
-			if cursor.scopeBlock == len(cursor.scopeTable.blocks) {
+			if cursor.scopeBlock == len(table.sparse) {
 				return length, length
 			}
-			start = max(start, int(cursor.scopeTable.blocks[cursor.scopeBlock])*queryTickBlockSize)
+			start = int(table.sparse[cursor.scopeBlock])
 		}
 		if cursor.view.filters.count != 0 && start%queryTickGroupSize == 0 && !cursor.groupMatches(start/queryTickGroupSize) {
 			start = (start/queryTickGroupSize + 1) * queryTickGroupSize
@@ -332,17 +332,25 @@ func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
 			start = end
 			continue
 		}
-		if cursor.scopeTable != nil {
-			if block >= len(cursor.scopeTable.rows) {
-				return length, length
+		if table := cursor.scopeTable; table != nil {
+			if len(table.dense) != 0 {
+				if block >= len(table.dense) {
+					return length, length
+				}
+				word := table.dense[block] & (^uint64(0) << uint(start%64))
+				if word == 0 {
+					start = end
+					continue
+				}
+				start = block*64 + bits.TrailingZeros64(word)
+				end = min(end, start+bits.TrailingZeros64(^(word>>uint(start%64))))
+			} else {
+				end = start + 1
+				for cursor.scopeBlock+1 < len(table.sparse) && int(table.sparse[cursor.scopeBlock+1]) == end && end%64 != 0 {
+					cursor.scopeBlock++
+					end++
+				}
 			}
-			word := cursor.scopeTable.rows[block] & (^uint64(0) << uint(start%64))
-			if word == 0 {
-				start = end
-				continue
-			}
-			start = block*64 + bits.TrailingZeros64(word)
-			end = min(end, start+bits.TrailingZeros64(^(word>>uint(start%64))))
 		}
 		return start, end
 	}

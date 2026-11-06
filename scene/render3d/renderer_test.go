@@ -16,8 +16,8 @@ func TestCompareOpaque3DSortsNormalTexturesForBatching(t *testing.T) {
 	first := graphics.CreateTextureByColor(graphics.White)
 	second := graphics.CreateTextureByColor(graphics.Black)
 	items := []extractedMesh3D{
-		{entity: 1, meshKey: 1, material: graphics.Material3DData{NormalTexture: second}},
-		{entity: 2, meshKey: 1, material: graphics.Material3DData{NormalTexture: first}},
+		{meshSnapshot3D: &meshSnapshot3D{entity: 1, meshKey: 1, material: graphics.Material3DData{NormalTexture: second}}},
+		{meshSnapshot3D: &meshSnapshot3D{entity: 2, meshKey: 1, material: graphics.Material3DData{NormalTexture: first}}},
 	}
 
 	slices.SortFunc(items, compareOpaque3D)
@@ -685,7 +685,7 @@ func cloneMeshBatch3D(batch render.MeshBatch3D) render.MeshBatch3D {
 	batch.Deformations = append([]render.MeshDeformationData(nil), batch.Deformations...)
 	batch.Lights = append([]render.Light3D(nil), batch.Lights...)
 	for index := range batch.Deformations {
-		batch.Deformations[index].JointMatrices = append([][16]float32(nil), batch.Deformations[index].JointMatrices...)
+		batch.Deformations[index].JointMatrices = append([]mgl32.Mat4(nil), batch.Deformations[index].JointMatrices...)
 		batch.Deformations[index].MorphWeights = append([]float32(nil), batch.Deformations[index].MorphWeights...)
 	}
 	return batch

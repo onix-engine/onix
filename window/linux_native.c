@@ -24,6 +24,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon-compose.h>
+#include <xkbcommon/xkbcommon-names.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include "text-input-unstable-v3-client-protocol.h"
@@ -162,6 +163,7 @@ struct OnixNativeWindow {
 	int maximized;
 	int fullscreen;
 	int mouse_captured;
+	uint8_t modifiers;
 	char *clipboard_text;
 	OnixEventQueue queue;
 	union {
@@ -205,6 +207,11 @@ static void onix_push_event(OnixNativeWindow *window, OnixEventKind kind, int ar
 	if (window == NULL) {
 		return;
 	}
+	if (arg0 >= 340 && arg0 <= 347) {
+		uint8_t bit = 1u << (arg0 - 340);
+		if (kind == ONIX_EVENT_KEY_DOWN) window->modifiers |= bit;
+		else if (kind == ONIX_EVENT_KEY_UP) window->modifiers &= ~bit;
+	}
 	// High-rate relative motion must not overflow the fixed event queue.
 	if (kind == ONIX_EVENT_MOUSE_DELTA && window->queue.head != window->queue.tail) {
 		OnixEvent *previous = &window->queue.items[(window->queue.tail + ONIX_EVENT_QUEUE_CAPACITY - 1) % ONIX_EVENT_QUEUE_CAPACITY];
@@ -225,6 +232,25 @@ static void onix_push_event(OnixNativeWindow *window, OnixEventKind kind, int ar
 	window->queue.items[window->queue.tail].y = y;
 	window->queue.items[window->queue.tail].text[0] = '\0';
 	window->queue.tail = next;
+}
+
+static void onix_release_modifiers(OnixNativeWindow *window, uint8_t mask) {
+	uint8_t released = window->modifiers & mask;
+	for (int index = 0; index < 8; index++) {
+		if (released & (1u << index)) onix_push_event(window, ONIX_EVENT_KEY_UP, 340 + index, 0, 0, 0);
+	}
+}
+
+// Reconcile with the native mask: IMEs and focus changes can consume key events.
+// The low four bits represent Shift, Control, Alt and Super, in that order.
+static void onix_sync_modifiers(OnixNativeWindow *window, uint8_t active) {
+	onix_release_modifiers(window, ~(active | (active << 4)));
+	for (int index = 0; index < 4; index++) {
+		uint8_t bit = 1u << index;
+		if ((active & bit) && !(window->modifiers & (bit | (bit << 4)))) {
+			onix_push_event(window, ONIX_EVENT_KEY_DOWN, 340 + index, 0, 0, 0);
+		}
+	}
 }
 
 static void onix_push_text_event_chunk(OnixNativeWindow *window, OnixEventKind kind, int active, const char *text, int len) {
@@ -1516,6 +1542,7 @@ static void onix_wayland_keyboard_leave(void *data, struct wl_keyboard *keyboard
 	(void)serial;
 	(void)surface;
 	OnixNativeWindow *window = data;
+	onix_release_modifiers(window, 0xff);
 	onix_window_set_mouse_captured(window, 0);
 	if (window->state.wayland.xkb_compose_state != NULL) {
 		xkb_compose_state_reset(window->state.wayland.xkb_compose_state);
@@ -1608,6 +1635,12 @@ static void onix_wayland_keyboard_modifiers(void *data, struct wl_keyboard *keyb
 		return;
 	}
 	xkb_state_update_mask(window->state.wayland.xkb_state, depressed, latched, locked, 0, 0, group);
+	const char *names[] = {XKB_MOD_NAME_SHIFT, XKB_MOD_NAME_CTRL, XKB_MOD_NAME_ALT, XKB_MOD_NAME_LOGO};
+	uint8_t active = 0;
+	for (int index = 0; index < 4; index++) {
+		if (xkb_state_mod_name_is_active(window->state.wayland.xkb_state, names[index], XKB_STATE_MODS_EFFECTIVE) > 0) active |= 1u << index;
+	}
+	onix_sync_modifiers(window, active);
 }
 
 static void onix_wayland_keyboard_repeat_info(void *data, struct wl_keyboard *keyboard, int32_t rate, int32_t delay) {
@@ -1823,6 +1856,14 @@ static void onix_poll_x11(OnixNativeWindow *window) {
 	XEvent event;
 	while (XPending(window->state.x11.display) > 0) {
 		XNextEvent(window->state.x11.display, &event);
+		if (event.type == KeyPress || event.type == KeyRelease) {
+			const unsigned int masks[] = {ShiftMask, ControlMask, Mod1Mask, Mod4Mask};
+			uint8_t active = 0;
+			for (int index = 0; index < 4; index++) {
+				if (event.xkey.state & masks[index]) active |= 1u << index;
+			}
+			onix_sync_modifiers(window, active);
+		}
 		if (window->state.x11.im != NULL && XFilterEvent(&event, None)) {
 			continue;
 		}
@@ -1925,6 +1966,7 @@ static void onix_poll_x11(OnixNativeWindow *window) {
 		case FocusOut:
 			if (event.xfocus.mode != NotifyNormal) break;
 			window->state.x11.focused = 0;
+			onix_release_modifiers(window, 0xff);
 			onix_window_set_mouse_captured(window, 0);
 			if (window->state.x11.ic != NULL) {
 				XUnsetICFocus(window->state.x11.ic);

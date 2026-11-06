@@ -26,6 +26,7 @@ type htmlOwnedTexture struct {
 	texture *graphics.Texture
 	target  *render.RenderTarget
 	paint   *htmlPaintRaster
+	shadow  *htmlShadowRaster
 	key     htmlTextureKey
 	refs    int
 	queued  bool
@@ -33,6 +34,7 @@ type htmlOwnedTexture struct {
 
 type htmlTextureCache struct {
 	blurScratch    htmlGPUBlurScratch
+	shadowScratch  htmlGPUBlurScratch
 	face, boldFace *font.Face
 	entries        map[htmlTextureKey]*htmlOwnedTexture
 	textures       map[*graphics.Texture]*htmlOwnedTexture
@@ -100,6 +102,7 @@ func (cache *htmlTextureCache) sweep() {
 			if variant, ok := strings.CutPrefix(entry.key.variant, "gpu-"); ok {
 				key := htmlTextureKey{node: entry.key.node, variant: variant}
 				if effect := cache.gpuBlur[key]; effect != nil && effect.output == entry {
+					cache.scratchForBlur(effect.target.Descriptor().ColorFormat).effects--
 					delete(cache.gpuBlur, key)
 				}
 			}
@@ -111,8 +114,11 @@ func (cache *htmlTextureCache) sweep() {
 	}
 	clear(cache.unused[len(retained):])
 	cache.unused = retained
-	if len(cache.gpuBlur) == 0 {
+	if cache.blurScratch.effects == 0 {
 		cache.blurScratch.dispose()
+	}
+	if cache.shadowScratch.effects == 0 {
+		cache.shadowScratch.dispose()
 	}
 }
 
@@ -124,6 +130,7 @@ func (cache *htmlTextureCache) dispose() {
 		}
 	}
 	cache.blurScratch.dispose()
+	cache.shadowScratch.dispose()
 	if cache.blurShader != nil {
 		_ = cache.blurShader.Dispose()
 		cache.blurShader = nil
@@ -202,6 +209,7 @@ type htmlOpacityInline struct {
 }
 
 type htmlOpacityRaster struct {
+	root                *dom.Node
 	boldFace            *font.Face
 	face                *font.Face
 	style               *style.ComputedStyle
@@ -227,6 +235,25 @@ func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacity
 }
 
 func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
+	return cache.updateOpacityRaster(box, box.Node, root, cacheSubtree, gpuBlur)
+}
+
+func (cache *htmlTextureCache) retireOpacityRoot(root *dom.Node) {
+	var retire func(*dom.Node)
+	retire = func(node *dom.Node) {
+		raster := cache.rasters[node]
+		if raster == nil || raster.root != root {
+			return
+		}
+		for _, child := range raster.children {
+			retire(child.node)
+		}
+		delete(cache.rasters, node)
+	}
+	retire(root)
+}
+
+func (cache *htmlTextureCache) updateOpacityRaster(box *layout.Box, owner *dom.Node, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
 	if cache.rasters == nil {
 		cache.rasters = make(map[*dom.Node]*htmlOpacityRaster)
 	}
@@ -235,6 +262,7 @@ func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cac
 		raster = &htmlOpacityRaster{}
 		cache.rasters[box.Node] = raster
 	}
+	raster.root = owner
 	r := box.BorderBox()
 	bounds := htmlOwnVisiblePaintBounds(box)
 	background, opacity := box.Style.BackgroundColor, box.Style.Opacity
@@ -257,7 +285,7 @@ func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cac
 	clear(raster.inline[len(box.InlineBackgrounds):])
 	raster.inline = raster.inline[:len(box.InlineBackgrounds)]
 	for index, child := range box.Children {
-		value := updateHTMLOpacityRaster(cache, child, false, group, false)
+		value := cache.updateOpacityRaster(child, owner, false, group, false)
 		bounds = htmlUnionPaintBounds(bounds, value.rect)
 		dirty = reuse.UpdateAt(&raster.children, index, htmlOpacityChild{child.Node, value.version}) || dirty
 	}

@@ -39,6 +39,8 @@ func (cache *retainedRender2D) replaceTexture(position int, previous *graphics.T
 		}
 		if len(dependency.positions) == 0 {
 			delete(cache.textures, previous)
+		} else {
+			cache.retainTexture(previous, dependency)
 		}
 	}
 	cache.trackTexture(position)
@@ -65,7 +67,7 @@ func (cache *retainedRender2D) refreshTextures() {
 				continue
 			}
 			cache.recordItemDamage(position)
-			cache.paints[position] = preparePaintItem2D(item)
+			cache.paints[position] = preparePaintItem2D(item, cache.device)
 			item.paint = &cache.paints[position]
 			cache.stats.PaintUpdated++
 		}

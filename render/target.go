@@ -10,6 +10,7 @@ type RenderTargetColorFormat uint8
 const (
 	RenderTargetRGBA8 RenderTargetColorFormat = iota
 	RenderTargetUint32
+	RenderTargetR8
 )
 
 type RenderTargetDescriptor struct {
@@ -23,10 +24,21 @@ func (descriptor RenderTargetDescriptor) Validate() error {
 	if descriptor.Width <= 0 || descriptor.Height <= 0 {
 		return errors.New("render: render target dimensions must be positive")
 	}
-	if descriptor.ColorFormat > RenderTargetUint32 {
+	if descriptor.ColorFormat > RenderTargetR8 {
 		return errors.New("render: invalid render target color format")
 	}
+	if descriptor.ColorFormat == RenderTargetR8 && descriptor.Depth {
+		return errors.New("render: R8 render targets require no depth attachment")
+	}
 	return nil
+}
+
+// TexelBytes returns the byte size used by color attachment readback.
+func (format RenderTargetColorFormat) TexelBytes() int {
+	if format == RenderTargetR8 {
+		return 1
+	}
+	return 4
 }
 
 type RenderTargetClear struct {
@@ -168,8 +180,8 @@ func (target *RenderTarget) Read(region RenderTargetRegion, destination []byte) 
 	if region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 || region.X+region.Width > target.descriptor.Width || region.Y+region.Height > target.descriptor.Height {
 		return errors.New("render: render target readback region is invalid")
 	}
-	if len(destination) != region.Width*region.Height*4 {
-		return fmt.Errorf("render: render target readback requires %d bytes, got %d", region.Width*region.Height*4, len(destination))
+	if len(destination) != region.Width*region.Height*target.descriptor.ColorFormat.TexelBytes() {
+		return fmt.Errorf("render: render target readback requires %d bytes, got %d", region.Width*region.Height*target.descriptor.ColorFormat.TexelBytes(), len(destination))
 	}
 	driver, ok := Current().(RenderTargetReadbackDriver)
 	if !ok {

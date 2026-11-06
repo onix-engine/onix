@@ -90,7 +90,7 @@ func (snapshots *renderSnapshots2D) appendUIShapeLayer2D[T uiShapeLayer2D](c *gr
 		}
 		sprite := Sprite2D{Shape: shape, Width: width, Height: height, Alpha: alpha}
 		info := renderEntityInfo2D(world, entity, true, 0, hierarchy)
-		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), graphics.Material2DData{}, anchor, matrix, clip, width, height, true, info.sortIndex)
+		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), nil, anchor, matrix, clip, width, height, true, info.sortIndex)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
@@ -134,7 +134,7 @@ func appendUIImageLayer2D(c *graphics.Canvas2D, world *ecs.World, snapshots *ren
 		sprite.Tint = image.Tint
 		sprite.Alpha = image.Alpha
 		info := renderEntityInfo2D(world, entity, true, 0, hierarchy)
-		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material2DForEntity(world, entity), anchor, matrix, clip, width, height, true, info.sortIndex)
+		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), snapshots.addMaterial(material2DForEntity(world, entity)), anchor, matrix, clip, width, height, true, info.sortIndex)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}

@@ -22,7 +22,7 @@ func TestUpdateParticleEmitter2DSystemSpawnsLoopingParticles(t *testing.T) {
 	world.InsertResource(&Time{Delta: time.Second})
 
 	if err := UpdateParticleEmitter2DSystem("").Run(world); err != nil {
-		t.Fatalf("update particle emitter: %v", err)
+		t.Fatalf("update particle content: %v", err)
 	}
 
 	count := 0
@@ -198,7 +198,7 @@ func TestParticleRendererBindsEachTextureAndRestoresFollowingSprite(t *testing.T
 	RegisterSpriteRenderer2D(world)
 	item := newParticleRenderItem2D(0, 1, &emitter, mgl32.Ident4(), clipRect2D{}, false, 0, white)
 	sprite := Sprite2DFromTexture(white)
-	following := renderItem2D{kind: renderItemSprite2D, material: item.material, texture: white, sprite: &sprite, transform: mgl32.Translate3D(50, 10, 0), width: 1, height: 1}
+	following := renderItem2D{kind: renderItemSprite2D, material: item.material, texture: white, content: &sprite, transform: mgl32.Translate3D(50, 10, 0), width: 1, height: 1}
 	drawRenderItems2D(canvas, world, []renderItem2D{item, following}, DrawViews2D{World: mgl32.Ident4(), UI: mgl32.Ident4()}, false)
 	if err := canvas.FinishFrame(); err != nil {
 		t.Fatal(err)

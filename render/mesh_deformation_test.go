@@ -3,6 +3,8 @@ package render
 import (
 	"math"
 	"testing"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 type deformationTestSource struct {
@@ -25,7 +27,7 @@ func TestMeshDeformationSeparatesStaticAndAnimatedStreams(t *testing.T) {
 	source := &deformationTestSource{}
 	handle, static := source.upload(t, MeshDeformationDescriptor{VertexCount: 1, TargetCount: 1, Skin: []MeshSkinVertex{{Joints: [4]uint32{2}, Weights: [4]float32{1}}}, MorphTargets: []MeshMorphVertex{{Position: [3]float32{1}, Tangent: [3]float32{2}}}})
 	identity := [16]float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
-	value := MeshDeformationData{Mesh: handle, JointMatrices: [][16]float32{identity, identity, identity}, MorphWeights: []float32{.5}}
+	value := MeshDeformationData{Mesh: handle, JointMatrices: []mgl32.Mat4{identity, identity, identity}, MorphWeights: []float32{.5}}
 	batch := MeshBatch3D{Draws: []MeshDraw3D{{Mesh: handle, DeformationIndex: 1}}, Deformations: []MeshDeformationData{value}}
 	words, err := packMeshDeformations(nil, batch, source)
 	if err != nil {
@@ -73,13 +75,13 @@ func TestMeshDeformationRejectsInvalidStaticStreams(t *testing.T) {
 func TestMeshDeformationRejectsInvalidAnimatedDataAndRecovers(t *testing.T) {
 	source := &deformationTestSource{}
 	handle, _ := source.upload(t, MeshDeformationDescriptor{VertexCount: 1, TargetCount: 1, Skin: []MeshSkinVertex{{Joints: [4]uint32{1}, Weights: [4]float32{1}}}, MorphTargets: []MeshMorphVertex{{}}})
-	valid := MeshDeformationData{Mesh: handle, JointMatrices: [][16]float32{{}, {}}, MorphWeights: []float32{.5}}
+	valid := MeshDeformationData{Mesh: handle, JointMatrices: []mgl32.Mat4{{}, {}}, MorphWeights: []float32{.5}}
 	for _, bad := range []MeshDeformationData{
 		{Mesh: NewHandle[MeshResource](handle.ID(), handle.Generation()+1)},
-		{Mesh: handle, JointMatrices: [][16]float32{{}}},
-		{Mesh: handle, JointMatrices: [][16]float32{{}, {}}, MorphWeights: []float32{1, 2}},
-		{Mesh: handle, JointMatrices: [][16]float32{{}, {}}, MorphWeights: []float32{float32(math.NaN())}},
-		{Mesh: handle, JointMatrices: [][16]float32{{float32(math.Inf(1))}, {}}},
+		{Mesh: handle, JointMatrices: []mgl32.Mat4{{}}},
+		{Mesh: handle, JointMatrices: []mgl32.Mat4{{}, {}}, MorphWeights: []float32{1, 2}},
+		{Mesh: handle, JointMatrices: []mgl32.Mat4{{}, {}}, MorphWeights: []float32{float32(math.NaN())}},
+		{Mesh: handle, JointMatrices: []mgl32.Mat4{{float32(math.Inf(1))}, {}}},
 	} {
 		batch := MeshBatch3D{Deformations: []MeshDeformationData{valid, bad}}
 		words, err := packMeshDeformations(make([]uint32, 0, 128), batch, source)
@@ -113,7 +115,7 @@ func BenchmarkPackMeshDeformations(b *testing.B) {
 		descriptor.Skin[i].Weights[0] = 1
 	}
 	handle, _ := source.upload(b, descriptor)
-	batch := MeshBatch3D{Draws: []MeshDraw3D{{Mesh: handle, DeformationIndex: 1}}, Deformations: []MeshDeformationData{{Mesh: handle, JointMatrices: make([][16]float32, 64), MorphWeights: []float32{.1, .2, .3, .4}}}}
+	batch := MeshBatch3D{Draws: []MeshDraw3D{{Mesh: handle, DeformationIndex: 1}}, Deformations: []MeshDeformationData{{Mesh: handle, JointMatrices: make([]mgl32.Mat4, 64), MorphWeights: []float32{.1, .2, .3, .4}}}}
 	words, err := packMeshDeformations(nil, batch, source)
 	if err != nil {
 		b.Fatal(err)

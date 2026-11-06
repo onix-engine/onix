@@ -18,8 +18,6 @@ const defaultCompositeBudget2D = 64 << 20
 var paintSeed2D = maphash.MakeSeed()
 
 type paintItem2D struct {
-	bounds      image.Rectangle
-	opaque      image.Rectangle
 	contentHash uint64
 	rawBounds   [4]float32
 	isOpaque    bool
@@ -31,8 +29,8 @@ func paintMix2D(hash, value uint64) uint64 {
 	return (hash ^ (value + 0x9e3779b97f4a7c15 + hash<<6 + hash>>2)) * 0x100000001b3
 }
 
-func preparePaintItem2D(item *renderItem2D) paintItem2D {
-	if !item.ui || item.material2D.Shader != nil || item.kind != renderItemSprite2D && item.kind != renderItemShape2D && item.kind != renderItemTextLayer2D {
+func preparePaintItem2D(item *renderItem2D, device *render.Device) paintItem2D {
+	if !item.ui || item.materialData().Shader != nil || item.kind != renderItemSprite2D && item.kind != renderItemShape2D && item.kind != renderItemTextLayer2D {
 		return paintItem2D{}
 	}
 	if item.texture.DynamicContent() {
@@ -58,7 +56,7 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 			Width, Height, X, Y int
 			ScaleX, ScaleY      float32
 		}{texture.SourceWidth, texture.SourceHeight, texture.OffsetX, texture.OffsetY, sx, sy}))
-		if !texture.ValidFor(item.device) {
+		if !texture.ValidFor(device) {
 			return paintItem2D{cacheable: true}
 		}
 	}
@@ -66,7 +64,7 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 	fringe := 1
 	var opaque image.Rectangle
 	if item.kind == renderItemTextLayer2D {
-		text := item.text
+		text := item.snapshot[textPaint2D]()
 		if text == nil {
 			return paintItem2D{}
 		}
@@ -85,17 +83,18 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 		maxX, maxY = -minX, -minY
 		for i := item.glyphStart; i < item.glyphEnd; i++ {
 			glyph := text.glyphs[i]
-			source := glyph.raster
+			base := glyph.raster.Glyph()
+			source := base
 			if item.outlined {
-				source = text.outlineGlyphs[i]
+				source = text.outlineGlyphs[i].Glyph()
 			}
-			hash = paintMix2D(hash, maphash.Comparable(paintSeed2D, glyph))
+			hash = paintMix2D(hash, maphash.Comparable(paintSeed2D, [4]float32{glyph.x, glyph.y, glyph.logicalWidth, glyph.logicalHeight}))
 			hash = paintMix2D(hash, maphash.Comparable(paintSeed2D, source))
 			if !source.Visible() {
 				continue
 			}
-			x := glyph.x + (source.OffsetX-glyph.raster.OffsetX)/scale
-			y := glyph.y + (source.OffsetY-glyph.raster.OffsetY)/scale
+			x := glyph.x + (source.OffsetX-base.OffsetX)/scale
+			y := glyph.y + (source.OffsetY-base.OffsetY)/scale
 			a, b, d, e, _ := boundsFromBase2D(item.transform.Mul4(mgl32.Translate3D(x, y, 0)), float32(source.Width)/scale, float32(source.Height)/scale)
 			minX, minY, maxX, maxY = min(minX, a), min(minY, b), max(maxX, d), max(maxY, e)
 		}
@@ -103,7 +102,7 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 			return paintItem2D{cacheable: true}
 		}
 	} else {
-		sprite := item.sprite
+		sprite := item.snapshot[Sprite2D]()
 		if sprite == nil {
 			return paintItem2D{}
 		}
@@ -127,24 +126,35 @@ func preparePaintItem2D(item *renderItem2D) paintItem2D {
 		return paintItem2D{}
 	}
 	paint := paintItem2D{contentHash: hash, rawBounds: [4]float32{minX, minY, maxX, maxY}, isOpaque: !opaque.Empty(), cacheable: true, fringe: fringe}
-	paint.resolve(item)
 	return paint
 }
 
 // Geometry-only updates reuse the content fingerprint and glyph geometry.
-func (paint *paintItem2D) resolve(item *renderItem2D) {
+func (paint paintItem2D) rectangles(item *renderItem2D) (bounds, opaque image.Rectangle) {
+	return paint.boundsRect(item), paint.opaqueRect(item)
+}
+
+func (paint paintItem2D) boundsRect(item *renderItem2D) image.Rectangle {
 	b := paint.rawBounds
-	paint.bounds = image.Rect(int(math.Floor(float64(b[0])))-paint.fringe, int(math.Floor(float64(b[1])))-paint.fringe, int(math.Ceil(float64(b[2])))+paint.fringe, int(math.Ceil(float64(b[3])))+paint.fringe)
-	paint.opaque = image.Rectangle{}
-	if paint.isOpaque && !item.clip.hasRounded {
-		paint.opaque = image.Rect(int(math.Ceil(float64(b[0]))), int(math.Ceil(float64(b[1]))), int(math.Floor(float64(b[2]))), int(math.Floor(float64(b[3]))))
-	}
+	bounds := image.Rect(int(math.Floor(float64(b[0])))-paint.fringe, int(math.Floor(float64(b[1])))-paint.fringe, int(math.Ceil(float64(b[2])))+paint.fringe, int(math.Ceil(float64(b[3])))+paint.fringe)
 	if item.clip.valid {
 		clip := image.Rect(int(math.Floor(float64(item.clip.minX))), int(math.Floor(float64(item.clip.minY))), int(math.Ceil(float64(item.clip.maxX))), int(math.Ceil(float64(item.clip.maxY))))
-		paint.bounds = paint.bounds.Intersect(clip)
-		inner := image.Rect(int(math.Ceil(float64(item.clip.minX))), int(math.Ceil(float64(item.clip.minY))), int(math.Floor(float64(item.clip.maxX))), int(math.Floor(float64(item.clip.maxY))))
-		paint.opaque = paint.opaque.Intersect(inner)
+		bounds = bounds.Intersect(clip)
 	}
+	return bounds
+}
+
+func (paint paintItem2D) opaqueRect(item *renderItem2D) image.Rectangle {
+	if !paint.isOpaque || item.clip.hasRounded {
+		return image.Rectangle{}
+	}
+	b := paint.rawBounds
+	opaque := image.Rect(int(math.Ceil(float64(b[0]))), int(math.Ceil(float64(b[1]))), int(math.Floor(float64(b[2]))), int(math.Floor(float64(b[3]))))
+	if item.clip.valid {
+		inner := image.Rect(int(math.Ceil(float64(item.clip.minX))), int(math.Ceil(float64(item.clip.minY))), int(math.Floor(float64(item.clip.maxX))), int(math.Floor(float64(item.clip.maxY))))
+		opaque = opaque.Intersect(inner)
+	}
+	return opaque
 }
 
 func (paint *paintItem2D) tileHash(item *renderItem2D, rect image.Rectangle) uint64 {
@@ -294,7 +304,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 		if view.prepared && view.spatial && view.retained == cache && view.generation+1 == generation && cache.damageValid && !clearChanged && view.cameraKey == cameraKey && len(view.coverage) == len(state.Items2D) {
 			if !view.updateDamage(state, camera, defaultUICamera, cache.damage) {
 				view.stats.Direct = true
-				return false, view.dispose()
+				return false, view.releaseTarget()
 			}
 		} else {
 			view.stats.PreparedTiles = len(view.tiles)
@@ -326,9 +336,10 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				paint := item.paint
 				if paint == nil || !paint.cacheable {
 					view.stats.Direct = true
-					return false, view.dispose()
+					return false, view.releaseTarget()
 				}
-				bounds := paint.bounds.Intersect(screen)
+				raw, opaque := paint.rectangles(item)
+				bounds := raw.Intersect(screen)
 				if bounds.Empty() {
 					continue
 				}
@@ -354,7 +365,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 						}
 						tile.visible++
 						tile.hash = paintMix2D(tile.hash, paint.tileHash(item, view.tileRect(index)))
-						if view.tileRect(index).In(paint.opaque) {
+						if view.tileRect(index).In(opaque) {
 							tile.covered = true
 						}
 					}
@@ -556,6 +567,16 @@ func (view *compositor2D) commitTiles() {
 }
 
 func (view *compositor2D) dispose() error {
+	if err := view.releaseTarget(); err != nil {
+		return err
+	}
+	// A disabled or retired compositor owns no reusable scene storage. Preserve
+	// only the caller's frame accounting; resizing rebuilds the workspace.
+	*view = compositor2D{stats: view.stats, seen: view.seen}
+	return nil
+}
+
+func (view *compositor2D) releaseTarget() error {
 	if view.target != nil {
 		if err := view.target.Dispose(); err != nil {
 			return err

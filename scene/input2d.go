@@ -114,7 +114,7 @@ type inputPickTarget2D struct {
 	camera    ecs.Entity
 	target    ecs.Entity
 	entity    ecs.Entity
-	inverse   mgl32.Mat4
+	inverse   [9]float32
 	clip      clipRect2D
 	anchor    Anchor
 	height    float32
@@ -138,12 +138,13 @@ type inputCamera2D struct {
 // Multiple records can share an entity; capture uses the first visible record
 // in pick sort order, just as targetByEntity2D does.
 type inputCaptureLookup2D struct {
-	camera               inputCamera2D
-	target               inputPickTarget2D
-	entity, cameraEntity ecs.Entity
-	defaultUICamera      ecs.Entity
-	cameraFound          bool
-	targetFound          bool
+	target          inputPickTarget2D
+	camera          inputCamera2D
+	entity          ecs.Entity
+	cameraEntity    ecs.Entity
+	defaultUICamera ecs.Entity
+	cameraFound     bool
+	targetFound     bool
 }
 
 func (c *inputCaptureLookup2D) consider(target *inputPickTarget2D) {
@@ -698,17 +699,19 @@ func (target *inputPickTarget2D) prepare(matrix mgl32.Mat4) {
 	base := quadBaseTransform(matrix, target.anchor, target.width, target.height, target.ui)
 	model := base.Mul4(mgl32.Scale3D(target.width, target.height, 1))
 	if math.Abs(float64(model.Det())) <= 1e-8 {
-		target.inverse = mgl32.Mat4{}
+		target.inverse = [9]float32{}
 		return
 	}
-	target.inverse = model.Inv()
+	inverse := model.Inv()
+	target.inverse = [9]float32{inverse[0], inverse[1], inverse[3], inverse[4], inverse[5], inverse[7], inverse[12], inverse[13], inverse[15]}
 }
 
 func inputTargetContains2D(target *inputPickTarget2D, x, y float32) bool {
 	if target.clip.valid && (x < target.clip.minX || x > target.clip.maxX || y < target.clip.minY || y > target.clip.maxY) {
 		return false
 	}
-	local := target.inverse.Mul4x1(mgl32.Vec4{x, y, 0, 1})
+	inverse := target.inverse
+	local := mgl32.Vec4{inverse[0]*x + inverse[3]*y + inverse[6], inverse[1]*x + inverse[4]*y + inverse[7], 0, inverse[2]*x + inverse[5]*y + inverse[8]}
 	if local.W() == 0 {
 		return false
 	}

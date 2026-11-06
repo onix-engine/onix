@@ -243,8 +243,8 @@ func TestHTMLBoxShadowCacheIgnoresUnrelatedStyle(t *testing.T) {
 			t.Fatal("unrelated style change regenerated the shadow mask")
 		}
 		changed.BoxShadow = []style.Shadow{{BlurRadius: style.LengthPx(4), Color: style.Color{G: 255, A: 255}}}
-		if next, nextVersion := htmlBoxShadowTextureForMode(state, node, &changed, 0, 38, 38, 20, 20, 9, maskOnly); next != texture || nextVersion <= version {
-			t.Fatal("shadow color change did not invalidate the mask")
+		if next, nextVersion := htmlBoxShadowTextureForMode(state, node, &changed, 0, 38, 38, 20, 20, 9, maskOnly); next != texture || nextVersion != version {
+			t.Fatal("RGB-only shadow change regenerated coverage")
 		}
 	}
 }

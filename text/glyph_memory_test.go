@@ -73,7 +73,7 @@ func TestGlyphRecordBudgetIncludesPhasesAndOutlines(t *testing.T) {
 	check := func(slot uint16, kind uint8, character rune) {
 		t.Helper()
 		record := cache.clock[slot]
-		if occupied[slot] || record.key.kind != kind || record.key.phase.character != character || record.value.glyph.Rune != character {
+		if occupied[slot] || record.key.kind != kind || record.key.phase.character != character || record.value.metrics.Rune != character {
 			t.Fatal("clock record disagrees with its map index")
 		}
 		occupied[slot] = true
@@ -178,7 +178,7 @@ func TestGlyphAtlasReclaimsColdPagesAndRegeneratesGlyphs(t *testing.T) {
 	cache.pool.byteLimit = defaultGlyphAtlasSize * defaultGlyphAtlasSize
 	original, texture := func() (Glyph, *graphics.Texture) {
 		glyph := cache.Glyph('A')
-		return cache.clock[cache.glyphs['A']].value.glyph, glyph.page.texture
+		return cache.clock[cache.glyphs['A']].value.glyph(), glyph.page.texture
 	}()
 	bitmap, err := value.RasterizeGlyph(value.GlyphIndex('A'), 16)
 	if err != nil {
@@ -256,4 +256,52 @@ func TestGlyphAtlasBudgetCountsLCDChannelsAndOversizedPages(t *testing.T) {
 	runtime.KeepAlive(gray)
 	runtime.KeepAlive(lcd)
 	runtime.KeepAlive(large)
+}
+
+func TestGlyphReferencesShareDescriptorsAndSurviveSlotEviction(t *testing.T) {
+	value := memoryTestFont(t)
+	cache := value.GlyphCache(16, 72)
+	glyph, ref := cache.GlyphWithReference('A')
+	outline := cache.OutlineWithReference('A', 1)
+	if ref.Glyph() != glyph || outline.Glyph() != cache.OutlineGlyph('A', 1) {
+		t.Fatal("shared descriptors changed raster metrics")
+	}
+	if n := testing.AllocsPerRun(100, func() {
+		g, next := cache.GlyphWithReference('A')
+		if next != ref || g != glyph || cache.OutlineWithReference('A', 1) != outline {
+			t.Fatal("a live glyph descriptor was duplicated")
+		}
+	}); n != 0 {
+		t.Fatalf("warm glyph references allocated %g times", n)
+	}
+	for r := rune(1000); r < 1000+glyphCacheEntryLimit*2; r++ {
+		cache.storeGlyph(phasedGlyphKey{character: r}, Glyph{Rune: r})
+	}
+	if _, exists := cache.glyphs['A']; exists {
+		t.Fatal("fixture did not evict the original cache slot")
+	}
+	if ref.Glyph() != glyph || outline.Glyph().Rune != 'A' || !outline.Glyph().Visible() {
+		t.Fatal("slot reuse mutated a live layout descriptor")
+	}
+}
+
+func TestGlyphReferenceRetainsOnlyLiveAtlasPages(t *testing.T) {
+	value := memoryTestFont(t)
+	cache := value.GlyphCache(16, 72)
+	cache.pool.byteLimit = defaultGlyphAtlasSize * defaultGlyphAtlasSize
+	_, ref := cache.GlyphWithReference('A')
+	texture := ref.Glyph().page.texture
+	fillMemoryTestPages(cache)
+	runtime.GC()
+	cache.FlushUploads()
+	if !texture.Valid() || ref.Glyph().page.cached {
+		t.Fatal("eviction invalidated a page owned by a live descriptor")
+	}
+	runtime.KeepAlive(ref)
+	ref = GlyphRef{}
+	runtime.GC()
+	cache.FlushUploads()
+	if texture.Valid() {
+		t.Fatal("weak descriptor cache pinned a retired atlas page")
+	}
 }

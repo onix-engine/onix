@@ -780,11 +780,14 @@ func (d *webGL2Driver) ReadRenderTarget(handle RenderTargetHandle, region Render
 	format, pixelType := webGLRGBA, webGLUnsignedByte
 	if target.descriptor.ColorFormat == RenderTargetUint32 {
 		format, pixelType = webGLRedInteger, webGLUnsignedInt
+	} else if target.descriptor.ColorFormat == RenderTargetR8 {
+		format = webGLRed
 	}
 	y := target.descriptor.Height - region.Y - region.Height
+	d.gl.Call("pixelStorei", 0x0D05, 1) // PACK_ALIGNMENT: R8 rows can have arbitrary widths.
 	d.gl.Call("readPixels", region.X, y, region.Width, region.Height, format, pixelType, d.readbackPixels)
 	js.CopyBytesToGo(destination, d.readbackBytes)
-	flipRenderTargetRows(destination, region.Width*4, region.Height)
+	flipRenderTargetRows(destination, region.Width*target.descriptor.ColorFormat.TexelBytes(), region.Height)
 	return nil
 }
 
@@ -809,6 +812,9 @@ func (d *webGL2Driver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 		d.gl.Call("texParameteri", webGLTexture2D, webGLTextureWrapS, webGLClampToEdge)
 		d.gl.Call("texParameteri", webGLTexture2D, webGLTextureWrapT, webGLClampToEdge)
 	} else {
+		if descriptor.ColorFormat == RenderTargetR8 {
+			internalFormat, format = webGLR8, webGLRed
+		}
 		d.setTextureParameters(TextureFilterLinear, TextureAddressClamp, TextureAddressClamp)
 	}
 	d.gl.Call("texImage2D", webGLTexture2D, 0, internalFormat, descriptor.Width, descriptor.Height, 0, format, pixelType, js.Null())
@@ -835,7 +841,11 @@ func (d *webGL2Driver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 		}
 		return nil, errors.New("render: WebGL2 framebuffer is incomplete")
 	}
-	color := d.insertTexture(webGLTexture{value: texture, filter: TextureFilterLinear})
+	textureFormat := TextureFormatRGBA8
+	if descriptor.ColorFormat == RenderTargetR8 {
+		textureFormat = TextureFormatR8
+	}
+	color := d.insertTexture(webGLTexture{value: texture, filter: TextureFilterLinear, format: textureFormat})
 	return &webGLRenderTarget{framebuffer: framebuffer, depth: depth, color: color, descriptor: descriptor}, nil
 }
 

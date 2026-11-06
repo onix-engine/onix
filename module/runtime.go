@@ -9,6 +9,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/graphics"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/physics"
 	"github.com/diiyw/onix/project"
 	"github.com/diiyw/onix/scene"
@@ -65,9 +66,10 @@ type Runtime struct {
 	runningEntities     []ecs.Entity
 	pending             []pendingRequest
 	manager             SceneManager
+	options             Options
 	renderScope         ecs.QueryScope
 	runningScope        ecs.QueryScope
-	options             Options
+	scopeRetention      [4]reuse.Retention
 	tick                uint64
 	scopeHierarchy      uint64
 	nextIdentity        uint64
@@ -81,6 +83,7 @@ type Runtime struct {
 	privateCommands     int
 	pendingLast         int
 	queryDepth          int
+	renderDistinct      bool
 	closed              bool
 	busy                bool
 	loading             bool
@@ -745,6 +748,7 @@ func (r *Runtime) despawnPrivate(c *Context, root ecs.Entity) {
 			}
 		}
 	}
+	r.scopeRetention[2].Record(len(r.despawnEntities))
 	for i := len(r.despawnEntities) - 1; i >= 0; i-- {
 		entity := r.despawnEntities[i]
 		if r.world.IsAlive(entity) {
@@ -943,6 +947,12 @@ func (r *Runtime) Close() error {
 	if scope := r.world.QueryScope(); scope == &r.runningScope || scope == &r.renderScope {
 		r.world.SetQueryScope(nil)
 	}
+	r.runningScope.Reset(nil)
+	r.renderScope.Reset(nil)
+	r.runningEntities = nil
+	r.renderEntities = nil
+	r.scopeNodes = nil
+	r.despawnEntities = nil
 	return err
 }
 

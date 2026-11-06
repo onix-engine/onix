@@ -58,7 +58,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 			if item.paint == nil || !item.paint.cacheable {
 				return false
 			}
-			next = item.paint.bounds.Intersect(screen)
+			next = item.paint.boundsRect(item).Intersect(screen)
 		} else {
 			previous = image.Rectangle{}
 		}
@@ -105,7 +105,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 			coverage.visible++
 			tile.visible++
 			tile.hash = paintMix2D(tile.hash, item.paint.tileHash(item, rect))
-			if rect.In(item.paint.opaque) {
+			if rect.In(item.paint.opaqueRect(item)) {
 				tile.covered = true
 				break
 			}

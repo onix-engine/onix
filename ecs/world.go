@@ -25,23 +25,26 @@ const (
 )
 
 type World struct {
+	queryPlans              map[uint64][]*queryPlan
+	scopes                  *QueryScope
 	queryScope              *QueryScope
+	simpleQueryPlans        map[simpleQueryKey]*queryPlan
 	directSystemContexts    map[string]*SystemContext
 	componentTypes          map[reflect.Type]componentID
 	frameScratch            map[reflect.Type]any
 	messages                map[reflect.Type]messageStore
 	resources               map[reflect.Type]any
 	archetypesByHash        map[uint64][]uint32
-	queryPlans              map[uint64][]*queryPlan
-	simpleQueryPlans        map[simpleQueryKey]*queryPlan
 	commands                Commands
 	queryMasks              querySpec
+	free                    []uint32
+	storageCandidates       []*archetype
 	occupiedArchetypes      []uint64
 	entities                []entityMeta
 	archetypes              []*archetype
 	componentInfos          []componentInfo
-	free                    []uint32
 	entityCount             int
+	maintenance             uint64
 	activeQueryIterators    int
 	activeComponentCleanups int
 	structureVersion        uint64
@@ -559,22 +562,22 @@ func (w *World) archetypeForOwned(ids []componentID) *archetype {
 }
 
 func (w *World) archetypeWithAdded(source *archetype, id componentID) *archetype {
-	if targetID, ok := source.addEdges[id]; ok {
+	if targetID, ok := source.edges[id]; ok {
 		return w.archetypes[targetID]
 	}
 	target := w.archetypeForOwned(addComponentID(source.ids, id))
-	source.addEdges = setArchetypeEdge(source.addEdges, id, target.id)
-	target.removeEdges = setArchetypeEdge(target.removeEdges, id, source.id)
+	source.edges = setArchetypeEdge(source.edges, id, target.id)
+	target.edges = setArchetypeEdge(target.edges, id, source.id)
 	return target
 }
 
 func (w *World) archetypeWithRemoved(source *archetype, id componentID) *archetype {
-	if targetID, ok := source.removeEdges[id]; ok {
+	if targetID, ok := source.edges[id]; ok {
 		return w.archetypes[targetID]
 	}
 	target := w.archetypeForOwned(removeComponentID(source.ids, id))
-	source.removeEdges = setArchetypeEdge(source.removeEdges, id, target.id)
-	target.addEdges = setArchetypeEdge(target.addEdges, id, source.id)
+	source.edges = setArchetypeEdge(source.edges, id, target.id)
+	target.edges = setArchetypeEdge(target.edges, id, source.id)
 	return target
 }
 
@@ -665,6 +668,10 @@ func (w *World) removeArchetypeRow(archetype *archetype, row int) {
 
 func (w *World) removeArchetypeEntity(archetype *archetype, row int) {
 	last := len(archetype.entities) - 1
+	if !archetype.retiring && (last == 0 || cap(archetype.entities) > 64 && last <= cap(archetype.entities)/4) {
+		archetype.retiring = true
+		w.storageCandidates = append(w.storageCandidates, archetype)
+	}
 	moved := archetype.entities[last]
 	archetype.entities[row] = moved
 	archetype.entities = archetype.entities[:last]

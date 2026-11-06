@@ -5,6 +5,32 @@ import (
 	"testing"
 )
 
+func TestR8RenderTargetReadbackUsesOneBytePerPixel(t *testing.T) {
+	driver := &renderTargetTestDriver{}
+	installRenderTargetTestDriver(t, driver)
+	target, err := NewRenderTarget(RenderTargetDescriptor{Width: 7, Height: 3, ColorFormat: RenderTargetR8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = target.Dispose() })
+	region := RenderTargetRegion{Width: 7, Height: 3}
+	pixels := make([]byte, 21)
+	if err := target.Read(region, pixels); err != nil {
+		t.Fatal(err)
+	}
+	for i, v := range pixels {
+		if v != byte(i) {
+			t.Fatal("R8 readback changed the byte layout")
+		}
+	}
+	if target.Read(region, make([]byte, 84)) == nil {
+		t.Fatal("R8 readback accepted an RGBA buffer")
+	}
+	if _, err := NewRenderTarget(RenderTargetDescriptor{Width: 7, Height: 3, ColorFormat: RenderTargetR8, Depth: true}); err == nil {
+		t.Fatal("R8 accepted an unsupported depth attachment")
+	}
+}
+
 func TestRenderTargetDefersRealizationAndResize(t *testing.T) {
 	driver := &renderTargetTestDriver{}
 	installRenderTargetTestDriver(t, driver)

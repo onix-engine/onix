@@ -23,7 +23,7 @@ func TestPickAndRenderSnapshotsIgnoreMigration(t *testing.T) {
 	if err := extractRender2D(context); err != nil {
 		t.Fatal(err)
 	}
-	retained := RenderWorldFor(world).Items2D[0].sprite
+	retained := RenderWorldFor(world).Items2D[0].snapshot[Sprite2D]()
 	for _, insert := range []bool{true, false} {
 		if insert {
 			if err := world.Insert(entities[0], cacheOptimizationMarker{}); err != nil {
@@ -39,7 +39,7 @@ func TestPickAndRenderSnapshotsIgnoreMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := RenderWorldFor(world)
-		if state.Preparation2D.Extracted != 0 || state.Preparation2D.Reused != 1000 || state.Preparation2D.Sorted || state.Items2D[0].sprite != retained {
+		if state.Preparation2D.Extracted != 0 || state.Preparation2D.Reused != 1000 || state.Preparation2D.Sorted || state.Items2D[0].snapshot[Sprite2D]() != retained {
 			t.Fatalf("unrelated migration rebuilt render snapshots: %+v", state.Preparation2D)
 		}
 	}
@@ -52,7 +52,7 @@ func TestPickAndRenderSnapshotsIgnoreMigration(t *testing.T) {
 	if err := extractRender2D(context); err != nil {
 		t.Fatal(err)
 	}
-	if state := RenderWorldFor(world); state.Preparation2D.Extracted != 1 || state.Items2D[0].sprite.Alpha != .5 {
+	if state := RenderWorldFor(world); state.Preparation2D.Extracted != 1 || state.Items2D[0].snapshot[Sprite2D]().Alpha != .5 {
 		t.Fatalf("migrated sprite stopped tracking value writes: %+v", state.Preparation2D)
 	}
 }
@@ -208,12 +208,12 @@ func TestRetainedRenderSkipsIntermediateComponentCopies(t *testing.T) {
 	}
 	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
 	for _, item := range scratch.Values[:cap(scratch.Values)] {
-		if item.sprite != nil || item.text != nil || item.emitter != nil || item.tilemap != nil || item.spine != nil {
+		if item.snapshot[Sprite2D]() != nil || item.snapshot[textPaint2D]() != nil || item.snapshot[ParticleEmitter2D]() != nil || item.snapshot[Tilemap2D]() != nil || item.snapshot[Spine2D]() != nil {
 			t.Fatal("temporary render items retained borrowed component references")
 		}
 	}
-	retained := RenderWorldFor(world).Items2D[0].sprite
-	direct := collectRenderItems2D(canvas, world, false)[0].sprite
+	retained := RenderWorldFor(world).Items2D[0].snapshot[Sprite2D]()
+	direct := collectRenderItems2D(canvas, world, false)[0].snapshot[Sprite2D]()
 	source := world.GetMut[Sprite2D](entities[0])
 	source.Alpha = .25
 	if retained == source || direct == source || retained.Alpha != 1 || direct.Alpha != 1 {
@@ -236,13 +236,13 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 	source := world.GetRef[Text2D](entities[0])
 	var worldText, uiText *textPaint2D
 	for _, item := range items {
-		if item.text == nil {
+		if item.snapshot[textPaint2D]() == nil {
 			continue
 		}
 		if item.ui {
-			uiText = item.text
+			uiText = item.snapshot[textPaint2D]()
 		} else {
-			worldText = item.text
+			worldText = item.snapshot[textPaint2D]()
 		}
 	}
 	if worldText == nil || uiText == nil || worldText == uiText {
@@ -259,7 +259,7 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 	source.Spans[0].Color = graphics.Black
 	source.Alpha = .25
 	for _, item := range RenderWorldFor(world).Items2D {
-		if item.text != nil && (item.color != graphics.White || item.text.Alpha != 1) {
+		if item.snapshot[textPaint2D]() != nil && (item.color != graphics.White || item.snapshot[textPaint2D]().Alpha != 1) {
 			t.Fatal("retained text aliases mutable component spans")
 		}
 	}

@@ -803,14 +803,14 @@ uint32_t onix_gpu_create_external_dmabuf_texture(OnixGPUDriver *d, int fd, uint3
 int onix_gpu_refresh_external_texture(OnixGPUDriver *d, uint32_t texture) { return dx_get_texture(d, texture) != NULL; }
 static int dx_create_target(OnixGPUDriver *d, DxTarget *target, uint32_t width, uint32_t height, uint32_t format,
                             int depth) {
-    if (!width || !height || format > 1)
+    if (!width || !height || format > 2 || (format == 2 && depth))
         return dx_fail("invalid target descriptor", E_INVALIDARG);
-    DxTexture texture = {.width = width, .height = height};
+    DxTexture texture = {.width = width, .height = height, .format = format == 2 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8};
     D3D11_TEXTURE2D_DESC desc = {.Width = width,
                                  .Height = height,
                                  .MipLevels = 1,
                                  .ArraySize = 1,
-                                 .Format = format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM,
+                                 .Format = format == 2 ? DXGI_FORMAT_R8_UNORM : format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM,
                                  .SampleDesc = {1, 0},
                                  .BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET};
     if (!dx_ok(ID3D11Device_CreateTexture2D(d->device, &desc, NULL, &texture.value), "create target texture") ||
@@ -893,9 +893,10 @@ int onix_gpu_read_render_target(OnixGPUDriver *d, uint32_t id, int32_t x, int32_
                                 uint8_t *destination, size_t length) {
     DxTarget *target = dx_get_target(d, id);
     if (!target || d->active_target || x < 0 || y < 0 || (uint64_t)x + width > target->width ||
-        (uint64_t)y + height > target->height || length < (uint64_t)width * height * 4)
+        (uint64_t)y + height > target->height || length < (uint64_t)width * height * (target->format == 2 ? 1 : 4))
         return dx_fail("invalid target readback", E_INVALIDARG);
-    DXGI_FORMAT format = target->format ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    DXGI_FORMAT format = target->format == 2 ? DXGI_FORMAT_R8_UNORM : target->format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    size_t row_bytes = (size_t)width * (target->format == 2 ? 1 : 4);
     if (!d->readback || d->readback_width != width || d->readback_height != height || d->readback_format != format) {
         RELEASE(d->readback);
         D3D11_TEXTURE2D_DESC desc = {.Width = width,
@@ -921,8 +922,8 @@ int onix_gpu_read_render_target(OnixGPUDriver *d, uint32_t id, int32_t x, int32_
                "map readback"))
         return 0;
     for (UINT row = 0; row < height; row++)
-        memcpy(destination + (size_t)row * width * 4, (uint8_t *)mapped.pData + (size_t)row * mapped.RowPitch,
-               (size_t)width * 4);
+        memcpy(destination + (size_t)row * row_bytes, (uint8_t *)mapped.pData + (size_t)row * mapped.RowPitch,
+               row_bytes);
     ID3D11DeviceContext_Unmap(d->context, (ID3D11Resource *)d->readback, 0);
     return 1;
 }

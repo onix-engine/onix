@@ -118,12 +118,12 @@ func TestSpriteTrail2DRenderItemsPrecedeSourceAndSnapshotState(t *testing.T) {
 	if len(items) != 2 || items[0].entity != entity || items[1].entity != entity {
 		t.Fatalf("render items = %+v, want trail then source", items)
 	}
-	if items[0].sprite.Alpha != 0.4 || items[1].sprite.Alpha != 0.8 {
-		t.Fatalf("trail/source alpha = %v/%v, want 0.4/0.8", items[0].sprite.Alpha, items[1].sprite.Alpha)
+	if items[0].snapshot[Sprite2D]().Alpha != 0.4 || items[1].snapshot[Sprite2D]().Alpha != 0.8 {
+		t.Fatalf("trail/source alpha = %v/%v, want 0.4/0.8", items[0].snapshot[Sprite2D]().Alpha, items[1].snapshot[Sprite2D]().Alpha)
 	}
 	component := world.GetMut[SpriteTrail2D](entity)
 	component.Clear()
-	if items[0].sprite.Alpha != 0.4 || items[0].transform[12] != 7 {
+	if items[0].snapshot[Sprite2D]().Alpha != 0.4 || items[0].transform[12] != 7 {
 		t.Fatalf("render snapshot changed after clearing simulation component: %+v", items[0])
 	}
 }

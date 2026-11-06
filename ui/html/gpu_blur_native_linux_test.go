@@ -33,7 +33,7 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 	cache := &htmlTextureCache{}
 	defer cache.dispose()
 	if !htmlGPUBlurAvailable(world, 0, cache, &layout.Box{}, 2) {
-		t.Fatal("GPU blur shader was unavailable")
+		t.Fatalf("GPU blur shader was unavailable: renderer=%+v shader=%+v", context.Device.RendererInfo(), cache.blurShader.UploadError())
 	}
 	const size = 25
 	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: size, Height: size})
@@ -42,7 +42,9 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 	}
 	defer target.Dispose()
 
-	for _, shadow := range []bool{false, true} {
+	for _, mode := range []string{"blur", "rgba-shadow", "r8-shadow"} {
+		shadow := mode != "blur"
+		coverage := mode == "r8-shadow"
 		source := image.NewRGBA(image.Rect(0, 0, size, size))
 		if shadow {
 			for y := 9; y < 16; y++ {
@@ -54,6 +56,14 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 			source.SetRGBA(12, 12, color.RGBA{255, 0, 0, 255})
 		}
 		texture := graphics.CreateTextureBySharedImage(source, false, graphics.ResourceUsageDefault)
+		if coverage {
+			_ = texture.Dispose()
+			mask := image.NewAlpha(source.Rect)
+			for i := range mask.Pix {
+				mask.Pix[i] = source.Pix[i*4+3]
+			}
+			texture = graphics.CreateTextureR8(size, size, mask.Pix, false, graphics.ResourceUsageDefault)
+		}
 		key := htmlTextureKey{node: &dom.Node{}}
 		cache.add(key, texture)
 		parameters := [4][4]float32{{0, 0, 2, 1}}
@@ -67,12 +77,19 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 		if blurred == nil || cache.blurTexture(canvas, key, texture, 1, parameters) != blurred {
 			t.Fatal("complete blur target was not retained")
 		}
-		parameters = htmlGPUBlurCompositeParameters(context.Device)
+		if coverage && (blurred.Format() != render.TextureFormatR8 || cache.shadowScratch.target.Descriptor().ColorFormat != render.RenderTargetR8 || cache.gpuBlur[key].target.Descriptor().ColorFormat != render.RenderTargetR8) {
+			t.Fatal("GPU shadow retained an RGBA attachment")
+		}
+		parameters = htmlGPUBlurCompositeParameters(context.Device, blurred)
 		if err := canvas.DrawTo(target, render.RenderTargetClear{ClearColor: true}, func() error {
 			canvas.BindMaterial2D(cache.blurShader)
 			canvas.SetMaterial2DParameters(parameters)
 			canvas.BindTexture(blurred)
-			canvas.DrawAffine([6]float32{size, 0, 0, 0, size, 0}, [6]float32{1, 0, 0, 0, 1, 0}, 1)
+			tint := graphics.White
+			if coverage {
+				tint = graphics.ColorRGBA{G: 1, A: 1}
+			}
+			canvas.DrawTintedAffine([6]float32{size, 0, 0, 0, size, 0}, [6]float32{1, 0, 0, 0, 1, 0}, tint, 1)
 			canvas.DrawFrame()
 			canvas.BindMaterial2D(nil)
 			canvas.SetMaterial2DParameters([4][4]float32{})
@@ -89,6 +106,17 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 		pixels := make([]byte, size*size*4)
 		if err := target.Read(render.RenderTargetRegion{Width: size, Height: size}, pixels); err != nil {
 			t.Fatal(err)
+		}
+		if coverage {
+			mask := make([]byte, size*size)
+			if err := cache.gpuBlur[key].target.Read(render.RenderTargetRegion{Width: size, Height: size}, mask); err != nil {
+				t.Fatal(err)
+			}
+			for i, alpha := range mask {
+				if alpha != pixels[i*4+3] {
+					t.Fatalf("R8 readback at %d: %d, composite alpha %d", i, alpha, pixels[i*4+3])
+				}
+			}
 		}
 		at := func(x, y int) color.RGBA {
 			i := (y*size + x) * 4
@@ -129,7 +157,7 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	shadowEntity := htmlCullRole(world, owner, shadow, htmlRoleShadow)
 	blurShader, blurOK := world.Get[scene.Shader[graphics.Material2DShader]](blurEntity)
 	shadowShader, shadowOK := world.Get[scene.Shader[graphics.Material2DShader]](shadowEntity)
-	if !blurOK || !shadowOK || blurShader.Custom != htmlGPUBlurCompositeParameters(context.Device) || shadowShader.Custom != htmlGPUBlurCompositeParameters(context.Device) {
+	if !blurOK || !shadowOK || blurShader.Custom != htmlGPUBlurCompositeParameters(context.Device, nil) || shadowShader.Custom != htmlGPUBlurCompositeParameters(context.Device, world.GetRef[scene.Sprite2D](shadowEntity).Texture) {
 		t.Fatalf("HTML GPU effects were not bound: blur=%v shadow=%v", blurOK, shadowOK)
 	}
 	state := world.GetRef[htmlRenderState](owner)
@@ -138,6 +166,9 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	}
 	if source := state.Textures.entries[htmlTextureKey{node: shadow.node, variant: "shadow-mask-0"}]; source == nil || !source.texture.ValidFor(context.Device) {
 		t.Fatal("shadow mask was released while its GPU output was in use")
+	}
+	if sprite := world.GetRef[scene.Sprite2D](shadowEntity); sprite.Texture.Format() != render.TextureFormatR8 {
+		t.Fatal("DOM shadow output is not R8")
 	}
 	blurKey := htmlTextureKey{node: blur.node}
 	shadowKey := htmlTextureKey{node: shadow.node, variant: "shadow-mask-0"}
@@ -153,8 +184,11 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	if current := state.Textures.gpuBlur[blurKey]; current == nil || current.output != beforeBlur.output || current.version <= blurVersion {
 		t.Fatal("blur content change did not redraw the retained GPU target")
 	}
-	if current := state.Textures.gpuBlur[shadowKey]; current == nil || current.output != beforeShadow.output || current.version <= shadowVersion {
-		t.Fatal("shadow content change did not redraw the retained GPU target")
+	if current := state.Textures.gpuBlur[shadowKey]; current == nil || current.output != beforeShadow.output || current.version != shadowVersion {
+		t.Fatal("shadow recoloring rerasterized the retained GPU target")
+	}
+	if sprite := world.GetRef[scene.Sprite2D](shadowEntity); sprite.Tint != (graphics.ColorRGBA{G: 128.0 / 255, A: 1}) {
+		t.Fatalf("recolor did not update tint: %+v", sprite.Tint)
 	}
 	blurVersion = state.Textures.gpuBlur[blurKey].version
 	blur.SetAttribute("style", "width:32px;height:20px;background:blue;filter:blur(2px);opacity:.5")
@@ -168,6 +202,14 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	blurEntity = htmlCullRole(world, owner, blur, htmlRoleSurface)
 	if sprite, ok := world.Get[scene.Sprite2D](blurEntity); !ok || sprite.Alpha != .5 {
 		t.Fatal("opacity-only change did not update the final composite alpha")
+	}
+	shadow.SetAttribute("style", "width:32px;height:20px;background:white")
+	if err := Sync(world); err != nil {
+		t.Fatal(err)
+	}
+	state = world.GetRef[htmlRenderState](owner)
+	if state.Textures.shadowScratch.target != nil || state.Textures.blurScratch.target == nil {
+		t.Fatal("retiring shadows retained R8 scratch or discarded the live color filter")
 	}
 }
 
@@ -185,7 +227,7 @@ func TestNativeHTMLGPUBlurCacheInvalidationAndOrientation(t *testing.T) {
 	cache := &htmlTextureCache{}
 	defer cache.dispose()
 	if !htmlGPUBlurAvailable(world, 0, cache, &layout.Box{}, 1) {
-		t.Fatal("GPU blur shader unavailable")
+		t.Fatalf("GPU blur shader unavailable: renderer=%+v shader=%+v", context.Device.RendererInfo(), cache.blurShader.UploadError())
 	}
 	const width, height = 31, 27
 	source := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -215,7 +257,7 @@ func TestNativeHTMLGPUBlurCacheInvalidationAndOrientation(t *testing.T) {
 	defer target.Dispose()
 	read := func() []byte {
 		t.Helper()
-		if err := cache.drawBlurPass(canvas, target, blurred, htmlGPUBlurCompositeParameters(context.Device)); err != nil {
+		if err := cache.drawBlurPass(canvas, target, blurred, htmlGPUBlurCompositeParameters(context.Device, blurred)); err != nil {
 			t.Fatal(err)
 		}
 		if err := canvas.FinishFrame(); err != nil {

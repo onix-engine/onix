@@ -10,6 +10,54 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
+func TestGeometryCacheSharesJointStorageAndDeduplicatesCPUAndGPU(t *testing.T) {
+	for _, gpuFirst := range []bool{false, true} {
+		name := "CPUFirst"
+		if gpuFirst {
+			name = "GPUFirst"
+		}
+		t.Run(name, func(t *testing.T) {
+			vertices := []render.Vertex3D{{Position: [3]float32{-1, 0, 0}}, {Position: [3]float32{1, 0, 0}}, {Position: [3]float32{0, 1, 0}}}
+			mesh := &graphics.Mesh{Vertices: vertices, Indices: []uint32{0, 1, 2}, Skin: make([]graphics.SkinVertex, 3)}
+			deformation := &Deformation{JointMatrices: []mgl32.Mat4{mgl32.Translate3D(1, 2, 3)}, MorphWeights: []float32{.5}}
+			gpu := extractedMesh3D{meshSnapshot3D: &meshSnapshot3D{mesh: mesh, deformation: deformation, meshHandle: render.NewHandle[render.MeshResource](1, 1), indexCount: 3, transform: mgl32.Ident4(), material: graphics.NewStandardMaterial(graphics.White).Material3D()}}
+			cpu := gpu
+			cpu.vertices = vertices
+			items := []extractedMesh3D{cpu, gpu, cpu, gpu}
+			if gpuFirst {
+				items = []extractedMesh3D{gpu, cpu, gpu, cpu}
+			}
+			view := renderView3D{geometry: make(map[meshGeometryKey3D]meshGeometry3D)}
+			frame := func() {
+				view.vertices, view.indices = view.vertices[:0], view.indices[:0]
+				view.instances, view.draws = view.instances[:0], view.draws[:0]
+				view.deformations = view.deformations[:0]
+				clear(view.geometry)
+				view.appendPhase(items, nil, false)
+			}
+			frame()
+			if len(view.vertices) != 3 || len(view.indices) != 3 || len(view.deformations) != 1 || len(view.draws) != 4 {
+				t.Fatal("shared geometry was duplicated or lost across CPU and GPU submissions")
+			}
+			if &view.deformations[0].JointMatrices[0] != &deformation.JointMatrices[0] || &view.deformations[0].MorphWeights[0] != &deformation.MorphWeights[0] {
+				t.Fatal("GPU submission copied animated deformation parameters")
+			}
+			for i, draw := range view.draws {
+				var deformationIndex uint32
+				if items[i].vertices == nil {
+					deformationIndex = 1
+				}
+				if draw.FirstIndex != 0 || draw.IndexCount != 3 || draw.DeformationIndex != deformationIndex {
+					t.Fatalf("draw %d lost its zero-offset CPU geometry or GPU deformation: %+v", i, draw)
+				}
+			}
+			if allocations := testing.AllocsPerRun(100, frame); allocations != 0 {
+				t.Fatalf("warm mixed geometry submission allocated %v times", allocations)
+			}
+		})
+	}
+}
+
 func TestRenderSubmeshesShareGeometryAndPreserveMaterialsAndRigidMotion(t *testing.T) {
 	for _, gpu := range []bool{false, true} {
 		name := "CPU"
@@ -110,8 +158,7 @@ func TestRenderSubmeshesShareGeometryAndPreserveMaterialsAndRigidMotion(t *testi
 				view.vertices = view.vertices[:0]
 				view.indices = view.indices[:0]
 				view.deformations = view.deformations[:0]
-				clear(view.dynamicGeometry)
-				clear(view.deformationIndices)
+				clear(view.geometry)
 				view.appendPhase(view.extracted, state.white, true)
 			}
 			for range 5 {

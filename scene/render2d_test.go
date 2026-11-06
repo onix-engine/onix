@@ -20,8 +20,9 @@ import (
 // A laid-out glyph is stored once per character of every document a code editor
 // keeps open, so its size is the engine's dominant text memory cost.
 func TestTextGlyph2DStaysCompact(t *testing.T) {
-	if size := unsafe.Sizeof(textGlyph2D{}); size > 72 {
-		t.Fatalf("textGlyph2D size = %d bytes, want at most 72", size)
+	t.Logf("render item=%d B, paint=%d B, text glyph=%d B, outline=%d B", unsafe.Sizeof(renderItem2D{}), unsafe.Sizeof(paintItem2D{}), unsafe.Sizeof(textGlyph2D{}), unsafe.Sizeof(onixtext.GlyphRef{}))
+	if size := unsafe.Sizeof(textGlyph2D{}); size > 32 {
+		t.Fatalf("textGlyph2D size = %d bytes, want at most 32", size)
 	}
 	if size := unsafe.Sizeof(textPaint2D{}); size > 88 {
 		t.Fatalf("textPaint2D size = %d bytes, want at most 88", size)
@@ -49,12 +50,12 @@ func TestTextPrelayoutUsesAuthoredGlyphPositions(t *testing.T) {
 	if !text.ensureLayout() || len(text.glyphs) != 2 {
 		t.Fatalf("prelayout glyph count = %d", len(text.glyphs))
 	}
-	if got, want := text.glyphs[1].x-text.glyphs[1].raster.OffsetX, float32(73); got != want {
+	if got, want := text.glyphs[1].x-text.glyphs[1].raster.Glyph().OffsetX, float32(73); got != want {
 		t.Fatalf("second glyph pen = %v, want %v", got, want)
 	}
 	text.Prelayout.Glyphs[1].PenX = 194
 	text.Prelayout.Revision++
-	if !text.ensureLayout() || text.glyphs[1].x-text.glyphs[1].raster.OffsetX != 94 {
+	if !text.ensureLayout() || text.glyphs[1].x-text.glyphs[1].raster.Glyph().OffsetX != 94 {
 		t.Fatal("updated authored position was not used")
 	}
 	text.Value = "AB"
@@ -67,7 +68,7 @@ func TestTextPrelayoutUsesAuthoredGlyphPositions(t *testing.T) {
 		t.Fatal("fresh authored glyphs were not restored")
 	}
 	text.Prelayout = TextPrelayout2D{}
-	if !text.ensureLayout() || text.prelayoutActive || text.glyphs[1].x-text.glyphs[1].raster.OffsetX == 94 {
+	if !text.ensureLayout() || text.prelayoutActive || text.glyphs[1].x-text.glyphs[1].raster.Glyph().OffsetX == 94 {
 		t.Fatal("removing authored positions did not restore native layout")
 	}
 }
@@ -175,7 +176,7 @@ func TestText2DRasterScalePreservesLogicalLayout(t *testing.T) {
 	if !text.ensureLayout() || !base.ensureLayout() {
 		t.Fatal("expected text to be shaped")
 	}
-	if len(text.glyphs) == 0 || text.glyphs[0].raster.Width <= base.glyphs[0].raster.Width {
+	if len(text.glyphs) == 0 || text.glyphs[0].raster.Glyph().Width <= base.glyphs[0].raster.Glyph().Width {
 		t.Fatalf("glyph atlas was not supersampled: base=%+v raster=%+v", base.glyphs[0].raster, text.glyphs[0].raster)
 	}
 }
@@ -292,7 +293,7 @@ func TestText2DLineBaselineSplitsFontLineGap(t *testing.T) {
 	if leading <= 0 {
 		t.Fatalf("test font line gap = %v, want positive", leading)
 	}
-	baseline := text.glyphs[0].y - text.glyphs[0].raster.OffsetY
+	baseline := text.glyphs[0].y - text.glyphs[0].raster.Glyph().OffsetY
 	want := ascent + leading*.5
 	if math.Abs(float64(baseline-want)) > 1.0/64 {
 		t.Fatalf("gy baseline = %v, want %v (ascent=%v leading=%v)", baseline, want, ascent, leading)
@@ -345,7 +346,7 @@ func TestText2DOutlineUsesExpandedGlyphLayerBehindFill(t *testing.T) {
 	if len(text.outlineGlyphs) != len(text.glyphs) {
 		t.Fatalf("outline layer is not index-parallel: glyphs=%d outlines=%d", len(text.glyphs), len(text.outlineGlyphs))
 	}
-	if outline := text.outlineGlyphs[0]; outline.Width <= glyph.raster.Width || outline.Height <= glyph.raster.Height {
+	if outline := text.outlineGlyphs[0].Glyph(); outline.Width <= glyph.raster.Glyph().Width || outline.Height <= glyph.raster.Glyph().Height {
 		t.Fatalf("outline glyph was not expanded: fill=%+v outline=%+v", glyph.raster, outline)
 	}
 	paint := text.paintSnapshot()
@@ -600,7 +601,7 @@ func TestDynamic2DItemBoundsRejectOffscreenTextAndSpine(t *testing.T) {
 	text := NewText2D("bounds")
 	text.OutlineWidth = 2
 	paint := text.paintSnapshot()
-	textItem := renderItem2D{text: &paint, transform: mgl32.Translate3D(10, 10, 0), width: 30, height: 12}
+	textItem := renderItem2D{content: &paint, transform: mgl32.Translate3D(10, 10, 0), width: 30, height: 12}
 	if !textRenderItemVisible2D(viewport, &textItem) {
 		t.Fatal("onscreen text bounds were culled")
 	}
@@ -618,46 +619,6 @@ func TestDynamic2DItemBoundsRejectOffscreenTextAndSpine(t *testing.T) {
 	clip := clipRect2D{minX: 60, minY: 60, maxX: 70, maxY: 70, valid: true}
 	if spineRenderItemVisible2D(viewport, mgl32.Translate3D(20, 20, 0), clip, -5, -5, 5, 5, true) {
 		t.Fatal("Spine bounds outside their UI clip were visible")
-	}
-}
-
-func TestAppendSpineMeshBatchBakesTransformsAndMergesDraws(t *testing.T) {
-	texture := render.NewHandle[render.TextureResource](1, 1)
-	makeBatch := func(x float32, blend render.MeshBlendMode) render.MeshBatch3D {
-		return render.MeshBatch3D{
-			ViewProjection: [16]float32(mgl32.Ident4()),
-			Vertices: []render.Vertex3D{
-				{Position: [3]float32{0, 1, 0}},
-				{Position: [3]float32{1, 0, 0}},
-				{Position: [3]float32{2, 1, 0}},
-			},
-			Indices:   []uint32{0, 1, 2},
-			Instances: []render.Instance3D{{Model: [16]float32(mgl32.Translate3D(x, 0, 0))}},
-			Draws:     []render.MeshDraw3D{{Texture: texture, IndexCount: 3, InstanceCount: 1, AlphaMode: uint32(graphics.AlphaBlend), BlendMode: blend}},
-		}
-	}
-
-	var merged render.MeshBatch3D
-	appendSpineMeshBatch(&merged, makeBatch(10, render.MeshBlendNormal))
-	appendSpineMeshBatch(&merged, makeBatch(20, render.MeshBlendNormal))
-	if len(merged.Instances) != 1 || len(merged.Draws) != 1 || merged.Draws[0].IndexCount != 6 {
-		t.Fatalf("merged Spine batch = instances %d, draws %d, index count %d; want 1/1/6", len(merged.Instances), len(merged.Draws), merged.Draws[0].IndexCount)
-	}
-	if got := merged.Vertices[0].Position[0]; got != 10 {
-		t.Fatalf("first baked vertex x = %v, want 10", got)
-	}
-	if got := merged.Vertices[3].Position[0]; got != 20 {
-		t.Fatalf("second baked vertex x = %v, want 20", got)
-	}
-	if got := merged.Indices[3]; got != 3 {
-		t.Fatalf("second geometry index = %d, want 3", got)
-	}
-
-	var split render.MeshBatch3D
-	appendSpineMeshBatch(&split, makeBatch(10, render.MeshBlendNormal))
-	appendSpineMeshBatch(&split, makeBatch(20, render.MeshBlendAdditive))
-	if len(split.Draws) != 2 || split.Draws[1].BlendMode != render.MeshBlendAdditive {
-		t.Fatalf("blend modes were merged incorrectly: %+v", split.Draws)
 	}
 }
 
@@ -840,11 +801,11 @@ func TestExtractRender2DCopiesSimulationComponents(t *testing.T) {
 	global := world.GetMut[GlobalTransform](entity)
 	global.Matrix = mgl32.Translate3D(50, 70, 0)
 
-	if item.sprite == component {
+	if item.snapshot[Sprite2D]() == component {
 		t.Fatal("render item retained a pointer to the simulation component")
 	}
-	if item.sprite.Width != 20 || item.transform[12] != 5 || item.transform[13] != 7 {
-		t.Fatalf("render snapshot changed with simulation world: %+v transform=%v", item.sprite, item.transform)
+	if item.snapshot[Sprite2D]().Width != 20 || item.transform[12] != 5 || item.transform[13] != 7 {
+		t.Fatalf("render snapshot changed with simulation world: %+v transform=%v", item.snapshot[Sprite2D](), item.transform)
 	}
 }
 
@@ -873,7 +834,7 @@ func TestUIVisualLayersExtractBackgroundImageAndBorder(t *testing.T) {
 	if items[0].entity != entity || items[0].kind != renderItemShape2D || items[1].kind != renderItemSprite2D || items[2].kind != renderItemShape2D {
 		t.Fatalf("unexpected UI visual layer order: %+v", items)
 	}
-	if items[1].sprite.Texture != texture || items[1].sprite.Slice == nil || *items[1].sprite.Slice != slice || items[1].sprite.Alpha != 0.35 || items[1].sprite.Tint != tint {
+	if items[1].snapshot[Sprite2D]().Texture != texture || items[1].snapshot[Sprite2D]().Slice == nil || *items[1].snapshot[Sprite2D]().Slice != slice || items[1].snapshot[Sprite2D]().Alpha != 0.35 || items[1].snapshot[Sprite2D]().Tint != tint {
 		t.Fatalf("unexpected UI image item: %+v", items[1])
 	}
 	if items[1].width != 40 || items[1].height != 20 {
@@ -927,7 +888,7 @@ func TestRegisteredMaterial2DIsExtractedWithSprite(t *testing.T) {
 	world.Spawn(bundle)
 
 	items := collectRenderItems2D(graphics.Canvas2DContext(100, 80), world, false)
-	if len(items) != 1 || items[0].material2D.Shader != shader || items[0].material2D.Custom[0][0] != material.value {
+	if len(items) != 1 || items[0].materialData().Shader != shader || items[0].materialData().Custom[0][0] != material.value {
 		t.Fatalf("unexpected extracted Material2D: %+v", items)
 	}
 	if items[0].material.shaderID != shader.BatchKey() {

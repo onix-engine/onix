@@ -164,7 +164,7 @@ func setupShadowAtlas3D(view *renderView3D, settings [render.MaxMeshLights]extra
 			viewport := render.Rect{X: int32(x), Y: int32(y), Width: int32(resolution), Height: int32(resolution)}
 			shadow := atlas.views[mapIndex]
 			if shadow == nil {
-				shadow = &renderView3D{dynamicGeometry: make(map[meshGeometryKey3D]uint32), deformationIndices: make(map[meshGeometryKey3D]uint32)}
+				shadow = &renderView3D{geometry: make(map[meshGeometryKey3D]meshGeometry3D)}
 				atlas.views[mapIndex] = shadow
 			}
 			shadow.frame = render.NewRenderView(extractedView3D{viewProjection: matrices[face]})

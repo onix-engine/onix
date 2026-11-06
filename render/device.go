@@ -6,6 +6,8 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 type Color struct {
@@ -369,7 +371,7 @@ type MeshDeformationDescriptor struct {
 // MeshDeformationData borrows only the animated parameters for this submission.
 // Static skin and morph streams reside in Mesh until DestroyMesh.
 type MeshDeformationData struct {
-	JointMatrices [][16]float32
+	JointMatrices []mgl32.Mat4
 	MorphWeights  []float32
 	Mesh          MeshHandle
 }

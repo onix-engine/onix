@@ -24,7 +24,7 @@ func (f *Face) Italic() *Face {
 	if f.italicVariant == nil {
 		f.italicVariant = &Face{
 			italicSource: f, italic: true, cacheKey: key,
-			Cmap: f.Cmap, Kern: f.Kern, SFNT: f.SFNT, fallback: f.fallback,
+			Cmap: f.Cmap, Kern: f.Kern, SFNT: f.SFNT, fallback: f.fallback, glyphFallback: f.glyphFallback,
 			CFF: f.CFF, color: f.color, Glyf: f.Glyf, Data: f.Data,
 			Loca: f.Loca, pairLookups: f.pairLookups, Metrics: f.Metrics,
 			weight: f.weight, asciiGlyphs: f.asciiGlyphs, Hhea: f.Hhea,

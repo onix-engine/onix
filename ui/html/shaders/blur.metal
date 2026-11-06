@@ -26,54 +26,54 @@ bool insideRoundedBox(
     metal::float4 rx,
     metal::float4 ry
 ) {
-    bool local = {};
-    bool local_1 = {};
-    bool local_2 = {};
-    metal::float2 center = metal::float2(0.0);
-    metal::float2 radius = metal::float2(0.0);
-    bool local_3 = {};
     bool local_4 = {};
     bool local_5 = {};
     bool local_6 = {};
+    metal::float2 center = metal::float2(0.0);
+    metal::float2 radius = metal::float2(0.0);
     bool local_7 = {};
+    bool local_8 = {};
+    bool local_9 = {};
+    bool local_10 = {};
+    bool local_11 = {};
     if (!(point.x < 0.0)) {
-        local = point.y < 0.0;
+        local_4 = point.y < 0.0;
     } else {
-        local = true;
+        local_4 = true;
     }
-    bool _e14 = local;
+    bool _e14 = local_4;
     if (!(_e14)) {
-        local_1 = point.x >= size.x;
+        local_5 = point.x >= size.x;
     } else {
-        local_1 = true;
+        local_5 = true;
     }
-    bool _e22 = local_1;
+    bool _e22 = local_5;
     if (!(_e22)) {
-        local_2 = point.y >= size.y;
+        local_6 = point.y >= size.y;
     } else {
-        local_2 = true;
+        local_6 = true;
     }
-    bool _e30 = local_2;
+    bool _e30 = local_6;
     if (_e30) {
         return false;
     }
     if (point.x < rx.x) {
-        local_3 = point.y < ry.x;
+        local_7 = point.y < ry.x;
     } else {
-        local_3 = false;
+        local_7 = false;
     }
-    bool _e47 = local_3;
+    bool _e47 = local_7;
     if (_e47) {
         radius = metal::float2(rx.x, ry.x);
         metal::float2 _e51 = radius;
         center = _e51;
     } else {
         if (point.x > (size.x - rx.y)) {
-            local_4 = point.y < ry.y;
+            local_8 = point.y < ry.y;
         } else {
-            local_4 = false;
+            local_8 = false;
         }
-        bool _e63 = local_4;
+        bool _e63 = local_8;
         if (_e63) {
             radius = metal::float2(rx.y, ry.y);
             float _e69 = radius.x;
@@ -81,22 +81,22 @@ bool insideRoundedBox(
             center = metal::float2(size.x - _e69, _e72);
         } else {
             if (point.x > (size.x - rx.z)) {
-                local_5 = point.y > (size.y - ry.z);
+                local_9 = point.y > (size.y - ry.z);
             } else {
-                local_5 = false;
+                local_9 = false;
             }
-            bool _e87 = local_5;
+            bool _e87 = local_9;
             if (_e87) {
                 radius = metal::float2(rx.z, ry.z);
                 metal::float2 _e91 = radius;
                 center = size - _e91;
             } else {
                 if (point.x < rx.w) {
-                    local_6 = point.y > (size.y - ry.w);
+                    local_10 = point.y > (size.y - ry.w);
                 } else {
-                    local_6 = false;
+                    local_10 = false;
                 }
-                bool _e104 = local_6;
+                bool _e104 = local_10;
                 if (_e104) {
                     radius = metal::float2(rx.w, ry.w);
                     float _e109 = radius.x;
@@ -109,11 +109,11 @@ bool insideRoundedBox(
     float _e116 = radius.x;
     if (!(_e116 <= 0.0)) {
         float _e123 = radius.y;
-        local_7 = _e123 <= 0.0;
+        local_11 = _e123 <= 0.0;
     } else {
-        local_7 = true;
+        local_11 = true;
     }
-    bool _e127 = local_7;
+    bool _e127 = local_11;
     if (_e127) {
         return true;
     }
@@ -156,15 +156,35 @@ fragment sprite_fragmentOutput sprite_fragment(
         metal::coord::normalized
     );
     const Input input = { varyings.uv, {}, varyings.color, varyings.parameters, varyings.box, varyings.radiusX, varyings.radiusY };
+    bool local = {};
+    bool local_1 = {};
     metal::float4 result = metal::float4(0.0);
     float total = 0.0;
     int index = -12;
+    bool local_2 = {};
+    bool local_3 = {};
     float mode = metal::abs(input.parameters.w);
     metal::float2 sampleUV = metal::float2(input.uv.x, (input.parameters.w < 0.0) ? 1.0 - input.uv.y : input.uv.y);
     metal::float2 gradientsX = metal::dfdx(sampleUV);
     metal::float2 gradientsY = metal::dfdy(sampleUV);
     if (mode > 2.5) {
+        local = mode < 3.5;
+    } else {
+        local = false;
+    }
+    bool _e27 = local;
+    if (!(_e27)) {
+        local_1 = mode > 5.5;
+    } else {
+        local_1 = true;
+    }
+    bool _e34 = local_1;
+    if (_e34) {
         metal::float4 pixel = source.sample(sourceSampler, sampleUV, metal::gradient2d(gradientsX, gradientsY));
+        if (mode > 5.5) {
+            float alpha = metal::min(pixel.x, pixel.w) * input.color.w;
+            return sprite_fragmentOutput { metal::float4(input.color.xyz * alpha, alpha) };
+        }
         return sprite_fragmentOutput { metal::float4((pixel.xyz * input.color.xyz) * input.color.w, pixel.w * input.color.w) };
     }
     float sigma = metal::max(input.parameters.z, 0.001);
@@ -175,44 +195,56 @@ fragment sprite_fragmentOutput sprite_fragment(
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            int _e87 = index;
-            index = as_type<int>(as_type<uint>(_e87) + as_type<uint>(1));
+            int _e119 = index;
+            index = as_type<int>(as_type<uint>(_e119) + as_type<uint>(1));
         }
         loop_init = false;
-        int _e52 = index;
-        if (_e52 <= 12) {
+        int _e77 = index;
+        if (_e77 <= 12) {
         } else {
             break;
         }
         {
-            int _e55 = index;
-            if (naga_abs(_e55) > limit) {
+            int _e80 = index;
+            if (naga_abs(_e80) > limit) {
                 continue;
             }
-            int _e58 = index;
-            float position = static_cast<float>(_e58);
+            int _e83 = index;
+            float position = static_cast<float>(_e83);
             float weight = metal::exp((-(position) * position) / ((2.0 * sigma) * sigma));
             metal::float2 uv = sampleUV + (input.parameters.xy * position);
             metal::float4 pixel_1 = source.sample(sourceSampler, uv, metal::gradient2d(gradientsX, gradientsY));
-            metal::float4 premultiplied = (mode > 0.5) ? pixel_1 : metal::float4(pixel_1.xyz * pixel_1.w, pixel_1.w);
-            metal::float4 _e82 = result;
-            result = _e82 + (premultiplied * weight);
-            float _e85 = total;
-            total = _e85 + weight;
+            metal::float4 premultiplied = (mode > 3.5) ? metal::float4(metal::min(pixel_1.x, pixel_1.w)) : (mode > 0.5) ? pixel_1 : metal::float4(pixel_1.xyz * pixel_1.w, pixel_1.w);
+            metal::float4 _e114 = result;
+            result = _e114 + (premultiplied * weight);
+            float _e117 = total;
+            total = _e117 + weight;
         }
     }
-    metal::float4 _e90 = result;
-    float _e91 = total;
-    result = _e90 / metal::float4(_e91);
+    metal::float4 _e122 = result;
+    float _e123 = total;
+    result = _e122 / metal::float4(_e123);
     if (mode > 1.5) {
+        local_2 = mode < 2.5;
+    } else {
+        local_2 = false;
+    }
+    bool _e133 = local_2;
+    if (!(_e133)) {
+        local_3 = mode > 4.5;
+    } else {
+        local_3 = true;
+    }
+    bool _e140 = local_3;
+    if (_e140) {
         metal::float2 pixel_2 = input.uv * static_cast<metal::float2>(metal::uint2(source.get_width(), source.get_height()));
-        bool _e108 = insideRoundedBox(pixel_2 - input.box.xy, input.box.zw, input.radiusX, input.radiusY);
-        if (_e108) {
+        bool _e153 = insideRoundedBox(pixel_2 - input.box.xy, input.box.zw, input.radiusX, input.radiusY);
+        if (_e153) {
             return sprite_fragmentOutput { metal::float4(0.0) };
         }
     }
-    float alpha = input.color.w;
-    metal::float4 _e113 = result;
-    float _e120 = result.w;
-    return sprite_fragmentOutput { metal::float4((_e113.xyz * input.color.xyz) * alpha, _e120 * alpha) };
+    float alpha_1 = input.color.w;
+    metal::float4 _e158 = result;
+    float _e165 = result.w;
+    return sprite_fragmentOutput { metal::float4((_e158.xyz * input.color.xyz) * alpha_1, _e165 * alpha_1) };
 }

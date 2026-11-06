@@ -6,6 +6,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/internal/entitycache"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -77,9 +78,9 @@ type resolvedUITransform struct {
 }
 
 type uiTransformNode struct {
-	resolved         resolvedUITransform
+	inheritedClip    clipRect2D
+	revision         uint64
 	parent           ecs.Entity
-	entity           ecs.Entity
 	seen             uint64
 	parentRevision   uint64
 	transform        UITransform
@@ -128,11 +129,11 @@ type uiTransformWorkspace struct {
 	scope        *ecs.QueryScope
 	bindings     uiTransformBindings
 	changes      ecs.SystemContext
-	nodes        entitycache.Store[uiTransformNode]
-	active       []ecs.Entity
 	queue        []ecs.Entity
+	nodes        entitycache.Store[uiTransformNode]
 	structures   [9]uint64
 	versions     [9]uint64
+	retention    reuse.Retention
 	scopeVersion uint64
 	generation   uint64
 	recomputed   int
@@ -181,10 +182,11 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 	scope, version := world.QueryScopeKey()
 	if workspace.scope != scope || workspace.scopeVersion != version {
 		workspace.nodes.Reset()
-		workspace.active = workspace.active[:0]
 		workspace.initialized = false
 		workspace.scope, workspace.scopeVersion = scope, version
 	}
+	workspace.nodes.Trim()
+	workspace.queue = workspace.retention.Trim(workspace.queue[:0], 64)
 	workspace.recomputed = 0
 	viewport := mgl32.Vec2{}
 	scaleFactor := float32(1)
@@ -202,30 +204,24 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 	workspace.generation++
 	workspace.queue = workspace.queue[:0]
 	if !workspace.initialized {
-		for _, entity := range workspace.active {
+		for entity := range workspace.nodes.All {
 			node := workspace.node(entity)
 			node.dirty, node.state = false, uiTransformUnvisited
 		}
 	}
 	hierarchy := HierarchyFor(world)
 	if !workspace.initialized || workspace.structures != structures {
-		for _, entity := range workspace.active {
-			if parent := workspace.node(workspace.node(entity).parent); parent != nil && !world.Has[UITransform](parent.entity) {
+		for entity := range workspace.nodes.All {
+			if parent := workspace.node(workspace.node(entity).parent); parent != nil && !world.Has[UITransform](workspace.node(entity).parent) {
 				workspace.mark(entity)
 			}
 		}
-		for _, entity := range workspace.active {
-			if !world.Has[UITransform](entity) {
-				workspace.nodes.Delete(entity)
-			}
-		}
-		workspace.active = workspace.active[:0]
+		workspace.nodes.Prune(func(entity ecs.Entity, _ *uiTransformNode) bool { return world.Has[UITransform](entity) })
 		for entity, _ := range world.Query[UITransform]().All {
 			workspace.refresh(world, entity, viewport, scaleFactor, !workspace.initialized || viewportChanged)
-			workspace.active = append(workspace.active, entity)
 		}
 	} else if viewportChanged {
-		for _, entity := range workspace.active {
+		for entity := range workspace.nodes.All {
 			workspace.refresh(world, entity, viewport, scaleFactor, true)
 		}
 	} else {
@@ -262,13 +258,23 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 		if workspace.versions[7] != versions[7] {
 			collectUITransformChanges[Text2D](world, changes, refresh)
 		}
-		if workspace.versions[8] != versions[8] {
-			for entity, access := range world.Query[UIGlobalTransform](changes.Changed[UIGlobalTransform](), ecs.With[UITransform]()).All {
-				value := access.Get()
 
-				if node := workspace.node(entity); node != nil && (node.resolved.matrix != value.Matrix || node.resolved.clip != value.clip) {
-					workspace.mark(entity)
-				}
+	}
+	if workspace.initialized && workspace.versions[8] != versions[8] {
+		since := workspace.lastRun
+		if since == world.ChangeTick() {
+			since--
+		}
+		changes := world.ChangesSince(since)
+		for entity, access := range world.Query[UIGlobalTransform](changes.Changed[UIGlobalTransform](), ecs.With[UITransform]()).All {
+			node := workspace.node(entity)
+			if node == nil || node.dirty {
+				continue
+			}
+			expected := composeUITransform(node, workspace.current(node.parent))
+			value := access.Get()
+			if expected.matrix != value.Matrix || expected.clip != value.clip {
+				workspace.mark(entity)
 			}
 		}
 	}
@@ -277,7 +283,7 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 		if node == nil {
 			continue
 		}
-		for child := hierarchy.FirstChild(node.entity); child != 0; child = hierarchy.NextSibling(child) {
+		for child := hierarchy.FirstChild(workspace.queue[index]); child != 0; child = hierarchy.NextSibling(child) {
 			workspace.mark(child)
 		}
 	}
@@ -286,24 +292,14 @@ func syncUIGlobalTransforms(context *ecs.SystemContext) error {
 		if workspace.node(entity) == nil {
 			continue
 		}
-		resolved, err := resolveUITransform(workspace, entity)
-		if err != nil {
+		if _, err := resolveUITransform(workspace, entity); err != nil {
 			workspace.initialized = false
-			return err
-		}
-		access := workspace.bindings.global.Access(world.Row(entity))
-		if global := access.Ref(); global != nil {
-			if global.Matrix != resolved.matrix || global.clip != resolved.clip {
-				ecs.CommitComponent(access, UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip})
-			}
-			continue
-		}
-		if err := world.Insert(entity, UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip}); err != nil {
 			return err
 		}
 	}
 	workspace.initialized = true
 	workspace.versions, workspace.structures = uiTransformRevisions(world)
+	workspace.retention.Record(len(workspace.queue))
 	workspace.lastRun = world.ChangeTick()
 	workspace.viewport, workspace.scaleFactor = viewport, scaleFactor
 	return nil
@@ -328,11 +324,8 @@ func (workspace *uiTransformWorkspace) mark(entity ecs.Entity) {
 
 func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Entity, viewport mgl32.Vec2, scaleFactor float32, force bool) {
 	node := workspace.nodes.Ensure(entity)
-	if node.seen == workspace.generation && node.entity == entity {
+	if node.seen == workspace.generation {
 		return
-	}
-	if node.entity != entity {
-		*node = uiTransformNode{}
 	}
 	row := world.Row(entity)
 	b := &workspace.bindings
@@ -344,11 +337,11 @@ func (workspace *uiTransformWorkspace) refresh(world *ecs.World, entity ecs.Enti
 	exempt := exemption != nil
 	parentExempt := exempt && exemption.ParentOnly
 	baseSize := b.baseSize(row)
-	global, hasGlobal := b.global.Get(row)
-	topologyChanged := node.entity != entity || node.parent != parent.Entity
-	dirty := force || topologyChanged || !hasGlobal || global.Matrix != node.resolved.matrix || global.clip != node.resolved.clip || node.transform != transform || node.baseSize != baseSize ||
+	_, hasGlobal := b.global.Get(row)
+	topologyChanged := node.seen == 0 || node.parent != parent.Entity
+	dirty := force || topologyChanged || !hasGlobal || node.transform != transform || node.baseSize != baseSize ||
 		node.localClip != clip || node.hasClip != hasClip || node.localRoundedClip != rounded || node.hasRoundedClip != hasRounded || node.clipExempt != exempt || node.parentClipExempt != parentExempt
-	node.entity, node.seen = entity, workspace.generation
+	node.seen = workspace.generation
 	node.transform, node.parent, node.baseSize = transform, parent.Entity, baseSize
 	node.localClip, node.hasClip, node.localRoundedClip, node.hasRoundedClip, node.clipExempt = clip, hasClip, rounded, hasRounded, exempt
 	node.parentClipExempt = parentExempt
@@ -364,7 +357,7 @@ func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (res
 		return resolvedUITransform{matrix: mgl32.Ident4()}, nil
 	}
 	if node.state == uiTransformResolved {
-		return node.resolved, nil
+		return workspace.current(entity), nil
 	}
 	if node.state == uiTransformVisiting {
 		return resolvedUITransform{}, fmt.Errorf("ecs: cycle detected in UI Parent hierarchy at entity %d", entity)
@@ -380,13 +373,40 @@ func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (res
 	}
 	if !node.dirty && node.parentRevision == parentTransform.revision {
 		node.state = uiTransformResolved
-		return node.resolved, nil
+		return workspace.current(entity), nil
 	}
-	resolved := resolvedUITransform{matrix: parentTransform.matrix.Mul4(node.local), clip: parentTransform.clip, revision: node.resolved.revision + 1}
+	resolved := composeUITransform(node, parentTransform)
+	world := workspace.bindings.world
+	access := workspace.bindings.global.Access(world.Row(entity))
+	value := UIGlobalTransform{Matrix: resolved.matrix, clip: resolved.clip}
+	if access.Ref() != nil {
+		ecs.CommitComponent(access, value)
+	} else if err := world.Insert(entity, value); err != nil {
+		return resolvedUITransform{}, err
+	}
+	node.inheritedClip, node.revision = resolved.inheritedClip, resolved.revision
+	node.dirty = false
+	node.parentRevision = parentTransform.revision
+	workspace.recomputed++
+	node.state = uiTransformResolved
+	return resolved, nil
+}
+
+func (workspace *uiTransformWorkspace) current(entity ecs.Entity) resolvedUITransform {
+	node := workspace.node(entity)
+	if node == nil {
+		return resolvedUITransform{matrix: mgl32.Ident4()}
+	}
+	global, _ := workspace.bindings.global.Get(workspace.bindings.world.Row(entity))
+	return resolvedUITransform{matrix: global.Matrix, clip: global.clip, inheritedClip: node.inheritedClip, revision: node.revision}
+}
+
+func composeUITransform(node *uiTransformNode, parent resolvedUITransform) resolvedUITransform {
+	resolved := resolvedUITransform{matrix: parent.matrix.Mul4(node.local), clip: parent.clip, revision: node.revision + 1}
 	if node.clipExempt {
 		resolved.clip = clipRect2D{}
 		if node.parentClipExempt {
-			resolved.clip = parentTransform.inheritedClip
+			resolved.clip = parent.inheritedClip
 		}
 	}
 	resolved.inheritedClip = resolved.clip
@@ -396,12 +416,7 @@ func resolveUITransform(workspace *uiTransformWorkspace, entity ecs.Entity) (res
 	if node.hasRoundedClip {
 		resolved.clip = addRoundedClip2D(resolved.clip, roundedClipFromLocal2D(resolved.matrix, node.localRoundedClip))
 	}
-	node.resolved = resolved
-	node.dirty = false
-	node.parentRevision = parentTransform.revision
-	workspace.recomputed++
-	node.state = uiTransformResolved
-	return resolved, nil
+	return resolved
 }
 
 func (b *uiTransformBindings) baseSize(row ecs.EntityRow) mgl32.Vec2 {

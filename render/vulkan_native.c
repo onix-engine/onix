@@ -61,6 +61,7 @@
 #define ONIX_MESH_BLEND_MODE_COUNT 4
 #define ONIX_VK_PIPELINE_NO_DEPTH 16
 #define ONIX_VK_PIPELINE_COMPACT_SPRITE 32
+#define ONIX_VK_PIPELINE_R8 64
 #define ONIX_VK_HOST_HEAP_RELEASE_BYTES (4u * 1024u * 1024u)
 #define ONIX_VK_COMMANDS_WARM 1024u
 
@@ -247,6 +248,7 @@ typedef struct {
 	VkFramebuffer framebuffer;
 	VkImage depth_image;
 	VkImageView depth_view;
+	VkImageView color_view; // identity view for R8 attachment; sampling uses the coverage swizzle
 	VkDeviceMemory depth_memory;
 } OnixVkRetiredRenderTarget;
 
@@ -303,7 +305,7 @@ typedef struct {
 	VkPipeline opaque;
 	VkPipeline opaque_surface;
 	VkPipeline transparent[ONIX_MESH_BLEND_MODE_COUNT];
-	VkPipeline color_only[1 + ONIX_MESH_BLEND_MODE_COUNT];
+	VkPipeline color_only[2][1 + ONIX_MESH_BLEND_MODE_COUNT];
 	VkShaderModule vertex, fragment;
 	int destroy_pending;
 	uint32_t retire_frame;
@@ -312,7 +314,7 @@ typedef struct {
 } OnixVkMeshPipeline;
 
 typedef struct {
-	VkPipeline pipeline, color_only;
+	VkPipeline pipeline, color_only[2];
 	VkShaderModule vertex, fragment;
 	int destroy_pending;
 	uint32_t retire_frame;
@@ -326,6 +328,7 @@ typedef struct {
 	VkFramebuffer framebuffer;
 	VkImage depth_image;
 	VkImageView depth_view;
+	VkImageView color_view; // identity view for R8 attachment; sampling uses the coverage swizzle
 	VkDeviceMemory depth_memory;
 	uint32_t width;
 	uint32_t height;
@@ -399,7 +402,7 @@ struct OnixGPUDriver {
 	VkRenderPass color_only_surface_passes[2];
 	VkRenderPass target_render_passes[4];
 	VkRenderPass picking_target_render_passes[4];
-	VkRenderPass color_only_target_passes[2][2];
+	VkRenderPass color_only_target_passes[3][2];
 	VkDescriptorSetLayout texture_layout;
 	VkDescriptorSetLayout deformation_layout;
 	VkBuffer empty_deformation_buffer;
@@ -417,7 +420,7 @@ struct OnixGPUDriver {
 	OnixVkMeshPipeline mesh_builtin[ONIX_MESH_VARIANT_COUNT];
 	VkPipeline mesh_picking_pipeline;
 	VkPipeline lcd_pipeline;
-	VkPipeline color_only_pipelines[11];
+	VkPipeline color_only_pipelines[2][11];
 	OnixVkMeshPipeline *mesh_pipelines;
 	OnixNativeSlots mesh_shader_slots;
 	OnixVkMaterial2DPipeline *material2d_pipelines;
@@ -1381,6 +1384,10 @@ static int onix_vk_color_only(const OnixGPUDriver *driver) {
 		: driver->render_targets[driver->active_render_target - 1].depth_image == VK_NULL_HANDLE;
 }
 
+static int onix_vk_r8_target(const OnixGPUDriver *driver) {
+	return driver->active_render_target != 0 && driver->render_targets[driver->active_render_target - 1].color_format == 2;
+}
+
 static VkRenderPass onix_vk_target_pass(OnixGPUDriver *driver, const OnixVkRenderTarget *target, uint32_t clear_flags) {
 	if (target->depth_image == VK_NULL_HANDLE) return driver->color_only_target_passes[target->color_format][clear_flags & 1u];
 	return target->color_format == 1 ? driver->picking_target_render_passes[clear_flags] : driver->target_render_passes[clear_flags];
@@ -1503,8 +1510,9 @@ static VkPipeline onix_vk_create_pipeline(
     VkPipelineLayout layout,
 	int kind) {
 	int no_depth = (kind & ONIX_VK_PIPELINE_NO_DEPTH) != 0;
+	int r8 = (kind & ONIX_VK_PIPELINE_R8) != 0;
 	int compact_sprite = (kind & ONIX_VK_PIPELINE_COMPACT_SPRITE) != 0;
-	kind &= ~(ONIX_VK_PIPELINE_NO_DEPTH | ONIX_VK_PIPELINE_COMPACT_SPRITE);
+	kind &= ~(ONIX_VK_PIPELINE_NO_DEPTH | ONIX_VK_PIPELINE_COMPACT_SPRITE | ONIX_VK_PIPELINE_R8);
     VkPipelineShaderStageCreateInfo stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1662,7 +1670,7 @@ static VkPipeline onix_vk_create_pipeline(
 		attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 		attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 	}
-	if (kind == 8) attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+	if (kind == 8 || r8) attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
 	if (kind == 2 || kind == 8 || kind == 9) attachment.blendEnable = VK_FALSE;
 	VkPipelineDepthStencilStateCreateInfo depth_stencil = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -1696,7 +1704,7 @@ static VkPipeline onix_vk_create_pipeline(
         .pColorBlendState = &blend,
         .pDynamicState = &dynamic,
         .layout = layout,
-		.renderPass = no_depth ? (driver->active_render_target == 0 ? driver->color_only_surface_passes[0] : driver->color_only_target_passes[kind == 8][1]) : kind == 8 ? driver->picking_target_render_passes[3] : driver->render_pass,
+		.renderPass = no_depth ? (driver->active_render_target == 0 ? driver->color_only_surface_passes[0] : driver->color_only_target_passes[r8 ? 2 : kind == 8][1]) : kind == 8 ? driver->picking_target_render_passes[3] : driver->render_pass,
         .subpass = 0,
     };
     VkPipeline result = VK_NULL_HANDLE;
@@ -1728,14 +1736,14 @@ static VkPipeline onix_vk_create_builtin_pipeline(
 }
 
 static VkPipeline onix_vk_2d_pipeline(OnixGPUDriver *driver, int kind, VkPipeline *normal) {
-	VkPipeline *pipeline = onix_vk_color_only(driver) ? &driver->color_only_pipelines[kind] : normal;
+	VkPipeline *pipeline = onix_vk_color_only(driver) ? &driver->color_only_pipelines[onix_vk_r8_target(driver)][kind] : normal;
 	if (*pipeline == VK_NULL_HANDLE) {
 		int shape = kind == 1 || kind == 3;
 		*pipeline = onix_vk_create_builtin_pipeline(driver,
 			shape ? driver->shape_vertex_shader : driver->sprite_vertex_shader,
 			shape ? driver->shape_fragment_shader : driver->sprite_fragment_shader,
 			shape ? driver->shape_layout : driver->sprite_layout,
-			kind | (onix_vk_color_only(driver) ? ONIX_VK_PIPELINE_NO_DEPTH : 0));
+			kind | (onix_vk_color_only(driver) ? ONIX_VK_PIPELINE_NO_DEPTH : 0) | (onix_vk_r8_target(driver) ? ONIX_VK_PIPELINE_R8 : 0));
 	}
 	return *pipeline;
 }
@@ -1949,12 +1957,12 @@ static VkPipeline onix_vk_mesh_pipeline(OnixGPUDriver *driver, const OnixNativeM
 	VkPipeline *pipeline = draw->alpha_mode == 2 ? &variants->transparent[draw->blend_mode]
 		: driver->active_render_target == 0 ? &variants->opaque_surface : &variants->opaque;
 	if (onix_vk_color_only(driver)) {
-		pipeline = &variants->color_only[draw->alpha_mode == 2 ? 1 + draw->blend_mode : 0];
-		kind |= ONIX_VK_PIPELINE_NO_DEPTH;
+		pipeline = &variants->color_only[onix_vk_r8_target(driver)][draw->alpha_mode == 2 ? 1 + draw->blend_mode : 0];
+		kind |= ONIX_VK_PIPELINE_NO_DEPTH | (onix_vk_r8_target(driver) ? ONIX_VK_PIPELINE_R8 : 0);
 	}
 	if (*pipeline == VK_NULL_HANDLE) {
 		*pipeline = draw->shader
-			? onix_vk_create_pipeline(driver, variants->vertex, variants->fragment, driver->mesh_layout, kind)
+			? onix_vk_create_pipeline(driver, variants->vertex, variants->fragment, driver->mesh_layout, kind | (onix_vk_r8_target(driver) ? ONIX_VK_PIPELINE_R8 : 0))
 			: onix_vk_create_builtin_pipeline(driver, driver->mesh_vertex_shader,
 				(OnixGPUShader[]){driver->mesh_fragment_shader, driver->mesh_unlit_fragment_shader, driver->mesh_depth_fragment_shader, driver->mesh_basic_fragment_shader}[variant], driver->mesh_layout, kind);
 	}
@@ -3158,6 +3166,7 @@ static void onix_vk_release_texture(OnixGPUDriver *driver, OnixVkTexture *textur
 static void onix_vk_release_retired_target(OnixGPUDriver *driver, OnixVkRetiredRenderTarget *target) {
 	if (target->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(driver->device, target->framebuffer, NULL);
 	if (target->depth_view != VK_NULL_HANDLE) vkDestroyImageView(driver->device, target->depth_view, NULL);
+	if (target->color_view != VK_NULL_HANDLE) vkDestroyImageView(driver->device, target->color_view, NULL);
 	if (target->depth_image != VK_NULL_HANDLE) vkDestroyImage(driver->device, target->depth_image, NULL);
 	if (target->depth_memory != VK_NULL_HANDLE) vkFreeMemory(driver->device, target->depth_memory, NULL);
 	*target = (OnixVkRetiredRenderTarget){0};
@@ -3168,12 +3177,14 @@ static void onix_vk_release_render_target_attachments(OnixGPUDriver *driver, Oni
 		.framebuffer = target->framebuffer,
 		.depth_image = target->depth_image,
 		.depth_view = target->depth_view,
+		.color_view = target->color_view,
 		.depth_memory = target->depth_memory,
 	};
 	onix_vk_release_retired_target(driver, &retired);
 	target->framebuffer = VK_NULL_HANDLE;
 	target->depth_image = VK_NULL_HANDLE;
 	target->depth_view = VK_NULL_HANDLE;
+	target->color_view = VK_NULL_HANDLE;
 	target->depth_memory = VK_NULL_HANDLE;
 }
 
@@ -3183,8 +3194,10 @@ static void onix_vk_release_mesh_pipeline(OnixGPUDriver *driver, OnixVkMeshPipel
 	for (uint32_t blend = 0; blend < ONIX_MESH_BLEND_MODE_COUNT; blend++) {
 		if (pipeline->transparent[blend] != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->transparent[blend], NULL);
 	}
-	for (uint32_t index = 0; index < 1 + ONIX_MESH_BLEND_MODE_COUNT; index++) {
-		if (pipeline->color_only[index]) vkDestroyPipeline(driver->device, pipeline->color_only[index], NULL);
+	for (uint32_t format = 0; format < 2; format++) {
+		for (uint32_t index = 0; index < 1 + ONIX_MESH_BLEND_MODE_COUNT; index++) {
+			if (pipeline->color_only[format][index]) vkDestroyPipeline(driver->device, pipeline->color_only[format][index], NULL);
+		}
 	}
 	if (pipeline->vertex) vkDestroyShaderModule(driver->device, pipeline->vertex, NULL);
 	if (pipeline->fragment) vkDestroyShaderModule(driver->device, pipeline->fragment, NULL);
@@ -3193,7 +3206,9 @@ static void onix_vk_release_mesh_pipeline(OnixGPUDriver *driver, OnixVkMeshPipel
 
 static void onix_vk_release_material2d_pipeline(OnixGPUDriver *driver, OnixVkMaterial2DPipeline *pipeline) {
 	if (pipeline->pipeline != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->pipeline, NULL);
-	if (pipeline->color_only) vkDestroyPipeline(driver->device, pipeline->color_only, NULL);
+	for (uint32_t format = 0; format < 2; format++) {
+		if (pipeline->color_only[format]) vkDestroyPipeline(driver->device, pipeline->color_only[format], NULL);
+	}
 	if (pipeline->vertex) vkDestroyShaderModule(driver->device, pipeline->vertex, NULL);
 	if (pipeline->fragment) vkDestroyShaderModule(driver->device, pipeline->fragment, NULL);
 	*pipeline = (OnixVkMaterial2DPipeline){0};
@@ -3310,13 +3325,15 @@ void onix_gpu_destroy(OnixGPUDriver *driver) {
 		for (uint32_t index = 0; index < driver->mesh_shader_slots.count; index++) onix_vk_release_mesh_pipeline(driver, &driver->mesh_pipelines[index]);
 		for (uint32_t index = 0; index < driver->material2d_shader_slots.count; index++) onix_vk_release_material2d_pipeline(driver, &driver->material2d_pipelines[index]);
 		if (driver->lcd_pipeline) vkDestroyPipeline(driver->device, driver->lcd_pipeline, NULL);
-		for (uint32_t index = 0; index < 2; index++) {
+		for (uint32_t index = 0; index < 3; index++) {
 			for (uint32_t clear = 0; clear < 2; clear++) {
 				if (driver->color_only_target_passes[index][clear]) vkDestroyRenderPass(driver->device, driver->color_only_target_passes[index][clear], NULL);
 			}
 		}
-		for (uint32_t kind = 0; kind < 11; kind++) {
-			if (driver->color_only_pipelines[kind]) vkDestroyPipeline(driver->device, driver->color_only_pipelines[kind], NULL);
+		for (uint32_t format = 0; format < 2; format++) {
+			for (uint32_t kind = 0; kind < 11; kind++) {
+				if (driver->color_only_pipelines[format][kind]) vkDestroyPipeline(driver->device, driver->color_only_pipelines[format][kind], NULL);
+			}
 		}
 		if (driver->sprite_layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, driver->sprite_layout, NULL);
 		if (driver->shape_layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, driver->shape_layout, NULL);
@@ -3853,7 +3870,7 @@ static int onix_vk_create_render_target_resources(
 	uint32_t color_format,
 	int depth,
 	OnixVkRenderTarget *target) {
-	if (width == 0 || height == 0 || color_format > 1) {
+	if (width == 0 || height == 0 || color_format > 2 || (color_format == 2 && depth)) {
 		onix_vk_set_error("unsupported Vulkan render target descriptor");
 		return 0;
 	}
@@ -3861,13 +3878,13 @@ static int onix_vk_create_render_target_resources(
 		for (uint32_t clear = 0; clear < 2; clear++) {
 			VkRenderPass *pass = &driver->color_only_target_passes[color_format][clear];
 			if (*pass == VK_NULL_HANDLE && !onix_vk_create_target_render_pass(driver, clear,
-				color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format, 0, pass)) return 0;
+				color_format == 2 ? VK_FORMAT_R8_UNORM : color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format, 0, pass)) return 0;
 		}
 	}
 	uint32_t texture_slot;
 	if (!onix_vk_acquire_texture_slot(driver, &texture_slot)) return 0;
-	VkFormat target_color_format = color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format;
-	OnixVkTexture color = {.width = width, .height = height, .mip_levels = 1};
+	VkFormat target_color_format = color_format == 2 ? VK_FORMAT_R8_UNORM : color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format;
+	OnixVkTexture color = {.width = width, .height = height, .mip_levels = 1, .format = color_format == 2 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8};
 	VkImageCreateInfo color_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -3941,7 +3958,20 @@ static int onix_vk_create_render_target_resources(
 			return 0;
 		}
 	}
-	VkImageView attachments[] = {color.view, result.depth_view};
+	if (color_format == 2) {
+		VkImageViewCreateInfo view = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = color.image, .viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = target_color_format,
+			.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+		};
+		if (!onix_vk_result(vkCreateImageView(driver->device, &view, NULL, &result.color_view), "vkCreateImageView(R8 attachment)")) {
+			onix_vk_release_texture(driver, &color);
+			onix_vk_release_render_target_attachments(driver, &result);
+			return 0;
+		}
+	}
+	VkImageView attachments[] = {result.color_view ? result.color_view : color.view, result.depth_view};
 	VkFramebufferCreateInfo framebuffer = {
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.renderPass = onix_vk_target_pass(driver, &result, 3),
@@ -3982,11 +4012,13 @@ static int onix_vk_retire_render_target_attachments(OnixGPUDriver *driver, OnixV
 		.framebuffer = target->framebuffer,
 		.depth_image = target->depth_image,
 		.depth_view = target->depth_view,
+		.color_view = target->color_view,
 		.depth_memory = target->depth_memory,
 	};
 	target->framebuffer = VK_NULL_HANDLE;
 	target->depth_image = VK_NULL_HANDLE;
 	target->depth_view = VK_NULL_HANDLE;
+	target->color_view = VK_NULL_HANDLE;
 	target->depth_memory = VK_NULL_HANDLE;
 	return 1;
 }
@@ -4161,12 +4193,12 @@ static int onix_vk_prepare_readback(OnixGPUDriver *driver, VkDeviceSize size) {
 
 int onix_gpu_read_render_target(OnixGPUDriver *driver, uint32_t handle, int32_t x, int32_t y, uint32_t width, uint32_t height, uint8_t *destination, size_t length) {
 	if (driver == NULL || driver->frame_active || handle == 0 || handle > driver->target_slots.count || destination == NULL || width == 0 || height == 0 ||
-		length != (size_t)width * height * 4 || x < 0 || y < 0) {
+		x < 0 || y < 0) {
 		onix_vk_set_error("invalid Vulkan render target readback");
 		return 0;
 	}
 	OnixVkRenderTarget *target = &driver->render_targets[handle - 1];
-	if (target->framebuffer == VK_NULL_HANDLE || target->destroy_pending || !target->initialized || target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width || (uint64_t)(uint32_t)y + height > target->height) {
+	if (length != (size_t)width * height * (target->color_format == 2 ? 1 : 4) || target->framebuffer == VK_NULL_HANDLE || target->destroy_pending || !target->initialized || target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width || (uint64_t)(uint32_t)y + height > target->height) {
 		onix_vk_set_error("Vulkan render target readback is outside the image");
 		return 0;
 	}
@@ -4651,9 +4683,9 @@ int onix_gpu_draw_sprites(
 			next_pipeline = onix_vk_2d_pipeline(driver, kind, normal);
 		} else {
 			OnixVkMaterial2DPipeline *custom = &driver->material2d_pipelines[draw->shader - 1];
-			VkPipeline *variant = onix_vk_color_only(driver) ? &custom->color_only : &custom->pipeline;
+			VkPipeline *variant = onix_vk_color_only(driver) ? &custom->color_only[onix_vk_r8_target(driver)] : &custom->pipeline;
 			if (*variant == VK_NULL_HANDLE) *variant = onix_vk_create_pipeline(driver, custom->vertex, custom->fragment,
-				driver->sprite_layout, onix_vk_color_only(driver) ? ONIX_VK_PIPELINE_NO_DEPTH : 0);
+				driver->sprite_layout, (onix_vk_color_only(driver) ? ONIX_VK_PIPELINE_NO_DEPTH : 0) | (onix_vk_r8_target(driver) ? ONIX_VK_PIPELINE_R8 : 0));
 			next_pipeline = *variant;
 		}
 		if (next_pipeline == VK_NULL_HANDLE) return 0;

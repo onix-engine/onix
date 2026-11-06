@@ -34,7 +34,6 @@ type Deformation struct {
 	NodeInverseBind []mgl32.Mat4
 	NodeMatrices    []mgl32.Mat4
 	vertices        []render.Vertex3D
-	gpuJoints       [][16]float32
 }
 
 // UpdateDeformationsSystem resolves optional joint and rigid node
@@ -73,17 +72,14 @@ func updateMeshDeformations3D(context *ecs.SystemContext) error {
 		deformation = access.Mut()
 		if len(deformation.JointEntities) != 0 {
 			deformation.JointMatrices = reuse.Resize(deformation.JointMatrices, len(deformation.JointEntities))
-			deformation.gpuJoints = reuse.Resize(deformation.gpuJoints, len(deformation.JointEntities))
 		}
 		for index, jointEntity := range deformation.JointEntities {
 			global, ok := context.World.Get[scene.GlobalTransform](jointEntity)
 			if !ok {
 				deformation.JointMatrices[index] = mgl32.Ident4()
-				deformation.gpuJoints[index] = [16]float32(mgl32.Ident4())
 				continue
 			}
 			deformation.JointMatrices[index] = meshFromWorld.Mul4(global.Matrix).Mul4(deformation.InverseBind[index])
-			deformation.gpuJoints[index] = [16]float32(deformation.JointMatrices[index])
 		}
 		if len(deformation.NodeEntities) != 0 {
 			deformation.NodeMatrices = reuse.Resize(deformation.NodeMatrices, len(deformation.NodeEntities))
@@ -115,10 +111,17 @@ type extractedView3D struct {
 	viewport         scene.CameraViewport
 }
 
+// Views keep only a shared snapshot reference and their CPU geometry choice.
+// Fixed blocks keep references valid while later cameras add snapshots.
 type extractedMesh3D struct {
+	*meshSnapshot3D
+	vertices []render.Vertex3D
+	distance float32
+}
+
+type meshSnapshot3D struct {
 	deformation                    *Deformation
 	mesh                           *graphics.Mesh
-	vertices                       []render.Vertex3D
 	material                       graphics.Material3DData
 	entity                         ecs.Entity
 	surfaceTextures                [render.MeshSurfaceTextureSlots]render.TextureHandle
@@ -130,27 +133,28 @@ type extractedMesh3D struct {
 	meshHandle                     render.MeshHandle
 	meshKey                        uint32
 	surfaceTextureFlags            uint32
-	distance                       float32
 	firstIndex                     uint32
 	indexCount                     uint32
 	noReflection                   bool
 	noShadow                       bool
 	noOcclusion                    bool
+	prepared                       uint64
 }
 
 type extractedMeshCandidate3D struct {
-	mesh         *graphics.Mesh
-	deformation  *Deformation
-	cpuVertices  []render.Vertex3D
-	layers       scene.RenderLayers
-	material     graphics.Material3DData
-	scene        uint64
-	entity       ecs.Entity
-	transform    mgl32.Mat4
-	bounds       graphics.BoundingSphere
-	cpuBounds    graphics.BoundingSphere
-	cpuReady     bool
-	customShader bool
+	mesh                                *graphics.Mesh
+	deformation                         *Deformation
+	cpuVertices                         []render.Vertex3D
+	layers                              scene.RenderLayers
+	scene                               uint64
+	entity                              ecs.Entity
+	transform                           mgl32.Mat4
+	cpuBounds                           graphics.BoundingSphere
+	cpuReady                            bool
+	customShader                        bool
+	noShadow, noOcclusion, noReflection bool
+	first                               int
+	count                               int
 }
 
 type material3DReader func(*ecs.World, ecs.Entity, int) (graphics.Material3DData, bool)
@@ -160,16 +164,20 @@ type meshGeometryKey3D struct {
 	deformation *Deformation
 }
 
+type meshGeometry3D struct {
+	firstIndex       uint32
+	deformationIndex uint32
+	cpu              bool
+}
+
 type renderPhase3D struct {
 	items []extractedMesh3D
 }
 
 type renderView3D struct {
 	occlusion          *renderView3D
-	deformationIndices map[meshGeometryKey3D]uint32
 	fxaa               *antialiasing3D
-	dynamicGeometry    map[meshGeometryKey3D]uint32
-	meshKeys           map[*graphics.Mesh]uint32
+	geometry           map[meshGeometryKey3D]meshGeometry3D
 	reflection         *screenReflection3D
 	shadow             *shadowAtlas3D
 	environment        Environment
@@ -190,6 +198,7 @@ type renderView3D struct {
 	drawRetention      reuse.Retention
 	instanceRetention  reuse.Retention
 	extractedRetention reuse.Retention
+	geometryRetention  reuse.MapRetention
 	scene              uint64
 	previousExtracted  int
 	lighting           render.MeshLighting
@@ -249,18 +258,25 @@ func (view *renderView3D) releaseUnusedExtracted() {
 // World stores per-camera frame snapshots. Simulation components are
 // read only during Extract; prepare, queue, sort, and draw use these snapshots.
 type World struct {
-	fxaaMesh   *graphics.Mesh
-	skyMesh    *graphics.Mesh
-	groundMesh *graphics.Mesh
-	views      map[ecs.Entity]*renderView3D
-	white      *graphics.Texture
-	registered map[reflect.Type]struct{}
-	viewOrder  []ecs.Entity
-	lights     []extractedLight3D
-	materials  []material3DReader
-	ambient    [4]float32
-	lightDir   [4]float32
-	lightColor [4]float32
+	groundMesh        *graphics.Mesh
+	skyMesh           *graphics.Mesh
+	registered        map[reflect.Type]struct{}
+	views             map[ecs.Entity]*renderView3D
+	meshKeys          map[*graphics.Mesh]uint32
+	white             *graphics.Texture
+	fxaaMesh          *graphics.Mesh
+	lights            []extractedLight3D
+	viewOrder         []ecs.Entity
+	snapshotBlocks    [][]meshSnapshot3D
+	materials         []material3DReader
+	meshKeyRetention  reuse.MapRetention
+	snapshotRetention reuse.Retention
+	previousSnapshots int
+	snapshotCount     int
+	preparation       uint64
+	ambient           [4]float32
+	lightDir          [4]float32
+	lightColor        [4]float32
 }
 
 type activeRenderViews3DScratch struct{}
@@ -320,7 +336,11 @@ func (state *World) Dispose() error {
 		}
 	}
 	clear(state.views)
+	state.snapshotBlocks = nil
+	state.snapshotCount, state.previousSnapshots = 0, 0
+	state.meshKeys = nil
 	state.viewOrder = state.viewOrder[:0]
+
 	state.skyMesh, state.groundMesh = nil, nil
 	state.fxaaMesh = nil
 	return first
@@ -367,9 +387,7 @@ func (state *World) viewFor(entity ecs.Entity) *renderView3D {
 	view := state.views[entity]
 	if view == nil {
 		view = &renderView3D{
-			meshKeys:           make(map[*graphics.Mesh]uint32),
-			dynamicGeometry:    make(map[meshGeometryKey3D]uint32),
-			deformationIndices: make(map[meshGeometryKey3D]uint32),
+			geometry: make(map[meshGeometryKey3D]meshGeometry3D),
 		}
 		state.views[entity] = view
 	}
@@ -428,6 +446,13 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		}
 	}()
 	state.viewOrder = state.viewOrder[:0]
+	state.previousSnapshots, state.snapshotCount = state.snapshotCount, 0
+	state.meshKeys = state.meshKeyRetention.Trim(state.meshKeys, 64)
+	clear(state.meshKeys)
+	if state.meshKeys == nil {
+		state.meshKeys = make(map[*graphics.Mesh]uint32)
+	}
+	defer state.releaseSnapshots()
 	activeViews := world.FrameScratchMap[activeRenderViews3DScratch, ecs.Entity, bool]()
 	renderState, _ := world.GetResource[*scene.RenderWorld]()
 	if renderState == nil {
@@ -491,7 +516,8 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 	state.extractLocalLights[AreaLight](world)
 
 	meshScratch := world.FrameScratch[extractedMeshes3DScratch, extractedMeshCandidate3D]()
-	meshScratch.Values = meshScratch.Values[:0]
+	meshRetention := world.FrameValue[extractedMeshes3DScratch, reuse.Retention]()
+	meshScratch.Values = meshRetention.Trim(meshScratch.Values, 64)
 	var deformationErr error
 	for entity, access := range world.Query2[Mesh, scene.GlobalTransform]().All {
 		mesh := access.A.Get()
@@ -503,19 +529,32 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		if visibility, ok := world.Get[scene.Visibility](entity); ok && !visibility.Visible {
 			continue
 		}
-		material := state.materialFor(world, entity, -1)
-		customShader := material.Shader != nil
-		for _, part := range mesh.Mesh.Submeshes {
-			customShader = customShader || state.materialFor(world, entity, int(part.Material)).Shader != nil
-		}
 		deformation := world.GetMut[Deformation](entity)
+		customShader := false
+		deformed := deformation != nil && (len(mesh.Mesh.Skin) != 0 || len(mesh.Mesh.MorphTargets) != 0)
+		if deformed {
+			customShader = state.materialFor(world, entity, -1).Shader != nil
+		}
+		for _, part := range mesh.Mesh.Submeshes {
+			if part.Node >= 0 && deformation != nil && len(deformation.NodeMatrices) != 0 && int(part.Node) >= len(deformation.NodeMatrices) {
+				return fmt.Errorf("ecs: submesh node %d exceeds deformation nodes", part.Node)
+			}
+			if deformed && !customShader {
+				customShader = state.materialFor(world, entity, int(part.Material)).Shader != nil
+			}
+		}
+		_, noShadow := world.Get[NoShadow](entity)
+		_, noOcclusion := world.Get[NoAmbientOcclusion](entity)
+		_, noReflection := world.Get[NoScreenReflection](entity)
 		meshScratch.Values = append(meshScratch.Values, extractedMeshCandidate3D{
-			entity: entity, scene: scene.LayerForEntity(world, entity).ID, mesh: mesh.Mesh, material: material, transform: transform.Matrix,
-			bounds: mesh.Mesh.Bounds, layers: scene.LayersForEntity(world, entity), deformation: deformation,
-			customShader: customShader,
+			entity: entity, scene: scene.LayerForEntity(world, entity).ID,
+			mesh: mesh.Mesh, layers: scene.LayersForEntity(world, entity), deformation: deformation,
+			transform: transform.Matrix, customShader: customShader, first: -1, count: max(1, len(mesh.Mesh.Submeshes)),
+			noShadow: noShadow, noOcclusion: noOcclusion, noReflection: noReflection,
 		})
 	}
 	meshScratch.ReleaseUnused()
+	meshRetention.Record(len(meshScratch.Values))
 	for _, camera := range renderState.Cameras {
 		if camera.Pipeline != scene.CameraPipeline3D {
 			continue
@@ -523,7 +562,6 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		view := state.viewFor(camera.Entity)
 		activeViews[camera.Entity] = true
 		view.resetExtracted()
-		clear(view.meshKeys)
 		viewport := camera.Camera.ResolvedViewport()
 		view.frame = render.NewRenderView(extractedView3D{
 			viewProjection:   camera.ClipFromWorld(),
@@ -563,7 +601,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 			if !camera.RenderLayers.Intersects(base.layers) {
 				continue
 			}
-			bounds := base.bounds
+			bounds := base.mesh.Bounds
 			var vertices []render.Vertex3D
 			if deformation := base.deformation; deformation != nil && (len(base.mesh.Skin) != 0 || len(base.mesh.MorphTargets) != 0) {
 				needsCPU := !gpuDeformation || base.customShader
@@ -582,45 +620,35 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 				}
 			}
 			gpuDeformed := base.deformation != nil && len(vertices) == 0 && (len(base.mesh.Skin) != 0 || len(base.mesh.MorphTargets) != 0)
-			meshKey, ok := view.meshKeys[base.mesh]
-			if !ok {
-				meshKey = uint32(len(view.meshKeys) + 1)
-				view.meshKeys[base.mesh] = meshKey
-			}
-			_, noShadow := world.Get[NoShadow](base.entity)
-			_, noOcclusion := world.Get[NoAmbientOcclusion](base.entity)
-			_, noReflection := world.Get[NoScreenReflection](base.entity)
-			for partIndex := 0; partIndex < max(1, len(base.mesh.Submeshes)); partIndex++ {
-				part := graphics.Submesh{IndexCount: uint32(len(base.mesh.Indices)), Node: -1}
-				material, transform := base.material, base.transform
-				if len(base.mesh.Submeshes) != 0 {
-					part = base.mesh.Submeshes[partIndex]
-					material = state.materialFor(world, base.entity, int(part.Material))
-				}
-				if part.Node >= 0 && base.deformation != nil && len(base.deformation.NodeMatrices) != 0 {
-					if int(part.Node) >= len(base.deformation.NodeMatrices) {
-						return fmt.Errorf("ecs: submesh node %d exceeds deformation nodes", part.Node)
-					}
-					transform = transform.Mul4(base.deformation.NodeMatrices[part.Node])
-				}
+			for partIndex := 0; partIndex < base.count; partIndex++ {
+				transform := base.partTransform(partIndex)
 				position := transform.Mul4x1(bounds.Center.Vec4(1)).Vec3()
 				scale := max(transform.Col(0).Vec3().Len(), transform.Col(1).Vec3().Len(), transform.Col(2).Vec3().Len())
 				visible := gpuDeformed || view.frustum.containsSphere(position, bounds.Radius*scale)
-				delta := position.Sub(view.frame.Camera.position)
-				item := extractedMesh3D{
-					noReflection: noReflection,
-					noOcclusion:  noOcclusion,
-					noShadow:     noShadow,
-					entity:       base.entity, mesh: base.mesh, meshKey: meshKey, material: material, transform: transform,
-					distance: delta.Dot(delta), vertices: vertices, deformation: base.deformation,
-					firstIndex: part.FirstIndex, indexCount: part.IndexCount,
+				var shadows uint32
+				if view.shadowActive && !base.noShadow {
+					for index, shadow := range view.shadow.views[:view.shadow.count] {
+						if gpuDeformed || shadow.frustum.containsSphere(position, bounds.Radius*scale) {
+							shadows |= 1 << index
+						}
+					}
 				}
+				if !visible && shadows == 0 {
+					continue
+				}
+				if base.first < 0 {
+					state.captureMesh(world, base)
+				}
+				snapshot := state.snapshotAt(base.first + partIndex)
+				delta := position.Sub(view.frame.Camera.position)
+				item := extractedMesh3D{meshSnapshot3D: snapshot, distance: delta.Dot(delta), vertices: vertices}
 				if visible {
 					view.extracted = append(view.extracted, item)
 				}
-				if view.shadowActive && !noShadow && material.AlphaMode != graphics.AlphaBlend && !material.Surface.Unlit && material.Shader == nil {
-					for _, shadow := range view.shadow.views[:view.shadow.count] {
-						if gpuDeformed || shadow.frustum.containsSphere(position, bounds.Radius*scale) {
+				material := snapshot.material
+				if shadows != 0 && material.AlphaMode != graphics.AlphaBlend && !material.Surface.Unlit && material.Shader == nil {
+					for index, shadow := range view.shadow.views[:view.shadow.count] {
+						if shadows&(1<<index) != 0 {
 							shadow.extracted = append(shadow.extracted, item)
 						}
 					}
@@ -646,6 +674,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 
 func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 	state := WorldFor(context.World)
+	state.preparation++
 	// A failed preparation must not leave partially queued views available.
 	defer func() {
 		if err != nil {
@@ -689,49 +718,50 @@ func prepareRenderResources3D(context *ecs.SystemContext) (err error) {
 					if err != nil {
 						return fmt.Errorf("ecs: prepare 3D mesh: %w", err)
 					}
-				} else {
-					item.meshHandle = render.MeshHandle{}
 				}
-				material := item.material
-				item.surfaceTextureFlags = 0
-				for slot, texture := range material.Surface.Textures() {
-					item.surfaceTextures[slot] = render.TextureHandle{}
-					if texture != nil {
-						item.surfaceTextureFlags |= render.MeshSurfaceTextureFlag(slot)
-						item.surfaceTextures[slot], err = prepareRenderResource3D(textureHandles, texture, graphics.DeviceFor(context.World))
-						if err != nil {
-							return fmt.Errorf("ecs: prepare surface texture: %w", err)
+				if item.prepared != state.preparation {
+					material := item.material
+					item.surfaceTextureFlags = 0
+					for slot, texture := range material.Surface.Textures() {
+						item.surfaceTextures[slot] = render.TextureHandle{}
+						if texture != nil {
+							item.surfaceTextureFlags |= render.MeshSurfaceTextureFlag(slot)
+							item.surfaceTextures[slot], err = prepareRenderResource3D(textureHandles, texture, graphics.DeviceFor(context.World))
+							if err != nil {
+								return fmt.Errorf("ecs: prepare surface texture: %w", err)
+							}
 						}
 					}
-				}
-				if material.Shader != nil {
-					item.shaderHandle, err = prepareRenderResource3D(shaderHandles, material.Shader, graphics.DeviceFor(context.World))
-					if err != nil {
-						return fmt.Errorf("ecs: prepare 3D material shader: %w", err)
+					if material.Shader != nil {
+						item.shaderHandle, err = prepareRenderResource3D(shaderHandles, material.Shader, graphics.DeviceFor(context.World))
+						if err != nil {
+							return fmt.Errorf("ecs: prepare 3D material shader: %w", err)
+						}
+					} else {
+						item.shaderHandle = render.MeshShaderHandle{}
 					}
-				} else {
-					item.shaderHandle = render.MeshShaderHandle{}
-				}
-				item.textureHandle = whiteHandle
-				if material.BaseColorTexture != nil {
-					item.textureHandle, err = prepareRenderResource3D(textureHandles, material.BaseColorTexture, graphics.DeviceFor(context.World))
-					if err != nil {
-						return fmt.Errorf("ecs: prepare 3D material texture: %w", err)
+					item.textureHandle = whiteHandle
+					if material.BaseColorTexture != nil {
+						item.textureHandle, err = prepareRenderResource3D(textureHandles, material.BaseColorTexture, graphics.DeviceFor(context.World))
+						if err != nil {
+							return fmt.Errorf("ecs: prepare 3D material texture: %w", err)
+						}
 					}
-				}
-				item.normalTextureHandle = render.TextureHandle{}
-				if material.NormalTexture != nil {
-					item.normalTextureHandle, err = prepareRenderResource3D(textureHandles, material.NormalTexture, graphics.DeviceFor(context.World))
-					if err != nil {
-						return fmt.Errorf("ecs: prepare 3D normal texture: %w", err)
+					item.normalTextureHandle = render.TextureHandle{}
+					if material.NormalTexture != nil {
+						item.normalTextureHandle, err = prepareRenderResource3D(textureHandles, material.NormalTexture, graphics.DeviceFor(context.World))
+						if err != nil {
+							return fmt.Errorf("ecs: prepare 3D normal texture: %w", err)
+						}
 					}
-				}
-				item.metallicRoughnessTextureHandle = render.TextureHandle{}
-				if material.MetallicRoughnessTexture != nil {
-					item.metallicRoughnessTextureHandle, err = prepareRenderResource3D(textureHandles, material.MetallicRoughnessTexture, graphics.DeviceFor(context.World))
-					if err != nil {
-						return fmt.Errorf("ecs: prepare 3D metallic roughness texture: %w", err)
+					item.metallicRoughnessTextureHandle = render.TextureHandle{}
+					if material.MetallicRoughnessTexture != nil {
+						item.metallicRoughnessTextureHandle, err = prepareRenderResource3D(textureHandles, material.MetallicRoughnessTexture, graphics.DeviceFor(context.World))
+						if err != nil {
+							return fmt.Errorf("ecs: prepare 3D metallic roughness texture: %w", err)
+						}
 					}
+					item.prepared = state.preparation
 				}
 				// Partition prepared snapshots in place. The two phases borrow
 				// disjoint ranges instead of retaining duplicate material records.
@@ -877,8 +907,8 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 			clear(view.deformations[len(view.deformations):previousDeformations])
 		}
 	}()
-	clear(view.dynamicGeometry)
-	clear(view.deformationIndices)
+	view.geometry = view.geometryRetention.Trim(view.geometry, 64)
+	clear(view.geometry)
 	picking := view.frame.Mode == render.RenderViewPicking
 	if !picking && view.environment.Atlas != nil {
 		view.lighting.EnvironmentTexture = view.environment.Atlas.RenderHandleFor(c.Device())
@@ -1027,38 +1057,30 @@ func (view *renderView3D) appendPhase(items []extractedMesh3D, white *graphics.T
 		}
 		key := meshGeometryKey3D{mesh: item.mesh, deformation: item.deformation}
 		if item.deformation != nil && len(item.vertices) == 0 && (len(item.mesh.Skin) != 0 || len(item.mesh.MorphTargets) != 0) {
-			if index, ok := view.deformationIndices[key]; ok {
-				draw.DeformationIndex = index
-			} else {
-				if cap(item.deformation.gpuJoints) < len(item.deformation.JointMatrices) {
-					item.deformation.gpuJoints = make([][16]float32, len(item.deformation.JointMatrices))
-				} else {
-					item.deformation.gpuJoints = item.deformation.gpuJoints[:len(item.deformation.JointMatrices)]
-				}
-				for index, matrix := range item.deformation.JointMatrices {
-					item.deformation.gpuJoints[index] = [16]float32(matrix)
-				}
+			geometry := view.geometry[key]
+			if geometry.deformationIndex == 0 {
 				view.deformations = append(view.deformations, render.MeshDeformationData{
-					Mesh: item.meshHandle, JointMatrices: item.deformation.gpuJoints,
+					Mesh: item.meshHandle, JointMatrices: item.deformation.JointMatrices,
 					MorphWeights: item.deformation.MorphWeights,
 				})
-				draw.DeformationIndex = uint32(len(view.deformations))
-				view.deformationIndices[key] = draw.DeformationIndex
+				geometry.deformationIndex = uint32(len(view.deformations))
+				view.geometry[key] = geometry
 			}
+			draw.DeformationIndex = geometry.deformationIndex
 		}
 		if len(item.vertices) != 0 {
 			draw.Mesh = render.MeshHandle{}
-			firstIndex, ok := view.dynamicGeometry[key]
-			if !ok {
+			geometry := view.geometry[key]
+			if !geometry.cpu {
 				vertexBase := uint32(len(view.vertices))
-				firstIndex = uint32(len(view.indices))
+				geometry.firstIndex, geometry.cpu = uint32(len(view.indices)), true
 				view.vertices = append(view.vertices, item.vertices...)
 				for _, index := range item.mesh.Indices {
 					view.indices = append(view.indices, vertexBase+index)
 				}
-				view.dynamicGeometry[key] = firstIndex
+				view.geometry[key] = geometry
 			}
-			draw.FirstIndex += firstIndex
+			draw.FirstIndex += geometry.firstIndex
 		}
 		if len(view.draws) != 0 {
 			previous := &view.draws[len(view.draws)-1]
@@ -1131,4 +1153,70 @@ func clamp01(value float32) float32 {
 
 func clamp(value, low, high float32) float32 {
 	return min(max(value, low), high)
+}
+
+func (state *World) snapshotAt(index int) *meshSnapshot3D {
+	return &state.snapshotBlocks[index/64][index%64]
+}
+func (state *World) appendSnapshot() *meshSnapshot3D {
+	if state.snapshotCount == len(state.snapshotBlocks)*64 {
+		state.snapshotBlocks = append(state.snapshotBlocks, make([]meshSnapshot3D, 64))
+	}
+	snapshot := state.snapshotAt(state.snapshotCount)
+	state.snapshotCount++
+	return snapshot
+}
+func (state *World) releaseSnapshots() {
+	for i := state.snapshotCount; i < state.previousSnapshots; i++ {
+		*state.snapshotAt(i) = meshSnapshot3D{}
+	}
+	minimum := 64
+	if state.snapshotCount == 0 {
+		minimum = 0
+	}
+	target := state.snapshotRetention.TrimCapacity(len(state.snapshotBlocks)*64, state.snapshotCount, minimum)
+	if target != 0 {
+		blocks := 0
+		if target > 0 {
+			blocks = (target + 63) / 64
+		}
+		clear(state.snapshotBlocks[blocks:])
+		state.snapshotBlocks = append([][]meshSnapshot3D(nil), state.snapshotBlocks[:blocks]...)
+	}
+}
+
+// Capture one immutable payload per entity/submesh only after a camera or shadow
+// needs it. Fully culled candidates retain no material snapshots.
+func (state *World) captureMesh(world *ecs.World, base *extractedMeshCandidate3D) {
+	base.first = state.snapshotCount
+	meshKey, known := state.meshKeys[base.mesh]
+	if !known {
+		meshKey = uint32(len(state.meshKeys) + 1)
+		state.meshKeys[base.mesh] = meshKey
+	}
+	for index := 0; index < base.count; index++ {
+		part := graphics.Submesh{IndexCount: uint32(len(base.mesh.Indices)), Node: -1}
+		slot := -1
+		if len(base.mesh.Submeshes) != 0 {
+			part = base.mesh.Submeshes[index]
+			slot = int(part.Material)
+		}
+		*state.appendSnapshot() = meshSnapshot3D{
+			entity: base.entity, mesh: base.mesh, meshKey: meshKey,
+			material: state.materialFor(world, base.entity, slot), transform: base.partTransform(index),
+			deformation: base.deformation, firstIndex: part.FirstIndex, indexCount: part.IndexCount,
+			noShadow: base.noShadow, noOcclusion: base.noOcclusion, noReflection: base.noReflection,
+		}
+	}
+}
+
+func (base *extractedMeshCandidate3D) partTransform(index int) mgl32.Mat4 {
+	transform := base.transform
+	if len(base.mesh.Submeshes) != 0 && base.deformation != nil {
+		part := base.mesh.Submeshes[index]
+		if part.Node >= 0 && len(base.deformation.NodeMatrices) != 0 {
+			transform = transform.Mul4(base.deformation.NodeMatrices[part.Node])
+		}
+	}
+	return transform
 }

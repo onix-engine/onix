@@ -65,7 +65,7 @@ func BenchmarkNativeHTMLGPUBlurCache(b *testing.B) {
 				}
 				if err := canvas.DrawTo(target, render.RenderTargetClear{ClearColor: true}, func() error {
 					canvas.BindMaterial2D(cache.blurShader)
-					canvas.SetMaterial2DParameters(htmlGPUBlurCompositeParameters(context.Device))
+					canvas.SetMaterial2DParameters(htmlGPUBlurCompositeParameters(context.Device, blurred))
 					canvas.BindTexture(blurred)
 					canvas.DrawAffine([6]float32{size, 0, 0, 0, size, 0}, [6]float32{1, 0, 0, 0, 1, 0}, 1)
 					canvas.DrawFrame()

@@ -289,14 +289,19 @@ func TestHTMLObjectFitPreservesLayoutAndClipsImage(t *testing.T) {
 		x, y, width, height float32
 	}{
 		{"fill", "center", 0, 0, 200, 200},
+		{"fill", "10px 20px", 10, 20, 200, 200},
+		{"fill", "right 10px bottom 20px", -10, -20, 200, 200},
 		{"contain", "center", 0, 50, 200, 100},
+		{"contain", "right bottom", 0, 100, 200, 100},
 		{"cover", "center", -100, 0, 400, 200},
+		{"cover", "25% 75%", -50, 0, 400, 200},
 		{"none", "center", 50, 75, 100, 50},
 		{"scale-down", "center", 50, 75, 100, 50},
 		{"none", "right 10px bottom 20px", 90, 130, 100, 50},
 	} {
 		t.Run(test.fit+"/"+test.position, func(t *testing.T) {
 			world := ecs.NewWorld()
+			t.Cleanup(func() { Dispose(world) })
 			world.InsertResource[ImageProvider](testHTMLImageProvider{texture: texture})
 			bundle := ecs.NewBundle(1)
 			html := New(fmt.Sprintf(`<img id="image" src="test.png" style="display:block;width:200px;height:200px;object-fit:%s;object-position:%s">`, test.fit, test.position))
@@ -318,7 +323,7 @@ func TestHTMLObjectFitPreservesLayoutAndClipsImage(t *testing.T) {
 			}
 			sprite, _ := world.Get[scene.Sprite2D](entity)
 			x, y := float32(0), float32(0)
-			if test.fit != "fill" {
+			if test.fit != "fill" || test.x != 0 || test.y != 0 {
 				layers, ok := world.Get[scene.SpriteLayers2D](entity)
 				if !ok || len(layers.Layers) != 1 {
 					t.Fatal("fitted image layer missing")

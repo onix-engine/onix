@@ -12,7 +12,8 @@ func (w *World) BindComponent[T any]() ComponentBinding[T] {
 }
 
 // EntityRow borrows one entity's location until the next structural mutation.
-// Use a fresh Row after spawning, despawning or adding/removing components.
+// Use a fresh Row after spawning, despawning, adding/removing components or
+// World.Maintain, which may compact component storage.
 type EntityRow struct {
 	world     *World
 	table     *archetype

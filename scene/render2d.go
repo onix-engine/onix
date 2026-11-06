@@ -107,7 +107,7 @@ type Text2D struct {
 	// Spans are sorted, non-overlapping UTF-8 byte ranges.
 	Spans               []TextSpan2D
 	lastInlineObjects   []TextInlineObject2D
-	outlineGlyphs       []onixtext.Glyph
+	outlineGlyphs       []onixtext.GlyphRef
 	inlineObjectLayouts []textInlineObjectLayout2D
 	lines               []textLineLayout2D
 	wrapRangeCache      []textWrapRange2D
@@ -239,7 +239,7 @@ type ClipExempt2D struct {
 // textGlyph2D keeps only raster-space bitmap metrics: logical placement divides
 // them by the raster scale, so storing both forms doubled every laid-out glyph.
 type textGlyph2D struct {
-	raster        onixtext.Glyph
+	raster        onixtext.GlyphRef
 	logicalWidth  float32
 	logicalHeight float32
 	x             float32
@@ -327,7 +327,7 @@ func drawSpriteRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport r
 	if !viewport.visible(item.quadTransform(), item.width, item.height) {
 		return
 	}
-	c.SetMaterial2DParameters(item.material2D.Custom)
+	c.SetMaterial2DParameters(item.materialData().Custom)
 	item.drawSprite(c)
 }
 
@@ -335,7 +335,7 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 	if !viewport.visible(item.quadTransform(), item.width, item.height) {
 		return
 	}
-	shape := item.sprite.Shape
+	shape := item.snapshot[Sprite2D]().Shape
 	// A zero-width border is invisible even when its computed color is opaque.
 	// HTML controls retain that color with border:0 and still need the mask.
 	if item.clip.hasRounded && shape.Kind == render.ShapeRoundedRect && shape.Radius <= 0 && shape.BorderWidth <= 0 && shape.Fill.A > 0 {
@@ -350,7 +350,7 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 			// global texture (and device residency) for each animated color.
 			fill := shape.Fill.GoColor()
 			tint := graphics.ColorFromRGBA(fill.R, fill.G, fill.B, fill.A)
-			c.DrawTintedMatricesCustom(model, textureModel, tint, item.sprite.Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
+			c.DrawTintedMatricesCustom(model, textureModel, tint, item.snapshot[Sprite2D]().Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
 			return
 		}
 	}
@@ -368,13 +368,13 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 		shape.Border,
 		shape.Radius,
 		shape.BorderWidth,
-		item.sprite.Alpha,
+		item.snapshot[Sprite2D]().Alpha,
 	)
 }
 
 func drawParticleRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport renderViewport2D) {
-	for _, particle := range item.emitter.particles {
-		alpha := item.emitter.alphaFor(particle)
+	for _, particle := range item.snapshot[ParticleEmitter2D]().particles {
+		alpha := item.snapshot[ParticleEmitter2D]().alphaFor(particle)
 		if alpha <= 0 || particle.clr.A <= 0 {
 			continue
 		}
@@ -389,7 +389,7 @@ func drawParticleRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport
 		model, clippedTexture, ok := clippedQuad2D(model, textureMatrix(texture), 1, 1, item.clip)
 		if ok {
 			c.BindTexture(texture)
-			custom := item.material2D.Custom
+			custom := item.materialData().Custom
 			if item.clip.hasRounded {
 				custom = roundedClipMaterial2D(custom, item.clip.rounded)
 			}
@@ -413,7 +413,7 @@ func drawTextRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport ren
 
 func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 	base := item.quadTransform()
-	if item.sprite.Slice == nil {
+	if item.snapshot[Sprite2D]().Slice == nil {
 		width, height := item.width, item.height
 		if item.texture.Trimmed() && item.texture.SourceWidth > 0 && item.texture.SourceHeight > 0 {
 			scaleX := item.width / float32(item.texture.SourceWidth)
@@ -432,11 +432,11 @@ func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 	rasterScaleX, rasterScaleY := item.texture.RasterScale()
 	xSpans, xCount := nineSliceAxisSpans(
 		float32(item.texture.LogicalWidth()), float32(item.texture.OffsetX)/rasterScaleX, float32(item.texture.Width)/rasterScaleX,
-		item.width, item.sprite.Slice.Left, item.sprite.Slice.Right,
+		item.width, item.snapshot[Sprite2D]().Slice.Left, item.snapshot[Sprite2D]().Slice.Right,
 	)
 	ySpans, yCount := nineSliceAxisSpans(
 		float32(item.texture.LogicalHeight()), float32(item.texture.OffsetY)/rasterScaleY, float32(item.texture.Height)/rasterScaleY,
-		item.height, item.sprite.Slice.Top, item.sprite.Slice.Bottom,
+		item.height, item.snapshot[Sprite2D]().Slice.Top, item.snapshot[Sprite2D]().Slice.Bottom,
 	)
 	baseTexture := textureMatrix(item.texture)
 	for y := range yCount {
@@ -455,11 +455,11 @@ func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 }
 
 func (item renderItem2D) drawSpriteMatrices(c *graphics.Canvas2D, model mgl32.Mat4, texture mgl32.Mat3) {
-	custom := item.material2D.Custom
+	custom := item.materialData().Custom
 	if item.clip.hasRounded {
 		custom = roundedClipMaterial2D(custom, item.clip.rounded)
 	}
-	c.DrawTintedMatricesCustom(model, texture, item.sprite.Tint, item.sprite.Alpha, custom)
+	c.DrawTintedMatricesCustom(model, texture, item.snapshot[Sprite2D]().Tint, item.snapshot[Sprite2D]().Alpha, custom)
 }
 
 func nineSliceAxis(sourceSize, targetSize, leading, trailing float32) ([4]float32, [4]float32) {
@@ -573,7 +573,7 @@ func (snapshots *renderSnapshots2D) appendSpriteTrailRenderItems2D[T renderGloba
 			if !spriteDrawable2D(&sprite, graphics.DeviceFor(world)) {
 				continue
 			}
-			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material, sample.anchor, sample.transform, sample.clip, sample.width, sample.height, ui, info.sortIndex)
+			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), snapshots.addMaterial(material), sample.anchor, sample.transform, sample.clip, sample.width, sample.height, ui, info.sortIndex)
 			item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 			items = append(items, item)
 		}
@@ -603,7 +603,7 @@ func (snapshots *renderSnapshots2D) appendSpriteRenderItems2D[T renderGlobalTran
 			continue
 		}
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
-		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.capture(sprite, snapshots.addSprite), material2DForEntity(world, entity), anchor, matrix, clip, width, height, ui, info.sortIndex)
+		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.capture(sprite, snapshots.addSprite), snapshots.addMaterial(material2DForEntity(world, entity)), anchor, matrix, clip, width, height, ui, info.sortIndex)
 		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 		items = append(items, item)
 	}
@@ -644,7 +644,7 @@ func (snapshots *renderSnapshots2D) appendSpriteLayerRenderItems2D[T renderGloba
 			if sprite.Alpha <= 0 {
 				continue
 			}
-			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), material, layer.Anchor, matrix, clip, width, height, ui, info.sortIndex+layer.Order)
+			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), snapshots.addMaterial(material), layer.Anchor, matrix, clip, width, height, ui, info.sortIndex+layer.Order)
 			item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
 			items = append(items, item)
 		}
@@ -716,7 +716,7 @@ func (snapshots *renderSnapshots2D) appendSpineRenderItems2D[T renderGlobalTrans
 		item := renderItem2D{
 			entity: entity, layers: info.layers, scene: info.scene, group: info.group, order: renderOrder2D(entity), sequence: uint32(len(items)),
 			depth: matrix[14], ui: ui, sortIndex: info.sortIndex, material: renderMaterialKey{pipeline: render.PipelineMesh, textureID: component.Player.Resource.Texture.BatchKey()},
-			kind: renderItemSpine2D, spine: snapshots.capture(component, snapshots.addSpine), texture: component.Player.Resource.Texture, transform: matrix, clip: clip, target: info.target,
+			kind: renderItemSpine2D, content: snapshots.capture(component, snapshots.addSpine), texture: component.Player.Resource.Texture, transform: matrix, clip: clip, target: info.target,
 		}
 		items = append(items, item)
 	}
@@ -1290,16 +1290,11 @@ const (
 )
 
 type renderItem2D struct {
-	sprite     *Sprite2D
+	content    any // a typed pointer to exactly one owned or borrowed snapshot
 	paint      *paintItem2D
-	device     *render.Device
 	texture    *graphics.Texture
-	spine      *Spine2D
-	text       *textPaint2D
-	tilemap    *Tilemap2D
-	emitter    *ParticleEmitter2D
+	material2D *graphics.Material2DData
 	layers     RenderLayers
-	material2D graphics.Material2DData
 	scene      SceneLayer
 	material   renderMaterialKey
 	glyphStart int
@@ -1321,6 +1316,16 @@ type renderItem2D struct {
 	lcdText    bool
 	kind       renderItemKind2D
 	ui         bool
+}
+
+// snapshot reads the active payload without allocating or retaining ECS storage.
+func (item renderItem2D) snapshot[T any]() *T { value, _ := item.content.(*T); return value }
+
+func (item *renderItem2D) materialData() graphics.Material2DData {
+	if item.material2D != nil {
+		return *item.material2D
+	}
+	return graphics.Material2DData{}
 }
 
 func spriteDrawable2D(sprite *Sprite2D, device *render.Device) bool {
@@ -1534,14 +1539,14 @@ func (t *Text2D) rebuildGlyphWindow() {
 				continue
 			}
 			pen += t.cache.Kern(previous, character) / logicalScale
-			raster := t.cache.Glyph(character)
+			raster, reference := t.cache.GlyphWithReference(character)
 			logical := logicalTextGlyph(raster, rasterScale)
 			if logical.Visible() {
 				if validOutlineWidth(t.OutlineWidth) {
-					t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineGlyph(character, t.OutlineWidth*float32(rasterScale)))
+					t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineWithReference(character, t.OutlineWidth*float32(rasterScale)))
 				}
 				t.glyphs = append(t.glyphs, textGlyph2D{
-					raster: raster, logicalWidth: float32(raster.Width) / logicalScale, logicalHeight: float32(raster.Height) / logicalScale,
+					raster: reference, logicalWidth: float32(raster.Width) / logicalScale, logicalHeight: float32(raster.Height) / logicalScale,
 					x: pen + logical.OffsetX + line.x, y: logical.OffsetY + line.baseline,
 					byteIndex: int32(byteIndex), line: int32(lineIndex),
 				})
@@ -1802,8 +1807,9 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 			}
 			pen += t.cache.Kern(prev, r) / float32(rasterScale)
 			var rasterGlyph onixtext.Glyph
+			var reference onixtext.GlyphRef
 			if shapeGlyphs {
-				rasterGlyph = t.cache.Glyph(r)
+				rasterGlyph, reference = t.cache.GlyphWithReference(r)
 			} else {
 				rasterGlyph = t.cache.GlyphMetrics(r)
 			}
@@ -1812,10 +1818,10 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 				logicalWidth := float32(rasterGlyph.Width) / float32(rasterScale)
 				if shapeGlyphs {
 					if validOutlineWidth(t.OutlineWidth) {
-						t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineGlyph(r, t.OutlineWidth*float32(rasterScale)))
+						t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineWithReference(r, t.OutlineWidth*float32(rasterScale)))
 					}
 					t.glyphs = append(t.glyphs, textGlyph2D{
-						raster:        rasterGlyph,
+						raster:        reference,
 						logicalWidth:  logicalWidth,
 						logicalHeight: float32(rasterGlyph.Height) / float32(rasterScale),
 						x:             pen + g.OffsetX,
@@ -1980,16 +1986,16 @@ func (t *Text2D) buildPrelayout(withGlyphs bool) bool {
 				_, size := utf8.DecodeRuneInString(t.Value[byteIndex:])
 				byteIndex += size
 			}
-			raster := t.cache.Glyph(positioned.Rune)
+			raster, reference := t.cache.GlyphWithReference(positioned.Rune)
 			logical := logicalTextGlyph(raster, rasterScale)
 			if !logical.Visible() {
 				continue
 			}
 			if validOutlineWidth(t.OutlineWidth) {
-				t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineGlyph(positioned.Rune, t.OutlineWidth*logicalScale))
+				t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineWithReference(positioned.Rune, t.OutlineWidth*logicalScale))
 			}
 			t.glyphs = append(t.glyphs, textGlyph2D{
-				raster:        raster,
+				raster:        reference,
 				logicalWidth:  float32(raster.Width) / logicalScale,
 				logicalHeight: float32(raster.Height) / logicalScale,
 				x:             positioned.PenX - float32(t.Prelayout.OriginX) + logical.OffsetX,
@@ -2477,9 +2483,13 @@ func roundedClipMaterial2D(custom [4][4]float32, clip roundedClip2D) [4][4]float
 	return custom
 }
 
-func newSpriteRenderItem2D(sequence uint32, entity ecs.Entity, sprite *Sprite2D, material2D graphics.Material2DData, anchor Anchor, transform mgl32.Mat4, clip clipRect2D, width, height float32, ui bool, sortIndex int) renderItem2D {
+func newSpriteRenderItem2D(sequence uint32, entity ecs.Entity, sprite *Sprite2D, material2D *graphics.Material2DData, anchor Anchor, transform mgl32.Mat4, clip clipRect2D, width, height float32, ui bool, sortIndex int) renderItem2D {
 	kind := renderItemSprite2D
-	material := textureMaterialKey(sprite.Texture, material2D.Shader)
+	var shader *graphics.Material2DShader
+	if material2D != nil {
+		shader = material2D.Shader
+	}
+	material := textureMaterialKey(sprite.Texture, shader)
 	texture := sprite.Texture
 	if sprite.Shape.Kind != 0 {
 		kind = renderItemShape2D
@@ -2495,7 +2505,7 @@ func newSpriteRenderItem2D(sequence uint32, entity ecs.Entity, sprite *Sprite2D,
 		material:   material,
 		material2D: material2D,
 		kind:       kind,
-		sprite:     sprite,
+		content:    sprite,
 		texture:    texture,
 		transform:  transform,
 		anchor:     anchor,
@@ -2518,7 +2528,7 @@ func newParticleRenderItem2D(sequence uint32, entity ecs.Entity, emitter *Partic
 		sortIndex: sortIndex,
 		material:  textureMaterialKey(texture, nil),
 		kind:      renderItemParticle2D,
-		emitter:   emitter,
+		content:   emitter,
 		texture:   texture,
 		transform: transform,
 		clip:      clip,
@@ -2528,13 +2538,13 @@ func newParticleRenderItem2D(sequence uint32, entity ecs.Entity, emitter *Partic
 func newTilemapRenderItem2D(sequence uint32, entity ecs.Entity, tilemap *Tilemap2D, anchor Anchor, transform mgl32.Mat4, clip clipRect2D, ui bool, sortIndex int) renderItem2D {
 	return renderItem2D{
 		order: renderOrder2D(entity), sequence: sequence, depth: transform[14], ui: ui, sortIndex: sortIndex,
-		material: textureMaterialKey(tilemap.Texture, nil), kind: renderItemTilemap2D, tilemap: tilemap,
+		material: textureMaterialKey(tilemap.Texture, nil), kind: renderItemTilemap2D, content: tilemap,
 		texture: tilemap.Texture, transform: transform, anchor: anchor, clip: clip,
 	}
 }
 
 func (item renderItem2D) drawTilemap(c *graphics.Canvas2D, viewport renderViewport2D) {
-	tilemap := item.tilemap
+	tilemap := item.snapshot[Tilemap2D]()
 	base := quadBaseTransform(item.transform, item.anchor, tilemap.PixelWidth(), tilemap.PixelHeight(), item.ui)
 	rows := tilemap.Texture.Height / tilemap.TileHeight
 	if rows <= 0 {
@@ -2562,7 +2572,7 @@ func (item renderItem2D) drawTilemap(c *graphics.Canvas2D, viewport renderViewpo
 			texture := mgl32.Mat3{0: textureScaleX, 4: textureScaleY, 6: float32(column) * textureScaleX, 7: float32(row) * textureScaleY, 8: 1}
 			model, texture, ok := clippedQuad2D(model, texture, float32(tilemap.TileWidth), float32(tilemap.TileHeight), item.clip)
 			if ok {
-				custom := item.material2D.Custom
+				custom := item.materialData().Custom
 				if item.clip.hasRounded {
 					custom = roundedClipMaterial2D(custom, item.clip.rounded)
 				}
@@ -2622,8 +2632,8 @@ func textRenderItemVisible2D(viewport renderViewport2D, item *renderItem2D) bool
 		return false
 	}
 	padding := float32(0)
-	if item.text != nil {
-		padding = max(validOutlinePadding2D(item.text.OutlineWidth), absFloat32(item.text.ShadowX), absFloat32(item.text.ShadowY))
+	if item.snapshot[textPaint2D]() != nil {
+		padding = max(validOutlinePadding2D(item.snapshot[textPaint2D]().OutlineWidth), absFloat32(item.snapshot[textPaint2D]().ShadowX), absFloat32(item.snapshot[textPaint2D]().ShadowY))
 	}
 	if padding > 0 {
 		return viewport.visibleBase(

@@ -32,6 +32,7 @@ type componentInfo struct {
 
 type column interface {
 	reserve(int)
+	compact(int)
 	moveTo(column, int)
 	swapRemove(int)
 	removeRow(int)

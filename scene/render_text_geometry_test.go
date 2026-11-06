@@ -64,13 +64,13 @@ func TestText2DTabStopsShareRenderingMeasurementAndCaret(t *testing.T) {
 	}
 	for _, glyph := range text.glyphs {
 		want := float32(30)
-		if glyph.raster.Rune == 'B' {
+		if glyph.raster.Glyph().Rune == 'B' {
 			want = 60
-		} else if glyph.raster.Rune != '界' && glyph.raster.Rune != 'C' {
+		} else if glyph.raster.Glyph().Rune != '界' && glyph.raster.Glyph().Rune != 'C' {
 			continue
 		}
-		if x := glyph.x - glyph.raster.OffsetX; math.Abs(float64(x-want)) > .001 {
-			t.Fatalf("glyph %q origin=%v, want %v", glyph.raster.Rune, x, want)
+		if x := glyph.x - glyph.raster.Glyph().OffsetX; math.Abs(float64(x-want)) > .001 {
+			t.Fatalf("glyph %q origin=%v, want %v", glyph.raster.Glyph().Rune, x, want)
 		}
 	}
 	if width, _, _ := MeasureTextValue2D(&text, "A\t界\t"); width != 60 {

@@ -3,6 +3,8 @@ package render
 import (
 	"fmt"
 	"testing"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 var deformationBenchmarkWord uint32
@@ -49,7 +51,7 @@ func BenchmarkMeshDeformationAnimated(b *testing.B) {
 			b.Run(fmt.Sprintf("deformations=%d/warm=%t", deformations, warm), func(b *testing.B) {
 				var source deformationTestSource
 				handle := source.layouts.Insert(meshDeformationLayout{skinOffset: 1, morphOffset: 9, vertexCount: 1024, requiredJoints: 64, targetCount: 4})
-				joints := make([][16]float32, 64)
+				joints := make([]mgl32.Mat4, 64)
 				for i := range joints {
 					joints[i] = [16]float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, float32(i), 0, 0, 1}
 				}

@@ -107,6 +107,60 @@ func TestKeyStateTracksPressedDownReleased(t *testing.T) {
 	}
 }
 
+func TestKeyModifiersPreservePressOrder(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		key  KeyCode
+		want Modifiers
+	}{
+		{"left control", KeyLeftControl, ModifierControl},
+		{"right control", KeyRightControl, ModifierControl},
+		{"left super", KeyLeftSuper, ModifierSuper},
+		{"right super", KeyRightSuper, ModifierSuper},
+		{"left shift", KeyLeftShift, ModifierShift},
+		{"right shift", KeyRightShift, ModifierShift},
+		{"left alt", KeyLeftAlt, ModifierAlt},
+		{"right alt", KeyRightAlt, ModifierAlt},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state, snapshot := NewState(), NewState()
+			state.PressKey(test.key)
+			state.PressKey(KeyV)
+			state.ReleaseKey(test.key)
+			state.PressKey(KeyV) // A repeat must retain the original chord.
+			state.ReleaseKey(KeyV)
+			snapshot.CopyFrom(state)
+			if !state.KeyPressed(KeyV) || state.KeyHeld(test.key) || state.KeyModifiers(KeyV) != test.want || snapshot.KeyModifiers(KeyV) != test.want {
+				t.Fatalf("lost modifiers at press: state=%v snapshot=%v", state.KeyModifiers(KeyV), snapshot.KeyModifiers(KeyV))
+			}
+			state.EndFrame()
+			if state.KeyModifiers(KeyV) != 0 || snapshot.KeyModifiers(KeyV) != test.want {
+				t.Fatal("modifier snapshot leaked across frames or shared storage")
+			}
+			state.PressKey(KeyV)
+			state.PressKey(test.key)
+			if state.KeyModifiers(KeyV) != 0 {
+				t.Fatal("a later modifier press changed an earlier key press")
+			}
+		})
+	}
+	state := NewState()
+	if n := testing.AllocsPerRun(100, func() {
+		state.PressKey(KeyLeftControl)
+		state.PressKey(KeyLeftSuper)
+		state.PressKey(KeyLeftShift)
+		state.PressKey(KeyLeftAlt)
+		state.PressKey(KeyV)
+		if state.KeyModifiers(KeyV) != ModifierControl|ModifierSuper|ModifierShift|ModifierAlt {
+			t.Fatal("lost combined modifiers")
+		}
+		state.ReleaseKey(KeyV)
+		state.EndFrame()
+	}); n != 0 {
+		t.Fatalf("warm key chords allocated %g times", n)
+	}
+}
+
 func TestInputStateTracksPrimaryInputAcrossFrame(t *testing.T) {
 	state := NewState()
 

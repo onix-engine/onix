@@ -2,14 +2,12 @@ package scene
 
 import (
 	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/render"
 	"github.com/diiyw/onix/spine"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
 type Spine2D struct {
 	Player *spine.Player
-	batch  render.MeshBatch3D
 }
 
 func SpineModelMatrix2D(transform mgl32.Mat4, ui bool) mgl32.Mat4 {

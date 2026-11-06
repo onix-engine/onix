@@ -98,13 +98,33 @@ func (f *Face) UseSystemFallback() {
 	f.fallback = set
 }
 
+// UseFallback sets a shared face to consult for missing glyphs before system
+// fallback. Configure it before measuring or rendering. The caller owns the
+// fallback and must keep it open while this face is in use.
+func (f *Face) UseFallback(face *Face) {
+	if f != nil {
+		f.glyphFallback = face
+	}
+}
+
 // ResolveGlyph returns both the owning face and its local glyph ID. If every
 // candidate is missing the character, it returns this face's .notdef glyph.
 // System fallback faces are shared; callers must not modify or close them.
 func (f *Face) ResolveGlyph(r rune) (*Face, uint16) {
 	id := f.GlyphIndex(r)
-	if f == nil || id != 0 || f.fallback == nil {
+	if f == nil || id != 0 {
 		return f, id
+	}
+	if face := f.glyphFallback; face != nil {
+		if id := face.GlyphIndex(r); id != 0 {
+			if f.italicSource != nil {
+				face = face.Italic()
+			}
+			return face, id
+		}
+	}
+	if f.fallback == nil {
+		return f, 0
 	}
 	g := f.fallback.resolve(r)
 	if g.face != nil {

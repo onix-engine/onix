@@ -28,13 +28,13 @@ func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
 	state := RenderWorldFor(world)
-	unchanged := state.Items2D[50].sprite
+	unchanged := state.Items2D[50].snapshot[Sprite2D]()
 	world.GetMut[Sprite2D](entities[0]).Shape.Fill = graphics.Black
 	incrementalFrame(t, world, canvas)
-	if state.Preparation2D.Extracted != 1 || state.Preparation2D.Reused != 99 || state.Preparation2D.Sorted || state.Items2D[50].sprite != unchanged {
+	if state.Preparation2D.Extracted != 1 || state.Preparation2D.Reused != 99 || state.Preparation2D.Sorted || state.Items2D[50].snapshot[Sprite2D]() != unchanged {
 		t.Fatalf("sparse extraction rebuilt unrelated snapshots: %+v", state.Preparation2D)
 	}
-	if state.Items2D[0].sprite.Shape.Fill != graphics.Black || state.Items2D[50].sprite.Shape.Fill != graphics.White {
+	if state.Items2D[0].snapshot[Sprite2D]().Shape.Fill != graphics.Black || state.Items2D[50].snapshot[Sprite2D]().Shape.Fill != graphics.White {
 		t.Fatal("snapshot contents were overwritten")
 	}
 	incrementalFrame(t, world, canvas)
@@ -129,12 +129,12 @@ func TestComposite2DScrollReusesPropertiesAndPixels(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 1000, false)
 	incrementalFrame(t, world, canvas)
 	state := RenderWorldFor(world)
-	snapshot := state.Items2D[0].sprite
+	snapshot := state.Items2D[0].snapshot[Sprite2D]()
 	for _, entity := range entities {
 		world.GetMut[UIGlobalTransform](entity).Matrix[12] += 128
 	}
 	incrementalFrame(t, world, canvas)
-	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PropertiesUpdated != 1000 || state.Items2D[0].sprite != snapshot {
+	if state.Preparation2D.Extracted != 0 || state.Preparation2D.PropertiesUpdated != 1000 || state.Items2D[0].snapshot[Sprite2D]() != snapshot {
 		t.Fatalf("translation rebuilt content: %+v", state.Preparation2D)
 	}
 	if state.Composite2D.ReusedTiles == 0 || state.Composite2D.DirtyTiles >= state.Composite2D.Tiles/2 || state.Composite2D.Direct {
@@ -171,7 +171,7 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 	transform := world.GetMut[UIGlobalTransform](entities[0])
 	transform.clip = clipRect2D{valid: true, minX: 0, minY: 0, maxX: 5, maxY: 5}
 	incrementalFrame(t, world, canvas)
-	if state.Items2D[0].paint.bounds.Max.X != 5 || state.Composite2D.DirtyTiles != 1 {
+	if state.Items2D[0].paint.boundsRect(&state.Items2D[0]).Max.X != 5 || state.Composite2D.DirtyTiles != 1 {
 		t.Fatal("clip-only damage missed", state.Composite2D)
 	}
 	texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))
@@ -212,8 +212,8 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 
 func TestComposite2DConservativeOpaqueBounds(t *testing.T) {
 	sprite := Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Alpha: 1}
-	item := newSpriteRenderItem2D(0, 1, &sprite, graphics.Material2DData{}, AnchorTopLeft, mgl32.Ident4(), clipRect2D{}, 256, 256, true, 0)
-	if got := preparePaintItem2D(&item).opaque; got != image.Rect(0, 0, 256, 256) {
+	item := newSpriteRenderItem2D(0, 1, &sprite, nil, AnchorTopLeft, mgl32.Ident4(), clipRect2D{}, 256, 256, true, 0)
+	if got := preparePaintItem2D(&item, nil).opaqueRect(&item); got != image.Rect(0, 0, 256, 256) {
 		t.Fatal("opaque rectangle not recognized", got)
 	}
 	for _, mutate := range []func(){
@@ -227,25 +227,24 @@ func TestComposite2DConservativeOpaqueBounds(t *testing.T) {
 		sprite.Shape, sprite.Alpha = RoundedRectShape2D(graphics.White, 0), 1
 		item.transform, item.clip = mgl32.Ident4(), clipRect2D{}
 		mutate()
-		if !preparePaintItem2D(&item).opaque.Empty() {
+		if !preparePaintItem2D(&item, nil).opaqueRect(&item).Empty() {
 			t.Fatal("unsafe occlusion accepted")
 		}
 	}
 	sprite.Shape, sprite.Alpha = RoundedRectShape2D(graphics.White, 0), 1
 	item.transform = mgl32.Ident4()
 	item.clip = clipRect2D{valid: true, minX: .25, minY: .25, maxX: 127.75, maxY: 127.75}
-	paint := preparePaintItem2D(&item)
-	if paint.opaque != image.Rect(1, 1, 127, 127) {
-		t.Fatal("fractional clip expanded opaque coverage", paint.opaque)
+	paint := preparePaintItem2D(&item, nil)
+	if paint.opaqueRect(&item) != image.Rect(1, 1, 127, 127) {
+		t.Fatal("fractional clip expanded opaque coverage", paint.opaqueRect(&item))
 	}
 	item.clip.hasRounded = true
-	paint.resolve(&item)
-	if !paint.opaque.Empty() {
+	if !paint.opaqueRect(&item).Empty() {
 		t.Fatal("new rounded clip retained opaque coverage")
 	}
 	item.kind = renderItemTextLayer2D
-	item.text = &textPaint2D{rasterScale: 1.1}
-	if preparePaintItem2D(&item).cacheable {
+	item.content = &textPaint2D{rasterScale: 1.1}
+	if preparePaintItem2D(&item, nil).cacheable {
 		t.Fatal("unsafe glyph raster phase accepted")
 	}
 }
@@ -258,6 +257,11 @@ func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 	incrementalFrame(t, world, canvas)
 	if state.Composite2D.CacheBytes != 0 {
 		t.Fatal("disabled budget retained cache")
+	}
+	for _, view := range state.compositors2D {
+		if view.target != nil || view.retained != nil || view.tiles != nil || view.coverage != nil || view.reuse != nil || view.damageTiles != nil || view.usedSlots != nil {
+			t.Fatal("disabled compositor retained CPU workspace")
+		}
 	}
 	world.RemoveResource[CompositeSettings2D]()
 	for _, entity := range entities {

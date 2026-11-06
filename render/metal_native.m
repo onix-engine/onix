@@ -48,7 +48,8 @@ typedef struct {
 } OnixMetalMeshPipeline;
 
 typedef struct {
-	id<MTLRenderPipelineState> pipelines[2];
+	id<MTLLibrary> vertex_library, fragment_library;
+	id<MTLRenderPipelineState> pipelines[3];
 	uint32_t free_next;
 } OnixMetalMaterial2DPipeline;
 
@@ -89,9 +90,9 @@ struct OnixMetalDriver {
 	id<MTLLibrary> default_library;
 	id<MTLLibrary> mesh_libraries[ONIX_MESH_VARIANT_COUNT];
 	id<MTLRenderPipelineState> mesh_variants[ONIX_MESH_VARIANT_COUNT-1][1+ONIX_MESH_BLEND_MODE_COUNT];
-	// Cache 2D variants by depth attachment, then sprite blend mode.
-	id<MTLRenderPipelineState> sprite_pipelines[2][2];
-	id<MTLRenderPipelineState> shape_pipelines[2];
+	// Cache 2D variants by color/depth attachment, then sprite blend mode.
+	id<MTLRenderPipelineState> sprite_pipelines[3][2];
+	id<MTLRenderPipelineState> shape_pipelines[3];
 	id<MTLRenderPipelineState> mesh_opaque_pipeline;
 	id<MTLRenderPipelineState> mesh_picking_pipeline;
 	id<MTLRenderPipelineState> mesh_transparent_pipelines[ONIX_MESH_BLEND_MODE_COUNT];
@@ -410,8 +411,8 @@ static id<MTLRenderPipelineState> onix_metal_pipeline(
     descriptor.fragmentFunction = fragment;
     descriptor.vertexDescriptor = vertex_descriptor;
     BOOL picking = [vertex_name isEqualToString:@"mesh_picking_vertex"];
-    descriptor.colorAttachments[0].pixelFormat = picking ? MTLPixelFormatR32Uint : MTLPixelFormatBGRA8Unorm;
-	descriptor.depthAttachmentPixelFormat = depth ? MTLPixelFormatDepth32Float : MTLPixelFormatInvalid;
+    descriptor.colorAttachments[0].pixelFormat = depth == 2 ? MTLPixelFormatR8Unorm : picking ? MTLPixelFormatR32Uint : MTLPixelFormatBGRA8Unorm;
+	descriptor.depthAttachmentPixelFormat = depth == 1 ? MTLPixelFormatDepth32Float : MTLPixelFormatInvalid;
 	descriptor.colorAttachments[0].blendingEnabled = picking ? NO : (blend_mode < 0 ? NO : YES);
     descriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
     descriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
@@ -541,19 +542,25 @@ uint32_t onix_metal_create_material2d_shader(OnixMetalDriver *driver, const char
 			onix_metal_set_error("Metal Material2D shader must export sprite_vertex or sprite_fragment");
 			return 0;
 		}
-		OnixMetalMaterial2DPipeline result = {0};
+		OnixMetalMaterial2DPipeline result = {
+			.vertex_library = [vertex_library retain], .fragment_library = [fragment_library retain],
+		};
 		for (uint32_t depth = 0; depth < 2; depth++) {
 			result.pipelines[depth] = onix_metal_pipeline(driver, vertex_library, fragment_library, @"sprite_vertex", @"sprite_fragment", onix_metal_sprite_vertex_descriptor(), 0, depth);
 			if (result.pipelines[depth] == nil) break;
 		}
 		[library release];
 		if (result.pipelines[0] == nil || result.pipelines[1] == nil) {
-			for (uint32_t depth = 0; depth < 2; depth++) [result.pipelines[depth] release];
+			for (uint32_t depth = 0; depth < 3; depth++) [result.pipelines[depth] release];
+			[result.vertex_library release];
+			[result.fragment_library release];
 			return 0;
 		}
 		uint32_t index;
 		if (!onix_metal_material2d_shaders_acquire(&driver->material2d_pipelines, &driver->material2d_shader_slots, &index)) {
-			for (uint32_t depth = 0; depth < 2; depth++) [result.pipelines[depth] release];
+			for (uint32_t depth = 0; depth < 3; depth++) [result.pipelines[depth] release];
+			[result.vertex_library release];
+			[result.fragment_library release];
 			onix_metal_set_error("failed to grow Metal Material2D shader storage");
 			return 0;
 		}
@@ -570,11 +577,13 @@ int onix_metal_destroy_material2d_shader(OnixMetalDriver *driver, uint32_t shade
 	uint32_t frame_index = driver->encoder != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
-	for (uint32_t depth = 0; depth < 2; depth++) {
+	for (uint32_t depth = 0; depth < 3; depth++) {
 		id<MTLRenderPipelineState> pipeline = driver->material2d_pipelines[shader - 1].pipelines[depth];
-		[driver->frame_resources[frame_index] addObject:pipeline];
+		if (pipeline != nil) [driver->frame_resources[frame_index] addObject:pipeline];
 		[pipeline release];
 	}
+	[driver->material2d_pipelines[shader - 1].vertex_library release];
+	[driver->material2d_pipelines[shader - 1].fragment_library release];
 	onix_metal_material2d_shaders_recycle(driver->material2d_pipelines, &driver->material2d_shader_slots, shader - 1);
 	return 1;
 }
@@ -616,6 +625,11 @@ static int onix_metal_resume_surface(OnixMetalDriver *driver, MTLLoadAction dept
 static int onix_metal_has_depth(OnixMetalDriver *driver) {
 	return driver->active_render_target == 0 ? driver->depth_texture != nil
 		: driver->render_targets[driver->active_render_target - 1].depth_texture != nil;
+}
+
+static int onix_metal_2d_attachment(OnixMetalDriver *driver) {
+	if (driver->active_render_target != 0 && driver->render_targets[driver->active_render_target - 1].color_format == 2) return 2;
+	return onix_metal_has_depth(driver);
 }
 
 static int onix_metal_require_depth(OnixMetalDriver *driver) {
@@ -808,7 +822,7 @@ void onix_metal_destroy(OnixMetalDriver *driver) {
 	[driver->readback_buffer release];
 	[driver->quad_vertices release];
     [driver->quad_indices release];
-	for (uint32_t depth = 0; depth < 2; depth++) {
+	for (uint32_t depth = 0; depth < 3; depth++) {
 		for (uint32_t blend = 0; blend < 2; blend++) [driver->sprite_pipelines[depth][blend] release];
 		[driver->shape_pipelines[depth] release];
 	}
@@ -827,7 +841,9 @@ void onix_metal_destroy(OnixMetalDriver *driver) {
 		for (uint32_t blend = 0; blend < ONIX_MESH_BLEND_MODE_COUNT; blend++) [driver->mesh_pipelines[index].transparent[blend] release];
 	}
 	for (uint32_t index = 0; index < driver->material2d_shader_slots.count; index++) {
-		for (uint32_t depth = 0; depth < 2; depth++) [driver->material2d_pipelines[index].pipelines[depth] release];
+		for (uint32_t depth = 0; depth < 3; depth++) [driver->material2d_pipelines[index].pipelines[depth] release];
+		[driver->material2d_pipelines[index].vertex_library release];
+		[driver->material2d_pipelines[index].fragment_library release];
 	}
 	for (uint32_t index = 0; index < driver->mesh_slots.count; index++) {
 		[driver->meshes[index].vertices release];
@@ -1267,11 +1283,11 @@ static int onix_metal_create_render_target_resources(
 	uint32_t color_format,
 	int depth,
 	OnixMetalRenderTarget *target) {
-	if (width == 0 || height == 0 || color_format > 1) {
+	if (width == 0 || height == 0 || color_format > 2 || (color_format == 2 && depth)) {
 		onix_metal_set_error("unsupported Metal render target descriptor");
 		return 0;
 	}
-	MTLPixelFormat pixel_format = color_format == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatR32Uint;
+	MTLPixelFormat pixel_format = color_format == 2 ? MTLPixelFormatR8Unorm : color_format == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatR32Uint;
 	MTLTextureDescriptor *color_descriptor = [MTLTextureDescriptor
 		texture2DDescriptorWithPixelFormat:pixel_format width:width height:height mipmapped:NO];
 	color_descriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
@@ -1301,7 +1317,7 @@ static int onix_metal_create_render_target_resources(
 		onix_metal_set_error("Metal render target texture table allocation failed");
 		return 0;
 	}
-	onix_metal_textures_insert(driver->textures, &driver->texture_slots, texture_slot, (OnixMetalTexture){.texture = color, .format = ONIX_TEXTURE_FORMAT_RGBA8});
+	onix_metal_textures_insert(driver->textures, &driver->texture_slots, texture_slot, (OnixMetalTexture){.texture = color, .format = color_format == 2 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8});
 	*target = (OnixMetalRenderTarget){
 		.color_texture = texture_slot + 1,
 		.color_format = color_format,
@@ -1453,19 +1469,20 @@ int onix_metal_read_render_target(
 	size_t length) {
 	if (driver == NULL || driver->encoder != nil || driver->command_buffer != nil || handle == 0 ||
 		handle > driver->target_slots.count || destination == NULL || width == 0 || height == 0 ||
-		length != (size_t)width * height * 4 || x < 0 || y < 0) {
+		x < 0 || y < 0) {
 		onix_metal_set_error("invalid Metal render target readback");
 		return 0;
 	}
 	OnixMetalRenderTarget *target = &driver->render_targets[handle - 1];
-	if (target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width ||
+	if (length != (size_t)width * height * (target->color_format == 2 ? 1 : 4) || target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width ||
 		(uint64_t)(uint32_t)y + height > target->height || target->color_texture > driver->texture_slots.count ||
 		driver->textures[target->color_texture - 1].texture == nil) {
 		onix_metal_set_error("Metal render target readback is outside the image");
 		return 0;
 	}
 	@autoreleasepool {
-		NSUInteger bytes_per_row = (NSUInteger)width * 4u;
+		NSUInteger row_bytes = (NSUInteger)width * (target->color_format == 2 ? 1u : 4u);
+		NSUInteger bytes_per_row = (row_bytes + 255u) & ~(NSUInteger)255u;
 		NSUInteger required = bytes_per_row * height;
 		if (required > driver->readback_used) driver->readback_used = required;
 		if (required > driver->readback_capacity) {
@@ -1492,7 +1509,9 @@ int onix_metal_read_render_target(
 			onix_metal_set_error("Metal render target readback command failed");
 			return 0;
 		}
-		memcpy(destination, buffer.contents, length);
+		for (uint32_t row = 0; row < height; row++) {
+			memcpy(destination + (size_t)row * row_bytes, (const uint8_t *)buffer.contents + (size_t)row * bytes_per_row, row_bytes);
+		}
 	}
 	return 1;
 }
@@ -1625,12 +1644,17 @@ int onix_metal_draw_sprites(OnixMetalDriver *driver, const OnixMetalSpriteUnifor
     onix_metal_apply_dynamic_state(driver);
     [driver->encoder setVertexBuffer:driver->quad_vertices offset:0 atIndex:0];
 	id<MTLRenderPipelineState> pipeline = nil;
-	uint32_t depth = onix_metal_has_depth(driver);
+	uint32_t depth = onix_metal_2d_attachment(driver);
 	for (uint32_t index = 0; index < draw_count; index++) {
 		const OnixNativeSpriteDraw *draw = &draws[index];
 		id<MTLRenderPipelineState> next_pipeline;
 		if (draw->shader != 0) {
-			next_pipeline = driver->material2d_pipelines[draw->shader - 1].pipelines[depth];
+			OnixMetalMaterial2DPipeline *custom = &driver->material2d_pipelines[draw->shader - 1];
+			if (custom->pipelines[depth] == nil) {
+				custom->pipelines[depth] = onix_metal_pipeline(driver, custom->vertex_library, custom->fragment_library, @"sprite_vertex", @"sprite_fragment", onix_metal_sprite_vertex_descriptor(), 0, depth);
+			}
+			next_pipeline = custom->pipelines[depth];
+			if (next_pipeline == nil) return 0;
 		} else {
 			id<MTLRenderPipelineState> *cached = &driver->sprite_pipelines[depth][driver->sprite_blend];
 			if (*cached == nil) {
@@ -1680,7 +1704,7 @@ int onix_metal_draw_shapes(OnixMetalDriver *driver, const OnixMetalSpriteUniform
 	if (!onix_metal_upload(driver, instances, byte_length, 16, 0, &instance_upload)) return 0;
 	id<MTLBuffer> instance_buffer = (id<MTLBuffer>)(uintptr_t)instance_upload.resource;
 	NSUInteger instance_offset = instance_upload.offset;
-	uint32_t depth = onix_metal_has_depth(driver);
+	uint32_t depth = onix_metal_2d_attachment(driver);
 	if (driver->shape_pipelines[depth] == nil) {
 		driver->shape_pipelines[depth] = onix_metal_pipeline(driver, driver->default_library, driver->default_library, @"shape_vertex", @"shape_fragment", onix_metal_shape_vertex_descriptor(), 0, depth);
 	}

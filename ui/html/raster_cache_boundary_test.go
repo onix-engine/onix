@@ -10,6 +10,41 @@ import (
 	"github.com/diiyw/onix/render"
 )
 
+func TestHTMLFormerOpacityGroupRetiresRasterDependencies(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div id="group" style="opacity:.5;width:128px;height:128px;background:red"><div style="width:100px;height:100px;background:blue"></div></div><div id="other" style="opacity:.5;width:20px;height:20px;background:green"><div style="width:10px;height:10px;background:yellow"></div></div>`)
+	defer Dispose(world)
+	state := world.GetRef[htmlRenderState](owner)
+	group := incrementalHTMLNode(t, world, owner, "group")
+	other := incrementalHTMLNode(t, world, owner, "other")
+	unchanged := state.Textures.rasters[other.node]
+	before := 0
+	for _, raster := range state.Textures.rasters {
+		if raster.root == group.node {
+			before += cap(raster.image.Pix)
+		}
+	}
+	if raster := state.Textures.rasters[group.node]; raster == nil || len(raster.image.Pix) == 0 {
+		t.Fatal("fixture did not rasterize the group")
+	}
+	group.SetAttribute("style", "opacity:1;width:128px;height:128px;background:red")
+	incrementalSync(t, world)
+	state = world.GetRef[htmlRenderState](owner)
+	for _, raster := range state.Textures.rasters {
+		if raster.root == group.node {
+			t.Fatal("former opacity group retained its raster dependencies")
+		}
+	}
+	t.Logf("retired opacity group pixel storage: %d -> 0 bytes", before)
+	if unchanged == nil || state.Textures.rasters[other.node] != unchanged || len(unchanged.image.Pix) == 0 {
+		t.Fatal("retiring one group discarded another live group")
+	}
+	group.SetAttribute("style", "opacity:.5;width:128px;height:128px;background:red")
+	incrementalSync(t, world)
+	if raster := world.GetRef[htmlRenderState](owner).Textures.rasters[group.node]; raster == nil || len(raster.image.Pix) == 0 {
+		t.Fatal("restored opacity group did not rebuild")
+	}
+}
+
 func TestHTMLOpacityCachesOnlyGroupsAndDirectSubtrees(t *testing.T) {
 	root := roundTwoOpacityTree(16)
 	cache := htmlTextureCache{}

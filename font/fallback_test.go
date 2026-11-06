@@ -56,6 +56,43 @@ func TestGlyphFallbackKeepsIDsLocalAndSharesOwnership(t *testing.T) {
 	}
 }
 
+func TestExplicitGlyphFallbackPrecedesSystemFallback(t *testing.T) {
+	primary, source := fallbackFixtureFace(t)
+	explicit, err := Load(fallbackFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = explicit.Close() })
+	id := explicit.GlyphIndex('文')
+	explicit.Cmap = &cmapFormat12{Groups: []cmapFormat12Group{{StartCharCode: '文', EndCharCode: '文', StartGlyphID: uint32(id)}}}
+	primary.UseFallback(explicit)
+	if owner, got := primary.ResolveGlyph('A'); owner != primary || got == 0 {
+		t.Fatal("explicit fallback replaced a primary glyph")
+	}
+	if owner, got := primary.ResolveGlyph('文'); owner != explicit || got != id || source.face != nil {
+		t.Fatal("explicit fallback did not precede lazy system fallback")
+	}
+	if owner, got := primary.ResolveGlyph('中'); owner == primary || owner == explicit || got == 0 {
+		t.Fatal("explicit fallback prevented system fallback")
+	}
+	if owner, got := primary.Italic().ResolveGlyph('文'); owner != explicit.Italic() || got != id {
+		t.Fatal("synthetic italic lost the explicit fallback")
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		primary.ResolveGlyph('A')
+		primary.ResolveGlyph('文')
+		primary.ResolveGlyph('中')
+	}); allocations != 0 {
+		t.Fatalf("warmed explicit fallback allocated %g times", allocations)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if explicit.GlyphIndex('文') != id {
+		t.Fatal("closing the primary closed its shared explicit fallback")
+	}
+}
+
 func TestScaledGlyphFallbackMatchesOwningFace(t *testing.T) {
 	primary, _ := fallbackFixtureFace(t)
 	// Force distinct design units to catch accidental use of the primary scale.

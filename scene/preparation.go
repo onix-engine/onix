@@ -28,12 +28,12 @@ func (t *Text2D) QueueUploads(queue *graphics.UploadQueue) {
 		return
 	}
 	for _, glyph := range t.glyphs {
-		if texture, ok := t.cache.Atlas(glyph.raster.Atlas); ok {
+		if texture, ok := t.cache.Atlas(glyph.raster.Glyph().Atlas); ok {
 			queue.AddTexture(texture)
 		}
 	}
 	for _, glyph := range t.outlineGlyphs {
-		if texture, ok := t.cache.Atlas(glyph.Atlas); ok {
+		if texture, ok := t.cache.Atlas(glyph.Glyph().Atlas); ok {
 			queue.AddTexture(texture)
 		}
 	}

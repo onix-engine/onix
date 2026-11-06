@@ -2,6 +2,16 @@ package input
 
 import "strings"
 
+// Modifiers records the modifier keys held at a key press.
+type Modifiers uint8
+
+const (
+	ModifierControl Modifiers = 1 << iota
+	ModifierSuper
+	ModifierShift
+	ModifierAlt
+)
+
 type PointerDevice uint8
 
 const (
@@ -31,7 +41,7 @@ type State struct {
 	clipboardRead   func() (string, bool)
 	clipboardWrite  func(string) bool
 	downKeys        map[KeyCode]struct{}
-	pressedKeys     map[KeyCode]struct{}
+	pressedKeys     map[KeyCode]Modifiers
 	composition     string
 	events          []Event
 	textEdits       []TextEdit
@@ -81,7 +91,7 @@ func (s *State) TextSelection() (TextSelection, bool) {
 func NewState() *State {
 	return &State{
 		downKeys:        map[KeyCode]struct{}{},
-		pressedKeys:     map[KeyCode]struct{}{},
+		pressedKeys:     map[KeyCode]Modifiers{},
 		releasedKeys:    map[KeyCode]struct{}{},
 		downMouse:       map[MouseButton]struct{}{},
 		pressedMouse:    map[MouseButton]struct{}{},
@@ -105,7 +115,10 @@ func (s *State) CopyFrom(source *State) {
 		}
 	}
 	copyKeys(s.downKeys, source.downKeys)
-	copyKeys(s.pressedKeys, source.pressedKeys)
+	clear(s.pressedKeys)
+	for key, modifiers := range source.pressedKeys {
+		s.pressedKeys[key] = modifiers
+	}
 	copyKeys(s.releasedKeys, source.releasedKeys)
 	copyMouse(s.downMouse, source.downMouse)
 	copyMouse(s.pressedMouse, source.pressedMouse)
@@ -217,7 +230,23 @@ func (s *State) PressKey(key KeyCode) {
 	if s == nil {
 		return
 	}
-	pressButton(s.downKeys, s.pressedKeys, key)
+	if !s.KeyHeld(key) {
+		s.downKeys[key] = struct{}{}
+		var modifiers Modifiers
+		if s.KeyHeld(KeyLeftControl) || s.KeyHeld(KeyRightControl) {
+			modifiers |= ModifierControl
+		}
+		if s.KeyHeld(KeyLeftSuper) || s.KeyHeld(KeyRightSuper) {
+			modifiers |= ModifierSuper
+		}
+		if s.KeyHeld(KeyLeftShift) || s.KeyHeld(KeyRightShift) {
+			modifiers |= ModifierShift
+		}
+		if s.KeyHeld(KeyLeftAlt) || s.KeyHeld(KeyRightAlt) {
+			modifiers |= ModifierAlt
+		}
+		s.pressedKeys[key] = modifiers
+	}
 	if s.composing {
 		s.compositionKeys[key] = struct{}{}
 	}
@@ -236,6 +265,15 @@ func (s *State) KeyHeld(key KeyCode) bool {
 
 func (s *State) KeyPressed(key KeyCode) bool {
 	return hasButton(s.pressedKeys, key)
+}
+
+// KeyModifiers returns the modifiers held when key was pressed this frame.
+// Later modifier presses or releases do not change the recorded chord.
+func (s *State) KeyModifiers(key KeyCode) Modifiers {
+	if s == nil {
+		return 0
+	}
+	return s.pressedKeys[key]
 }
 
 func (s *State) KeyPressedDuringComposition(key KeyCode) bool {
@@ -541,7 +579,7 @@ func releaseButton[T comparable](down, released map[T]struct{}, value T) {
 	}
 }
 
-func hasButton[T comparable](set map[T]struct{}, value T) bool {
+func hasButton[T comparable, V any](set map[T]V, value T) bool {
 	_, ok := set[value]
 	return ok
 }

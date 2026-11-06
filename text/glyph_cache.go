@@ -34,6 +34,17 @@ type Glyph struct {
 	Advance float32
 }
 
+// GlyphRef shares an immutable raster descriptor. The descriptor owns its atlas
+// page independently of cache slots, so eviction cannot change a live layout.
+type GlyphRef struct{ value *Glyph }
+
+func (ref GlyphRef) Glyph() Glyph {
+	if ref.value != nil {
+		return *ref.value
+	}
+	return Glyph{}
+}
+
 // RGBA reports whether the atlas retains RGB channels (color or LCD glyphs).
 func (g Glyph) RGBA() bool { return g.page != nil && g.page.lcd }
 
@@ -51,15 +62,29 @@ func (g Glyph) KeepAlive(canvas *graphics.Canvas2D) {
 
 // Cached records do not pin pages. Returned glyphs do, so evicting a page from
 // the LRU never invalidates geometry held by live text or render snapshots.
+type glyphMetrics struct {
+	Atlas, X, Y, Width, Height int32
+	Rune                       rune
+	OffsetX, OffsetY, Advance  float32
+}
+
 type cachedGlyph struct {
-	page  weak.Pointer[glyphAtlas]
-	glyph Glyph
+	page      weak.Pointer[glyphAtlas]
+	reference weak.Pointer[Glyph]
+	metrics   glyphMetrics
 }
 
 func cacheGlyph(g Glyph) cachedGlyph {
-	page := g.page
-	g.page = nil
-	return cachedGlyph{glyph: g, page: weak.Make(page)}
+	return cachedGlyph{page: weak.Make(g.page), metrics: glyphMetrics{
+		Atlas: g.Atlas, X: g.X, Y: g.Y, Width: g.Width, Height: g.Height,
+		Rune: g.Rune, OffsetX: g.OffsetX, OffsetY: g.OffsetY, Advance: g.Advance,
+	}}
+}
+
+func (g cachedGlyph) glyph() Glyph {
+	return Glyph{Atlas: g.metrics.Atlas, X: g.metrics.X, Y: g.metrics.Y,
+		Width: g.metrics.Width, Height: g.metrics.Height, Rune: g.metrics.Rune,
+		OffsetX: g.metrics.OffsetX, OffsetY: g.metrics.OffsetY, Advance: g.metrics.Advance}
 }
 
 type glyphAtlas struct {
@@ -279,7 +304,7 @@ func (c *GlyphCache) GlyphMetrics(r rune) Glyph {
 	defer c.mu.Unlock()
 	if entry, ok := c.glyphs[r]; ok {
 		c.touchEntry(entry)
-		return c.clock[entry].value.glyph
+		return c.clock[entry].value.glyph()
 	}
 	g := Glyph{Rune: r}
 	if c.face == nil {
@@ -307,6 +332,31 @@ func (c *GlyphCache) GlyphGrayAt(r rune, phaseX, phaseY uint8, color font.LCDCol
 func (c *GlyphCache) glyphAt(r rune, phaseX, phaseY uint8, color font.LCDColor, preblend bool) Glyph {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.glyphAtLocked(r, phaseX, phaseY, color, preblend)
+}
+
+func (c *GlyphCache) GlyphWithReference(r rune) (Glyph, GlyphRef) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	glyph := c.glyphAtLocked(r, 0, 0, 0, false)
+	return glyph, c.reference(c.glyphs[r], glyph)
+}
+
+func (c *GlyphCache) reference(slot uint16, glyph Glyph) GlyphRef {
+	if !glyph.Visible() {
+		return GlyphRef{}
+	}
+	record := &c.clock[slot]
+	value := record.value.reference.Value()
+	if value == nil {
+		value = new(Glyph)
+		*value = glyph
+		record.value.reference = weak.Make(value)
+	}
+	return GlyphRef{value: value}
+}
+
+func (c *GlyphCache) glyphAtLocked(r rune, phaseX, phaseY uint8, color font.LCDColor, preblend bool) Glyph {
 	phaseX, phaseY = phaseX&3, phaseY&3
 	key := phasedGlyphKey{character: r, x: phaseX, y: phaseY, color: color, preblend: preblend}
 	if !preblend && phaseX == 0 && phaseY == 0 {
@@ -391,7 +441,7 @@ func (c *GlyphCache) storeGlyph(key phasedGlyphKey, glyph Glyph) {
 func (c *GlyphCache) resolve(slot uint16) (Glyph, bool) {
 	c.touchEntry(slot)
 	entry := c.clock[slot].value
-	g := entry.glyph
+	g := entry.glyph()
 	if !g.Visible() {
 		return g, true
 	}
@@ -484,6 +534,21 @@ func (c *GlyphCache) OutlineGlyph(r rune, width float32) Glyph {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.outlineGlyphLocked(r, width)
+}
+
+func (c *GlyphCache) OutlineWithReference(r rune, width float32) GlyphRef {
+	if width <= 0 || math.IsNaN(float64(width)) || math.IsInf(float64(width), 0) {
+		_, ref := c.GlyphWithReference(r)
+		return ref
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	glyph := c.outlineGlyphLocked(r, width)
+	return c.reference(c.outlinedGlyphs[outlinedGlyphKey{r, width}], glyph)
+}
+
+func (c *GlyphCache) outlineGlyphLocked(r rune, width float32) Glyph {
 	key := outlinedGlyphKey{rune: r, width: width}
 	if entry, ok := c.outlinedGlyphs[key]; ok {
 		if g, live := c.resolve(entry); live {

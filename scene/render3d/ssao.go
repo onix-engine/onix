@@ -104,7 +104,7 @@ func setupViewSSAO3D(view *renderView3D, settings SSAOSettings) error {
 		if err != nil {
 			return err
 		}
-		view.occlusion = &renderView3D{dynamicGeometry: make(map[meshGeometryKey3D]uint32), deformationIndices: make(map[meshGeometryKey3D]uint32)}
+		view.occlusion = &renderView3D{geometry: make(map[meshGeometryKey3D]meshGeometry3D)}
 		view.occlusion.frame.Target = target
 	}
 	pass := view.occlusion

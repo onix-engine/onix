@@ -5,6 +5,7 @@ import (
 
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/internal/entitycache"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -75,11 +76,9 @@ func (t Transform) LookingAt(target, up mgl32.Vec3) Transform {
 type transformWorkspaceTag struct{}
 
 type transformNode struct {
-	entity    ecs.Entity
 	parent    ecs.Entity
 	transform Transform
 	local     mgl32.Mat4
-	matrix    mgl32.Mat4
 	dirty     bool
 	state     uint8
 }
@@ -88,10 +87,10 @@ type transformWorkspace struct {
 	scope           *ecs.QueryScope
 	changes         ecs.SystemContext
 	global          ecs.ComponentBinding[GlobalTransform]
-	nodes           entitycache.Store[transformNode]
-	active          []ecs.Entity
 	queue           []ecs.Entity
+	nodes           entitycache.Store[transformNode]
 	versions        [3]uint64
+	retention       reuse.Retention
 	structures      [2]uint64
 	scopeVersion    uint64
 	parentStructure uint64
@@ -130,6 +129,8 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		workspace.initialized = false
 		workspace.scope, workspace.scopeVersion = scope, version
 	}
+	workspace.nodes.Trim()
+	workspace.queue = workspace.retention.Trim(workspace.queue[:0], 64)
 	workspace.recomputed = 0
 	versions, structures := transformRevisions(world)
 	if workspace.initialized && workspace.structures == structures && workspace.versions == versions {
@@ -139,16 +140,14 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 	hierarchy := HierarchyFor(world)
 	if !workspace.initialized || workspace.structures != structures {
 		workspace.nodes.Reset()
-		workspace.active = workspace.active[:0]
 		for entity, access := range world.Query[Transform]().All {
 			transform := access.Get()
 
 			node := workspace.nodes.Ensure(entity)
-			*node = transformNode{entity: entity, transform: transform, local: transform.LocalMatrix(), dirty: true}
+			*node = transformNode{transform: transform, local: transform.LocalMatrix(), dirty: true}
 			if parent, ok := world.Get[Parent](entity); ok {
 				node.parent = parent.Entity
 			}
-			workspace.active = append(workspace.active, entity)
 			workspace.queue = append(workspace.queue, entity)
 		}
 	} else {
@@ -172,7 +171,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			}
 			_, parentStructure := world.ComponentValueRevision[Parent]()
 			if workspace.parentStructure != parentStructure {
-				for _, entity := range workspace.active {
+				for entity := range workspace.nodes.All {
 					refreshParent(entity)
 				}
 			} else {
@@ -195,7 +194,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			for entity, access := range world.Query[GlobalTransform](changes.Changed[GlobalTransform]()).All {
 				transform := access.Get()
 
-				if node := workspace.node(entity); node != nil && node.matrix != transform.Matrix {
+				if node := workspace.node(entity); node != nil && workspace.expectedMatrix(world, node) != transform.Matrix {
 					workspace.mark(entity)
 				}
 			}
@@ -207,25 +206,15 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		}
 	}
 	for _, entity := range workspace.queue {
-		matrix, err := workspace.resolve(entity)
-		if err != nil {
+		if _, err := workspace.resolve(world, entity); err != nil {
 			workspace.initialized = false
-			return err
-		}
-		access := workspace.global.Access(world.Row(entity))
-		if global := access.Ref(); global != nil {
-			if global.Matrix != matrix {
-				ecs.CommitComponent(access, GlobalTransform{Matrix: matrix})
-			}
-			continue
-		}
-		if err := world.Insert(entity, GlobalTransform{Matrix: matrix}); err != nil {
 			return err
 		}
 	}
 	_, workspace.parentStructure = world.ComponentValueRevision[Parent]()
 	workspace.initialized = true
 	workspace.versions, workspace.structures = transformRevisions(world)
+	workspace.retention.Record(len(workspace.queue))
 	workspace.lastRun = world.ChangeTick()
 	return nil
 }
@@ -242,23 +231,42 @@ func (workspace *transformWorkspace) mark(entity ecs.Entity) {
 	}
 }
 
-func (workspace *transformWorkspace) resolve(entity ecs.Entity) (mgl32.Mat4, error) {
+func (workspace *transformWorkspace) resolve(world *ecs.World, entity ecs.Entity) (mgl32.Mat4, error) {
 	node := workspace.node(entity)
 	if node == nil {
 		return mgl32.Ident4(), nil
 	}
 	if !node.dirty {
-		return node.matrix, nil
+		if value, ok := workspace.global.Get(world.Row(entity)); ok {
+			return value.Matrix, nil
+		}
 	}
 	if node.state == 1 {
 		return mgl32.Mat4{}, fmt.Errorf("ecs: cycle detected in Parent hierarchy at entity %d", entity)
 	}
 	node.state = 1
-	parent, err := workspace.resolve(node.parent)
+	parent, err := workspace.resolve(world, node.parent)
 	if err != nil {
 		return mgl32.Mat4{}, err
 	}
-	node.matrix, node.dirty, node.state = parent.Mul4(node.local), false, 0
+	matrix := parent.Mul4(node.local)
+	access := workspace.global.Access(world.Row(entity))
+	if access.Ref() != nil {
+		ecs.CommitComponent(access, GlobalTransform{Matrix: matrix})
+	} else if err := world.Insert(entity, GlobalTransform{Matrix: matrix}); err != nil {
+		return mgl32.Mat4{}, err
+	}
+	node.dirty, node.state = false, 0
 	workspace.recomputed++
-	return node.matrix, nil
+	return matrix, nil
+}
+
+func (workspace *transformWorkspace) expectedMatrix(world *ecs.World, node *transformNode) mgl32.Mat4 {
+	parent := mgl32.Ident4()
+	if workspace.node(node.parent) != nil {
+		if global, ok := workspace.global.Get(world.Row(node.parent)); ok {
+			parent = global.Matrix
+		}
+	}
+	return parent.Mul4(node.local)
 }

@@ -43,7 +43,7 @@ func TestSolidShapeRoundedClipIgnoresInvisibleBorder(t *testing.T) {
 				Shape: OutlinedRoundedRectShape2D(graphics.Black, test.color, 0, test.width),
 				Width: 98, Height: 78, Alpha: 1,
 			}
-			item := newSpriteRenderItem2D(0, 0, &sprite, graphics.Material2DData{}, AnchorTopLeft,
+			item := newSpriteRenderItem2D(0, 0, &sprite, nil, AnchorTopLeft,
 				mgl32.Translate3D(1, 1, 0),
 				clipRect2D{minX: 1, minY: 1, maxX: 99, maxY: 79, valid: true, hasRounded: true, rounded: rounded},
 				98, 78, true, 0)
@@ -71,14 +71,14 @@ func TestRoundedClipColorsReuseWhiteTextureAndPreserveRGBA8(t *testing.T) {
 	canvas := graphics.Canvas2DContext(100, 80)
 	rounded := roundedClip2D{minX: 1, minY: 1, maxX: 99, maxY: 79, radius: 8}
 	sprite := Sprite2D{Shape: RoundedRectShape2D(graphics.White, 0), Width: 98, Height: 78, Alpha: .7}
-	item := newSpriteRenderItem2D(0, 0, &sprite, graphics.Material2DData{}, AnchorTopLeft,
+	item := newSpriteRenderItem2D(0, 0, &sprite, nil, AnchorTopLeft,
 		mgl32.Translate3D(1, 1, 0),
 		clipRect2D{minX: 1, minY: 1, maxX: 99, maxY: 79, valid: true, hasRounded: true, rounded: rounded},
 		98, 78, true, 0)
 	viewport := renderViewport2D{clipFromLayer: canvas.ProjectionMatrix(), active: true}
 	for index := range 256 {
 		fill := graphics.ColorRGBA{R: float32(index) / 256, G: .372, B: .831, A: .681}
-		item.sprite.Shape.Fill = fill
+		item.snapshot[Sprite2D]().Shape.Fill = fill
 		drawShapeRenderItem2D(canvas, &item, viewport)
 		if err := canvas.FinishFrame(); err != nil {
 			t.Fatal(err)

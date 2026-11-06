@@ -47,11 +47,11 @@ func TestRetainedRender2DUnusedDynamicInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	incrementalFrame(t, world, canvas)
-	unchanged := RenderWorldFor(world).Items2D[50].sprite
+	unchanged := RenderWorldFor(world).Items2D[50].snapshot[Sprite2D]()
 	material.value = .75 // Edits through the material pointer still update.
 	incrementalFrame(t, world, canvas)
 	state := RenderWorldFor(world)
-	if state.Preparation2D.Extracted != 1 || state.Items2D[0].material2D.Custom[0][0] != .75 || state.Items2D[50].sprite != unchanged {
+	if state.Preparation2D.Extracted != 1 || state.Items2D[0].materialData().Custom[0][0] != .75 || state.Items2D[50].snapshot[Sprite2D]() != unchanged {
 		t.Fatalf("material edit rebuilt unrelated content: %+v", state.Preparation2D)
 	}
 	incrementalFrame(t, world, canvas)
@@ -60,7 +60,7 @@ func TestRetainedRender2DUnusedDynamicInputs(t *testing.T) {
 	}
 	world.Remove[MeshMaterial2D[customMaterial2DTest]](entities[0])
 	incrementalFrame(t, world, canvas)
-	if state.Items2D[0].material2D != (graphics.Material2DData{}) {
+	if state.Items2D[0].materialData() != (graphics.Material2DData{}) {
 		t.Fatal("removed material retained")
 	}
 }
@@ -76,16 +76,16 @@ func TestRetainedRender2DMixedTilemapSnapshots(t *testing.T) {
 	}
 	incrementalFrame(t, world, canvas)
 	state := RenderWorldFor(world)
-	unchanged := state.Items2D[50].sprite
+	unchanged := state.Items2D[50].snapshot[Sprite2D]()
 	tilemap.Tiles[0] = 1 // Revision zero allows direct tile edits.
 	incrementalFrame(t, world, canvas)
-	if state.Preparation2D.Extracted != 2 || state.Items2D[50].sprite != unchanged {
+	if state.Preparation2D.Extracted != 2 || state.Items2D[50].snapshot[Sprite2D]() != unchanged {
 		t.Fatalf("dynamic entity invalidated scene: %+v", state.Preparation2D)
 	}
 	var snapshot *Tilemap2D
 	for i := range state.Items2D {
-		if state.Items2D[i].tilemap != nil {
-			snapshot = state.Items2D[i].tilemap
+		if state.Items2D[i].snapshot[Tilemap2D]() != nil {
+			snapshot = state.Items2D[i].snapshot[Tilemap2D]()
 		}
 	}
 	if snapshot == nil || snapshot.Tiles[0] != 1 {
@@ -222,7 +222,7 @@ func TestRetainedRender2DReclaimsPeakStorage(t *testing.T) {
 	}
 	for i := range cache.items {
 		item := &cache.items[i]
-		if item.paint != &cache.paints[i] || *item.paint != preparePaintItem2D(item) {
+		if item.paint != &cache.paints[i] || *item.paint != preparePaintItem2D(item, cache.device) {
 			t.Fatalf("item %d retained stale paint data after reclamation", i)
 		}
 	}
@@ -240,7 +240,7 @@ func TestRetainedRender2DReclaimsPeakStorage(t *testing.T) {
 	}
 	world.GetMut[Sprite2D](entities[0]).Shape.Fill = graphics.Black
 	incrementalFrame(t, world, canvas)
-	if state.Preparation2D.Extracted != 1 || state.Composite2D.DirtyTiles == 0 || state.Items2D[0].sprite.Shape.Fill != graphics.Black {
+	if state.Preparation2D.Extracted != 1 || state.Composite2D.DirtyTiles == 0 || state.Items2D[0].snapshot[Sprite2D]().Shape.Fill != graphics.Black {
 		t.Fatal("reclaimed scene failed to repaint a sparse edit")
 	}
 	if allocations := testing.AllocsPerRun(60, func() { incrementalFrame(t, world, canvas) }); allocations != 0 {

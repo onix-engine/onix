@@ -97,8 +97,7 @@ func setupViewSSR3D(view *renderView3D, settings SSRSettings) error {
 		}
 		s := &screenReflection3D{}
 		for _, pass := range [...]*renderView3D{&s.depth, &s.radiance, &s.occlusion, &s.resolve} {
-			pass.dynamicGeometry = make(map[meshGeometryKey3D]uint32)
-			pass.deformationIndices = make(map[meshGeometryKey3D]uint32)
+			pass.geometry = make(map[meshGeometryKey3D]meshGeometry3D)
 		}
 		s.depth.frame.Target = depth
 		s.radiance.frame.Target = color

@@ -1,6 +1,9 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import (
+	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/internal/reuse"
+)
 
 type inputPickChange2D uint8
 
@@ -44,6 +47,7 @@ type inputPickCache2D struct {
 	cameras          []inputCamera2D
 	lookup           inputCaptureLookup2D
 	versions         [len(inputPickInputs2D)]uint64
+	retention        [2]reuse.Retention
 	transformMembers [inputPickTransformCount2D]uint64
 	registryRevision uint64
 	scopeVersion     uint64
@@ -55,6 +59,8 @@ type inputPickCache2D struct {
 }
 
 func (cache *inputPickCache2D) refresh(world *ecs.World, entity, camera ecs.Entity) bool {
+	cache.targets = cache.retention[0].Trim(cache.targets, 64)
+	cache.cameras = cache.retention[1].Trim(cache.cameras, 4)
 	var versions [len(inputPickInputs2D)]uint64
 	var members [inputPickTransformCount2D]uint64
 	var changes inputPickChange2D
