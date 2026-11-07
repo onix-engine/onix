@@ -151,10 +151,6 @@ type writtenResourcePackage struct {
 	digest [sha256.Size]byte
 }
 
-func writeResourcePackage(output string, files map[string]resourceInput) (writtenResourcePackage, error) {
-	return writeResourcePackageWithProgress(output, files, nil)
-}
-
 func writeResourcePackageWithProgress(output string, files map[string]resourceInput, progress func(resource.PackProgress)) (writtenResourcePackage, error) {
 	temporary := output + ".tmp"
 	file, err := os.Create(temporary)

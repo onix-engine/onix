@@ -121,9 +121,3 @@ func resolveTransition(values [4]string, property string) TransformTransition {
 	}
 	return result
 }
-
-func parseTransformTransition(input string) (TransformTransition, error) {
-	value := ComputedStyle{}
-	err := applyTransitionProperty(&value, "transition", input)
-	return resolveTransition(value.transitionValues(), "transform"), err
-}

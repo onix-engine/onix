@@ -573,6 +573,9 @@ func (c *Canvas2D) finishSpriteDraw() {
 		shader = c.material2DShader.RenderHandleFor(c.device)
 	}
 	texture := c.texture.RenderHandleFor(c.device)
+	if owner := c.texture.baseTexture(); owner.colorOwner != nil {
+		c.RetainUntilFlush(owner)
+	}
 	if len(c.draws) > 0 {
 		previous := &c.draws[len(c.draws)-1]
 		if previous.Shader == shader && previous.FirstInstance+previous.InstanceCount == uint32(c.drawStart) {
@@ -621,6 +624,7 @@ func (c *Canvas2D) FinishFrame() error {
 	c.draws = c.drawRetention.Trim(c.draws, 64)
 	c.shapes = c.shapeRetention.Trim(c.shapes, 256)
 	c.retained = c.retainedRetention.Trim(c.retained, 32)
+	c.setError(maintainColorTextures(c.device))
 	err := c.err
 	c.err = nil
 	return err

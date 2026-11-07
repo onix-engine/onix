@@ -18,9 +18,9 @@ type htmlDocumentState struct {
 	SourceDocument  *dom.Node
 	Source          string
 	EmbeddedCSS     string
+	MutationRoots   []*dom.Node
 	NodeAncestors   htmlAncestorCache[*dom.Node, *dom.Node]
 	NodeFlags       htmlAncestorCache[*dom.Node, bool]
-	MutationRoots   []*dom.Node
 	Revision        uint64
 	EventRevision   uint64
 	IndexDirty      bool
@@ -56,7 +56,6 @@ type htmlLayoutState struct {
 }
 
 type htmlPaintState struct {
-	Textures          htmlTextureCache
 	BoxRenderings     map[*dom.Node]*htmlBoxRendering
 	EmittingBox       *htmlBoxRendering
 	StickyBindings    map[*dom.Node]*htmlStickyBinding
@@ -64,12 +63,13 @@ type htmlPaintState struct {
 	OverflowExtents   map[*layout.Box]htmlOverflowExtent
 	RenderNodes       map[*dom.Node]*htmlNodeRendering
 	EntityGroups      map[htmlRenderIdentity]*htmlEntityGroup
-	BoxFlags          htmlAncestorCache[*layout.Box, bool]
-	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
+	Textures          htmlTextureCache
 	RenderQueue       []*htmlBoxRendering
 	Children          []ecs.Entity
 	RemovedBoxes      []*htmlBoxRendering
 	PaintCullRoots    []*htmlBoxRendering
+	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
+	BoxFlags          htmlAncestorCache[*layout.Box, bool]
 	RenderGeneration  uint64
 	OwnerSpansValid   bool
 	PartialValid      bool

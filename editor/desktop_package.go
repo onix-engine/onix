@@ -377,10 +377,6 @@ func copyProjectThirdPartyNotices(projectDir, targetDir string) error {
 	return nil
 }
 
-func packageMacOSDMG(root, appBundle, output, volumeName string) error {
-	return packageMacOSDMGWith(root, appBundle, output, volumeName, exec.LookPath, runCommand)
-}
-
 func packageMacOSDMGWith(root, appBundle, output, volumeName string, lookPath func(string) (string, error), run func(string, []string, string, ...string) error) error {
 	hdiutil, err := lookPath("hdiutil")
 	if err != nil {

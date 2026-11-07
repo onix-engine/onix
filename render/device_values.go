@@ -76,6 +76,24 @@ func (values *DeviceValues[T]) Clear() {
 	values.others = values.others[:0]
 }
 
+// Remove transfers one device's value to the caller, including values whose
+// device has already been destroyed. Other device residencies remain intact.
+func (values *DeviceValues[T]) Remove(device *Device) (T, bool) {
+	if values.first.device == device && device != nil {
+		value := values.first.value
+		values.first = deviceValue[T]{}
+		return value, true
+	}
+	for index, entry := range values.others {
+		if entry.device == device && device != nil {
+			values.others[index] = deviceValue[T]{}
+			return entry.value, true
+		}
+	}
+	var zero T
+	return zero, false
+}
+
 func (values *DeviceValues[T]) Release(dispose func(*Device, T) error) error {
 	if values.first.device.Driver() != nil {
 		if err := dispose(values.first.device, values.first.value); err != nil {

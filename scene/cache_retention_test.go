@@ -63,3 +63,41 @@ func TestTransformHierarchyAndPickReclaimPeaks(t *testing.T) {
 	t.Logf("transform store: %d -> %d B; pick targets: %d -> %d B", peakTransform, entityStoreBytes(&spatial.nodes), peakPick, uintptr(cap(pick.targets))*unsafe.Sizeof(inputPickTarget2D{}))
 	t.Logf("record sizes transform/UI/renderItem/paint/pick = %d/%d/%d/%d/%d B", unsafe.Sizeof(transformNode{}), unsafe.Sizeof(uiTransformNode{}), unsafe.Sizeof(renderItem2D{}), unsafe.Sizeof(paintItem2D{}), unsafe.Sizeof(inputPickTarget2D{}))
 }
+
+func TestRenderHierarchyReclaimsPeakThroughWorldMaintenance(t *testing.T) {
+	world, entities := hierarchyFixture(4096)
+	if err := world.Insert(entities[0], PainterGroup2D(7)); err != nil {
+		t.Fatal(err)
+	}
+	cache := frameRenderHierarchy2DCachePtr(world)
+	for _, entity := range entities {
+		if cache.resolve(world, entity).group != 7 {
+			t.Fatal("hierarchy fixture lost inherited group")
+		}
+	}
+	world.Maintain()
+	old := cache.values
+	for _, entity := range entities[4:] {
+		world.Despawn(entity)
+	}
+	frame := func() {
+		cache = frameRenderHierarchy2DCachePtr(world)
+		for _, entity := range entities[:4] {
+			if cache.resolve(world, entity).group != 7 {
+				t.Fatal("shrinking hierarchy lost inherited group")
+			}
+		}
+		world.Maintain()
+	}
+	for range reuse.RetentionFrames + 2 {
+		frame()
+	}
+	probe := ^ecs.Entity(0)
+	old[probe] = renderHierarchy2DInfo{}
+	if _, ok := cache.values[probe]; ok || len(cache.values) != 4 {
+		t.Fatal("world maintenance retained the historical render hierarchy map")
+	}
+	if n := testing.AllocsPerRun(100, frame); n != 0 {
+		t.Fatalf("reclaimed hierarchy allocated %g", n)
+	}
+}

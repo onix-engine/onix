@@ -170,3 +170,47 @@ func TestBMPCharacterMapDoesNotAliasSupplementaryRunes(t *testing.T) {
 		t.Fatal("format 4 aliased a supplementary rune to a BMP glyph")
 	}
 }
+
+func TestGlyphFallbackBoundsUnsupportedCharacterCache(t *testing.T) {
+	set := &fallbackSet{glyphs: make(map[rune]resolvedGlyph)}
+	set.once.Do(func() {})
+	for r := rune(0); r < fallbackGlyphCacheLimit*2; r++ {
+		if set.resolve(r).face != nil {
+			t.Fatal("empty fallback set resolved a character")
+		}
+	}
+	if len(set.glyphs) != fallbackGlyphCacheLimit || len(set.order) != fallbackGlyphCacheLimit {
+		t.Fatal("unsupported characters grew the fallback cache past its limit")
+	}
+	if _, ok := set.glyphs[0]; ok {
+		t.Fatal("oldest missing character was not evicted")
+	}
+	if _, ok := set.glyphs[fallbackGlyphCacheLimit*2-1]; !ok {
+		t.Fatal("newest missing character was not retained")
+	}
+	if allocations := testing.AllocsPerRun(100, func() { set.resolve(fallbackGlyphCacheLimit * 2) }); allocations != 0 {
+		t.Fatalf("bounded fallback warm lookup allocated %g", allocations)
+	}
+}
+
+func TestGlyphFallbackConcurrentEviction(t *testing.T) {
+	set := &fallbackSet{glyphs: make(map[rune]resolvedGlyph)}
+	set.once.Do(func() {})
+	var workers sync.WaitGroup
+	for worker := range 8 {
+		workers.Go(func() {
+			for offset := range 1024 {
+				set.resolve(rune(0xf0000 + worker*1024 + offset))
+			}
+		})
+	}
+	workers.Wait()
+	if len(set.glyphs) != fallbackGlyphCacheLimit || len(set.order) != fallbackGlyphCacheLimit {
+		t.Fatal("concurrent misses escaped the fallback cache budget")
+	}
+	for _, r := range set.order {
+		if _, ok := set.glyphs[r]; !ok {
+			t.Fatal("concurrent eviction desynchronized FIFO and glyph index")
+		}
+	}
+}

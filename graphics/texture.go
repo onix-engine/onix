@@ -3,17 +3,14 @@ package graphics
 import (
 	"errors"
 	"image"
-	"sync"
 	"sync/atomic"
 
 	"github.com/diiyw/onix/render"
 )
 
 var (
-	errTextureDevice        = errors.New("graphics: texture has no CPU payload for this device")
-	textureColorImageLocker sync.Mutex
-	textureColorImageCache  = make(map[int]*Texture)
-	textureBatchCounter     atomic.Uint64
+	errTextureDevice    = errors.New("graphics: texture has no CPU payload for this device")
+	textureBatchCounter atomic.Uint64
 )
 
 type Texture struct {
@@ -21,6 +18,7 @@ type Texture struct {
 	externalDevice     *render.Device
 	renderTarget       *render.RenderTarget
 	source             *Texture
+	colorOwner         *colorTextureEntry
 	device             *render.Device
 	residencies        render.DeviceValues[render.TextureHandle]
 	updates            []render.TextureUpdate
@@ -82,23 +80,6 @@ func (t *Texture) DynamicContent() bool {
 	return base != nil && (base.external || base.renderTarget != nil)
 }
 
-func CreateTextureByColor(clr ColorRGBA) *Texture {
-	key := clr.Int32()
-	textureColorImageLocker.Lock()
-	defer textureColorImageLocker.Unlock()
-	if texture, ok := textureColorImageCache[key]; ok && texture.Valid() {
-		return texture
-	}
-	texture := newTexture(1, 1, true, ResourceUsageDefault, []byte{
-		uint8(clr.R * 255),
-		uint8(clr.G * 255),
-		uint8(clr.B * 255),
-		uint8(clr.A * 255),
-	})
-	textureColorImageCache[key] = texture
-	return texture
-}
-
 func CreateTextureByImageNoMipmap(im *image.RGBA) *Texture {
 	return CreateTextureByImageWithUsage(im, false, ResourceUsageDefault)
 }
@@ -127,7 +108,7 @@ func CreateTextureFromExternal(descriptor render.ExternalTextureDescriptor) (*Te
 		MaxU: 1, MaxV: 1, batchKey: nextTextureBatchKey(),
 		usage: ResourceUsageGPU, handle: handle, device: render.ActiveDevice(), external: true, externalDevice: render.ActiveDevice(),
 	}
-	texture.residencies.Set(texture.device, handle)
+	texture.deviceValues().Set(texture.device, handle)
 	return texture, nil
 }
 
@@ -164,7 +145,7 @@ func (t *Texture) RefreshExternal() error {
 		return errors.New("graphics: invalid external texture refresh")
 	}
 	t.contentRevision = textureRevision.Add(1)
-	handle, valid := t.residencies.Get(t.externalDevice)
+	handle, valid := t.deviceValues().Get(t.externalDevice)
 	if !valid {
 		return errors.New("graphics: invalid external texture refresh")
 	}
@@ -341,7 +322,7 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	}
 
 	wasResident := false
-	_ = base.residencies.Each(func(_ *render.Device, _ render.TextureHandle) error { wasResident = true; return nil })
+	_ = base.deviceValues().Each(func(_ *render.Device, _ render.TextureHandle) error { wasResident = true; return nil })
 	if !base.usage.Has(ResourceUsageCPU) && len(base.pix) == 0 && !base.zeroInitialized && !wasResident {
 		return
 	}
@@ -374,7 +355,7 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	}
 
 	base.err = nil
-	base.err = base.residencies.Each(func(device *render.Device, handle render.TextureHandle) error {
+	base.err = base.deviceValues().Each(func(device *render.Device, handle render.TextureHandle) error {
 		if cap(base.updates) < len(updates) {
 			base.updates = make([]render.TextureUpdate, len(updates))
 		} else {
@@ -415,7 +396,7 @@ func (t *Texture) ValidFor(device *render.Device) bool {
 	if base.hasPixelPayload() {
 		return true
 	}
-	handle, ok := base.residencies.Get(device)
+	handle, ok := base.deviceValues().Get(device)
 	return ok && handle.Valid()
 }
 
@@ -634,7 +615,7 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		t.device = device
 		return
 	}
-	if handle, ok := t.residencies.Get(device); ok {
+	if handle, ok := t.deviceValues().Get(device); ok {
 		t.device, t.handle, t.err = device, handle, nil
 		return
 	}
@@ -672,7 +653,7 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		Levels: t.payloadLevels(),
 	}, pixels)
 	if t.err == nil {
-		t.residencies.Set(device, t.handle)
+		t.deviceValues().Set(device, t.handle)
 		if !t.usage.Has(ResourceUsageCPU) {
 			t.pix = nil
 			t.zeroInitialized = false
@@ -689,7 +670,7 @@ func (t *Texture) destroyHandle() error {
 	if t == nil {
 		return nil
 	}
-	if err := t.residencies.Release(func(device *render.Device, handle render.TextureHandle) error {
+	if err := t.deviceValues().Release(func(device *render.Device, handle render.TextureHandle) error {
 		return device.Driver().DestroyTexture(handle)
 	}); err != nil {
 		return err

@@ -71,10 +71,6 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 	return raster.texture
 }
 
-func rasterHTMLBoxPaint(dst *image.RGBA, computed *style.ComputedStyle, width, height float64) {
-	rasterHTMLBoxPaintPrepared(dst, computed, width, height, 1, prepareHTMLRasterGradients(nil, computed))
-}
-
 func prepareHTMLRasterGradients(reuse []htmlRasterGradient, computed *style.ComputedStyle) []htmlRasterGradient {
 	count := len(computed.BackgroundLayers)
 	if count == 0 && computed.BackgroundImage != "" {

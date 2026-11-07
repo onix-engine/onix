@@ -6,9 +6,9 @@ import (
 )
 
 type fontShorthand struct {
+	line, family string
 	size, weight Value
 	style        FontStyle
-	line, family string
 }
 
 func parseFontShorthandParts(raw string, ctx parseContext) (fontShorthand, error) {

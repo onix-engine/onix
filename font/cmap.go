@@ -14,7 +14,6 @@ type cmapFormat4 struct {
 	StartCodes    []uint16
 	IDDeltas      []int16
 	IDRangeOffset []uint16
-	GlyphIDArray  []uint16
 	Data          []byte
 }
 
@@ -77,7 +76,11 @@ func parseCmapFormat4(data []byte) (*cmapFormat4, error) {
 	if length > len(data) {
 		return nil, fmt.Errorf("cmap format 4 length out of bounds")
 	}
-	segCount := int(binary.BigEndian.Uint16(data[6:8]) / 2)
+	segCountX2 := binary.BigEndian.Uint16(data[6:8])
+	if segCountX2 == 0 || segCountX2%2 != 0 {
+		return nil, fmt.Errorf("cmap format 4 invalid segment count")
+	}
+	segCount := int(segCountX2 / 2)
 	needed := 16 + segCount*8
 	if length < needed {
 		return nil, fmt.Errorf("cmap format 4 truncated segments")
@@ -96,24 +99,17 @@ func parseCmapFormat4(data []byte) (*cmapFormat4, error) {
 	offset += 2
 	for i := 0; i < segCount; i++ {
 		startCodes[i] = binary.BigEndian.Uint16(data[offset+i*2 : offset+i*2+2])
+		if startCodes[i] > endCodes[i] || i > 0 && startCodes[i] <= endCodes[i-1] {
+			return nil, fmt.Errorf("cmap format 4 unordered or overlapping segments")
+		}
 	}
 	offset += segCount * 2
 	for i := 0; i < segCount; i++ {
 		idDeltas[i] = int16(binary.BigEndian.Uint16(data[offset+i*2 : offset+i*2+2]))
 	}
 	offset += segCount * 2
-	rangeOffsetStart := offset
 	for i := 0; i < segCount; i++ {
 		idRangeOffset[i] = binary.BigEndian.Uint16(data[offset+i*2 : offset+i*2+2])
-	}
-	arrayStart := rangeOffsetStart + segCount*2
-	arrayBytes := length - arrayStart
-	if arrayBytes < 0 {
-		return nil, fmt.Errorf("cmap format 4 invalid glyph array")
-	}
-	glyphIDArray := make([]uint16, arrayBytes/2)
-	for i := range glyphIDArray {
-		glyphIDArray[i] = binary.BigEndian.Uint16(data[arrayStart+i*2 : arrayStart+i*2+2])
 	}
 
 	return &cmapFormat4{
@@ -121,7 +117,6 @@ func parseCmapFormat4(data []byte) (*cmapFormat4, error) {
 		StartCodes:    startCodes,
 		IDDeltas:      idDeltas,
 		IDRangeOffset: idRangeOffset,
-		GlyphIDArray:  glyphIDArray,
 		Data:          data[:length],
 	}, nil
 }
@@ -130,21 +125,24 @@ func parseCmapFormat12(data []byte) (*cmapFormat12, error) {
 	if len(data) < 16 {
 		return nil, fmt.Errorf("cmap format 12 too short")
 	}
-	length := int(binary.BigEndian.Uint32(data[4:8]))
-	if length > len(data) {
+	length := binary.BigEndian.Uint32(data[4:8])
+	if length < 16 || uint64(length) > uint64(len(data)) {
 		return nil, fmt.Errorf("cmap format 12 length out of bounds")
 	}
-	numGroups := int(binary.BigEndian.Uint32(data[12:16]))
-	if length < 16+numGroups*12 {
+	numGroups := binary.BigEndian.Uint32(data[12:16])
+	if numGroups > (length-16)/12 {
 		return nil, fmt.Errorf("cmap format 12 truncated groups")
 	}
-	groups := make([]cmapFormat12Group, numGroups)
-	for i := 0; i < numGroups; i++ {
+	groups := make([]cmapFormat12Group, int(numGroups))
+	for i := range groups {
 		offset := 16 + i*12
 		groups[i] = cmapFormat12Group{
 			StartCharCode: binary.BigEndian.Uint32(data[offset : offset+4]),
 			EndCharCode:   binary.BigEndian.Uint32(data[offset+4 : offset+8]),
 			StartGlyphID:  binary.BigEndian.Uint32(data[offset+8 : offset+12]),
+		}
+		if groups[i].StartCharCode > groups[i].EndCharCode || i > 0 && groups[i].StartCharCode <= groups[i-1].EndCharCode {
+			return nil, fmt.Errorf("cmap format 12 unordered or overlapping groups")
 		}
 	}
 	return &cmapFormat12{Groups: groups}, nil
@@ -155,34 +153,48 @@ func (c *cmapFormat4) GlyphIndex(r rune) uint16 {
 		return 0
 	}
 	code := uint16(r)
-	for i := 0; i < len(c.EndCodes); i++ {
-		if code < c.StartCodes[i] || code > c.EndCodes[i] {
-			continue
+	lo, hi := 0, len(c.EndCodes)
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		if c.EndCodes[mid] < code {
+			lo = mid + 1
+		} else {
+			hi = mid
 		}
-		if c.IDRangeOffset[i] == 0 {
-			return uint16(int(code) + int(c.IDDeltas[i]))
-		}
-		idRangeOffsetPos := 14 + len(c.EndCodes)*2 + 2 + len(c.StartCodes)*2 + len(c.IDDeltas)*2 + i*2
-		glyphOffset := idRangeOffsetPos + int(c.IDRangeOffset[i]) + int(code-c.StartCodes[i])*2
-		if glyphOffset+2 > len(c.Data) {
-			return 0
-		}
-		glyph := binary.BigEndian.Uint16(c.Data[glyphOffset : glyphOffset+2])
-		if glyph == 0 {
-			return 0
-		}
-		return uint16(int(glyph) + int(c.IDDeltas[i]))
 	}
-	return 0
+	i := lo
+	if i == len(c.EndCodes) || code < c.StartCodes[i] {
+		return 0
+	}
+	if c.IDRangeOffset[i] == 0 {
+		return uint16(int(code) + int(c.IDDeltas[i]))
+	}
+	idRangeOffsetPos := 16 + len(c.EndCodes)*6 + i*2
+	glyphOffset := idRangeOffsetPos + int(c.IDRangeOffset[i]) + int(code-c.StartCodes[i])*2
+	if glyphOffset+2 > len(c.Data) {
+		return 0
+	}
+	glyph := binary.BigEndian.Uint16(c.Data[glyphOffset : glyphOffset+2])
+	if glyph == 0 {
+		return 0
+	}
+	return uint16(int(glyph) + int(c.IDDeltas[i]))
 }
 
 func (c *cmapFormat12) GlyphIndex(r rune) uint16 {
 	code := uint32(r)
-	for _, group := range c.Groups {
-		if code < group.StartCharCode || code > group.EndCharCode {
-			continue
+	lo, hi := 0, len(c.Groups)
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		if c.Groups[mid].EndCharCode < code {
+			lo = mid + 1
+		} else {
+			hi = mid
 		}
-		return uint16(group.StartGlyphID + (code - group.StartCharCode))
 	}
-	return 0
+	if lo == len(c.Groups) || code < c.Groups[lo].StartCharCode {
+		return 0
+	}
+	group := c.Groups[lo]
+	return uint16(group.StartGlyphID + (code - group.StartCharCode))
 }

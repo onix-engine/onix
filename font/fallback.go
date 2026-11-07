@@ -58,10 +58,14 @@ type fallbackStyle struct {
 type fallbackSet struct {
 	glyphs  map[rune]resolvedGlyph
 	sources []*fallbackSource
+	order   []rune
 	style   fallbackStyle
+	head    int
 	mu      sync.RWMutex
 	once    sync.Once
 }
+
+const fallbackGlyphCacheLimit = 4096
 
 var fallbackSources = sync.OnceValue(func() []*fallbackSource {
 	fonts, _ := SystemFonts()
@@ -163,7 +167,15 @@ func (s *fallbackSet) resolve(r rune) resolvedGlyph {
 			break
 		}
 	}
-	// Cache misses as well as hits; unsupported characters never rescan fonts.
+	// Keep hits and misses in a bounded FIFO; arbitrary unsupported Unicode
+	// input must not grow every style's process-wide map indefinitely.
+	if len(s.order) < fallbackGlyphCacheLimit {
+		s.order = append(s.order, r)
+	} else {
+		delete(s.glyphs, s.order[s.head])
+		s.order[s.head] = r
+		s.head = (s.head + 1) % fallbackGlyphCacheLimit
+	}
 	s.glyphs[r] = g
 	return g
 }

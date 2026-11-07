@@ -196,33 +196,3 @@ func coverageIntersections(dst []coverageIntersection, y float64, contours []Out
 	}
 	return dst, winding
 }
-
-func pointInContours(x, y float64, contours []OutlineContour) bool {
-	winding := 0
-	for _, contour := range contours {
-		winding += contourWindingNumber(x, y, contour)
-	}
-	return winding != 0
-}
-
-func contourWindingNumber(x, y float64, contour OutlineContour) int {
-	winding := 0
-	for i, j := 0, len(contour)-1; i < len(contour); j, i = i, i+1 {
-		pi := contour[i]
-		pj := contour[j]
-		if pi.Y <= y {
-			if pj.Y > y && isLeft(pi, pj, x, y) > 0 {
-				winding++
-			}
-			continue
-		}
-		if pj.Y <= y && isLeft(pi, pj, x, y) < 0 {
-			winding--
-		}
-	}
-	return winding
-}
-
-func isLeft(p0, p1 OutlinePoint, x, y float64) float64 {
-	return (p1.X-p0.X)*(y-p0.Y) - (x-p0.X)*(p1.Y-p0.Y)
-}

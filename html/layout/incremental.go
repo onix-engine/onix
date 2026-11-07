@@ -9,6 +9,7 @@ import (
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/style"
+	"github.com/diiyw/onix/internal/reuse"
 )
 
 // Work counts formatting calls separately from reused and translated subtrees.
@@ -35,15 +36,28 @@ type Cache struct {
 	Removed        []*Box
 	localFlexRoots []*Box
 	// Reordered contains flex containers whose child order actually changed.
-	Reordered   []*Box
-	context     layoutContext
-	Work        Work
-	viewport    Rect
-	pass        uint64
-	generation  uint64
-	restylePass uint64
+	Reordered     []*Box
+	context       layoutContext
+	retention     [4]reuse.Retention
+	nodeRetention reuse.MapRetention
+	Work          Work
+	viewport      Rect
+	pass          uint64
+	generation    uint64
+	restylePass   uint64
 	// ReserveScrollbarSpace selects classic scrollbars for this document.
 	ReserveScrollbarSpace bool
+}
+
+// MaintainCache releases historical workspace peaks after sustained underuse.
+// It is also safe between updates, after consumers finish using Changed/Removed.
+func (cache *Cache) MaintainCache() {
+	cache.nodes = cache.nodeRetention.Trim(cache.nodes, 64)
+	cache.Changed = cache.retention[0].Trim(cache.Changed, 64)
+	cache.Removed = cache.retention[1].Trim(cache.Removed, 64)
+	cache.Reordered = cache.retention[2].Trim(cache.Reordered, 16)
+	cache.localFlexRoots = cache.retention[3].Trim(cache.localFlexRoots, 16)
+	cache.context.trim()
 }
 
 type boxLayoutCache struct {
@@ -87,6 +101,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 	cache.pass++
 	cache.restylePass++
 	defer func() {
+		cache.retention[3].Record(len(cache.localFlexRoots))
 		clear(cache.localFlexRoots)
 		cache.localFlexRoots = cache.localFlexRoots[:0]
 		clear(cache.context.inlineSegments[:cap(cache.context.inlineSegments)])
@@ -99,10 +114,12 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 			clear(scratch.controlTokens[:cap(scratch.controlTokens)])
 			scratch.shapeGlyphs = scratch.shapeGlyphs[:0]
 		}
+		cache.MaintainCache()
 	}()
 	viewport := Rect{Width: width, Height: height}
 	if cache.document != root {
 		cache.Root = nil
+		cache.nodeRetention.Record(len(cache.nodes))
 		clear(cache.nodes)
 		cache.document = root
 		cache.context = layoutContext{}
@@ -120,6 +137,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 		topology = true
 	}
 	if topology || cache.Root == nil {
+		cache.nodeRetention.Record(len(cache.nodes))
 		if cache.nodes == nil {
 			cache.nodes = make(map[*dom.Node]*Box)
 		}

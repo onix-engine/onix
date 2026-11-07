@@ -4,6 +4,7 @@ import (
 	"iter"
 	"strings"
 	"sync"
+	"weak"
 
 	"github.com/diiyw/onix/html/css"
 	"github.com/diiyw/onix/html/dom"
@@ -120,25 +121,28 @@ type compiledSelectorRef struct {
 }
 
 var compiledStylesheetCache struct {
-	stylesheet *css.Stylesheet
-	compiled   *compiledStylesheet
+	stylesheet weak.Pointer[css.Stylesheet]
+	compiled   weak.Pointer[compiledStylesheet]
 	sync.Mutex
 }
 
 // Stylesheets are immutable after parsing, so pointer identity is enough to
-// cache the compiled matcher.
+// cache the compiled matcher. This convenience cache owns neither object;
+// retained documents keep their matcher alive through MutationCache.compiled.
 func compiledMatcher(stylesheet *css.Stylesheet) *compiledStylesheet {
 	if stylesheet == nil {
 		return nil
 	}
 	compiledStylesheetCache.Lock()
 	defer compiledStylesheetCache.Unlock()
-	if compiledStylesheetCache.stylesheet == stylesheet {
-		return compiledStylesheetCache.compiled
+	if compiledStylesheetCache.stylesheet.Value() == stylesheet {
+		if compiled := compiledStylesheetCache.compiled.Value(); compiled != nil {
+			return compiled
+		}
 	}
 	compiled := compileStylesheet(stylesheet)
-	compiledStylesheetCache.stylesheet = stylesheet
-	compiledStylesheetCache.compiled = compiled
+	compiledStylesheetCache.stylesheet = weak.Make(stylesheet)
+	compiledStylesheetCache.compiled = weak.Make(compiled)
 	return compiled
 }
 

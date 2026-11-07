@@ -18,7 +18,6 @@ type Face struct {
 	Kern             kernTable
 	backing          *fontBacking
 	glyphBitmapCache map[glyphBitmapCacheKey]*GlyphBitmap
-	glyphIndexCache  map[rune]uint16
 	SFNT             *sfnt
 	fallback         *fallbackSet
 	CFF              *cffFont
@@ -72,9 +71,8 @@ func (f *Face) Close() error {
 	f.fallback = nil
 	f.glyphFallback = nil
 	f.color = colorGlyphTables{}
-	clear(f.glyphIndexCache)
-	clear(f.outlineCache)
-	clear(f.glyphBitmapCache)
+	f.outlineCache = nil
+	f.glyphBitmapCache = nil
 	f.bitmapOrder, f.bitmapHead, f.bitmapBytes = nil, 0, 0
 	f.cacheMu.Unlock()
 	return backing.close()
@@ -138,7 +136,6 @@ func ParseIndex(data []byte, index int) (*Face, error) {
 		Maxp:             maxp,
 		Metrics:          metrics,
 		Cmap:             cmapTable,
-		glyphIndexCache:  map[rune]uint16{},
 		outlineCache:     map[uint16]weak.Pointer[Outline]{},
 		glyphBitmapCache: map[glyphBitmapCacheKey]*GlyphBitmap{},
 	}
@@ -204,25 +201,10 @@ func (f *Face) GlyphIndex(r rune) uint16 {
 	if uint32(r) < uint32(len(f.asciiGlyphs)) {
 		return f.asciiGlyphs[r]
 	}
-	f.cacheMu.RLock()
-	if glyphID, ok := f.glyphIndexCache[r]; ok {
-		f.cacheMu.RUnlock()
-		return glyphID
-	}
-	f.cacheMu.RUnlock()
-
-	glyphID := f.Cmap.GlyphIndex(r)
-	f.cacheMu.Lock()
-	f.ensureCachesLocked()
-	f.glyphIndexCache[r] = glyphID
-	f.cacheMu.Unlock()
-	return glyphID
+	return f.Cmap.GlyphIndex(r)
 }
 
 func (f *Face) ensureCachesLocked() {
-	if f.glyphIndexCache == nil {
-		f.glyphIndexCache = map[rune]uint16{}
-	}
 	if f.outlineCache == nil {
 		f.outlineCache = map[uint16]weak.Pointer[Outline]{}
 	}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+	"weak"
 
 	"github.com/diiyw/onix/font"
 	"github.com/diiyw/onix/html/dom"
@@ -45,6 +46,7 @@ type layoutContext struct {
 	controlTokens         []controlToken
 	shapeGlyphs           []shapedGlyph
 	textScratch           []textLayoutScratch
+	retention             [4]reuse.Retention
 	uncached              int
 	textDepth             int
 	reserveScrollbarSpace bool
@@ -55,6 +57,24 @@ type textLayoutScratch struct {
 	inlineSegments []inlineSegment
 	controlTokens  []controlToken
 	shapeGlyphs    []shapedGlyph
+	retention      [4]reuse.Retention
+}
+
+func (scratch *textLayoutScratch) trim() {
+	scratch.lineItems = scratch.retention[0].Trim(scratch.lineItems[:0], 64)
+	scratch.inlineSegments = scratch.retention[1].Trim(scratch.inlineSegments[:0], 64)
+	scratch.controlTokens = scratch.retention[2].Trim(scratch.controlTokens[:0], 64)
+	scratch.shapeGlyphs = scratch.retention[3].Trim(scratch.shapeGlyphs[:0], 256)
+}
+
+func (ctx *layoutContext) trim() {
+	scratch := textLayoutScratch{ctx.lineItems, ctx.inlineSegments, ctx.controlTokens, ctx.shapeGlyphs, ctx.retention}
+	scratch.trim()
+	ctx.lineItems, ctx.inlineSegments = scratch.lineItems, scratch.inlineSegments
+	ctx.controlTokens, ctx.shapeGlyphs, ctx.retention = scratch.controlTokens, scratch.shapeGlyphs, scratch.retention
+	for index := range ctx.textScratch {
+		ctx.textScratch[index].trim()
+	}
 }
 
 type textShapeResult struct {
@@ -100,6 +120,7 @@ func (ctx *layoutContext) reset() {
 	ctx.floatContext, ctx.retained, ctx.boldFace, ctx.err = nil, nil, nil, nil
 	ctx.uncached, ctx.textDepth = 0, 0
 	ctx.reserveScrollbarSpace = false
+	ctx.retention = [4]reuse.Retention{}
 }
 
 func (scratch *textLayoutScratch) reset() {
@@ -109,6 +130,7 @@ func (scratch *textLayoutScratch) reset() {
 	scratch.inlineSegments = reuse.Reset(scratch.inlineSegments, maxCapacity)
 	scratch.controlTokens = reuse.Reset(scratch.controlTokens, maxCapacity)
 	scratch.shapeGlyphs = reuse.Reset(scratch.shapeGlyphs, maxCapacity)
+	scratch.retention = [4]reuse.Retention{}
 }
 
 // UsedLineHeight resolves the used value of line-height for a shaped face.
@@ -161,6 +183,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			inlineSegments: ctx.inlineSegments,
 			controlTokens:  ctx.controlTokens,
 			shapeGlyphs:    ctx.shapeGlyphs,
+			retention:      ctx.retention,
 		}
 		depth := ctx.textDepth
 		if depth == len(ctx.textScratch) {
@@ -171,6 +194,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		ctx.inlineSegments = scratch.inlineSegments
 		ctx.controlTokens = scratch.controlTokens
 		ctx.shapeGlyphs = scratch.shapeGlyphs[:0]
+		ctx.retention = scratch.retention
 		ctx.textDepth++
 		defer func() {
 			ctx.textDepth--
@@ -179,11 +203,13 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				inlineSegments: ctx.inlineSegments,
 				controlTokens:  ctx.controlTokens,
 				shapeGlyphs:    ctx.shapeGlyphs[:0],
+				retention:      ctx.retention,
 			}
 			ctx.lineItems = parent.lineItems
 			ctx.inlineSegments = parent.inlineSegments
 			ctx.controlTokens = parent.controlTokens
 			ctx.shapeGlyphs = parent.shapeGlyphs
+			ctx.retention = parent.retention
 		}()
 	}
 
@@ -232,7 +258,9 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		defer func() {
 			// A pooled buffer can be much larger than this paragraph. Include
 			// flushed lines, but leave its already-zero spare capacity alone.
-			clear(currentLine[:max(lineItemsUsed, len(currentLine))])
+			used := max(lineItemsUsed, len(currentLine))
+			options.Context.retention[0].Record(used)
+			clear(currentLine[:used])
 			options.Context.lineItems = currentLine[:0]
 		}()
 	}
@@ -746,16 +774,6 @@ type inlineSegment struct {
 	PreserveWhitespace bool
 }
 
-func collectInlineSegments(node *dom.Node, styles style.Map) []inlineSegment {
-	var segments []inlineSegment
-	appendInlineSegments(&segments, node, styles, nil)
-	return segments
-}
-
-func collectInlineSegmentsWithContext(node *dom.Node, styles style.Map, ctx *layoutContext, inlineBoxes []*Box) []inlineSegment {
-	return collectInlineSegmentsWithIndex(node, styles, ctx, inlineBoxIndexFor(inlineBoxes))
-}
-
 func collectInlineSegmentsWithIndex(node *dom.Node, styles style.Map, ctx *layoutContext, index map[*dom.Node]*Box) []inlineSegment {
 	if ctx == nil {
 		var segments []inlineSegment
@@ -764,6 +782,7 @@ func collectInlineSegmentsWithIndex(node *dom.Node, styles style.Map, ctx *layou
 	}
 	ctx.inlineSegments = ctx.inlineSegments[:0]
 	appendInlineRootSegments(&ctx.inlineSegments, node, styles, index)
+	ctx.retention[1].Record(len(ctx.inlineSegments))
 	return ctx.inlineSegments
 }
 
@@ -791,19 +810,6 @@ func appendInlineRootSegments(segments *[]inlineSegment, node *dom.Node, styles 
 		computed = &placeholder
 	}
 	*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: control.Text, PreserveWhitespace: control.PreserveWhitespace})
-}
-
-// inlineBoxIndexFor maps nodes to their atomic inline boxes; a nil index (no
-// boxes) supports the same lookups as an empty one.
-func inlineBoxIndexFor(boxes []*Box) map[*dom.Node]*Box {
-	if len(boxes) == 0 {
-		return nil
-	}
-	index := make(map[*dom.Node]*Box, len(boxes))
-	for _, box := range boxes {
-		index[box.Node] = box
-	}
-	return index
 }
 
 func appendInlineSegments(segments *[]inlineSegment, node *dom.Node, styles style.Map, inlineBoxes map[*dom.Node]*Box) {
@@ -1202,6 +1208,7 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	if ctx != nil {
 		shaped = ctx.controlTokens[:0]
 		defer func() {
+			ctx.retention[2].Record(len(shaped))
 			clear(shaped)
 			ctx.controlTokens = shaped[:0]
 		}()
@@ -1515,13 +1522,13 @@ type shapedGlyph struct {
 // Shaping depends only on font identity, token text, and font size, so the
 // results are cached process-wide: layout rebuilds (typing, hover changes)
 // would otherwise re-shape the same tokens every frame. Faces are identified
-// by pointer, and the cache holds that pointer strongly: metric patching (for
-// synthesized bold) makes content-based keys unsafe, and pinning prevents a
-// closed face from aliasing a new one at the same address. Only short tokens
+// by weak identity: metric patching (for synthesized bold) makes content-based
+// keys unsafe. Weak identities cannot alias a new face at a recycled address
+// and do not keep a font or its file mapping alive. Only short tokens
 // are retained; cache keys clone their text so a token cannot pin a whole
 // source-file backing string.
 type textShapeKey struct {
-	face              *font.Face
+	face              weak.Pointer[font.Face]
 	text              string
 	fontSizeBits      uint64
 	letterSpacingBits uint64
@@ -1546,7 +1553,7 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 	cacheable := len(token.Text) <= textShapeCacheTokenLimit
 	var key textShapeKey
 	if cacheable {
-		key = textShapeKey{face: face, text: token.Text, fontSizeBits: math.Float64bits(fontSize), letterSpacingBits: math.Float64bits(letterSpacing)}
+		key = textShapeKey{face: weak.Make(face), text: token.Text, fontSizeBits: math.Float64bits(fontSize), letterSpacingBits: math.Float64bits(letterSpacing)}
 		textShapeCache.Lock()
 		result, ok := textShapeCache.entries[key]
 		textShapeCache.Unlock()
@@ -1562,6 +1569,7 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 		// so later shaping and nested layout cannot overwrite a pending line.
 		start := len(ctx.shapeGlyphs)
 		ctx.shapeGlyphs = slices.Grow(ctx.shapeGlyphs, count)[:start+count]
+		ctx.retention[3].Record(len(ctx.shapeGlyphs))
 		glyphs = ctx.shapeGlyphs[start : start : start+count]
 	} else {
 		glyphs = make([]shapedGlyph, 0, count)
@@ -1601,7 +1609,16 @@ func shapeToken(face *font.Face, token textToken, fontSize, letterSpacing float6
 	}
 	textShapeCache.Lock()
 	if previous, ok := textShapeCache.entries[cacheKey]; ok {
-		textShapeCache.bytes -= previous.bytes
+		textShapeCache.Unlock()
+		return previous.glyphs, previous.width, nil
+	}
+	if len(textShapeCache.entries) >= textShapeCacheLimit || textShapeCache.bytes+entry.bytes > textShapeCacheBytesLimit {
+		for key, previous := range textShapeCache.entries {
+			if key.face.Value() == nil {
+				delete(textShapeCache.entries, key)
+				textShapeCache.bytes -= previous.bytes
+			}
+		}
 	}
 	if len(textShapeCache.entries) >= textShapeCacheLimit || textShapeCache.bytes+entry.bytes > textShapeCacheBytesLimit {
 		textShapeCache.entries = make(map[textShapeKey]textShapeResult, 256)

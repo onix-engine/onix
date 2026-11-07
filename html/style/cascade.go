@@ -504,14 +504,6 @@ func backgroundLayersRequireRebuild(previous, current *ComputedStyle) bool {
 		!slices.Equal(previous.BackgroundLayers, current.BackgroundLayers)
 }
 
-func collectSpecifiedValues(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, matchContext *css.MatchContext) (map[string]cascadedValue, error) {
-	scratch := &cascadeScratch{values: make(map[string]cascadedValue, 16), matcher: matchContext}
-	if scratch.matcher == nil {
-		scratch.matcher = css.NewMatchContext()
-	}
-	return collectSpecifiedValuesInto(node, stylesheet, input, queries, scratch)
-}
-
 func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (map[string]cascadedValue, error) {
 	values := scratch.values
 	clear(values)

@@ -1,6 +1,9 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import (
+	"github.com/diiyw/onix/ecs"
+	"github.com/diiyw/onix/internal/reuse"
+)
 
 type renderHierarchy2DInfo struct {
 	layers   RenderLayers
@@ -25,7 +28,12 @@ type renderHierarchy2DCache struct {
 	values    map[ecs.Entity]renderHierarchy2DInfo
 	hierarchy *Hierarchy
 	versions  [6]uint64
+	retention reuse.MapRetention
 	structure uint64
+}
+
+func (c *renderHierarchy2DCache) MaintainCache() {
+	c.values = c.retention.Trim(c.values, 64)
 }
 
 func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
@@ -45,6 +53,7 @@ func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 		cache.values = make(map[ecs.Entity]renderHierarchy2DInfo)
 	}
 	if cache.versions != versions || cache.structure != world.EntityVersion() {
+		cache.retention.Record(len(cache.values))
 		clear(cache.values)
 		cache.versions, cache.structure = versions, world.EntityVersion()
 	}

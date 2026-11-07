@@ -1676,12 +1676,12 @@ type htmlStylesheetKey struct {
 
 // Each embedded state owns one pipeline stage. Cross-stage transitions live in state.go.
 type htmlRenderState struct {
+	htmlPaintState
 	htmlDocumentState
 	htmlStyleState
-	htmlLayoutState
-	htmlPaintState
 	htmlInputState
 	htmlUpdateState
+	htmlLayoutState
 }
 
 type htmlGradientKey struct {
@@ -1757,6 +1757,9 @@ func syncHTML(context *ecs.SystemContext) error {
 				bindHTMLStickyContent(world, state)
 			}
 			state.Textures.sweep()
+			if state.SyncStats.Layouts == 0 {
+				state.LayoutCache.MaintainCache()
+			}
 			state.OverflowBindings = state.OverflowRetention[0].Trim(state.OverflowBindings, 16)
 			state.OverflowRoutes = state.OverflowRetention[1].Trim(state.OverflowRoutes, 64)
 			state.OverflowEntities = state.OverflowRetention[2].Trim(state.OverflowEntities, 16)
@@ -2798,8 +2801,7 @@ func dispatchHTMLNodePointer(world *ecs.World, owner ecs.Entity, node *dom.Node,
 		return
 	}
 	state := world.GetRef[htmlRenderState](owner)
-	ok := state != nil
-	if !ok || state == nil {
+	if state == nil {
 		return
 	}
 	binding, ok := state.NodeEvents[node]
@@ -4014,15 +4016,6 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		markHTMLChildNode(world, entity, box.Node)
 		state.Children = append(state.Children, entity)
 	}
-}
-
-func htmlUniformRadius(value *style.ComputedStyle, width, height float64) float32 {
-	if value == nil {
-		return 0
-	}
-	radius := max(style.ResolveLength(value.BorderRadius.TopLeft.Horizontal, width), style.ResolveLength(value.BorderRadius.TopRight.Horizontal, width))
-	radius = max(radius, max(style.ResolveLength(value.BorderRadius.BottomRight.Horizontal, width), style.ResolveLength(value.BorderRadius.BottomLeft.Horizontal, width)))
-	return float32(max(min(radius, min(width, height)*0.5), 0))
 }
 
 func htmlOverflowBackgroundCovered(box *layout.Box) bool {

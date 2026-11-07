@@ -2913,29 +2913,6 @@ func fixed26_6ToFloat32(v font.Int26_6) float32 {
 	return float32(v) / 64
 }
 
-func stringsTrimSpace(value string) string {
-	start := 0
-	end := len(value)
-	for start < end {
-		switch value[start] {
-		case ' ', '\t', '\n', '\r':
-			start++
-		default:
-			goto trimEnd
-		}
-	}
-trimEnd:
-	for end > start {
-		switch value[end-1] {
-		case ' ', '\t', '\n', '\r':
-			end--
-		default:
-			return value[start:end]
-		}
-	}
-	return value[start:end]
-}
-
 // Text returns the authoritative immutable text used for geometry and paint.
 func (t Text2D) Text() piecetree.Snapshot {
 	if t.Source != (piecetree.Snapshot{}) {

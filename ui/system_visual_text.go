@@ -351,16 +351,15 @@ type textFieldMaskCache struct {
 }
 
 type textFieldDisplayCache struct {
-	source, visual                   piecetree.Snapshot
-	prefix                           string
-	composition                      string
-	placeholder                      string
-	display                          string
-	value                            string
-	anchor                           int
-	caret                            int
-	focused                          bool
-	valid, displayValid, prefixValid bool
+	source, visual      piecetree.Snapshot
+	composition         string
+	placeholder         string
+	display             string
+	value               string
+	anchor              int
+	caret               int
+	focused             bool
+	valid, displayValid bool
 }
 
 type textFieldMaskMissingScratch struct{}
@@ -471,26 +470,6 @@ func textFieldDisplayCacheMut(world *ecs.World, owner ecs.Entity, field TextFiel
 	return cache
 }
 
-func textFieldCompositionPrefix(world *ecs.World, owner ecs.Entity, field TextField, caret int) string {
-	caret = max(0, min(caret, runeCount(field.Value)))
-	if field.Composition == "" {
-		return field.Value[:runeByteIndex(field.Value, caret)]
-	}
-	if cache := textFieldDisplayCacheRef(world, owner, field, caret); cache != nil && cache.prefixValid {
-		return cache.prefix
-	}
-	if cache := textFieldDisplayCacheMut(world, owner, field, caret); cache != nil {
-		if !cache.prefixValid {
-			byteIndex := runeByteIndex(field.Value, caret)
-			cache.prefix = field.Value[:byteIndex] + field.Composition
-			cache.prefixValid = true
-		}
-		return cache.prefix
-	}
-	byteIndex := runeByteIndex(field.Value, caret)
-	return field.Value[:byteIndex] + field.Composition
-}
-
 func runeCount(value string) int {
 	return utf8.RuneCountInString(value)
 }
@@ -509,15 +488,9 @@ func runeByteIndex(value string, target int) int {
 	return len(value)
 }
 
-func runeSlice(value string, start, end int) string {
-	start, end = orderedSelection(start, end)
-	return value[runeByteIndex(value, start):runeByteIndex(value, end)]
-}
-
 func syncNumberInputStepIcon(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D) {
 	step := world.GetRef[NumberInputStep](owner)
-	ok := step != nil
-	if !ok || step == nil {
+	if step == nil {
 		return
 	}
 	control, ok := controlViewFor(world, owner)

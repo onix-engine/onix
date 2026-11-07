@@ -33,24 +33,6 @@ func preview3DCameraTransformAround(target mgl32.Vec3, yaw, pitch, distance floa
 	return transform
 }
 
-func preview3DPanTarget(target mgl32.Vec3, cameraTransform mgl32.Mat4, distance, fov, viewportHeight, deltaX, deltaY float32) mgl32.Vec3 {
-	if deltaX == 0 && deltaY == 0 {
-		return target
-	}
-	distance = max(distance, 0.001)
-	viewportHeight = max(viewportHeight, 1)
-	if fov <= 0 {
-		fov = float32(math.Pi / 4)
-	}
-	right := cameraTransform.Col(0).Vec3()
-	up := cameraTransform.Col(1).Vec3()
-	if right.Len() <= 0.000001 || up.Len() <= 0.000001 {
-		return target
-	}
-	worldPerPixel := 2 * distance * float32(math.Tan(float64(fov)*0.5)) / viewportHeight
-	return target.Sub(right.Normalize().Mul(deltaX * worldPerPixel)).Add(up.Normalize().Mul(deltaY * worldPerPixel))
-}
-
 // Map the attachment's texture origin into the editor's top-left canvas space.
 func drawPreview3DColorTexture(c *graphics.Canvas2D, texture *graphics.Texture, bounds rect, radius float32) {
 	if c == nil || texture == nil || !texture.Valid() {

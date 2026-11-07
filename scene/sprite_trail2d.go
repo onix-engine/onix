@@ -66,8 +66,7 @@ func updateSpriteTrails2D(context *ecs.SystemContext) error {
 		trail := access.Mut()
 
 		sprite := world.GetRef[Sprite2D](entity)
-		ok := sprite != nil
-		if !ok || sprite == nil {
+		if sprite == nil {
 			trail.Clear()
 			continue
 		}

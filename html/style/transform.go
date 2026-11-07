@@ -187,22 +187,6 @@ func isCSSWhitespace(value byte) bool {
 	}
 }
 
-func parseTransformRotation(input string) (float64, error) {
-	trimmed := strings.TrimSpace(input)
-	if strings.EqualFold(trimmed, "none") {
-		return 0, nil
-	}
-	open := strings.IndexByte(trimmed, '(')
-	if open < 0 || !strings.HasSuffix(trimmed, ")") || !strings.EqualFold(strings.TrimSpace(trimmed[:open]), "rotate") {
-		return 0, fmt.Errorf("unsupported transform %q", input)
-	}
-	rotation, err := parseAngleDegrees(strings.TrimSpace(trimmed[open+1 : len(trimmed)-1]))
-	if err == nil && (math.IsNaN(rotation) || math.IsInf(rotation, 0)) {
-		return 0, fmt.Errorf("invalid transform angle %q", input)
-	}
-	return rotation, err
-}
-
 func parseCSSTime(input string) (float64, bool, error) {
 	trimmed := strings.ToLower(strings.TrimSpace(input))
 	if len(trimmed) == 0 {

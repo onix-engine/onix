@@ -8,6 +8,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/diiyw/onix/text/piecetree"
+
 	textmate "github.com/eugenioenko/textmate-go"
 )
 
@@ -93,36 +95,44 @@ type lexicalLine struct {
 // the first changed line until the unchanged suffix has the same start state.
 // Its buffers are reused; a Document belongs to one worker.
 type Document struct {
-	grammar                    *textmate.Grammar
-	scopes                     map[*textmate.ScopeStack]tokenKey
-	filename, source, language string
-	painter                    Painter
-	lineScratch                []lexicalLine
-	ranges, scratch            []Capture
-	lines                      []lexicalLine
-	tokens                     []Token
-	retokenized                int
-	initialized                bool
-	styled                     bool
+	grammar            *textmate.Grammar
+	scopes             map[*textmate.ScopeStack]tokenKey
+	filename, language string
+	source             piecetree.Snapshot
+	painter            Painter
+	lineScratch        []lexicalLine
+	ranges, scratch    []Capture
+	lines              []lexicalLine
+	tokens             []Token
+	retokenized        int
+	initialized        bool
+	styled             bool
 }
 
 func (d *Document) Language() string { return d.language }
 func (d *Document) Close()           { *d = Document{} }
 
 // Update detects file extensions or language IDs. Unknown languages stay plain.
-func (d *Document) Update(filename, source string) error {
+func (d *Document) Update[V piecetree.Value](filename string, value V) error {
+	source := piecetree.Text(value)
 	if d.initialized && d.filename == filename && d.source == source {
 		d.retokenized = 0
 		return nil
 	}
-	start, oldEnd, newEnd := changedRange(d.source, source)
+	start, oldEnd, newEnd := d.source.ChangedRange(source)
 	return d.UpdateRange(filename, source, start, oldEnd, newEnd)
 }
 
+// UpdateSnapshot is the worker interface for immutable document text.
+func (d *Document) UpdateSnapshot(filename string, source piecetree.Snapshot) error {
+	return d.Update(filename, source)
+}
+
 // UpdateRange accepts a known UTF-8 edit. Bytes outside the edit must be equal.
-func (d *Document) UpdateRange(filename, source string, start, oldEnd, newEnd int) error {
-	if start < 0 || oldEnd < start || oldEnd > len(d.source) || newEnd < start || newEnd > len(source) || start > len(source) ||
-		!byteBoundary(d.source, start) || !byteBoundary(d.source, oldEnd) || !byteBoundary(source, start) || !byteBoundary(source, newEnd) {
+func (d *Document) UpdateRange[V piecetree.Value](filename string, value V, start, oldEnd, newEnd int) error {
+	source := piecetree.Text(value)
+	if start < 0 || oldEnd < start || oldEnd > d.source.Len() || newEnd < start || newEnd > source.Len() || start > source.Len() ||
+		!snapshotBoundary(d.source, start) || !snapshotBoundary(d.source, oldEnd) || !snapshotBoundary(source, start) || !snapshotBoundary(source, newEnd) {
 		return fmt.Errorf("invalid syntax edit range")
 	}
 	if d.initialized && d.filename == filename && d.source == source {
@@ -143,44 +153,30 @@ func (d *Document) UpdateRange(filename, source string, start, oldEnd, newEnd in
 		clear(d.lines)
 		clear(d.ranges)
 		d.lines, d.ranges = d.lines[:0], d.ranges[:0]
-		start, oldEnd, newEnd = 0, len(d.source), len(source)
+		start, oldEnd, newEnd = 0, d.source.Len(), source.Len()
 	}
 	d.retokenized = 0
 	d.styled = false
 	if d.grammar != nil {
 		d.tokenize(source, start, oldEnd, newEnd)
 	} else {
+		clear(d.lines)
+		clear(d.ranges)
 		d.lines, d.ranges = d.lines[:0], d.ranges[:0]
 	}
+	d.ranges = trimBuffer(d.ranges, len(d.ranges))
+	d.scratch = trimBuffer(d.scratch, len(d.ranges))
+	d.lines = trimBuffer(d.lines, len(d.lines))
+	d.lineScratch = trimBuffer(d.lineScratch, len(d.lines))
+	clear(d.tokens)
+	d.tokens = trimBuffer(d.tokens[:0], len(d.ranges))
+	clear(d.painter.tokens)
+	d.painter.tokens = trimBuffer(d.painter.tokens[:0], len(d.ranges))
 	d.source, d.initialized = source, true
 	return nil
 }
 
-func byteBoundary(source string, offset int) bool {
-	return offset == len(source) || utf8.RuneStart(source[offset])
-}
-
-// changedRange finds one replacement without allocating or splitting UTF-8.
-func changedRange(before, after string) (start, oldEnd, newEnd int) {
-	for start < min(len(before), len(after)) && before[start] == after[start] {
-		start++
-	}
-	for start > 0 && (!byteBoundary(before, start) || !byteBoundary(after, start)) {
-		start--
-	}
-	oldEnd, newEnd = len(before), len(after)
-	for oldEnd > start && newEnd > start && before[oldEnd-1] == after[newEnd-1] {
-		oldEnd--
-		newEnd--
-	}
-	for oldEnd < len(before) && (!byteBoundary(before, oldEnd) || !byteBoundary(after, newEnd)) {
-		oldEnd++
-		newEnd++
-	}
-	return
-}
-
-func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
+func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int) {
 	first := 0
 	if len(d.lines) != 0 {
 		first, _ = slices.BinarySearchFunc(d.lines, start, func(line lexicalLine, offset int) int { return line.start - offset })
@@ -198,8 +194,8 @@ func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
 	}
 	ranges := append(d.scratch[:0], d.ranges[:prefix]...)
 	lines := append(d.lineScratch[:0], d.lines[:first]...)
-	shift := len(source) - len(d.source)
-	for pos <= len(source) {
+	shift := source.Len() - d.source.Len()
+	for pos <= source.Len() {
 		// The suffix text is unchanged by contract. Matching its incoming lexical
 		// state proves that all its cached tokens and ending states remain valid.
 		if pos >= newEnd && pos-shift >= oldEnd && len(lines) > first {
@@ -219,15 +215,17 @@ func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
 				break
 			}
 		}
-		end := strings.IndexByte(source[pos:], '\n')
+		end := source.IndexByte(pos, '\n')
 		if end < 0 {
-			end = len(source)
-		} else {
-			end += pos
+			end = source.Len()
 		}
-		text := source[pos:end]
+		// The tokenizer's long-line fallback only needs the incoming state and
+		// a length beyond its budget. Bound copies even for a fragmented,
+		// document-sized generated line, then extend its fallback token below.
+		const lineBudget = 20_000
+		text := source.Slice(pos, min(end, pos+lineBudget+1))
 		tokenStart := len(ranges)
-		result := d.grammar.TokenizeLineWithOptions(text, state, textmate.TokenizeOptions{MaxLineBytes: 20_000})
+		result := d.grammar.TokenizeLineWithOptions(text, state, textmate.TokenizeOptions{MaxLineBytes: lineBudget})
 		d.retokenized++
 		// Convert monotonically increasing rune offsets in one pass. The editor and
 		// wire protocol use bytes, including for CJK and astral Unicode characters.
@@ -242,6 +240,9 @@ func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
 		}
 		for _, token := range result.Tokens {
 			begin, finish := toByte(token.Start), toByte(token.End)
+			if end-pos > lineBudget {
+				begin, finish = 0, end-pos
+			}
 			if begin == finish {
 				continue
 			}
@@ -257,7 +258,7 @@ func (d *Document) tokenize(source string, start, oldEnd, newEnd int) {
 		}
 		state = result.RuleStack
 		lines = append(lines, lexicalLine{start: pos, tokenStart: tokenStart, endState: state})
-		if end == len(source) {
+		if end == source.Len() {
 			break
 		}
 		pos = end + 1
@@ -386,5 +387,18 @@ func (p *Painter) Tokens(language string, captures []Token, theme *Theme, defini
 	if len(p.tokens) < previous {
 		clear(p.tokens[len(p.tokens):previous])
 	}
+	p.tokens = trimBuffer(p.tokens, len(captures))
 	return p.tokens
+}
+
+// Keep warm storage, dropping capacity only after a substantial reduction.
+func trimBuffer[T any](value []T, live int) []T {
+	if cap(value) > max(4096, live*4) {
+		return append([]T(nil), value...)
+	}
+	return value
+}
+
+func snapshotBoundary(source piecetree.Snapshot, offset int) bool {
+	return offset == source.Len() || utf8.RuneStart(source.ByteAt(offset))
 }

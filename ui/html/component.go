@@ -8,6 +8,7 @@ import (
 	"github.com/diiyw/onix/ecs"
 	"github.com/diiyw/onix/html/css"
 	"github.com/diiyw/onix/html/dom"
+	"github.com/diiyw/onix/internal/reuse"
 	"github.com/diiyw/onix/scene"
 )
 
@@ -566,20 +567,45 @@ type htmlComponentChildItem struct {
 }
 
 type htmlComponentChildList struct {
-	OldIndex map[uint64]int
-	Seen     map[uint64]bool
-	Nodes    map[*dom.Node]bool
-	Items    []htmlComponentChildItem
-	Scratch  []htmlComponentChildItem
+	Index   htmlComponentDiffIndex
+	Nodes   map[*dom.Node]bool
+	Items   []htmlComponentChildItem
+	Scratch []htmlComponentChildItem
 }
 
 type htmlComponentVNodeChildren struct {
-	OldIndex map[uint64]int
-	Seen     map[uint64]bool
-	Used     map[uint64]bool
-	Removed  map[*dom.Node]struct{}
-	Items    []htmlComponentKeyedItem
-	Scratch  []htmlComponentKeyedItem
+	Index   htmlComponentDiffIndex
+	Removed map[*dom.Node]struct{}
+	Items   []htmlComponentKeyedItem
+	Scratch []htmlComponentKeyedItem
+}
+
+// The upper bits hold the previous position plus one; low bits distinguish
+// duplicate input keys from old nodes actually reused by this commit.
+type htmlComponentDiffIndex struct {
+	values    map[uint64]uint64
+	retention *reuse.MapRetention
+}
+
+const (
+	htmlComponentKeySeen uint64 = 1 << iota
+	htmlComponentKeyUsed
+)
+
+func (index *htmlComponentDiffIndex) reset() {
+	// Small lists need only the index; allocate peak tracking once a list
+	// actually grows large enough to benefit from bucket reclamation.
+	if index.retention == nil && len(index.values) > 64 {
+		index.retention = &reuse.MapRetention{}
+	}
+	if index.retention != nil {
+		index.values = index.retention.Trim(index.values, 64)
+	}
+	if index.values == nil {
+		index.values = make(map[uint64]uint64)
+	} else {
+		clear(index.values)
+	}
 }
 
 type htmlComponentTemplate struct {
@@ -1401,31 +1427,25 @@ func reconcileHTMLComponentChildList(world *ecs.World, parentEntity, page ecs.En
 	if list == nil || slotNode == nil || slotNode.Type != dom.ElementNode {
 		return
 	}
-	if list.Seen == nil {
-		list.Seen = make(map[uint64]bool)
-	}
-	if list.OldIndex == nil {
-		list.OldIndex = make(map[uint64]int)
-	}
+	list.Index.reset()
 	if list.Nodes == nil {
 		list.Nodes = make(map[*dom.Node]bool)
 	}
-	clear(list.Seen)
-	clear(list.OldIndex)
 	old := list.Items
 	for index, item := range old {
-		list.OldIndex[item.Key] = index
+		list.Index.values[item.Key] = uint64(index+1) << 2
 	}
 	clear(list.Scratch[:cap(list.Scratch)])
 	items := list.Scratch[:0]
 	for _, vnode := range next {
-		if vnode.definition == nil || vnode.values == nil || list.Seen[vnode.Key] {
+		entry := list.Index.values[vnode.Key]
+		if vnode.definition == nil || vnode.values == nil || entry&htmlComponentKeySeen != 0 {
 			continue
 		}
-		list.Seen[vnode.Key] = true
+		list.Index.values[vnode.Key] = entry | htmlComponentKeySeen
 		var item htmlComponentChildItem
-		if index, ok := list.OldIndex[vnode.Key]; ok {
-			item = old[index]
+		if position := entry >> 2; position != 0 {
+			item = old[position-1]
 		}
 		if item.Entity != 0 && item.Definition != vnode.definition {
 			UnmountComponent(world, item.Entity)
@@ -1446,7 +1466,7 @@ func reconcileHTMLComponentChildList(world *ecs.World, parentEntity, page ecs.En
 		items = append(items, item)
 	}
 	for _, oldItem := range old {
-		if !list.Seen[oldItem.Key] && oldItem.Entity != 0 && world.IsAlive(oldItem.Entity) {
+		if list.Index.values[oldItem.Key]&htmlComponentKeySeen == 0 && oldItem.Entity != 0 && world.IsAlive(oldItem.Entity) {
 			UnmountComponent(world, oldItem.Entity)
 		}
 	}
@@ -1593,38 +1613,29 @@ func reconcileHTMLComponentKeyedList(world *ecs.World, owner ecs.Entity, parent 
 
 // reconcileHTMLComponentVNodeList shares key matching, node reuse and removal.
 func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent *dom.Node, list *htmlComponentVNodeChildren, next []VNode, children map[*dom.Node]*htmlComponentVNodeChildren, scopeClass string) ([]htmlComponentKeyedItem, bool) {
-	if list.OldIndex == nil {
-		list.OldIndex = make(map[uint64]int)
-	}
-	if list.Seen == nil {
-		list.Seen = make(map[uint64]bool)
-	}
-	if list.Used == nil {
-		list.Used = make(map[uint64]bool)
-	}
-	clear(list.OldIndex)
-	clear(list.Seen)
-	clear(list.Used)
+	list.Index.reset()
 	for index, item := range list.Items {
-		list.OldIndex[item.Key] = index
+		list.Index.values[item.Key] = uint64(index+1) << 2
 	}
 
 	clear(list.Scratch[:cap(list.Scratch)])
 	items := list.Scratch[:0]
 	for _, vnode := range next {
 		tag := strings.ToLower(strings.TrimSpace(vnode.Tag))
-		if tag == "" || list.Seen[vnode.Key] {
+		entry := list.Index.values[vnode.Key]
+		if tag == "" || entry&htmlComponentKeySeen != 0 {
 			continue
 		}
-		list.Seen[vnode.Key] = true
+		entry |= htmlComponentKeySeen
 		var node *dom.Node
-		if oldIndex, ok := list.OldIndex[vnode.Key]; ok && oldIndex >= 0 && oldIndex < len(list.Items) {
-			candidate := list.Items[oldIndex].Node
+		if position := entry >> 2; position != 0 {
+			candidate := list.Items[position-1].Node
 			if candidate != nil && candidate.Data == tag {
 				node = candidate
-				list.Used[vnode.Key] = true
+				entry |= htmlComponentKeyUsed
 			}
 		}
+		list.Index.values[vnode.Key] = entry
 		if node == nil {
 			node = dom.NewElement(tag, nil)
 		}
@@ -1634,7 +1645,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 
 	changed := len(items) != len(list.Items)
 	for index, item := range list.Items {
-		if !list.Used[item.Key] {
+		if list.Index.values[item.Key]&htmlComponentKeyUsed == 0 {
 			if item.Node != nil && item.Node.Parent == parent {
 				if list.Removed == nil {
 					list.Removed = make(map[*dom.Node]struct{})

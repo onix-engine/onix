@@ -63,24 +63,6 @@ func snapshotHeight(n *snapshotNode) int {
 	}
 	return n.height
 }
-func snapshotBytes(n *snapshotNode) int {
-	if n == nil {
-		return 0
-	}
-	return n.bytes
-}
-func snapshotRunes(n *snapshotNode) int {
-	if n == nil {
-		return 0
-	}
-	return n.runes
-}
-func snapshotBreaks(n *snapshotNode) int {
-	if n == nil {
-		return 0
-	}
-	return n.breaks
-}
 func snapshotLeaf(value string) *snapshotNode {
 	if value == "" {
 		return nil

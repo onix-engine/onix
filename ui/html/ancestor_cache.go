@@ -3,6 +3,7 @@ package html
 import (
 	"github.com/diiyw/onix/html/dom"
 	"github.com/diiyw/onix/html/layout"
+	"github.com/diiyw/onix/internal/reuse"
 )
 
 func htmlNodeParent(node *dom.Node) *dom.Node   { return node.Parent }
@@ -21,11 +22,24 @@ func htmlNearestBox(state *htmlRenderState, node *dom.Node) *layout.Box {
 // Resolve shared ancestor paths once per operation. The path and index retain
 // their storage between operations, so warmed traversals allocate nothing.
 type htmlAncestorCache[N comparable, V any] struct {
-	values map[N]V
-	path   []N
+	values    map[N]V
+	retention *htmlAncestorRetention
+	path      []N
+}
+
+type htmlAncestorRetention struct {
+	mapRetention  reuse.MapRetention
+	pathRetention reuse.Retention
 }
 
 func (cache *htmlAncestorCache[N, V]) clear() {
+	if cache.retention == nil && len(cache.values) > 64 {
+		cache.retention = &htmlAncestorRetention{}
+	}
+	if cache.retention != nil {
+		cache.values = cache.retention.mapRetention.Trim(cache.values, 64)
+		cache.path = cache.retention.pathRetention.Trim(cache.path, 32)
+	}
 	clear(cache.values)
 }
 
@@ -42,6 +56,12 @@ func (cache *htmlAncestorCache[N, V]) resolve(node N, parent func(N) N, inherit 
 		}
 		cache.path = append(cache.path, node)
 		node = parent(node)
+	}
+	if cache.retention == nil && len(cache.path) > 32 {
+		cache.retention = &htmlAncestorRetention{}
+	}
+	if cache.retention != nil {
+		cache.retention.pathRetention.Record(len(cache.path))
 	}
 	for i := len(cache.path) - 1; i >= 0; i-- {
 		node = cache.path[i]

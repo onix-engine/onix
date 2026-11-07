@@ -2,7 +2,6 @@ package html
 
 import (
 	"image"
-	"image/color"
 	"math"
 	"strings"
 
@@ -368,22 +367,6 @@ func paintHTMLOpacityContents(cache *htmlTextureCache, box *layout.Box, dst *ima
 			htmlCompositeRGBA(dst, &value.image, int(math.Round(value.rect.X-originX)), int(math.Round(value.rect.Y-originY)))
 		} else {
 			paintHTMLOpacityContents(cache, child, dst, originX, originY, scratch)
-		}
-	}
-}
-
-func rasterHTMLBackground(dst *image.RGBA, box *layout.Box, originX, originY float64) {
-	r := box.BorderBox()
-	value := box.Style.BackgroundColor
-	if value.Kind != style.ValueColor || value.Color.A == 0 {
-		return
-	}
-	for y := 0; y < int(math.Ceil(r.Height)); y++ {
-		for x := 0; x < int(math.Ceil(r.Width)); x++ {
-			px, py := float64(x)+0.5, float64(y)+0.5
-			if htmlRoundedPixel(box.Style, px, py, r.Width, r.Height) {
-				dst.SetRGBA(int(math.Floor(r.X-originX))+x, int(math.Floor(r.Y-originY))+y, color.RGBA(value.Color))
-			}
 		}
 	}
 }

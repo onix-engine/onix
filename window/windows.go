@@ -1400,11 +1400,3 @@ func mustUTF16Ptr(s string) *uint16 {
 	}
 	return ptr
 }
-
-func mustBytePtr(s string) *byte {
-	ptr, err := syscall.BytePtrFromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return ptr
-}

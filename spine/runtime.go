@@ -2503,10 +2503,6 @@ func interpolateClipVertex(a, b clipVertex, mix float32) clipVertex {
 	}
 }
 
-func regionAttachmentUVs(r atlasRegion, textureWidth, textureHeight int) []float32 {
-	return regionAttachmentUVsInto(nil, r, textureWidth, textureHeight)
-}
-
 func regionAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, textureHeight int) []float32 {
 	out := resizeSlice(dst, 8)
 	u := float32(r.x) / float32(textureWidth)

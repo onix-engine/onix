@@ -202,3 +202,7 @@ func BenchmarkDocumentLineEdit(b *testing.B) {
 		doc.UpdateRange("main.go", source, offset, offset+2, offset+2)
 	}
 }
+
+func byteBoundary(source string, offset int) bool {
+	return offset == len(source) || utf8.RuneStart(source[offset])
+}
