@@ -1,10 +1,10 @@
 package project
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 // QueueEntityUploads collects authored resources and prepared text into the

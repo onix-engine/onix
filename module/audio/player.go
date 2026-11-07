@@ -3,8 +3,8 @@ package moduleaudio
 import (
 	"time"
 
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/module"
 )
 
 type audioPlayback interface {

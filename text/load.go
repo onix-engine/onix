@@ -1,6 +1,6 @@
 package text
 
-import "github.com/diiyw/onix/font"
+import "github.com/onix-engine/onix/font"
 
 func LoadFont(data []byte) (*Font, error) {
 	fnt, err := font.Parse(data)

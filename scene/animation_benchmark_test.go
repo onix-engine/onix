@@ -1,7 +1,7 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 	"testing"
 	"time"
 )

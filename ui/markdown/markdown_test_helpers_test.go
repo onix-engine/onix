@@ -3,11 +3,11 @@ package markdown
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 func newUIWorld(t *testing.T) *ecs.World {

@@ -1,8 +1,8 @@
 package module
 
 import (
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
 )
 
 // Engine protocols contain data only; consumers need no provider imports.

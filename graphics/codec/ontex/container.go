@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/diiyw/onix/internal/texcontainer"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/internal/texcontainer"
+	"github.com/onix-engine/onix/render"
 )
 
 const (

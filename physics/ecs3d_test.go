@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
 )
 
 func Test3DTransformWritebackPreservesSimulationPrecision(t *testing.T) {

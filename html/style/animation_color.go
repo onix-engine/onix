@@ -5,7 +5,7 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 const (

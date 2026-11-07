@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestNativeVulkanFrameDoesNotAllocate(t *testing.T) {

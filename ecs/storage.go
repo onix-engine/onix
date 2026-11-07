@@ -1,6 +1,6 @@
 package ecs
 
-import "github.com/diiyw/onix/internal/reuse"
+import "github.com/onix-engine/onix/internal/reuse"
 
 // Maintain releases caches after sustained underuse. Call once at the end of a
 // frame, after all borrowed component accesses and drawing snapshots are done.

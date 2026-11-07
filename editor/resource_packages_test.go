@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	onixpng "github.com/diiyw/onix/images/png"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/resource"
+	onixpng "github.com/onix-engine/onix/images/png"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/resource"
 )
 
 func TestResourcePackageConfigRejectsRemovedFields(t *testing.T) {

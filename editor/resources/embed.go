@@ -4,9 +4,9 @@ import (
 	"embed"
 	"sync"
 
-	"github.com/diiyw/onix/graphics"
-	graphicssvg "github.com/diiyw/onix/graphics/codec/svg"
-	"github.com/diiyw/onix/images/svg"
+	"github.com/onix-engine/onix/graphics"
+	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
+	"github.com/onix-engine/onix/images/svg"
 )
 
 type LogoSize uint16

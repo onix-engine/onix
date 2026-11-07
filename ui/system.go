@@ -5,13 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/internal/smallsort"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/text/piecetree"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/internal/smallsort"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/text/piecetree"
+	"github.com/onix-engine/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

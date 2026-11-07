@@ -3,7 +3,7 @@ package module
 import (
 	"testing"
 
-	htmlui "github.com/diiyw/onix/ui/html"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func TestModuleHTMLSelectionIsPrivateAndExpiresWithDocument(t *testing.T) {

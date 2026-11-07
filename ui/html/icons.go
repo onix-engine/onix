@@ -4,9 +4,9 @@ import (
 	_ "embed"
 	"sync"
 
-	"github.com/diiyw/onix/graphics"
-	graphicssvg "github.com/diiyw/onix/graphics/codec/svg"
-	"github.com/diiyw/onix/images/svg"
+	"github.com/onix-engine/onix/graphics"
+	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
+	"github.com/onix-engine/onix/images/svg"
 )
 
 // htmlSelectIconData is the lucide:chevron-down icon supplied by better-icons.

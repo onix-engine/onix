@@ -3,8 +3,8 @@ package simulation
 import (
 	"math/rand/v2"
 
-	"github.com/diiyw/onix"
-	enginephysics "github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 const (

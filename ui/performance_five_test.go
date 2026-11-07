@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 var reviewSelectionSink selectionRect

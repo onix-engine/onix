@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/window"
 	"github.com/godbus/dbus/v5"
 )
 

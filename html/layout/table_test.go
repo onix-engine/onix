@@ -3,9 +3,9 @@ package layout
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 func tableFixture(t *testing.T, source, cssSource string) (*dom.Node, style.Map, *Box, map[string]*Box) {

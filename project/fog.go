@@ -1,6 +1,6 @@
 package project
 
-import "github.com/diiyw/onix/scene/render3d"
+import "github.com/onix-engine/onix/scene/render3d"
 
 type FogSpec struct {
 	Mode       render3d.FogMode `json:"mode"`

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/html/layout"
+	"github.com/onix-engine/onix/html/layout"
 )
 
 func assertHTMLOwnerSpans(t *testing.T, state htmlRenderState) {

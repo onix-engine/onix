@@ -2,7 +2,7 @@
 
 package filedialog
 
-import "github.com/diiyw/onix/window"
+import "github.com/onix-engine/onix/window"
 
 // Register installs the desktop portal implementation for Linux builds.
 func Register() {

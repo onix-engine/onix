@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func TestSpineIconSupportsTint(t *testing.T) {

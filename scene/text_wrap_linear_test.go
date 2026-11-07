@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/font"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	onixtext "github.com/diiyw/onix/text"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/font"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	onixtext "github.com/onix-engine/onix/text"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 // The digest was recorded from the preceding prefix-measurement implementation.

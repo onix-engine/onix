@@ -5,8 +5,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/internal/sourcejson"
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/sourcejson"
+	"github.com/onix-engine/onix/internal/typedbin"
 )
 
 func preparedSpawnTestFile[T any](t *testing.T, value T) *fstest.MapFile {

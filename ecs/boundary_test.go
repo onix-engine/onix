@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 type boundaryPosition struct{ X int }

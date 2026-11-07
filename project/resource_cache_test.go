@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 )
 
 func TestResourceCacheDeduplicatesConcurrentLoad(t *testing.T) {

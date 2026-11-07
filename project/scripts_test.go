@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
-	sceneapi "github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
+	sceneapi "github.com/onix-engine/onix/scene"
 )
 
 func TestSceneScriptInputErrorRetainsLaterMessages(t *testing.T) {

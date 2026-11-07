@@ -58,7 +58,7 @@ func TestCodeTokenRangeSelectsQuotedContents(t *testing.T) {
 	for _, test := range []struct {
 		name, value, selected string
 	}{
-		{"import path", `import "github.com/diiyw/onix/scene"`, "github.com/diiyw/onix/scene"},
+		{"import path", `import "github.com/onix-engine/onix/scene"`, "github.com/onix-engine/onix/scene"},
 		{"spaces and Unicode", `值 := "你好 世界🙂/scene"`, "你好 世界🙂/scene"},
 		{"single quotes", `value = 'hello world/path'`, "hello world/path"},
 		{"escaped quotes", `value = "hello \"world\"/path"`, `hello \"world\"/path`},

@@ -1,6 +1,6 @@
 package project
 
-import "github.com/diiyw/onix/scene/render3d"
+import "github.com/onix-engine/onix/scene/render3d"
 
 // A nil camera SSAO spec disables the depth prepass.
 type SSAOSpec struct {

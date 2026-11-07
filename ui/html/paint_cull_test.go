@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
 )
 
 func htmlCullRole(world *ecs.World, owner ecs.Entity, node Node, role htmlRenderRole) ecs.Entity {

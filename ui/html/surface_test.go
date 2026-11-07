@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	onixfont "github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	onixfont "github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 type testHTMLImageProvider struct {

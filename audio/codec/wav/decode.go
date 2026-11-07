@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/diiyw/onix/audio"
+	"github.com/onix-engine/onix/audio"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func TestAnimationTaskCountTracksCompletionPauseAndScope(t *testing.T) {

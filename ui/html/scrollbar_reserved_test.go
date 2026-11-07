@@ -3,8 +3,8 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

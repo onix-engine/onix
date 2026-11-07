@@ -25,7 +25,7 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/input"
 )
 
 func init() {

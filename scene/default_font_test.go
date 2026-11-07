@@ -3,7 +3,7 @@ package scene
 import (
 	"testing"
 
-	onixtext "github.com/diiyw/onix/text"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 func TestNewText2DUsesSharedSystemFont(t *testing.T) {

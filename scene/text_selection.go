@@ -4,7 +4,7 @@ import (
 	"iter"
 	"sort"
 
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 // TextSelectionRects2D visits the selected visual rows in a vertical viewport.

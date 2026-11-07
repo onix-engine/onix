@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/graphics/codec/ontex"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/graphics/codec/ontex"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestEncodeASTCChainPureGo(t *testing.T) {

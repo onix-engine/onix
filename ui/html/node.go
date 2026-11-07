@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/scene"
 )
 
 // Node is a mutable node owned by an HTML surface. Mutations are rendered

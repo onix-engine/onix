@@ -1,6 +1,6 @@
 package project
 
-import "github.com/diiyw/onix/graphics"
+import "github.com/onix-engine/onix/graphics"
 
 // ModMaterial2D keeps material uniforms per instance.
 type ModMaterial2D struct {

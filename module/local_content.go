@@ -6,11 +6,11 @@ import (
 	"iter"
 	"reflect"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/text"
 )
 
 // Content confines procedural UI and model operations to one module. ECS IDs

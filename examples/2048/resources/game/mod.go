@@ -7,10 +7,10 @@ import (
 	"math/rand/v2"
 	"strconv"
 
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 var tileViews = func() [32]struct{ text, class, spawned string } {

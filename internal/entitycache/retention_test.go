@@ -3,8 +3,8 @@ package entitycache
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func TestTrimPruneAndGenerationAfterPeak(t *testing.T) {

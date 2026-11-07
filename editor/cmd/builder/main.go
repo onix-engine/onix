@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/diiyw/onix/editor"
+	"github.com/onix-engine/onix/editor"
 )
 
 func main() {

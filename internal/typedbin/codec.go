@@ -14,7 +14,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 const (

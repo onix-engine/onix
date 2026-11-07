@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	editorresources "github.com/diiyw/onix/editor/resources"
+	editorresources "github.com/onix-engine/onix/editor/resources"
 )
 
 func TestEditorDialogResourcesAreComponents(t *testing.T) {

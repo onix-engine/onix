@@ -3,7 +3,7 @@ package editor
 import (
 	"slices"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

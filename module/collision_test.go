@@ -3,7 +3,7 @@ package module
 import (
 	"testing"
 
-	"github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/physics"
 )
 
 func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {

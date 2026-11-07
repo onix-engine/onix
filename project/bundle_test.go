@@ -13,10 +13,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	sceneapi "github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	sceneapi "github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/window"
 )
 
 func TestExplicitControlBindingComposesAuthoredParts(t *testing.T) {

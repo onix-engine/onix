@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func TestComposite2DSparsePreparationMatchesFullRebuild(t *testing.T) {

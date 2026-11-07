@@ -2,8 +2,8 @@ package project
 
 import (
 	"encoding/json"
-	"github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 const (

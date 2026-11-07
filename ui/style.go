@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 )
 
 // ControlState is the visual input state shared by interactive widgets.

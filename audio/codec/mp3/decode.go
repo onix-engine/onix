@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/diiyw/onix/audio"
+	"github.com/onix-engine/onix/audio"
 	"github.com/hajimehoshi/go-mp3"
 )
 

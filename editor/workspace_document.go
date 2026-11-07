@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 // DocumentID is the project-relative file that owns an edit and its undo state.

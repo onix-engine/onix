@@ -1,7 +1,7 @@
 package html
 
 import (
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/style"
 	"image"
 	"image/color"
 	"math"

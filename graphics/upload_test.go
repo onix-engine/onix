@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestUploadQueueDeduplicatesAndBudgetsExplicitDevice(t *testing.T) {

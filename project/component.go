@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 // Component resolves a named scene node and acquires write access. Use

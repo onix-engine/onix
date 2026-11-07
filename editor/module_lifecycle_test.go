@@ -12,7 +12,7 @@ func TestModuleGeneratorBindsSceneLifetimeHooksAndRejectsBadSignature(t *testing
 	directory := moduleBuildFixture(t)
 	moduleBuildFile(t, directory, "resources/scenes/game.json", `{"behavior":"Game","modules":[]}`)
 	moduleBuildFile(t, directory, "game.go", `package main
-import m "github.com/diiyw/onix/module"
+import m "github.com/onix-engine/onix/module"
 type Game struct{}
 func (*Game) Enter(*m.Context, m.SceneStartup) error { return nil }
 func (*Game) Exit(*m.Context) error { return nil }
@@ -33,7 +33,7 @@ func (*Game) Resume(*m.Context, m.SceneStartup) error { return nil }
 		}
 	}
 	moduleBuildFile(t, directory, "game.go", `package main
-import m "github.com/diiyw/onix/module"
+import m "github.com/onix-engine/onix/module"
 type Game struct{}
 func (*Game) Resume(*m.Context, string) error { return nil }
 `)

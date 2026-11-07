@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {

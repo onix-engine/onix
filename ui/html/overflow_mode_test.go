@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

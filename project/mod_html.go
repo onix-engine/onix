@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 type modHTMLImages struct {

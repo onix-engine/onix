@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/window"
 )
 
 type workspaceFileBrowser struct {

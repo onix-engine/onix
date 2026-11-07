@@ -9,8 +9,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/typedbin"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

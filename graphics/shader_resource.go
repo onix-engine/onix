@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 var shaderBatchCounter atomic.Uint64

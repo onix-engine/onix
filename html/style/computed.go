@@ -1,6 +1,6 @@
 package style
 
-import "github.com/diiyw/onix/html/dom"
+import "github.com/onix-engine/onix/html/dom"
 
 type ValueKind uint8
 

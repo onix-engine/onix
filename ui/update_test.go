@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 	"testing"
 )

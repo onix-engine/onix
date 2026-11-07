@@ -2,7 +2,7 @@
 
 package window
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 func newDesktopRenderDriver(surface render.NativeSurface) (render.Driver, error) {
 	return render.NewDirectXDriver(surface)

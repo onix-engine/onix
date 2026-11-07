@@ -4,8 +4,8 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestHTMLVisibilityControlAndEditableDescendants(t *testing.T) {

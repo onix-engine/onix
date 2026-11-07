@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/resource"
 )
 
 const (

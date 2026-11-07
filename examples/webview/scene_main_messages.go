@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/module"
 )
 
 type SceneMain struct{}

@@ -3,8 +3,8 @@ package webp
 import (
 	"bytes"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/images/webp"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/images/webp"
 )
 
 type Decoder struct{}

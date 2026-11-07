@@ -1,9 +1,9 @@
 package render3d
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 )
 
 // Register enables 3D camera extraction and submission in this world.

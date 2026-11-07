@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 // Serialize returns the current retained HTML document for page.

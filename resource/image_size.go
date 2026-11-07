@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	onixpng "github.com/diiyw/onix/images/png"
-	onixsvg "github.com/diiyw/onix/images/svg"
-	webpconfig "github.com/diiyw/onix/images/webp/config"
-	"github.com/diiyw/onix/internal/texcontainer"
+	onixpng "github.com/onix-engine/onix/images/png"
+	onixsvg "github.com/onix-engine/onix/images/svg"
+	webpconfig "github.com/onix-engine/onix/images/webp/config"
+	"github.com/onix-engine/onix/internal/texcontainer"
 )
 
 // Size returns an image's logical dimensions from the configured resource

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/diiyw/onix/editor"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/editor"
+	"github.com/onix-engine/onix/project"
 )
 
 func main() {

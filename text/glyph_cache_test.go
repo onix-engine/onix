@@ -7,9 +7,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestGlyphBitmapPreservesAntialiasedMaskEdge(t *testing.T) {

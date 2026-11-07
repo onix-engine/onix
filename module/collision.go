@@ -1,8 +1,8 @@
 package module
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/physics"
 )
 
 // Geometry uses solver world coordinates. Element is the sender's private name;

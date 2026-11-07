@@ -5,9 +5,9 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestHTMLFormerOpacityGroupRetiresRasterDependencies(t *testing.T) {

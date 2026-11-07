@@ -1,6 +1,6 @@
 package graphics
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 func applyViewAffineBatch(instances []render.Instance2D, view [6]float32) {
 	applyViewAffineBatchArch(instances, view)

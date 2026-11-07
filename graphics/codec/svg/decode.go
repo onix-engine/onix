@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/diiyw/onix/graphics"
-	onixsvg "github.com/diiyw/onix/images/svg"
+	"github.com/onix-engine/onix/graphics"
+	onixsvg "github.com/onix-engine/onix/images/svg"
 )
 
 // Decoder retains twice the intrinsic resolution and uses mipmaps when reduced.

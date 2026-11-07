@@ -6,7 +6,7 @@ import (
 	"iter"
 	"slices"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func (view *compositor2D) tileIndices(bounds image.Rectangle) iter.Seq[int] {

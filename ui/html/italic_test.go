@@ -1,11 +1,11 @@
 package html
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	"testing"
 )
 

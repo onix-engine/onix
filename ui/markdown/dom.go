@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/syntax"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/syntax"
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
 	goldmarktext "github.com/yuin/goldmark/text"

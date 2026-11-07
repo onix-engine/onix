@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestHTMLRetiredSourceContextsMatchFresh(t *testing.T) {

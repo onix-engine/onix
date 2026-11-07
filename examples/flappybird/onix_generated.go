@@ -2,16 +2,16 @@
 package main
 
 import (
-	onix "github.com/diiyw/onix"
-	contracts "github.com/diiyw/onix/examples/flappybird/contracts"
-	mod0 "github.com/diiyw/onix/examples/flappybird/input"
-	mod1 "github.com/diiyw/onix/examples/flappybird/resources/presentation"
-	mod4 "github.com/diiyw/onix/examples/flappybird/simulation"
-	graphics "github.com/diiyw/onix/graphics"
-	ontex "github.com/diiyw/onix/graphics/codec/ontex"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	module "github.com/diiyw/onix/module"
-	project "github.com/diiyw/onix/project"
+	onix "github.com/onix-engine/onix"
+	contracts "github.com/onix-engine/onix/examples/flappybird/contracts"
+	mod0 "github.com/onix-engine/onix/examples/flappybird/input"
+	mod1 "github.com/onix-engine/onix/examples/flappybird/resources/presentation"
+	mod4 "github.com/onix-engine/onix/examples/flappybird/simulation"
+	graphics "github.com/onix-engine/onix/graphics"
+	ontex "github.com/onix-engine/onix/graphics/codec/ontex"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	module "github.com/onix-engine/onix/module"
+	project "github.com/onix-engine/onix/project"
 	iofs "io/fs"
 )
 

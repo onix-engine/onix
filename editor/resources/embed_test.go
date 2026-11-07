@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/diiyw/onix/images/svg"
+	"github.com/onix-engine/onix/images/svg"
 )
 
 func TestLogoResourcesMatchTheirDeclaredSizes(t *testing.T) {

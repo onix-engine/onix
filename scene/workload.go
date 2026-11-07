@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import "github.com/onix-engine/onix/ecs"
 
 type taskCountCache struct {
 	versions [5]uint64

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
 type htmlComponentCounterProps struct {

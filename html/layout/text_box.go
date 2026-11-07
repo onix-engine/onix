@@ -4,8 +4,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/style"
 )
 
 // textBoxTrimming resolves the first/last line edges of a horizontal block

@@ -3,12 +3,12 @@ package module
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene/render3d"
-	"github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene/render3d"
+	"github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 // ContentProfile selects component construction and its entire lifecycle at

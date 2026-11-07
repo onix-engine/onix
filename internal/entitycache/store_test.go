@@ -3,7 +3,7 @@ package entitycache
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func TestStoreDeletionGenerationAndReuse(t *testing.T) {

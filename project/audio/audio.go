@@ -6,8 +6,8 @@ package projectaudio
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/project"
 )
 
 const resourceKind = "audio"

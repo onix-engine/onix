@@ -1,7 +1,7 @@
 package window
 
 import (
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 // ErrWebViewUnavailable is returned when no platform browser implementation

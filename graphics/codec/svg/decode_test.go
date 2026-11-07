@@ -3,8 +3,8 @@ package svg
 import (
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	onixsvg "github.com/diiyw/onix/images/svg"
+	"github.com/onix-engine/onix/graphics"
+	onixsvg "github.com/onix-engine/onix/images/svg"
 )
 
 type sizeRasterScale struct{}

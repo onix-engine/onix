@@ -1,9 +1,9 @@
 package html
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/scene"
 )
 
 // Structural updates keep the global topology/index pass but avoid re-emitting

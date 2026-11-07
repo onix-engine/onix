@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 	"github.com/ebitengine/purego"
 )
 

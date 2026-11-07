@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func TestEditorImageDecoderLoadsSVG(t *testing.T) {

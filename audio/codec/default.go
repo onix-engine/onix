@@ -2,11 +2,11 @@
 package codec
 
 import (
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/audio/codec/flac"
-	"github.com/diiyw/onix/audio/codec/mp3"
-	"github.com/diiyw/onix/audio/codec/vorbis"
-	"github.com/diiyw/onix/audio/codec/wav"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/audio/codec/flac"
+	"github.com/onix-engine/onix/audio/codec/mp3"
+	"github.com/onix-engine/onix/audio/codec/vorbis"
+	"github.com/onix-engine/onix/audio/codec/wav"
 )
 
 type DefaultDecoder struct{}

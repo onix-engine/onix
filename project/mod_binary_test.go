@@ -5,7 +5,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 )
 
 func TestModuleBinaryPlanRoundTripAndRejectsInvalidData(t *testing.T) {

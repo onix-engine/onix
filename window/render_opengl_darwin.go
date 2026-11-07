@@ -2,7 +2,7 @@
 
 package window
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 func newMacRenderDriver(layer, view uintptr, width, height int) (render.Driver, error) {
 	return render.NewOpenGLDriver(render.NativeSurface{Window: view, Width: width, Height: height})

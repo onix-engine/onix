@@ -2,7 +2,7 @@ package window
 
 import (
 	"errors"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 	"testing"
 )
 

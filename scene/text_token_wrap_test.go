@@ -6,8 +6,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	"github.com/diiyw/onix/text/piecetree"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 func TestTokenWrapPreservesWordsWhitespaceAndNewlines(t *testing.T) {

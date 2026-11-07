@@ -1,8 +1,8 @@
 package presentation
 
 import (
-	"github.com/diiyw/onix/examples/flappybird/contracts"
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/examples/flappybird/contracts"
+	"github.com/onix-engine/onix/module"
 )
 
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {

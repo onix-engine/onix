@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 )
 
 type AnimationKeyframeSpec[T any] struct {

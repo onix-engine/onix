@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type htmlBridgeState struct {

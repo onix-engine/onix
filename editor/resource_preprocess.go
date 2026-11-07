@@ -13,10 +13,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	onixpng "github.com/diiyw/onix/images/png"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	onixpng "github.com/onix-engine/onix/images/png"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
 )
 
 type resourcePackageOptions struct {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/audio/codec"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/audio/codec"
 	flaccodec "github.com/mewkiz/flac"
 	"github.com/mewkiz/flac/frame"
 	"github.com/mewkiz/flac/meta"

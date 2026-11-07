@@ -1,6 +1,6 @@
 package graphics
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 var material2DShaderOps = newShaderResourceOps[render.Material2DShaderResource](
 	shaderResourceMaterial2D,

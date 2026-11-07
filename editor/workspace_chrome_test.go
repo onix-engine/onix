@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
+	"github.com/onix-engine/onix/window"
 )
 
 // titlebarButtonTag returns the serialized markup of one titlebar button so

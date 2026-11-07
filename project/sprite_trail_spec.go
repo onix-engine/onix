@@ -2,7 +2,7 @@ package project
 
 import (
 	"fmt"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 type SpriteTrailSpec struct {

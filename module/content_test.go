@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type contentPNGDecoder = graphics.ImageDecoderSet[graphicspng.Decoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder, graphics.NoImageDecoder]

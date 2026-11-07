@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func buildLinuxPackage(root string, options BuildOptions) (string, error) {

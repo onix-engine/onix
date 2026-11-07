@@ -1,13 +1,13 @@
 package project
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 type sceneComponentClearer func(*ecs.World, ecs.Entity)

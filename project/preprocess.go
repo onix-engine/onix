@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/typedbin"
-	spineruntime "github.com/diiyw/onix/spine"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/typedbin"
+	spineruntime "github.com/onix-engine/onix/spine"
 )
 
 // PreprocessManifests compiles project, resource, prefab, catalog, and scene manifests.

@@ -17,7 +17,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 	"github.com/ebitengine/purego"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"

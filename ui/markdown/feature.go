@@ -1,9 +1,9 @@
 package markdown
 
 import (
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/ecs"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/ecs"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 // Feature installs Markdown conversion on top of the HTML UI runtime.

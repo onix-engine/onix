@@ -3,10 +3,10 @@ package editor
 import (
 	"runtime"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/window"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

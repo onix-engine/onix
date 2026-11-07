@@ -4,7 +4,7 @@ import (
 	"bytes"
 	stdjpeg "image/jpeg"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 type Decoder struct{}

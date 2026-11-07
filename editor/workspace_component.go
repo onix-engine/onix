@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 type workspaceComponentProps struct {

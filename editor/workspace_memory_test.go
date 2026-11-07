@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestWorkspaceHistoryReleasesDiscardedCommands(t *testing.T) {

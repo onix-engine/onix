@@ -3,8 +3,8 @@ package layout
 import (
 	"math"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/style"
 )
 
 type floatArea struct {

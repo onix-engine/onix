@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/input"
 )
 
 func TestClipboardShortcutsPreservePressModifiers(t *testing.T) {

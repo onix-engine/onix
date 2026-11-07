@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 	"math"
 	"sync"
 )

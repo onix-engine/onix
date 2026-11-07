@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 func TestRetainedNestedFlexScratchMatchesFull(t *testing.T) {

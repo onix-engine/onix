@@ -8,9 +8,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/diiyw/onix/editor"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/window/filedialog"
+	"github.com/onix-engine/onix/editor"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/window/filedialog"
 )
 
 func main() {

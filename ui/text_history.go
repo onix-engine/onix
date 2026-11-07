@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/diiyw/onix/input"
+import "github.com/onix-engine/onix/input"
 
 const textFieldHistoryLimit = 128
 

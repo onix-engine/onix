@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	onixsvg "github.com/diiyw/onix/images/svg"
+	onixsvg "github.com/onix-engine/onix/images/svg"
 )
 
 func TestTransparentColorsKeepFilteredContourBrightness(t *testing.T) {

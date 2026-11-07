@@ -6,8 +6,8 @@ import (
 	"image/png"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
 )
 
 func TestDecodeUsesAtlasMinFilter(t *testing.T) {

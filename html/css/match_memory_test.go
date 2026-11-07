@@ -4,7 +4,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {

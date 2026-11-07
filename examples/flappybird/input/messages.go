@@ -1,7 +1,7 @@
 package input
 
 import (
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/module"
 )
 
 func (m *Mod) OnMessage(c *module.Context, message module.Message) error {

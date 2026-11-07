@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 type visualFixture struct {

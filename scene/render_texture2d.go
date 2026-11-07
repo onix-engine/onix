@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/graphics"
+import "github.com/onix-engine/onix/graphics"
 
 type retainedTexture2D struct {
 	positions         []int

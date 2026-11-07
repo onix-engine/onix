@@ -3,7 +3,7 @@ package ontex
 import (
 	"bytes"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 // Decoder plugs the ONIXTEX1 container into a graphics.ImageDecoderSet.

@@ -3,7 +3,7 @@ package physics
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 // RigidBody2D turns a world-space scene node into a simulated body. Dynamic

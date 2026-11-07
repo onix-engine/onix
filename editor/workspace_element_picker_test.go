@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func particlePickerFixture(t *testing.T, root bool) (*ModuleEditor, string) {

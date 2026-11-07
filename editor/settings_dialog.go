@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/window"
 )
 
 type projectSettingsCategory uint8

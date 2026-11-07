@@ -7,11 +7,11 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	sceneapi "github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	sceneapi "github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	onixtext "github.com/onix-engine/onix/text"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

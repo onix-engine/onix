@@ -5,7 +5,7 @@ import (
 	"testing"
 	"weak"
 
-	"github.com/diiyw/onix/html/css"
+	"github.com/onix-engine/onix/html/css"
 )
 
 func abandonedCompiledMatcher(t *testing.T) (weak.Pointer[css.Stylesheet], weak.Pointer[compiledStylesheet]) {

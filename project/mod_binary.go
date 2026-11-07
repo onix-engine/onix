@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/diiyw/onix/internal/typedbin"
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/internal/typedbin"
+	"github.com/onix-engine/onix/resource"
 )
 
 const ModulePlanFile = "resources/modules.bin"

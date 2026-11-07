@@ -1,10 +1,10 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/render"
 )
 
 type spineRenderBatch2DScratch struct{}

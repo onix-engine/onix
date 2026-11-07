@@ -1,15 +1,15 @@
 package assets
 
 import (
-	"github.com/diiyw/onix/audio/codec"
-	"github.com/diiyw/onix/font"
-	fontwoff2 "github.com/diiyw/onix/font/codec/woff2"
-	"github.com/diiyw/onix/graphics"
-	graphicsgif "github.com/diiyw/onix/graphics/codec/gif"
-	graphicsjpeg "github.com/diiyw/onix/graphics/codec/jpeg"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	graphicswebp "github.com/diiyw/onix/graphics/codec/webp"
-	windowpng "github.com/diiyw/onix/window/codec/png"
+	"github.com/onix-engine/onix/audio/codec"
+	"github.com/onix-engine/onix/font"
+	fontwoff2 "github.com/onix-engine/onix/font/codec/woff2"
+	"github.com/onix-engine/onix/graphics"
+	graphicsgif "github.com/onix-engine/onix/graphics/codec/gif"
+	graphicsjpeg "github.com/onix-engine/onix/graphics/codec/jpeg"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	graphicswebp "github.com/onix-engine/onix/graphics/codec/webp"
+	windowpng "github.com/onix-engine/onix/window/codec/png"
 )
 
 // DefaultResourceFeature is the standard decoder bundle used by projects

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/diiyw/onix/internal/brotli"
+	"github.com/onix-engine/onix/internal/brotli"
 )
 
 func TestCompressWasmBrotliReplacesRawArtifact(t *testing.T) {

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/layout"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
 func collectHTMLFragments(t *testing.T, page string) []layout.TextFragment {

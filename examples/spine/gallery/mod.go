@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/diiyw/onix/examples/spine/contracts"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/spine"
+	"github.com/onix-engine/onix/examples/spine/contracts"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/spine"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

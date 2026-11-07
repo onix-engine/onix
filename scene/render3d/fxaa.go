@@ -1,9 +1,9 @@
 package render3d
 
 import (
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

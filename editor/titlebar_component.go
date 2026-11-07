@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"sync"
 
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/ui/html"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 type titlebarComponentState struct{ Recent editorVNodeView }

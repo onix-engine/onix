@@ -13,9 +13,9 @@ import (
 	"unsafe"
 
 	onixapp "__APP_IMPORT_PATH__"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/window"
-	onixwebview "github.com/diiyw/onix/window/webview"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/window"
+	onixwebview "github.com/onix-engine/onix/window/webview"
 )
 
 //export OnixSetNativeWindow

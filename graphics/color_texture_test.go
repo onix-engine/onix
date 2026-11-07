@@ -6,8 +6,8 @@ import (
 	"testing"
 	"weak"
 
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

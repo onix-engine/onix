@@ -3,7 +3,7 @@ package module
 import (
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 type hotState struct{ received, results, updates int64 }

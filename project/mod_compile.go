@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

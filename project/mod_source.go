@@ -5,7 +5,7 @@ package project
 import (
 	"io/fs"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 )
 
 func openModuleAuthoringProject() (*ProjectPlan, fs.FS, error) {

@@ -3,7 +3,7 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestHTMLFlexExpansionRetainsUnchangedControls(t *testing.T) {

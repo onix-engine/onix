@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestWorkspacePatchBatchOrderAndPrecision(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func TestRetainedTextureChangesStayLocal(t *testing.T) {

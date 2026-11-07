@@ -3,7 +3,7 @@ package window
 import (
 	"testing"
 
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/input"
 )
 
 func TestTextInputSupportGatesAndDispatchesEvents(t *testing.T) {

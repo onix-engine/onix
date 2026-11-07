@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
 )
 
 func htmlStickyPosition(t testing.TB, world *ecs.World, entity ecs.Entity) (x, y float32) {

@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import "github.com/onix-engine/onix/ecs"
 
 // Activity controls simulation independently of visibility. An entity may be
 // invisible while running; suspended scene content must do neither.

@@ -7,14 +7,14 @@ import (
 	"path"
 	"slices"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/resource"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	"github.com/diiyw/onix/spine"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/resource"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	"github.com/onix-engine/onix/spine"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 // OpenModResources installs only this definition's private resource namespace.

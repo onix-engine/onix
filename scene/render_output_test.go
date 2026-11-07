@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	onixtext "github.com/onix-engine/onix/text"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

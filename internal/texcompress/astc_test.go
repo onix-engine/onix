@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestEncodeASTCLevelWritesStandardConstantColorBlock(t *testing.T) {

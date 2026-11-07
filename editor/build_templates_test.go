@@ -13,7 +13,7 @@ func TestNativeTextInputTemplatesParse(t *testing.T) {
 		"templates/ios/native/main.go",
 	} {
 		source := readTemplate(t, path)
-		source = strings.ReplaceAll(source, "__APP_IMPORT_PATH__", "github.com/diiyw/onix")
+		source = strings.ReplaceAll(source, "__APP_IMPORT_PATH__", "github.com/onix-engine/onix")
 		if _, err := parser.ParseFile(token.NewFileSet(), path, source, parser.AllErrors); err != nil {
 			t.Fatalf("parse %s: %v", path, err)
 		}

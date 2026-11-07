@@ -1,8 +1,8 @@
 package simulation
 
 import (
-	"github.com/diiyw/onix/examples/flappybird/contracts"
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/examples/flappybird/contracts"
+	"github.com/onix-engine/onix/module"
 )
 
 type Mod struct {

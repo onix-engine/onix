@@ -5,7 +5,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 var ErrUploadUnavailable = errors.New("graphics: resource is not resident after upload")

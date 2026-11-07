@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 // QueryScope confines ordinary queries to a borrowed entity set. Direct

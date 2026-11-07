@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/internal/shaderhlsl"
+	"github.com/onix-engine/onix/internal/shaderhlsl"
 	"github.com/gogpu/naga"
 )
 

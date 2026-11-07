@@ -6,9 +6,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestHTMLFiltersApplyInOrderAndClampEachFunction(t *testing.T) {

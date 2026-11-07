@@ -2,10 +2,10 @@
 package main
 
 import (
-	onix "github.com/diiyw/onix"
-	graphics "github.com/diiyw/onix/graphics"
-	module "github.com/diiyw/onix/module"
-	project "github.com/diiyw/onix/project"
+	onix "github.com/onix-engine/onix"
+	graphics "github.com/onix-engine/onix/graphics"
+	module "github.com/onix-engine/onix/module"
+	project "github.com/onix-engine/onix/project"
 	iofs "io/fs"
 )
 

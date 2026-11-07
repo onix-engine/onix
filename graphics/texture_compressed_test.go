@@ -3,7 +3,7 @@ package graphics
 import (
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 // A packed texture reaches the backend as one flat payload plus a level count.

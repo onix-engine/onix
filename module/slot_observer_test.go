@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestSlotChangeCoalescesAndIgnoresUnchangedWrites(t *testing.T) {

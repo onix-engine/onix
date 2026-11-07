@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

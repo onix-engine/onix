@@ -5,7 +5,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestEmptyTextureRestoresCompactShadow(t *testing.T) {

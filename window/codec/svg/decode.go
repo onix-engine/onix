@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"image"
 
-	onixsvg "github.com/diiyw/onix/images/svg"
+	onixsvg "github.com/onix-engine/onix/images/svg"
 )
 
 type RasterSize interface {

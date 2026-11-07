@@ -5,8 +5,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

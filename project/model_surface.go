@@ -3,7 +3,7 @@ package project
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func (s compiledMaterialSurface) validate() error {

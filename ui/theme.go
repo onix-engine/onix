@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 func alphaColor(clr graphics.ColorRGBA, alpha float32) graphics.ColorRGBA {

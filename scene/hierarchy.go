@@ -1,8 +1,8 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 const (

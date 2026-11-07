@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 func TestSnapshotFieldIMESelectionAndGeometry(t *testing.T) {

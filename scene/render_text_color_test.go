@@ -3,9 +3,9 @@ package scene
 import (
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

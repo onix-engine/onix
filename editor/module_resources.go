@@ -15,10 +15,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/resource"
 )
 
 type moduleAssetCollector struct {

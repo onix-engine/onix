@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/window"
 )
 
 // Readback synchronizes each sample with execution. This measures a complete

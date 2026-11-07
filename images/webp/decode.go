@@ -13,9 +13,9 @@ import (
 	"image/draw"
 	"io"
 
-	"github.com/diiyw/onix/images/webp/internal/riff"
-	"github.com/diiyw/onix/images/webp/internal/vp8"
-	"github.com/diiyw/onix/images/webp/internal/vp8l"
+	"github.com/onix-engine/onix/images/webp/internal/riff"
+	"github.com/onix-engine/onix/images/webp/internal/vp8"
+	"github.com/onix-engine/onix/images/webp/internal/vp8l"
 )
 
 var errInvalidFormat = errors.New("webp: invalid format")

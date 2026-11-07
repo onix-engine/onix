@@ -2,7 +2,7 @@ package project
 
 import (
 	"encoding/json"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 	"math"
 	"testing"
 )

@@ -8,9 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	graphicswebp "github.com/diiyw/onix/graphics/codec/webp"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	graphicswebp "github.com/onix-engine/onix/graphics/codec/webp"
 )
 
 func TestDecodeRasterCreatesTexture(t *testing.T) {

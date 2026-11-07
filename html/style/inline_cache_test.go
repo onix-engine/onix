@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestInlineStyleCacheOwnsSource(t *testing.T) {

@@ -3,7 +3,7 @@ package project
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/physics"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

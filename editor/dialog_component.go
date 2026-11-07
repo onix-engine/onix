@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	editorresources "github.com/diiyw/onix/editor/resources"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 type editorDialogComponentProps struct {

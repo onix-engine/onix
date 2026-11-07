@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	graphicsgif "github.com/diiyw/onix/graphics/codec/gif"
-	graphicsjpeg "github.com/diiyw/onix/graphics/codec/jpeg"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	graphicswebp "github.com/diiyw/onix/graphics/codec/webp"
-	"github.com/diiyw/onix/resource"
-	sceneapi "github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	graphicsgif "github.com/onix-engine/onix/graphics/codec/gif"
+	graphicsjpeg "github.com/onix-engine/onix/graphics/codec/jpeg"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	graphicswebp "github.com/onix-engine/onix/graphics/codec/webp"
+	"github.com/onix-engine/onix/resource"
+	sceneapi "github.com/onix-engine/onix/scene"
 )
 
 func TestTextureCacheUsesContentIdentityAndSharesAtlasImage(t *testing.T) {

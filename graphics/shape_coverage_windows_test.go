@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 	"golang.org/x/sys/windows"
 )

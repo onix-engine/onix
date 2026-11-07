@@ -3,7 +3,7 @@ package scene
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func TestTransformSyncSkipsStaticAndUnrelatedSubtrees(t *testing.T) {

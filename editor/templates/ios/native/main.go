@@ -12,8 +12,8 @@ import (
 	"unsafe"
 
 	onixapp "__APP_IMPORT_PATH__"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/window"
 )
 
 //export OnixSetMetalLayer

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestCachedTypeIndicesMatchFreshScansAfterReorder(t *testing.T) {

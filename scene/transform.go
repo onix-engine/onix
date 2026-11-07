@@ -3,9 +3,9 @@ package scene
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/entitycache"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/entitycache"
+	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

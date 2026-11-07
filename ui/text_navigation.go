@@ -5,8 +5,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 func moveTextCaret(text piecetree.Snapshot, caret, anchor int, state *input.State) (int, int) {

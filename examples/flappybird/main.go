@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/project"
 )
 
 func main() {

@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import "github.com/onix-engine/onix/ecs"
 
 // SceneLayer separates camera content and orders complete scenes before local
 // world/UI order. Descendants inherit the scene root's layer.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestScopeStylesheetKeepsDocumentAncestors(t *testing.T) {

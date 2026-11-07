@@ -4,11 +4,11 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 // A box owns only the primitives it emits, excluding its child boxes. This

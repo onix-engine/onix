@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	sceneapi "github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/ecs"
+	sceneapi "github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 func TestEmptyNodeIsNeutralAtRuntime(t *testing.T) {

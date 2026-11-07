@@ -4,7 +4,7 @@ import (
 	"math/bits"
 	"slices"
 
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 type componentMask []uint64

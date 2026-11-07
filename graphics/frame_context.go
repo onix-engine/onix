@@ -1,8 +1,8 @@
 package graphics
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/render"
 )
 
 // FrameContext belongs to an ECS world/window. Engine systems obtain their

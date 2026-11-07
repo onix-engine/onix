@@ -1,9 +1,9 @@
 package editor
 
 import (
-	"github.com/diiyw/onix/graphics"
-	onixtext "github.com/diiyw/onix/text"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/graphics"
+	onixtext "github.com/onix-engine/onix/text"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 type theme struct {

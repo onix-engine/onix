@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 type canvasTestDriver struct {
 	viewport render.Rect

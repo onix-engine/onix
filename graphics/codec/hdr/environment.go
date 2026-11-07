@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 // BakeEnvironment decodes a 2:1 HDR panorama and bakes an RGBE environment

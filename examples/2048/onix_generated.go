@@ -2,11 +2,11 @@
 package main
 
 import (
-	onix "github.com/diiyw/onix"
-	mod0 "github.com/diiyw/onix/examples/2048/resources/game"
-	graphics "github.com/diiyw/onix/graphics"
-	module "github.com/diiyw/onix/module"
-	project "github.com/diiyw/onix/project"
+	onix "github.com/onix-engine/onix"
+	mod0 "github.com/onix-engine/onix/examples/2048/resources/game"
+	graphics "github.com/onix-engine/onix/graphics"
+	module "github.com/onix-engine/onix/module"
+	project "github.com/onix-engine/onix/project"
 	iofs "io/fs"
 )
 

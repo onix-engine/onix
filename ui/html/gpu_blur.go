@@ -4,12 +4,12 @@ import (
 	_ "embed"
 	"math"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
 )
 
 //go:embed shaders/blur.spv

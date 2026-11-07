@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 // Cache authoring metadata once. Rendering reuses the editor's VNodes and field

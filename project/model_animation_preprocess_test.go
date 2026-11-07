@@ -3,7 +3,7 @@
 package project
 
 import (
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 	"testing"
 	"testing/fstest"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 func TestSnapshotIncrementalHighlightAndShrink(t *testing.T) {

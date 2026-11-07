@@ -4,9 +4,9 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/ecs"
-	sceneapi "github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/ecs"
+	sceneapi "github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 func preparedSceneTestSource(t *testing.T, nodes []SceneNodeSpec) fstest.MapFS {

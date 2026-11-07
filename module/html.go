@@ -1,8 +1,8 @@
 package module
 
 import (
-	"github.com/diiyw/onix/scene"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 // Rect is an element's border box in its HTML surface's coordinates.

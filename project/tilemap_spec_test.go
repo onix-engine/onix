@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 )
 
 func TestTilemapCompactRoundTrip(t *testing.T) {

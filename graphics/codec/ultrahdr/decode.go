@@ -11,7 +11,7 @@ import (
 	"image/jpeg"
 	"math"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

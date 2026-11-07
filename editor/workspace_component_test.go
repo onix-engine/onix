@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/project"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/project"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {

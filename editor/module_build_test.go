@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics/codec/ontex"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/resource"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics/codec/ontex"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/resource"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func moduleBuildFile(t *testing.T, directory, name, source string) {
@@ -45,8 +45,8 @@ func moduleBuildFixture(t *testing.T) string {
 	moduleBuildFile(t, directory, "asset/custom/value.dat", "scene two asset")
 	moduleBuildFile(t, directory, "a/mod.go", `package a
 import (
-  m "github.com/diiyw/onix/module"
-  "github.com/diiyw/onix/project"
+  m "github.com/onix-engine/onix/module"
+  "github.com/onix-engine/onix/project"
   "example.com/game/contracts"
 )
 type Mod struct { slot m.Slot }
@@ -66,7 +66,7 @@ func (s *Mod) Destroy(*m.Context) error { return nil }
 
 import (
 	"example.com/game/contracts"
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/module"
 )
 
 type Mod struct{}
@@ -110,9 +110,9 @@ func TestModuleBuildGeneratesTypedRegistryAndExecutesRequests(t *testing.T) {
 import (
  "os"
  "testing"
- "github.com/diiyw/onix/ecs"
- "github.com/diiyw/onix/module"
- "github.com/diiyw/onix/project"
+ "github.com/onix-engine/onix/ecs"
+ "github.com/onix-engine/onix/module"
+ "github.com/onix-engine/onix/project"
  "example.com/game/contracts"
 )
 func TestGeneratedRuntime(t *testing.T) {
@@ -138,7 +138,7 @@ func TestGeneratedRuntime(t *testing.T) {
 
 func TestModuleBuildDiagnosticsPreserveGeneratedAndUserSources(t *testing.T) {
 	for _, tt := range []struct{ name, file, source, want string }{
-		{"signature", "b/mod.go", `package b; import "github.com/diiyw/onix/module"; type Mod struct{}; func (*Mod) OnMessage(*module.Context,string) error { return nil }`, "signature"},
+		{"signature", "b/mod.go", `package b; import "github.com/onix-engine/onix/module"; type Mod struct{}; func (*Mod) OnMessage(*module.Context,string) error { return nil }`, "signature"},
 		{"dependency", "a/leak.go", `package a; import _ "example.com/game/b"`, "depends on module"},
 		{"helper dependency", "tools/leak.go", `package tools; import _ "example.com/game/b"`, "depends on module"},
 		{"protocol state", "contracts/state.go", `package contracts; func init(){}`, "data declarations only"},
@@ -234,9 +234,9 @@ import (
  "io/fs"
  "errors"
  "testing"
- "github.com/diiyw/onix/ecs"
- "github.com/diiyw/onix/module"
- "github.com/diiyw/onix/project"
+ "github.com/onix-engine/onix/ecs"
+ "github.com/onix-engine/onix/module"
+ "github.com/onix-engine/onix/project"
  "example.com/game/contracts"
 )
 func TestReleasePackage(t *testing.T) {
@@ -273,12 +273,12 @@ func TestReleasePackage(t *testing.T) {
 		t.Fatalf("inspect release symbols: %v\n%s", err, symbols)
 	}
 	for _, forbidden := range []string{
-		"github.com/diiyw/onix/project.(*Resources).ModContent",
-		"github.com/diiyw/onix/ui/html.renderHTML",
-		"github.com/diiyw/onix/html/style.applyProperty",
-		"github.com/diiyw/onix/spine.restoreResource",
-		"github.com/diiyw/onix/physics.(*World).buildBroadphase",
-		"github.com/diiyw/onix/scene/render3d.UpdateDeformationsSystem",
+		"github.com/onix-engine/onix/project.(*Resources).ModContent",
+		"github.com/onix-engine/onix/ui/html.renderHTML",
+		"github.com/onix-engine/onix/html/style.applyProperty",
+		"github.com/onix-engine/onix/spine.restoreResource",
+		"github.com/onix-engine/onix/physics.(*World).buildBroadphase",
+		"github.com/onix-engine/onix/scene/render3d.UpdateDeformationsSystem",
 	} {
 		if bytes.Contains(symbols, []byte(forbidden)) {
 			t.Errorf("2D release retains optional implementation %s", forbidden)
@@ -490,7 +490,7 @@ func TestModuleBuildAndroidStagingSupportsIndependentProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(source), `"github.com/diiyw/onix/resource"`) || !strings.Contains(string(source), `SetDefaultProject(source, ".")`) {
+	if !strings.Contains(string(source), `"github.com/onix-engine/onix/resource"`) || !strings.Contains(string(source), `SetDefaultProject(source, ".")`) {
 		t.Fatal("mobile package source uses the project's module as engine import")
 	}
 }

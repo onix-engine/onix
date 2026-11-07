@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 // decodeBC1Block reconstructs a 4x4 block the way a sampler would, so tests can

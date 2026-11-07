@@ -8,9 +8,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/diiyw/onix/ecs"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/ecs"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/text/piecetree"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

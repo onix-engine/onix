@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
 func TestTextReusesUnchangedPlainLineMetrics(t *testing.T) {

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/resource"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/resource"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 type fontResource struct {

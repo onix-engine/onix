@@ -8,12 +8,12 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	onixtext "github.com/onix-engine/onix/text"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

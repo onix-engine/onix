@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/internal/brotli"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/internal/brotli"
 )
 
 // Decoder handles WOFF2 fonts. Importing this package is the link boundary

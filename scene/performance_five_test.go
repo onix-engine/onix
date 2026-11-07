@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	"github.com/diiyw/onix/text/piecetree"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 var reviewRuneSink rune

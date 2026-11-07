@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/font"
+	"github.com/onix-engine/onix/font"
 )
 
 func TestFlappyFontSubsetPreservesGlyphs(t *testing.T) {

@@ -432,7 +432,7 @@ return png.Encode(output, atlas)
 ```
 
 ```go
-import graphicshdr "github.com/diiyw/onix/graphics/codec/hdr"
+import graphicshdr "github.com/onix-engine/onix/graphics/codec/hdr"
 
 images, err := graphicshdr.ImportEnvironment(data, 256, 256)
 if err != nil {

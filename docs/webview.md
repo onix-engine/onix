@@ -6,10 +6,10 @@ entity and install the backend before the first frame:
 
 ```go
 import (
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	webview "github.com/diiyw/onix/window/webview"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	webview "github.com/onix-engine/onix/window/webview"
 )
 
 app := onix.NewApp()
@@ -57,7 +57,7 @@ When installing the systems manually, import and register the built-in adapter
 for the target before installing the ECS system:
 
 ```go
-import "github.com/diiyw/onix/window/webview"
+import "github.com/onix-engine/onix/window/webview"
 
 webview.Register()
 ```

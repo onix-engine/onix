@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestModuleBuildSpineCollectsDeclaredFilesWithoutExportMetadata(t *testing.T) {

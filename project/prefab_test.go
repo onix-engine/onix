@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	sceneapi "github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	sceneapi "github.com/onix-engine/onix/scene"
 )
 
 func TestPrefabRegisteredByResourcesMountsUnderSceneNode(t *testing.T) {

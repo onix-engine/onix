@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/graphics"
+import "github.com/onix-engine/onix/graphics"
 
 // Shader attaches a shared GPU program and per-element uniforms to geometry.
 // T is graphics.Material2DShader for sprites or graphics.MeshShader for meshes.

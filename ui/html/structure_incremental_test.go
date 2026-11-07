@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func TestHTMLStructureStylesStayWithinParent(t *testing.T) {

@@ -4,13 +4,13 @@
 package assets
 
 import (
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/project"
-	projectaudio "github.com/diiyw/onix/project/audio"
-	onixtext "github.com/diiyw/onix/text"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/project"
+	projectaudio "github.com/onix-engine/onix/project/audio"
+	onixtext "github.com/onix-engine/onix/text"
+	"github.com/onix-engine/onix/window"
 )
 
 // Feature installs statically selected image, font, and audio decoder

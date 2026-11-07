@@ -3,8 +3,8 @@ package png
 import (
 	"bytes"
 
-	"github.com/diiyw/onix/graphics"
-	onixpng "github.com/diiyw/onix/images/png"
+	"github.com/onix-engine/onix/graphics"
+	onixpng "github.com/onix-engine/onix/images/png"
 )
 
 type Decoder struct{}

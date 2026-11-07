@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix"
+	"github.com/onix-engine/onix"
 
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
 )
 
 type browserHandle struct {

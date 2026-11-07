@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/project"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func TestWorkspaceOutlinerElementsExpandOneLevelAndKeepInstanceState(t *testing.T) {

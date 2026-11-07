@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/diiyw/onix/internal/shaderhlsl"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/internal/shaderhlsl"
+	"github.com/onix-engine/onix/project"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/glsl"
 	"github.com/gogpu/naga/ir"

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/project"
-	engineui "github.com/diiyw/onix/ui"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/project"
+	engineui "github.com/onix-engine/onix/ui"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 // These are the legacy inspector's presentation choices, applied to module

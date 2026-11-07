@@ -9,12 +9,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/graphics/codec/ontex"
-	onixpng "github.com/diiyw/onix/images/png"
-	onixsvg "github.com/diiyw/onix/images/svg"
-	"github.com/diiyw/onix/images/webp"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/graphics/codec/ontex"
+	onixpng "github.com/onix-engine/onix/images/png"
+	onixsvg "github.com/onix-engine/onix/images/svg"
+	"github.com/onix-engine/onix/images/webp"
+	"github.com/onix-engine/onix/render"
 )
 
 // TextureTarget selects the block-compressed format family a build encodes

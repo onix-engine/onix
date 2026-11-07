@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestTextareaTokenWrapPercentTracksViewport(t *testing.T) {

@@ -17,10 +17,10 @@ import (
 	"strconv"
 	"strings"
 
-	editorresources "github.com/diiyw/onix/editor/resources"
-	onixsvg "github.com/diiyw/onix/images/svg"
-	_ "github.com/diiyw/onix/images/webp"
-	"github.com/diiyw/onix/project"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	onixsvg "github.com/onix-engine/onix/images/svg"
+	_ "github.com/onix-engine/onix/images/webp"
+	"github.com/onix-engine/onix/project"
 )
 
 type buildIcon struct {

@@ -1,9 +1,9 @@
 package html
 
 import (
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/render"
 	"image"
 	"image/color"
 	"math"

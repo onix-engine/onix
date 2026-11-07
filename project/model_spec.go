@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/render"
 )
 
 type ModelSpec struct {

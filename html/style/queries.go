@@ -4,8 +4,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 // compiledCondition is a rule condition (media or container query) parsed

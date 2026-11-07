@@ -4,7 +4,7 @@ import (
 	"image"
 	"image/color"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 // TextureFromImage converts a decoded image into a texture.

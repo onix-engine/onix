@@ -1,11 +1,11 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/input"
 	"testing"
 	"unicode/utf8"
 
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
 func TestTextCaretCacheInvalidationAndUnicode(t *testing.T) {

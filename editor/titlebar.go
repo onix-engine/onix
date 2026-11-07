@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	editoricons "github.com/diiyw/onix/editor/resources/images/icons"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
-	onixtext "github.com/diiyw/onix/text"
-	engineui "github.com/diiyw/onix/ui"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	editoricons "github.com/onix-engine/onix/editor/resources/images/icons"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
+	onixtext "github.com/onix-engine/onix/text"
+	engineui "github.com/onix-engine/onix/ui"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 // Only action identifiers cross the Go/HTML boundary. Labels, icons, shortcuts

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/typedbin"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/typedbin"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 func fresnelGLTF() string {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/diiyw/onix/examples/webview/contracts"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/examples/webview/contracts"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/scene"
 )
 
 type Mod struct{ bounds module.Slot }

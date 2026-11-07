@@ -2,7 +2,7 @@
 
 package webview
 
-import "github.com/diiyw/onix/window"
+import "github.com/onix-engine/onix/window"
 
 func registerBackend() {
 	window.RegisterX11WebViewBackendIfUnset(newBackend)

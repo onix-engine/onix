@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	enginephysics "github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/ecs"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 func TestPhysicsSceneComponentsMaterializeOnNode(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestNagaShaderCompilerUsesOnixWebGLClipSpace(t *testing.T) {

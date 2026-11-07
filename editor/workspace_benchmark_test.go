@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func benchmarkWorkspaceDocument(b *testing.B, count int) *WorkspaceDocument {

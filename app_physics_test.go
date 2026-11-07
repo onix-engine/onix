@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestPhysics2DSystemSetStepsNodeComponents(t *testing.T) {

@@ -1,6 +1,6 @@
 package window
 
-import "github.com/diiyw/onix/input"
+import "github.com/onix-engine/onix/input"
 
 type callback[T any] struct {
 	handler func(T)

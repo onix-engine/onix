@@ -3,7 +3,7 @@ package editor
 import (
 	"path/filepath"
 
-	editoricons "github.com/diiyw/onix/editor/resources/images/icons"
+	editoricons "github.com/onix-engine/onix/editor/resources/images/icons"
 )
 
 const (

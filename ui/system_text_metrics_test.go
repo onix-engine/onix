@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/html"
 )
 
 func observeComponentChanges[T any](t *testing.T, world *ecs.World) func() int {

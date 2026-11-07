@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 type viewport3DTestDriver struct {

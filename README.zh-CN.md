@@ -5,7 +5,7 @@
 Onix 是使用 Go 编写的游戏与应用引擎，提供类型化 ECS、2D/3D 渲染与物理、
 HTML/CSS UI、音频、资源打包和项目编辑器。
 
-Go 模块路径为 `github.com/diiyw/onix`，根包名为 `onix`。
+Go 模块路径为 `github.com/onix-engine/onix`，根包名为 `onix`。
 
 ## 环境要求
 

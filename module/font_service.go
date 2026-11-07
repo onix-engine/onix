@@ -5,9 +5,9 @@ import (
 	"io"
 	"math"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 type fontResource struct {

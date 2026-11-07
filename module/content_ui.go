@@ -4,11 +4,11 @@ import (
 	"iter"
 	"reflect"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/text"
-	ui "github.com/diiyw/onix/ui"
-	html "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/text"
+	ui "github.com/onix-engine/onix/ui"
+	html "github.com/onix-engine/onix/ui/html"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

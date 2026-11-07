@@ -5,8 +5,8 @@ package project
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
 )
 
 func (importer *gltfImporter) appendMaterialSurface(value *compiledModelMaterial, material gltfMaterial) error {

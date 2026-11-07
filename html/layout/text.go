@@ -11,11 +11,11 @@ import (
 	"unicode/utf8"
 	"weak"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/resource"
 )
 
 type TextLayoutOptions struct {

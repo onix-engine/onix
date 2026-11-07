@@ -5,10 +5,10 @@ import (
 	iofs "io/fs"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/resource"
-	onixtext "github.com/diiyw/onix/text"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/resource"
+	onixtext "github.com/onix-engine/onix/text"
+	"github.com/onix-engine/onix/window"
 )
 
 // ResourceFeature provides project resource implementations selected by the

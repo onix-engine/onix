@@ -1,6 +1,6 @@
 package project
 
-import "github.com/diiyw/onix/graphics"
+import "github.com/onix-engine/onix/graphics"
 
 // PreprocessedFile is a source resource replacement or removal.
 type PreprocessedFile struct {

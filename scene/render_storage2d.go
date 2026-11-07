@@ -3,9 +3,9 @@ package scene
 import (
 	"unsafe"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func sliceStorage2D[T any](values []T) (used, capacity int) {

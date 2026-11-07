@@ -3,7 +3,7 @@ package style
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestInlineDeclarationsKeepSemicolonsInsideFunctions(t *testing.T) {

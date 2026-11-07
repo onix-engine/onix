@@ -1,10 +1,10 @@
 package html
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
 )
 
 func spawnHTMLInlineBackgrounds(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, window htmlPaintWindow, control ecs.Entity, controlRect layout.Rect, stackIndex int, visible bool) {

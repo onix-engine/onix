@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
 )
 
 //go:embed images/file-icons.png

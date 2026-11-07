@@ -5,9 +5,9 @@ import (
 	"math"
 	"slices"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

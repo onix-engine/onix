@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestPreparationUsesIndependentFullCapacityPayloadBanks(t *testing.T) {

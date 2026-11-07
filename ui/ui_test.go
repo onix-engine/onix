@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	graphicssvg "github.com/diiyw/onix/graphics/codec/svg"
-	"github.com/diiyw/onix/images/svg"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
+	"github.com/onix-engine/onix/images/svg"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

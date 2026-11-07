@@ -5,11 +5,11 @@ import (
 	"hash/fnv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/scene"
 )
 
 // Template is the immutable source of a component view. It is parsed once

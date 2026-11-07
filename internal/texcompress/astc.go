@@ -1,6 +1,6 @@
 package texcompress
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 const astcBlockBytes = 16
 

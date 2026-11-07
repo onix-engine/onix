@@ -2,14 +2,14 @@
 package main
 
 import (
-	onix "github.com/diiyw/onix"
-	contracts "github.com/diiyw/onix/examples/spine/contracts"
-	mod0 "github.com/diiyw/onix/examples/spine/controls"
-	mod1 "github.com/diiyw/onix/examples/spine/gallery"
-	graphics "github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	module "github.com/diiyw/onix/module"
-	project "github.com/diiyw/onix/project"
+	onix "github.com/onix-engine/onix"
+	contracts "github.com/onix-engine/onix/examples/spine/contracts"
+	mod0 "github.com/onix-engine/onix/examples/spine/controls"
+	mod1 "github.com/onix-engine/onix/examples/spine/gallery"
+	graphics "github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	module "github.com/onix-engine/onix/module"
+	project "github.com/onix-engine/onix/project"
 	iofs "io/fs"
 )
 

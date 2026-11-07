@@ -1,8 +1,8 @@
 package layout
 
 import (
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/style"
 )
 
 // ScrollbarSize is shared by layout and painting so the gutter matches its bar.

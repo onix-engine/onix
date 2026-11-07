@@ -1,6 +1,6 @@
 package graphics
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 var meshShaderOps = newShaderResourceOps[render.MeshShaderResource](
 	shaderResourceMesh,

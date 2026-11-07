@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func (w *WorkspaceDocument) CreateScene(id project.SceneID) error {

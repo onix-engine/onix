@@ -1,9 +1,9 @@
 package input
 
 import (
-	engineinput "github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/scene"
+	engineinput "github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/scene"
 )
 
 type Mod struct {

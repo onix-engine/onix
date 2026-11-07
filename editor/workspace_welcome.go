@@ -4,9 +4,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func (a *ModuleEditor) layoutWorkspaceWelcome(world *ecs.World) {

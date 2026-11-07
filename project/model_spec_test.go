@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	sceneapi "github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	sceneapi "github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 func TestLoadModelResourcesAndInstantiate3DGameObjects(t *testing.T) {

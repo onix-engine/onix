@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui"
 )
 
 func TestContentProfilesRejectUnsupportedComponents(t *testing.T) {

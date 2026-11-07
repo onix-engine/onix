@@ -1,4 +1,4 @@
-module github.com/diiyw/onix
+module github.com/onix-engine/onix
 
 go 1.27.0
 

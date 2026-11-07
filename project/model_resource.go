@@ -7,9 +7,9 @@ import (
 	pathpkg "path"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
 )
 
 type compiledModelResource struct {

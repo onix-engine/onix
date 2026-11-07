@@ -3,7 +3,7 @@ package module
 import (
 	"testing"
 
-	html "github.com/diiyw/onix/ui/html"
+	html "github.com/onix-engine/onix/ui/html"
 )
 
 func BenchmarkContentRenderBridge(b *testing.B) {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 )
 
 const packageConfigFile = "packages.json"

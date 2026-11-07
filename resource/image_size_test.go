@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/internal/texcontainer"
+	"github.com/onix-engine/onix/internal/texcontainer"
 )
 
 func TestSizeReadsAbsoluteImageWithoutDefaultSource(t *testing.T) {

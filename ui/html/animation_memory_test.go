@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/html/style"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestHTMLStaticAnimationWorkspaceLifecycle(t *testing.T) {

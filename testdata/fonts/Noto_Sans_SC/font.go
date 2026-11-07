@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	onixtext "github.com/diiyw/onix/text"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 // NotoSansSCRegular is loaded from the checked-in font file at runtime.

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/window"
 )
 
 // CreateProjectOptions configures the authoring scaffold. Module folders and
@@ -93,7 +93,7 @@ func CreateProjectDirectory(directory string, options CreateProjectOptions) (*Pr
 		if strings.ContainsAny(version, " \t\r\n\"") {
 			return nil, fmt.Errorf("invalid engine version %q", version)
 		}
-		text := fmt.Sprintf("module %s\n\ngo 1.27.0\n\nrequire github.com/diiyw/onix %s\n", name, version)
+		text := fmt.Sprintf("module %s\n\ngo 1.27.0\n\nrequire github.com/onix-engine/onix %s\n", name, version)
 		if options.EngineDirectory != "" {
 			engine, err := filepath.Abs(options.EngineDirectory)
 			if err != nil {
@@ -102,7 +102,7 @@ func CreateProjectDirectory(directory string, options CreateProjectOptions) (*Pr
 			if _, err := os.Stat(filepath.Join(engine, "go.mod")); err != nil {
 				return nil, fmt.Errorf("local engine: %w", err)
 			}
-			text += fmt.Sprintf("\nreplace github.com/diiyw/onix => %q\n", filepath.ToSlash(engine))
+			text += fmt.Sprintf("\nreplace github.com/onix-engine/onix => %q\n", filepath.ToSlash(engine))
 			if sums, err := os.ReadFile(filepath.Join(engine, "go.sum")); err == nil {
 				files = append(files, struct {
 					name string
@@ -168,8 +168,8 @@ func CreateProjectDirectory(directory string, options CreateProjectOptions) (*Pr
 const moduleProjectMain = `package main
 
 import (
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/project"
 )
 
 func main() {
@@ -196,9 +196,9 @@ package main
 
 import (
 	"io/fs"
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/project"
 )
 
 type OnixContentProfile = module.Render2D

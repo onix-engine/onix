@@ -1,8 +1,8 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
 )
 
 // InputFocus is the currently focused ECS entity for keyboard/text input.

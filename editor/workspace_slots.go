@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 // Slot controls display the inherited value without writing an override until

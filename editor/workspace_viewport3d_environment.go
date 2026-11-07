@@ -3,12 +3,12 @@ package editor
 import (
 	"math"
 
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 type htmlRasterGradient struct {

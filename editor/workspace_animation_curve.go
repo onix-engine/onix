@@ -5,12 +5,12 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	engineui "github.com/diiyw/onix/ui"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func (a *ModuleEditor) renderAnimationCurvePopup(b *editorVNodeView) {

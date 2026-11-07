@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestWorkspacePreviewCoordinateIsolationAndAffectedInstances(t *testing.T) {

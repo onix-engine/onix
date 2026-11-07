@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	graphicshdr "github.com/diiyw/onix/graphics/codec/hdr"
-	"github.com/diiyw/onix/graphics/codec/ultrahdr"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/graphics"
+	graphicshdr "github.com/onix-engine/onix/graphics/codec/hdr"
+	"github.com/onix-engine/onix/graphics/codec/ultrahdr"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 type environmentResource struct{ atlas, panorama *graphics.Texture }

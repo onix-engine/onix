@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/sourcejson"
-	sceneapi "github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/sourcejson"
+	sceneapi "github.com/onix-engine/onix/scene"
 )
 
 // PrefabID identifies one reusable node hierarchy registered by resources.json.

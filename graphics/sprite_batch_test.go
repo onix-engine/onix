@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

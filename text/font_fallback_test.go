@@ -3,7 +3,7 @@ package text
 import (
 	"testing"
 
-	"github.com/diiyw/onix/font"
+	"github.com/onix-engine/onix/font"
 )
 
 type noGlyphCmap struct{}

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	onixsvg "github.com/diiyw/onix/images/svg"
+	onixsvg "github.com/onix-engine/onix/images/svg"
 )
 
 func TestLoadBuildIconUsesDefaultLogoAndCustomImage(t *testing.T) {

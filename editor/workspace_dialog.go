@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diiyw/onix/ecs"
-	editorresources "github.com/diiyw/onix/editor/resources"
-	"github.com/diiyw/onix/project"
-	htmlui "github.com/diiyw/onix/ui/html"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	editorresources "github.com/onix-engine/onix/editor/resources"
+	"github.com/onix-engine/onix/project"
+	htmlui "github.com/onix-engine/onix/ui/html"
+	"github.com/onix-engine/onix/window"
 )
 
 type workspaceDialogField struct{ Name, Kind, Value string }
@@ -59,7 +59,7 @@ var editorEngineVersionLabel = sync.OnceValue(func() string {
 	}
 	version := info.Main.Version
 	for _, dependency := range info.Deps {
-		if dependency.Path == "github.com/diiyw/onix" {
+		if dependency.Path == "github.com/onix-engine/onix" {
 			version = dependency.Version
 			if dependency.Replace != nil {
 				version = dependency.Replace.Version
@@ -70,7 +70,7 @@ var editorEngineVersionLabel = sync.OnceValue(func() string {
 	if version == "" || version == "(devel)" {
 		version = "(devel)"
 		for _, setting := range info.Settings {
-			if info.Main.Path == "github.com/diiyw/onix" && setting.Key == "vcs.revision" {
+			if info.Main.Path == "github.com/onix-engine/onix" && setting.Key == "vcs.revision" {
 				version += " " + setting.Value[:min(12, len(setting.Value))]
 				break
 			}

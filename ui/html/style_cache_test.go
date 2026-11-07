@@ -3,7 +3,7 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/style"
 )
 
 func TestHTMLFullCascadeReusesStylesAndReleasesRemovedNodes(t *testing.T) {

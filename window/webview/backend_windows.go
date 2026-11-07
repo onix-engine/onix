@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/window"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestLayoutContextResetReleasesDocument(t *testing.T) {

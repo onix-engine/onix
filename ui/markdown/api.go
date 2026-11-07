@@ -1,8 +1,8 @@
 package markdown
 
 import (
-	"github.com/diiyw/onix/ecs"
-	engineui "github.com/diiyw/onix/ui"
+	"github.com/onix-engine/onix/ecs"
+	engineui "github.com/onix-engine/onix/ui"
 )
 
 func SyncSystem(name string) ecs.SystemConfig { return engineui.SyncSystem(name) }

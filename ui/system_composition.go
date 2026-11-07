@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/text/piecetree"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/text/piecetree"
 )
 
 func syncAuthoredTextPositions(world *ecs.World) {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/scene"
 )
 
 func assertHTMLContextMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Entity, source string) {

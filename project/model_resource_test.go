@@ -18,12 +18,12 @@ import (
 	"github.com/binzume/modelconv/fbx"
 	"github.com/binzume/modelconv/geom"
 
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	"github.com/diiyw/onix/internal/typedbin"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/internal/typedbin"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

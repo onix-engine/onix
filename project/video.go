@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 )
 
 // Video owns a pinned encoded video blob. Bytes returns an immutable borrowed

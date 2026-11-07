@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 func TestCameraHDREnvironmentSharesBakeAndReleasesTexture(t *testing.T) {

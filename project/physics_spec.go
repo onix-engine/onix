@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/diiyw/onix/ecs"
-	enginephysics "github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/ecs"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 type RigidBody2DSpec struct {

@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/font"
+	"github.com/onix-engine/onix/font"
 )
 
 type latinOnlyCmap struct {

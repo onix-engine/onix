@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 )
 
 // ModelAnimationSource is a named collection of vector/quaternion keyframe

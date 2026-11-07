@@ -5,7 +5,7 @@ package project
 import (
 	"testing"
 
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

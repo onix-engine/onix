@@ -3,7 +3,7 @@ package project
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/scene"
 )
 
 func validateModAnimationTargets(plan *ModPlan) error {

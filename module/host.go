@@ -1,7 +1,7 @@
 package module
 
 import (
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/window"
 	"time"
 )
 

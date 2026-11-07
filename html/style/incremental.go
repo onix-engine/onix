@@ -1,8 +1,8 @@
 package style
 
 import (
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*dom.Node) (Map, error) {

@@ -3,8 +3,8 @@ package graphics
 import (
 	"testing"
 
-	"github.com/diiyw/onix/internal/reuse"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/internal/reuse"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestCanvasReclaimsBurstCapacityWithoutLosingEarlierBatches(t *testing.T) {

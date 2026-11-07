@@ -1,8 +1,8 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/render"
 )
 
 type Tilemap2D struct {

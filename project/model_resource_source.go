@@ -13,9 +13,9 @@ import (
 	pathpkg "path"
 	"strings"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/typedbin"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/typedbin"
+	"github.com/onix-engine/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

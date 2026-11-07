@@ -2,13 +2,13 @@
 package main
 
 import (
-	onix "github.com/diiyw/onix"
-	mod0 "github.com/diiyw/onix/examples/webview/browser"
-	contracts "github.com/diiyw/onix/examples/webview/contracts"
-	graphics "github.com/diiyw/onix/graphics"
-	module "github.com/diiyw/onix/module"
-	project "github.com/diiyw/onix/project"
-	onixwebview "github.com/diiyw/onix/window/webview"
+	onix "github.com/onix-engine/onix"
+	mod0 "github.com/onix-engine/onix/examples/webview/browser"
+	contracts "github.com/onix-engine/onix/examples/webview/contracts"
+	graphics "github.com/onix-engine/onix/graphics"
+	module "github.com/onix-engine/onix/module"
+	project "github.com/onix-engine/onix/project"
+	onixwebview "github.com/onix-engine/onix/window/webview"
 	iofs "io/fs"
 )
 

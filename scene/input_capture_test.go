@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

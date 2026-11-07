@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/diiyw/onix/font"
+	"github.com/onix-engine/onix/font"
 )
 
 type Font struct {

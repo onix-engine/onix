@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"maps"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 // Cache compiled form data independently of document history and disk state.

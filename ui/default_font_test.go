@@ -3,9 +3,9 @@ package ui
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/scene"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/scene"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 func TestDefaultControlThemeUsesSharedSystemFont(t *testing.T) {

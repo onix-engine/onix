@@ -1,6 +1,6 @@
 package scene
 
-import "github.com/diiyw/onix/ecs"
+import "github.com/onix-engine/onix/ecs"
 
 func requireWorld(world *ecs.World) {
 	if world == nil {

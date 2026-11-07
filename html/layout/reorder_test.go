@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 func TestLocalFlexOrderRestoresDOMTiesAndDeduplicatesParents(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/internal/entitycache"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/entitycache"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func entityStoreBytes[T any](store *entitycache.Store[T]) uintptr {

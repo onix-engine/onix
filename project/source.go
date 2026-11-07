@@ -6,7 +6,7 @@ import (
 	iofs "io/fs"
 	"strings"
 
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/resource"
 )
 
 type projectBlobSource interface {

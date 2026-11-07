@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/diiyw/onix/internal/smallsort"
+	"github.com/onix-engine/onix/internal/smallsort"
 )
 
 type entityMeta struct {

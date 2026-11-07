@@ -3,7 +3,7 @@ package onix
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func (app *App) LoadScene(bundle *project.Bundle) (*project.SceneInstance, error) {

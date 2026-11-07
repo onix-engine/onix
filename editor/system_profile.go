@@ -3,7 +3,7 @@ package editor
 import (
 	"slices"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 type projectImageDecoderDescriptor struct {
@@ -16,10 +16,10 @@ type projectImageDecoderDescriptor struct {
 }
 
 var projectImageDecoderDescriptors = [...]projectImageDecoderDescriptor{
-	{ID: project.ImageDecoderGIF, Label: "GIF", FieldName: "project.engine.imageDecoders.gif", ImportName: "graphicsgif", ImportPath: "github.com/diiyw/onix/graphics/codec/gif", GoType: "graphicsgif.Decoder"},
-	{ID: project.ImageDecoderJPEG, Label: "JPEG (.jpg)", FieldName: "project.engine.imageDecoders.jpeg", ImportName: "graphicsjpeg", ImportPath: "github.com/diiyw/onix/graphics/codec/jpeg", GoType: "graphicsjpeg.Decoder"},
-	{ID: project.ImageDecoderPNG, Label: "PNG", FieldName: "project.engine.imageDecoders.png", ImportName: "graphicspng", ImportPath: "github.com/diiyw/onix/graphics/codec/png", GoType: "graphicspng.Decoder"},
-	{ID: project.ImageDecoderWebP, Label: "WebP", FieldName: "project.engine.imageDecoders.webp", ImportName: "graphicswebp", ImportPath: "github.com/diiyw/onix/graphics/codec/webp", GoType: "graphicswebp.Decoder"},
+	{ID: project.ImageDecoderGIF, Label: "GIF", FieldName: "project.engine.imageDecoders.gif", ImportName: "graphicsgif", ImportPath: "github.com/onix-engine/onix/graphics/codec/gif", GoType: "graphicsgif.Decoder"},
+	{ID: project.ImageDecoderJPEG, Label: "JPEG (.jpg)", FieldName: "project.engine.imageDecoders.jpeg", ImportName: "graphicsjpeg", ImportPath: "github.com/onix-engine/onix/graphics/codec/jpeg", GoType: "graphicsjpeg.Decoder"},
+	{ID: project.ImageDecoderPNG, Label: "PNG", FieldName: "project.engine.imageDecoders.png", ImportName: "graphicspng", ImportPath: "github.com/onix-engine/onix/graphics/codec/png", GoType: "graphicspng.Decoder"},
+	{ID: project.ImageDecoderWebP, Label: "WebP", FieldName: "project.engine.imageDecoders.webp", ImportName: "graphicswebp", ImportPath: "github.com/onix-engine/onix/graphics/codec/webp", GoType: "graphicswebp.Decoder"},
 }
 
 // projectTextureContainerDecoder is not a user-selectable image format. A
@@ -29,7 +29,7 @@ var projectImageDecoderDescriptors = [...]projectImageDecoderDescriptor{
 var projectTextureContainerDecoder = projectImageDecoderDescriptor{
 	Label:      "Compressed texture container",
 	ImportName: "ontex",
-	ImportPath: "github.com/diiyw/onix/graphics/codec/ontex",
+	ImportPath: "github.com/onix-engine/onix/graphics/codec/ontex",
 	GoType:     "ontex.Decoder",
 }
 
@@ -85,10 +85,10 @@ var projectRuntimeFeatureDescriptors = [...]projectRuntimeFeatureDescriptor{
 	{ID: project.FeatureUIControls, Content: []string{"LayoutContent"}, Label: "UI Controls", GoType: "UIControls"},
 	{ID: project.FeatureUIWidgets, Content: []string{"LayoutContent"}, Label: "UI Widgets", GoType: "UIWidgets"},
 	{ID: project.FeatureUITextInput, Content: []string{"LayoutContent"}, Label: "UI Text Input", GoType: "UITextInput"},
-	{ID: project.FeatureUIMarkdown, Content: []string{"LayoutContent"}, Label: "UI Markdown", GoType: "UIMarkdown[markdown.Feature]", ImportName: "markdown", ImportPath: "github.com/diiyw/onix/ui/markdown"},
+	{ID: project.FeatureUIMarkdown, Content: []string{"LayoutContent"}, Label: "UI Markdown", GoType: "UIMarkdown[markdown.Feature]", ImportName: "markdown", ImportPath: "github.com/onix-engine/onix/ui/markdown"},
 	{ID: project.FeatureUIHTML, Content: []string{"LayoutContent", "HTMLContent"}, Label: "UI HTML", GoType: "UIHTML"},
-	{ID: project.FeatureWebView, Content: []string{"LayoutContent"}, Label: "WebView", GoType: "WebView", ImportName: "onixwebview", ImportPath: "github.com/diiyw/onix/window/webview", Register: true},
-	{ID: project.FeatureFileDialogs, Label: "File Dialogs", ImportName: "filedialog", ImportPath: "github.com/diiyw/onix/window/filedialog", Register: true},
+	{ID: project.FeatureWebView, Content: []string{"LayoutContent"}, Label: "WebView", GoType: "WebView", ImportName: "onixwebview", ImportPath: "github.com/onix-engine/onix/window/webview", Register: true},
+	{ID: project.FeatureFileDialogs, Label: "File Dialogs", ImportName: "filedialog", ImportPath: "github.com/onix-engine/onix/window/filedialog", Register: true},
 }
 
 type projectResourceDescriptor struct {

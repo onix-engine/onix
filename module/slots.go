@@ -4,9 +4,9 @@ import (
 	"math"
 	"slices"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
 )
 
 type slotState struct {

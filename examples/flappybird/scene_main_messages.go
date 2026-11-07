@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/diiyw/onix/examples/flappybird/contracts"
-	"github.com/diiyw/onix/module"
+	"github.com/onix-engine/onix/examples/flappybird/contracts"
+	"github.com/onix-engine/onix/module"
 )
 
 type SceneMain struct{}

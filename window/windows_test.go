@@ -5,7 +5,7 @@ package window
 import (
 	"testing"
 
-	"github.com/diiyw/onix/input"
+	"github.com/onix-engine/onix/input"
 )
 
 // The pump talks to user32 through a stack argument array; the registered

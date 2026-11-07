@@ -8,11 +8,11 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	"github.com/diiyw/onix/project"
-	sceneapi "github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	"github.com/onix-engine/onix/project"
+	sceneapi "github.com/onix-engine/onix/scene"
 )
 
 func TestImageFeatureInstantiatesPNGSprite(t *testing.T) {

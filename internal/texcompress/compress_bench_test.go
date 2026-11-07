@@ -3,7 +3,7 @@ package texcompress
 import (
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 func BenchmarkEncodeChain(b *testing.B) {

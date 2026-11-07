@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/diiyw/onix"
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/graphics"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	graphicssvg "github.com/diiyw/onix/graphics/codec/svg"
-	onixsvg "github.com/diiyw/onix/images/svg"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/graphics"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
+	onixsvg "github.com/onix-engine/onix/images/svg"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type fixtureImageProvider struct {

@@ -1,7 +1,7 @@
 package scene
 
 import (
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 type renderSnapshots2DScratch struct{}

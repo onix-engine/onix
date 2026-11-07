@@ -3,8 +3,8 @@ package editor
 import (
 	"runtime"
 
-	"github.com/diiyw/onix/input"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/input"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type workspaceWindowIconSize struct{}

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 func BenchmarkHTMLComponentTraversal(b *testing.B) {

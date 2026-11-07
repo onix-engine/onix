@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"testing"
 
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/window"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/window"
 )
 
 func TestMain(m *testing.M) {

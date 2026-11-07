@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
 )
 
 type preloadFeature struct {

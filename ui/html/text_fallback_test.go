@@ -5,9 +5,9 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/layout"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
 )
 
 type noGlyphCmap struct{}

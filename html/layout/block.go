@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {

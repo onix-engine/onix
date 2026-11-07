@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	htmlui "github.com/diiyw/onix/ui/html"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/project"
+	htmlui "github.com/onix-engine/onix/ui/html"
+	"github.com/onix-engine/onix/window"
 )
 
 func TestWorkspaceShaderComponentOffersElementSourcePickers(t *testing.T) {

@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestWorkspaceReloadKeepsModuleEditingAndSelection(t *testing.T) {

@@ -3,7 +3,7 @@ package style
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/css"
+	"github.com/onix-engine/onix/html/css"
 )
 
 func TestMutationDependenciesSeparateLocalSiblingRules(t *testing.T) {

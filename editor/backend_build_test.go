@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
 )
 
 func TestBackendBuildFlagsAndShaderTargets(t *testing.T) {

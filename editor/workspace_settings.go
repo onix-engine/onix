@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
 )
 
 func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save string, categories []settingsCategoryItem[C], category C) settingsDialogLayout[C] {

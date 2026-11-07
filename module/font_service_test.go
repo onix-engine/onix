@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
 )
 
 type fontFixture struct {

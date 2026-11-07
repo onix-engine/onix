@@ -1,8 +1,8 @@
 package module
 
 import (
-	"github.com/diiyw/onix/ecs"
-	html "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	html "github.com/onix-engine/onix/ui/html"
 )
 
 // ContentRenderContext is passed by value; Props and State refer to the component.

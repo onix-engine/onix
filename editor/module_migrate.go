@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 type ModuleMigrationIssue struct {

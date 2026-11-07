@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 // cssWideKeywords are the value keywords from CSS Cascade 4 section 7 that

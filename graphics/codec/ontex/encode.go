@@ -3,8 +3,8 @@ package ontex
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/internal/texcompress"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/internal/texcompress"
+	"github.com/onix-engine/onix/render"
 )
 
 // EncodeOptions selects how source pixels are compressed.

@@ -3,7 +3,7 @@ package editor
 import (
 	"fmt"
 
-	onixtext "github.com/diiyw/onix/text"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 func loadSystemUIFont() (*onixtext.Font, error) {

@@ -3,8 +3,8 @@ package html
 import (
 	"math"
 
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 	"github.com/go-gl/mathgl/mgl32"
 )
 

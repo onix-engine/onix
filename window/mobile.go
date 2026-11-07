@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/render"
 )
 
 var context *Context

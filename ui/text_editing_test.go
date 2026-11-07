@@ -3,10 +3,10 @@ package ui
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/input"
-	"github.com/diiyw/onix/text/piecetree"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
+	"github.com/onix-engine/onix/text/piecetree"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func TestTextEditingNavigation(t *testing.T) {

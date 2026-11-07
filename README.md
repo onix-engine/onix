@@ -6,7 +6,7 @@ Onix is a game and application engine written in Go. It includes a typed ECS,
 2D and 3D rendering and physics, HTML/CSS UI, audio, resource packaging, and a
 project editor.
 
-The Go module is `github.com/diiyw/onix`; the root package is `onix`.
+The Go module is `github.com/onix-engine/onix`; the root package is `onix`.
 
 ## Prerequisites
 

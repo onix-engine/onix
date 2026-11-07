@@ -7,7 +7,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/audio"
+	"github.com/onix-engine/onix/audio"
 )
 
 func TestPCM16StereoStreamResamplesAndSeeks(t *testing.T) {

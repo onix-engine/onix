@@ -1,8 +1,8 @@
 package module
 
 import (
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene/render3d"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene/render3d"
 )
 
 // InstallMaterial3D replaces the built-in material during this instance's

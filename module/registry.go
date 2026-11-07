@@ -4,7 +4,7 @@ package module
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 // Registry contains cold registration only. A Runtime snapshots it at creation.

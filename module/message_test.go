@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestMessagesAddressAnySceneInstanceWithoutDeclarations(t *testing.T) {

@@ -3,14 +3,14 @@ package onix
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
-	enginephysics "github.com/diiyw/onix/physics"
-	"github.com/diiyw/onix/project"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/scene/render3d"
-	engineui "github.com/diiyw/onix/ui"
-	"github.com/diiyw/onix/ui/html"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/ecs"
+	enginephysics "github.com/onix-engine/onix/physics"
+	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/scene/render3d"
+	engineui "github.com/onix-engine/onix/ui"
+	"github.com/onix-engine/onix/ui/html"
+	"github.com/onix-engine/onix/window"
 )
 
 // SystemSet is a statically selected engine capability. The unexported method

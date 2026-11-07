@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/internal/typedbin"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/typedbin"
+	"github.com/onix-engine/onix/render"
 )
 
 type compiledResource struct {

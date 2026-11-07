@@ -3,8 +3,8 @@ package render3d
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/render"
 )
 
 // Quality caps authored effects. It never enables an effect that the

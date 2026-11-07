@@ -3,7 +3,7 @@ package physics
 import (
 	"math"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 // RigidBody3D binds a world-space transform to a simulated body.

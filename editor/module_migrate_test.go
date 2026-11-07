@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 func migrationFixture(t *testing.T, scene, main string) string {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/window"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/window"
 )
 
 func TestLinuxWebViewLoadsInstalledRuntime(t *testing.T) {

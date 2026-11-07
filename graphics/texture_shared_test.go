@@ -5,7 +5,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 type sharedImageDriver struct {

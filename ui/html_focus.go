@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"github.com/diiyw/onix/ecs"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type htmlFocusGroup struct {

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"weak"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func textWorkspaceCapacities(ctx *layoutContext) [4]int {

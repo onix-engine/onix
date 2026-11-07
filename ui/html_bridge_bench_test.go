@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	htmlui "github.com/diiyw/onix/ui/html"
+	"github.com/onix-engine/onix/ecs"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func BenchmarkHTMLControlBridge(b *testing.B) {

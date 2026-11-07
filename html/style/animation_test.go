@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/diiyw/onix/html/css"
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/css"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestCSSAnimationCascadeAndPropertyKeyframes(t *testing.T) {

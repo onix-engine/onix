@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/diiyw/onix/internal/brotli"
+	"github.com/onix-engine/onix/internal/brotli"
 )
 
 // compressWasmBrotli streams the raw WASM into its transport artifact so the

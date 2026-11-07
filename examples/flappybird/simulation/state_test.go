@@ -3,7 +3,7 @@ package simulation
 import (
 	"testing"
 
-	enginephysics "github.com/diiyw/onix/physics"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 var defaultBirdStart = enginephysics.V(-92, 197)

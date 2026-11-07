@@ -6,8 +6,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/internal/typedbin"
-	enginephysics "github.com/diiyw/onix/physics"
+	"github.com/onix-engine/onix/internal/typedbin"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 func TestExternalCollisionResourceLoadsSingleConvexIntoModelCache(t *testing.T) {

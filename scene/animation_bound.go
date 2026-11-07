@@ -3,7 +3,7 @@ package scene
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/ecs"
+	"github.com/onix-engine/onix/ecs"
 )
 
 // This file contains playback for clips whose bindings were resolved to real

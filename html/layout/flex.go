@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/html/dom"
-	"github.com/diiyw/onix/html/style"
+	"github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/style"
 )
 
 type flexConfig struct {

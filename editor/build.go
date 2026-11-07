@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diiyw/onix/render"
-	"github.com/diiyw/onix/resource"
+	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/resource"
 )
 
 const buildOutputDirName = "dist"
@@ -923,7 +923,7 @@ func generateProjectResourceOverlay(root string, layout *projectBuildLayout, cat
 	if err := os.MkdirAll(layout.AppDir, 0o755); err != nil {
 		return fmt.Errorf("create resource overlay directory: %w", err)
 	}
-	sources := generatedResourceSources(packageName, "github.com/diiyw/onix/resource", layout.ProjectRelPath, layout.NativeResourceDir, catalog)
+	sources := generatedResourceSources(packageName, "github.com/onix-engine/onix/resource", layout.ProjectRelPath, layout.NativeResourceDir, catalog)
 	replacements := make(map[string]string, len(sources))
 	for name, source := range sources {
 		generatedPath := filepath.Join(layout.AppDir, name)
@@ -970,7 +970,7 @@ func prepareEmbeddedProjectResources(root string, layout *projectBuildLayout, mo
 	if err != nil {
 		return err
 	}
-	for name, source := range generatedResourceSources(layout.PackageName, "github.com/diiyw/onix/resource", layout.ProjectRelPath, layout.NativeResourceDir, catalog) {
+	for name, source := range generatedResourceSources(layout.PackageName, "github.com/onix-engine/onix/resource", layout.ProjectRelPath, layout.NativeResourceDir, catalog) {
 		if err := os.WriteFile(filepath.Join(layout.AppDir, name), []byte(source), 0o644); err != nil {
 			return fmt.Errorf("write embedded project resource source %s: %w", name, err)
 		}

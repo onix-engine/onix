@@ -7,7 +7,7 @@ import (
 	iofs "io/fs"
 	pathpkg "path"
 
-	"github.com/diiyw/onix/internal/typedbin"
+	"github.com/onix-engine/onix/internal/typedbin"
 )
 
 func decodeModelResource(_ iofs.FS, path string, data []byte) (compiledModelResource, error) {

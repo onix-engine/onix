@@ -4,12 +4,12 @@ import (
 	"fmt"
 	iofs "io/fs"
 
-	"github.com/diiyw/onix/audio"
-	"github.com/diiyw/onix/graphics"
-	graphicsgif "github.com/diiyw/onix/graphics/codec/gif"
-	graphicsjpeg "github.com/diiyw/onix/graphics/codec/jpeg"
-	graphicspng "github.com/diiyw/onix/graphics/codec/png"
-	graphicssvg "github.com/diiyw/onix/graphics/codec/svg"
+	"github.com/onix-engine/onix/audio"
+	"github.com/onix-engine/onix/graphics"
+	graphicsgif "github.com/onix-engine/onix/graphics/codec/gif"
+	graphicsjpeg "github.com/onix-engine/onix/graphics/codec/jpeg"
+	graphicspng "github.com/onix-engine/onix/graphics/codec/png"
+	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
 )
 
 type testResourceFeature struct{}

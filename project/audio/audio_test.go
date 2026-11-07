@@ -5,8 +5,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diiyw/onix/audio/codec"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/audio/codec"
+	"github.com/onix-engine/onix/project"
 )
 
 func TestFeatureLoadsAudioLazily(t *testing.T) {

@@ -3,9 +3,9 @@ package render3d
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
 )
 
 func TestShaderComponentPreservesMeshMaterialsAndOverridesEverySlot(t *testing.T) {

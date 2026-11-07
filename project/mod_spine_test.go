@@ -4,9 +4,9 @@ import (
 	"image"
 	"testing"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/scene"
-	"github.com/diiyw/onix/spine"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/spine"
 )
 
 func TestModSpineContentAppliesConfiguredAnimationBeforeFirstTick(t *testing.T) {

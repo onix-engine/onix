@@ -3,7 +3,7 @@ package css
 import (
 	"testing"
 
-	"github.com/diiyw/onix/html/dom"
+	"github.com/onix-engine/onix/html/dom"
 )
 
 func TestTokenizer(t *testing.T) {

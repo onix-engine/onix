@@ -2,7 +2,7 @@
 
 package graphics
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 func newShapeCoverageDriver(surface render.NativeSurface) (render.Driver, error) {
 	return render.NewOpenGLDriver(surface)

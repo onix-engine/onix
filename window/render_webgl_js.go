@@ -3,7 +3,7 @@
 package window
 
 import (
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 	"syscall/js"
 )
 

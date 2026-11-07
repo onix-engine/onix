@@ -3,10 +3,10 @@ package main
 import (
 	"io/fs"
 
-	"github.com/diiyw/onix/graphics"
-	"github.com/diiyw/onix/graphics/codec/svg"
-	"github.com/diiyw/onix/module"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/graphics/codec/svg"
+	"github.com/onix-engine/onix/module"
+	"github.com/onix-engine/onix/project"
 )
 
 // Keep small, rotating sprites sharp while limiting background rasterization

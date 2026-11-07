@@ -3,7 +3,7 @@ package graphics
 import (
 	"fmt"
 
-	"github.com/diiyw/onix/render"
+	"github.com/onix-engine/onix/render"
 )
 
 // CompressedTextureDescriptor describes a payload that is already in the texel

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/diiyw/onix/graphics"
+	"github.com/onix-engine/onix/graphics"
 )
 
 // ParseColor shares the engine's authored CSS color parser with module loaders.

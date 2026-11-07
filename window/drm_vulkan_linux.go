@@ -7,7 +7,7 @@ package window
 */
 import "C"
 
-import "github.com/diiyw/onix/render"
+import "github.com/onix-engine/onix/render"
 
 func newDRMDriver(display *C.OnixDRMDisplay, width, height int) (render.Driver, error) {
 	if C.onix_drm_save_outputs(display) == 0 {

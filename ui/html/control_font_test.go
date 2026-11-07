@@ -3,11 +3,11 @@ package html
 import (
 	"testing"
 
-	"github.com/diiyw/onix/ecs"
-	onixfont "github.com/diiyw/onix/font"
-	"github.com/diiyw/onix/scene"
-	notosanssc "github.com/diiyw/onix/testdata/fonts/Noto_Sans_SC"
-	onixtext "github.com/diiyw/onix/text"
+	"github.com/onix-engine/onix/ecs"
+	onixfont "github.com/onix-engine/onix/font"
+	"github.com/onix-engine/onix/scene"
+	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
+	onixtext "github.com/onix-engine/onix/text"
 )
 
 func TestHTMLControlFontKeepsTabWidthAcrossSiblingHover(t *testing.T) {

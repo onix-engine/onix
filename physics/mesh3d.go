@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diiyw/onix/internal/reuse"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 // CollisionMode selects the shape produced by model import baking.

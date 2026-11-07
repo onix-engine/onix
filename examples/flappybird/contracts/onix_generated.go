@@ -3,7 +3,7 @@ package contracts
 
 import (
 	"fmt"
-	"github.com/diiyw/onix/project"
+	"github.com/onix-engine/onix/project"
 )
 
 type FlappyFrame struct {

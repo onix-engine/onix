@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	enginephysics "github.com/diiyw/onix/physics"
+	enginephysics "github.com/onix-engine/onix/physics"
 )
 
 // CollisionResourceSpec is the interchange format for collision geometry
