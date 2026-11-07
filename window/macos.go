@@ -32,12 +32,18 @@ func init() {
 	runtime.LockOSThread()
 }
 
+// cgo checks the entire allocation behind an event pointer. Keep the batch
+// separate from Context, whose callbacks and resources contain Go pointers.
+type macEventBuffer [256]C.OnixMacEvent
+
 type Context struct {
 	renderContext
 	closeRequestSupport
 	iconDecoderSupport
 	renderErr      error
 	nativeWindow   *C.OnixMacWindow
+	mouseDownEvent *C.OnixMacEvent
+	events         *macEventBuffer
 	onKeydown      func(input.KeyCode)
 	onKeyup        func(input.KeyCode)
 	onMouseDown    func(x, y float64, button input.MouseButton)
@@ -55,7 +61,6 @@ type Context struct {
 	mouseCaptureSupport
 	textInputSupport
 	viewport          viewportState
-	events            [256]C.OnixMacEvent
 	Width             int
 	Height            int
 	devicePixelRatio  float64
@@ -98,6 +103,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		nativeWindow:     nativeWindow,
 		viewport:         newViewportState(width, height),
 		framePacer:       newFramePacer(),
+		events:           new(macEventBuffer),
 		decorations:      options.Decorations,
 		shadow:           options.Shadow,
 		resizable:        options.Resizable,
@@ -206,7 +212,7 @@ func (c *Context) applyInputRegion() {
 func (c *Context) Minimize()         { C.onix_macos_minimize(c.nativeWindow) }
 func (c *Context) ToggleMaximize()   { C.onix_macos_toggle_maximize(c.nativeWindow) }
 func (c *Context) ToggleFullscreen() { C.onix_macos_toggle_fullscreen(c.nativeWindow) }
-func (c *Context) StartWindowDrag()  { C.onix_macos_start_drag(c.nativeWindow) }
+func (c *Context) StartWindowDrag()  { C.onix_macos_start_drag(c.nativeWindow, c.mouseDownEvent) }
 
 func (c *Context) adjustViewport() {
 	if !c.viewport.apply(c.Device.Driver(),
@@ -352,8 +358,11 @@ func (c *Context) handleEvent(event *C.OnixMacEvent) {
 	case int(C.ONIX_MAC_EVENT_MOUSE_DOWN):
 		if c.onMouseDown != nil {
 			x, y := c.GetLogicalXY(float64(event.x), float64(event.y))
+			c.mouseDownEvent = event
 			c.onMouseDown(x, y, input.MouseButton(event.arg0))
+			c.mouseDownEvent = nil
 		}
+		C.onix_macos_release_event(event)
 	case int(C.ONIX_MAC_EVENT_MOUSE_UP):
 		if c.onMouseUp != nil {
 			x, y := c.GetLogicalXY(float64(event.x), float64(event.y))

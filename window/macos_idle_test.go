@@ -8,10 +8,37 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/onix-engine/onix/input"
 )
 
+func TestMacOSMouseDownScopesWindowDragEvent(t *testing.T) {
+	c := &Context{events: new(macEventBuffer)}
+	event := &c.events[0]
+	event.kind = 6 // ONIX_MAC_EVENT_MOUSE_DOWN
+	called := false
+	c.OnMouseDown(func(x, y float64, button input.MouseButton) {
+		called = true
+		if c.mouseDownEvent != event {
+			t.Fatal("window drag did not receive the dispatched press")
+		}
+		// Even without a native window, cgo validates the retained press before
+		// the native function can return. Context must never be part of it.
+		c.StartWindowDrag()
+	})
+	c.handleEvent(event)
+	if !called || c.mouseDownEvent != nil {
+		t.Fatal("mouse-down event escaped its callback")
+	}
+	if allocs := testing.AllocsPerRun(100, func() { c.handleEvent(event) }); allocs != 0 {
+		t.Fatalf("mouse-down event allocated %g times", allocs)
+	}
+	c.OnMouseDown(nil)
+	c.handleEvent(event)
+}
+
 func TestMacOSRedrawResumesFramePacing(t *testing.T) {
-	c := &Context{framePacer: newFramePacer()}
+	c := &Context{framePacer: newFramePacer(), events: new(macEventBuffer)}
 	c.framePacer.setTargetFPS(1)
 	now := time.Now()
 	if !c.framePacer.ready(now) || c.framePacer.ready(now.Add(time.Millisecond)) {
@@ -38,7 +65,7 @@ func TestMacOSNativeIdle(t *testing.T) {
 	if output, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
 		t.Fatalf("compile native macOS idle test: %v\n%s", err, output)
 	}
-	for _, name := range []string{"dispatch", "wake", "callback", "reopen"} {
+	for _, name := range []string{"dispatch", "wake", "callback", "reopen", "drag"} {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

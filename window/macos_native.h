@@ -42,6 +42,8 @@ int onix_macos_file_dialog(
 void onix_macos_file_dialog_free(char **paths, int count);
 
 typedef struct {
+    // Retained native press; ownership transfers to the caller of pop_event.
+    void *mouse_down;
     int kind;
     int arg0;
     double x;
@@ -64,6 +66,7 @@ void onix_macos_poll(OnixMacWindow *window);
 void onix_macos_wait(OnixMacWindow *window, int timeout_ms);
 void onix_macos_wake(void);
 int onix_macos_pop_event(OnixMacWindow *window, OnixMacEvent *event);
+void onix_macos_release_event(OnixMacEvent *event);
 int onix_macos_should_close(OnixMacWindow *window);
 void onix_macos_cancel_close(OnixMacWindow *window);
 int onix_macos_width(OnixMacWindow *window);
@@ -83,7 +86,7 @@ void onix_macos_set_input_region(OnixMacWindow *window, int enabled, const OnixM
 void onix_macos_minimize(OnixMacWindow *window);
 void onix_macos_toggle_maximize(OnixMacWindow *window);
 void onix_macos_toggle_fullscreen(OnixMacWindow *window);
-void onix_macos_start_drag(OnixMacWindow *window);
+void onix_macos_start_drag(OnixMacWindow *window, const OnixMacEvent *event);
 void onix_macos_set_text_input_config(
     OnixMacWindow *window,
     uint64_t session,

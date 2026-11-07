@@ -55,7 +55,10 @@ static void onix_macos_push(OnixMacWindow *window, int kind, int arg0, double x,
         }
     }
     int next = (window->event_tail + 1) % ONIX_MAC_EVENT_CAPACITY;
-    if (next == window->event_head) window->event_head = (window->event_head + 1) % ONIX_MAC_EVENT_CAPACITY;
+    if (next == window->event_head) {
+        onix_macos_release_event(&window->events[window->event_head]);
+        window->event_head = (window->event_head + 1) % ONIX_MAC_EVENT_CAPACITY;
+    }
     OnixMacEvent *event = &window->events[window->event_tail];
     memset(event, 0, sizeof(*event));
     event->kind = kind;
@@ -282,6 +285,12 @@ static int onix_macos_key(NSEvent *event) {
 - (void)pushMouse:(NSEvent *)event kind:(int)kind button:(int)button {
     NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
     onix_macos_push(self.state, kind, button, point.x, point.y, NULL);
+    if (kind == ONIX_MAC_EVENT_MOUSE_DOWN && button == 0) {
+        // Go dispatches after AppKit has drained its queue and autorelease pool.
+        // Keep the original press with its queued event, not NSApp.currentEvent.
+        int index = (self.state->event_tail + ONIX_MAC_EVENT_CAPACITY - 1) % ONIX_MAC_EVENT_CAPACITY;
+        self.state->events[index].mouse_down = [event retain];
+    }
 }
 
 - (BOOL)hasMarkedText {
@@ -704,6 +713,10 @@ void onix_macos_destroy(OnixMacWindow *state) {
     [state->delegate release];
     [state->view release];
     [state->window release];
+    while (state->event_head != state->event_tail) {
+        onix_macos_release_event(&state->events[state->event_head]);
+        state->event_head = (state->event_head + 1) % ONIX_MAC_EVENT_CAPACITY;
+    }
     free(state->input_rects);
     free(state);
 }
@@ -744,8 +757,15 @@ void onix_macos_wake(void) {
 int onix_macos_pop_event(OnixMacWindow *state, OnixMacEvent *event) {
     if (state == NULL || event == NULL || state->event_head == state->event_tail) return 0;
     *event = state->events[state->event_head];
+    state->events[state->event_head].mouse_down = NULL;
     state->event_head = (state->event_head + 1) % ONIX_MAC_EVENT_CAPACITY;
     return 1;
+}
+
+void onix_macos_release_event(OnixMacEvent *event) {
+    if (event == NULL) return;
+    [(NSEvent *)event->mouse_down release];
+    event->mouse_down = NULL;
 }
 
 int onix_macos_should_close(OnixMacWindow *state) { return state == NULL || state->should_close; }
@@ -826,8 +846,13 @@ void onix_macos_toggle_fullscreen(OnixMacWindow *state) {
     if (state != NULL) [state->window toggleFullScreen:nil];
 }
 
-void onix_macos_start_drag(OnixMacWindow *state) {
-    if (state != NULL && NSApp.currentEvent != nil) [state->window performWindowDragWithEvent:NSApp.currentEvent];
+void onix_macos_start_drag(OnixMacWindow *state, const OnixMacEvent *event) {
+    if (state == NULL || event == NULL || state->mouse_captured) return;
+    NSEvent *press = (NSEvent *)event->mouse_down;
+    // A quick click may already have been released while Go was processing.
+    if (press.type != NSEventTypeLeftMouseDown || press.window != state->window ||
+        ([NSEvent pressedMouseButtons] & 1) == 0) return;
+    [state->window performWindowDragWithEvent:press];
 }
 
 void onix_macos_set_text_input_config(

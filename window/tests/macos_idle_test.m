@@ -1,12 +1,27 @@
 #include "../macos_native.h"
 
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
 #include <assert.h>
 #include <stdatomic.h>
 #include <string.h>
 
 static int dispatched;
 static atomic_bool woke;
+static NSUInteger mouse_buttons;
+static NSEvent *drag_event;
+
+static NSUInteger pressed_mouse_buttons(id object, SEL selector) {
+    (void)object;
+    (void)selector;
+    return mouse_buttons;
+}
+
+static void perform_window_drag(id object, SEL selector, NSEvent *event) {
+    (void)object;
+    (void)selector;
+    drag_event = event;
+}
 
 @interface OnixIdleTestApplication : NSApplication
 @end
@@ -26,6 +41,7 @@ static int drain(OnixMacWindow *state) {
     int redraws = 0;
     while (onix_macos_pop_event(state, &event)) {
         if (event.kind == ONIX_MAC_EVENT_REDRAW) redraws++;
+        onix_macos_release_event(&event);
     }
     return redraws;
 }
@@ -104,6 +120,53 @@ static void test_reopen(OnixMacWindow *state, NSWindow *window) {
     assert(drain(state) > 0);
 }
 
+static void test_drag(OnixMacWindow *state, NSWindow *window) {
+    Method buttons = class_getClassMethod([NSEvent class], @selector(pressedMouseButtons));
+    Method drag = class_getInstanceMethod([NSWindow class], @selector(performWindowDragWithEvent:));
+    IMP original_buttons = method_setImplementation(buttons, (IMP)pressed_mouse_buttons);
+    IMP original_drag = method_setImplementation(drag, (IMP)perform_window_drag);
+    OnixMacEvent events[2];
+    // Queue two different presses, then let their autorelease pool expire before
+    // dispatching either, just as the Go event batch does after native polling.
+    @autoreleasepool {
+        for (int i = 0; i < 2; i++) {
+            NSEvent *press = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown
+                location:NSMakePoint(100 + i * 80, 220) modifierFlags:0 timestamp:i + 1
+                windowNumber:window.windowNumber context:nil eventNumber:i + 1 clickCount:1 pressure:1];
+            [window.contentView mouseDown:press];
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        assert(onix_macos_pop_event(state, &events[i]));
+        assert(events[i].kind == ONIX_MAC_EVENT_MOUSE_DOWN);
+    }
+    mouse_buttons = 1;
+    for (int i = 0; i < 2; i++) {
+        drag_event = nil;
+        onix_macos_start_drag(state, &events[i]);
+        assert(drag_event == events[i].mouse_down);
+        assert(drag_event.eventNumber == i + 1);
+        assert(drag_event.locationInWindow.x == 100 + i * 80);
+    }
+    // A completed click must not initiate a late drag from an old position.
+    mouse_buttons = 0;
+    drag_event = nil;
+    onix_macos_start_drag(state, &events[0]);
+    assert(drag_event == nil);
+    mouse_buttons = 1;
+    onix_macos_start_drag(state, NULL);
+    assert(drag_event == nil);
+    for (int i = 0; i < 2; i++) {
+        onix_macos_release_event(&events[i]);
+        assert(events[i].mouse_down == NULL);
+        onix_macos_start_drag(state, &events[i]);
+        assert(drag_event == nil);
+        onix_macos_release_event(&events[i]);
+    }
+    method_setImplementation(buttons, original_buttons);
+    method_setImplementation(drag, original_drag);
+}
+
 int main(int argc, const char **argv) {
     assert(argc == 2);
     @autoreleasepool {
@@ -117,6 +180,7 @@ int main(int argc, const char **argv) {
         else if (strcmp(argv[1], "wake") == 0) test_wake(state);
         else if (strcmp(argv[1], "callback") == 0) test_callback(state, window);
         else if (strcmp(argv[1], "reopen") == 0) test_reopen(state, window);
+        else if (strcmp(argv[1], "drag") == 0) test_drag(state, window);
         else assert(false);
         onix_macos_destroy(state);
         assert([NSApp.delegate applicationShouldHandleReopen:NSApp hasVisibleWindows:NO]);
