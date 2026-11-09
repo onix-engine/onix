@@ -565,7 +565,7 @@ func TestWorkspaceEditorPointerSelectionAndPlacementDragSingleUndo(t *testing.T)
 	}
 	modRevision, history := a.Document.Mods["button"].Revision, len(a.Document.undo)
 	a.canvasScale = .5
-	a.beginPlacementDrag("start", 100, 100)
+	a.beginCanvasDrag("start", "", 100, 100)
 	a.updatePlacementDrag(input.Pointer{X: 120, Y: 130, Down: true})
 	if len(a.Document.undo) != history || a.Document.Instance("start").Placement.Position[0] != 30 {
 		t.Fatal("drag movement wrote undo history before release")

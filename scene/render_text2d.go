@@ -2,14 +2,13 @@ package scene
 
 import (
 	"math"
-	"sort"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
 	onixtext "github.com/onix-engine/onix/text"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type standaloneTextScratchTag struct{}
@@ -86,14 +85,6 @@ func (t *Text2D) appendStyledTextRuns(dst []renderItem2D, order uint64, transfor
 		start = end
 	}
 	return dst
-}
-
-func (t *Text2D) spanColor(byteIndex int) graphics.ColorRGBA {
-	index := sort.Search(len(t.Spans), func(index int) bool { return t.Spans[index].End > byteIndex })
-	if index < len(t.Spans) && t.Spans[index].Start <= byteIndex {
-		return t.Spans[index].Color
-	}
-	return t.Color
 }
 
 func (t *Text2D) appendTextRuns(dst []renderItem2D, order uint64, transform mgl32.Mat4, clr graphics.ColorRGBA, clip clipRect2D, ui bool, sortIndex int, outlined bool, paint *textPaint2D) []renderItem2D {

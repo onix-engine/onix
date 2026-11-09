@@ -6,8 +6,18 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/scene"
 )
+
+func htmlBoxDepth(box *layout.Box) int {
+	depth := 0
+	for box != nil {
+		depth++
+		box = box.Parent
+	}
+	return depth
+}
 
 func TestHTMLReparentMatchesFresh(t *testing.T) {
 	for _, contexts := range []struct{ name, left, right string }{

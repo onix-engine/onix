@@ -3,11 +3,11 @@ package editor
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type workspacePlacementDrag struct {
@@ -34,10 +34,6 @@ type workspacePlacementDrag struct {
 	WorldSpace     bool
 	Moved          bool
 	Definition     bool
-}
-
-func (a *ModuleEditor) beginPlacementDrag(id string, x, y float32) {
-	a.beginCanvasDrag(id, "", x, y)
 }
 
 func (a *ModuleEditor) beginCanvasDrag(id, element string, x, y float32) {

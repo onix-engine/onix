@@ -46,7 +46,7 @@ func (b *Box) appendInlineBackground(node *dom.Node, rect Rect, line int, styles
 		return
 	}
 	b.appendInlineBackground(node.Parent, rect, line, styles)
-	if computed.Display == style.Keyword("contents") || computed.BackgroundColor.Color.A == 0 && computed.BackgroundImage == "" && computed.AnimatedPaint&style.AnimatedBackgroundColor == 0 || rect.Width <= 0 || rect.Height <= 0 {
+	if computed.Display == style.Keyword("contents") || computed.BackgroundColor.Color.A == 0 && computed.Background.Image == "" && computed.AnimatedPaint&style.AnimatedBackgroundColor == 0 || rect.Width <= 0 || rect.Height <= 0 {
 		return
 	}
 	key := inlineBackgroundKey{node, line}

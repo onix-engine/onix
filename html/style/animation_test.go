@@ -231,3 +231,33 @@ func TestCSSAnimationColorTransitionShorthandMatching(t *testing.T) {
 		}
 	}
 }
+
+func TestTransitionListCyclingAndLastMatchingEntry(t *testing.T) {
+	computed := defaultStyle(nil)
+	for _, declaration := range []css.Declaration{
+		{Property: "transition-property", Value: "all, width, border, border-left-color, opacity"},
+		{Property: "transition-duration", Value: "1s, 2s, 3s"},
+		{Property: "transition-delay", Value: "-100ms, 200ms"},
+		{Property: "transition-timing-function", Value: "linear, cubic-bezier(.25, .1, .25, 1)"},
+	} {
+		if err := applyTransitionProperty(&computed, declaration.Property, declaration.Value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resolveMotion(computed.mutableMotion())
+	for index, expected := range [...]struct {
+		duration float64
+		delay    float64
+		timing   TransformEasing
+	}{
+		{1, -.1, TransformLinear}, {2, -.1, TransformLinear},
+		{1, -.1, TransformLinear}, {1, -.1, TransformLinear},
+		{3, -.1, TransformLinear}, {3, -.1, TransformLinear},
+		{3, -.1, TransformLinear}, {1, .2, TransformCubicBezier},
+	} {
+		transition := computed.TransitionFor(index)
+		if !transition.Enabled || transition.Duration != expected.duration || transition.Delay != expected.delay || transition.Timing.Kind != expected.timing {
+			t.Fatalf("property %d: %+v; want %+v", index, transition, expected)
+		}
+	}
+}

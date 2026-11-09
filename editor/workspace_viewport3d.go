@@ -5,13 +5,13 @@ import (
 	"math"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type workspace3DMod struct {
@@ -378,11 +378,6 @@ func (a *ModuleEditor) updateViewport3DInput(in *input.State) {
 		a.pressViewport3D(pointer.X, pointer.Y)
 		a.updatePlacementDrag(pointer)
 	}
-}
-
-func (a *ModuleEditor) pickViewport3D(x, y float32) string {
-	id, _ := a.pickViewport3DTarget(x, y)
-	return id
 }
 
 func (a *ModuleEditor) pickViewport3DTarget(x, y float32) (string, string) {

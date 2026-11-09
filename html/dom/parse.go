@@ -248,18 +248,6 @@ func (p *Parser) leadingSpace() bool {
 	return true
 }
 
-func isHTMLDocument(input string) bool {
-	var p Parser
-	p.scanner.reset(input)
-	for {
-		kind := p.scanner.scan()
-		if kind == tokenComment || kind == TokenText && p.leadingSpace() {
-			continue
-		}
-		return documentToken(&p.scanner, kind)
-	}
-}
-
 // replaceNUL is used by insertion modes: HTML data drops NUL, foreign data
 // replaces it. Ordinary strings remain source views.
 func (p *Parser) replaceNUL(s string, replacement bool) string {

@@ -184,7 +184,7 @@ func TestWorkspaceCanvasModuleDefinitionDragAndClick(t *testing.T) {
 	a, context := workspaceElementDragFixture(t)
 	revision, history := a.Document.Scene().Revision, len(a.Document.undo)
 	original := a.Document.Mods["button"].Plan.Transform.Position
-	a.beginPlacementDrag("start", 100, 100)
+	a.beginCanvasDrag("start", "", 100, 100)
 	a.updatePlacementDrag(input.Pointer{X: 130, Y: 120, Down: true})
 	graphics.BindFrame(context.World, graphics.CurrentContext())
 	if err := a.sync(context); err != nil {
@@ -200,7 +200,7 @@ func TestWorkspaceCanvasModuleDefinitionDragAndClick(t *testing.T) {
 		t.Fatal(err)
 	}
 	history = len(a.Document.undo)
-	a.beginPlacementDrag("start", 100, 100)
+	a.beginCanvasDrag("start", "", 100, 100)
 	a.updatePlacementDrag(input.Pointer{X: 102, Y: 102, Released: true})
 	if len(a.Document.undo) != history {
 		t.Fatal("click created a move command")
@@ -345,7 +345,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 		if err := a.sync(context); err != nil {
 			t.Fatal(err)
 		}
-		bounds, ok := a.viewport3DSelectionBounds(0)
+		bounds, ok, _ := a.viewport3DSelectionGeometry(0)
 		if !ok {
 			t.Fatal("3D selection has no projected bounds", element)
 		}
@@ -373,7 +373,7 @@ func TestWorkspace3DCanvasModuleAndElementDrag(t *testing.T) {
 		if global == original || global.Col(3).Vec3().Sub(original.Col(3).Vec3()).Sub(a.canvasDrag.WorldDelta).Len() > .001 || a.Document.Revision != revision || len(a.Document.undo) != history {
 			t.Fatal("3D drag did not preview descendants without authoring", element)
 		}
-		if allocs := testing.AllocsPerRun(100, func() { move(35); move(25); a.viewport3DSelectionBounds(0) }); allocs != 0 {
+		if allocs := testing.AllocsPerRun(100, func() { move(35); move(25); a.viewport3DSelectionGeometry(0) }); allocs != 0 {
 			t.Fatalf("3D drag and selection allocated %g", allocs)
 		}
 		a.updatePlacementDrag(input.Pointer{X: x + 25, Y: y + 15, Released: true})

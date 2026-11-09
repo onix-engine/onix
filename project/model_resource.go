@@ -375,11 +375,6 @@ func finiteFloat32(value float32) bool {
 	return !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0)
 }
 
-func (r *Resources) loadModelResource(value string) (*graphics.Mesh, error) {
-	_, mesh, err := r.loadModelAsset(value)
-	return mesh, err
-}
-
 func (r *Resources) loadImportedTexture(path string, data []byte, mime string, options graphics.TextureOptions) (*graphics.Texture, error) {
 	options.Usage = graphics.ResourceUsageGPU
 	if len(data) == 0 {

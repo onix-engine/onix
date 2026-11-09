@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
@@ -13,7 +14,6 @@ import (
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestWorkspace2DModuleOpeningCentersVisibleContent(t *testing.T) {
@@ -316,7 +316,7 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 		t.Fatalf("missing legacy guides: major=%v minor=%v origin=%v", foundMajor, foundMinor, foundOrigin)
 	}
 	v := &a.viewport2D
-	if id := a.pickViewport2D(a.canvasBounds().X+v.frame.X+60*a.canvasScale, a.canvasBounds().Y+v.frame.Y+80*a.canvasScale); id != "start" {
+	if id, _ := a.pickViewport2DTarget(a.canvasBounds().X+v.frame.X+60*a.canvasScale, a.canvasBounds().Y+v.frame.Y+80*a.canvasScale); id != "start" {
 		t.Fatal("sprite picking did not match rendered placement", id)
 	}
 	oldWorld, oldSource := v.world, v.imageName
@@ -382,7 +382,7 @@ func TestWorkspace2DMiddleDragPansViewAndPreservesPicking(t *testing.T) {
 	if a.Document.Revision != revision || a.Selected != selected || a.canvasDrag.ID != "" || a.viewport2D.rows[0].root != root || a.canvasScale != scale {
 		t.Fatal("pan changed authored content, selection, or zoom")
 	}
-	if id := a.pickViewport2D(float32(x+30), float32(y+10)); id != "start" {
+	if id, _ := a.pickViewport2DTarget(float32(x+30), float32(y+10)); id != "start" {
 		t.Fatal("pan broke picking", id)
 	}
 	in.EndFrame()
@@ -530,11 +530,11 @@ func TestWorkspace2DWheelZoomAnchorsPickingAndDrag(t *testing.T) {
 		if abs(bounds.X+frame.X+60*a.canvasScale-x) > .001 || abs(bounds.Y+frame.Y+80*a.canvasScale-y) > .001 {
 			t.Fatal("zoom moved the scene point under the cursor", frame)
 		}
-		if id := a.pickViewport2D(x, y); id != "start" {
+		if id, _ := a.pickViewport2DTarget(x, y); id != "start" {
 			t.Fatal("zoom broke instance picking", id)
 		}
 	}
-	a.beginPlacementDrag("start", x, y)
+	a.beginCanvasDrag("start", "", x, y)
 	a.updatePlacementDrag(input.Pointer{X: x + 20, Y: y + 10, Down: true})
 	if abs(a.canvasDrag.Delta[0]-20/a.canvasScale) > .001 || abs(a.canvasDrag.Delta[1]-10/a.canvasScale) > .001 {
 		t.Fatal("drag did not use the zoomed canvas scale", a.canvasDrag.Delta)
@@ -707,7 +707,7 @@ func TestWorkspace2DCameraPickingAndPlacementDrag(t *testing.T) {
 		t.Fatal("could not project sprite")
 	}
 	x, y := a.canvasBounds().X+v.frame.X+point[0]*a.canvasScale, a.canvasBounds().Y+v.frame.Y+point[1]*a.canvasScale
-	if id := a.pickViewport2D(x, y); id != "world" {
+	if id, _ := a.pickViewport2DTarget(x, y); id != "world" {
 		t.Fatal("authored camera was not used for picking", id)
 	}
 	in := input.NewState()
@@ -722,10 +722,10 @@ func TestWorkspace2DCameraPickingAndPlacementDrag(t *testing.T) {
 	if abs(x-bounds.X-projected[0]) > .001 || abs(y-bounds.Y-projected[1]) > .001 {
 		t.Fatal("wheel zoom did not anchor the authored camera projection", projected)
 	}
-	if id := a.pickViewport2D(x, y); id != "world" {
+	if id, _ := a.pickViewport2DTarget(x, y); id != "world" {
 		t.Fatal("zoom broke picking through the authored camera", id)
 	}
-	a.beginPlacementDrag("world", x, y)
+	a.beginCanvasDrag("world", "", x, y)
 	a.updatePlacementDrag(input.Pointer{X: x + 20, Y: y, Down: true})
 	if abs(a.canvasDrag.Delta[0]) > .02 || abs(a.canvasDrag.Delta[1]-40/a.canvasScale) > .05 {
 		t.Fatal("drag ignored camera rotation or scale", a.canvasDrag.Delta)

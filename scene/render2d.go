@@ -8,13 +8,13 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
 	onixtext "github.com/onix-engine/onix/text"
 	"github.com/onix-engine/onix/text/piecetree"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type RenderSettings2D struct {
@@ -2920,4 +2920,3 @@ func (t Text2D) Text() piecetree.Snapshot {
 	}
 	return piecetree.FromString(t.Value)
 }
-func (t *Text2D) ellipsizedValue() string { return t.ellipsizedText().String() }

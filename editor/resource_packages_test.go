@@ -15,6 +15,7 @@ import (
 
 	onixpng "github.com/onix-engine/onix/images/png"
 	"github.com/onix-engine/onix/project"
+	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/resource"
 )
 
@@ -85,7 +86,11 @@ func TestResourceReferenceVisitors(t *testing.T) {
 }
 
 func TestAndroidShaderTargetIncludesOnlyDefaultBackend(t *testing.T) {
-	if got := shaderTargetForBuildPlatform(BuildPlatformAndroid); got != project.ShaderTargetVulkan {
+	backend, err := render.ResolveBackend(string(BuildPlatformAndroid), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := shaderTargetForBackend(backend); got != project.ShaderTargetVulkan {
 		t.Fatalf("Android shader target = %v, want Vulkan", got)
 	}
 }

@@ -35,7 +35,7 @@ func TestHTMLConcurrentRasterScratchDoesNotOverwriteResults(t *testing.T) {
 		computed.Filters = []style.Filter{{Kind: style.FilterBlur, Amount: float64(index%3 + 1)}}
 		box := &layout.Box{Node: &dom.Node{}, Style: computed, Content: layout.Rect{Width: float64(11 + index), Height: float64(8 + index)}}
 		cache := htmlTextureCache{}
-		return &htmlOpacityRasterFor(&cache, box).image
+		return &updateHTMLOpacityRaster(&cache, box, true, false, false).image
 	}
 	for index := range count {
 		expected[index] = bytes.Clone(paint(index).Pix)
@@ -79,7 +79,7 @@ func TestHTMLRasterTextureSharesPixelsAndDetachesOnResize(t *testing.T) {
 	defer state.Textures.dispose()
 	computed := &style.ComputedStyle{BackgroundColor: style.ColorValue(style.Color{R: 231, A: 255}), Opacity: style.Number(.5)}
 	box := &layout.Box{Node: &dom.Node{}, Style: computed, Content: layout.Rect{Width: 32, Height: 24}}
-	first := htmlOpacityTexture(&state, box)
+	first := htmlOpacityTextureMode(&state, box, false)
 	if !first.RenderHandle().Valid() || driver.source != &state.Textures.rasters[box.Node].image.Pix[0] {
 		t.Fatal("opacity texture copied its retained raster")
 	}
@@ -87,14 +87,14 @@ func TestHTMLRasterTextureSharesPixelsAndDetachesOnResize(t *testing.T) {
 	want := bytes.Clone(oldPixels)
 	box.Content.Width, box.Content.Height = 8, 6
 	computed.BackgroundColor.Color.R = 17
-	second := htmlOpacityTexture(&state, box)
+	second := htmlOpacityTextureMode(&state, box, false)
 	if second == first || !bytes.Equal(oldPixels, want) {
 		t.Fatal("resizing overwrote the old texture's CPU pixels")
 	}
 	if !second.RenderHandle().Valid() || driver.source != &state.Textures.rasters[box.Node].image.Pix[0] || bytes.Equal(driver.pixels, want) {
 		t.Fatal("replacement opacity texture lost its new pixels")
 	}
-	computed.BackgroundImage = "linear-gradient(red,blue)"
+	computed.Background.Image = "linear-gradient(red,blue)"
 	for _, shadow := range []bool{false, true} {
 		var variant string
 		if shadow {

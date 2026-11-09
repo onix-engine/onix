@@ -36,10 +36,6 @@ func (c *renderHierarchy2DCache) MaintainCache() {
 	c.values = c.retention.Trim(c.values, 64)
 }
 
-func frameRenderHierarchy2DCache(world *ecs.World) renderHierarchy2DCache {
-	return *frameRenderHierarchy2DCachePtr(world)
-}
-
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
 func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 	cache := world.FrameValue[renderHierarchy2DCacheScratch, renderHierarchy2DCache]()

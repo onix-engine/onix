@@ -6,10 +6,18 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
+
+func (p *Player) attachmentGeometry(slotIndex int, a *attachment, r atlasRegion) ([]float32, []float32, []uint32) {
+	return p.attachmentGeometryInto(nil, nil, slotIndex, a, r)
+}
+
+func meshAttachmentUVs(r atlasRegion, textureWidth, textureHeight int, input []float32) []float32 {
+	return meshAttachmentUVsInto(nil, r, textureWidth, textureHeight, input)
+}
 
 func TestAppendMeshBatchIntoPreservesGeometryAndMergesPlayers(t *testing.T) {
 	texture := graphics.CreateTextureByImageWithUsage(image.NewRGBA(image.Rect(0, 0, 10, 10)), false, graphics.ResourceUsageCPU)

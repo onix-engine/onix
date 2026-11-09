@@ -229,10 +229,6 @@ type htmlOpacityRaster struct {
 	gpuBlur             bool
 }
 
-func htmlOpacityRasterFor(cache *htmlTextureCache, box *layout.Box) *htmlOpacityRaster {
-	return updateHTMLOpacityRaster(cache, box, true, false, false)
-}
-
 func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
 	return cache.updateOpacityRaster(box, box.Node, root, cacheSubtree, gpuBlur)
 }

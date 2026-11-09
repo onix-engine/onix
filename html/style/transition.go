@@ -99,7 +99,12 @@ func validateTransitionField(index int, raw string) error {
 	return nil
 }
 
-func resolveTransition(values [4]string, property string) TransformTransition {
+// Resolve each list entry once, then apply it to all matching properties.
+// Later entries replace earlier matches, including shorthand matches.
+func resolveTransitions(values [4]string) (result [AnimatedPropertyCount]TransformTransition) {
+	if values == ([4]string{}) {
+		return result
+	}
 	var lists [4][]string
 	for i, value := range values {
 		if value == "" {
@@ -107,17 +112,24 @@ func resolveTransition(values [4]string, property string) TransformTransition {
 		}
 		lists[i] = splitCSSList(value)
 	}
-	result := TransformTransition{}
 	for i, name := range lists[0] {
 		name = strings.ToLower(strings.TrimSpace(name))
-		if name != "all" && name != property && AnimatedProperty(name)&AnimatedProperty(property) == 0 {
+		properties := AnimatedProperty(name)
+		if name == "all" {
+			properties = AnimatedTransform | AnimatedOpacity | AnimatedColors
+		}
+		if properties == 0 {
 			continue
 		}
-		result.Enabled = true
-		result.Duration, _, _ = parseCSSTime(lists[1][i%len(lists[1])])
-		result.Timing, _ = ParseTimingFunction(lists[2][i%len(lists[2])])
-		result.Easing = result.Timing.Kind
-		result.Delay, _, _ = parseCSSTime(lists[3][i%len(lists[3])])
+		transition := TransformTransition{Enabled: true}
+		transition.Duration, _, _ = parseCSSTime(lists[1][i%len(lists[1])])
+		transition.Timing, _ = ParseTimingFunction(lists[2][i%len(lists[2])])
+		transition.Delay, _, _ = parseCSSTime(lists[3][i%len(lists[3])])
+		for index, property := range AnimatedPropertyList {
+			if properties&property != 0 {
+				result[index] = transition
+			}
+		}
 	}
 	return result
 }

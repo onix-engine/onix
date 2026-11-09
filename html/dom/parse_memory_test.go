@@ -19,7 +19,11 @@ func TestHTMLDocumentDetection(t *testing.T) {
 		{"<!DoCtYpE><p>", true}, {"<!--unterminated <html>", false},
 		{"<htmlish>", false}, {"<HTML/>", true}, {"<html", false},
 	} {
-		if got := isHTMLDocument(test.source); got != test.document {
+		var parser Parser
+		if _, err := parser.Parse(test.source); err != nil {
+			t.Fatal(err)
+		}
+		if got := !parser.builder.fragment; got != test.document {
 			t.Errorf("document detection for %q = %v; want %v", test.source, got, test.document)
 		}
 	}
@@ -28,12 +32,13 @@ func TestHTMLDocumentDetection(t *testing.T) {
 func TestLongTextDocumentDetection(t *testing.T) {
 	text := strings.Repeat("Long document 中文 &amp; text. ", 8192)
 	for _, prefix := range []string{"", " \n", "<!-- leading -->\n", "<!-- first --><!-- second -->\t"} {
-		if isHTMLDocument(prefix + text) {
-			t.Fatal("plain fragment was classified as a document")
-		}
-		root, err := Parse(prefix + text)
+		var parser Parser
+		root, err := parser.Parse(prefix + text)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !parser.builder.fragment {
+			t.Fatal("plain fragment was classified as a document")
 		}
 		var got strings.Builder
 		for _, child := range root.Children {
@@ -51,11 +56,19 @@ func TestLongTextDocumentDetection(t *testing.T) {
 		"\u2003<!-- leading --> &#32;&#10;<html><body>Text</body></html>",
 		"<!-- leading -->&#x20;<body>Text</body>",
 	} {
-		if !isHTMLDocument(source) {
+		var parser Parser
+		if _, err := parser.Parse(source); err != nil {
+			t.Fatal(err)
+		}
+		if parser.builder.fragment {
 			t.Fatalf("document wrappers were lost after whitespace/comments: %q", source)
 		}
 	}
-	if isHTMLDocument("<!-- leading -->&amp;<html></html>") {
+	var parser Parser
+	if _, err := parser.Parse("<!-- leading -->&amp;<html></html>"); err != nil {
+		t.Fatal(err)
+	}
+	if !parser.builder.fragment {
 		t.Fatal("an entity producing visible text was ignored")
 	}
 }

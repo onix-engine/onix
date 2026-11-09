@@ -32,8 +32,10 @@ func new2DResources() *Resources {
 	}
 }
 
-func (Render2DProfile) loadProfileResources(source iofs.FS, projectDir, file string, feature ResourceFeature) (*Resources, error) {
-	return load2DResources(source, projectDir, file, feature)
+func (Render2DProfile) loadProfileResources(bundle *Bundle, source iofs.FS, projectDir, file string, feature ResourceFeature) error {
+	var err error
+	bundle.resources, err = load2DResources(source, projectDir, file, feature)
+	return err
 }
 
 func (Render2DProfile) componentBuilder() sceneComponentBuilder {
@@ -44,8 +46,10 @@ func (Render2DProfile) componentClearer() sceneComponentClearer { return clear2D
 
 func (Render2DProfile) uiSystems() sceneUISync { return sceneUISync{} }
 
-func (Render2DAnimationsProfile) loadProfileResources(source iofs.FS, projectDir, file string, feature ResourceFeature) (*Resources, error) {
-	return load2DResources(source, projectDir, file, feature)
+func (Render2DAnimationsProfile) loadProfileResources(bundle *Bundle, source iofs.FS, projectDir, file string, feature ResourceFeature) error {
+	var err error
+	bundle.resources, err = load2DResources(source, projectDir, file, feature)
+	return err
 }
 
 func (Render2DAnimationsProfile) componentBuilder() sceneComponentBuilder {
@@ -88,36 +92,11 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 	}
 	components.Put(scene.Visibility{Visible: node.Visible})
 	components.Put(spec.Anchor)
-	var animator scene.Animator
-	requiresSprite := false
-	if animations && node.HasAnimation {
-		var err error
-		animator, requiresSprite, err = bundle.ecsAnimationForSpec(spec, &node)
-		if err != nil {
-			return ecs.Bundle{}, err
-		}
-	}
 	if spec.Components.VisualsEmpty() {
 		components.Put(scene.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
 	}
-	if node.HasSprite {
-		sprite, err := bundle.ecsSpriteForSpec(spec)
-		if err != nil {
-			return ecs.Bundle{}, err
-		}
-		if requiresSprite {
-			if texture := animator.CurrentTexture(); texture != nil {
-				sprite.Texture = texture
-				sprite.Slice = nil
-				if spec.Width <= 0 {
-					sprite.Width = float32(texture.LogicalWidth())
-				}
-				if spec.Height <= 0 {
-					sprite.Height = float32(texture.LogicalHeight())
-				}
-			}
-		}
-		components.Put(sprite)
+	if err := bundle.putSpriteAnimationComponents(&components, node); err != nil {
+		return ecs.Bundle{}, err
 	}
 	if node.HasText {
 		text, err := bundle.ecsTextForPlanNode(node)
@@ -125,20 +104,6 @@ func buildProfile2DSceneComponents(bundle *Bundle, node sceneSpawnNode, animatio
 			return ecs.Bundle{}, err
 		}
 		components.Put(text)
-	}
-	if animations && node.HasAnimation {
-		if requiresSprite && !node.HasSprite {
-			sprite := scene.Sprite2DFromTexture(animator.CurrentTexture())
-			sprite.Alpha = spec.Alpha
-			if spec.Width > 0 {
-				sprite.Width = float32(spec.Width)
-			}
-			if spec.Height > 0 {
-				sprite.Height = float32(spec.Height)
-			}
-			components.Put(sprite)
-		}
-		components.Put(animator)
 	}
 	return components, nil
 }

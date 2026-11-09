@@ -265,7 +265,7 @@ func BenchmarkSceneSpawnPlan(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ReportMetric(float64(len(plan.Nodes)), "nodes")
-	bundle := &Bundle{}
+	bundle := &Bundle{components: buildAllSceneComponents}
 
 	b.Run("RecursiveSpecs", func(b *testing.B) {
 		b.ReportAllocs()

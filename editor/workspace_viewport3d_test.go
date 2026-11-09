@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
@@ -12,7 +13,6 @@ import (
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func workspace3DEditorFixture(t *testing.T) (*ModuleEditor, *ecs.SystemContext) {
@@ -178,7 +178,7 @@ func TestWorkspace3DRenderTargetModelsAndGuides(t *testing.T) {
 	camera := preview3DCameraTransformAround(a.viewport3D.view.target, a.viewport3D.view.yaw, a.viewport3D.view.pitch, a.viewport3D.view.distance/a.zoom).LocalMatrix()
 	point := projection.Matrix(bounds.W, bounds.H).Mul4(camera.Inv()).Mul4x1(global.Matrix.Col(3))
 	x, y := bounds.X+(point.X()/point.W()+1)*bounds.W*.5, bounds.Y+(1-point.Y()/point.W())*bounds.H*.5
-	if id := a.pickViewport3D(x, y); id != "model" {
+	if id, _ := a.pickViewport3DTarget(x, y); id != "model" {
 		t.Fatalf("3D canvas picking did not select owning module: %q", id)
 	}
 }

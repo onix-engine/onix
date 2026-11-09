@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/project"
@@ -14,7 +15,6 @@ import (
 	"github.com/onix-engine/onix/scene"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type workspace2DMod struct {
@@ -741,11 +741,6 @@ func viewportAxisLabelPosition(origin, direction mgl32.Vec2, bounds rect) (mgl32
 		entry, exit = max(entry, min(first, last)), min(exit, max(first, last))
 	}
 	return origin.Add(direction.Mul(exit)), entry <= exit
-}
-
-func (a *ModuleEditor) pickViewport2D(x, y float32) string {
-	id, _ := a.pickViewport2DTarget(x, y)
-	return id
 }
 
 func (a *ModuleEditor) pickViewport2DTarget(x, y float32) (string, string) {

@@ -16,8 +16,8 @@ func TestInlineDeclarationsKeepSemicolonsInsideFunctions(t *testing.T) {
 		t.Fatalf("compute styles: %v", err)
 	}
 	computed := styles[doc.Children[0]]
-	if computed.BackgroundImage != "data:image/svg+xml;base64,abc;def" {
-		t.Fatalf("background image = %q", computed.BackgroundImage)
+	if computed.Background.Image != "data:image/svg+xml;base64,abc;def" {
+		t.Fatalf("background image = %q", computed.Background.Image)
 	}
 	if computed.Color.Color != (Color{R: 1, G: 2, B: 3, A: 255}) {
 		t.Fatalf("color = %#v", computed.Color.Color)

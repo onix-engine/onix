@@ -4,18 +4,27 @@ import (
 	"image"
 	"math"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"unsafe"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	onixtext "github.com/onix-engine/onix/text"
-	"github.com/go-gl/mathgl/mgl32"
 )
+
+func (t *Text2D) spanColor(byteIndex int) graphics.ColorRGBA {
+	index := sort.Search(len(t.Spans), func(index int) bool { return t.Spans[index].End > byteIndex })
+	if index < len(t.Spans) && t.Spans[index].Start <= byteIndex {
+		return t.Spans[index].Color
+	}
+	return t.Color
+}
 
 // A laid-out glyph is stored once per character of every document a code editor
 // keeps open, so its size is the engine's dominant text memory cost.
@@ -141,7 +150,7 @@ func TestText2DMaxWidthEllipsizesLongLines(t *testing.T) {
 	if !ok {
 		t.Fatal("expected constrained text to be measurable")
 	}
-	value := text.ellipsizedValue()
+	value := text.ellipsizedText().String()
 	if value == text.Value || !strings.HasSuffix(value, "...") {
 		t.Fatalf("expected ellipsized text, got %q", value)
 	}
@@ -150,7 +159,7 @@ func TestText2DMaxWidthEllipsizesLongLines(t *testing.T) {
 	}
 
 	text.MaxWidth = 0
-	if got := text.ellipsizedValue(); got != text.Value {
+	if got := text.ellipsizedText().String(); got != text.Value {
 		t.Fatalf("zero max width should preserve text, got %q", got)
 	}
 }
@@ -306,7 +315,7 @@ func TestText2DEllipsizedValueDoesNotAllocateWhenTextFits(t *testing.T) {
 	text.MaxWidth = 200
 	text.ensureFace()
 	if allocations := testing.AllocsPerRun(100, func() {
-		if got := text.ellipsizedValue(); got != text.Value {
+		if got := text.ellipsizedText().String(); got != text.Value {
 			t.Fatalf("ellipsized value = %q, want %q", got, text.Value)
 		}
 	}); allocations != 0 {
@@ -456,7 +465,7 @@ func TestText2DInlineObjectsParticipateInEllipsis(t *testing.T) {
 	if !text.ensureFace() {
 		t.Fatal("expected text face")
 	}
-	if got := text.ellipsizedValue(); !strings.HasSuffix(got, "...") || strings.Contains(got, "\ufffc") {
+	if got := text.ellipsizedText().String(); !strings.HasSuffix(got, "...") || strings.Contains(got, "\ufffc") {
 		t.Fatalf("ellipsized inline text = %q", got)
 	}
 	width, _, ok := MeasureText2D(&text)
@@ -1011,8 +1020,8 @@ func TestUIRenderConfigurationInheritsFromParent(t *testing.T) {
 	childBundle := ecs.NewBundle(1)
 	childBundle.Put(Parent{Entity: parent})
 	child := world.Spawn(childBundle)
-	cache := frameRenderHierarchy2DCache(world)
-	info := renderEntityInfo2D(world, child, true, 0, &cache)
+	cache := frameRenderHierarchy2DCachePtr(world)
+	info := renderEntityInfo2D(world, child, true, 0, cache)
 	if !info.layers.Contains(130) || info.layers.Contains(0) {
 		t.Fatalf("inherited UI render layers = %+v", info.layers)
 	}
@@ -1022,7 +1031,7 @@ func TestUIRenderConfigurationInheritsFromParent(t *testing.T) {
 	if info.sortIndex != 17 {
 		t.Fatalf("inherited UI stack index = %d, want 17", info.sortIndex)
 	}
-	worldInfo := renderEntityInfo2D(world, child, false, 0, &cache)
+	worldInfo := renderEntityInfo2D(world, child, false, 0, cache)
 	if !worldInfo.layers.Contains(0) || worldInfo.layers.Contains(130) {
 		t.Fatalf("world render layers unexpectedly inherited: %+v", worldInfo.layers)
 	}
@@ -1181,7 +1190,7 @@ func BenchmarkText2DEllipsizedLongLine(b *testing.B) {
 	text.ensureFace()
 	b.ReportAllocs()
 	for range b.N {
-		benchmarkTextResult = text.ellipsizedValue()
+		benchmarkTextResult = text.ellipsizedText().String()
 	}
 }
 

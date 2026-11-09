@@ -35,11 +35,6 @@ type resourcePreprocessContext struct {
 	Config     resourcePackageConfig
 }
 
-func shaderTargetForBuildPlatform(platform BuildPlatform) project.ShaderTarget {
-	backend, _ := render.ResolveBackend(string(platform), "")
-	return shaderTargetForBackend(backend)
-}
-
 func shaderTargetForBackend(backend render.Backend) project.ShaderTarget {
 	switch backend {
 	case render.BackendVulkan:

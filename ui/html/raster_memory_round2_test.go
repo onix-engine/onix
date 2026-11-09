@@ -60,7 +60,7 @@ func TestHTMLOpacityRecordedPixels(t *testing.T) {
 	hash := sha256.New()
 	for i := range 4 {
 		leaf.Style.BackgroundColor.Color.R = byte(i * 31)
-		raster := htmlOpacityRasterFor(&cache, root)
+		raster := updateHTMLOpacityRaster(&cache, root, true, false, false)
 		composited := append([]byte(nil), raster.image.Pix...)
 		for index := 3; index < len(composited); index += 4 {
 			composited[index] = uint8((uint16(composited[index]) + 1) / 2)
@@ -137,7 +137,7 @@ func BenchmarkHTMLOpacityWorkingSet(b *testing.B) {
 			b.Run(fmt.Sprintf("%d/%s", depth, mode), func(b *testing.B) {
 				root := roundTwoOpacityTree(depth)
 				cache := htmlTextureCache{}
-				htmlOpacityRasterFor(&cache, root)
+				updateHTMLOpacityRaster(&cache, root, true, false, false)
 				b.ReportAllocs()
 				b.ResetTimer()
 				for b.Loop() {
@@ -146,7 +146,7 @@ func BenchmarkHTMLOpacityWorkingSet(b *testing.B) {
 					} else if mode == "repaint" {
 						root.Style.BackgroundColor.Color.R ^= 1
 					}
-					htmlOpacityRasterFor(&cache, root)
+					updateHTMLOpacityRaster(&cache, root, true, false, false)
 				}
 				bytes := 0
 				for _, raster := range cache.rasters {

@@ -277,18 +277,8 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 		style.BackgroundColor = parent.BackgroundColor
 	case "background-image":
 		copyBackgroundImages(style, parent)
-	case "background-position":
-		copyBackgroundPositions(style, parent)
-	case "background-repeat":
-		copyBackgroundRepeats(style, parent)
-	case "background-size":
-		copyBackgroundSizes(style, parent)
-	case "background-origin":
-		copyBackgroundOrigins(style, parent)
-	case "background-clip":
-		copyBackgroundClips(style, parent)
-	case "background-attachment":
-		copyBackgroundAttachments(style, parent)
+	case "background-position", "background-repeat", "background-size", "background-origin", "background-clip", "background-attachment":
+		copyBackgroundLayerField(style, parent, property)
 	case "color":
 		style.Color = parent.Color
 	case "placeholder-color":
@@ -344,139 +334,44 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 }
 
 func copyBackground(style, parent *ComputedStyle) {
-	style.BackgroundLayers = slices.Clone(parent.BackgroundLayers)
-	style.BackgroundImage = parent.BackgroundImage
-	style.BackgroundSizeX, style.BackgroundSizeY = parent.BackgroundSizeX, parent.BackgroundSizeY
-	style.BackgroundPosX, style.BackgroundPosY = parent.BackgroundPosX, parent.BackgroundPosY
-	style.BackgroundPosXOrigin, style.BackgroundPosYOrigin = parent.BackgroundPosXOrigin, parent.BackgroundPosYOrigin
-	style.BackgroundRepeatX, style.BackgroundRepeatY = parent.BackgroundRepeatX, parent.BackgroundRepeatY
-	style.BackgroundOrigin, style.BackgroundClip, style.BackgroundAttachment = parent.BackgroundOrigin, parent.BackgroundClip, parent.BackgroundAttachment
+	style.Background = parent.Background
+	style.ExtraBackgroundLayers = slices.Clone(parent.ExtraBackgroundLayers)
 	style.BackgroundColor = parent.BackgroundColor
 }
 
 func copyBackgroundImages(style, parent *ComputedStyle) {
-	if len(parent.BackgroundLayers) == 0 {
-		style.BackgroundLayers = nil
-		style.BackgroundImage = ""
+	style.Background.Image = parent.Background.Image
+	if len(parent.ExtraBackgroundLayers) == 0 {
+		style.ExtraBackgroundLayers = nil
 		return
 	}
-	if len(style.BackgroundLayers) < len(parent.BackgroundLayers) {
-		ensureBackgroundLayerCount(style, len(parent.BackgroundLayers))
-	}
-	style.BackgroundLayers = style.BackgroundLayers[:len(parent.BackgroundLayers)]
-	for index := range style.BackgroundLayers {
-		style.BackgroundLayers[index].Image = parent.BackgroundLayers[index].Image
-	}
-	style.BackgroundImage = parent.BackgroundImage
-}
-
-func copyBackgroundPositions(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.PosX, target.PosY = source.PosX, source.PosY
-		target.PosXOrigin, target.PosYOrigin = source.PosXOrigin, source.PosYOrigin
-	})
-	if len(style.BackgroundLayers) > 0 {
-		first := style.BackgroundLayers[0]
-		style.BackgroundPosX, style.BackgroundPosY = first.PosX, first.PosY
-		style.BackgroundPosXOrigin, style.BackgroundPosYOrigin = first.PosXOrigin, first.PosYOrigin
-	} else {
-		style.BackgroundPosX, style.BackgroundPosY = parent.BackgroundPosX, parent.BackgroundPosY
-		style.BackgroundPosXOrigin, style.BackgroundPosYOrigin = parent.BackgroundPosXOrigin, parent.BackgroundPosYOrigin
+	ensureBackgroundLayerCount(style, parent.BackgroundLayerCount())
+	style.ExtraBackgroundLayers = style.ExtraBackgroundLayers[:len(parent.ExtraBackgroundLayers)]
+	for index := range style.ExtraBackgroundLayers {
+		style.ExtraBackgroundLayers[index].Image = parent.ExtraBackgroundLayers[index].Image
 	}
 }
 
-func copyBackgroundRepeats(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.RepeatX, target.RepeatY = source.RepeatX, source.RepeatY
-	})
-	if len(style.BackgroundLayers) > 0 {
-		first := style.BackgroundLayers[0]
-		style.BackgroundRepeatX, style.BackgroundRepeatY = first.RepeatX, first.RepeatY
-	} else {
-		style.BackgroundRepeatX, style.BackgroundRepeatY = parent.BackgroundRepeatX, parent.BackgroundRepeatY
-	}
-}
-
-func copyBackgroundSizes(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.SizeX, target.SizeY = source.SizeX, source.SizeY
-	})
-	if len(style.BackgroundLayers) > 0 {
-		first := style.BackgroundLayers[0]
-		style.BackgroundSizeX, style.BackgroundSizeY = first.SizeX, first.SizeY
-	} else {
-		style.BackgroundSizeX, style.BackgroundSizeY = parent.BackgroundSizeX, parent.BackgroundSizeY
-	}
-}
-
-func copyBackgroundOrigins(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.Origin = source.Origin
-	})
-	if len(style.BackgroundLayers) > 0 {
-		style.BackgroundOrigin = style.BackgroundLayers[0].Origin
-	} else {
-		style.BackgroundOrigin = parent.BackgroundOrigin
-	}
-}
-
-func copyBackgroundClips(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.Clip = source.Clip
-	})
-	if len(style.BackgroundLayers) > 0 {
-		style.BackgroundClip = style.BackgroundLayers[0].Clip
-	} else {
-		style.BackgroundClip = parent.BackgroundClip
-	}
-}
-
-func copyBackgroundAttachments(style, parent *ComputedStyle) {
-	copyBackgroundLayerField(style, parent, func(target *BackgroundLayer, source BackgroundLayer) {
-		target.Attachment = source.Attachment
-	})
-	if len(style.BackgroundLayers) > 0 {
-		style.BackgroundAttachment = style.BackgroundLayers[0].Attachment
-	} else {
-		style.BackgroundAttachment = parent.BackgroundAttachment
-	}
-}
-
-func copyBackgroundLayerField(style, parent *ComputedStyle, copyField func(*BackgroundLayer, BackgroundLayer)) {
-	count := len(style.BackgroundLayers)
-	if count < len(parent.BackgroundLayers) {
-		count = len(parent.BackgroundLayers)
-		ensureBackgroundLayerCount(style, count)
-	}
-	if count == 0 {
-		return
-	}
-	for index := 0; index < count; index++ {
-		source := backgroundLayerAt(parent, index)
-		copyField(&style.BackgroundLayers[index], source)
-	}
-}
-
-func backgroundLayerAt(style *ComputedStyle, index int) BackgroundLayer {
-	if len(style.BackgroundLayers) > 0 {
-		if index >= len(style.BackgroundLayers) {
-			index = len(style.BackgroundLayers) - 1
+func copyBackgroundLayerField(style, parent *ComputedStyle, property string) {
+	ensureBackgroundLayerCount(style, parent.BackgroundLayerCount())
+	for index := range style.BackgroundLayerCount() {
+		source := parent.BackgroundLayer(min(index, parent.BackgroundLayerCount()-1))
+		target := style.BackgroundLayer(index)
+		switch property {
+		case "background-position":
+			target.PosX, target.PosY = source.PosX, source.PosY
+			target.PosXOrigin, target.PosYOrigin = source.PosXOrigin, source.PosYOrigin
+		case "background-repeat":
+			target.RepeatX, target.RepeatY = source.RepeatX, source.RepeatY
+		case "background-size":
+			target.SizeX, target.SizeY = source.SizeX, source.SizeY
+		case "background-origin":
+			target.Origin = source.Origin
+		case "background-clip":
+			target.Clip = source.Clip
+		case "background-attachment":
+			target.Attachment = source.Attachment
 		}
-		return style.BackgroundLayers[index]
-	}
-	return BackgroundLayer{
-		Image:      style.BackgroundImage,
-		SizeX:      style.BackgroundSizeX,
-		SizeY:      style.BackgroundSizeY,
-		PosX:       style.BackgroundPosX,
-		PosY:       style.BackgroundPosY,
-		PosXOrigin: style.BackgroundPosXOrigin,
-		PosYOrigin: style.BackgroundPosYOrigin,
-		RepeatX:    style.BackgroundRepeatX,
-		RepeatY:    style.BackgroundRepeatY,
-		Origin:     style.BackgroundOrigin,
-		Clip:       style.BackgroundClip,
-		Attachment: style.BackgroundAttachment,
 	}
 }
 
