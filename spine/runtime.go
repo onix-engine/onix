@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/sourcejson"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type Resource struct {
@@ -2170,10 +2170,6 @@ func addTimelineTimes[T interface{ timelineTime() float32 }](times map[float32]s
 	}
 }
 
-func (p *Player) attachmentGeometry(slotIndex int, a *attachment, r atlasRegion) ([]float32, []float32, []uint32) {
-	return p.attachmentGeometryInto(nil, nil, slotIndex, a, r)
-}
-
 var regionAttachmentIndices = [...]uint32{0, 1, 2, 2, 3, 0}
 
 func (p *Player) attachmentGeometryInto(dstPositions, dstUVs []float32, slotIndex int, a *attachment, r atlasRegion) ([]float32, []float32, []uint32) {
@@ -2213,10 +2209,6 @@ func (p *Player) attachmentGeometryInto(dstPositions, dstUVs []float32, slotInde
 	positions := p.vertexAttachmentWorldVerticesInto(dstPositions, slotIndex, a, len(a.uvs)/2)
 	uvs := meshAttachmentUVsInto(dstUVs, r, p.Resource.Texture.Width, p.Resource.Texture.Height, a.uvs)
 	return positions, uvs, a.triangles
-}
-
-func (p *Player) vertexAttachmentWorldVertices(slotIndex int, a *attachment, vertexCount int) []float32 {
-	return p.vertexAttachmentWorldVerticesInto(nil, slotIndex, a, vertexCount)
 }
 
 func (p *Player) vertexAttachmentWorldVerticesInto(dst []float32, slotIndex int, a *attachment, vertexCount int) []float32 {
@@ -2519,10 +2511,6 @@ func regionAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, texture
 	out[0], out[1], out[2], out[3] = u, v2, u, v
 	out[4], out[5], out[6], out[7] = u2, v, u2, v2
 	return out
-}
-
-func meshAttachmentUVs(r atlasRegion, textureWidth, textureHeight int, input []float32) []float32 {
-	return meshAttachmentUVsInto(nil, r, textureWidth, textureHeight, input)
 }
 
 func meshAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, textureHeight int, input []float32) []float32 {

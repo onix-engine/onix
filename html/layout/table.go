@@ -9,6 +9,16 @@ import (
 	"github.com/onix-engine/onix/html/style"
 )
 
+type tableMeasureKey struct {
+	source *style.ComputedStyle
+	width  float64
+}
+
+type tableMeasuredStyle struct {
+	value *style.ComputedStyle
+	used  bool
+}
+
 type tableColumn struct {
 	minimum, preferred, width, x float64
 	definite                     bool
@@ -26,6 +36,7 @@ type tableRow struct {
 }
 
 type tableScratch struct {
+	measured map[tableMeasureKey]tableMeasuredStyle
 	rows     []tableRow
 	cells    []tableCell
 	columns  []tableColumn
@@ -149,12 +160,24 @@ func layoutTableContainer(box *Box, containing, absolute Rect, face *font.Face, 
 		}
 	}
 	y += spacingY
+	if scratch.measured == nil && len(scratch.cells) != 0 {
+		scratch.measured = make(map[tableMeasureKey]tableMeasuredStyle)
+	}
+	measured := scratch.measured
 	for _, cell := range scratch.cells {
 		first, last := scratch.columns[cell.column], scratch.columns[cell.column+cell.columnSpan-1]
 		x, width := first.x, last.x+last.width-first.x
-		layoutTableCell(cell.box, Rect{X: x, Y: y, Width: width, Height: containing.Height}, abs, face, styles, ctx)
+		layoutTableCell(cell.box, Rect{X: x, Y: y, Width: width, Height: containing.Height}, abs, face, styles, ctx, measured)
 		if cell.rowSpan == 1 {
 			scratch.rows[cell.row].height = max(scratch.rows[cell.row].height, cell.box.BorderBox().Height)
+		}
+	}
+	for key, measure := range measured {
+		if !measure.used {
+			delete(measured, key)
+		} else {
+			measure.used = false
+			measured[key] = measure
 		}
 	}
 	for _, cell := range scratch.cells {
@@ -271,16 +294,24 @@ func resolveTableColumns(columns []tableColumn, available, minimum, preferred fl
 	}
 }
 
-func layoutTableCell(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutTableCell(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext, measured map[tableMeasureKey]tableMeasuredStyle) {
 	original := box.Style
-	if box.tableMeasureStyle == nil {
-		box.tableMeasureStyle = new(style.ComputedStyle)
+	key := tableMeasureKey{source: original, width: maxFloat(containing.Width-computedHorizontalBoxExtras(original, containing.Width), 0)}
+	measure := measured[key]
+	// Fragments retain this style. Share equal measurements across cells and
+	// refresh once per table pass, including styles changed in place.
+	if !measure.used {
+		if measure.value == nil {
+			measure.value = new(style.ComputedStyle)
+		}
+		*measure.value = *original
+		measure.value.Margin = style.Edges{}
+		measure.value.Width = style.LengthPx(key.width)
+		measure.value.BoxSizing = style.Keyword("content-box")
+		measure.used = true
+		measured[key] = measure
 	}
-	*box.tableMeasureStyle = *original
-	box.tableMeasureStyle.Margin = style.Edges{}
-	box.tableMeasureStyle.Width = style.LengthPx(maxFloat(containing.Width-computedHorizontalBoxExtras(original, containing.Width), 0))
-	box.tableMeasureStyle.BoxSizing = style.Keyword("content-box")
-	box.Style = box.tableMeasureStyle
+	box.Style = measure.value
 	layoutBlock(box, containing, absolute, face, styles, ctx)
 	box.Style = original
 }

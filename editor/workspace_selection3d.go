@@ -3,10 +3,10 @@ package editor
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func (v *workspaceViewport3D) measurePart(part *workspace3DPart) {
@@ -20,11 +20,6 @@ func (v *workspaceViewport3D) measurePart(part *workspace3DPart) {
 			part.low[axis], part.high[axis] = min(part.low[axis], value), max(part.high[axis], value)
 		}
 	}
-}
-
-func (a *ModuleEditor) viewport3DSelectionBounds(index int) (rect, bool) {
-	bounds, found, _ := a.viewport3DSelectionGeometry(index)
-	return bounds, found
 }
 
 func (a *ModuleEditor) viewport3DSelectionGeometry(index int) (rect, bool, bool) {

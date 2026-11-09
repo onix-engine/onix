@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
@@ -11,7 +12,6 @@ import (
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func workspace3DHelpersFixture(t *testing.T, components project.ModComponents, elements []project.ModElementSpec) (*ModuleEditor, *ecs.SystemContext) {
@@ -92,7 +92,7 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 					a.zoom = zoom
 					a.syncViewport3DProjection()
 					x, y := workspace3DCanvasPoint(t, a, entity)
-					if id := a.pickViewport3D(x, y); id != "helpers" {
+					if id, _ := a.pickViewport3DTarget(x, y); id != "helpers" {
 						t.Fatal("source origin was not selectable", orthographic, zoom, id)
 					}
 					projection := v.world.GetRef[scene.Projection](v.view.camera)
@@ -139,7 +139,7 @@ func TestWorkspace3DHelpersDrawPickAndMoveWithoutMeshes(t *testing.T) {
 				t.Fatal("undo did not restore the helper transform")
 			}
 			v.world.GetMut[scene.Visibility](entity).Visible = false
-			if id := a.pickViewport3D(x, y); id != "" {
+			if id, _ := a.pickViewport3DTarget(x, y); id != "" {
 				t.Fatal("hidden helper remained selectable", id)
 			}
 			projection := v.world.GetRef[scene.Projection](v.view.camera)
@@ -265,8 +265,8 @@ func TestWorkspace3DHelperRenderingAndPickingDoNotAllocate(t *testing.T) {
 	frame := func() {
 		driver.shapes = driver.shapes[:0]
 		a.drawViewport3DHelpers(canvas, projection, view)
-		a.viewport3DSelectionBounds(len(a.viewport3D.rows) - 1)
-		a.pickViewport3D(x, y)
+		a.viewport3DSelectionGeometry(len(a.viewport3D.rows) - 1)
+		a.pickViewport3DTarget(x, y)
 		if err := canvas.FinishFrame(); err != nil {
 			panic(err)
 		}

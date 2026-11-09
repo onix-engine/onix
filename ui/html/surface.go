@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
@@ -19,7 +20,6 @@ import (
 	"github.com/onix-engine/onix/scene"
 	onixtext "github.com/onix-engine/onix/text"
 	"github.com/onix-engine/onix/text/piecetree"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Surface is a retained HTML surface. Value may contain regular HTML and inline
@@ -1180,7 +1180,7 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 				}
 			} else if world.Has[htmlCanvasSurface](entity) {
 				sprite.Shape.Fill = htmlColor(computed.BackgroundColor)
-				if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
+				if texture := htmlGradientTextureFor(state, computed.Background.Image, sprite.Width, sprite.Height); texture != nil {
 					sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 					sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 				}
@@ -1192,7 +1192,7 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 					}
 				} else {
 					sprite.Shape = htmlShape(computed, float64(sprite.Width), float64(sprite.Height))
-					if texture := htmlGradientTextureFor(state, computed.BackgroundImage, sprite.Width, sprite.Height); texture != nil {
+					if texture := htmlGradientTextureFor(state, computed.Background.Image, sprite.Width, sprite.Height); texture != nil {
 						sprite.Texture, sprite.Tint, sprite.Shape = texture, graphics.White, scene.Shape2D{}
 						sprite.Tint.A = 1 // Coverage already includes the authored shadow alpha.
 					} else {
@@ -1322,7 +1322,7 @@ func htmlPropagatesCanvasBackground(box *layout.Box) bool {
 	if box.Node.Data == "html" && box.Parent.Node.Type == dom.DocumentNode {
 		return true
 	}
-	return box.Node.Data == "body" && box.Parent.Node.Data == "html" && box.Parent.Style.BackgroundColor.Color.A == 0 && box.Parent.Style.BackgroundImage == ""
+	return box.Node.Data == "body" && box.Parent.Node.Data == "html" && box.Parent.Style.BackgroundColor.Color.A == 0 && box.Parent.Style.Background.Image == ""
 }
 
 type htmlTextDecoration struct{}
@@ -2469,7 +2469,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	}
 	if !suppressPaint && !flattened && paintVisible && htmlPropagatesCanvasBackground(box) {
 		color := htmlColor(box.Style.BackgroundColor)
-		if color.A > 0 || isHTMLLinearGradient(box.Style.BackgroundImage) || box.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 {
+		if color.A > 0 || isHTMLLinearGradient(box.Style.Background.Image) || box.Style.AnimatedPaint&style.AnimatedBackgroundColor != 0 {
 			entity := spawnHTMLSurface(world, owner, box.Node, htmlRoleCanvas, 0, 0, float32(state.Viewport.Width), float32(state.Viewport.Height), scene.RoundedRectShape2D(color, 0), stackIndex-1, visible)
 			_ = world.Insert(entity, htmlCanvasSurface{})
 			markHTMLChildNode(world, entity, box.Node)
@@ -3119,15 +3119,6 @@ func htmlEditableControlTextFragment(world *ecs.World, control ecs.Entity, node 
 		fragment.Style = &placeholderStyle
 	}
 	return fragment
-}
-
-func htmlBoxDepth(box *layout.Box) int {
-	depth := 0
-	for box != nil {
-		depth++
-		box = box.Parent
-	}
-	return depth
 }
 
 const (
@@ -3875,8 +3866,6 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 				state.Textures.bind(entity, texture)
 			}
 		}
-	} else {
-		spawnHTMLBackgroundLayers(world, owner, box, entity, stackIndex, visible)
 	}
 	_ = world.Insert(entity, htmlElementSurface{})
 	_ = world.Insert(entity, scene.InputTarget2D{Width: float32(rect.Width), Height: float32(rect.Height), Receiver: receiver, PassThrough: passThrough})
@@ -3889,10 +3878,10 @@ func htmlHasGradientBackground(value *style.ComputedStyle) bool {
 	if value == nil {
 		return false
 	}
-	if isHTMLLinearGradient(value.BackgroundImage) {
+	if isHTMLLinearGradient(value.Background.Image) {
 		return true
 	}
-	for _, layer := range value.BackgroundLayers {
+	for _, layer := range value.ExtraBackgroundLayers {
 		if isHTMLLinearGradient(layer.Image) {
 			return true
 		}
@@ -3912,48 +3901,6 @@ func htmlHasVisibleBorder(value *style.ComputedStyle, width float64) bool {
 		}
 	}
 	return false
-}
-
-// CSS paints the first background image on top. The primary surface already
-// owns that layer; the remaining parsed layers are attached as retained
-// sprites on the same entity so reconciliation keeps them stable.
-func spawnHTMLBackgroundLayers(world *ecs.World, owner ecs.Entity, box *layout.Box, entity ecs.Entity, stackIndex int, visible bool) {
-	if box == nil || box.Style == nil || entity == 0 || len(box.Style.BackgroundLayers) < 2 || htmlNeedsRasterPaint(box.Style) {
-		return
-	}
-	state := world.GetMut[htmlRenderState](owner)
-	if state == nil {
-		return
-	}
-	rect := box.BorderBox()
-	layers := make([]scene.SpriteLayer2D, 0, len(box.Style.BackgroundLayers)-1)
-	for index := len(box.Style.BackgroundLayers) - 1; index >= 1; index-- {
-		layer := box.Style.BackgroundLayers[index]
-		if !isHTMLLinearGradient(layer.Image) {
-			continue
-		}
-		texture := htmlGradientTextureFor(state, layer.Image, float32(rect.Width), float32(rect.Height))
-		if texture == nil {
-			continue
-		}
-		sprite := scene.NewSprite2D()
-		sprite.Texture = texture
-		sprite.Width, sprite.Height = float32(rect.Width), float32(rect.Height)
-		layers = append(layers, scene.SpriteLayer2D{
-			ID:     fmt.Sprintf("background-%d", index),
-			Order:  index - len(box.Style.BackgroundLayers),
-			Sprite: sprite, Anchor: scene.AnchorTopLeft, Visible: visible,
-		})
-	}
-	if len(layers) == 0 {
-		return
-	}
-	if existing := world.GetMut[scene.SpriteLayers2D](entity); existing != nil {
-		existing.Layers = append(existing.Layers[:0], layers...)
-		existing.InvalidateMatrices()
-		return
-	}
-	_ = world.Insert(entity, scene.SpriteLayers2D{Layers: layers})
 }
 
 func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, stackIndex int, visible bool) {
@@ -4032,7 +3979,7 @@ func htmlOverflowBackgroundCovered(box *layout.Box) bool {
 		}
 		background := child.Style.BackgroundColor
 		if background.Kind != style.ValueColor || background.Color.A <= 0 {
-			if !isHTMLLinearGradient(child.Style.BackgroundImage) {
+			if !isHTMLLinearGradient(child.Style.Background.Image) {
 				continue
 			}
 		}
@@ -4052,7 +3999,7 @@ func htmlCompositePaintBounds(state *htmlRenderState, box *layout.Box, face *fon
 	}
 	// A single background primitive already carries opacity on the GPU.
 	// Rasterizing it creates an unnecessary composite that blocks local reflow.
-	if box.Node != nil && len(box.Children) == 0 && len(box.TextFragments) == 0 && len(box.ImageFragments) == 0 && len(box.ControlFragments) == 0 && len(box.InlineBackgrounds) == 0 && len(box.Style.Filters) == 0 && len(box.Style.BoxShadow) == 0 && len(box.Style.BackgroundLayers) == 0 && box.Style.BackgroundImage == "" && box.Border == (layout.Edges{}) && !isHTMLControlNode(box.Node) && box.Node.Data != "img" {
+	if box.Node != nil && len(box.Children) == 0 && len(box.TextFragments) == 0 && len(box.ImageFragments) == 0 && len(box.ControlFragments) == 0 && len(box.InlineBackgrounds) == 0 && len(box.Style.Filters) == 0 && len(box.Style.BoxShadow) == 0 && len(box.Style.ExtraBackgroundLayers) == 0 && box.Style.Background.Image == "" && box.Border == (layout.Edges{}) && !isHTMLControlNode(box.Node) && box.Node.Data != "img" {
 		return layout.Rect{}, false
 	}
 	if htmlPropagatesCanvasBackground(box) {
@@ -4066,7 +4013,7 @@ func htmlCompositePaintBounds(state *htmlRenderState, box *layout.Box, face *fon
 		if current == nil || current.Style == nil || current.Style.AnimatedPaint != 0 || face == nil && len(current.TextFragments) != 0 || len(current.ImageFragments) != 0 || len(current.ControlFragments) != 0 || len(current.Style.BoxShadow) != 0 || htmlOverflowClipsStyle(current.Style) || isHTMLControlNode(current.Node) || current.Node != nil && current.Node.Data == "img" {
 			return layout.Rect{}, false
 		}
-		if current.Style.BackgroundImage != "" && !isHTMLLinearGradient(current.Style.BackgroundImage) {
+		if current.Style.Background.Image != "" && !isHTMLLinearGradient(current.Style.Background.Image) {
 			return layout.Rect{}, false
 		}
 		for _, background := range current.InlineBackgrounds {
@@ -4074,7 +4021,7 @@ func htmlCompositePaintBounds(state *htmlRenderState, box *layout.Box, face *fon
 				return layout.Rect{}, false
 			}
 		}
-		for _, layer := range current.Style.BackgroundLayers {
+		for _, layer := range current.Style.ExtraBackgroundLayers {
 			if layer.Image != "" && layer.Image != "none" && !isHTMLLinearGradient(layer.Image) {
 				return layout.Rect{}, false
 			}
@@ -4157,10 +4104,6 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	return bundle.finish()
 }
 
-func htmlOpacityTexture(state *htmlRenderState, root *layout.Box) *graphics.Texture {
-	return htmlOpacityTextureMode(state, root, false)
-}
-
 func htmlOpacityTextureMode(state *htmlRenderState, root *layout.Box, gpuBlur bool) *graphics.Texture {
 	if state == nil || root == nil {
 		return nil
@@ -4220,13 +4163,6 @@ func htmlCompositeRGBA(dst, src *image.RGBA, offsetX, offsetY int) {
 			dst.Pix[di+3] = uint8(math.Round(outA * 255))
 		}
 	}
-}
-
-func htmlRoundedPixel(computed *style.ComputedStyle, x, y, width, height float64) bool {
-	if computed == nil {
-		return false
-	}
-	return htmlRoundedRasterPixel(prepareHTMLRasterCorners(computed, width, height), x, y, width, height)
 }
 
 type htmlRasterCorner struct{ x, y float64 }
@@ -4402,8 +4338,8 @@ func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node,
 	if state := world.GetMut[htmlRenderState](owner); state != nil {
 		if computed, ok := state.Styles.Get(node); ok {
 			sprite.Alpha = float32(computed.Opacity.Number)
-			if (role == htmlRoleSurface || role == htmlRoleInlineBackground || role == htmlRoleCanvas) && computed.BackgroundImage != "" {
-				texture := htmlGradientTextureFor(state, computed.BackgroundImage, width, height)
+			if (role == htmlRoleSurface || role == htmlRoleInlineBackground || role == htmlRoleCanvas) && computed.Background.Image != "" {
+				texture := htmlGradientTextureFor(state, computed.Background.Image, width, height)
 				if texture != nil {
 					sprite.Texture = texture
 					sprite.Tint = graphics.White

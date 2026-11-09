@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	onixtext "github.com/onix-engine/onix/text"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func outputTestFont(t testing.TB) *onixtext.Font {
@@ -95,8 +95,8 @@ func TestRenderOutputFreezesLayoutAndComposesConsumerTransform(t *testing.T) {
 	e := world.Spawn(b)
 	c := graphics.Canvas2DContext(320, 240)
 	snapshots := renderSnapshots2D{}
-	hierarchy := frameRenderHierarchy2DCache(world)
-	items := snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, &hierarchy, nil, false, true)
+	hierarchy := frameRenderHierarchy2DCachePtr(world)
+	items := snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, hierarchy, nil, false, true)
 	if len(items) == 0 || items[0].entity != e || items[0].transform[12] != 123 || items[0].transform[13] != 45 {
 		t.Fatalf("output did not use consumer coordinates: %+v", items)
 	}
@@ -105,7 +105,7 @@ func TestRenderOutputFreezesLayoutAndComposesConsumerTransform(t *testing.T) {
 	}
 	step := func() {
 		snapshots.reset()
-		items = snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, &hierarchy, items[:0], false, true)
+		items = snapshots.appendOutputRenderItems2D[UIGlobalTransform](c, world, hierarchy, items[:0], false, true)
 	}
 	for range 8 {
 		step()

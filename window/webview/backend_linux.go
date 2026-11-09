@@ -20,32 +20,6 @@ import (
 	"github.com/onix-engine/onix/window"
 )
 
-const linuxWebViewBridgeScript = `(function(){
-  "use strict";
-  var pending = new Map(), nextID = 0;
-  function invoke(name, payload) {
-    return new Promise(function(resolve, reject) {
-      var id = ++nextID;
-      pending.set(id, {resolve: resolve, reject: reject});
-      window.webkit.messageHandlers.onix.postMessage(JSON.stringify({
-        id: id,
-        name: String(name),
-        payload: String(payload == null ? "" : payload)
-      }));
-    });
-  }
-  globalThis.__onixWebViewResolve = function(response) {
-    var callbacks = pending.get(response.id);
-    if (!callbacks) return;
-    pending.delete(response.id);
-    if (response.ok) callbacks.resolve(response.result);
-    else callbacks.reject(new Error(response.error || "webview invocation failed"));
-  };
-  globalThis.__onixInvoke = invoke;
-  globalThis.onix = globalThis.onix || {};
-  globalThis.onix.invoke = invoke;
-})();`
-
 type linuxWebViewBackend struct {
 	handles map[*linuxWebViewHandle]struct{}
 	done    chan struct{}
@@ -127,7 +101,7 @@ func (b *linuxWebViewBackend) Create(options scene.WebViewOptions, invoke scene.
 	}
 	handle.token = cgo.NewHandle(handle)
 
-	initScript := linuxWebViewBridgeScript
+	initScript := webkitWebViewBridgeScript
 	if !options.Visible {
 		initScript += `document.documentElement.style.visibility="hidden";`
 	}

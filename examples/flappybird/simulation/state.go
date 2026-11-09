@@ -146,10 +146,6 @@ func (s *flappyState) snapshot() flappySnapshot {
 	}
 }
 
-func flappyUIPosition(x, y float32) (float32, float32) {
-	return x + flappyViewportWidth*0.5, flappyViewportHeight*0.5 - y
-}
-
 func flappyWorldPosition(x, y float32) enginephysics.Vector {
 	return enginephysics.V(float64(x-flappyViewportWidth*0.5), float64(flappyViewportHeight*0.5-y))
 }

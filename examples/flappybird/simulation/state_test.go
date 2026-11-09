@@ -8,13 +8,11 @@ import (
 
 var defaultBirdStart = enginephysics.V(-92, 197)
 
-func TestFlappyWorldCoordinatesMapIntoUIViewport(t *testing.T) {
-	x, y := flappyUIPosition(0, 0)
-	if x != flappyViewportWidth*.5 || y != flappyViewportHeight*.5 {
-		t.Fatalf("world origin = (%v,%v)", x, y)
+func TestFlappyUIViewportMapsIntoWorldCoordinates(t *testing.T) {
+	if origin := flappyWorldPosition(flappyViewportWidth*.5, flappyViewportHeight*.5); origin != (enginephysics.Vector{}) {
+		t.Fatalf("viewport center maps to world position %v", origin)
 	}
-	x, y = flappyUIPosition(float32(defaultBirdStart.X), float32(defaultBirdStart.Y))
-	if x != 283 || y != 470 || flappyWorldPosition(x, y) != defaultBirdStart {
+	if flappyWorldPosition(283, 470) != defaultBirdStart {
 		t.Fatal("bird coordinate conversion failed")
 	}
 }

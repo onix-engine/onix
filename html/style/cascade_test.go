@@ -177,11 +177,11 @@ func TestComputeLinearGradientBackgroundImage(t *testing.T) {
 	}
 	gradient := doc.Children[0]
 	computed := styles[gradient]
-	if computed.BackgroundImage != `linear-gradient(to right, #ef4444, #3b82f6)` {
-		t.Fatalf("background image = %q", computed.BackgroundImage)
+	if computed.Background.Image != `linear-gradient(to right, #ef4444, #3b82f6)` {
+		t.Fatalf("background image = %q", computed.Background.Image)
 	}
-	if len(computed.BackgroundLayers) != 1 || computed.BackgroundLayers[0].Image != computed.BackgroundImage {
-		t.Fatalf("background layers = %#v", computed.BackgroundLayers)
+	if computed.BackgroundLayerCount() != 1 || computed.ExtraBackgroundLayers != nil {
+		t.Fatalf("background layers = %#v", computed.ExtraBackgroundLayers)
 	}
 }
 
@@ -199,8 +199,8 @@ func TestComputeBackgroundImageGradientList(t *testing.T) {
 		t.Fatal(err)
 	}
 	computed := styles[doc.Children[0]]
-	if len(computed.BackgroundLayers) != 2 || computed.BackgroundLayers[0].Image == "" || computed.BackgroundLayers[1].Image == "" {
-		t.Fatalf("background image layers = %#v", computed.BackgroundLayers)
+	if computed.BackgroundLayerCount() != 2 || computed.Background.Image == "" || computed.ExtraBackgroundLayers[0].Image == "" {
+		t.Fatalf("background image layers = %#v", computed.ExtraBackgroundLayers)
 	}
 }
 
@@ -220,20 +220,20 @@ func TestComputeLinearGradientBackgroundShorthandComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	computed := styles[doc.Children[0]]
-	if computed.BackgroundImage != `linear-gradient(to right, red, blue)` {
-		t.Fatalf("background image = %q", computed.BackgroundImage)
+	if computed.Background.Image != `linear-gradient(to right, red, blue)` {
+		t.Fatalf("background image = %q", computed.Background.Image)
 	}
 	if got := computed.BackgroundColor.Color; got != (Color{A: 64}) {
 		t.Fatalf("background color = %#v, want alpha 64", got)
 	}
-	if computed.BackgroundPosX.Kind != ValueNumber || computed.BackgroundPosX.Number != .5 || computed.BackgroundPosY.Keyword != "center" {
-		t.Fatalf("background position = %#v %#v", computed.BackgroundPosX, computed.BackgroundPosY)
+	if computed.Background.PosX.Kind != ValueNumber || computed.Background.PosX.Number != .5 || computed.Background.PosY.Keyword != "center" {
+		t.Fatalf("background position = %#v %#v", computed.Background.PosX, computed.Background.PosY)
 	}
-	if computed.BackgroundSizeX.Keyword != "cover" || computed.BackgroundSizeY.Keyword != "cover" {
-		t.Fatalf("background size = %#v %#v", computed.BackgroundSizeX, computed.BackgroundSizeY)
+	if computed.Background.SizeX.Keyword != "cover" || computed.Background.SizeY.Keyword != "cover" {
+		t.Fatalf("background size = %#v %#v", computed.Background.SizeX, computed.Background.SizeY)
 	}
-	if computed.BackgroundRepeatX.Keyword != "no-repeat" || computed.BackgroundRepeatY.Keyword != "no-repeat" {
-		t.Fatalf("background repeat = %#v %#v", computed.BackgroundRepeatX, computed.BackgroundRepeatY)
+	if computed.Background.RepeatX.Keyword != "no-repeat" || computed.Background.RepeatY.Keyword != "no-repeat" {
+		t.Fatalf("background repeat = %#v %#v", computed.Background.RepeatX, computed.Background.RepeatY)
 	}
 }
 
@@ -250,7 +250,7 @@ func TestComputeLinearGradientFunctionValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := styles[doc.Children[0]].BackgroundImage; got != `LINEAR-GRADIENT(red, blue)` {
+	if got := styles[doc.Children[0]].Background.Image; got != `LINEAR-GRADIENT(red, blue)` {
 		t.Fatalf("case-preserved background image = %q", got)
 	}
 
@@ -262,7 +262,7 @@ func TestComputeLinearGradientFunctionValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("malformed declaration should be recovered: %v", err)
 	}
-	if got := malformedStyles[doc.Children[0]].BackgroundImage; got != "" {
+	if got := malformedStyles[doc.Children[0]].Background.Image; got != "" {
 		t.Fatalf("malformed gradient should be ignored, got %q", got)
 	}
 }
@@ -669,7 +669,7 @@ func TestComputeTransformRotationAndTransition(t *testing.T) {
 	if computed.TransformRotation != 90 {
 		t.Fatalf("transform rotation = %v, want 90 degrees", computed.TransformRotation)
 	}
-	if computed.TransitionFor(0).Duration != 0.16 || computed.TransitionFor(0).Easing != TransformEase {
+	if computed.TransitionFor(0).Duration != 0.16 || computed.TransitionFor(0).Timing.Kind != TransformEase {
 		t.Fatalf("transform transition = %#v, want 160ms ease", computed.TransitionFor(0))
 	}
 	previous := *computed
@@ -970,13 +970,13 @@ func TestComputeCSSWideBackgroundLonghandsPreserveSiblingFields(t *testing.T) {
 	}
 	parent := doc.Children[0]
 	image, position, reset := parent.Children[0], parent.Children[1], parent.Children[2]
-	if styles[image].BackgroundImage != "parent.png" || styles[image].BackgroundPosX != LengthPx(1) || styles[image].BackgroundPosY != LengthPx(2) || styles[image].BackgroundRepeatX != Keyword("repeat") || styles[image].BackgroundRepeatY != Keyword("no-repeat") || styles[image].BackgroundSizeX != LengthPx(3) || styles[image].BackgroundSizeY != LengthPx(4) {
+	if styles[image].Background.Image != "parent.png" || styles[image].Background.PosX != LengthPx(1) || styles[image].Background.PosY != LengthPx(2) || styles[image].Background.RepeatX != Keyword("repeat") || styles[image].Background.RepeatY != Keyword("no-repeat") || styles[image].Background.SizeX != LengthPx(3) || styles[image].Background.SizeY != LengthPx(4) {
 		t.Fatalf("background-image inherit changed sibling fields: %#v", styles[image])
 	}
-	if styles[position].BackgroundImage != "child.png" || styles[position].BackgroundPosX != LengthPx(10) || styles[position].BackgroundPosY != LengthPx(20) || styles[position].BackgroundRepeatX != Keyword("repeat") || styles[position].BackgroundRepeatY != Keyword("no-repeat") || styles[position].BackgroundSizeX != LengthPx(3) || styles[position].BackgroundSizeY != LengthPx(4) {
+	if styles[position].Background.Image != "child.png" || styles[position].Background.PosX != LengthPx(10) || styles[position].Background.PosY != LengthPx(20) || styles[position].Background.RepeatX != Keyword("repeat") || styles[position].Background.RepeatY != Keyword("no-repeat") || styles[position].Background.SizeX != LengthPx(3) || styles[position].Background.SizeY != LengthPx(4) {
 		t.Fatalf("background-position inherit changed sibling fields: %#v", styles[position])
 	}
-	if styles[reset].BackgroundImage != "child.png" || styles[reset].BackgroundPosX != Number(0) || styles[reset].BackgroundPosY != Number(0) || styles[reset].BackgroundRepeatX != Keyword("repeat") || styles[reset].BackgroundRepeatY != Keyword("no-repeat") || styles[reset].BackgroundSizeX != LengthPx(3) || styles[reset].BackgroundSizeY != LengthPx(4) {
+	if styles[reset].Background.Image != "child.png" || styles[reset].Background.PosX != Number(0) || styles[reset].Background.PosY != Number(0) || styles[reset].Background.RepeatX != Keyword("repeat") || styles[reset].Background.RepeatY != Keyword("no-repeat") || styles[reset].Background.SizeX != LengthPx(3) || styles[reset].Background.SizeY != LengthPx(4) {
 		t.Fatalf("background-position initial changed sibling fields: %#v", styles[reset])
 	}
 }
@@ -1755,17 +1755,17 @@ func TestComputeBackgroundPositionVariants(t *testing.T) {
 
 	card := doc.Children[0].Children[1].Children[0]
 	computed := styles[card]
-	if len(computed.BackgroundLayers) != 2 {
-		t.Fatalf("background layer count = %d", len(computed.BackgroundLayers))
+	if computed.BackgroundLayerCount() != 2 {
+		t.Fatalf("background layer count = %d", computed.BackgroundLayerCount())
 	}
-	first := computed.BackgroundLayers[0]
+	first := computed.Background
 	if first.PosXOrigin != "right" || first.PosX != LengthPx(0) {
 		t.Fatalf("first x position = %#v %#v", first.PosXOrigin, first.PosX)
 	}
 	if first.PosYOrigin != "center" || first.PosY != Keyword("center") {
 		t.Fatalf("first y position = %#v %#v", first.PosYOrigin, first.PosY)
 	}
-	second := computed.BackgroundLayers[1]
+	second := computed.ExtraBackgroundLayers[0]
 	if second.PosXOrigin != "right" || second.PosX != LengthPx(10) {
 		t.Fatalf("second x position = %#v %#v", second.PosXOrigin, second.PosX)
 	}

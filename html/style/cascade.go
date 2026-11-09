@@ -492,16 +492,10 @@ func paintedBackground(value *ComputedStyle) bool {
 }
 
 func backgroundLayersRequireRebuild(previous, current *ComputedStyle) bool {
-	if previous.BackgroundImage == "" && current.BackgroundImage == "" {
+	if previous.Background.Image == "" && current.Background.Image == "" {
 		return false
 	}
-	return previous.BackgroundImage != current.BackgroundImage || previous.BackgroundSizeX != current.BackgroundSizeX ||
-		previous.BackgroundSizeY != current.BackgroundSizeY || previous.BackgroundPosX != current.BackgroundPosX ||
-		previous.BackgroundPosY != current.BackgroundPosY || previous.BackgroundPosXOrigin != current.BackgroundPosXOrigin ||
-		previous.BackgroundPosYOrigin != current.BackgroundPosYOrigin || previous.BackgroundRepeatX != current.BackgroundRepeatX ||
-		previous.BackgroundRepeatY != current.BackgroundRepeatY || previous.BackgroundOrigin != current.BackgroundOrigin ||
-		previous.BackgroundClip != current.BackgroundClip || previous.BackgroundAttachment != current.BackgroundAttachment ||
-		!slices.Equal(previous.BackgroundLayers, current.BackgroundLayers)
+	return previous.Background != current.Background || !slices.Equal(previous.ExtraBackgroundLayers, current.ExtraBackgroundLayers)
 }
 
 func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (map[string]cascadedValue, error) {
@@ -1657,15 +1651,14 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		style.Filters = filters
 	case "background":
-		backgrounds, color, hasColor, err := parseBackgroundLayers(raw, ctx)
+		first, extra, color, hasColor, err := parseBackgroundLayers(raw, ctx)
 		if err != nil {
 			return err
 		}
 		if hasColor {
 			style.BackgroundColor = color
 		}
-		style.BackgroundLayers = backgrounds
-		syncPrimaryBackgroundFields(style)
+		style.Background, style.ExtraBackgroundLayers = first, extra
 	case "background-color":
 		color, err := parseColorValue(raw)
 		if err != nil {
@@ -1679,9 +1672,8 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(images))
 		for i, imageURL := range images {
-			style.BackgroundLayers[i].Image = imageURL
+			style.BackgroundLayer(i).Image = imageURL
 		}
-		syncPrimaryBackgroundFields(style)
 	case "background-position":
 		positions, err := parseBackgroundPositionList(raw, ctx)
 		if err != nil {
@@ -1689,12 +1681,11 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(positions))
 		for i, position := range positions {
-			style.BackgroundLayers[i].PosX = position.X
-			style.BackgroundLayers[i].PosY = position.Y
-			style.BackgroundLayers[i].PosXOrigin = position.XOrigin
-			style.BackgroundLayers[i].PosYOrigin = position.YOrigin
+			style.BackgroundLayer(i).PosX = position.X
+			style.BackgroundLayer(i).PosY = position.Y
+			style.BackgroundLayer(i).PosXOrigin = position.XOrigin
+			style.BackgroundLayer(i).PosYOrigin = position.YOrigin
 		}
-		syncPrimaryBackgroundFields(style)
 	case "background-repeat":
 		repeats, err := parseBackgroundRepeatList(raw)
 		if err != nil {
@@ -1702,10 +1693,9 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(repeats))
 		for i, repeat := range repeats {
-			style.BackgroundLayers[i].RepeatX = repeat.X
-			style.BackgroundLayers[i].RepeatY = repeat.Y
+			style.BackgroundLayer(i).RepeatX = repeat.X
+			style.BackgroundLayer(i).RepeatY = repeat.Y
 		}
-		syncPrimaryBackgroundFields(style)
 	case "background-size":
 		sizes, err := parseBackgroundSizeList(raw, ctx)
 		if err != nil {
@@ -1713,10 +1703,9 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(sizes))
 		for i, size := range sizes {
-			style.BackgroundLayers[i].SizeX = size.X
-			style.BackgroundLayers[i].SizeY = size.Y
+			style.BackgroundLayer(i).SizeX = size.X
+			style.BackgroundLayer(i).SizeY = size.Y
 		}
-		syncPrimaryBackgroundFields(style)
 	case "background-origin":
 		origins, err := parseBackgroundBoxList(raw)
 		if err != nil {
@@ -1724,10 +1713,8 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(origins))
 		for i, origin := range origins {
-			style.BackgroundLayers[i].Origin = origin
+			style.BackgroundLayer(i).Origin = origin
 		}
-		style.BackgroundOrigin = origins[0]
-		syncPrimaryBackgroundFields(style)
 	case "background-clip":
 		clips, err := parseBackgroundBoxList(raw)
 		if err != nil {
@@ -1735,10 +1722,8 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(clips))
 		for i, clip := range clips {
-			style.BackgroundLayers[i].Clip = clip
+			style.BackgroundLayer(i).Clip = clip
 		}
-		style.BackgroundClip = clips[0]
-		syncPrimaryBackgroundFields(style)
 	case "background-attachment":
 		attachments, err := parseBackgroundAttachmentList(raw)
 		if err != nil {
@@ -1746,10 +1731,8 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		}
 		ensureBackgroundLayerCount(style, len(attachments))
 		for i, attachment := range attachments {
-			style.BackgroundLayers[i].Attachment = attachment
+			style.BackgroundLayer(i).Attachment = attachment
 		}
-		style.BackgroundAttachment = attachments[0]
-		syncPrimaryBackgroundFields(style)
 	case "color":
 		color, err := parseColorValue(raw)
 		if err != nil {
@@ -2697,46 +2680,40 @@ func parseBackgroundBoxList(input string) ([]string, error) {
 	return values, nil
 }
 
-func parseBackgroundLayers(input string, ctx parseContext) ([]BackgroundLayer, Value, bool, error) {
-	trimmed := strings.TrimSpace(input)
-	if looksLikeColor(trimmed) {
-		color, err := parseColorValue(trimmed)
-		if err != nil {
-			return nil, Value{}, false, err
-		}
-		return nil, color, true, nil
+func parseBackgroundLayers(input string, ctx parseContext) (first BackgroundLayer, extra []BackgroundLayer, color Value, hasColor bool, err error) {
+	first = initialBackgroundLayer()
+	if trimmed := strings.TrimSpace(input); looksLikeColor(trimmed) {
+		color, err = parseColorValue(trimmed)
+		return first, nil, color, err == nil, err
 	}
-	parts := splitCSSList(input)
-	if len(parts) == 0 {
-		parts = []string{input}
-	}
-	layers := make([]BackgroundLayer, 0, len(parts))
-	var color Value
-	hasColor := false
-	for _, part := range parts {
-		background, err := parseBackground(part, ctx)
-		if err != nil {
-			return nil, Value{}, false, err
+	count := 0
+	for part := range cssValues(input, false) {
+		background, parseErr := parseBackground(part, ctx)
+		if parseErr != nil {
+			return first, nil, Value{}, false, parseErr
 		}
 		if background.Color != nil {
 			color, hasColor = *background.Color, true
 		}
-		layers = append(layers, BackgroundLayer{
-			Image:      background.Image,
-			SizeX:      background.SizeX,
-			SizeY:      background.SizeY,
-			PosX:       background.PositionX,
-			PosY:       background.PositionY,
-			PosXOrigin: background.PositionXOrigin,
-			PosYOrigin: background.PositionYOrigin,
-			RepeatX:    background.RepeatX,
-			RepeatY:    background.RepeatY,
-			Origin:     background.Origin,
-			Clip:       background.Clip,
-			Attachment: background.Attachment,
-		})
+		layer := BackgroundLayer{
+			Image: background.Image,
+			SizeX: background.SizeX, SizeY: background.SizeY,
+			PosX: background.PositionX, PosY: background.PositionY,
+			PosXOrigin: background.PositionXOrigin, PosYOrigin: background.PositionYOrigin,
+			RepeatX: background.RepeatX, RepeatY: background.RepeatY,
+			Origin: background.Origin, Clip: background.Clip, Attachment: background.Attachment,
+		}
+		if count == 0 {
+			first = layer
+		} else {
+			extra = append(extra, layer)
+		}
+		count++
 	}
-	return layers, color, hasColor, nil
+	if count == 0 {
+		err = fmt.Errorf("invalid background %q", input)
+	}
+	return
 }
 
 func looksLikeColor(input string) bool {
@@ -2830,61 +2807,6 @@ func parseBackgroundSizeList(input string, ctx parseContext) ([]backgroundSizeVa
 		sizes = append(sizes, backgroundSizeValue{X: x, Y: y})
 	}
 	return sizes, nil
-}
-
-func ensureBackgroundLayerCount(style *ComputedStyle, count int) {
-	if count <= 0 {
-		return
-	}
-	for len(style.BackgroundLayers) < count {
-		style.BackgroundLayers = append(style.BackgroundLayers, BackgroundLayer{
-			SizeX:      Keyword("auto"),
-			SizeY:      Keyword("auto"),
-			PosX:       Number(0),
-			PosY:       Number(0),
-			PosXOrigin: "left",
-			PosYOrigin: "top",
-			RepeatX:    Keyword("repeat"),
-			RepeatY:    Keyword("repeat"),
-			Origin:     "padding-box",
-			Clip:       "border-box",
-			Attachment: "scroll",
-		})
-	}
-}
-
-func syncPrimaryBackgroundFields(style *ComputedStyle) {
-	if style == nil {
-		return
-	}
-	if len(style.BackgroundLayers) == 0 {
-		style.BackgroundImage = ""
-		style.BackgroundSizeX = Keyword("auto")
-		style.BackgroundSizeY = Keyword("auto")
-		style.BackgroundPosX = Number(0)
-		style.BackgroundPosY = Number(0)
-		style.BackgroundPosXOrigin = "left"
-		style.BackgroundPosYOrigin = "top"
-		style.BackgroundRepeatX = Keyword("repeat")
-		style.BackgroundRepeatY = Keyword("repeat")
-		style.BackgroundOrigin = "padding-box"
-		style.BackgroundClip = "border-box"
-		style.BackgroundAttachment = "scroll"
-		return
-	}
-	first := style.BackgroundLayers[0]
-	style.BackgroundImage = first.Image
-	style.BackgroundSizeX = first.SizeX
-	style.BackgroundSizeY = first.SizeY
-	style.BackgroundPosX = first.PosX
-	style.BackgroundPosY = first.PosY
-	style.BackgroundPosXOrigin = first.PosXOrigin
-	style.BackgroundPosYOrigin = first.PosYOrigin
-	style.BackgroundRepeatX = first.RepeatX
-	style.BackgroundRepeatY = first.RepeatY
-	style.BackgroundOrigin = first.Origin
-	style.BackgroundClip = first.Clip
-	style.BackgroundAttachment = first.Attachment
 }
 
 func parseBackground(input string, ctx parseContext) (backgroundValue, error) {

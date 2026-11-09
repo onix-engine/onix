@@ -13,6 +13,14 @@ import (
 	"github.com/onix-engine/onix/html/style"
 )
 
+func glyphRunWidth(glyphs []shapedGlyph) float64 {
+	width := 0.0
+	for _, glyph := range glyphs {
+		width += glyph.Advance
+	}
+	return width
+}
+
 func loadLayoutTestFace(t *testing.T) *font.Face {
 	t.Helper()
 	face, err := font.LoadDefault()

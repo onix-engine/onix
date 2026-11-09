@@ -1932,6 +1932,18 @@ func TestHTMLResetButtonSynchronizesRuntimeControls(t *testing.T) {
 	if fieldState.Value != "default" || text.Value != "default" || !checkState.Checked || !toggle.Value || modeState.Selected != 1 || selector.Selected != 1 {
 		t.Fatalf("reset runtime state = field:%#v text:%#v check:%#v toggle:%#v mode:%#v selector:%#v", fieldState, text, checkState, toggle, modeState, selector)
 	}
+	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
+		switch access.A.Ref().Control {
+		case check:
+			if access.B.Ref().Value != "✓" {
+				t.Fatal("reset did not restore the checkbox mark")
+			}
+		case mode:
+			if access.B.Ref().Value != "B" {
+				t.Fatal("reset did not restore the selected label")
+			}
+		}
+	}
 	assertHTMLEvent(t, reader.Read(world), owner, "settings", htmlui.EventReset, "")
 }
 

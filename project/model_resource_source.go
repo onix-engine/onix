@@ -13,10 +13,10 @@ import (
 	pathpkg "path"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/typedbin"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const (
@@ -386,11 +386,6 @@ func (importer *gltfImporter) appendMaterials() error {
 		importer.result.Materials[index] = value
 	}
 	return nil
-}
-
-func (importer *gltfImporter) textureURI(index int) string {
-	path, _, _, _ := importer.textureReference(index)
-	return path
 }
 
 func (importer *gltfImporter) textureReference(index int) (string, []byte, string, error) {

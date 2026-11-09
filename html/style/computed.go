@@ -101,7 +101,6 @@ type TransformTransition struct {
 	Duration float64
 	Delay    float64
 	Enabled  bool
-	Easing   TransformEasing
 }
 
 type BackgroundLayer struct {
@@ -122,17 +121,12 @@ type BackgroundLayer struct {
 // styleCore holds the comparable part of a resolved style so instances
 // can be interned by value; slice-valued properties live outside it.
 type styleCore struct {
-	BackgroundImage          string
-	BackgroundAttachment     string
-	BackgroundPosYOrigin     string
+	Background               BackgroundLayer
 	ObjectPosYOrigin         string
 	ObjectPosXOrigin         string
 	ContainerName            string
 	GridTemplateRows         string
 	GridTemplateColumns      string
-	BackgroundPosXOrigin     string
-	BackgroundClip           string
-	BackgroundOrigin         string
 	BorderRadius             Corners
 	BorderWidth              Edges
 	Padding                  Edges
@@ -141,11 +135,6 @@ type styleCore struct {
 	BorderStyle              Edges
 	TextOverflow             Value
 	JustifyItems             Value
-	BackgroundSizeY          Value
-	BackgroundPosX           Value
-	BackgroundPosY           Value
-	BackgroundRepeatX        Value
-	BackgroundRepeatY        Value
 	MaxHeight                Value
 	MaxWidth                 Value
 	MinHeight                Value
@@ -186,7 +175,6 @@ type styleCore struct {
 	GridRowStart             Value
 	GridRowEnd               Value
 	JustifyContent           Value
-	BackgroundSizeX          Value
 	JustifySelf              Value
 	AlignItems               Value
 	AlignSelf                Value
@@ -238,10 +226,11 @@ type styleCore struct {
 }
 
 type ComputedStyle struct {
-	motion           *motionStyle
-	BackgroundLayers []BackgroundLayer
-	BoxShadow        []Shadow
-	Filters          []Filter
+	motion *motionStyle
+	// ExtraBackgroundLayers follows the primary inline Background layer.
+	ExtraBackgroundLayers []BackgroundLayer
+	BoxShadow             []Shadow
+	Filters               []Filter
 	styleCore
 }
 

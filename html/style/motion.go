@@ -78,18 +78,7 @@ func motionHash(seed maphash.Seed, motion *motionStyle) uint64 {
 }
 
 func resolveMotion(motion *motionStyle) {
-	motion.transitions = [AnimatedPropertyCount]TransformTransition{}
-	if motion.transition != ([4]string{}) {
-		for i, property := range AnimatedPropertyList {
-			name := "transform"
-			if property == AnimatedOpacity {
-				name = "opacity"
-			} else if i >= 2 {
-				name = animatedColorNames[i-2]
-			}
-			motion.transitions[i] = resolveTransition(motion.transition, name)
-		}
-	}
+	motion.transitions = resolveTransitions(motion.transition)
 	motion.animations = resolveAnimations(motion.animation)
 	motion.shared = true
 }

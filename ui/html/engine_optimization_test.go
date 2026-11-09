@@ -23,20 +23,20 @@ func TestHTMLOpacityTextureReusesRasterAndTexture(t *testing.T) {
 	child.Style.BackgroundColor = style.Value{Kind: style.ValueColor, Color: style.Color{B: 255, A: 255}}
 	child.Style.Opacity = style.Value{Kind: style.ValueNumber, Number: 1}
 	root.Children = []*layout.Box{child}
-	texture := htmlOpacityTexture(&state, root)
+	texture := htmlOpacityTextureMode(&state, root, false)
 	state.Textures.bind(1, texture)
 	state.Textures.sweep()
 	for range 100 {
 		state.RenderGeneration++
-		if htmlOpacityTexture(&state, root) != texture {
+		if htmlOpacityTextureMode(&state, root, false) != texture {
 			t.Fatal("unchanged content recreated texture")
 		}
 	}
-	if allocations := testing.AllocsPerRun(100, func() { htmlOpacityTexture(&state, root) }); allocations != 0 {
+	if allocations := testing.AllocsPerRun(100, func() { htmlOpacityTextureMode(&state, root, false) }); allocations != 0 {
 		t.Fatalf("cache-hit allocations=%v", allocations)
 	}
 	child.Style.BackgroundColor.Color = style.Color{G: 255, A: 255}
-	if htmlOpacityTexture(&state, root) != texture {
+	if htmlOpacityTextureMode(&state, root, false) != texture {
 		t.Fatal("same-size repaint recreated texture")
 	}
 	pixel := state.Textures.rasters[root.Node].image.RGBAAt(1, 1)
@@ -45,14 +45,14 @@ func TestHTMLOpacityTextureReusesRasterAndTexture(t *testing.T) {
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		child.Style.BackgroundColor.Color.G ^= 1
-		if htmlOpacityTexture(&state, root) != texture {
+		if htmlOpacityTextureMode(&state, root, false) != texture {
 			t.Fatal("repaint recreated texture")
 		}
 	}); allocations != 0 {
 		t.Fatalf("repaint allocations=%v", allocations)
 	}
 	root.Content.Width++
-	replacement := htmlOpacityTexture(&state, root)
+	replacement := htmlOpacityTextureMode(&state, root, false)
 	if replacement == texture {
 		t.Fatal("dimension change retained old texture")
 	}

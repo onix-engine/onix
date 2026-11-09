@@ -44,7 +44,7 @@ func htmlInlineBackgroundListEligible(background layout.InlineBackground) bool {
 
 func htmlInlineBackgroundListStyleEligible(computed *style.ComputedStyle) bool {
 	return computed != nil && computed.BackgroundColor.Color.A > 0 &&
-		computed.BackgroundImage == "" && len(computed.BackgroundLayers) == 0 &&
+		computed.Background.Image == "" && len(computed.ExtraBackgroundLayers) == 0 &&
 		computed.AnimatedPaint == 0 && !computed.AnimatedOpacity && computed.Opacity.Kind == style.ValueNumber
 }
 

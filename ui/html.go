@@ -4,13 +4,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/text/piecetree"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type htmlControlState struct {
@@ -411,7 +411,6 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 			}
 			if SetHTMLControlChecked(world, event.Entity, checked) {
 				control, _ = world.Get[htmlui.Control](event.Entity)
-				refreshHTMLControlText(world, event.Entity, control)
 				writeHTMLEvent(world, event.Entity, control, htmlui.EventClick)
 				writeHTMLEvent(world, event.Entity, control, htmlui.EventInput)
 				writeHTMLEvent(world, event.Entity, control, htmlui.EventChange)
@@ -547,13 +546,16 @@ func syncHTMLControlsAfterReset(world *ecs.World, owner ecs.Entity) {
 			selector.Selected = control.Selected
 			selector.Open = false
 			setHTMLSelectorVisibility(world, entity, false)
-			syncHTMLSelectorState(world, entity)
+			syncHTMLSelectorOptions(world, entity, control)
 		}
 		if state := world.GetMut[htmlControlState](entity); state != nil {
 			state.CommittedValue = control.Value
 		}
-		if control.Tag != "select" {
-			refreshHTMLControlText(world, entity, control)
+	}
+	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
+		control := world.GetRef[htmlui.Control](access.A.Ref().Control)
+		if control != nil && control.Owner == owner {
+			syncHTMLControlText(access.B, control)
 		}
 	}
 	if state, ok := world.GetResource[*uiEventState](); ok && state != nil && state.Focused != 0 {
@@ -767,13 +769,17 @@ func syncHTMLSelectorState(world *ecs.World, entity ecs.Entity) {
 	if selector := world.GetMut[Selector](entity); selector != nil {
 		selector.Selected = control.Selected
 	}
+	syncHTMLSelectorOptions(world, entity, control)
+	refreshHTMLControlText(world, entity, control)
+}
+
+func syncHTMLSelectorOptions(world *ecs.World, entity ecs.Entity, control htmlui.Control) {
 	if runtime, exists := world.Get[htmlSelectorRuntime](entity); exists {
 		for index, item := range runtime.Items {
 			selected := index < len(control.Options) && control.Options[index].Selected
 			SetControlSelected(world, item, selected)
 		}
 	}
-	refreshHTMLControlText(world, entity, control)
 }
 
 func publishHTMLSelectChange(world *ecs.World, entity ecs.Entity) {
@@ -1253,20 +1259,23 @@ func cleanupHTMLSelectorElements(world *ecs.World) {
 }
 
 func refreshHTMLControlText(world *ecs.World, controlEntity ecs.Entity, control htmlui.Control) {
+	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
+		if access.A.Ref().Control == controlEntity {
+			syncHTMLControlText(access.B, &control)
+		}
+	}
+}
+
+func syncHTMLControlText(text ecs.ComponentAccess[scene.Text2D], control *htmlui.Control) {
 	value := ""
-	if control.Tag == "input" && htmlControlType(control) == "checkbox" && control.Checked {
+	if control.Tag == "input" && htmlControlType(*control) == "checkbox" && control.Checked {
 		value = "✓"
 	}
 	if control.Tag == "select" && control.Selected >= 0 && control.Selected < len(control.Options) {
 		value = control.Options[control.Selected].Label
 	}
-	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
-		link := access.A.Mut()
-		text := access.B.Mut()
-
-		if link.Control == controlEntity && text != nil {
-			text.Value = value
-		}
+	if text.Ref().Value != value {
+		text.Mut().Value = value
 	}
 }
 

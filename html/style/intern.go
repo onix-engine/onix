@@ -114,7 +114,7 @@ func (index *styleIndex) resolveMotion(current *motionStyle) *motionStyle {
 
 func styleHash(seed maphash.Seed, computed *ComputedStyle) uint64 {
 	hash := maphash.Comparable(seed, computed.styleCore) ^
-		styleSliceHash(seed, computed.BackgroundLayers)*0x9e3779b97f4a7c15 ^
+		styleSliceHash(seed, computed.ExtraBackgroundLayers)*0x9e3779b97f4a7c15 ^
 		styleSliceHash(seed, computed.BoxShadow)*0xbf58476d1ce4e5b9 ^
 		styleSliceHash(seed, computed.Filters)*0x94d049bb133111eb
 	if computed.motion != nil {
@@ -144,7 +144,7 @@ func styleSliceCode[T comparable](values []T) uint64 {
 
 func styleEqual(a, b *ComputedStyle) bool {
 	return a.styleCore == b.styleCore && motionEqual(a.motion, b.motion) &&
-		styleSliceEqual(a.BackgroundLayers, b.BackgroundLayers) &&
+		styleSliceEqual(a.ExtraBackgroundLayers, b.ExtraBackgroundLayers) &&
 		styleSliceEqual(a.BoxShadow, b.BoxShadow) && styleSliceEqual(a.Filters, b.Filters)
 }
 

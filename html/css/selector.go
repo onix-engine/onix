@@ -324,7 +324,7 @@ func isEmptyElement(node *dom.Node) bool {
 		if child.Type == dom.ElementNode {
 			return false
 		}
-		if child.Type == dom.TextNode {
+		if child.Type == dom.TextNode && child.Data != "" {
 			return false
 		}
 	}

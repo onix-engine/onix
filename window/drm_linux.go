@@ -149,41 +149,6 @@ func (c *Context) adjustViewport() {
 	c.viewport.apply(c.Device.Driver(), float64(c.Width), float64(c.Height), float64(c.Width), float64(c.Height))
 }
 
-func (c *Context) OnKeydown(callback func(input.KeyCode)) {
-	c.onKeydown = chainCallback(c.onKeydown, callback)
-}
-
-func (c *Context) OnKeyup(callback func(input.KeyCode)) {
-	c.onKeyup = chainCallback(c.onKeyup, callback)
-}
-
-func (c *Context) OnMouseDown(callback func(float64, float64, input.MouseButton)) {
-	c.onMouseDown = chainCallback3(c.onMouseDown, callback)
-}
-
-func (c *Context) OnMouseUp(callback func(float64, float64, input.MouseButton)) {
-	c.onMouseUp = chainCallback3(c.onMouseUp, callback)
-}
-
-func (c *Context) OnMouseMove(callback func(float64, float64)) {
-	c.onMouseMove = chainCallback2(c.onMouseMove, callback)
-}
-
-func (c *Context) OnMouseWheel(callback func(float64, float64)) {
-	c.onMouseWheel = chainCallback2(c.onMouseWheel, callback)
-}
-
-func (c *Context) OnTouchStart(callback func(float64, float64)) {
-	c.onTouchStart = chainCallback2(c.onTouchStart, callback)
-}
-
-func (c *Context) OnTouchMove(callback func(float64, float64)) {
-	c.onTouchMove = chainCallback2(c.onTouchMove, callback)
-}
-
-func (c *Context) OnTouchEnd(callback func(float64, float64)) {
-	c.onTouchEnd = chainCallback2(c.onTouchEnd, callback)
-}
 func (c *Context) OnFilesDropped(func(float64, float64, []string)) {}
 func (c *Context) SetTitle(string)                                 {}
 func (c *Context) SetIcon([]byte) error                            { return nil }

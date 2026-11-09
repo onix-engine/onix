@@ -332,45 +332,71 @@ func collisionModelID(node SceneNodeSpec, explicit string) string {
 	return ""
 }
 
+func (b *Bundle) modelCollisionForSpec(node SceneNodeSpec, model, component string, mode enginephysics.CollisionMode) (enginephysics.CookedCollision, error) {
+	cooked, err := b.collisionForModelID(collisionModelID(node, model))
+	if err != nil {
+		return enginephysics.CookedCollision{}, err
+	}
+	if cooked.Mode != mode {
+		return enginephysics.CookedCollision{}, fmt.Errorf("game object %q %s requires model collision mode %q", node.ID, component, mode)
+	}
+	return cooked, nil
+}
+
+func (spec TriangleMeshCollider3DSpec) component(bundle *Bundle, node SceneNodeSpec) (enginephysics.TriangleMeshCollider3D, error) {
+	cooked, err := bundle.modelCollisionForSpec(node, spec.Model, "triangleMeshCollider3D", enginephysics.CollisionModeTriangleMesh)
+	if err != nil {
+		return enginephysics.TriangleMeshCollider3D{}, err
+	}
+	collider := enginephysics.NewCollider3D(cooked.TriangleMesh)
+	spec.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+	return collider, nil
+}
+
+func (spec ConvexHullCollider3DSpec) component(bundle *Bundle, node SceneNodeSpec) (enginephysics.ConvexHullCollider3D, error) {
+	cooked, err := bundle.modelCollisionForSpec(node, spec.Model, "convexHullCollider3D", enginephysics.CollisionModeSingleConvex)
+	if err != nil {
+		return enginephysics.ConvexHullCollider3D{}, err
+	}
+	collider := enginephysics.NewCollider3D(cooked.ConvexHull)
+	spec.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+	return collider, nil
+}
+
+func (spec CompoundCollider3DSpec) component(bundle *Bundle, node SceneNodeSpec) (enginephysics.CompoundCollider3D, error) {
+	cooked, err := bundle.modelCollisionForSpec(node, spec.Model, "compoundCollider3D", enginephysics.CollisionModeConvexDecomposition)
+	if err != nil {
+		return enginephysics.CompoundCollider3D{}, err
+	}
+	collider := enginephysics.NewCollider3D(cooked.Compound)
+	spec.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
+	return collider, nil
+}
+
 func putPhysics3DComponents(bundle *Bundle, output *ecs.Bundle, spec SceneNodeSpec) error {
 	components := spec.Components
 	if components.RigidBody3D != nil {
 		output.Put(components.RigidBody3D.component())
 	}
 	if components.TriangleMeshCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.TriangleMeshCollider3D.Model))
+		collider, err := components.TriangleMeshCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeTriangleMesh {
-			return fmt.Errorf("game object %q triangleMeshCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeTriangleMesh)
-		}
-		collider := enginephysics.NewCollider3D(cooked.TriangleMesh)
-		components.TriangleMeshCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		output.Put(collider)
 	}
 	if components.ConvexHullCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.ConvexHullCollider3D.Model))
+		collider, err := components.ConvexHullCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeSingleConvex {
-			return fmt.Errorf("game object %q convexHullCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeSingleConvex)
-		}
-		collider := enginephysics.NewCollider3D(cooked.ConvexHull)
-		components.ConvexHullCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		output.Put(collider)
 	}
 	if components.CompoundCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.CompoundCollider3D.Model))
+		collider, err := components.CompoundCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeConvexDecomposition {
-			return fmt.Errorf("game object %q compoundCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeConvexDecomposition)
-		}
-		collider := enginephysics.NewCollider3D(cooked.Compound)
-		components.CompoundCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		output.Put(collider)
 	}
 	return nil
@@ -381,58 +407,32 @@ func applyPhysics3DComponents(bundle *Bundle, world *ecs.World, entity ecs.Entit
 	if err := replacePhysicsComponent(world, entity, components.RigidBody3D, func(value RigidBody3DSpec) enginephysics.RigidBody3D { return value.component() }); err != nil {
 		return err
 	}
-	remove3D := func() {
-		world.Remove[enginephysics.TriangleMeshCollider3D](entity)
-		world.Remove[enginephysics.ConvexHullCollider3D](entity)
-		world.Remove[enginephysics.CompoundCollider3D](entity)
-	}
-	remove3D()
-	if components.TriangleMeshCollider3D != nil || components.ConvexHullCollider3D != nil || components.CompoundCollider3D != nil {
-		return insertPhysics3DCollider(world, entity, bundle, spec)
-	}
-	return nil
-}
-
-func insertPhysics3DCollider(world *ecs.World, entity ecs.Entity, bundle *Bundle, spec SceneNodeSpec) error {
-	components := spec.Components
+	world.Remove[enginephysics.TriangleMeshCollider3D](entity)
+	world.Remove[enginephysics.ConvexHullCollider3D](entity)
+	world.Remove[enginephysics.CompoundCollider3D](entity)
 	if components.TriangleMeshCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.TriangleMeshCollider3D.Model))
+		collider, err := components.TriangleMeshCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeTriangleMesh {
-			return fmt.Errorf("game object %q triangleMeshCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeTriangleMesh)
-		}
-		collider := enginephysics.NewCollider3D(cooked.TriangleMesh)
-		components.TriangleMeshCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		if err := world.Insert(entity, collider); err != nil {
 			return err
 		}
 	}
 	if components.ConvexHullCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.ConvexHullCollider3D.Model))
+		collider, err := components.ConvexHullCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeSingleConvex {
-			return fmt.Errorf("game object %q convexHullCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeSingleConvex)
-		}
-		collider := enginephysics.NewCollider3D(cooked.ConvexHull)
-		components.ConvexHullCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		if err := world.Insert(entity, collider); err != nil {
 			return err
 		}
 	}
 	if components.CompoundCollider3D != nil {
-		cooked, err := bundle.collisionForModelID(collisionModelID(spec, components.CompoundCollider3D.Model))
+		collider, err := components.CompoundCollider3D.component(bundle, spec)
 		if err != nil {
 			return err
 		}
-		if cooked.Mode != enginephysics.CollisionModeConvexDecomposition {
-			return fmt.Errorf("game object %q compoundCollider3D requires model collision mode %q", spec.ID, enginephysics.CollisionModeConvexDecomposition)
-		}
-		collider := enginephysics.NewCollider3D(cooked.Compound)
-		components.CompoundCollider3D.Collider3DSettingsSpec.applyColliderSettings3D(&collider)
 		return world.Insert(entity, collider)
 	}
 	return nil

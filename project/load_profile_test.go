@@ -1,6 +1,7 @@
 package project
 
 import (
+	iofs "io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -8,6 +9,39 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	sceneapi "github.com/onix-engine/onix/scene"
 )
+
+type resourceManifestReadFS struct {
+	fstest.MapFS
+	reads int
+}
+
+func (source *resourceManifestReadFS) ReadFile(name string) ([]byte, error) {
+	if name == "resources/resources.json" {
+		source.reads++
+	}
+	return iofs.ReadFile(source.MapFS, name)
+}
+
+func TestConfiguredProjectReadsResourceManifestOnce(t *testing.T) {
+	for _, name := range []string{"json", "prepared"} {
+		t.Run(name, func(t *testing.T) {
+			source := &resourceManifestReadFS{MapFS: preparedSceneTestSource(t, nil)}
+			data := []byte(`{}`)
+			if name == "prepared" {
+				data = preparedSpawnTestFile(t, resourceManifest{}).Data
+			}
+			source.MapFS["resources/resources.json"] = &fstest.MapFile{Data: data}
+			bundle, err := LoadConfiguredWith[ResourceFeature](source, ".", EngineConfig{Features: []RuntimeFeatureID{FeatureRender2D}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer bundle.Dispose()
+			if source.reads != 1 {
+				t.Fatalf("read resource manifest %d times, want 1", source.reads)
+			}
+		})
+	}
+}
 
 func TestConfiguredProjectInstantiatesStaticScene(t *testing.T) {
 	source := fstest.MapFS{

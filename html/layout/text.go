@@ -1435,14 +1435,6 @@ func whiteSpaceMode(computed *style.ComputedStyle, preserveWhitespace bool) stri
 	return "normal"
 }
 
-func glyphRunWidth(glyphs []shapedGlyph) float64 {
-	width := 0.0
-	for _, glyph := range glyphs {
-		width += glyph.Advance
-	}
-	return width
-}
-
 func glyphRunText(glyphs []shapedGlyph) string {
 	var builder strings.Builder
 	for _, glyph := range glyphs {

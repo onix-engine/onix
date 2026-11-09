@@ -72,9 +72,9 @@ func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style
 }
 
 func prepareHTMLRasterGradients(reuse []htmlRasterGradient, computed *style.ComputedStyle) []htmlRasterGradient {
-	count := len(computed.BackgroundLayers)
-	if count == 0 && computed.BackgroundImage != "" {
-		count = 1
+	count := computed.BackgroundLayerCount()
+	if count == 1 && computed.Background.Image == "" {
+		count = 0
 	}
 	previous := len(reuse)
 	if count < previous {
@@ -82,10 +82,7 @@ func prepareHTMLRasterGradients(reuse []htmlRasterGradient, computed *style.Comp
 	}
 	reuse = slices.Grow(reuse, max(count-previous, 0))[:count]
 	for index := range reuse {
-		source := computed.BackgroundImage
-		if len(computed.BackgroundLayers) > 0 {
-			source = computed.BackgroundLayers[index].Image
-		}
+		source := computed.BackgroundLayer(index).Image
 		if index < previous && reuse[index].image == source {
 			continue
 		}

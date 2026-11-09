@@ -106,10 +106,6 @@ func (q Quaternion) Rotate(vector Vector3D) Vector3D {
 	return vector.Add(twiceCross.Mul(q.W)).Add(part.Cross(twiceCross))
 }
 
-func (q Quaternion) inverseRotate(vector Vector3D) Vector3D {
-	return q.Normalize().Conjugate().Rotate(vector)
-}
-
 func integrateRotation(rotation Quaternion, angularVelocity Vector3D, delta float64) Quaternion {
 	spin := Quaternion{X: angularVelocity.X, Y: angularVelocity.Y, Z: angularVelocity.Z}.Mul(rotation)
 	return Quaternion{

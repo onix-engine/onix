@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	enginephysics "github.com/onix-engine/onix/physics"
@@ -18,7 +19,6 @@ import (
 	"github.com/onix-engine/onix/spine"
 	engineui "github.com/onix-engine/onix/ui"
 	"github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type SceneInstance struct {
@@ -254,90 +254,45 @@ func (s *SceneInstance) Resources() *Resources {
 // existing runtime entity. The cloned nodes get a unique ID prefix and remain
 // part of the scene so their authored UI composition can be bound normally.
 func (s *SceneInstance) CloneChildrenUnder(parent ecs.Entity, templateID, prefix string) (map[string]ecs.Entity, error) {
-	if s == nil || s.World == nil || s.project == nil {
-		return nil, fmt.Errorf("scene instance is nil")
-	}
-	if !s.World.IsAlive(parent) {
-		return nil, fmt.Errorf("clone parent entity %d does not exist", parent)
-	}
-	template, ok := s.Entities[strings.TrimSpace(templateID)]
-	if !ok {
-		return nil, fmt.Errorf("scene template %q does not exist", templateID)
-	}
-	prefix = strings.Trim(strings.TrimSpace(prefix), "-")
-	if prefix == "" {
-		return nil, fmt.Errorf("scene template prefix is required")
-	}
-	clones := make(map[string]ecs.Entity)
-	rollback := func(err error) (map[string]ecs.Entity, error) {
-		s.rollbackClones(clones)
-		return nil, err
-	}
-	children := sceneChildIndex(s.World)
-	for _, child := range children[template] {
-		if err := s.cloneTemplateNode(parent, child, prefix, clones, children); err != nil {
-			return rollback(err)
-		}
-	}
-	if err := s.resolveCloneWidgetTargets(clones); err != nil {
-		return rollback(err)
-	}
-	if err := s.bindRuntimeAnimationTargets(cloneEntities(clones)...); err != nil {
-		return rollback(err)
-	}
-	if err := s.RefreshTransforms(); err != nil {
-		return rollback(err)
-	}
-	return clones, nil
+	return s.cloneUnder(parent, templateID, prefix, cloneChildren)
 }
 
 // CloneNodeUnder clones one authored scene node and its descendants under an
 // existing entity. It is useful for data-driven UI that keeps one editable
 // item template in the scene and creates the remaining items at runtime.
 func (s *SceneInstance) CloneNodeUnder(parent ecs.Entity, templateID, prefix string) (map[string]ecs.Entity, error) {
-	if s == nil || s.World == nil || s.project == nil {
-		return nil, fmt.Errorf("scene instance is nil")
-	}
-	if !s.World.IsAlive(parent) {
-		return nil, fmt.Errorf("clone parent entity %d does not exist", parent)
-	}
-	template, ok := s.Entities[strings.TrimSpace(templateID)]
-	if !ok {
-		return nil, fmt.Errorf("scene template %q does not exist", templateID)
-	}
-	prefix = strings.Trim(strings.TrimSpace(prefix), "-")
-	if prefix == "" {
-		return nil, fmt.Errorf("scene template prefix is required")
-	}
-	clones := make(map[string]ecs.Entity)
-	rollback := func(err error) (map[string]ecs.Entity, error) {
-		s.rollbackClones(clones)
-		return nil, err
-	}
-	if err := s.cloneTemplateNode(parent, template, prefix, clones, sceneChildIndex(s.World)); err != nil {
-		return rollback(err)
-	}
-	if err := s.resolveCloneWidgetTargets(clones); err != nil {
-		return rollback(err)
-	}
-	if err := s.bindRuntimeAnimationTargets(cloneEntities(clones)...); err != nil {
-		return rollback(err)
-	}
-	if err := s.RefreshTransforms(); err != nil {
-		return rollback(err)
-	}
-	return clones, nil
+	return s.cloneUnder(parent, templateID, prefix, cloneNode)
 }
 
 // CloneRootsUnder clones all authored root nodes under an existing runtime
 // entity. The cloned nodes get a unique ID prefix and remain part of the
 // scene so their authored UI composition can be bound normally.
 func (s *SceneInstance) CloneRootsUnder(parent ecs.Entity, prefix string) (map[string]ecs.Entity, error) {
+	return s.cloneUnder(parent, "", prefix, cloneRoots)
+}
+
+type sceneCloneKind uint8
+
+const (
+	cloneNode sceneCloneKind = iota
+	cloneChildren
+	cloneRoots
+)
+
+func (s *SceneInstance) cloneUnder(parent ecs.Entity, templateID, prefix string, kind sceneCloneKind) (map[string]ecs.Entity, error) {
 	if s == nil || s.World == nil || s.project == nil {
 		return nil, fmt.Errorf("scene instance is nil")
 	}
 	if !s.World.IsAlive(parent) {
 		return nil, fmt.Errorf("clone parent entity %d does not exist", parent)
+	}
+	var template ecs.Entity
+	if kind != cloneRoots {
+		var ok bool
+		template, ok = s.Entities[strings.TrimSpace(templateID)]
+		if !ok {
+			return nil, fmt.Errorf("scene template %q does not exist", templateID)
+		}
 	}
 	prefix = strings.Trim(strings.TrimSpace(prefix), "-")
 	if prefix == "" {
@@ -349,7 +304,14 @@ func (s *SceneInstance) CloneRootsUnder(parent ecs.Entity, prefix string) (map[s
 		return nil, err
 	}
 	children := sceneChildIndex(s.World)
-	for _, root := range s.Roots {
+	roots := []ecs.Entity{template}
+	switch kind {
+	case cloneChildren:
+		roots = children[template]
+	case cloneRoots:
+		roots = s.Roots
+	}
+	for _, root := range roots {
 		if err := s.cloneTemplateNode(parent, root, prefix, clones, children); err != nil {
 			return rollback(err)
 		}
@@ -1307,69 +1269,35 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 
 func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sceneSpawnNode) error {
 	spec := node.Spec
-	var animator sceneapi.Animator
-	requiresSprite := false
-	if node.HasAnimation {
-		var err error
-		animator, requiresSprite, err = s.project.ecsAnimationForSpec(spec, &node)
+	if node.HasSprite || node.HasAnimation {
+		sprite, animator, hasSprite, err := s.project.spriteAnimationForNode(node)
 		if err != nil {
 			return err
 		}
-	}
-	if node.HasSprite {
-		sprite, err := s.project.ecsSpriteForSpec(spec)
-		if err != nil {
-			return err
-		}
-		if requiresSprite {
-			if texture := animator.CurrentTexture(); texture != nil {
-				sprite.Texture = texture
-				sprite.Slice = nil
-				if spec.Width <= 0 {
-					sprite.Width = float32(texture.LogicalWidth())
-				}
-				if spec.Height <= 0 {
-					sprite.Height = float32(texture.LogicalHeight())
-				}
-			}
-		}
-		if err := s.World.Insert(entity, sprite); err != nil {
-			return err
-		}
-		if trail := spec.Components.Sprite.Trail; trail != nil {
-			if err := s.World.Insert(entity, trail.component()); err != nil {
-				return err
-			}
-		} else {
-			s.World.Remove[sceneapi.SpriteTrail2D](entity)
-		}
-	} else {
-		s.World.Remove[sceneapi.Sprite2D](entity)
-		s.World.Remove[sceneapi.SpriteTrail2D](entity)
-		s.World.Remove[sceneapi.Animator](entity)
-	}
-	if node.HasAnimation {
-		if requiresSprite && !node.HasSprite {
-			sprite := sceneapi.Sprite2DFromTexture(animator.CurrentTexture())
-			sprite.Alpha = spec.Alpha
-			if spec.Width > 0 {
-				sprite.Width = float32(spec.Width)
-			}
-			if spec.Height > 0 {
-				sprite.Height = float32(spec.Height)
-			}
+		if hasSprite {
 			if err := s.World.Insert(entity, sprite); err != nil {
 				return err
 			}
+		} else {
+			s.World.Remove[sceneapi.Sprite2D](entity)
 		}
-		if err := s.World.Insert(entity, animator); err != nil {
+		if node.HasAnimation {
+			if err := s.World.Insert(entity, animator); err != nil {
+				return err
+			}
+		} else {
+			s.World.Remove[sceneapi.Animator](entity)
+		}
+	} else {
+		s.World.Remove[sceneapi.Sprite2D](entity)
+		s.World.Remove[sceneapi.Animator](entity)
+	}
+	if node.HasSprite && spec.Components.Sprite.Trail != nil {
+		if err := s.World.Insert(entity, spec.Components.Sprite.Trail.component()); err != nil {
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Animator](entity)
-		if !node.HasSprite {
-			s.World.Remove[sceneapi.Sprite2D](entity)
-		}
+		s.World.Remove[sceneapi.SpriteTrail2D](entity)
 	}
 	if node.HasText {
 		text, err := s.project.ecsTextForPlanNode(node)
@@ -2069,36 +1997,13 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 	if layers, ok := renderLayersFromSpec(spec.RenderLayers); ok {
 		components.Put(layers)
 	}
-	var animator sceneapi.Animator
-	requiresSprite := false
-	if node.HasAnimation {
-		var err error
-		animator, requiresSprite, err = b.ecsAnimationForSpec(spec, &node)
-		if err != nil {
-			return ecs.Bundle{}, err
-		}
-	}
 	if spec.Control != nil || spec.Components.VisualsEmpty() {
 		components.Put(sceneapi.Size2D{Width: float32(spec.Width), Height: float32(spec.Height)})
 	}
+	if err := b.putSpriteAnimationComponents(&components, node); err != nil {
+		return ecs.Bundle{}, err
+	}
 	if node.HasSprite {
-		sprite, err := b.ecsSpriteForSpec(spec)
-		if err != nil {
-			return ecs.Bundle{}, err
-		}
-		if requiresSprite {
-			if texture := animator.CurrentTexture(); texture != nil {
-				sprite.Texture = texture
-				sprite.Slice = nil
-				if spec.Width <= 0 {
-					sprite.Width = float32(texture.LogicalWidth())
-				}
-				if spec.Height <= 0 {
-					sprite.Height = float32(texture.LogicalHeight())
-				}
-			}
-		}
-		components.Put(sprite)
 		if trail := spec.Components.Sprite.Trail; trail != nil {
 			if err := trail.validate(); err != nil {
 				return ecs.Bundle{}, fmt.Errorf("game object %q trail %w", spec.ID, err)
@@ -2140,20 +2045,6 @@ func (b *Bundle) buildSceneComponents(node sceneSpawnNode, named, include3D bool
 			return ecs.Bundle{}, err
 		}
 		components.Put(component)
-	}
-	if node.HasAnimation {
-		if requiresSprite && !node.HasSprite {
-			sprite := sceneapi.Sprite2DFromTexture(animator.CurrentTexture())
-			sprite.Alpha = spec.Alpha
-			if spec.Width > 0 {
-				sprite.Width = float32(spec.Width)
-			}
-			if spec.Height > 0 {
-				sprite.Height = float32(spec.Height)
-			}
-			components.Put(sprite)
-		}
-		components.Put(animator)
 	}
 	if include3D {
 		if node.HasModel {

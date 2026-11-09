@@ -5,10 +5,10 @@ import (
 	"math"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/internal/smallsort"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type InputTarget2D struct {
@@ -209,9 +209,6 @@ func compareInputPickTargetKeys2D(a, b *inputPickTarget2D) int {
 	}
 	return cmp.Compare(a.sequence, b.sequence)
 }
-
-type inputTargets2DScratch struct{}
-type inputCameras2DScratch struct{}
 
 func DispatchInputEvents2DSystem(name string) ecs.SystemConfig {
 	if name == "" {
@@ -448,14 +445,6 @@ func inputEventPath2D(world *ecs.World, entity ecs.Entity) []ecs.Entity {
 	return path.Values[start:]
 }
 
-func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
-	scratch := world.FrameScratch[inputCameras2DScratch, inputCamera2D]()
-	var captureDefaultCamera ecs.Entity
-	scratch.Values, captureDefaultCamera = collectInputCamerasInto2D(world, scratch.Values, capture)
-	scratch.ReleaseUnused()
-	return scratch.Values, captureDefaultCamera
-}
-
 func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
 	cameras = cameras[:0]
 	state, _ := world.GetResource[*RenderWorld]()
@@ -507,13 +496,6 @@ func collectInputCamerasInto2D(world *ecs.World, cameras []inputCamera2D, captur
 		capture.defaultUICamera = defaultCamera.entity
 	}
 	return cameras, defaultCamera.entity
-}
-
-func collectInputTargets2D(world *ecs.World, capture *inputCaptureLookup2D) []inputPickTarget2D {
-	scratch := world.FrameScratch[inputTargets2DScratch, inputPickTarget2D]()
-	scratch.Values = collectInputTargetsInto2D(world, scratch.Reserve(world.EntityCount()), capture)
-	scratch.ReleaseUnused()
-	return scratch.Values
 }
 
 func collectInputTargetsInto2D(world *ecs.World, targets []inputPickTarget2D, capture *inputCaptureLookup2D) []inputPickTarget2D {

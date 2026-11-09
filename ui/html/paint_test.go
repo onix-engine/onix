@@ -107,7 +107,8 @@ func TestHTMLRasterizesLayeredBackgroundsIndependentCornersAndShadows(t *testing
 		t.Fatal("box shadow was not rasterized with its blur")
 	}
 	computed := state.Styles[node.node]
-	if htmlRoundedPixel(computed, 1, 1, 80, 40) || !htmlRoundedPixel(computed, 12, 2, 80, 40) {
+	radii := prepareHTMLRasterCorners(computed, 80, 40)
+	if htmlRoundedRasterPixel(radii, 1, 1, 80, 40) || !htmlRoundedRasterPixel(radii, 12, 2, 80, 40) {
 		t.Fatal("individual top-left corner radius was not applied")
 	}
 }

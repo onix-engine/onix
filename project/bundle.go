@@ -688,20 +688,13 @@ const (
 	resourceFileName     = "resources.json"
 )
 
-type bundleLoader interface {
-	loadResources(iofs.FS, string, string, ResourceFeature) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error)
-	componentBuilder() sceneComponentBuilder
-	componentClearer() sceneComponentClearer
-	uiSystems() sceneUISync
-}
-
 // LoadProfile is the compile-time boundary for project resource and scene
 // support. Profiles intentionally use unexported methods so applications can
-// select only engine-owned implementations through generic APIs. Unlike the
-// full loader, a profile does not return indexes for unsupported resource
-// families, keeping those types out of its static call graph.
+// select only engine-owned implementations through generic APIs. Each profile
+// installs its resources directly on the bundle so unsupported resource
+// families stay outside its static call graph.
 type LoadProfile interface {
-	loadProfileResources(iofs.FS, string, string, ResourceFeature) (*Resources, error)
+	loadProfileResources(*Bundle, iofs.FS, string, string, ResourceFeature) error
 	componentBuilder() sceneComponentBuilder
 	componentClearer() sceneComponentClearer
 	uiSystems() sceneUISync
@@ -709,8 +702,8 @@ type LoadProfile interface {
 
 type allFeaturesLoader struct{}
 
-func (allFeaturesLoader) loadResources(source iofs.FS, projectDir, path string, feature ResourceFeature) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error) {
-	return loadResources(source, projectDir, path, feature)
+func (allFeaturesLoader) loadProfileResources(bundle *Bundle, source iofs.FS, projectDir, path string, feature ResourceFeature) error {
+	return bundle.loadFullResources(source, projectDir, path, feature, nil)
 }
 
 func (allFeaturesLoader) componentBuilder() sceneComponentBuilder { return buildAllSceneComponents }
@@ -722,18 +715,15 @@ func (allFeaturesLoader) uiSystems() sceneUISync { return fullSceneUISync() }
 // configuredLoader composes resource validation, scene components, and UI
 // synchronization from an explicit EngineConfig.
 type configuredLoader struct {
-	Feature ResourceFeature
-	Config  EngineConfig
+	Config EngineConfig
 }
 
-func (loader configuredLoader) loadResources(source iofs.FS, projectDir, path string, _ ResourceFeature) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error) {
+func (loader configuredLoader) loadProfileResources(bundle *Bundle, source iofs.FS, projectDir, path string, feature ResourceFeature) error {
 	if err := loader.Config.Validate(); err != nil {
-		return nil, nil, nil, nil, nil, err
+		return err
 	}
-	if err := validateConfiguredResourceManifest(source, path, loader.Config); err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-	return loadResources(source, projectDir, path, loader.Feature)
+	bundle.engineConfig = loader.Config
+	return bundle.loadFullResources(source, projectDir, path, feature, &loader.Config)
 }
 
 func (configuredLoader) componentBuilder() sceneComponentBuilder {
@@ -756,21 +746,7 @@ func (loader configuredLoader) uiSystems() sceneUISync {
 	return sync
 }
 
-func validateConfiguredResourceManifest(source iofs.FS, path string, config EngineConfig) error {
-	exists, err := projectFileExists(source, path)
-	if err != nil || !exists {
-		return err
-	}
-	manifest, err := readJSON[resourceManifest](source, path)
-	if err != nil {
-		return err
-	}
-	unsupported := func(enabled ResourceID, count int, name string) error {
-		if count > 0 && !config.HasResource(enabled) {
-			return fmt.Errorf("%s contains disabled %s resources", pathpkg.Base(path), name)
-		}
-		return nil
-	}
+func validateConfiguredResourceManifest(manifest *resourceManifest, path string, config EngineConfig) error {
 	checks := [...]struct {
 		id    ResourceID
 		name  string
@@ -787,22 +763,22 @@ func validateConfiguredResourceManifest(source iofs.FS, path string, config Engi
 		{id: ResourceHTML, count: len(manifest.HTML), name: "html"},
 	}
 	for _, check := range checks {
-		if err := unsupported(check.id, check.count, check.name); err != nil {
-			return err
+		if check.count > 0 && !config.HasResource(check.id) {
+			return fmt.Errorf("%s contains disabled %s resources", pathpkg.Base(path), check.name)
 		}
 	}
 	return nil
 }
 
 func Load(source iofs.FS, root string) (*Bundle, error) {
-	return loadBundle(source, root, allFeaturesLoader{})
+	return loadProfileBundle(source, root, allFeaturesLoader{}, nil)
 }
 
 // LoadConfiguredWith loads a project using explicit resource and runtime
 // feature selections.
 func LoadConfiguredWith[F ResourceFeature](source iofs.FS, root string, config EngineConfig) (*Bundle, error) {
 	var feature F
-	return loadBundle(source, root, configuredLoader{Config: config, Feature: feature})
+	return loadProfileBundle(source, root, configuredLoader{Config: config}, feature)
 }
 
 func loadProfileBundle[P LoadProfile](source iofs.FS, root string, profile P, feature ResourceFeature) (*Bundle, error) {
@@ -817,48 +793,36 @@ func loadProfileBundle[P LoadProfile](source iofs.FS, root string, profile P, fe
 	if err != nil {
 		return nil, err
 	}
-	resources, err := profile.loadProfileResources(source, root, pathpkg.Join(manifestDir, resourceFileName), feature)
-	if err != nil {
-		return nil, err
-	}
-	resourcesOwned := true
-	defer func() {
-		if resourcesOwned {
-			_ = resources.Dispose()
-		}
-	}()
-	prefabPlansByID, prefabIDs, err := loadPrefabResources(source, root, resources.prefabSpecs)
-	if err != nil {
-		return nil, err
-	}
-	entrySceneID, scenePlansByID, sceneIDs, err := loadSceneCatalog(source, manifestDir)
-	if err != nil {
-		return nil, err
-	}
 	project := &Bundle{
-		resources:            resources,
 		engineConfig:         manifest.Engine,
 		components:           profile.componentBuilder(),
 		clearComponents:      profile.componentClearer(),
 		uiSync:               profile.uiSystems(),
 		appConfig:            AppConfig{Window: manifest.Window, Viewport: manifest.Viewport},
-		entrySceneID:         entrySceneID,
-		scenePlansByID:       scenePlansByID,
-		sceneIDs:             sceneIDs,
-		prefabPlansByID:      prefabPlansByID,
-		prefabIDs:            prefabIDs,
-		particleSpecs:        nil,
-		tilemapSpecs:         nil,
-		modelSpecs:           nil,
-		modelResources:       nil,
-		spineSpecs:           nil,
 		inlineAnimationClips: newResourceCache[string, *scene.AnimationClip](0),
+	}
+	if err := profile.loadProfileResources(project, source, root, pathpkg.Join(manifestDir, resourceFileName), feature); err != nil {
+		return nil, err
+	}
+	resourcesOwned := true
+	defer func() {
+		if resourcesOwned {
+			_ = project.resources.Dispose()
+		}
+	}()
+	project.prefabPlansByID, project.prefabIDs, err = loadPrefabResources(source, root, project.resources.prefabSpecs)
+	if err != nil {
+		return nil, err
+	}
+	project.entrySceneID, project.scenePlansByID, project.sceneIDs, err = loadSceneCatalog(source, manifestDir)
+	if err != nil {
+		return nil, err
 	}
 	if err := project.prepareInlineAnimationPlans(); err != nil {
 		return nil, err
 	}
 	if manifest.ClearColor != "" {
-		clr, err := resources.ParseColor(manifest.ClearColor, 1)
+		clr, err := project.resources.ParseColor(manifest.ClearColor, 1)
 		if err != nil {
 			return nil, fmt.Errorf("%s clearColor: %w", projectFileName, err)
 		}
@@ -878,89 +842,13 @@ func loadProfileBundle[P LoadProfile](source iofs.FS, root string, profile P, fe
 	return project, nil
 }
 
-func loadBundle(source iofs.FS, root string, loader bundleLoader) (*Bundle, error) {
-	if source == nil {
-		return nil, fmt.Errorf("project resource source is nil")
+func (b *Bundle) loadFullResources(source iofs.FS, projectDir, path string, feature ResourceFeature, config *EngineConfig) error {
+	var err error
+	b.resources, b.particleSpecs, b.tilemapSpecs, b.modelSpecs, b.spineSpecs, err = loadResources(source, projectDir, path, feature, config)
+	if err == nil {
+		b.modelResources = newResourceCache[string, modelResource](len(b.modelSpecs))
 	}
-	root = pathpkg.Clean(root)
-	if root != "." && (!iofs.ValidPath(root) || strings.ContainsRune(root, '\\')) {
-		return nil, fmt.Errorf("invalid project root %q", root)
-	}
-	manifest, manifestDir, err := loadGameManifest(source, root)
-	if err != nil {
-		return nil, err
-	}
-
-	resources, particleSpecs, tilemapSpecs, modelSpecs, spineSpecs, err := loader.loadResources(source, root, pathpkg.Join(manifestDir, resourceFileName), nil)
-	if err != nil {
-		return nil, err
-	}
-	resourcesOwned := true
-	defer func() {
-		if resourcesOwned {
-			_ = resources.Dispose()
-		}
-	}()
-	prefabPlansByID, prefabIDs, err := loadPrefabResources(source, root, resources.prefabSpecs)
-	if err != nil {
-		return nil, err
-	}
-
-	entrySceneID, scenePlansByID, sceneIDs, err := loadSceneCatalog(source, manifestDir)
-	if err != nil {
-		return nil, err
-	}
-	project := &Bundle{
-		resources:       resources,
-		engineConfig:    manifest.Engine,
-		components:      loader.componentBuilder(),
-		clearComponents: loader.componentClearer(),
-		uiSync:          loader.uiSystems(),
-		appConfig: AppConfig{
-			Window:   manifest.Window,
-			Viewport: manifest.Viewport,
-		},
-		entrySceneID:         entrySceneID,
-		scenePlansByID:       scenePlansByID,
-		sceneIDs:             sceneIDs,
-		prefabPlansByID:      prefabPlansByID,
-		prefabIDs:            prefabIDs,
-		particleSpecs:        particleSpecs,
-		tilemapSpecs:         tilemapSpecs,
-		modelSpecs:           modelSpecs,
-		modelResources:       newResourceCache[string, modelResource](len(modelSpecs)),
-		spineSpecs:           spineSpecs,
-		inlineAnimationClips: newResourceCache[string, *scene.AnimationClip](0),
-	}
-	if configured, ok := loader.(configuredLoader); ok {
-		project.engineConfig = configured.Config
-	}
-	if err := project.prepareInlineAnimationPlans(); err != nil {
-		return nil, err
-	}
-
-	if manifest.ClearColor != "" {
-		clr, err := resources.ParseColor(manifest.ClearColor, 1)
-		if err != nil {
-			return nil, fmt.Errorf("%s clearColor: %w", projectFileName, err)
-		}
-		project.clearColor = clr
-		project.hasClear = true
-	}
-
-	iconPath, err := resolveWindowIconPath(manifestDir, manifest.Window.Icon)
-	if err != nil {
-		return nil, fmt.Errorf("%s window.icon: %w", projectFileName, err)
-	}
-	if iconPath != "" {
-		project.windowIcon, err = readProjectFile(source, iconPath)
-		if err != nil {
-			return nil, fmt.Errorf("read window icon %s: %w", iconPath, err)
-		}
-	}
-
-	resourcesOwned = false
-	return project, nil
+	return err
 }
 
 func (b *Bundle) prepareInlineAnimationPlans() error {
@@ -1172,7 +1060,7 @@ func (r *Resources) Spine(id string) (*spineruntime.Resource, error) {
 	return loadNamedResource(id, "spine", spines)
 }
 
-func loadResources(source iofs.FS, projectDir, path string, feature ResourceFeature) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error) {
+func loadResources(source iofs.FS, projectDir, path string, feature ResourceFeature, config *EngineConfig) (*Resources, map[string]ParticleSpec, map[string]TilemapSpec, map[string]ModelSpec, map[string]SpineSpec, error) {
 	exists, err := projectFileExists(source, path)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
@@ -1190,6 +1078,11 @@ func loadResources(source iofs.FS, projectDir, path string, feature ResourceFeat
 	manifest, err := readJSON[resourceManifest](source, path)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
+	}
+	if config != nil {
+		if err := validateConfiguredResourceManifest(&manifest, path, *config); err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
 	}
 	prefabSpecs, err := normalizePrefabResourceSpecs(manifest.Prefabs)
 	if err != nil {

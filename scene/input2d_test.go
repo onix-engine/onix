@@ -5,9 +5,9 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/input"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type previousInputEventLayout struct {
@@ -572,4 +572,22 @@ func TestDispatchInputUsesPressPositionBeforeSameFrameMove(t *testing.T) {
 	if !pressed || !moved {
 		t.Fatalf("same-frame press/move lost original capture: press=%v move=%v", pressed, moved)
 	}
+}
+
+type inputTargets2DScratch struct{}
+type inputCameras2DScratch struct{}
+
+func collectInputCameras2D(world *ecs.World, capture *inputCaptureLookup2D) ([]inputCamera2D, ecs.Entity) {
+	scratch := world.FrameScratch[inputCameras2DScratch, inputCamera2D]()
+	var captureDefaultCamera ecs.Entity
+	scratch.Values, captureDefaultCamera = collectInputCamerasInto2D(world, scratch.Values, capture)
+	scratch.ReleaseUnused()
+	return scratch.Values, captureDefaultCamera
+}
+
+func collectInputTargets2D(world *ecs.World, capture *inputCaptureLookup2D) []inputPickTarget2D {
+	scratch := world.FrameScratch[inputTargets2DScratch, inputPickTarget2D]()
+	scratch.Values = collectInputTargetsInto2D(world, scratch.Reserve(world.EntityCount()), capture)
+	scratch.ReleaseUnused()
+	return scratch.Values
 }

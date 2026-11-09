@@ -219,27 +219,6 @@ func storeMetaBlockHeader(len uint, is_uncompressed bool, storage_ix *uint, stor
 	writeSingleBit(is_uncompressed, storage_ix, storage)
 }
 
-func storeMetaBlockHeaderBW(len uint, is_uncompressed bool, bw *bitWriter) {
-	var nibbles uint = 6
-
-	/* ISLAST */
-	bw.writeBits(1, 0)
-
-	if len <= 1<<16 {
-		nibbles = 4
-	} else if len <= 1<<20 {
-		nibbles = 5
-	} else if len > 1<<24 {
-		panic("metablock too long")
-	}
-
-	bw.writeBits(2, uint64(nibbles)-4)
-	bw.writeBits(nibbles*4, uint64(len)-1)
-
-	/* ISUNCOMPRESSED */
-	bw.writeSingleBit(is_uncompressed)
-}
-
 func createCommands(input []byte, block_size uint, input_size uint, base_ip_ptr []byte, table []int, table_bits uint, min_match uint, literals *[]byte, commands *[]uint32) {
 	var ip int = 0
 	var shift uint = 64 - table_bits
