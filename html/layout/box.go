@@ -30,7 +30,6 @@ type Box struct {
 	flow              *flowScratch
 	flexMeasureStyle  *style.ComputedStyle
 	inlinePaintIndex  map[inlineBackgroundKey]int
-	tableMeasureStyle *style.ComputedStyle
 	intrinsicScratch  *layoutContext
 	Style             *style.ComputedStyle
 	Parent            *Box
