@@ -1,42 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Lark Engine</title>
-  <desc id="desc">A flat game-engine bird emblem in vivid vermilion, with a bright golden wing, golden-yellow beak and feet, and saturated solid-color shading. No gradients or filters.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Onix — blue and violet emblem</title>
+  <desc id="desc">A cyan, blue and violet open ring crossed by two sweeping ribbons, on a rounded midnight-blue tile. Redrawn entirely with vector paths and gradients.</desc>
   <defs>
-    <path id="body-shape" d="M 303 95
-             C 264 94 235 112 215 148
-             C 198 183 189 221 169 265
-             C 148 309 119 354 94 385
-             C 85 397 93 411 107 413
-             C 127 416 144 388 170 359
-             C 211 376 266 380 310 363
-             C 355 347 380 318 391 280
-             C 405 239 395 194 387 164
-             C 381 122 348 93 303 95 Z"/>
-    <clipPath id="body-clip"><use href="#body-shape"/></clipPath>
-    <path id="wing-shape" d="M 176 317
-             C 188 280 212 239 243 218
-             C 255 209 264 208 272 220
-             C 291 248 284 279 266 298
-             C 244 321 210 326 183 323
-             Q 174 322 176 317 Z"/>
-    <clipPath id="wing-clip"><use href="#wing-shape"/></clipPath>
+    <linearGradient id="tile" x1="180" y1="0" x2="1060" y2="1254" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020b24"/>
+      <stop offset=".43" stop-color="#000014"/>
+      <stop offset=".76" stop-color="#000015"/>
+      <stop offset="1" stop-color="#061c7b"/>
+    </linearGradient>
+    <radialGradient id="tile-cyan" cx="0" cy="0" r="1" gradientTransform="translate(408 343) rotate(58) scale(540 466)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#003f89" stop-opacity=".39"/>
+      <stop offset="1" stop-color="#00132d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="tile-blue" cx="0" cy="0" r="1" gradientTransform="translate(1254 1254) rotate(-135) scale(620 529)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#163eff"/>
+      <stop offset=".38" stop-color="#092ac3" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#001570" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tile-edge" x1="0" y1="0" x2="1254" y2="1254" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0a286d"/>
+      <stop offset=".4" stop-color="#100735"/>
+      <stop offset=".73" stop-color="#090b3d"/>
+      <stop offset="1" stop-color="#2448ff"/>
+    </linearGradient>
+    <linearGradient id="upper-ring" x1="380" y1="200" x2="710" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60fff1"/>
+      <stop offset=".24" stop-color="#20e2f1"/>
+      <stop offset=".58" stop-color="#079bff"/>
+      <stop offset="1" stop-color="#2451fa"/>
+    </linearGradient>
+    <linearGradient id="upper-gloss" x1="363" y1="198" x2="700" y2="608" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b3fff8"/>
+      <stop offset=".46" stop-color="#71e5ff" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#2464ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lower-ring" x1="832" y1="480" x2="716" y2="1047" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#060a35"/>
+      <stop offset=".34" stop-color="#2221c5"/>
+      <stop offset=".65" stop-color="#5527ff"/>
+      <stop offset="1" stop-color="#b733f5"/>
+    </linearGradient>
+    <radialGradient id="lower-shade" cx="0" cy="0" r="1" gradientTransform="translate(530 853) rotate(44) scale(277 188)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00031d" stop-opacity=".98"/>
+      <stop offset=".46" stop-color="#08043e" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#160357" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="right-shade" cx="0" cy="0" r="1" gradientTransform="translate(919 631) rotate(12) scale(151 235)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#000216" stop-opacity=".92"/>
+      <stop offset="1" stop-color="#03032b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cross-ribbon" x1="493" y1="414" x2="1035" y2="870" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#50fff4"/>
+      <stop offset=".22" stop-color="#20d8f5"/>
+      <stop offset=".49" stop-color="#237afa"/>
+      <stop offset=".66" stop-color="#4334ff"/>
+      <stop offset="1" stop-color="#c04af3"/>
+    </linearGradient>
+    <linearGradient id="cross-edge" x1="466" y1="420" x2="1050" y2="852" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8afff9" stop-opacity=".8"/>
+      <stop offset=".5" stop-color="#3496ff" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#df6aff" stop-opacity=".7"/>
+    </linearGradient>
+    <linearGradient id="front-ribbon" x1="553" y1="503" x2="891" y2="824" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#28dce9"/>
+      <stop offset=".35" stop-color="#1d96fa"/>
+      <stop offset=".72" stop-color="#3466ff"/>
+      <stop offset="1" stop-color="#785cff"/>
+    </linearGradient>
+    <linearGradient id="front-tip" x1="280" y1="977" x2="678" y2="638" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b6b3ff" stop-opacity=".72"/>
+      <stop offset=".4" stop-color="#7b9eff" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#68a9ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="front-violet" x1="600" y1="620" x2="650" y2="985" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7650ff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#8058ff" stop-opacity=".85"/>
+    </linearGradient>
+    <linearGradient id="front-edge" x1="275" y1="975" x2="1096" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d1cdff"/>
+      <stop offset=".47" stop-color="#79c8ff"/>
+      <stop offset=".76" stop-color="#54e9ff"/>
+      <stop offset="1" stop-color="#9a8aff"/>
+    </linearGradient>
+    <path id="tile-shape" d="M290 1H964C1124 1 1253 130 1253 290V964C1253 1124 1124 1253 964 1253H290C130 1253 1 1124 1 964V290C1 130 130 1 290 1Z"/>
+    <path id="ring-bottom" d="M1019 432C1048 486 1064 545 1064 607C1064 846 876 1040 640 1040C555 1040 482 1021 424 984L536 895C569 907 605 912 642 912C798 912 924 775 924 607C924 573 918 539 907 510Z"/>
+    <path id="cross-shape" d="M442 420H568C606 420 634 431 661 460L1077 851H952C911 851 882 842 852 814Z"/>
+    <path id="front-shape" d="M277 974L851 443C879 416 907 400 951 400H1095L606 871C532 945 438 974 321 974Z"/>
+    <clipPath id="tile-clip"><use href="#tile-shape"/></clipPath>
   </defs>
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 240 355 V 400 M 297 351 V 398" stroke="#FFC237" stroke-width="24"/>
-    <path d="M 383 152 C 403 152 421 157 422 166 C 423 174 407 185 388 190 Z" fill="#FFC237"/>
-    <use href="#body-shape" fill="#F34232"/>
-    <path d="M 87 405
-             C 119 394 141 365 165 343
-             C 222 367 282 365 329 334
-             C 373 305 392 257 391 211
-             L 429 260 L 394 385 L 107 439 Z" fill="#DB2D2D" clip-path="url(#body-clip)"/>
-    <use href="#wing-shape" fill="#FFBB45"/>
-    <path d="M 172 311
-             C 209 316 239 306 261 284
-             C 275 268 280 246 277 233
-             L 307 247 L 296 337 L 170 338 Z" fill="#F39725" clip-path="url(#wing-clip)"/>
-    <ellipse cx="331" cy="164" rx="24" ry="27" fill="#F3F0E8"/>
-    <ellipse cx="335" cy="163" rx="14" ry="18" fill="#26323D"/>
-    <circle cx="340" cy="155" r="6" fill="#FFFFFF"/>
+  <g clip-path="url(#tile-clip)">
+    <use href="#tile-shape" fill="url(#tile)"/>
+    <use href="#tile-shape" fill="url(#tile-cyan)"/>
+    <use href="#tile-shape" fill="url(#tile-blue)"/>
+    <use href="#tile-shape" stroke="url(#tile-edge)" stroke-width="3"/>
+  </g>
+  <g id="emblem">
+    <use href="#ring-bottom" fill="url(#lower-ring)"/>
+    <use href="#ring-bottom" fill="url(#lower-shade)"/>
+    <use href="#ring-bottom" fill="url(#right-shade)"/>
+    <path d="M424 984C482 1021 555 1040 640 1040C876 1040 1064 846 1064 607" stroke="#af44ff" stroke-opacity=".36" stroke-width="3"/>
+    <path d="M315 891C237 813 191 712 191 597C191 372 386 184 620 184C769 184 895 255 966 362H915C884 362 860 373 839 393C783 341 707 309 626 309C463 309 329 438 329 597C329 671 359 738 411 789Z" fill="url(#upper-ring)"/>
+    <path d="M315 891C237 813 191 712 191 597C191 372 386 184 620 184C769 184 895 255 966 362M839 393C783 341 707 309 626 309C463 309 329 438 329 597" stroke="url(#upper-gloss)" stroke-width="2.5"/>
+    <use href="#cross-shape" fill="url(#cross-ribbon)"/>
+    <use href="#cross-shape" stroke="url(#cross-edge)" stroke-width="2.5"/>
+    <use href="#front-shape" fill="url(#front-ribbon)"/>
+    <use href="#front-shape" fill="url(#front-violet)"/>
+    <use href="#front-shape" fill="url(#front-tip)"/>
+    <use href="#front-shape" stroke="url(#front-edge)" stroke-opacity=".6" stroke-width="3"/>
   </g>
 </svg>
