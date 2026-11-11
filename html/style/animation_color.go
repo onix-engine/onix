@@ -112,9 +112,9 @@ func paintColorFields(computed *ComputedStyle) [AnimatedColorCount]*Value {
 	return [AnimatedColorCount]*Value{&computed.Color, &computed.BackgroundColor, &computed.BorderColor.Top, &computed.BorderColor.Right, &computed.BorderColor.Bottom, &computed.BorderColor.Left}
 }
 
-func resolvePaintColors(computed, parent *ComputedStyle, hasParent bool, node *dom.Node, specified map[string]cascadedValue) {
-	_, declaredColor := specified["color"]
-	computed.ColorInherited = hasParent && inheritsFromParent(specified, "color") && (!isDisabledControl(node) || declaredColor)
+func resolvePaintColors(computed, parent *ComputedStyle, hasParent bool, node *dom.Node, specified *cascadedValues) {
+	_, declaredColor := specified.get(propertyColor)
+	computed.ColorInherited = hasParent && inheritsFromParent(specified, propertyColor) && (!isDisabledControl(node) || declaredColor)
 	if computed.Color.Keyword == "currentcolor" {
 		computed.Color = ColorValue(Color{A: 255})
 		computed.ColorInherited = hasParent

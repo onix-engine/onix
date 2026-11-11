@@ -2,6 +2,7 @@ package scene
 
 import (
 	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/entitycache"
 	"github.com/onix-engine/onix/internal/reuse"
 )
 
@@ -25,15 +26,21 @@ type renderEntity2DInfo struct {
 type renderHierarchy2DCacheScratch struct{}
 
 type renderHierarchy2DCache struct {
-	values    map[ecs.Entity]renderHierarchy2DInfo
 	hierarchy *Hierarchy
-	versions  [6]uint64
+	sparse    map[ecs.Entity]renderHierarchy2DInfo
+	values    entitycache.Store[renderHierarchy2DInfo]
 	retention reuse.MapRetention
+	highest   uint32
+	versions  [6]uint64
 	structure uint64
 }
 
 func (c *renderHierarchy2DCache) MaintainCache() {
-	c.values = c.retention.Trim(c.values, 64)
+	if c.sparse != nil {
+		c.sparse = c.retention.Trim(c.sparse, 64)
+	} else {
+		c.values.Trim()
+	}
 }
 
 // frameRenderHierarchy2DCachePtr retains inherited state until its inputs change.
@@ -45,12 +52,8 @@ func frameRenderHierarchy2DCachePtr(world *ecs.World) *renderHierarchy2DCache {
 		componentValueVersion[RenderLayers](world), componentValueVersion[UITargetCamera](world),
 		componentValueVersion[UIStackIndex](world), componentValueVersion[PainterGroup2D](world),
 	}
-	if cache.values == nil {
-		cache.values = make(map[ecs.Entity]renderHierarchy2DInfo)
-	}
 	if cache.versions != versions || cache.structure != world.EntityVersion() {
-		cache.retention.Record(len(cache.values))
-		clear(cache.values)
+		cache.resetValues()
 		cache.versions, cache.structure = versions, world.EntityVersion()
 	}
 	return cache
@@ -75,11 +78,15 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	if entity == 0 {
 		return renderHierarchy2DInfo{}
 	}
-	if info, ok := c.values[entity]; ok {
-		return info
+	if c.sparse != nil {
+		if info, ok := c.sparse[entity]; ok {
+			return info
+		}
+	} else if info := c.values.Get(entity); info != nil {
+		return *info
 	}
 	// A provisional default also terminates cycles, without a second map.
-	c.values[entity] = renderHierarchy2DInfo{}
+	c.setValue(entity, renderHierarchy2DInfo{})
 	info := renderHierarchy2DInfo{layers: RenderLayers{}}
 	if parent := c.hierarchy.Parent(entity); parent != 0 {
 		info = c.resolve(world, parent)
@@ -99,8 +106,43 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	if stack, ok := world.Get[UIStackIndex](entity); ok {
 		info.stack, info.hasStack = int(stack), true
 	}
-	c.values[entity] = info
+	c.setValue(entity, info)
 	return info
+}
+
+// Keep a compact slot index for dense populations. Sparse high IDs use a map
+// so a few rendered entities never reserve an index for the entire World.
+func (c *renderHierarchy2DCache) setValue(entity ecs.Entity, value renderHierarchy2DInfo) {
+	index, _ := entity.Index()
+	c.highest = max(c.highest, index)
+	if c.sparse == nil && uint64(c.highest) >= uint64(max(128, (c.values.Len()+1)*4)) {
+		c.sparse = make(map[ecs.Entity]renderHierarchy2DInfo, c.values.Len()+1)
+		for entity, value := range c.values.All {
+			c.sparse[entity] = *value
+		}
+		c.values = entitycache.Store[renderHierarchy2DInfo]{}
+	}
+	if c.sparse != nil {
+		c.sparse[entity] = value
+		if len(c.sparse) > 64 && uint64(c.highest) < uint64(len(c.sparse))*4 {
+			for entity, value := range c.sparse {
+				*c.values.Ensure(entity) = value
+			}
+			c.sparse, c.retention = nil, reuse.MapRetention{}
+		}
+	} else {
+		*c.values.Ensure(entity) = value
+	}
+}
+
+func (c *renderHierarchy2DCache) resetValues() {
+	c.highest = 0
+	if c.sparse != nil {
+		c.retention.Record(len(c.sparse))
+		clear(c.sparse)
+	} else {
+		c.values.Reset()
+	}
 }
 
 func componentValueVersion[T any](world *ecs.World) uint64 {

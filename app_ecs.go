@@ -164,8 +164,10 @@ func (app *App) runMainFrame(now time.Time) error {
 		return err
 	}
 	if state := app.ecsInput(); state != nil {
+		scene.SyncPointerCursor2D(app.World)
 		if app.Context != nil {
 			app.Context.SetTextInputConfig(state.TextInputConfig())
+			app.Context.SetCursor(state.Cursor())
 		}
 		state.EndFrame()
 	}
@@ -280,10 +282,10 @@ func (app *App) processInputEvents(context *ecs.SystemContext) error {
 	if app == nil {
 		return processInputEvents(context)
 	}
-	return processInputEventsWithHandlers(context, app.inputHandlers)
+	return processInputEventsWithHandlers(context, &app.inputHandlers)
 }
 
-func processInputEventsWithHandlers(context *ecs.SystemContext, handlers map[input.Phase][]func(*input.Dispatch)) error {
+func processInputEventsWithHandlers(context *ecs.SystemContext, handlers *[input.PhaseUnhandled + 1][]func(*input.Dispatch)) error {
 	if context == nil || context.World == nil {
 		return nil
 	}
@@ -295,7 +297,7 @@ func processInputEventsWithHandlers(context *ecs.SystemContext, handlers map[inp
 		state.ApplyEvent(event)
 		context.World.WriteMessage(event)
 		dispatch := input.Dispatch{Event: event}
-		for _, phase := range []input.Phase{input.PhaseGlobal, input.PhaseGUI, input.PhaseShortcut, input.PhaseUnhandled} {
+		for phase := input.PhaseGlobal; handlers != nil && phase <= input.PhaseUnhandled; phase++ {
 			dispatch.Phase = phase
 			for _, handler := range handlers[phase] {
 				handler(&dispatch)

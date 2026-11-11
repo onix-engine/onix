@@ -175,7 +175,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 		}
 		return nil, cache.context.err
 	}
-	cache.Root.Viewport = viewport
+	cache.Root.setViewport(viewport)
 	return cache.Root, nil
 }
 

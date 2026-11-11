@@ -53,3 +53,41 @@ func TestListMarkerReflowDoesNotAllocate(t *testing.T) {
 		t.Fatalf("warm list marker layout allocated %g objects", allocations)
 	}
 }
+
+func TestListMarkerCacheOrdinalAndStyleChanges(t *testing.T) {
+	root, styles, face := retainedFixture(t, `<ol id="list" start="3"><li id="first">First</li><li id="second" value="9">Second</li></ol><div id="plain">Plain</div>`)
+	t.Cleanup(func() { _ = face.Close() })
+	list, first, second := retainedNode(root, "list"), retainedNode(root, "first"), retainedNode(root, "second")
+	var cache Cache
+	check := func(a, b string) {
+		t.Helper()
+		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{list, first, second}, false)
+		fresh, err := BuildWithFonts(root, styles, face, face, 320, 200)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRetainedMatchesFull(t, got, fresh)
+		for _, item := range []struct {
+			node *dom.Node
+			text string
+		}{{first, a}, {second, b}} {
+			box := cache.nodes[item.node]
+			if fragments := box.TextFragments; len(fragments) == 0 || fragments[len(fragments)-1].Text != item.text {
+				t.Fatalf("list marker = %v, want %q", fragments, item.text)
+			}
+		}
+		if cache.nodes[retainedNode(root, "plain")].marker != nil || cache.nodes[list].marker != nil {
+			t.Fatal("ordinary boxes retained list item caches")
+		}
+	}
+	updateRetained(t, &cache, root, styles, face, nil, true)
+	check("3.", "9.")
+	list.SetAttr("start", "5")
+	second.RemoveAttr("value")
+	check("5.", "6.")
+	list.SetAttr("reversed", "")
+	check("5.", "4.")
+	styles.Exclusive(first).ListStyleType = style.Keyword("lower-alpha")
+	styles.Exclusive(second).ListStyleType = style.Keyword("decimal-leading-zero")
+	check("e.", "04.")
+}

@@ -394,55 +394,56 @@ func (c *Context) ClipboardText() (string, bool) {
 }
 
 type Context struct {
+	closeRequestSupport
 	renderContext
+	iconDecoderSupport
+	onKeyup        func(input.KeyCode)
+	downKeys       map[input.KeyCode]struct{}
+	onMouseWheel   func(xoff, yoff float64)
+	downMouse      map[input.MouseButton]struct{}
+	onMouseUp      func(x, y float64, button input.MouseButton)
+	onMouseDown    func(x, y float64, button input.MouseButton)
+	onMouseMove    func(x, y float64)
+	onKeydown      func(input.KeyCode)
+	onTouchStart   func(x, y float64)
+	onTouchMove    func(x, y float64)
+	onFilesDropped func(x, y float64, files []string)
+	onTouchEnd     func(x, y float64)
+	decorations    DecorationMode
+	cursorSupport
 	loopControl
+	inputRegion []InputRegionRect
+	framePacer  framePacer
 	mouseCaptureSupport
 	textInputSupport
-	closeRequestSupport
-	iconDecoderSupport
-	Width               int
-	Height              int
-	devicePixelRatio    float64
-	window              hwnd
-	message             msg
-	messageSlots        [5]uintptr
-	shown               bool
-	icon                hicon
-	shouldClose         bool
-	minimized           bool
-	onKeydown           func(input.KeyCode)
-	onKeyup             func(input.KeyCode)
-	downKeys            map[input.KeyCode]struct{}
-	onMouseDown         func(x, y float64, button input.MouseButton)
-	onMouseUp           func(x, y float64, button input.MouseButton)
-	downMouse           map[input.MouseButton]struct{}
-	mouseX              float64
-	mouseY              float64
-	rawMouse            rawMouseInput
-	rawMouseSize        uint32
-	onMouseMove         func(x, y float64)
-	onMouseWheel        func(xoff, yoff float64)
-	onTouchStart        func(x, y float64)
-	onTouchMove         func(x, y float64)
-	onTouchEnd          func(x, y float64)
-	onFilesDropped      func(x, y float64, files []string)
 	viewport            viewportState
-	framePacer          framePacer
-	highSurrogate       uint16
-	resizePending       bool
-	transparent         bool
-	decorations         DecorationMode
+	message             msg
+	rawMouse            rawMouseInput
+	messageSlots        [5]uintptr
+	mouseX              float64
+	Height              int
+	mouseY              float64
+	Width               int
+	icon                hicon
+	fullscreenStyle     uintptr
+	window              hwnd
+	devicePixelRatio    float64
 	cornerRadius        int
+	fullscreenRect      rect
+	rawMouseSize        uint32
+	highSurrogate       uint16
+	transparent         bool
+	resizePending       bool
 	customCorners       bool
 	roundedCorners      bool
 	border              bool
 	shadow              bool
 	resizable           bool
 	fullscreen          bool
-	fullscreenStyle     uintptr
-	fullscreenRect      rect
+	shown               bool
+	shouldClose         bool
 	fullscreenMaximized bool
-	inputRegion         []InputRegionRect
+	minimized           bool
 }
 
 // NativeHandle returns the host HWND for embedding platform controls.
@@ -483,6 +484,7 @@ func newContext(width, height int, title string, options Options) *Context {
 		c.shouldClose = true
 		c.Wake()
 	}
+	c.applyCursor = c.applyPointerCursor
 	c.textInputSupport.applyConfig = c.applyTextInputConfig
 	creatingContext = c
 	defer func() { creatingContext = nil }()
@@ -881,6 +883,12 @@ func wndProc(window hwnd, message uint32, wParam, lParam uintptr) uintptr {
 			c.emitTextInput(string(r))
 		}
 		return 0
+	case wmSetCursor:
+		// Preserve native titlebar and window-edge resize cursors.
+		if hwnd(wParam) == c.window && uint16(lParam) == 1 && !c.mouseCaptured {
+			c.setPointerCursor()
+			return 1
+		}
 	case wmMouseMove:
 		if c.mouseCaptured {
 			return 0

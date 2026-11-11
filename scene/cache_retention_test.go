@@ -76,7 +76,7 @@ func TestRenderHierarchyReclaimsPeakThroughWorldMaintenance(t *testing.T) {
 		}
 	}
 	world.Maintain()
-	old := cache.values
+	peak := entityStoreBytes(&cache.values)
 	for _, entity := range entities[4:] {
 		world.Despawn(entity)
 	}
@@ -92,10 +92,8 @@ func TestRenderHierarchyReclaimsPeakThroughWorldMaintenance(t *testing.T) {
 	for range reuse.RetentionFrames + 2 {
 		frame()
 	}
-	probe := ^ecs.Entity(0)
-	old[probe] = renderHierarchy2DInfo{}
-	if _, ok := cache.values[probe]; ok || len(cache.values) != 4 {
-		t.Fatal("world maintenance retained the historical render hierarchy map")
+	if cache.values.Len() != 4 || entityStoreBytes(&cache.values) >= peak/4 {
+		t.Fatal("world maintenance retained historical render hierarchy storage")
 	}
 	if n := testing.AllocsPerRun(100, frame); n != 0 {
 		t.Fatalf("reclaimed hierarchy allocated %g", n)

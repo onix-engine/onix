@@ -32,25 +32,18 @@ type cascadeWeight struct {
 
 type cascadeScratch struct {
 	changes    *[]NodeChange
-	values     map[string]cascadedValue
 	matcher    *css.MatchContext
 	compiled   *compiledStylesheet
 	persistent *styleIndex
-	ordered    []specifiedProperty
 	styles     styleIndex
 	motion     motionStyle
+	values     cascadedValues
 	visited    int
-}
-
-type specifiedProperty struct {
-	name  string
-	value cascadedValue
-	order cascadePropertyOrder
 }
 
 var cascadePropertyGroups = [...][]string{
 	{"font", "font-size", "font-family", "font-weight", "font-style"},
-	{"display", "appearance", "pointer-events", "visibility"},
+	{"display", "appearance", "pointer-events", "cursor", "visibility"},
 	{"table-layout", "border-spacing", "vertical-align"},
 	{"flex", "flex-flow", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "flex-basis"},
 	{"grid-template-columns", "grid-template-rows", "grid-column", "grid-row", "grid-column-start", "grid-column-end", "grid-row-start", "grid-row-end"},
@@ -78,7 +71,6 @@ var cascadePropertyGroups = [...][]string{
 
 var cascadeScratchPool = sync.Pool{New: func() any {
 	return &cascadeScratch{
-		values:  make(map[string]cascadedValue, 16),
 		matcher: css.NewMatchContext(),
 	}
 }}
@@ -87,15 +79,13 @@ func acquireCascadeScratch() *cascadeScratch {
 	scratch := cascadeScratchPool.Get().(*cascadeScratch)
 	scratch.visited = 0
 	scratch.persistent = nil
-	clear(scratch.values)
+	scratch.values.reset()
 	scratch.matcher.Reset()
 	return scratch
 }
 
 func releaseCascadeScratch(scratch *cascadeScratch) {
-	clear(scratch.values)
-	clear(scratch.ordered)
-	scratch.ordered = scratch.ordered[:0]
+	scratch.values.reset()
 	scratch.matcher.Reset()
 	scratch.compiled = nil
 	scratch.changes = nil
@@ -281,21 +271,21 @@ func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *Compu
 	if node != nil && node.Type == dom.ElementNode {
 		switch node.Data {
 		case "i", "em", "cite", "dfn", "var", "address":
-			_, hasStyle := specified["font-style"]
-			_, hasFont := specified["font"]
+			_, hasStyle := specified.get(propertyFontStyle)
+			_, hasFont := specified.get(propertyFont)
 			if !hasStyle && !hasFont {
 				computed.FontStyle = FontItalic
 			}
 		case "ol":
-			if _, declared := specified["list-style-type"]; !declared {
+			if _, declared := specified.get(propertyListStyleType); !declared {
 				computed.ListStyleType = Keyword("decimal")
 			}
 		case "ul", "menu":
-			if _, declared := specified["list-style-type"]; !declared {
+			if _, declared := specified.get(propertyListStyleType); !declared {
 				computed.ListStyleType = Keyword("disc")
 			}
 		case "table":
-			if _, declared := specified["border-spacing"]; !declared {
+			if _, declared := specified.get(propertyBorderSpacing); !declared {
 				computed.BorderSpacingX, computed.BorderSpacingY = LengthPx(2), LengthPx(2)
 			}
 		}
@@ -313,7 +303,7 @@ func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *Compu
 		ParentFontSize: parentFontSize,
 		RootFontSize:   rootFontSize,
 	}
-	if err := applySpecifiedValues(node, computed, parent, specified, definitions, ctx, scratch); err != nil {
+	if err := applySpecifiedValues(node, computed, parent, specified, definitions, ctx); err != nil {
 		return err
 	}
 	resolvePaintColors(computed, parent, hasParent, node, specified)
@@ -460,7 +450,7 @@ func computedStyleChangeForNode(node *dom.Node, previous, current *ComputedStyle
 		// changing only its color can be applied without rebuilding layout.
 		(previous.BorderColor != current.BorderColor && uniformBorderColor(previous.BorderColor) && uniformBorderColor(current.BorderColor)) ||
 		previous.ColorInherited != current.ColorInherited || previous.Color != current.Color || previous.PlaceholderColor != current.PlaceholderColor ||
-		previous.PointerEvents != current.PointerEvents {
+		previous.PointerEvents != current.PointerEvents || previous.Cursor != current.Cursor {
 		return ChangePaint
 	}
 	return ChangeNone
@@ -498,9 +488,9 @@ func backgroundLayersRequireRebuild(previous, current *ComputedStyle) bool {
 	return previous.Background != current.Background || !slices.Equal(previous.ExtraBackgroundLayers, current.ExtraBackgroundLayers)
 }
 
-func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (map[string]cascadedValue, error) {
-	values := scratch.values
-	clear(values)
+func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (*cascadedValues, error) {
+	values := &scratch.values
+	values.reset()
 	if node == nil || node.Type != dom.ElementNode {
 		return values, nil
 	}
@@ -520,7 +510,7 @@ func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, inpu
 			}
 
 			for declIndex, declaration := range compiled.declarations[ref.ruleIndex] {
-				updateCascadedValue(values, declaration.property, declaration.value, declaration.order, declaration.parsed, cascadeWeight{
+				updateCascadedValue(values, declaration.value, declaration.order, declaration.parsed, cascadeWeight{
 					important: boolInt(declaration.important),
 					id:        ref.specificity.ID,
 					class:     ref.specificity.Class,
@@ -705,17 +695,24 @@ func aspectRatio(width, height float64) float64 {
 	return width / height
 }
 
-// updateCascadedValue expects pre-normalized property names and values:
-// stylesheet declarations are normalized at compile time and inline
-// declarations at cache time.
-func updateCascadedValue(values map[string]cascadedValue, property, value string, order cascadePropertyOrder, parsed *preparedValue, weight cascadeWeight) {
-	if property == "" || value == "" {
+// Property IDs and normalized values are prepared when declarations compile.
+func updateCascadedValue(values *cascadedValues, value string, order cascadePropertyOrder, parsed *preparedValue, weight cascadeWeight) {
+	if order.id == propertyInvalid || value == "" {
 		return
 	}
-
-	current, ok := values[property]
-	if !ok || compareWeights(weight, current.weight) > 0 {
-		values[property] = cascadedValue{value: value, weight: weight, order: order, parsed: parsed}
+	position := values.indices[order.id]
+	if position != 0 && compareWeights(weight, values.entries[position-1].weight) <= 0 {
+		return
+	}
+	entry := cascadedValue{value: value, weight: weight, order: order, parsed: parsed}
+	if position == 0 {
+		if values.entries == nil {
+			values.entries = make([]cascadedValue, 0, 16)
+		}
+		values.entries = append(values.entries, entry)
+		values.indices[order.id] = uint8(len(values.entries))
+	} else {
+		values.entries[position-1] = entry
 	}
 }
 
@@ -766,14 +763,14 @@ const (
 	inlineStyleCacheSourceLimit = 64 << 10
 )
 
-func applyInlineDeclarations(values map[string]cascadedValue, input string) error {
+func applyInlineDeclarations(values *cascadedValues, input string) error {
 	declarations, err := inlineStyleCache.parse(input)
 	if err != nil {
 		return err
 	}
 	for i := range declarations {
 		declaration := &declarations[i]
-		updateCascadedValue(values, declaration.property, declaration.value, declaration.propertyOrder, declaration.parsed, cascadeWeight{important: boolInt(declaration.important), inline: 1, order: declaration.order})
+		updateCascadedValue(values, declaration.value, declaration.propertyOrder, declaration.parsed, cascadeWeight{important: boolInt(declaration.important), inline: 1, order: declaration.order})
 	}
 	return nil
 }
@@ -942,47 +939,50 @@ var cascadePropertyIndex = buildCascadePropertyIndex()
 type cascadePropertyOrder struct {
 	group    int32
 	position int32
+	id       propertyID
 	known    bool
 }
 
 func buildCascadePropertyIndex() map[string]cascadePropertyOrder {
-	index := make(map[string]cascadePropertyOrder, len(cascadePropertyGroups)*2)
+	index := make(map[string]cascadePropertyOrder, int(propertyCount)-1)
+	for id, name := range cascadePropertyNames[1:] {
+		index[name] = cascadePropertyOrder{id: propertyID(id + 1)}
+	}
 	for groupIndex, group := range cascadePropertyGroups {
 		for position, property := range group {
-			if _, exists := index[property]; !exists {
-				index[property] = cascadePropertyOrder{group: int32(groupIndex), position: int32(position), known: true}
-			}
+			order := index[property]
+			order.group, order.position, order.known = int32(groupIndex), int32(position), true
+			index[property] = order
 		}
 	}
 	return index
 }
 
-func applySpecifiedValues(node *dom.Node, computed, parent *ComputedStyle, specified map[string]cascadedValue, definitions filterDefinitions, ctx parseContext, scratch *cascadeScratch) error {
-	ordered := scratch.ordered[:0]
-	for name, value := range specified {
-		if !value.order.known {
-			continue
-		}
-		ordered = append(ordered, specifiedProperty{name: name, value: value, order: value.order})
-	}
-	slices.SortFunc(ordered, func(left, right specifiedProperty) int {
+func applySpecifiedValues(node *dom.Node, computed, parent *ComputedStyle, specified *cascadedValues, definitions filterDefinitions, ctx parseContext) error {
+	ordered := specified.entries
+	slices.SortFunc(ordered, func(left, right cascadedValue) int {
 		if left.order.group != right.order.group {
 			return int(left.order.group - right.order.group)
 		}
-		if weight := compareWeights(left.value.weight, right.value.weight); weight != 0 {
+		if weight := compareWeights(left.weight, right.weight); weight != 0 {
 			return weight
 		}
 		return int(left.order.position - right.order.position)
 	})
 	for i := range ordered {
 		entry := &ordered[i]
+		specified.indices[entry.order.id] = uint8(i + 1)
+		if !entry.order.known {
+			continue
+		}
+		name := cascadePropertyNames[entry.order.id]
 		ctx.FontSize = computed.FontSize.LengthPx
-		if isCSSWideKeyword(entry.value.value) {
-			applyCSSWideKeyword(computed, parent, node, entry.name, entry.value.value)
+		if isCSSWideKeyword(entry.value) {
+			applyCSSWideKeyword(computed, parent, node, name, entry.value)
 			markAnimationImportance(computed, entry)
 			continue
 		}
-		if parsed := entry.value.parsed; parsed != nil {
+		if parsed := entry.parsed; parsed != nil {
 			if parsed.motion != nil {
 				applyPreparedMotion(computed, parsed)
 			} else {
@@ -991,30 +991,29 @@ func applySpecifiedValues(node *dom.Node, computed, parent *ComputedStyle, speci
 			markAnimationImportance(computed, entry)
 			continue
 		}
-		if err := applyProperty(computed, entry.name, entry.value.value, definitions, ctx); err != nil {
+		if err := applyProperty(computed, name, entry.value, definitions, ctx); err != nil {
 			// Invalid declarations are ignored at property level, including the
 			// properties with a narrower implementation-specific value grammar.
-			if entry.name == "opacity" || entry.name == "scrollbar-width" || entry.name == "transform" || entry.name == "transform-origin" || strings.HasPrefix(entry.name, "transition") || strings.HasPrefix(entry.name, "animation") {
+			if name == "opacity" || name == "scrollbar-width" || name == "transform" || name == "transform-origin" || strings.HasPrefix(name, "transition") || strings.HasPrefix(name, "animation") {
 				continue
 			}
 			return err
 		}
 		markAnimationImportance(computed, entry)
 	}
-	scratch.ordered = ordered
 	return applyCascadedLineHeight(node, computed, parent, specified, ctx)
 }
 
-func markAnimationImportance(computed *ComputedStyle, entry *specifiedProperty) {
-	if entry.value.weight.important == 0 {
+func markAnimationImportance(computed *ComputedStyle, entry *cascadedValue) {
+	if entry.weight.important == 0 {
 		return
 	}
-	computed.AnimationImportant |= AnimatedProperty(entry.name)
+	computed.AnimationImportant |= AnimatedProperty(cascadePropertyNames[entry.order.id])
 }
 
-func applyCascadedLineHeight(node *dom.Node, computed, parent *ComputedStyle, specified map[string]cascadedValue, ctx parseContext) error {
-	lineHeight, hasLineHeight := specified["line-height"]
-	font, hasFont := specified["font"]
+func applyCascadedLineHeight(node *dom.Node, computed, parent *ComputedStyle, specified *cascadedValues, ctx parseContext) error {
+	lineHeight, hasLineHeight := specified.get(propertyLineHeight)
+	font, hasFont := specified.get(propertyFont)
 	if !hasLineHeight && !hasFont {
 		return nil
 	}
@@ -1173,6 +1172,12 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			return err
 		}
 		style.Visibility = value
+	case "cursor":
+		cursor, ok := parseCursor(raw)
+		if !ok {
+			return fmt.Errorf("invalid cursor %q", raw)
+		}
+		style.Cursor = cursor
 	case "pointer-events":
 		value, err := parseKeyword(raw, "auto", "none", "inherit", "initial", "unset")
 		if err != nil {

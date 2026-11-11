@@ -28,6 +28,7 @@ struct OnixMacWindow {
     double scale;
     int should_close;
     int mouse_captured;
+    int cursor;
     CGPoint saved_cursor;
     int event_head;
     int event_tail;
@@ -40,6 +41,34 @@ struct OnixMacWindow {
     OnixMacInputRect *input_rects;
     OnixMacEvent events[ONIX_MAC_EVENT_CAPACITY];
 };
+
+// Keep these indices in sync with input.Cursor.
+static NSCursor *onix_macos_cursor(int cursor) {
+    switch (cursor) {
+    case ONIX_CURSOR_TEXT: return [NSCursor IBeamCursor];
+    case ONIX_CURSOR_POINTER: return [NSCursor pointingHandCursor];
+    case ONIX_CURSOR_CROSSHAIR: case ONIX_CURSOR_CELL: case ONIX_CURSOR_ZOOM_IN: case ONIX_CURSOR_ZOOM_OUT: return [NSCursor crosshairCursor];
+    case ONIX_CURSOR_MOVE: case ONIX_CURSOR_GRAB: case ONIX_CURSOR_ALL_SCROLL: return [NSCursor openHandCursor];
+    case ONIX_CURSOR_EW_RESIZE: return [NSCursor resizeLeftRightCursor];
+    case ONIX_CURSOR_NS_RESIZE: return [NSCursor resizeUpDownCursor];
+    case ONIX_CURSOR_GRABBING: return [NSCursor closedHandCursor];
+    case ONIX_CURSOR_NOT_ALLOWED: return [NSCursor operationNotAllowedCursor];
+    case ONIX_CURSOR_NONE: {
+        static NSCursor *hidden;
+        if (hidden == nil) {
+            NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(1, 1)];
+            hidden = [[NSCursor alloc] initWithImage:image hotSpot:NSZeroPoint];
+            [image release];
+        }
+        return hidden;
+    }
+    case ONIX_CURSOR_VERTICAL_TEXT: return [NSCursor IBeamCursorForVerticalLayout];
+    case ONIX_CURSOR_CONTEXT_MENU: return [NSCursor contextualMenuCursor];
+    case ONIX_CURSOR_COPY: return [NSCursor dragCopyCursor];
+    case ONIX_CURSOR_ALIAS: return [NSCursor dragLinkCursor];
+    default: return [NSCursor arrowCursor];
+    }
+}
 
 static _Thread_local char onix_macos_error[512];
 
@@ -202,6 +231,10 @@ static int onix_macos_key(NSEvent *event) {
 - (void)dealloc {
     [_markedText release];
     [super dealloc];
+}
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    [self addCursorRect:self.bounds cursor:onix_macos_cursor(self.state->cursor)];
 }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)isFlipped { return YES; }
@@ -677,6 +710,13 @@ void onix_macos_file_dialog_free(char **paths, int count) {
     free(paths);
 }
 
+void onix_macos_set_cursor(OnixMacWindow *state, int cursor) {
+    if (state == NULL || cursor < 0 || cursor >= ONIX_CURSOR_COUNT) return;
+    state->cursor = cursor;
+    [state->window invalidateCursorRectsForView:state->view];
+    if (!state->mouse_captured) [onix_macos_cursor(cursor) set];
+}
+
 int onix_macos_set_mouse_captured(OnixMacWindow *state, int captured) {
     if (state == NULL) return 0;
     captured = captured != 0;
@@ -721,13 +761,25 @@ void onix_macos_destroy(OnixMacWindow *state) {
     free(state);
 }
 
+static void onix_macos_send_event(NSEvent *event) {
+    NSWindow *window = event.window ?: NSApp.keyWindow;
+    // NSApplication drops key-up events while Command is held. Dispatch them
+    // to our window so shortcut keys do not remain held in the input state.
+    if (event.type == NSEventTypeKeyUp && (event.modifierFlags & NSEventModifierFlagCommand) &&
+        [window.contentView isKindOfClass:[OnixMacView class]]) {
+        [window sendEvent:event];
+    } else {
+        [NSApp sendEvent:event];
+    }
+}
+
 void onix_macos_poll(OnixMacWindow *state) {
     if (state == NULL) return;
     @autoreleasepool {
         onix_macos_update_input_passthrough(state);
         NSEvent *event;
         while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES]) != nil) {
-            [NSApp sendEvent:event];
+            onix_macos_send_event(event);
         }
         [NSApp updateWindows];
         onix_macos_layout_window_buttons(state);
@@ -743,7 +795,7 @@ void onix_macos_wait(OnixMacWindow *state, int timeout_ms) {
         // and dispatch the event here, before the normal poll drains the rest.
         NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:deadline inMode:NSDefaultRunLoopMode dequeue:YES];
         state->waiting = 0;
-        if (event != nil) [NSApp sendEvent:event];
+        if (event != nil) onix_macos_send_event(event);
     }
 }
 

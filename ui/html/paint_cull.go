@@ -3,13 +3,13 @@ package html
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
 	onixtext "github.com/onix-engine/onix/text"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // htmlPaintWindow keeps buffered CSS clip bounds in document coordinates.
@@ -163,10 +163,10 @@ func htmlPaintCullChangedRoot(world *ecs.World, state *htmlRenderState, node *do
 
 func htmlPaintCullDirty(rendered *htmlBoxRendering, outer, window htmlPaintWindow) bool {
 	if rendered.CompositeRoot {
-		return rendered.OuterWindow.contains(rendered.EffectBounds) != outer.contains(rendered.EffectBounds)
+		return rendered.OuterWindow.contains(rendered.Effects.Composite) != outer.contains(rendered.Effects.Composite)
 	}
 	if rendered.OuterWindow.contains(rendered.Box.BorderBox()) != outer.contains(rendered.Box.BorderBox()) ||
-		rendered.OuterWindow.contains(rendered.PaintBounds) != outer.contains(rendered.PaintBounds) {
+		rendered.OuterWindow.contains(rendered.paintBounds()) != outer.contains(rendered.paintBounds()) {
 		return true
 	}
 	if rendered.Window == window {
@@ -277,7 +277,8 @@ func reconcileHTMLPaintCullBox(world *ecs.World, owner ecs.Entity, state *htmlRe
 	var controlRect layout.Rect
 	if parent := box.Parent; parent != nil {
 		if inherited := state.BoxRenderings[parent.Node]; inherited != nil {
-			control, focusOwner, controlRect = inherited.Control, inherited.FocusOwner, inherited.ControlRect
+			context := inherited.inputContext()
+			control, focusOwner, controlRect = context.Control, context.FocusOwner, context.ControlRect
 		}
 	}
 	state.Children = rendered.Entities[:0]

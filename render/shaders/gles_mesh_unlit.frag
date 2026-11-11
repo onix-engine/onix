@@ -66,9 +66,9 @@ uniform highp sampler2D tex;
 
 uniform highp sampler2D environmentTex;
 
-smooth in vec3 _vs2fs_location0;
-smooth in vec2 _vs2fs_location2;
-smooth in vec4 _vs2fs_location3;
+in vec3 _vs2fs_location0;
+in vec2 _vs2fs_location2;
+in vec4 _vs2fs_location3;
 flat in vec4 _vs2fs_location5;
 flat in vec4 _vs2fs_location6;
 flat in vec4 _vs2fs_location7;

@@ -1020,7 +1020,7 @@ func TestArchetypeTransitionsAreCachedInBothDirections(t *testing.T) {
 		t.Fatal(err)
 	}
 	velocityID := world.componentTypes[reflect.TypeFor[testVelocity]()]
-	velocityArchetypeID, ok := positionArchetype.edges[velocityID]
+	velocityArchetypeID, ok := positionArchetype.edge(velocityID)
 	if !ok {
 		t.Fatal("add transition was not cached")
 	}
@@ -1035,7 +1035,7 @@ func TestArchetypeTransitionsAreCachedInBothDirections(t *testing.T) {
 		t.Fatal("remove velocity")
 	}
 	velocityArchetype := world.archetypes[velocityArchetypeID]
-	if velocityArchetype.edges[velocityID] != positionArchetype.id {
+	if target, ok := velocityArchetype.edge(velocityID); !ok || target != positionArchetype.id {
 		t.Fatal("reverse remove transition was not cached")
 	}
 }

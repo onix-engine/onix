@@ -2,6 +2,7 @@
 #define ONIX_ENGINE_WINDOW_LINUX_NATIVE_H
 
 #include <stdint.h>
+#include "cursor_native.h"
 
 typedef enum {
 	ONIX_BACKEND_NONE = 0,
@@ -64,6 +65,7 @@ uintptr_t onix_window_native_surface(OnixNativeWindow *window);
 
 void onix_window_set_title(OnixNativeWindow *window, const char *title);
 void onix_window_set_icon(OnixNativeWindow *window, int width, int height, const uint32_t *pixels);
+void onix_window_set_cursor(OnixNativeWindow *window, int cursor);
 void onix_window_set_vsync(OnixNativeWindow *window, int enabled);
 int onix_window_set_mouse_captured(OnixNativeWindow *window, int captured);
 void onix_window_set_text_input_config(OnixNativeWindow *window, int active, int multiline, int kind);

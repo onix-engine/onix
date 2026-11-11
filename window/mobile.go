@@ -37,6 +37,7 @@ func init() {
 type Context struct {
 	renderContext
 	loopControl
+	cursorSupport
 	mouseCaptureSupport
 	textInputSupport
 	closeRequestSupport

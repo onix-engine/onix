@@ -28,6 +28,7 @@ type Context struct {
 	loopControl
 	mouseCaptureClick  js.Func
 	mouseCaptureChange js.Func
+	cursorSupport
 	mouseCaptureSupport
 	options               Options
 	viewport              viewportState
@@ -65,6 +66,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		c.document.Set("body", body)
 	}
 	c.document.Get("body").Call("appendChild", c.canvas)
+	c.applyCursor = func(cursor input.Cursor) { c.canvas.Get("style").Set("cursor", cursor.String()) }
 	c.initMouseCapture()
 	c.textInput = c.document.Call("createElement", "textarea")
 	c.initTextInputElement()

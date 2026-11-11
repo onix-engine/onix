@@ -15,6 +15,7 @@ type InputTarget2D struct {
 	Width       float32
 	Height      float32
 	Receiver    ecs.Entity
+	Cursor      input.Cursor
 	InputFilter InputFilter
 	PassThrough bool
 	Disabled    bool
@@ -27,6 +28,7 @@ type InputBlocker2D struct {
 	Width       float32
 	Height      float32
 	Receiver    ecs.Entity
+	Cursor      input.Cursor
 	InputFilter InputFilter
 	PassThrough bool
 }
@@ -52,6 +54,7 @@ type InputHandler2D struct {
 }
 
 type inputTracker2D struct {
+	cursorTarget    ecs.Entity
 	active          ecs.Entity
 	activeReceiver  ecs.Entity
 	activeCamera    ecs.Entity
@@ -71,6 +74,9 @@ func RemapInputEntity2D(world *ecs.World, previous, current ecs.Entity) {
 	}
 	hovered, pressed := false, false
 	if tracker, ok := world.GetResource[*inputTracker2D](); ok && tracker != nil {
+		if tracker.cursorTarget == previous {
+			tracker.cursorTarget = current
+		}
 		if tracker.activeReceiver == previous {
 			tracker.active, tracker.activeReceiver = current, current
 			pressed = tracker.hasActive
@@ -246,11 +252,14 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 	cache := world.ScopeValue[inputPickCache2D, inputPickCache2D]()
 	changed := cache.refresh(world, tracker.active, tracker.activeCamera)
 	if !changed && !pointerActive {
+		syncPointerCursor2D(world, inputState, tracker.cursorTarget)
 		return nil
 	}
 	cameras, targets, defaultUICamera := cache.cameras, cache.targets, cache.defaultUICamera
 	lookup := cache.lookup
 	hovered, hoverX, hoverY, hoverPicked := pickInputTarget2D(cameras, defaultUICamera, targets, pointer.X, pointer.Y)
+	tracker.cursorTarget = hovered.entity
+	syncPointerCursor2D(world, inputState, tracker.cursorTarget)
 	updateInputHover2D(world, tracker, pointer.Device, hovered, hoverX, hoverY, hoverPicked)
 	if hoverPicked && (pointer.WheelX != 0 || pointer.WheelY != 0) {
 		event := pointerInputEvent(pointer.Device, hovered.receiver, inputEventPath2D(world, hovered.receiver), InputEventWheel, hoverX, hoverY)
@@ -311,6 +320,30 @@ func dispatchInputEvents2D(context *ecs.SystemContext) error {
 		capture.Camera = 0
 	}
 	return nil
+}
+
+// SyncPointerCursor2D refreshes the hovered entity's cursor after UI style updates.
+// It reuses the input dispatcher's hit result without another hit-test traversal.
+func SyncPointerCursor2D(world *ecs.World) {
+	state, _ := world.GetResource[*input.State]()
+	tracker, _ := world.GetResource[*inputTracker2D]()
+	if state != nil && tracker != nil {
+		syncPointerCursor2D(world, state, tracker.cursorTarget)
+	}
+}
+
+// Use the existing pick result, including non-interactive surfaces that occlude
+// controls. Cursor-only style changes are also observed while the pointer is idle.
+func syncPointerCursor2D(world *ecs.World, state *input.State, entity ecs.Entity) {
+	cursor := input.CursorDefault
+	if state.Pointer().Device == input.PointerDeviceMouse {
+		if target := world.GetRef[InputTarget2D](entity); target != nil {
+			cursor = target.Cursor
+		} else if blocker := world.GetRef[InputBlocker2D](entity); blocker != nil {
+			cursor = blocker.Cursor
+		}
+	}
+	state.SetCursor(cursor)
 }
 
 func updateInputHover2D(world *ecs.World, tracker *inputTracker2D, device input.PointerDevice, target inputPickTarget2D, x, y float32, picked bool) {
@@ -611,7 +644,7 @@ func pickInputTarget2D(cameras []inputCamera2D, defaultUICamera ecs.Entity, targ
 				continue
 			}
 			if target.blocked {
-				return inputPickTarget2D{}, 0, 0, false
+				return *target, x, y, false
 			}
 			picked := *target
 			picked.camera = camera.entity

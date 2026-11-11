@@ -1082,18 +1082,18 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 
 func TestHTMLComponentVNodeStateResetClearsCapacity(t *testing.T) {
 	state := newHTMLComponentVNodeState()
-	state.Keyed["code"] = make([]VNode, 1, 2)
-	state.Keyed["code"][0] = TextVNode(1, "span", strings.Repeat("source", 1024))
-	state.Keyed["code"] = state.Keyed["code"][:0]
-	state.ComponentChildren["projects"] = make([]ComponentVNode, 1, 2)
-	state.ComponentChildren["projects"] = state.ComponentChildren["projects"][:0]
+	keyed := make([]VNode, 1, 2)
+	keyed[0] = TextVNode(1, "span", strings.Repeat("source", 1024))
+	state.Keyed["code"] = htmlComponentVNodeList[VNode]{Values: keyed[:0], Active: true}
+	state.ComponentChildren["projects"] = htmlComponentVNodeList[ComponentVNode]{Values: make([]ComponentVNode, 0, 2), Active: true}
 	state.reset()
-	if retained := state.Keyed["code"][:cap(state.Keyed["code"])]; retained[0].Text != "" {
+	if retained := state.Keyed["code"].Values[:cap(state.Keyed["code"].Values)]; retained[0].Text != "" {
 		t.Fatal("keyed VNode backing storage retained text")
 	}
-	if retained := state.ComponentChildren["projects"][:cap(state.ComponentChildren["projects"])]; retained[0].values != nil {
+	if retained := state.ComponentChildren["projects"].Values[:cap(state.ComponentChildren["projects"].Values)]; retained[0].values != nil {
 		t.Fatal("component VNode backing storage retained child values")
 	}
+
 }
 
 func TestHTMLComponentKeyedTextUpdatesDoNotAccumulateRenderEntities(t *testing.T) {

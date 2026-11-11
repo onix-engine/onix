@@ -30,11 +30,13 @@ func TestHTMLComponentChildSlotReuseAndSnapshots(t *testing.T) {
 	}
 	view.AppendComponentChild("slot", 1, definition, props{Text: "first", Reference: &reference}, "state")
 	view.AppendComponentChild("slot", 2, definition, props{Text: "removed", Reference: &reference}, "removed")
-	values := instance.Next.ComponentChildren["slot"]
+	values := instance.Next.ComponentChildren["slot"].Values
 	first := values[0].values.(*htmlComponentChildValues[props, string])
 	second := values[1].values.(*htmlComponentChildValues[props, string])
 	// Reset must clear even slots beyond len, while retaining empty workspaces.
-	instance.Next.ComponentChildren["slot"] = values[:0]
+	list := instance.Next.ComponentChildren["slot"]
+	list.Values = values[:0]
+	instance.Next.ComponentChildren["slot"] = list
 	instance.Next.reset()
 	if *first != (htmlComponentChildValues[props, string]{}) || *second != (htmlComponentChildValues[props, string]{}) {
 		t.Fatal("reset retained props or initial state")
@@ -45,7 +47,7 @@ func TestHTMLComponentChildSlotReuseAndSnapshots(t *testing.T) {
 		}
 	}
 	view.AppendComponentChild("slot", 3, definition, props{Text: "reused", Reference: nil}, "new")
-	if instance.Next.ComponentChildren["slot"][0].values != first {
+	if instance.Next.ComponentChildren["slot"].Values[0].values != first {
 		t.Fatal("slot did not reuse parameter storage")
 	}
 	// Replacing and then extending a slot must not mutate a caller's snapshot.
@@ -138,7 +140,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	}
 	shrunk, _ := world.Get[htmlComponentInstance](parent)
 	for _, buffer := range []htmlComponentVNodeState{shrunk.Current, shrunk.Next} {
-		values := buffer.ComponentChildren["slot"]
+		values := buffer.ComponentChildren["slot"].Values
 		for _, node := range values[:cap(values)][1:] {
 			if node.values != nil || node.definition != nil {
 				t.Fatal("shortened slot retained removed parameter workspaces")
@@ -159,7 +161,7 @@ func TestHTMLAppendComponentChildrenReconcile(t *testing.T) {
 	}
 	instance, _ := world.Get[htmlComponentInstance](parent)
 	for _, buffer := range []htmlComponentVNodeState{instance.Current, instance.Next} {
-		values := buffer.ComponentChildren["slot"]
+		values := buffer.ComponentChildren["slot"].Values
 		for _, node := range values[:cap(values)] {
 			if node.values != nil || node.definition != nil {
 				t.Fatal("omitted slot retained parameter workspaces")

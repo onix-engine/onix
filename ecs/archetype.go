@@ -91,7 +91,7 @@ func hashComponentID(hash uint64, id componentID) uint64 {
 }
 
 type archetype struct {
-	edges map[componentID]uint32
+	edges *archetypeEdges
 	// ids is sorted and columns is aligned with it. Single-column lookups use
 	// a short linear scan; bulk bindings can merge the sorted IDs directly.
 	mask       componentMask
@@ -103,6 +103,49 @@ type archetype struct {
 	id         uint32
 	retiring   bool
 	hasCleanup bool // conservative: may remain true after a hook is disabled
+}
+
+type archetypeEdges []archetypeEdge
+
+type archetypeEdge struct {
+	component componentID
+	target    uint32
+}
+
+func (a *archetype) edge(id componentID) (uint32, bool) {
+	if a.edges == nil {
+		return 0, false
+	}
+	edges := *a.edges
+	if len(edges) > 8 {
+		// Consecutive component IDs can be addressed directly. Sparse IDs use
+		// binary search so a large transition set never needs a linear scan.
+		if offset := uint64(id - edges[0].component); offset < uint64(len(edges)) && edges[offset].component == id {
+			return edges[offset].target, true
+		}
+		lo, hi := 0, len(edges)
+		for lo < hi {
+			mid := int(uint(lo+hi) >> 1)
+			if edges[mid].component < id {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		if lo < len(edges) && edges[lo].component == id {
+			return edges[lo].target, true
+		}
+		return 0, false
+	}
+	for _, edge := range edges {
+		if edge.component == id {
+			return edge.target, true
+		}
+		if edge.component > id {
+			break
+		}
+	}
+	return 0, false
 }
 
 func (a *archetype) has(id componentID) bool {

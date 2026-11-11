@@ -234,12 +234,9 @@ func (n Node) SetAttribute(name, value string) bool {
 	if !n.valid() || n.node.Type != dom.ElementNode || name == "" {
 		return false
 	}
-	if n.node.Attributes == nil {
-		n.node.Attributes = make(map[string]string)
-	} else if current, ok := n.node.Attributes[name]; ok && current == value {
+	if !n.node.SetAttr(name, value) {
 		return true
 	}
-	n.node.Attributes[name] = value
 	n.syncAttributeState(name, true)
 	n.markAttributeDirty(name)
 	return true
@@ -251,10 +248,9 @@ func (n Node) RemoveAttribute(name string) bool {
 	if !n.valid() || n.node.Type != dom.ElementNode {
 		return false
 	}
-	if _, ok := n.node.Attributes[name]; !ok {
+	if !n.node.RemoveAttr(name) {
 		return false
 	}
-	delete(n.node.Attributes, name)
 	n.syncAttributeState(name, false)
 	n.markAttributeDirty(name)
 	return true
@@ -286,8 +282,7 @@ func (n Node) SetHidden(hidden bool) bool {
 	if !n.valid() || n.node.Type != dom.ElementNode {
 		return false
 	}
-	if _, ok := n.node.Attributes["hidden"]; ok {
-		delete(n.node.Attributes, "hidden")
+	if n.node.RemoveAttr("hidden") {
 		n.markAttributeDirty("hidden")
 	}
 	return true

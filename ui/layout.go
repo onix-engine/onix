@@ -5,10 +5,10 @@ import (
 	"math"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // LayoutType selects the arrangement performed by Layout.
@@ -135,7 +135,6 @@ type uiLayoutScratch struct {
 	depths             map[ecs.Entity]int
 	runtime            map[ecs.Entity]*uiLayoutRuntimeState
 	scope              *ecs.QueryScope
-	visitingDepths     map[ecs.Entity]bool
 	depthPath          []ecs.Entity
 	children           []uiLayoutChild
 	nodes              []uiLayoutNode
@@ -329,14 +328,9 @@ func refreshUILayoutHierarchy(world *ecs.World, scratch *uiLayoutScratch) bool {
 	} else {
 		clear(scratch.depths)
 	}
-	if scratch.visitingDepths == nil {
-		scratch.visitingDepths = make(map[ecs.Entity]bool)
-	} else {
-		clear(scratch.visitingDepths)
-	}
 	scratch.depthPath = scratch.depthPath[:0]
 	for _, entity := range scratch.nodeInputs {
-		scratch.nodes = append(scratch.nodes, uiLayoutNode{entity: entity, depth: uiHierarchyDepth(world, entity, scratch.depths, scratch.visitingDepths, &scratch.depthPath)})
+		scratch.nodes = append(scratch.nodes, uiLayoutNode{entity: entity, depth: uiHierarchyDepth(world, entity, scratch.depths, &scratch.depthPath)})
 	}
 	slices.SortFunc(scratch.children, func(a, b uiLayoutChild) int {
 		if value := cmp.Compare(a.parent, b.parent); value != 0 {
@@ -356,8 +350,8 @@ func refreshUILayoutHierarchy(world *ecs.World, scratch *uiLayoutScratch) bool {
 	return true
 }
 
-func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity]int, visiting map[ecs.Entity]bool, path *[]ecs.Entity) int {
-	if depth, ok := depths[entity]; ok {
+func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity]int, path *[]ecs.Entity) int {
+	if depth, ok := depths[entity]; ok && depth >= 0 {
 		return depth
 	}
 	start := len(*path)
@@ -366,13 +360,12 @@ func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity
 	for remaining := world.EntityCount() + 1; current != 0 && remaining > 0; remaining-- {
 		if cached, ok := depths[current]; ok {
 			depth = cached
+			if cached < 0 {
+				depth = world.EntityCount() + 1
+			}
 			break
 		}
-		if visiting[current] {
-			depth = world.EntityCount() + 1
-			break
-		}
-		visiting[current] = true
+		depths[current] = -1
 		*path = append(*path, current)
 		parent, ok := world.Get[scene.Parent](current)
 		if !ok || parent.Entity == 0 || !world.IsAlive(parent.Entity) {
@@ -383,7 +376,6 @@ func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity
 	for index := len(*path) - 1; index >= start; index-- {
 		value := (*path)[index]
 		depths[value] = depth
-		delete(visiting, value)
 		depth++
 	}
 	result := depths[entity]

@@ -5,11 +5,12 @@ import (
 	"math"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const (
@@ -591,6 +592,7 @@ func spawnTextControl[T Input | Textarea](world *ecs.World, opts TextOptions, co
 		bundle.Put(StyleOverride[TextFieldStyle]{Value: *opts.Style})
 	}
 	entity := world.Spawn(bundle)
+	world.GetMut[scene.InputTarget2D](entity).Cursor = input.CursorText
 	spawnControlBody(world, entity, opts.Width, opts.Height, theme.Surface, theme.StackIndex, opts.Radius)
 	spawnJoinedEdges(world, entity, opts.JoinLeft, opts.JoinRight, theme)
 	return entity, theme
@@ -615,6 +617,7 @@ func SpawnNumberInput(world *ecs.World, opts NumberInputOptions) ecs.Entity {
 	if step == 0 {
 		step = 1
 	}
+	world.GetMut[scene.InputTarget2D](entity).Cursor = input.CursorText
 	_ = world.Insert(entity, NumberInput{
 		Step:            step,
 		Integer:         opts.Integer,

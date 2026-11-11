@@ -59,8 +59,8 @@ uniform mat4x4 occlusionInverseProjection;
 
 uniform highp sampler2D tex;
 
-smooth in vec2 _vs2fs_location2;
-smooth in vec4 _vs2fs_location3;
+in vec2 _vs2fs_location2;
+in vec4 _vs2fs_location3;
 flat in vec4 _vs2fs_location5;
 layout(location = 0) out vec4 _fs2p_location0;
 

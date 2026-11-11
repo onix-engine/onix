@@ -36,7 +36,7 @@ func BuildWithFonts(root *dom.Node, styles style.Map, face, boldFace *font.Face,
 	if ctx.err != nil {
 		return nil, ctx.err
 	}
-	box.Viewport = viewport
+	box.setViewport(viewport)
 	return box, nil
 }
 

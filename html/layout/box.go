@@ -23,6 +23,8 @@ type Edges struct {
 }
 
 type Box struct {
+	marker            *listMarkerCache
+	viewport          *Rect
 	gridMeasureStyle  *style.ComputedStyle
 	flex              *flexScratch
 	grid              *gridScratch
@@ -35,33 +37,58 @@ type Box struct {
 	Parent            *Box
 	Node              *dom.Node
 	floats            *floatContext
-	markerText        string
 	StableID          string
 	ControlFragments  []ControlFragment
 	InlineBackgrounds []InlineBackground
 	ImageFragments    []ImageFragment
 	TextFragments     []TextFragment
 	Children          []*Box
-	markerType        style.Value
 	reflow            boxLayoutCache
 	Padding           Edges
 	FlowMarginBox     Rect
 	// ScrollbarGutter is reserved between the padding edge and border.
 	ScrollbarGutter   Edges
-	Viewport          Rect
 	Border            Edges
 	Content           Rect
 	Margin            Edges
-	listOrdinal       int
 	ScrollHeight      float64
 	TextHeight        float64
 	ScrollWidth       float64
-	markerOrdinal     int
 	ownPaintHash      uint64
 	hasFloats         bool
-	listOrdinalValid  bool
-	markerValid       bool
 	ownPaintHashValid bool
+}
+
+// Only list items retain numbering and formatted marker text. Ordinary boxes
+// (including every table cell) need no marker payload.
+type listMarkerCache struct {
+	text                 string
+	kind                 style.Value
+	ordinal, textOrdinal int
+	ordinalValid, valid  bool
+}
+
+func (box *Box) listMarker() *listMarkerCache {
+	if box.marker == nil {
+		box.marker = &listMarkerCache{}
+	}
+	return box.marker
+}
+
+// Viewport returns the document viewport on the root box. Descendant boxes
+// have no viewport payload and return a zero rectangle.
+func (box *Box) Viewport() Rect {
+	if box.viewport != nil {
+		return *box.viewport
+	}
+	return Rect{}
+}
+
+func (box *Box) setViewport(viewport Rect) {
+	if box.viewport == nil {
+		box.viewport = &Rect{}
+	}
+	*box.viewport = viewport
 }
 
 type flowScratch struct {

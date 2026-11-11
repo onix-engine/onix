@@ -17,6 +17,7 @@ import (
 	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
 	onixtext "github.com/onix-engine/onix/text"
 	"github.com/onix-engine/onix/text/piecetree"
@@ -1161,7 +1162,7 @@ func syncHTMLRenderedStyles(world *ecs.World, owner ecs.Entity, state *htmlRende
 			current := world.GetMut[Control](entity)
 			current.Wrap = htmlTextareaWrap(computed)
 		}
-		syncHTMLPointerEvents(world, entity, computed, state.Key.PassThrough)
+		syncHTMLPointerEvents(world, entity, child.Node, computed, state.Key.PassThrough)
 		syncHTMLCSSVisibility(world, entity, computed)
 		nodeVisible := visible && htmlStyleVisible(computed)
 		sprite := world.GetMut[scene.Sprite2D](entity)
@@ -1360,7 +1361,7 @@ func markHTMLChildNode(world *ecs.World, entity ecs.Entity, node *dom.Node) {
 		child.Node = node
 		if state := world.GetMut[htmlRenderState](child.Owner); state != nil {
 			if computed, ok := state.Styles.Get(node); ok {
-				syncHTMLPointerEvents(world, entity, computed, state.Key.PassThrough)
+				syncHTMLPointerEvents(world, entity, child.Node, computed, state.Key.PassThrough)
 				syncHTMLCSSVisibility(world, entity, computed)
 				syncHTMLNodeTransform(world, state, entity, node, computed)
 			}
@@ -1370,14 +1371,25 @@ func markHTMLChildNode(world *ecs.World, entity ecs.Entity, node *dom.Node) {
 
 // syncHTMLPointerEvents excludes only this element from hit testing. Descendants
 // use their own computed value, so an explicit auto overrides inherited none.
-func syncHTMLPointerEvents(world *ecs.World, entity ecs.Entity, computed *style.ComputedStyle, passThrough bool) {
+func syncHTMLPointerEvents(world *ecs.World, entity ecs.Entity, node *dom.Node, computed *style.ComputedStyle, passThrough bool) {
 	passThrough = passThrough || !htmlStyleVisible(computed) || computed.PointerEvents == style.Keyword("none")
 	if target := world.GetMut[scene.InputTarget2D](entity); target != nil {
 		target.PassThrough = passThrough
+		target.Cursor = htmlCursor(computed, node)
 	}
 	if blocker := world.GetMut[scene.InputBlocker2D](entity); blocker != nil {
 		blocker.PassThrough = passThrough
+		blocker.Cursor = htmlCursor(computed, node)
 	}
+}
+
+func htmlCursor(computed *style.ComputedStyle, node *dom.Node) input.Cursor {
+	keyword := computed.Cursor.String()
+	if keyword == "auto" && isHTMLEditableControlNode(node) && !dom.IsDisabled(node) {
+		return input.CursorText
+	}
+	cursor, _ := input.ParseCursor(keyword)
+	return cursor
 }
 
 // SetNodeOffset moves all retained visuals generated for the element with
@@ -2422,7 +2434,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	}
 	outer := htmlPaintWindowForBox(state, box, window)
 	if state.LocalReconcile && rendered.OuterWindow == outer && rendered.CullRect == box.PaddingBox() &&
-		rendered.OverflowX == box.Style.OverflowX && rendered.OverflowY == box.Style.OverflowY &&
+		rendered.OverflowX == htmlOverflowModeFor(box.Style.OverflowX) && rendered.OverflowY == htmlOverflowModeFor(box.Style.OverflowY) &&
 		(outer.unbounded || len(box.Style.Filters) != 0) == rendered.Window.unbounded {
 		// A local paint update must not move the buffered scroll anchor unless
 		// its descendants are also re-windowed. Scroll reconciliation has
@@ -2433,7 +2445,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	}
 	rendered.CullRect = box.PaddingBox()
 	rendered.OuterWindow, rendered.Window = outer, window
-	rendered.PaintBounds = htmlBoxPaintBounds(box)
+	rendered.setPaintBounds(htmlBoxPaintBounds(box))
 	rendered.CompositeRoot = false
 	entityStart := len(state.Children)
 	trackHTMLStickyBox(state, box)
@@ -2450,7 +2462,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	state.Textures.face, state.Textures.boldFace = regularFace, boldFace
 	if !suppressPaint {
 		if bounds, composite := htmlCompositePaintBounds(state, box, regularFace); composite {
-			rendered.EffectBounds = bounds
+			rendered.setCompositeBounds(bounds)
 			// A skipped group still suppresses its individual child visuals and
 			// retains input/focus targets. Rasterization is deferred until needed.
 			if bounds.Width <= 0 || bounds.Height <= 0 || !outer.contains(bounds) || box.Style.Opacity == style.Number(0) && !box.Style.AnimatedOpacity {
@@ -2532,7 +2544,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 				linkHTMLFocusOwner(world, entity, focusOwner)
 				state.Children = append(state.Children, entity)
 			}
-			if outer.contains(rendered.PaintBounds) {
+			if outer.contains(rendered.paintBounds()) {
 				spawnHTMLBoxShadows(world, owner, state, box, baseStack, visible)
 			}
 			if outer.contains(box.BorderBox()) {
@@ -2649,7 +2661,11 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 			}
 		}
 	}
-	rendered.Control, rendered.FocusOwner, rendered.ControlRect = control, focusOwner, controlRect
+	var inheritedInput *htmlBoxInput
+	if box.Parent != nil {
+		inheritedInput = state.BoxRenderings[box.Parent.Node].Input
+	}
+	rendered.setInputContext(inheritedInput, htmlBoxInput{Control: control, FocusOwner: focusOwner, ControlRect: controlRect})
 	bindHTMLBoxNodeEvents(world, owner, state, box, baseStack, passThrough, visible)
 	state.EmittingBox = nil
 	if state.LocalReconcile {
@@ -3237,20 +3253,42 @@ func htmlBoxCreatesStackContext(box *layout.Box) bool {
 	return false
 }
 
+// Retained boxes need the resolved overflow mode, not a full CSS value with
+// length, color and number payloads. Keep snapshots independent of mutable styles.
+type htmlOverflowMode uint8
+
+const (
+	htmlOverflowModeVisible htmlOverflowMode = iota
+	htmlOverflowModeHidden
+	htmlOverflowModeClip
+	htmlOverflowModeAuto
+	htmlOverflowModeScroll
+)
+
+func htmlOverflowModeFor(value style.Value) htmlOverflowMode {
+	if value.Kind == style.ValueKeyword {
+		switch value.Keyword {
+		case "hidden":
+			return htmlOverflowModeHidden
+		case "clip":
+			return htmlOverflowModeClip
+		case "auto":
+			return htmlOverflowModeAuto
+		case "scroll":
+			return htmlOverflowModeScroll
+		}
+	}
+	return htmlOverflowModeVisible
+}
+
+func (mode htmlOverflowMode) clips() bool { return mode != htmlOverflowModeVisible }
+
 func htmlOverflowClipsAxis(value style.Value) bool {
-	if value.Kind != style.ValueKeyword {
-		return false
-	}
-	switch value.Keyword {
-	case "hidden", "clip", "scroll", "auto":
-		return true
-	default:
-		return false
-	}
+	return htmlOverflowModeFor(value).clips()
 }
 
 func htmlOverflowScrollsAxis(value style.Value) bool {
-	return value.Kind == style.ValueKeyword && (value.Keyword == "auto" || value.Keyword == "scroll")
+	return htmlOverflowModeFor(value) >= htmlOverflowModeAuto
 }
 
 type htmlOverflowExtent struct {
@@ -3578,7 +3616,7 @@ func htmlOverflowScrollbarVisibility(computed *style.ComputedStyle, width, heigh
 }
 
 func htmlOverflowAlwaysShowsAxis(value style.Value) bool {
-	return value.Kind == style.ValueKeyword && value.Keyword == "scroll"
+	return htmlOverflowModeFor(value) == htmlOverflowModeScroll
 }
 
 func htmlOverflowScrollbarColors(computed *style.ComputedStyle) htmlScrollbarColors {
@@ -3857,7 +3895,11 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	if shape.Fill.A <= 0 && shape.Border.A <= 0 && !htmlHasGradientBackground(box.Style) && box.Style.AnimatedPaint&(style.AnimatedBackgroundColor|style.AnimatedBorders) == 0 && !(rasterPaint && htmlHasVisibleBorder(box.Style, rect.Width)) {
 		return 0, false
 	}
-	entity := spawnHTMLSurface(world, owner, box.Node, htmlRoleSurface, float32(rect.X), float32(rect.Y), float32(rect.Width), float32(rect.Height), shape, stackIndex, visible)
+	bundle := beginHTMLSurfaceVariant(world, owner, box.Node, htmlRoleSurface, "", float32(rect.X), float32(rect.Y), float32(rect.Width), float32(rect.Height), shape, stackIndex, visible)
+	bundle.putHTML(htmlElementSurface{})
+	bundle.putHTML(scene.InputTarget2D{Width: float32(rect.Width), Height: float32(rect.Height), Receiver: receiver, PassThrough: passThrough})
+	bundle.putHTML(scene.InputState2D{})
+	entity := bundle.finish()
 	if rasterPaint {
 		if texture := htmlPaintTextureFor(state, box.Node, box.Style, float32(rect.Width), float32(rect.Height)); texture != nil {
 			if sprite := world.GetMut[scene.Sprite2D](entity); sprite != nil {
@@ -3867,9 +3909,6 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 			}
 		}
 	}
-	_ = world.Insert(entity, htmlElementSurface{})
-	_ = world.Insert(entity, scene.InputTarget2D{Width: float32(rect.Width), Height: float32(rect.Height), Receiver: receiver, PassThrough: passThrough})
-	_ = world.Insert(entity, scene.InputState2D{})
 	applyHTMLAnimatedVisual(world, state, entity, box.Node)
 	return entity, true
 }
@@ -4333,6 +4372,11 @@ func spawnHTMLSurface(world *ecs.World, owner ecs.Entity, node *dom.Node, role h
 }
 
 func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, x, y, width, height float32, shape scene.Shape2D, stackIndex int, visible bool) ecs.Entity {
+	bundle := beginHTMLSurfaceVariant(world, owner, node, role, variant, x, y, width, height, shape, stackIndex, visible)
+	return bundle.finish()
+}
+
+func beginHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, x, y, width, height float32, shape scene.Shape2D, stackIndex int, visible bool) htmlEntityWriter {
 	sprite := scene.NewSprite2D()
 	sprite.Shape, sprite.Width, sprite.Height = shape, width, height
 	if state := world.GetMut[htmlRenderState](owner); state != nil {
@@ -4358,7 +4402,7 @@ func spawnHTMLSurfaceVariant(world *ecs.World, owner ecs.Entity, node *dom.Node,
 	(&bundle).putHTML(sprite)
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
 	(&bundle).putHTML(htmlChild{Owner: owner})
-	return bundle.finish()
+	return bundle
 }
 
 // htmlGradientTexture rasterizes the supported CSS linear-gradient image into

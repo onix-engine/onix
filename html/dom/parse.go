@@ -57,6 +57,9 @@ func (p *Parser) Reset() {
 		for i := range count {
 			slot := &block[i]
 			n := &slot.node
+			if n.sharedAttributes {
+				n.Attributes = nil
+			}
 			clear(n.Attributes)
 			clear(n.Children)
 			*n = Node{Attributes: n.Attributes, Children: n.Children[:0]}

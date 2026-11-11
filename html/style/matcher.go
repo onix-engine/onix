@@ -37,7 +37,6 @@ type compiledKeyframes struct {
 
 type preparedDeclaration struct {
 	parsed    *preparedValue
-	property  string
 	value     string
 	order     cascadePropertyOrder
 	important bool
@@ -52,7 +51,6 @@ func prepareDeclarations(declarations []css.Declaration) []preparedDeclaration {
 			continue
 		}
 		prepared = append(prepared, preparedDeclaration{
-			property:  property,
 			value:     value,
 			important: declaration.Important,
 			order:     cascadePropertyIndex[property],

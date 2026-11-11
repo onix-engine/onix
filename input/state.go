@@ -1,6 +1,9 @@
 package input
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Modifiers records the modifier keys held at a key press.
 type Modifiers uint8
@@ -32,16 +35,12 @@ type Pointer struct {
 }
 
 type State struct {
-	compositionKeys map[KeyCode]struct{}
+	compositionKeys []KeyCode
 	consumedEvents  map[uint64]struct{}
-	releasedKeys    map[KeyCode]struct{}
-	downMouse       map[MouseButton]struct{}
-	pressedMouse    map[MouseButton]struct{}
-	releasedMouse   map[MouseButton]struct{}
+	keys            buttonStates[KeyCode]
+	mouse           buttonStates[MouseButton]
 	clipboardRead   func() (string, bool)
 	clipboardWrite  func(string) bool
-	downKeys        map[KeyCode]struct{}
-	pressedKeys     map[KeyCode]Modifiers
 	composition     string
 	events          []Event
 	textEdits       []TextEdit
@@ -51,6 +50,7 @@ type State struct {
 	textRevision    uint64
 	nextEventSeq    uint64
 	pointer         Pointer
+	cursor          Cursor
 	hasSelection    bool
 	composing       bool
 }
@@ -88,42 +88,14 @@ func (s *State) TextSelection() (TextSelection, bool) {
 	return s.textSelection, s.hasSelection
 }
 
-func NewState() *State {
-	return &State{
-		downKeys:        map[KeyCode]struct{}{},
-		pressedKeys:     map[KeyCode]Modifiers{},
-		releasedKeys:    map[KeyCode]struct{}{},
-		downMouse:       map[MouseButton]struct{}{},
-		pressedMouse:    map[MouseButton]struct{}{},
-		releasedMouse:   map[MouseButton]struct{}{},
-		compositionKeys: map[KeyCode]struct{}{},
-	}
-}
+func NewState() *State { return &State{} }
 
 // CopyFrom reuses storage for an isolated snapshot of keyboard and pointer state.
 func (s *State) CopyFrom(source *State) {
-	copyKeys := func(dst, src map[KeyCode]struct{}) {
-		clear(dst)
-		for key := range src {
-			dst[key] = struct{}{}
-		}
-	}
-	copyMouse := func(dst, src map[MouseButton]struct{}) {
-		clear(dst)
-		for key := range src {
-			dst[key] = struct{}{}
-		}
-	}
-	copyKeys(s.downKeys, source.downKeys)
-	clear(s.pressedKeys)
-	for key, modifiers := range source.pressedKeys {
-		s.pressedKeys[key] = modifiers
-	}
-	copyKeys(s.releasedKeys, source.releasedKeys)
-	copyMouse(s.downMouse, source.downMouse)
-	copyMouse(s.pressedMouse, source.pressedMouse)
-	copyMouse(s.releasedMouse, source.releasedMouse)
+	s.keys.values = append(s.keys.values[:0], source.keys.values...)
+	s.mouse.values = append(s.mouse.values[:0], source.mouse.values...)
 	s.pointer = source.pointer
+	s.cursor = source.cursor
 	s.clipboardWrite, s.clipboardRead = source.clipboardWrite, source.clipboardRead
 }
 
@@ -210,11 +182,9 @@ func (s *State) EndFrame() {
 	if s == nil {
 		return
 	}
-	clear(s.pressedKeys)
-	clear(s.releasedKeys)
-	clear(s.pressedMouse)
-	clear(s.releasedMouse)
-	clear(s.compositionKeys)
+	s.keys.endFrame()
+	s.mouse.endFrame()
+	s.compositionKeys = s.compositionKeys[:0]
 	clear(s.consumedEvents)
 	s.textEdits = s.textEdits[:0]
 	s.hasSelection = false
@@ -230,8 +200,7 @@ func (s *State) PressKey(key KeyCode) {
 	if s == nil {
 		return
 	}
-	if !s.KeyHeld(key) {
-		s.downKeys[key] = struct{}{}
+	if entry := s.keys.press(key); entry != nil {
 		var modifiers Modifiers
 		if s.KeyHeld(KeyLeftControl) || s.KeyHeld(KeyRightControl) {
 			modifiers |= ModifierControl
@@ -245,10 +214,10 @@ func (s *State) PressKey(key KeyCode) {
 		if s.KeyHeld(KeyLeftAlt) || s.KeyHeld(KeyRightAlt) {
 			modifiers |= ModifierAlt
 		}
-		s.pressedKeys[key] = modifiers
+		entry.flags = entry.flags&15 | uint8(modifiers)<<4
 	}
-	if s.composing {
-		s.compositionKeys[key] = struct{}{}
+	if s.composing && !slices.Contains(s.compositionKeys, key) {
+		s.compositionKeys = append(s.compositionKeys, key)
 	}
 }
 
@@ -256,15 +225,15 @@ func (s *State) ReleaseKey(key KeyCode) {
 	if s == nil {
 		return
 	}
-	releaseButton(s.downKeys, s.releasedKeys, key)
+	s.keys.release(key)
 }
 
 func (s *State) KeyHeld(key KeyCode) bool {
-	return hasButton(s.downKeys, key)
+	return s != nil && s.keys.has(key, buttonDown)
 }
 
 func (s *State) KeyPressed(key KeyCode) bool {
-	return hasButton(s.pressedKeys, key)
+	return s != nil && s.keys.has(key, buttonPressed)
 }
 
 // KeyModifiers returns the modifiers held when key was pressed this frame.
@@ -273,11 +242,14 @@ func (s *State) KeyModifiers(key KeyCode) Modifiers {
 	if s == nil {
 		return 0
 	}
-	return s.pressedKeys[key]
+	if entry := s.keys.find(key); entry != nil {
+		return Modifiers(entry.flags >> 4)
+	}
+	return 0
 }
 
 func (s *State) KeyPressedDuringComposition(key KeyCode) bool {
-	return s != nil && hasButton(s.compositionKeys, key)
+	return s != nil && slices.Contains(s.compositionKeys, key)
 }
 
 func (s *State) CompositionHandledKey() bool {
@@ -285,14 +257,14 @@ func (s *State) CompositionHandledKey() bool {
 }
 
 func (s *State) KeyReleased(key KeyCode) bool {
-	return hasButton(s.releasedKeys, key)
+	return s != nil && s.keys.has(key, buttonReleased)
 }
 
 func (s *State) PressMouse(button MouseButton, x, y float64) {
 	if s == nil {
 		return
 	}
-	pressButton(s.downMouse, s.pressedMouse, button)
+	s.mouse.press(button)
 	if button == MouseLeft {
 		s.pressPointer(PointerDeviceMouse, float32(x), float32(y))
 		return
@@ -304,7 +276,7 @@ func (s *State) ReleaseMouse(button MouseButton, x, y float64) {
 	if s == nil {
 		return
 	}
-	releaseButton(s.downMouse, s.releasedMouse, button)
+	s.mouse.release(button)
 	if button == MouseLeft {
 		s.releasePointer(PointerDeviceMouse, float32(x), float32(y))
 		return
@@ -331,15 +303,15 @@ func (s *State) ScrollMouse(xoff, yoff float64) {
 }
 
 func (s *State) MouseHeld(button MouseButton) bool {
-	return hasButton(s.downMouse, button)
+	return s != nil && s.mouse.has(button, buttonDown)
 }
 
 func (s *State) MousePressed(button MouseButton) bool {
-	return hasButton(s.pressedMouse, button)
+	return s != nil && s.mouse.has(button, buttonPressed)
 }
 
 func (s *State) MouseReleased(button MouseButton) bool {
-	return hasButton(s.releasedMouse, button)
+	return s != nil && s.mouse.has(button, buttonReleased)
 }
 
 func (s *State) TouchStart(x, y float64) {
@@ -513,7 +485,7 @@ func (s *State) TextInputConfig() TextInputConfig {
 
 func (s *State) clearTextInputEvents() {
 	s.textEdits = s.textEdits[:0]
-	clear(s.compositionKeys)
+	s.compositionKeys = s.compositionKeys[:0]
 }
 
 func (s *State) pressPointer(device PointerDevice, x, y float32) {
@@ -565,21 +537,56 @@ func (s *State) snapPointer(device PointerDevice, x, y float32) {
 	s.pointer.DeltaY = 0
 }
 
-func pressButton[T comparable](down, pressed map[T]struct{}, value T) {
-	if _, ok := down[value]; !ok {
-		pressed[value] = struct{}{}
-	}
-	down[value] = struct{}{}
+// Only active buttons need storage. A short dense list supports every platform's
+// signed key codes and extra mouse buttons without a range-sized state array.
+type buttonStates[K comparable] struct{ values []buttonState[K] }
+type buttonState[K comparable] struct {
+	key   K
+	flags uint8
 }
 
-func releaseButton[T comparable](down, released map[T]struct{}, value T) {
-	if _, ok := down[value]; ok {
-		delete(down, value)
-		released[value] = struct{}{}
+const (
+	buttonDown uint8 = 1 << iota
+	buttonPressed
+	buttonReleased
+)
+
+func (s *buttonStates[K]) find(key K) *buttonState[K] {
+	for i := range s.values {
+		if s.values[i].key == key {
+			return &s.values[i]
+		}
+	}
+	return nil
+}
+func (s *buttonStates[K]) has(key K, flag uint8) bool {
+	entry := s.find(key)
+	return entry != nil && entry.flags&flag != 0
+}
+func (s *buttonStates[K]) press(key K) *buttonState[K] {
+	if entry := s.find(key); entry != nil {
+		if entry.flags&buttonDown != 0 {
+			return nil
+		}
+		entry.flags |= buttonDown | buttonPressed
+		return entry
+	}
+	s.values = append(s.values, buttonState[K]{key: key, flags: buttonDown | buttonPressed})
+	return &s.values[len(s.values)-1]
+}
+func (s *buttonStates[K]) release(key K) {
+	if entry := s.find(key); entry != nil && entry.flags&buttonDown != 0 {
+		entry.flags = entry.flags&^buttonDown | buttonReleased
 	}
 }
-
-func hasButton[T comparable, V any](set map[T]V, value T) bool {
-	_, ok := set[value]
-	return ok
+func (s *buttonStates[K]) endFrame() {
+	kept := s.values[:0]
+	for _, entry := range s.values {
+		if entry.flags&buttonDown != 0 {
+			entry.flags = buttonDown
+			kept = append(kept, entry)
+		}
+	}
+	clear(s.values[len(kept):])
+	s.values = kept
 }

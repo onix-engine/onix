@@ -280,15 +280,16 @@ func appendListMarker(fragments []TextFragment, box *Box, face *font.Face, ctx *
 	if box == nil || box.Style == nil || box.Style.Display.Kind != style.ValueKeyword || box.Style.Display.Keyword != "list-item" {
 		return fragments
 	}
-	ordinal := box.listOrdinal
-	if !box.listOrdinalValid {
+	cache := box.listMarker()
+	ordinal := cache.ordinal
+	if !cache.ordinalValid {
 		ordinal = 1
 	}
-	if !box.markerValid || box.markerOrdinal != ordinal || box.markerType != box.Style.ListStyleType {
-		box.markerText = listMarkerText(ordinal, box.Style.ListStyleType)
-		box.markerOrdinal, box.markerType, box.markerValid = ordinal, box.Style.ListStyleType, true
+	if !cache.valid || cache.textOrdinal != ordinal || cache.kind != box.Style.ListStyleType {
+		cache.text = listMarkerText(ordinal, box.Style.ListStyleType)
+		cache.textOrdinal, cache.kind, cache.valid = ordinal, box.Style.ListStyleType, true
 	}
-	marker := box.markerText
+	marker := cache.text
 	if marker == "" {
 		return fragments
 	}
@@ -452,10 +453,11 @@ func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Re
 					}
 				}
 			}
-			if child.listOrdinalValid && child.listOrdinal != ordinal {
+			cache := child.listMarker()
+			if cache.ordinalValid && cache.ordinal != ordinal {
 				child.reflow.valid = false
 			}
-			child.listOrdinal, child.listOrdinalValid = ordinal, true
+			cache.ordinal, cache.ordinalValid = ordinal, true
 			ordinal += step
 		}
 		if child.Style.Display.Kind != style.ValueKeyword || isAbsolutePositioned(child) || isFloated(child) {

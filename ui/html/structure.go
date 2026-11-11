@@ -40,7 +40,7 @@ func prepareHTMLStructure(state *htmlRenderState, root *layout.Box) bool {
 func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered := state.BoxRenderings[box.Node]
 	if rendered == nil {
-		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: box.Style.ZIndex, OverflowX: box.Style.OverflowX, OverflowY: box.Style.OverflowY, ExtentRect: box.BorderBox()}
+		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: box.Style.ZIndex, OverflowX: htmlOverflowModeFor(box.Style.OverflowX), OverflowY: htmlOverflowModeFor(box.Style.OverflowY), ExtentRect: box.BorderBox()}
 		state.BoxRenderings[box.Node] = rendered
 		// New boxes must emit even if their first layout produced no geometry.
 		if !queueHTMLBox(state, box) {

@@ -2,6 +2,7 @@
 #define ONIX_ENGINE_WINDOW_MACOS_NATIVE_H
 
 #include <stdint.h>
+#include "cursor_native.h"
 
 enum {
     ONIX_MAC_EVENT_CLOSE = 1,
@@ -61,6 +62,7 @@ typedef struct {
 const char *onix_macos_last_error(void);
 OnixMacWindow *onix_macos_create(int width, int height, const char *title, int transparent, int decorations, double title_bar_height, int shadow, int resizable);
 void onix_macos_destroy(OnixMacWindow *window);
+void onix_macos_set_cursor(OnixMacWindow *window, int cursor);
 int onix_macos_set_mouse_captured(OnixMacWindow *window, int captured);
 void onix_macos_poll(OnixMacWindow *window);
 void onix_macos_wait(OnixMacWindow *window, int timeout_ms);

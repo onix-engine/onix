@@ -1,11 +1,11 @@
 package html
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Identity is independent of document order. Slots identify fragments of one
@@ -161,6 +161,10 @@ func htmlOptionalBit[T any]() uint16 {
 		return 1 << 12
 	case *scene.Shader[graphics.Material2DShader]:
 		return 1 << 13
+	case *htmlElementSurface:
+		return 1 << 14
+	case *htmlOpacitySurface:
+		return 1 << 15
 	}
 	return 0
 }
@@ -252,6 +256,8 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		writer.removeMissingHTML[ScrollbarPart]()
 		writer.removeMissingHTML[scene.ClipExempt2D]()
 		writer.removeMissingHTML[scene.Shader[graphics.Material2DShader]]()
+		writer.removeMissingHTML[htmlElementSurface]()
+		writer.removeMissingHTML[htmlOpacitySurface]()
 		writer.state.SyncStats.Reused++
 	}
 	binding := htmlEntityBinding{writer.entity, writer.optional}

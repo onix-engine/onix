@@ -43,6 +43,9 @@ def generate_native(source_path, output_suffix, directory, compact):
     fields = re.search(r'struct PBRUniforms \{(.*?)\n\};', source, re.S).group(1).strip().splitlines()
     gles = source.replace(uniform, '\n'.join('uniform ' + line.strip() for line in fields))
     gles = gles.replace('_group_0_binding_0_fs.', '').replace('const bool SHADOW_FLIP_Y = true;', 'const bool SHADOW_FLIP_Y = false;')
+    # GLSL ES 3.0 links interpolation qualifiers textually, while the built-in
+    # vertex stages declare smooth varyings without an explicit qualifier.
+    gles = gles.replace('smooth in ', 'in ').replace('smooth out ', 'out ')
     vk = source.replace('#version 300 es', '#version 450').replace('precision highp float;', '').replace('precision highp int;', '')
     vk = vk.replace(uniform, 'layout(set=2,binding=1,std140) uniform PBRUniforms_block_0Fragment { PBRUniforms _group_0_binding_0_fs; };')
     metal = metal_path.read_text().replace('pbr [[user(fake0)]]', 'pbr [[buffer(2)]]')

@@ -40,7 +40,7 @@ type App struct {
 	clipboardState      *input.State
 	*window.Context
 	windowDragRegion                  func(x, y float64) bool
-	inputHandlers                     map[input.Phase][]func(*input.Dispatch)
+	inputHandlers                     [input.PhaseUnhandled + 1][]func(*input.Dispatch)
 	idle                              appIdleState
 	renderPacer                       ratePacer
 	windowDragClick                   windowDragClick
@@ -144,7 +144,6 @@ func NewApp() *App {
 		fixedTime:     scene.NewFixedTime(time.Second / time.Duration(DefaultTargetTPS)),
 		now:           time.Now,
 		windowOptions: window.DefaultOptions(),
-		inputHandlers: map[input.Phase][]func(*input.Dispatch){},
 	}
 	// Loaders may start before the first frame. Give their workers a stable
 	// wake request immediately rather than creating it during the first Step.
@@ -156,11 +155,8 @@ func NewApp() *App {
 // AddInputHandler registers a synchronous handler for one input phase.
 // Handlers run in registration order and may call Dispatch.Consume.
 func (app *App) AddInputHandler(phase input.Phase, handler func(*input.Dispatch)) {
-	if app == nil || handler == nil {
+	if app == nil || handler == nil || phase > input.PhaseUnhandled {
 		return
-	}
-	if app.inputHandlers == nil {
-		app.inputHandlers = map[input.Phase][]func(*input.Dispatch){}
 	}
 	app.inputHandlers[phase] = append(app.inputHandlers[phase], handler)
 }

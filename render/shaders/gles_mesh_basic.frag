@@ -106,15 +106,15 @@ uniform highp sampler2D shadowTex;
 
 uniform highp sampler2D screenDepthTex;
 
-smooth in vec3 _vs2fs_location0;
-smooth in vec3 _vs2fs_location1;
-smooth in vec2 _vs2fs_location2;
-smooth in vec4 _vs2fs_location3;
-smooth in vec4 _vs2fs_location4;
+in vec3 _vs2fs_location0;
+in vec3 _vs2fs_location1;
+in vec2 _vs2fs_location2;
+in vec4 _vs2fs_location3;
+in vec4 _vs2fs_location4;
 flat in vec4 _vs2fs_location5;
 flat in vec4 _vs2fs_location6;
 flat in vec4 _vs2fs_location7;
-smooth in vec4 _vs2fs_location10;
+in vec4 _vs2fs_location10;
 layout(location = 0) out vec4 _fs2p_location0;
 
 vec3 pbr_srgb(vec3 linear) {

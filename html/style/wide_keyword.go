@@ -21,6 +21,7 @@ var inheritedProperties = map[string]struct{}{
 	"font-style":           {},
 	"visibility":           {},
 	"pointer-events":       {},
+	"cursor":               {},
 	"color":                {},
 	"placeholder-color":    {},
 	"text-align":           {},
@@ -116,6 +117,8 @@ func copyCSSProperty(style, parent *ComputedStyle, property string) {
 		style.GridRowEnd = parent.GridRowEnd
 	case "visibility":
 		style.Visibility = parent.Visibility
+	case "cursor":
+		style.Cursor = parent.Cursor
 	case "pointer-events":
 		style.PointerEvents = parent.PointerEvents
 	case "appearance":

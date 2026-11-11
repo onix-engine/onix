@@ -223,6 +223,7 @@ type styleCore struct {
 	FontStyle                FontStyle
 	// Derived paint context, propagated during the existing cascade traversal.
 	TextOpaqueBackdrop bool
+	Cursor             Cursor
 }
 
 type ComputedStyle struct {

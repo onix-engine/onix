@@ -65,7 +65,7 @@ func TestMacOSNativeIdle(t *testing.T) {
 	if output, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
 		t.Fatalf("compile native macOS idle test: %v\n%s", err, output)
 	}
-	for _, name := range []string{"dispatch", "wake", "callback", "reopen", "drag"} {
+	for _, name := range []string{"dispatch", "wake", "callback", "reopen", "drag", "keys-poll", "keys-wait"} {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

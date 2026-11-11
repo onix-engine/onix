@@ -2,6 +2,7 @@ package dom
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -15,14 +16,15 @@ const (
 )
 
 type Node struct {
-	Attributes map[string]string
-	Parent     *Node
-	Data       string
-	namespace  string
-	Children   []*Node
-	Type       NodeType
-	Order      uint32
-	States     StateSet[ElementState]
+	Attributes       map[string]string
+	Parent           *Node
+	Data             string
+	namespace        string
+	Children         []*Node
+	Type             NodeType
+	Order            uint32
+	States           StateSet[ElementState]
+	sharedAttributes bool
 }
 
 func NewDocument() *Node {
@@ -49,6 +51,43 @@ func (n *Node) Attr(name string) (string, bool) {
 
 	value, ok := n.Attributes[name]
 	return value, ok
+}
+
+// ShareAttributes installs an immutable attribute map. Neither the caller nor
+// readers of Attributes may write to it directly. SetAttr and RemoveAttr detach
+// the map on the first change, keeping other nodes that share it isolated.
+func (n *Node) ShareAttributes(attributes map[string]string) {
+	n.Attributes, n.sharedAttributes = attributes, true
+}
+
+// SetAttr changes an attribute, returning whether its value changed.
+func (n *Node) SetAttr(name, value string) bool {
+	if current, ok := n.Attr(name); ok && current == value {
+		return false
+	}
+	n.writableAttributes()
+	n.Attributes[name] = value
+	return true
+}
+
+// RemoveAttr removes an attribute, returning whether it was present.
+func (n *Node) RemoveAttr(name string) bool {
+	if _, ok := n.Attr(name); !ok {
+		return false
+	}
+	n.writableAttributes()
+	delete(n.Attributes, name)
+	return true
+}
+
+func (n *Node) writableAttributes() {
+	if n.sharedAttributes {
+		n.Attributes = maps.Clone(n.Attributes)
+		n.sharedAttributes = false
+	}
+	if n.Attributes == nil {
+		n.Attributes = make(map[string]string)
+	}
 }
 
 func HasInputType(node *Node, inputType string) bool {

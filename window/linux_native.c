@@ -3,6 +3,7 @@
 #include "linux_native.h"
 
 #include <X11/Xatom.h>
+#include <X11/cursorfont.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrender.h>
@@ -64,6 +65,7 @@ typedef struct {
 	int focused;
 	int xi_opcode;
 	Cursor hidden_cursor;
+	Cursor cursors[ONIX_CURSOR_COUNT];
 	Atom clipboard;
 	Atom targets;
 	Atom utf8_string;
@@ -163,6 +165,7 @@ struct OnixNativeWindow {
 	int maximized;
 	int fullscreen;
 	int mouse_captured;
+	int cursor;
 	uint8_t modifiers;
 	char *clipboard_text;
 	OnixEventQueue queue;
@@ -1199,12 +1202,17 @@ static void onix_set_mouse_capture_state(OnixNativeWindow *window, int captured)
 static void onix_wayland_update_cursor(OnixNativeWindow *window) {
 	OnixWaylandState *state = &window->state.wayland;
 	if (!state->pointer_entered || state->pointer == NULL) return;
-	if (window->mouse_captured) {
+	if (window->mouse_captured || window->cursor == ONIX_CURSOR_NONE) {
 		wl_pointer_set_cursor(state->pointer, state->pointer_serial, NULL, 0, 0);
 		return;
 	}
+	if (state->shm == NULL || state->compositor == NULL) return;
+	if (state->cursor_theme == NULL) state->cursor_theme = wl_cursor_theme_load(NULL, 24, state->shm);
+	if (state->cursor_surface == NULL) state->cursor_surface = wl_compositor_create_surface(state->compositor);
 	if (state->cursor_theme == NULL || state->cursor_surface == NULL) return;
-	struct wl_cursor *cursor = wl_cursor_theme_get_cursor(state->cursor_theme, "left_ptr");
+	static const char *names[] = {"left_ptr", "xterm", "hand2", "crosshair", "fleur", "sb_h_double_arrow", "sb_v_double_arrow", "size_bdiag", "size_fdiag", "openhand", "closedhand", "not-allowed", "watch", "left_ptr_watch", "question_arrow", "left_ptr", "vertical-text", "all-scroll", "context-menu", "cell", "copy", "alias", "zoom-in", "zoom-out"};
+	struct wl_cursor *cursor = wl_cursor_theme_get_cursor(state->cursor_theme, names[window->cursor]);
+	if (cursor == NULL) cursor = wl_cursor_theme_get_cursor(state->cursor_theme, "left_ptr");
 	if (cursor == NULL || cursor->image_count == 0) return;
 	struct wl_cursor_image *image = cursor->images[0];
 	struct wl_buffer *buffer = wl_cursor_image_get_buffer(image);
@@ -1213,6 +1221,29 @@ static void onix_wayland_update_cursor(OnixNativeWindow *window) {
 	wl_surface_attach(state->cursor_surface, buffer, 0, 0);
 	wl_surface_damage(state->cursor_surface, 0, 0, image->width, image->height);
 	wl_surface_commit(state->cursor_surface);
+}
+
+void onix_window_set_cursor(OnixNativeWindow *window, int cursor) {
+	if (window == NULL || cursor < 0 || cursor >= ONIX_CURSOR_COUNT) return;
+	window->cursor = cursor;
+	if (window->backend == ONIX_BACKEND_WAYLAND) {
+		onix_wayland_update_cursor(window);
+		wl_display_flush(window->state.wayland.display);
+	} else if (window->backend == ONIX_BACKEND_X11) {
+		OnixX11State *state = &window->state.x11;
+		static const unsigned int shapes[] = {XC_left_ptr, XC_xterm, XC_hand2, XC_crosshair, XC_fleur, XC_sb_h_double_arrow, XC_sb_v_double_arrow, XC_bottom_left_corner, XC_bottom_right_corner, XC_hand1, XC_hand2, XC_X_cursor, XC_watch, XC_watch, XC_question_arrow, 0, XC_xterm, XC_fleur, XC_left_ptr, XC_plus, XC_hand2, XC_hand2, XC_plus, XC_circle};
+		if (state->cursors[cursor] == None) {
+			if (cursor == ONIX_CURSOR_NONE) {
+				char data = 0;
+				Pixmap bitmap = XCreateBitmapFromData(state->display, state->window, &data, 1, 1);
+				XColor color = {0};
+				state->cursors[cursor] = XCreatePixmapCursor(state->display, bitmap, bitmap, &color, &color, 0, 0);
+				XFreePixmap(state->display, bitmap);
+			} else state->cursors[cursor] = XCreateFontCursor(state->display, shapes[cursor]);
+		}
+		XDefineCursor(state->display, state->window, state->cursors[cursor]);
+		XFlush(state->display);
+	}
 }
 
 static void onix_wayland_relative_motion(void *data, struct zwp_relative_pointer_v1 *pointer,
@@ -1443,6 +1474,7 @@ static void onix_wayland_pointer_enter(void *data, struct wl_pointer *pointer, u
 	window->state.wayland.pointer_serial = serial;
 	window->state.wayland.pointer_entered = 1;
 	onix_wayland_update_cursor(window);
+	onix_push_event(window, ONIX_EVENT_MOUSE_MOVE, 0, 0, wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void onix_wayland_pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface) {
@@ -2279,6 +2311,7 @@ void onix_window_destroy(OnixNativeWindow *window) {
 	}
 
 	if (window->backend == ONIX_BACKEND_X11) {
+		for (int i = 0; i < ONIX_CURSOR_COUNT; i++) if (window->state.x11.cursors[i] != None) XFreeCursor(window->state.x11.display, window->state.x11.cursors[i]);
 		if (window->state.x11.hidden_cursor != None) XFreeCursor(window->state.x11.display, window->state.x11.hidden_cursor);
 		if (window->state.x11.ic != NULL) {
 			XDestroyIC(window->state.x11.ic);

@@ -167,6 +167,50 @@ static void test_drag(OnixMacWindow *state, NSWindow *window) {
     method_setImplementation(drag, original_drag);
 }
 
+static void test_keys(OnixMacWindow *state, NSWindow *window, BOOL wait) {
+    NSEventModifierFlags modifiers[] = {
+        NSEventModifierFlagCommand,
+        NSEventModifierFlagCommand | NSEventModifierFlagShift,
+        NSEventModifierFlagControl,
+        0,
+    };
+    for (size_t i = 0; i < sizeof(modifiers) / sizeof(modifiers[0]); i++) {
+        // Releasing V before Command must allow the next Cmd+V to press V again.
+        for (int repeat = 0; repeat < 2; repeat++) {
+            for (int release = 0; release < 2; release++) {
+                NSEvent *key = [NSEvent keyEventWithType:release ? NSEventTypeKeyUp : NSEventTypeKeyDown
+                    location:NSZeroPoint modifierFlags:modifiers[i] timestamp:0
+                    windowNumber:window.windowNumber context:nil characters:@"v"
+                    charactersIgnoringModifiers:@"v" isARepeat:NO keyCode:9];
+                [NSApp postEvent:key atStart:YES];
+                int received = 0;
+                NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1];
+                do {
+                    if (wait) onix_macos_wait(state, 10);
+                    else onix_macos_poll(state);
+                    OnixMacEvent event;
+                    while (onix_macos_pop_event(state, &event)) {
+                        if (event.kind == ONIX_MAC_EVENT_KEY_DOWN || event.kind == ONIX_MAC_EVENT_KEY_UP) {
+                            assert(event.kind == (release ? ONIX_MAC_EVENT_KEY_UP : ONIX_MAC_EVENT_KEY_DOWN));
+                            assert(event.arg0 == 86); // V
+                            received++;
+                        }
+                        onix_macos_release_event(&event);
+                    }
+                } while (received == 0 && [deadline timeIntervalSinceNow] > 0);
+                assert(received == 1);
+                // The other pump must not deliver the same event again.
+                onix_macos_poll(state);
+                OnixMacEvent event;
+                while (onix_macos_pop_event(state, &event)) {
+                    assert(event.kind != ONIX_MAC_EVENT_KEY_DOWN && event.kind != ONIX_MAC_EVENT_KEY_UP);
+                    onix_macos_release_event(&event);
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, const char **argv) {
     assert(argc == 2);
     @autoreleasepool {
@@ -181,6 +225,8 @@ int main(int argc, const char **argv) {
         else if (strcmp(argv[1], "callback") == 0) test_callback(state, window);
         else if (strcmp(argv[1], "reopen") == 0) test_reopen(state, window);
         else if (strcmp(argv[1], "drag") == 0) test_drag(state, window);
+        else if (strcmp(argv[1], "keys-poll") == 0) test_keys(state, window, NO);
+        else if (strcmp(argv[1], "keys-wait") == 0) test_keys(state, window, YES);
         else assert(false);
         onix_macos_destroy(state);
         assert([NSApp.delegate applicationShouldHandleReopen:NSApp hasVisibleWindows:NO]);

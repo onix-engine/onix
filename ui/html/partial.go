@@ -14,33 +14,31 @@ import (
 // A box owns only the primitives it emits, excluding its child boxes. This
 // index lets local updates retire missing fragments without sweeping all groups.
 type htmlBoxRendering struct {
+	Input                *htmlBoxInput
+	ownInput             *htmlBoxInput
+	Effects              *htmlBoxEffects
 	Box                  *layout.Box
 	Overflow             *htmlOverflowClipBinding
 	Parent               *layout.Box
 	ContextParent        *htmlBoxRendering
 	Groups               []htmlRenderIdentity
 	Entities             []ecs.Entity
-	Visibility           style.Value
-	OverflowX, OverflowY style.Value
 	ZIndex               style.Value
 	Window               htmlPaintWindow
 	OuterWindow          htmlPaintWindow
-	ControlRect          layout.Rect
 	ExtentRect           layout.Rect
 	CullRect             layout.Rect
-	PaintBounds          layout.Rect
-	EffectBounds         layout.Rect
 	Clip                 ecs.Entity
 	Generation           uint64
 	OwnerEnd             int
 	OwnerStart           int
 	GeometryHash         uint64
 	Depth                int
-	FocusOwner           ecs.Entity
-	Control              ecs.Entity
 	StyleGeneration      uint64
 	PaintEnd             int
 	Stack                int
+	OverflowX, OverflowY htmlOverflowMode
+	Visible              bool
 	SharedRendering      bool
 	ClipMoved            bool
 	OwnerReordered       bool
@@ -55,6 +53,63 @@ type htmlBoxRendering struct {
 	StackChanged         bool
 	Composite            bool
 	Expanded             bool
+}
+
+// Descendants share their inherited input context. Only boxes that change the
+// context own storage; keep that storage for allocation-free later updates.
+type htmlBoxInput struct {
+	ControlRect         layout.Rect
+	Control, FocusOwner ecs.Entity
+}
+
+type htmlBoxEffects struct {
+	Paint, Composite layout.Rect
+}
+
+func (rendered *htmlBoxRendering) inputContext() htmlBoxInput {
+	if rendered != nil && rendered.Input != nil {
+		return *rendered.Input
+	}
+	return htmlBoxInput{}
+}
+
+func (rendered *htmlBoxRendering) setInputContext(inherited *htmlBoxInput, value htmlBoxInput) {
+	switch {
+	case value.Control == 0 && value.FocusOwner == 0:
+		rendered.Input = nil
+	case inherited != nil && *inherited == value:
+		rendered.Input = inherited
+	default:
+		if rendered.ownInput == nil {
+			rendered.ownInput = &htmlBoxInput{}
+		}
+		*rendered.ownInput = value
+		rendered.Input = rendered.ownInput
+	}
+}
+
+func (rendered *htmlBoxRendering) paintBounds() layout.Rect {
+	if rendered.Effects != nil {
+		return rendered.Effects.Paint
+	}
+	return rendered.Box.BorderBox()
+}
+
+func (rendered *htmlBoxRendering) setPaintBounds(bounds layout.Rect) {
+	if rendered.Effects == nil && bounds == rendered.Box.BorderBox() {
+		return
+	}
+	if rendered.Effects == nil {
+		rendered.Effects = &htmlBoxEffects{}
+	}
+	rendered.Effects.Paint = bounds
+}
+
+func (rendered *htmlBoxRendering) setCompositeBounds(bounds layout.Rect) {
+	if rendered.Effects == nil {
+		rendered.Effects = &htmlBoxEffects{Paint: rendered.Box.BorderBox()}
+	}
+	rendered.Effects.Composite = bounds
 }
 
 // Full emission starts a new membership generation without clearing a second
@@ -80,7 +135,7 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 		clear(rendered.Groups)
 		rendered.Groups = rendered.Groups[:0]
 		rendered.Box, rendered.Parent, rendered.ZIndex = box, box.Parent, box.Style.ZIndex
-		rendered.OverflowX, rendered.OverflowY = box.Style.OverflowX, box.Style.OverflowY
+		rendered.OverflowX, rendered.OverflowY = htmlOverflowModeFor(box.Style.OverflowX), htmlOverflowModeFor(box.Style.OverflowY)
 		rendered.Clip, rendered.Depth = 0, 0
 		rendered.ExtentRect, rendered.ExtentDirty = box.BorderBox(), false
 		if box.Parent != nil {
@@ -90,7 +145,7 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 	}
 	rendered.Generation = state.RenderGeneration
 	rendered.GeometryHash = box.OwnGeometryHash()
-	rendered.Visibility = box.Style.Visibility
+	rendered.Visible = htmlStyleVisible(box.Style)
 	rendered.OwnsContext = false
 	rendered.ContextParent = nil
 	if inheritedControl != 0 || inheritedFocus != 0 {
@@ -115,10 +170,10 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered.Queued = true
 	rendered.StackChanged = rendered.ZIndex != box.Style.ZIndex
 	// Mode and parent changes invalidate routes even when descendant geometry stays equal.
-	rendered.ClipChanged = rendered.Parent != box.Parent || exists != htmlBoxNeedsOverflowClip(state, box) || rendered.OverflowX != box.Style.OverflowX || rendered.OverflowY != box.Style.OverflowY
+	rendered.ClipChanged = rendered.Parent != box.Parent || exists != htmlBoxNeedsOverflowClip(state, box) || rendered.OverflowX != htmlOverflowModeFor(box.Style.OverflowX) || rendered.OverflowY != htmlOverflowModeFor(box.Style.OverflowY)
 	rendered.ClipMoved = exists && (previous.rect.X != rect.X || previous.rect.Y != rect.Y)
 	state.RenderQueue = append(state.RenderQueue, rendered)
-	if htmlOverflowClipsAxis(rendered.OverflowX) != htmlOverflowClipsAxis(box.Style.OverflowX) || htmlOverflowClipsAxis(rendered.OverflowY) != htmlOverflowClipsAxis(box.Style.OverflowY) {
+	if rendered.OverflowX.clips() != htmlOverflowClipsAxis(box.Style.OverflowX) || rendered.OverflowY.clips() != htmlOverflowClipsAxis(box.Style.OverflowY) {
 		for parent := box.Parent; parent != nil; parent = parent.Parent {
 			if !queueHTMLBox(state, parent) {
 				return false
@@ -216,7 +271,7 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		if !rendered.PaintDirty {
 			continue
 		}
-		if rendered.Visibility != rendered.Box.Style.Visibility && rendered.Parent != nil && htmlOverflowClipsStyle(rendered.Parent.Style) {
+		if rendered.Visible != htmlStyleVisible(rendered.Box.Style) && rendered.Parent != nil && htmlOverflowClipsStyle(rendered.Parent.Style) {
 			if !queueHTMLBox(state, rendered.Parent) {
 				return state.fallback(FallbackContext)
 			}
@@ -277,7 +332,8 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		var controlRect layout.Rect
 		if parent := rendered.Box.Parent; parent != nil {
 			inherited := state.BoxRenderings[parent.Node]
-			control, focusOwner, controlRect = inherited.Control, inherited.FocusOwner, inherited.ControlRect
+			context := inherited.inputContext()
+			control, focusOwner, controlRect = context.Control, context.FocusOwner, context.ControlRect
 		}
 		htmlSpawnBoxes(world, owner, state, rendered.Box, fontValue, boldFont, dpi, stackIndex, passThrough, visible, control, focusOwner, controlRect)
 		rendered.Entities = state.Children
@@ -368,7 +424,7 @@ func finishHTMLBoxReconcile(world *ecs.World, state *htmlRenderState, rendered *
 	}
 	rendered.Parent = rendered.Box.Parent
 	rendered.ZIndex = rendered.Box.Style.ZIndex
-	rendered.OverflowX, rendered.OverflowY = rendered.Box.Style.OverflowX, rendered.Box.Style.OverflowY
+	rendered.OverflowX, rendered.OverflowY = htmlOverflowModeFor(rendered.Box.Style.OverflowX), htmlOverflowModeFor(rendered.Box.Style.OverflowY)
 	live := rendered.Groups[:0]
 	for _, key := range rendered.Groups {
 		group := state.EntityGroups[key]

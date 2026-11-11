@@ -53,6 +53,7 @@ type Context struct {
 	loopControl
 	decorations DecorationMode
 	inputRegion []InputRegionRect
+	cursorSupport
 	mouseCaptureSupport
 	viewport       viewportState
 	events         [256]C.OnixEvent
@@ -144,6 +145,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		C.free(unsafe.Pointer(nativeWindow))
 		panic(err)
 	}
+	ctx.applyCursor = func(cursor input.Cursor) { C.onix_window_set_cursor(ctx.nativeWindow, C.int(cursor)) }
 	ctx.textInputSupport.applyConfig = ctx.applyTextInputConfig
 	ctx.wakePipe, err = ctx.openWakePipe()
 	if err != nil {

@@ -562,7 +562,7 @@ func (w *World) archetypeForOwned(ids []componentID) *archetype {
 }
 
 func (w *World) archetypeWithAdded(source *archetype, id componentID) *archetype {
-	if targetID, ok := source.edges[id]; ok {
+	if targetID, ok := source.edge(id); ok {
 		return w.archetypes[targetID]
 	}
 	target := w.archetypeForOwned(addComponentID(source.ids, id))
@@ -572,7 +572,7 @@ func (w *World) archetypeWithAdded(source *archetype, id componentID) *archetype
 }
 
 func (w *World) archetypeWithRemoved(source *archetype, id componentID) *archetype {
-	if targetID, ok := source.edges[id]; ok {
+	if targetID, ok := source.edge(id); ok {
 		return w.archetypes[targetID]
 	}
 	target := w.archetypeForOwned(removeComponentID(source.ids, id))
@@ -581,11 +581,24 @@ func (w *World) archetypeWithRemoved(source *archetype, id componentID) *archety
 	return target
 }
 
-func setArchetypeEdge(edges map[componentID]uint32, id componentID, target uint32) map[componentID]uint32 {
+func setArchetypeEdge(edges *archetypeEdges, id componentID, target uint32) *archetypeEdges {
 	if edges == nil {
-		edges = make(map[componentID]uint32)
+		edges = new(archetypeEdges)
+		*edges = make(archetypeEdges, 0, 4)
 	}
-	edges[id] = target
+	values := *edges
+	index := 0
+	for index < len(values) && values[index].component < id {
+		index++
+	}
+	if index < len(values) && values[index].component == id {
+		values[index].target = target
+		return edges
+	}
+	values = append(values, archetypeEdge{})
+	copy(values[index+1:], values[index:])
+	values[index] = archetypeEdge{component: id, target: target}
+	*edges = values
 	return edges
 }
 

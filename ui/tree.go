@@ -107,16 +107,14 @@ type treeNodeKey[T comparable] struct {
 }
 
 type treeNodeState[T comparable] struct {
-	key    treeNodeKey[T]
-	node   TreeNode[T]
-	entity ecs.Entity
+	node       TreeNode[T]
+	entity     ecs.Entity
+	offset     float32
+	visibility uint8
 }
 
 type treeNodesScratch[T comparable] struct{}
-type treeVisibilityScratch[T comparable] struct{}
-type treeVisitingScratch[T comparable] struct{}
 type treeStatesScratch[T comparable] struct{}
-type treeRowOffsetsScratch[T comparable] struct{}
 type treeVisibleCountsScratch[T comparable] struct{}
 
 // treeActivation routes a click directly to the node's concrete generic type.
@@ -220,17 +218,13 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		theme = DefaultTheme()
 	}
 	skin := skinFor(world, theme)
-	nodes := world.FrameScratchMap[treeNodesScratch[T], treeNodeKey[T], TreeNode[T]]()
-	visibility := world.FrameScratchMap[treeVisibilityScratch[T], treeNodeKey[T], bool]()
-	visiting := world.FrameScratchMap[treeVisitingScratch[T], treeNodeKey[T], bool]()
+	nodes := world.FrameScratchMap[treeNodesScratch[T], treeNodeKey[T], int]()
 	states := world.FrameScratch[treeStatesScratch[T], treeNodeState[T]]()
 	defer states.ReleaseUnused()
 	for entity, access := range world.Query[TreeNode[T]]().All {
 		node := access.Get()
 
-		key := treeNodeKey[T]{tree: node.Tree, id: node.ID}
-		nodes[key] = node
-		states.Values = append(states.Values, treeNodeState[T]{entity: entity, key: key, node: node})
+		states.Values = append(states.Values, treeNodeState[T]{entity: entity, node: node})
 	}
 	slices.SortFunc(states.Values, func(a, b treeNodeState[T]) int {
 		if a.node.Tree == b.node.Tree {
@@ -238,22 +232,25 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		}
 		return cmp.Compare(a.node.Tree, b.node.Tree)
 	})
-	for key := range nodes {
-		if _, err := treeNodeVisible(nodes, visibility, visiting, key); err != nil {
+	for i := range states.Values {
+		node := &states.Values[i].node
+		nodes[treeNodeKey[T]{tree: node.Tree, id: node.ID}] = i
+	}
+	visibleCountByTree := world.FrameScratchMap[treeVisibleCountsScratch[T], ecs.Entity, int]()
+	for i := range states.Values {
+		visible, err := treeNodeVisible(nodes, states.Values, i)
+		if err != nil {
 			return err
 		}
-	}
-	rowOffsets := world.FrameScratchMap[treeRowOffsetsScratch[T], treeNodeKey[T], float32]()
-	visibleCountByTree := world.FrameScratchMap[treeVisibleCountsScratch[T], ecs.Entity, int]()
-	for _, state := range states.Values {
-		if !visibility[state.key] {
+		if !visible {
 			continue
 		}
+		state := &states.Values[i]
 		tree, ok := world.Get[Tree[T]](state.node.Tree)
 		if !ok {
 			continue
 		}
-		rowOffsets[state.key] = float32(visibleCountByTree[state.node.Tree])*tree.RowHeight + treeRowInset(tree.RowHeight)
+		state.offset = float32(visibleCountByTree[state.node.Tree])*tree.RowHeight + treeRowInset(tree.RowHeight)
 		visibleCountByTree[state.node.Tree]++
 	}
 	for entity, access := range world.Query3[TreeNode[T], scene.Visibility, scene.Size2D]().All {
@@ -262,7 +259,12 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		size := access.C.Mut()
 
 		key := treeNodeKey[T]{tree: node.Tree, id: node.ID}
-		visible.Visible = visibility[key]
+		stateIndex, found := nodes[key]
+		if !found {
+			continue
+		}
+		row := &states.Values[stateIndex]
+		visible.Visible = row.visibility == treeVisible
 		node.Selected = node.treeNodeSelected(world)
 		tree, ok := world.Get[Tree[T]](node.Tree)
 		if !ok {
@@ -271,7 +273,7 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		rowHeight := treeRowVisualHeight(tree.RowHeight)
 		if transform := world.GetMut[scene.UITransform](entity); transform != nil {
 			transform.Translation.X.Value = 0
-			transform.Translation.Y.Value = rowOffsets[key]
+			transform.Translation.Y.Value = row.offset
 		}
 		SetControlBounds(world, entity, tree.Width, rowHeight)
 		SetControlDisabled(world, entity, node.Disabled)
@@ -338,35 +340,43 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 	return nil
 }
 
-func treeNodeVisible[T comparable](nodes map[treeNodeKey[T]]TreeNode[T], visibility, visiting map[treeNodeKey[T]]bool, key treeNodeKey[T]) (bool, error) {
-	if visible, ok := visibility[key]; ok {
-		return visible, nil
-	}
-	if visiting[key] {
-		return false, fmt.Errorf("ui: cycle detected in tree %d at node %v", key.tree, key.id)
-	}
-	node, ok := nodes[key]
-	if !ok {
+const (
+	treeUnvisited uint8 = iota
+	treeVisiting
+	treeHidden
+	treeVisible
+)
+
+func treeNodeVisible[T comparable](indices map[treeNodeKey[T]]int, states []treeNodeState[T], index int) (bool, error) {
+	state := &states[index]
+	switch state.visibility {
+	case treeVisible:
+		return true, nil
+	case treeHidden:
 		return false, nil
+	case treeVisiting:
+		return false, fmt.Errorf("ui: cycle detected in tree %d at node %v", state.node.Tree, state.node.ID)
 	}
+	node := &state.node
 	if !node.HasParent {
-		visibility[key] = true
+		state.visibility = treeVisible
 		return true, nil
 	}
-	visiting[key] = true
-	defer delete(visiting, key)
-	parentKey := treeNodeKey[T]{tree: node.Tree, id: node.Parent}
-	parent, exists := nodes[parentKey]
+	state.visibility = treeVisiting
+	parentIndex, exists := indices[treeNodeKey[T]{tree: node.Tree, id: node.Parent}]
 	if !exists {
-		visibility[key] = false
+		state.visibility = treeHidden
 		return false, nil
 	}
-	parentVisible, err := treeNodeVisible(nodes, visibility, visiting, parentKey)
+	parentVisible, err := treeNodeVisible(indices, states, parentIndex)
 	if err != nil {
 		return false, err
 	}
-	visible := parentVisible && parent.Expanded
-	visibility[key] = visible
+	visible := parentVisible && states[parentIndex].node.Expanded
+	state.visibility = treeHidden
+	if visible {
+		state.visibility = treeVisible
+	}
 	return visible, nil
 }
 

@@ -58,6 +58,7 @@ type Context struct {
 	loopControl
 	inputRegion []InputRegionRect
 	framePacer  framePacer
+	cursorSupport
 	mouseCaptureSupport
 	textInputSupport
 	viewport          viewportState
@@ -108,6 +109,7 @@ func NewContext(width, height int, title string, options Options) *Context {
 		shadow:           options.Shadow,
 		resizable:        options.Resizable,
 	}
+	context.applyCursor = func(cursor input.Cursor) { C.onix_macos_set_cursor(context.nativeWindow, C.int(cursor)) }
 	context.textInputSupport.applyConfig = context.applyTextInputConfig
 	context.applyMouseCapture = func(captured bool) bool {
 		return context.nativeWindow != nil && C.onix_macos_set_mouse_captured(context.nativeWindow, C.int(boolInt(captured))) != 0
