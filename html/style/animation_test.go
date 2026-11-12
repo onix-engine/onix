@@ -10,7 +10,7 @@ import (
 
 func TestCSSAnimationCascadeAndPropertyKeyframes(t *testing.T) {
 	root := dom.NewDocument()
-	node := dom.NewElement("div", map[string]string{"id": "target"})
+	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"})
 	root.AppendChild(node)
 	sheet, err := css.Parse(`#target {
  animation: move 2s linear -500ms 2.5 alternate both, fade 4s ease-in infinite;
@@ -122,7 +122,7 @@ func TestCSSAnimationLonghandsAndTransitionLists(t *testing.T) {
 
 func TestCSSAnimationColorInterpolationAndCascade(t *testing.T) {
 	root := dom.NewDocument()
-	node := dom.NewElement("div", map[string]string{"id": "target"})
+	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"})
 	root.AppendChild(node)
 	sheet, err := css.Parse(`#target {color:red;background:transparent;border:2px solid;animation:paint 1s linear both;border-left-color:green !important}
 	@keyframes paint {
@@ -163,12 +163,12 @@ func TestCSSAnimationColorInterpolationAndCascade(t *testing.T) {
 
 func TestCSSAnimationCurrentColorAndInheritance(t *testing.T) {
 	root := dom.NewDocument()
-	parent := dom.NewElement("div", map[string]string{"style": "color:red"})
+	parent := dom.NewElement("div", dom.Attribute{Name: "style", Value: "color:red"})
 	root.AppendChild(parent)
 	for _, color := range []string{"", "inherit", "unset", "currentColor", "red", "initial"} {
-		node := dom.NewElement("span", map[string]string{"id": color, "style": "background:currentColor;border:1px solid currentColor"})
+		node := dom.NewElement("span", dom.Attribute{Name: "id", Value: color}, dom.Attribute{Name: "style", Value: "background:currentColor;border:1px solid currentColor"})
 		if color != "" {
-			node.Attributes["style"] = "color:" + color + ";background:currentColor;border:1px solid currentColor"
+			node.SetAttr("style", "color:"+color+";background:currentColor;border:1px solid currentColor")
 		}
 		parent.AppendChild(node)
 	}

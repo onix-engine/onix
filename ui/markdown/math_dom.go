@@ -18,45 +18,45 @@ func appendMarkdownMathNode(parent *dom.Node, node mathNode) {
 		if node.noBar {
 			class += " math-frac-no-bar"
 		}
-		fraction := markdownElement(parent, "span", map[string]string{"class": class})
-		appendMathChild(markdownElement(fraction, "span", map[string]string{"class": "math-num"}), node, 0)
-		appendMathChild(markdownElement(fraction, "span", map[string]string{"class": "math-den"}), node, 1)
+		fraction := markdownElement(parent, "span", dom.Attribute{Name: "class", Value: class})
+		appendMathChild(markdownElement(fraction, "span", dom.Attribute{Name: "class", Value: "math-num"}), node, 0)
+		appendMathChild(markdownElement(fraction, "span", dom.Attribute{Name: "class", Value: "math-den"}), node, 1)
 		markdownText(parent, node.right)
 	case mathRadical:
-		radical := markdownElement(parent, "span", map[string]string{"class": "math-radical"})
+		radical := markdownElement(parent, "span", dom.Attribute{Name: "class", Value: "math-radical"})
 		if len(node.children) > 1 && node.children[1].kind != mathEmpty {
-			appendMarkdownMathNode(markdownElement(radical, "span", map[string]string{"class": "math-root-index"}), node.children[1])
+			appendMarkdownMathNode(markdownElement(radical, "span", dom.Attribute{Name: "class", Value: "math-root-index"}), node.children[1])
 		}
-		markdownText(markdownElement(radical, "span", map[string]string{"class": "math-root-symbol"}), "√")
-		appendMathChild(markdownElement(markdownElement(radical, "span", map[string]string{"class": "math-radicand"}), "span", map[string]string{"class": "math-radicand-body"}), node, 0)
+		markdownText(markdownElement(radical, "span", dom.Attribute{Name: "class", Value: "math-root-symbol"}), "√")
+		appendMathChild(markdownElement(markdownElement(radical, "span", dom.Attribute{Name: "class", Value: "math-radicand"}), "span", dom.Attribute{Name: "class", Value: "math-radicand-body"}), node, 0)
 	case mathScripts:
-		scripts := markdownElement(parent, "span", map[string]string{"class": "math-scripts"})
-		appendMathChild(markdownElement(scripts, "span", map[string]string{"class": "math-base"}), node, 0)
-		stack := markdownElement(scripts, "span", map[string]string{"class": "math-script-stack"})
+		scripts := markdownElement(parent, "span", dom.Attribute{Name: "class", Value: "math-scripts"})
+		appendMathChild(markdownElement(scripts, "span", dom.Attribute{Name: "class", Value: "math-base"}), node, 0)
+		stack := markdownElement(scripts, "span", dom.Attribute{Name: "class", Value: "math-script-stack"})
 		if len(node.children) > 1 && node.children[1].kind != mathEmpty {
-			appendMarkdownMathNode(markdownElement(stack, "sup", nil), node.children[1])
+			appendMarkdownMathNode(markdownElement(stack, "sup"), node.children[1])
 		}
 		if len(node.children) > 2 && node.children[2].kind != mathEmpty {
-			appendMarkdownMathNode(markdownElement(stack, "sub", nil), node.children[2])
+			appendMarkdownMathNode(markdownElement(stack, "sub"), node.children[2])
 		}
 	case mathMatrix:
 		left, right := mathEnvironmentDelimiters(node.name)
-		matrix := markdownElement(parent, "span", map[string]string{"class": "math-matrix"})
+		matrix := markdownElement(parent, "span", dom.Attribute{Name: "class", Value: "math-matrix"})
 		if left != "" {
-			markdownText(markdownElement(matrix, "span", map[string]string{"class": "math-delimiter"}), left)
+			markdownText(markdownElement(matrix, "span", dom.Attribute{Name: "class", Value: "math-delimiter"}), left)
 		}
-		grid := markdownElement(matrix, "span", map[string]string{"class": "math-grid"})
+		grid := markdownElement(matrix, "span", dom.Attribute{Name: "class", Value: "math-grid"})
 		for _, row := range node.rows {
-			line := markdownElement(grid, "span", map[string]string{"class": "math-row"})
+			line := markdownElement(grid, "span", dom.Attribute{Name: "class", Value: "math-row"})
 			for column, cell := range row {
-				appendMarkdownMathNode(markdownElement(line, "span", map[string]string{"class": "math-cell math-align-" + mathCellAlignment(node, column)}), cell)
+				appendMarkdownMathNode(markdownElement(line, "span", dom.Attribute{Name: "class", Value: "math-cell math-align-" + mathCellAlignment(node, column)}), cell)
 			}
 		}
 		if right != "" {
-			markdownText(markdownElement(matrix, "span", map[string]string{"class": "math-delimiter"}), right)
+			markdownText(markdownElement(matrix, "span", dom.Attribute{Name: "class", Value: "math-delimiter"}), right)
 		}
 	case mathStyle:
-		appendMathChild(markdownElement(parent, "span", map[string]string{"class": "math-style math-" + node.name}), node, 0)
+		appendMathChild(markdownElement(parent, "span", dom.Attribute{Name: "class", Value: "math-style math-" + node.name}), node, 0)
 	}
 }
 

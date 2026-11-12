@@ -2,7 +2,6 @@ package html
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
@@ -56,7 +55,7 @@ func writeHTMLNode(builder *strings.Builder, node *dom.Node) {
 	case dom.ElementNode:
 		builder.WriteByte('<')
 		builder.WriteString(node.Data)
-		writeHTMLAttributes(builder, node.Attributes)
+		writeHTMLAttributes(builder, node)
 		builder.WriteByte('>')
 		if htmlComponentVoidTag(node.Data) {
 			return
@@ -70,20 +69,12 @@ func writeHTMLNode(builder *strings.Builder, node *dom.Node) {
 	}
 }
 
-func writeHTMLAttributes(builder *strings.Builder, attributes map[string]string) {
-	if len(attributes) == 0 {
-		return
-	}
-	names := make([]string, 0, len(attributes))
-	for name := range attributes {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+func writeHTMLAttributes(builder *strings.Builder, node *dom.Node) {
+	for name, value := range node.SortedAttributes() {
 		builder.WriteByte(' ')
 		builder.WriteString(name)
 		builder.WriteString("=\"")
-		writeEscapedHTMLAttribute(builder, attributes[name])
+		writeEscapedHTMLAttribute(builder, value)
 		builder.WriteByte('"')
 	}
 }

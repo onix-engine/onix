@@ -2,12 +2,15 @@ package layout
 
 import "math"
 
+// GeometryHash describes the ordered geometry independently of box identities.
 func (b *Box) GeometryHash() uint64 {
 	h := newGeometryHash()
 	writeBoxGeometryHash(&h, b)
 	return h.sum64()
 }
 
+// OwnGeometryHash excludes ancestry and sibling order. Renderers track those
+// separately so structural edits with unchanged geometry can reuse paint.
 func (b *Box) OwnGeometryHash() uint64 {
 	h := newGeometryHash()
 	writeBoxOwnGeometryHash(&h, b)
@@ -53,7 +56,6 @@ func writeBoxOwnGeometryHash(h *geometryHash, box *Box) {
 		writeStringHash(h, "<nil>")
 		return
 	}
-	writeStringHash(h, box.StableID)
 	writeRectHash(h, box.Viewport())
 	writeRectHash(h, box.Content)
 	writeEdgesHash(h, box.Padding)

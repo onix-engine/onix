@@ -167,7 +167,7 @@ func TestEmptyAndPlaceholderWhitespaceSemantics(t *testing.T) {
 	if Match(stylesheet.Rules[0].Selectors[1], doc.Children[1]) {
 		t.Fatal(":placeholder-shown should not match a textarea containing whitespace text")
 	}
-	empty := dom.NewElement("div", nil)
+	empty := dom.NewElement("div")
 	empty.AppendChild(dom.NewText(""))
 	if !Match(stylesheet.Rules[0].Selectors[0], empty) {
 		t.Fatal(":empty should ignore zero-length text nodes")

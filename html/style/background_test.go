@@ -31,7 +31,7 @@ func TestBackgroundInheritanceAndInterningKeepLayersIndependent(t *testing.T) {
 			t.Fatalf("inherited layer %d lost its image", index)
 		}
 	}
-	first.Attributes["style"] = "background-size: 20px 30px, 80px 90px"
+	first.SetAttr("style", "background-size: 20px 30px, 80px 90px")
 	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestBackgroundInheritanceAndInterningKeepLayersIndependent(t *testing.T) {
 			t.Fatal("changing one child corrupted another background")
 		}
 	}
-	first.Attributes["style"] = "background: red"
+	first.SetAttr("style", "background: red")
 	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}

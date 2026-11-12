@@ -2,6 +2,8 @@
 
 日期：2026-11-11。基线是本轮开始时的工作区快照，包含当时已有的未提交修改。DOM 属性存储不在本轮修改范围内。
 
+2026-11-12 已完成后续 [DOM 属性存储优化](dom-attribute-storage.md)，单独记录其结构、API 迁移及对比。
+
 ## 实现范围
 
 | 路径 | 调整 |
@@ -97,7 +99,7 @@ Linux amd64，Go 1.27.3，Intel Core i5-11500。通过 `GOMAXPROCS=1 taskset -c 
 
 ```sh
 GOMAXPROCS=1 taskset -c 2 go test -p 1 -run '^$' \
-  -bench '^(InputStateMaps|FrameScratchMap|ArchetypeEdges|ArchetypeEdgeDistribution|TreeMaps|UILayoutHierarchyMaps|HTMLComponentStateCreate|HTMLComponentChildSlot|HTMLComponentDiff|CandidateCascade|CascadeWorkspacePopulation|ComputeFullStyles|RenderHierarchyMaps|RenderHierarchyPopulation|RenderHierarchySparsePopulation|InputHandlerPhases)$' \
+  -bench '^Benchmark(InputStateMaps|FrameScratchMap|ArchetypeEdges|ArchetypeEdgeDistribution|TreeMaps|UILayoutHierarchyMaps|HTMLComponentStateCreate|HTMLComponentChildSlot|HTMLComponentDiff|CandidateCascade|CascadeWorkspacePopulation|ComputeFullStyles|RenderHierarchyMaps|RenderHierarchyPopulation|RenderHierarchySparsePopulation|InputHandlerPhases)$' \
   -benchmem -benchtime=300ms -count=3 \
   ./input ./ecs ./ui ./ui/html ./html/style ./scene .
 

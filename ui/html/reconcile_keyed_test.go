@@ -11,8 +11,8 @@ func TestHTMLKeyedSlotPreservesStaticChildrenAndReleasesReplacedNodes(t *testing
 	world := ecs.NewWorld()
 	spawner := world.NewSpawner1[Surface]()
 	page := spawner.Spawn(New(""))
-	parent := dom.NewElement("ul", nil)
-	before, after := dom.NewElement("header", nil), dom.NewElement("footer", nil)
+	parent := dom.NewElement("ul")
+	before, after := dom.NewElement("header"), dom.NewElement("footer")
 	before.Parent, after.Parent = parent, parent
 	parent.Children = []*dom.Node{before, after}
 	list := &htmlComponentKeyedList{}
@@ -50,7 +50,7 @@ func BenchmarkRefactorHTMLKeyedList(b *testing.B) {
 			world := ecs.NewWorld()
 			owner := world.NewSpawner1[Surface]()
 			page := owner.Spawn(New(""))
-			parent := dom.NewElement("ul", nil)
+			parent := dom.NewElement("ul")
 			keyed := &htmlComponentKeyedList{}
 			children := &htmlComponentVNodeChildren{}
 			states := make(map[*dom.Node]*htmlComponentVNodeChildren)
@@ -81,8 +81,8 @@ func TestHTMLKeyedBatchRemovalPreservesStaticChildren(t *testing.T) {
 	world := ecs.NewWorld()
 	owners := world.NewSpawner1[Surface]()
 	owner := owners.Spawn(New(""))
-	parent := dom.NewElement("ul", nil)
-	before, after := dom.NewElement("header", nil), dom.NewElement("footer", nil)
+	parent := dom.NewElement("ul")
+	before, after := dom.NewElement("header"), dom.NewElement("footer")
 	parent.AppendChild(before)
 	parent.AppendChild(after)
 	list := &htmlComponentKeyedList{}

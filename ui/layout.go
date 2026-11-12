@@ -121,9 +121,8 @@ func NewWidget() Widget {
 }
 
 type uiLayoutChild struct {
-	parent ecs.Entity
-	child  ecs.Entity
-	order  int
+	child ecs.Entity
+	order int
 }
 
 type uiLayoutNode struct {
@@ -132,18 +131,16 @@ type uiLayoutNode struct {
 }
 
 type uiLayoutScratch struct {
-	depths             map[ecs.Entity]int
 	runtime            map[ecs.Entity]*uiLayoutRuntimeState
 	scope              *ecs.QueryScope
-	depthPath          []ecs.Entity
 	children           []uiLayoutChild
 	nodes              []uiLayoutNode
 	layoutChildren     []ecs.Entity
-	nodeInputs         []ecs.Entity
-	childInputs        []uiLayoutChild
+	mapRetention       reuse.MapRetention
+	retention          [3]reuse.Retention
 	versions           [10]uint64
 	hierarchyVersions  [4]uint64
-	hierarchyStructure uint64
+	generation         uint64
 	structure          uint64
 	scopeVersion       uint64
 	recomputed         int
@@ -151,6 +148,13 @@ type uiLayoutScratch struct {
 	initialized        bool
 	runtimeInitialized bool
 	pending            bool
+}
+
+func (scratch *uiLayoutScratch) MaintainCache() {
+	scratch.runtime = scratch.mapRetention.Trim(scratch.runtime, 64)
+	scratch.nodes = scratch.retention[0].Trim(scratch.nodes, 64)
+	scratch.children = scratch.retention[1].Trim(scratch.children[:0], 16)
+	scratch.layoutChildren = scratch.retention[2].Trim(scratch.layoutChildren[:0], 16)
 }
 
 type uiLayoutSizeInput struct {
@@ -163,6 +167,7 @@ type uiLayoutSizeInput struct {
 
 type uiLayoutRuntimeState struct {
 	children    []uiLayoutSizeInput
+	hierarchy   uint64
 	parent      uiLayoutSizeInput
 	layout      Layout
 	viewport    scene.ViewportSize
@@ -205,7 +210,12 @@ type uiWidgetRuntimeState struct {
 }
 
 type uiWidgetRuntimeStates struct {
-	values map[ecs.Entity]uiWidgetRuntimeState
+	values    map[ecs.Entity]uiWidgetRuntimeState
+	retention reuse.MapRetention
+}
+
+func (runtime *uiWidgetRuntimeStates) MaintainCache() {
+	runtime.values = runtime.retention.Trim(runtime.values, 64)
 }
 
 type uiWidgetRuntimeStateTag struct{}
@@ -247,6 +257,7 @@ func syncUILayouts(context *ecs.SystemContext) error {
 	if scratch.runtime == nil {
 		scratch.runtime = make(map[ecs.Entity]*uiLayoutRuntimeState)
 	}
+	scratch.mapRetention.Record(len(scratch.runtime))
 	for entity := range scratch.runtime {
 		if !world.IsAlive(entity) || !world.Has[Layout](entity) || !world.Has[scene.UITransform](entity) {
 			delete(scratch.runtime, entity)
@@ -262,16 +273,12 @@ func syncUILayouts(context *ecs.SystemContext) error {
 		if !ok || layout.Type == LayoutNone {
 			continue
 		}
-		start, end := layoutChildRange(scratch.children, node.entity)
-		scratch.layoutChildren = scratch.layoutChildren[:0]
-		for _, child := range scratch.children[start:end] {
-			scratch.layoutChildren = append(scratch.layoutChildren, child.child)
-		}
 		state := scratch.runtime[node.entity]
 		if state == nil {
 			state = &uiLayoutRuntimeState{}
 			scratch.runtime[node.entity] = state
 		}
+		scratch.collectChildren(world, node.entity, state)
 		if captureUILayoutInputs(world, state, node.entity, layout, scratch.layoutChildren, viewport) {
 			applyUILayout(world, node.entity, layout, scratch.layoutChildren)
 			scratch.recomputed++
@@ -288,121 +295,73 @@ func syncUILayouts(context *ecs.SystemContext) error {
 }
 
 func refreshUILayoutHierarchy(world *ecs.World, scratch *uiLayoutScratch) bool {
-	versions := [4]uint64{world.ComponentVersion[scene.Parent](), world.ComponentVersion[scene.SiblingOrder](), world.ComponentStructureVersion[Layout](), world.ComponentStructureVersion[scene.UITransform]()}
-	if scratch.initialized && scratch.hierarchyStructure == world.StructureVersion() && scratch.hierarchyVersions == versions {
+	hierarchy := scene.HierarchyFor(world)
+	order, _ := world.ComponentValueRevision[scene.SiblingOrder]()
+	_, layouts := world.ComponentValueRevision[Layout]()
+	_, transforms := world.ComponentValueRevision[scene.UITransform]()
+	versions := [4]uint64{hierarchy.Version(), order, layouts, transforms}
+	scope, scopeVersion := world.QueryScopeKey()
+	sameScope := scratch.scope == scope && scratch.scopeVersion == scopeVersion
+	if scratch.initialized && sameScope && scratch.hierarchyVersions == versions {
 		return false
 	}
-	scratch.hierarchyStructure, scratch.hierarchyVersions = world.StructureVersion(), versions
-	dirty := !scratch.initialized
-	childCount := 0
-	for child, access := range world.Query[scene.Parent]().All {
-		parent := access.Get()
-
-		if parent.Entity != 0 && world.IsAlive(parent.Entity) {
-			order := int(child)
-			if authoredOrder, ok := world.Get[scene.SiblingOrder](child); ok {
-				order = int(authoredOrder)
+	if !scratch.initialized || !sameScope || scratch.hierarchyVersions[0] != versions[0] || scratch.hierarchyVersions[2] != layouts || scratch.hierarchyVersions[3] != transforms {
+		scratch.nodes = scratch.nodes[:0]
+		for entity := range world.Query2[Layout, scene.UITransform]().All {
+			depth := hierarchy.Depth(entity)
+			if depth < 0 {
+				depth = world.EntityCount()
 			}
-			input := uiLayoutChild{parent: parent.Entity, child: child, order: order}
-			dirty = reuse.UpdateAt(&scratch.childInputs, childCount, input) || dirty
-			childCount++
+			scratch.nodes = append(scratch.nodes, uiLayoutNode{entity: entity, depth: depth})
 		}
+		slices.SortFunc(scratch.nodes, func(a, b uiLayoutNode) int {
+			if value := cmp.Compare(a.depth, b.depth); value != 0 {
+				return value
+			}
+			return cmp.Compare(a.entity, b.entity)
+		})
+		scratch.retention[0].Record(len(scratch.nodes))
 	}
-	dirty = childCount != len(scratch.childInputs) || dirty
-	scratch.childInputs = scratch.childInputs[:childCount]
-	nodeCount := 0
-	for entity, _ := range world.Query2[Layout, scene.UITransform]().All {
-		dirty = reuse.UpdateAt(&scratch.nodeInputs, nodeCount, entity) || dirty
-		nodeCount++
-	}
-	dirty = nodeCount != len(scratch.nodeInputs) || dirty
-	scratch.nodeInputs = scratch.nodeInputs[:nodeCount]
-	if !dirty {
-		return false
-	}
-	scratch.initialized = true
-	scratch.children = append(scratch.children[:0], scratch.childInputs...)
-	scratch.nodes = scratch.nodes[:0]
-	if scratch.depths == nil {
-		scratch.depths = make(map[ecs.Entity]int)
-	} else {
-		clear(scratch.depths)
-	}
-	scratch.depthPath = scratch.depthPath[:0]
-	for _, entity := range scratch.nodeInputs {
-		scratch.nodes = append(scratch.nodes, uiLayoutNode{entity: entity, depth: uiHierarchyDepth(world, entity, scratch.depths, &scratch.depthPath)})
-	}
-	slices.SortFunc(scratch.children, func(a, b uiLayoutChild) int {
-		if value := cmp.Compare(a.parent, b.parent); value != 0 {
-			return value
-		}
-		if value := cmp.Compare(a.order, b.order); value != 0 {
-			return value
-		}
-		return cmp.Compare(a.child, b.child)
-	})
-	slices.SortFunc(scratch.nodes, func(a, b uiLayoutNode) int {
-		if value := cmp.Compare(a.depth, b.depth); value != 0 {
-			return value
-		}
-		return cmp.Compare(a.entity, b.entity)
-	})
+	scratch.hierarchyVersions = versions
+	scratch.generation++
+	scratch.scope, scratch.scopeVersion, scratch.initialized = scope, scopeVersion, true
 	return true
 }
 
-func uiHierarchyDepth(world *ecs.World, entity ecs.Entity, depths map[ecs.Entity]int, path *[]ecs.Entity) int {
-	if depth, ok := depths[entity]; ok && depth >= 0 {
-		return depth
-	}
-	start := len(*path)
-	current := entity
-	depth := 0
-	for remaining := world.EntityCount() + 1; current != 0 && remaining > 0; remaining-- {
-		if cached, ok := depths[current]; ok {
-			depth = cached
-			if cached < 0 {
-				depth = world.EntityCount() + 1
+// Child order is retained in the size snapshots already needed for change
+// detection. Only topology/order changes need a fresh shared-hierarchy walk.
+func (scratch *uiLayoutScratch) collectChildren(world *ecs.World, entity ecs.Entity, state *uiLayoutRuntimeState) {
+	scratch.layoutChildren = scratch.layoutChildren[:0]
+	if state.hierarchy == scratch.generation && state.initialized {
+		for _, child := range state.children {
+			scratch.layoutChildren = append(scratch.layoutChildren, child.entity)
+		}
+	} else {
+		hierarchy := scene.HierarchyFor(world)
+		scratch.children = scratch.children[:0]
+		for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
+			if !world.InQueryScope(child) {
+				continue
 			}
-			break
+			order := int(child)
+			if authored, ok := world.Get[scene.SiblingOrder](child); ok {
+				order = int(authored)
+			}
+			scratch.children = append(scratch.children, uiLayoutChild{child: child, order: order})
 		}
-		depths[current] = -1
-		*path = append(*path, current)
-		parent, ok := world.Get[scene.Parent](current)
-		if !ok || parent.Entity == 0 || !world.IsAlive(parent.Entity) {
-			break
+		slices.SortFunc(scratch.children, func(a, b uiLayoutChild) int {
+			if order := cmp.Compare(a.order, b.order); order != 0 {
+				return order
+			}
+			return cmp.Compare(a.child, b.child)
+		})
+		for _, child := range scratch.children {
+			scratch.layoutChildren = append(scratch.layoutChildren, child.child)
 		}
-		current = parent.Entity
+		scratch.retention[1].Record(len(scratch.children))
+		state.hierarchy = scratch.generation
 	}
-	for index := len(*path) - 1; index >= start; index-- {
-		value := (*path)[index]
-		depths[value] = depth
-		depth++
-	}
-	result := depths[entity]
-	*path = (*path)[:start]
-	return result
-}
-
-func layoutChildRange(children []uiLayoutChild, parent ecs.Entity) (int, int) {
-	start, limit := 0, len(children)
-	for start < limit {
-		middle := int(uint(start+limit) >> 1)
-		if children[middle].parent < parent {
-			start = middle + 1
-		} else {
-			limit = middle
-		}
-	}
-	end, limit := start, len(children)
-	for end < limit {
-		middle := int(uint(end+limit) >> 1)
-		if children[middle].parent <= parent {
-			end = middle + 1
-		} else {
-			limit = middle
-		}
-	}
-	return start, end
+	scratch.retention[2].Record(len(scratch.layoutChildren))
 }
 
 func applyUILayout(world *ecs.World, entity ecs.Entity, layout Layout, children []ecs.Entity) {
@@ -757,6 +716,7 @@ func syncUIWidgets(world *ecs.World) {
 	if runtime.values == nil {
 		runtime.values = make(map[ecs.Entity]uiWidgetRuntimeState)
 	} else {
+		runtime.retention.Record(len(runtime.values))
 		// Dynamic UI nodes can be removed between frames. Drop their cached
 		// alignment state so the runtime map does not grow for the lifetime of a
 		// world.

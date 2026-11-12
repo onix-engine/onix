@@ -217,6 +217,9 @@ func TestMacOSBuildEnvironmentUsesSelectedArchitecture(t *testing.T) {
 				"CGO_CXXFLAGS=": test.clangArch,
 				"CGO_LDFLAGS=":  test.clangArch,
 			}
+			if test.hostOS == "darwin" {
+				want["CGO_LDFLAGS="] += " -Wl,-no_warn_duplicate_libraries"
+			}
 			for name, expected := range want {
 				found := false
 				for _, value := range env {

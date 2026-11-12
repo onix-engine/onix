@@ -27,7 +27,7 @@ root, err := parser.Parse(source)
 ```
 
 The next `parser.Parse` or `parser.Reset` invalidates the preceding result,
-including node pointers, maps, child slices and decoded strings. The parser
+including node pointers, attribute storage, child slices and decoded strings. The parser
 must not be copied after use or shared concurrently. Independent parsers can run
 concurrently. `Reset` clears source/tree references and retains capacity;
 assigning `dom.Parser{}` releases the retained capacity.
@@ -39,11 +39,17 @@ Windows-1252 replacements, invalid scalar handling and attribute ampersand rules
 Decoded string views remain immutable throughout a parse even when buffers grow.
 
 Nodes use geometrically growing blocks so pointers remain stable. Individual
-attribute maps, child slices and buffers for joining adjacent text are reused.
+attribute lists/maps, child slices and buffers for joining adjacent text are reused.
 The open-element, formatting, template and attribute scratch storage is retained
 as well. Once the required capacities have been warmed, repeated parsing builds
 the tree again with zero heap allocations, including entity decoding and tree
 repair. Fresh independent documents still allocate their output storage.
+
+DOM attributes use compact lists for up to eight entries and maps for larger
+sets. Attribute storage is encapsulated behind `Attr`, `SetAttr`, `RemoveAttr`
+and iteration methods; template clones share storage and detach on mutation.
+See [DOM attribute storage](dom-attribute-storage.md) for the API migration,
+ownership rules and the separate before/after measurements.
 
 Document order and control initialization share one traversal. Selects normalize
 on return from their children; a radio normalization traversal runs only when

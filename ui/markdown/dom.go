@@ -29,8 +29,8 @@ func markdownToDOM(value string) *dom.Node {
 	return root
 }
 
-func markdownElement(parent *dom.Node, tag string, attrs map[string]string) *dom.Node {
-	node := dom.NewElement(tag, attrs)
+func markdownElement(parent *dom.Node, tag string, attrs ...dom.Attribute) *dom.Node {
+	node := dom.NewElement(tag, attrs...)
 	parent.AppendChild(node)
 	return node
 }
@@ -46,18 +46,18 @@ func markdownText(parent *dom.Node, value string) {
 	parent.AppendChild(dom.NewText(value))
 }
 
-func markdownAttributes(node ast.Node) map[string]string {
+func markdownAttributes(node ast.Node) []dom.Attribute {
 	if len(node.Attributes()) == 0 {
 		return nil
 	}
-	attrs := make(map[string]string, len(node.Attributes()))
+	attrs := make([]dom.Attribute, 0, len(node.Attributes()))
 	for _, attribute := range node.Attributes() {
 		name := string(attribute.Name)
 		switch value := attribute.Value.(type) {
 		case []byte:
-			attrs[name] = string(value)
+			attrs = append(attrs, dom.Attribute{Name: name, Value: string(value)})
 		case string:
-			attrs[name] = value
+			attrs = append(attrs, dom.Attribute{Name: name, Value: value})
 		}
 	}
 	return attrs
@@ -77,27 +77,24 @@ func appendMarkdownNode(parent *dom.Node, node ast.Node, source []byte) bool {
 	case *ast.Document, *ast.TextBlock:
 		return appendMarkdownChildren(parent, node, source)
 	case *ast.Paragraph:
-		return appendMarkdownChildren(markdownElement(parent, "p", markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, "p", markdownAttributes(node)...), node, source)
 	case *ast.Heading:
-		return appendMarkdownChildren(markdownElement(parent, "h"+strconv.Itoa(value.Level), markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, "h"+strconv.Itoa(value.Level), markdownAttributes(node)...), node, source)
 	case *ast.Blockquote:
-		return appendMarkdownChildren(markdownElement(parent, "blockquote", markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, "blockquote", markdownAttributes(node)...), node, source)
 	case *ast.List:
 		tag := "ul"
-		attrs := markdownAttributes(node)
 		if value.IsOrdered() {
 			tag = "ol"
-			if value.Start != 1 {
-				if attrs == nil {
-					attrs = make(map[string]string, 1)
-				}
-				attrs["start"] = strconv.Itoa(value.Start)
-			}
 		}
-		return appendMarkdownChildren(markdownElement(parent, tag, attrs), node, source)
+		list := markdownElement(parent, tag, markdownAttributes(node)...)
+		if value.IsOrdered() && value.Start != 1 {
+			list.SetAttr("start", strconv.Itoa(value.Start))
+		}
+		return appendMarkdownChildren(list, node, source)
 	case *ast.ListItem:
-		item := markdownElement(parent, "li", markdownAttributes(node))
-		marker := markdownElement(item, "span", map[string]string{"class": "markdown-list-marker"})
+		item := markdownElement(parent, "li", markdownAttributes(node)...)
+		marker := markdownElement(item, "span", dom.Attribute{Name: "class", Value: "markdown-list-marker"})
 		if list, ok := node.Parent().(*ast.List); ok && list.IsOrdered() {
 			markdownText(marker, strconv.Itoa(markdownListItemNumber(value))+". ")
 		} else {
@@ -105,10 +102,10 @@ func appendMarkdownNode(parent *dom.Node, node ast.Node, source []byte) bool {
 		}
 		return appendMarkdownChildren(item, node, source)
 	case *ast.ThematicBreak:
-		markdownElement(parent, "hr", markdownAttributes(node))
+		markdownElement(parent, "hr", markdownAttributes(node)...)
 		return true
 	case *ast.CodeBlock:
-		code := markdownElement(markdownElement(parent, "pre", nil), "code", nil)
+		code := markdownElement(markdownElement(parent, "pre"), "code")
 		for index := range value.Lines().Len() {
 			line := value.Lines().At(index)
 			markdownText(code, string(line.Value(source)))
@@ -120,7 +117,7 @@ func appendMarkdownNode(parent *dom.Node, node ast.Node, source []byte) bool {
 	case *ast.Text:
 		markdownText(parent, string(value.Segment.Value(source)))
 		if value.HardLineBreak() {
-			markdownElement(parent, "br", nil)
+			markdownElement(parent, "br")
 			markdownText(parent, "\n")
 		} else if value.SoftLineBreak() {
 			markdownText(parent, "\n")
@@ -134,9 +131,9 @@ func appendMarkdownNode(parent *dom.Node, node ast.Node, source []byte) bool {
 		if value.Level == 2 {
 			tag = "strong"
 		}
-		return appendMarkdownChildren(markdownElement(parent, tag, markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, tag, markdownAttributes(node)...), node, source)
 	case *ast.CodeSpan:
-		code := markdownElement(parent, "code", markdownAttributes(node))
+		code := markdownElement(parent, "code", markdownAttributes(node)...)
 		for child := value.FirstChild(); child != nil; child = child.NextSibling() {
 			text, ok := child.(*ast.Text)
 			if !ok {
@@ -151,77 +148,66 @@ func appendMarkdownNode(parent *dom.Node, node ast.Node, source []byte) bool {
 		}
 		return true
 	case *ast.Link:
-		attrs := markdownAttributes(node)
-		if attrs == nil {
-			attrs = make(map[string]string, 2)
-		}
-		attrs["href"] = string(util.URLEscape(value.Destination, true))
+		link := markdownElement(parent, "a", markdownAttributes(node)...)
+		link.SetAttr("href", string(util.URLEscape(value.Destination, true)))
 		if value.Title != nil {
-			attrs["title"] = string(value.Title)
+			link.SetAttr("title", string(value.Title))
 		}
-		return appendMarkdownChildren(markdownElement(parent, "a", attrs), node, source)
+		return appendMarkdownChildren(link, node, source)
 	case *ast.AutoLink:
 		url := util.URLEscape(value.URL(source), false)
 		if value.AutoLinkType == ast.AutoLinkEmail && !bytes.HasPrefix(bytes.ToLower(url), []byte("mailto:")) {
 			url = append([]byte("mailto:"), url...)
 		}
-		link := markdownElement(parent, "a", map[string]string{"href": string(url)})
+		link := markdownElement(parent, "a", dom.Attribute{Name: "href", Value: string(url)})
 		markdownText(link, string(value.Label(source)))
 		return true
 	case *ast.Image:
-		attrs := markdownAttributes(node)
-		if attrs == nil {
-			attrs = make(map[string]string, 3)
-		}
-		attrs["src"] = string(util.URLEscape(value.Destination, true))
-		attrs["alt"] = markdownPlainText(value, source)
+		image := markdownElement(parent, "img", markdownAttributes(node)...)
+		image.SetAttr("src", string(util.URLEscape(value.Destination, true)))
+		image.SetAttr("alt", markdownPlainText(value, source))
 		if value.Title != nil {
-			attrs["title"] = string(value.Title)
+			image.SetAttr("title", string(value.Title))
 		}
-		markdownElement(parent, "img", attrs)
 		return true
 	case *extast.Strikethrough:
-		return appendMarkdownChildren(markdownElement(parent, "del", markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, "del", markdownAttributes(node)...), node, source)
 	case *extast.TaskCheckBox:
-		attrs := map[string]string{"type": "checkbox", "disabled": ""}
+		checkbox := markdownElement(parent, "input", dom.Attribute{Name: "type", Value: "checkbox"}, dom.Attribute{Name: "disabled", Value: ""})
 		if value.IsChecked {
-			attrs["checked"] = ""
+			checkbox.SetAttr("checked", "")
 		}
-		markdownElement(parent, "input", attrs)
 		markdownText(parent, " ")
 		return true
 	case *extast.Table:
-		return appendMarkdownChildren(markdownElement(parent, "table", markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(parent, "table", markdownAttributes(node)...), node, source)
 	case *extast.TableHeader:
-		return appendMarkdownChildren(markdownElement(markdownElement(parent, "thead", nil), "tr", nil), node, source)
+		return appendMarkdownChildren(markdownElement(markdownElement(parent, "thead"), "tr"), node, source)
 	case *extast.TableRow:
 		body := parent
 		if parent.Data == "table" {
 			if count := len(parent.Children); count != 0 && parent.Children[count-1].Data == "tbody" {
 				body = parent.Children[count-1]
 			} else {
-				body = markdownElement(parent, "tbody", nil)
+				body = markdownElement(parent, "tbody")
 			}
 		}
-		return appendMarkdownChildren(markdownElement(body, "tr", markdownAttributes(node)), node, source)
+		return appendMarkdownChildren(markdownElement(body, "tr", markdownAttributes(node)...), node, source)
 	case *extast.TableCell:
 		tag := "td"
 		if node.Parent().Kind() == extast.KindTableHeader {
 			tag = "th"
 		}
-		attrs := markdownAttributes(node)
+		cell := markdownElement(parent, tag, markdownAttributes(node)...)
 		if value.Alignment != extast.AlignNone {
-			if attrs == nil {
-				attrs = make(map[string]string, 1)
-			}
-			attrs["style"] = strings.TrimSuffix(attrs["style"], ";") + "text-align:" + value.Alignment.String()
+			cell.SetAttr("style", strings.TrimSuffix(cell.AttrValue("style"), ";")+"text-align:"+value.Alignment.String())
 		}
-		return appendMarkdownChildren(markdownElement(parent, tag, attrs), node, source)
+		return appendMarkdownChildren(cell, node, source)
 	case *markdownInlineMath:
-		appendMarkdownMathNode(markdownElement(parent, "span", map[string]string{"class": "math inline"}), parseMarkdownMath(value.Content))
+		appendMarkdownMathNode(markdownElement(parent, "span", dom.Attribute{Name: "class", Value: "math inline"}), parseMarkdownMath(value.Content))
 		return true
 	case *markdownDisplayMath:
-		appendMarkdownMathNode(markdownElement(parent, "div", map[string]string{"class": "math display"}), parseMarkdownMath(value.Lines().Value(source)))
+		appendMarkdownMathNode(markdownElement(parent, "div", dom.Attribute{Name: "class", Value: "math display"}), parseMarkdownMath(value.Lines().Value(source)))
 		return true
 	default:
 		return false
@@ -249,23 +235,22 @@ func markdownPlainText(node ast.Node, source []byte) string {
 func appendMarkdownCodeBlock(parent *dom.Node, block *ast.FencedCodeBlock, source []byte) {
 	language := block.Language(source)
 	code := markdownCodeBlockSource(block, source)
-	attrs := map[string]string{}
+	codeNode := markdownElement(markdownElement(parent, "pre"), "code")
 	if len(language) != 0 {
-		attrs["class"] = "language-" + string(language)
+		codeNode.SetAttr("class", "language-"+string(language))
 	}
 	var document syntax.Document
 	defer document.Close()
 	if len(language) != 0 && document.Update(string(language), code) == nil && document.Language() != "" {
-		attrs["class"] = "syntax language-" + string(language)
-		codeNode := markdownElement(markdownElement(parent, "pre", nil), "code", attrs)
+		codeNode.SetAttr("class", "syntax language-"+string(language))
 		offset := 0
 		for _, token := range document.Tokens(markdownRuntimeFor().style, nil) {
 			markdownText(codeNode, code[offset:token.Start])
-			markdownText(markdownElement(codeNode, "span", map[string]string{"class": "syntax-token", "style": token.CSS}), code[token.Start:token.End])
+			markdownText(markdownElement(codeNode, "span", dom.Attribute{Name: "class", Value: "syntax-token"}, dom.Attribute{Name: "style", Value: token.CSS}), code[token.Start:token.End])
 			offset = token.End
 		}
 		markdownText(codeNode, code[offset:])
 		return
 	}
-	markdownText(markdownElement(markdownElement(parent, "pre", nil), "code", attrs), code)
+	markdownText(codeNode, code)
 }

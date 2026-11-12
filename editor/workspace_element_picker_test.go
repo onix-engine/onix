@@ -143,7 +143,7 @@ func TestWorkspaceParticleElementsDropdownFloatsAndDismisses(t *testing.T) {
 	var popup *dom.Node
 	var find func(*dom.Node)
 	find = func(node *dom.Node) {
-		if node.Attributes["id"] == "content-elements-list" {
+		if node.AttrValue("id") == "content-elements-list" {
 			popup = node
 		}
 		for _, child := range node.Children {
@@ -151,11 +151,11 @@ func TestWorkspaceParticleElementsDropdownFloatsAndDismisses(t *testing.T) {
 		}
 	}
 	find(root)
-	if popup == nil || popup.Attributes["role"] != "dialog" {
+	if popup == nil || popup.AttrValue("role") != "dialog" {
 		t.Fatal("dropdown missing")
 	}
 	for parent := popup.Parent; parent != nil; parent = parent.Parent {
-		if parent.Attributes["id"] == "inspector" {
+		if parent.AttrValue("id") == "inspector" {
 			t.Fatal("dropdown is clipped by the inspector")
 		}
 	}

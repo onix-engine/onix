@@ -8,8 +8,8 @@ import "strings"
 
 func adjustAttributeNames(aa []htmlAttribute, nameMap map[string]string) {
 	for i := range aa {
-		if newName, ok := nameMap[aa[i].Key]; ok {
-			aa[i].Key = newName
+		if newName, ok := nameMap[aa[i].Name]; ok {
+			aa[i].Name = newName
 		}
 	}
 }
@@ -21,13 +21,8 @@ func htmlIntegrationPoint(n *Node) bool {
 	switch n.namespace {
 	case "math":
 		if n.Data == "annotation-xml" {
-			for key, value := range n.Attributes {
-				if key == "encoding" {
-					if strings.EqualFold(value, "text/html") || strings.EqualFold(value, "application/xhtml+xml") {
-						return true
-					}
-				}
-			}
+			value := n.AttrValue("encoding")
+			return strings.EqualFold(value, "text/html") || strings.EqualFold(value, "application/xhtml+xml")
 		}
 	case "svg":
 		switch n.Data {

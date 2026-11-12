@@ -7,10 +7,10 @@ import (
 )
 
 func TestDescendantTextOwnership(t *testing.T) {
-	root := dom.NewElement("div", nil)
+	root := dom.NewElement("div")
 	root.AppendChild(dom.NewText(""))
-	root.AppendChild(dom.NewElement("img", nil))
-	wrapper := dom.NewElement("span", nil)
+	root.AppendChild(dom.NewElement("img"))
+	wrapper := dom.NewElement("span")
 	root.AppendChild(wrapper)
 	text := dom.NewText(" 中文\tGo ")
 	wrapper.AppendChild(text)
@@ -40,9 +40,9 @@ func TestDescendantTextOwnership(t *testing.T) {
 }
 
 func BenchmarkDescendantText(b *testing.B) {
-	root := dom.NewElement("div", nil)
-	root.AppendChild(dom.NewElement("img", nil))
-	wrapper := dom.NewElement("span", nil)
+	root := dom.NewElement("div")
+	root.AppendChild(dom.NewElement("img"))
+	wrapper := dom.NewElement("span")
 	root.AppendChild(wrapper)
 	wrapper.AppendChild(dom.NewText("nested label"))
 	wrapper.AppendChild(dom.NewText(""))
@@ -55,8 +55,8 @@ func BenchmarkDescendantText(b *testing.B) {
 }
 
 func TestDescendantTextSingleValueAllocations(t *testing.T) {
-	root := dom.NewElement("div", nil)
-	wrapper := dom.NewElement("span", nil)
+	root := dom.NewElement("div")
+	wrapper := dom.NewElement("span")
 	root.AppendChild(wrapper)
 	wrapper.AppendChild(dom.NewText("nested label"))
 	root.AppendChild(dom.NewText(""))

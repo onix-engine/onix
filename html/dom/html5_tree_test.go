@@ -2,7 +2,6 @@ package dom
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -55,13 +54,8 @@ func htmlTreeShape(root *Node) string {
 		switch n.Type {
 		case ElementNode:
 			fmt.Fprintf(&b, "(%s", n.Data)
-			keys := make([]string, 0, len(n.Attributes))
-			for k := range n.Attributes {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				fmt.Fprintf(&b, " %s=%q", k, n.Attributes[k])
+			for name, value := range n.SortedAttributes() {
+				fmt.Fprintf(&b, " %s=%q", name, value)
 			}
 			b.WriteByte(')')
 			for _, c := range n.Children {

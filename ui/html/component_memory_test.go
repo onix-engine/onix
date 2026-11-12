@@ -15,7 +15,7 @@ func TestHTMLComponentChildSlotReuseAndSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	instance := &htmlComponentInstance{Next: newHTMLComponentVNodeState()}
+	instance := &htmlComponentInstance{}
 	view := &View{instance: instance, template: definition.runtime.template}
 	// A valid slot needs a data-ref.
 	template, err := compileHTMLComponentTemplate(`<div data-ref="slot"></div><div data-ref="other"></div>`)
@@ -184,7 +184,7 @@ func TestHTMLAppendComponentChildrenWarmAllocations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	instance := &htmlComponentInstance{Current: newHTMLComponentVNodeState(), Next: newHTMLComponentVNodeState()}
+	instance := &htmlComponentInstance{}
 	view := &View{instance: instance, template: template}
 	render := func() {
 		view.reset()

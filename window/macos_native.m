@@ -5,6 +5,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -652,7 +653,7 @@ int onix_macos_file_dialog(
             }
         }
         if (extensions != NULL && extension_bytes > 0 && mode != 1) {
-            NSMutableArray *allowed = [NSMutableArray array];
+            NSMutableArray<UTType *> *allowed = [NSMutableArray array];
             int offset = 0;
             while (offset < extension_bytes) {
                 const char *extension = extensions + offset;
@@ -662,11 +663,12 @@ int onix_macos_file_dialog(
                     continue;
                 }
                 NSString *value = [NSString stringWithUTF8String:extension];
-                if (value != nil) [allowed addObject:value];
+                UTType *type = value != nil ? [UTType typeWithFilenameExtension:value] : nil;
+                if (type != nil) [allowed addObject:type];
                 offset += (int)length + 1;
             }
             if (allowed.count > 0) {
-                panel.allowedFileTypes = allowed;
+                panel.allowedContentTypes = allowed;
                 panel.allowsOtherFileTypes = NO;
             }
         }

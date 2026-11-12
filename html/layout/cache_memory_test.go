@@ -55,7 +55,7 @@ func TestRetainedLayoutReclaimsWorkspacePeaks(t *testing.T) {
 	if after[0] >= peak[0] || after[1] >= peak[1] || after[3] >= peak[3] || cap(cache.Changed) > 64 || cap(cache.Removed) > 64 {
 		t.Fatalf("layout retained its peak: workspace %v -> %v, changed/removed=%d/%d", peak, after, cap(cache.Changed), cap(cache.Removed))
 	}
-	probe := dom.NewElement("probe", nil)
+	probe := dom.NewElement("probe")
 	oldIndex[probe] = &Box{}
 	if cache.nodes[probe] != nil {
 		t.Fatal("layout node map retained its historical buckets")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/scene"
 )
 
@@ -231,14 +232,34 @@ func FindPart[P, T any](world *ecs.World, owner ecs.Entity) (ecs.Entity, bool) {
 
 type partIndex[P, T any] struct {
 	entities    map[ecs.Entity]ecs.Entity
+	retention   reuse.MapRetention
 	versions    [2]uint64
+	idle        uint8
 	initialized bool
+	used        bool
+}
+
+func (index *partIndex[P, T]) MaintainCache() {
+	if !index.used {
+		if index.idle < reuse.RetentionFrames {
+			index.idle++
+		}
+		if index.idle == reuse.RetentionFrames {
+			index.entities = nil
+			index.retention = reuse.MapRetention{}
+			index.initialized = false
+		}
+		return
+	}
+	index.used, index.idle = false, 0
+	index.entities = index.retention.Trim(index.entities, 64)
 }
 
 // Cache entities, never component pointers. Column migration changes these
 // versions too, preserving the first match in the current query order.
 func partEntities[P, T any](world *ecs.World) map[ecs.Entity]ecs.Entity {
 	index := world.FrameValue[partIndex[P, T], partIndex[P, T]]()
+	index.used = true
 	versions := [2]uint64{world.ComponentVersion[Relation[T]](), world.ComponentVersion[Part[P]]()}
 	if index.initialized && index.versions == versions {
 		return index.entities
@@ -246,6 +267,7 @@ func partEntities[P, T any](world *ecs.World) map[ecs.Entity]ecs.Entity {
 	if index.entities == nil {
 		index.entities = make(map[ecs.Entity]ecs.Entity)
 	}
+	index.retention.Record(len(index.entities))
 	clear(index.entities)
 	for entity, access := range world.Query[Relation[T]](ecs.With[Part[P]]()).All {
 		relation := access.Get()

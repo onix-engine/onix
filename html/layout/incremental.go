@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strconv"
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/dom"
@@ -45,6 +44,7 @@ type Cache struct {
 	pass          uint64
 	generation    uint64
 	restylePass   uint64
+	nextID        uint64
 	// ReserveScrollbarSpace selects classic scrollbars for this document.
 	ReserveScrollbarSpace bool
 }
@@ -62,7 +62,6 @@ func (cache *Cache) MaintainCache() {
 
 type boxLayoutCache struct {
 	measurement          *style.ComputedStyle
-	parentID             string
 	height               style.Value
 	width                style.Value
 	containing, absolute Rect
@@ -81,6 +80,12 @@ type boxLayoutCache struct {
 	shiftable            bool
 	dirty                bool
 	valid                bool
+}
+
+// BoxForNode returns the node's box from the latest layout update. Nodes with
+// display:none or display:contents and inline nodes without a box return nil.
+func (cache *Cache) BoxForNode(node *dom.Node) *Box {
+	return cache.nodes[node]
 }
 
 // Update reconciles topology only when needed, then propagates changed layout
@@ -142,7 +147,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 			cache.nodes = make(map[*dom.Node]*Box)
 		}
 		cache.generation++
-		cache.Root = cache.reconcile(root, nil, "", 0, styles, force)
+		cache.Root = cache.reconcile(root, nil, 0, styles, force)
 		for node, box := range cache.nodes {
 			if box.reflow.generation != cache.generation {
 				cache.Removed = append(cache.Removed, box)
@@ -239,14 +244,15 @@ func styleInstance(styles style.Map, node *dom.Node, current *style.ComputedStyl
 	return current
 }
 
-func (cache *Cache) reconcile(node *dom.Node, parent *Box, parentID string, index int, styles style.Map, force bool) *Box {
+func (cache *Cache) reconcile(node *dom.Node, parent *Box, index int, styles style.Map, force bool) *Box {
 	cache.Work.TopologyVisited++
 	if !nodeCreatesBox(node, styles) {
 		return nil
 	}
 	box := cache.nodes[node]
 	if box == nil {
-		box = &Box{Node: node}
+		cache.nextID++
+		box = &Box{Node: node, StableID: cache.nextID}
 		cache.nodes[node] = box
 		cache.Work.Created++
 	}
@@ -261,14 +267,7 @@ func (cache *Cache) reconcile(node *dom.Node, parent *Box, parentID string, inde
 		box.reflow.valid = false
 	}
 	box.Style = computed
-	if box.StableID == "" || box.reflow.parentID != parentID || box.reflow.index != index {
-		if parent == nil {
-			box.StableID = "0"
-		} else {
-			box.StableID = parentID + "." + strconv.Itoa(index)
-		}
-		box.reflow.parentID, box.reflow.index = parentID, index
-	}
+	box.reflow.index = index
 	box.reflow.generation = cache.generation
 	old := box.Children
 	children := old[:0]
@@ -279,7 +278,7 @@ func (cache *Cache) reconcile(node *dom.Node, parent *Box, parentID string, inde
 	childIndex := 0
 	box.hasFloats = false
 	for _, childNode := range node.Children {
-		children, shiftable = cache.reconcileLayoutChild(childNode, box, box.StableID, old, children, &childIndex, shiftable, styles, force)
+		children, shiftable = cache.reconcileLayoutChild(childNode, box, old, children, &childIndex, shiftable, styles, force)
 	}
 	if len(children) != len(old) {
 		cache.markLayoutDirty(box)
@@ -295,18 +294,18 @@ func (cache *Cache) reconcile(node *dom.Node, parent *Box, parentID string, inde
 	return box
 }
 
-func (cache *Cache) reconcileLayoutChild(node *dom.Node, parent *Box, parentID string, old, children []*Box, childIndex *int, shiftable bool, styles style.Map, force bool) ([]*Box, bool) {
+func (cache *Cache) reconcileLayoutChild(node *dom.Node, parent *Box, old, children []*Box, childIndex *int, shiftable bool, styles style.Map, force bool) ([]*Box, bool) {
 	computed, ok := styles.Get(node)
 	if !ok {
 		return children, shiftable
 	}
 	if computed.Display.Kind == style.ValueKeyword && computed.Display.Keyword == "contents" {
 		for _, child := range node.Children {
-			children, shiftable = cache.reconcileLayoutChild(child, parent, parentID, old, children, childIndex, shiftable, styles, force)
+			children, shiftable = cache.reconcileLayoutChild(child, parent, old, children, childIndex, shiftable, styles, force)
 		}
 		return children, shiftable
 	}
-	child := cache.reconcile(node, parent, parentID, *childIndex, styles, force)
+	child := cache.reconcile(node, parent, *childIndex, styles, force)
 	*childIndex = *childIndex + 1
 	if child == nil {
 		return children, shiftable

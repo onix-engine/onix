@@ -25,7 +25,7 @@ func TestLongTextLayoutRecordings(t *testing.T) {
 		{"pre-wrap", strings.Repeat("  line one\tline two\r\n\n中文\rtext  ", 12), "white-space:pre-wrap;tab-size:3", "8fcbfce724e7e5478d06be66f9d643c7f6537e5de9e9d671bb4a626243c32f1f"},
 		{"pre-line", "  One\t 中文 \r\n\n <b>Bold words</b>\n  trailing ", "white-space:pre-line", "3a699347dff83ea9dac182d432cc996b38ff09667c7a0cf6a9d281b2fa9a44d0"},
 		{"ellipsis", strings.Repeat("AVj English 中文 ", 16), "white-space:nowrap;text-overflow:ellipsis;text-align:right", "bd026215bbfa2d73a2f6b34f5ecc7690d42a3d5f826b181adc3da080fd1e6c3a"},
-		{"inline", `A<span>mixed 中文 text</span><img style="width:12px;height:9px"><button>Button 中文</button><span style="font-size:19px"> large text</span> tail`, "", "4ba275bff971f2fe0c77d6f0508912dc967d0932a6038158b0a9b2834da9448b"},
+		{"inline", `A<span>mixed 中文 text</span><img style="width:12px;height:9px"><button>Button 中文</button><span style="font-size:19px"> large text</span> tail`, "", "be467ad94e0c6d0600bd73a3f220ab8b4471f0bd39145156114bfe5b2dbf7f23"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root, err := dom.Parse(`<div style="width:137px;` + test.declarations + `">` + test.source + `</div>`)

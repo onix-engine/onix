@@ -7,7 +7,6 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
 	"github.com/onix-engine/onix/html/dom"
-	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/scene"
 )
 
@@ -335,12 +334,7 @@ func cloneHTMLNode(node, parent *dom.Node) *dom.Node {
 		return nil
 	}
 	clone := &dom.Node{Type: node.Type, Data: node.Data, Parent: parent, States: node.States, Order: node.Order}
-	if len(node.Attributes) > 0 {
-		clone.Attributes = make(map[string]string, len(node.Attributes))
-		for name, value := range node.Attributes {
-			clone.Attributes[name] = value
-		}
-	}
+	clone.ShareAttributes(node)
 	if len(node.Children) > 0 {
 		clone.Children = make([]*dom.Node, len(node.Children))
 		for index, child := range node.Children {
@@ -361,11 +355,16 @@ func (n Node) Bounds() (Rect, bool) {
 	if !n.valid() {
 		return Rect{}, false
 	}
-	state, ok := n.world.Get[htmlRenderState](n.owner)
-	if !ok || !state.Rendered {
+	state := n.world.GetRef[htmlRenderState](n.owner)
+	if state == nil || !state.Rendered {
 		return Rect{}, false
 	}
-	return htmlNodeBounds(state.Boxes, n.node)
+	box := state.LayoutCache.BoxForNode(n.node)
+	if box == nil {
+		return Rect{}, false
+	}
+	r := box.BorderBox()
+	return Rect{float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height)}, r.Width > 0 && r.Height > 0
 }
 
 // ScrollContainer returns the node's synchronized overflow scroll entity,
@@ -385,20 +384,4 @@ func (n Node) ScrollContainer() (ecs.Entity, bool) {
 	entity := binding.entity
 	_, ok := n.world.Get[scene.UIScroll](entity)
 	return entity, ok
-}
-
-func htmlNodeBounds(box *layout.Box, node *dom.Node) (Rect, bool) {
-	if box == nil {
-		return Rect{}, false
-	}
-	if box.Node == node {
-		r := box.BorderBox()
-		return Rect{float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height)}, r.Width > 0 && r.Height > 0
-	}
-	for _, child := range box.Children {
-		if r, ok := htmlNodeBounds(child, node); ok {
-			return r, true
-		}
-	}
-	return Rect{}, false
 }

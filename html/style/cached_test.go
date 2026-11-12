@@ -48,7 +48,7 @@ func TestComputeWithCacheMatchesFreshCascade(t *testing.T) {
 	viewport.Width = 640
 	cache.ContainerMetrics = map[*dom.Node]ContainerMetrics{panel: {Width: 240, Height: 80}}
 	check()
-	root.Children[0].Attributes = map[string]string{"style": "font-size:24px"}
+	root.Children[0].SetAttributes(dom.Attribute{Name: "style", Value: "font-size:24px"})
 	check()
 	removed.Parent.Children = removed.Parent.Children[:1]
 	removed.Parent = nil
@@ -108,7 +108,7 @@ func cachedStyleNode(node *dom.Node, id string) *dom.Node {
 func TestPersistentStyleIndexBound(t *testing.T) {
 	var cache MutationCache
 	cache.prepareStyleIndex()
-	computed := defaultStyle(dom.NewElement("div", nil))
+	computed := defaultStyle(dom.NewElement("div"))
 	for i := range maxDocumentStyleInterned + 20 {
 		computed.Width = LengthPx(float64(i))
 		cache.styles.commit(&computed, nil)

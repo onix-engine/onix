@@ -11,10 +11,18 @@ const (
 	hierarchyEnabled = hierarchyActive | hierarchyVisible
 )
 
+const (
+	hierarchyResolved uint8 = 1 << iota
+	hierarchyVisiting
+	hierarchyQueued
+	hierarchyDepthResolved
+	hierarchyDepthVisiting
+)
+
 type hierarchyNode struct {
 	entity, parent, firstChild, nextSibling, previousSibling ecs.Entity
-	local, inherited                                         uint8
-	valid, visiting, queued                                  bool
+	depth                                                    uint32
+	local, inherited, state                                  uint8
 }
 
 // Hierarchy is the world-owned parent/child index shared by scene systems.
@@ -68,6 +76,40 @@ func (h *Hierarchy) NextSibling(entity ecs.Entity) ecs.Entity {
 	return 0
 }
 
+// Depth returns the number of live ancestors, including ancestors outside the
+// current query scope. Missing entities and cycles return -1.
+func (h *Hierarchy) Depth(entity ecs.Entity) int {
+	h.path = h.path[:0]
+	depth, cyclic := -1, false
+	for n := h.node(entity); n != nil; n = h.node(n.parent) {
+		if n.state&hierarchyDepthResolved != 0 {
+			cyclic = n.depth == ^uint32(0)
+			depth = int(n.depth)
+			break
+		}
+		if n.state&hierarchyDepthVisiting != 0 {
+			cyclic = true
+			break
+		}
+		n.state |= hierarchyDepthVisiting
+		h.path = append(h.path, n.entity)
+	}
+	for i := len(h.path) - 1; i >= 0; i-- {
+		n := h.node(h.path[i])
+		if cyclic {
+			n.depth = ^uint32(0)
+		} else {
+			depth++
+			n.depth = uint32(depth)
+		}
+		n.state = n.state&^hierarchyDepthVisiting | hierarchyDepthResolved
+	}
+	if cyclic {
+		return -1
+	}
+	return depth
+}
+
 func (h *Hierarchy) node(entity ecs.Entity) *hierarchyNode {
 	index, ok := entity.Index()
 	if !ok || int(index) >= len(h.nodes) || h.nodes[index].entity != entity {
@@ -110,14 +152,14 @@ func (h *Hierarchy) sync(world *ecs.World) {
 		h.refreshFlags[Visibility](world, changes, versions, members, 2)
 		for i := 0; i < len(h.queue); i++ {
 			n := h.node(h.queue[i])
-			n.valid = false
+			n.state &^= hierarchyResolved | hierarchyDepthResolved
 			for child := n.firstChild; child != 0; child = h.NextSibling(child) {
 				h.mark(child)
 			}
 		}
 		h.invalidated = len(h.queue)
 		for _, entity := range h.queue {
-			h.node(entity).queued = false
+			h.node(entity).state &^= hierarchyQueued
 		}
 		h.queue = h.queue[:0]
 	}
@@ -214,8 +256,8 @@ func (h *Hierarchy) refreshFlags[T any](world *ecs.World, changes *ecs.SystemCon
 }
 
 func (h *Hierarchy) mark(entity ecs.Entity) {
-	if n := h.node(entity); n != nil && !n.queued {
-		n.queued = true
+	if n := h.node(entity); n != nil && n.state&hierarchyQueued == 0 {
+		n.state |= hierarchyQueued
 		h.queue = append(h.queue, entity)
 	}
 }
@@ -224,21 +266,22 @@ func (h *Hierarchy) flags(entity ecs.Entity) uint8 {
 	h.path = h.path[:0]
 	flags := uint8(hierarchyEnabled)
 	for n := h.node(entity); n != nil; n = h.node(n.parent) {
-		if n.valid {
+		if n.state&hierarchyResolved != 0 {
 			flags = n.inherited
 			break
 		}
-		if n.visiting {
+		if n.state&hierarchyVisiting != 0 {
 			flags = 0
 			break
 		}
-		n.visiting = true
+		n.state |= hierarchyVisiting
 		h.path = append(h.path, n.entity)
 	}
 	for i := len(h.path) - 1; i >= 0; i-- {
 		n := h.node(h.path[i])
 		flags &= n.local
-		n.inherited, n.valid, n.visiting = flags, true, false
+		n.inherited = flags
+		n.state = n.state&^hierarchyVisiting | hierarchyResolved
 		h.recomputed++
 	}
 	return flags

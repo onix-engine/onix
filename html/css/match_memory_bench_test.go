@@ -10,9 +10,9 @@ import (
 func BenchmarkMatchContextStorage(b *testing.B) {
 	for _, count := range []int{100, 1000, 5000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			parent := dom.NewElement("section", nil)
+			parent := dom.NewElement("section")
 			for range count {
-				parent.AppendChild(dom.NewElement("div", map[string]string{"class": "item"}))
+				parent.AppendChild(dom.NewElement("div", dom.Attribute{Name: "class", Value: "item"}))
 			}
 			sheet, err := Parse(`.item:nth-child(odd) {color:red}`)
 			if err != nil {

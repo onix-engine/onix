@@ -3,7 +3,6 @@ package layout
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/onix-engine/onix/font"
@@ -41,24 +40,22 @@ func BuildWithFonts(root *dom.Node, styles style.Map, face, boldFace *font.Face,
 }
 
 func buildTree(node *dom.Node, styles style.Map) *Box {
-	return buildTreeWithStableID(node, styles, "0")
+	var nextID uint64
+	return buildTreeWithIDs(node, styles, &nextID)
 }
 
-func buildTreeWithStableID(node *dom.Node, styles style.Map, stableID string) *Box {
+func buildTreeWithIDs(node *dom.Node, styles style.Map, nextID *uint64) *Box {
 	if !nodeCreatesBox(node, styles) {
 		return nil
 	}
 	computed := styles[node]
 
-	box := &Box{StableID: stableID, Node: node, Style: computed}
+	*nextID += 1
+	box := &Box{StableID: *nextID, Node: node, Style: computed}
 	if len(node.Children) > 0 {
 		box.Children = make([]*Box, 0, len(node.Children))
 	}
-	box.Children = appendLayoutChildren(box.Children, node, styles, stableID)
-	for _, child := range box.Children {
-		child.Parent = box
-		box.hasFloats = box.hasFloats || isFloated(child) || child.hasFloats && !establishesFloatContext(child)
-	}
+	appendLayoutChildren(box, node, styles, nextID)
 	if isFlexDisplay(computed.Display.Keyword) {
 		slices.SortStableFunc(box.Children, compareFlexOrder)
 	}
@@ -66,24 +63,23 @@ func buildTreeWithStableID(node *dom.Node, styles style.Map, stableID string) *B
 	return box
 }
 
-func appendLayoutChildren(children []*Box, node *dom.Node, styles style.Map, stableID string) []*Box {
-	for index, child := range node.Children {
+func appendLayoutChildren(parent *Box, node *dom.Node, styles style.Map, nextID *uint64) {
+	for _, child := range node.Children {
 		computed, ok := styles.Get(child)
 		if !ok {
 			continue
 		}
-		childID := stableID + "." + strconv.Itoa(index)
 		if computed.Display.Kind == style.ValueKeyword && computed.Display.Keyword == "contents" {
-			children = appendLayoutChildren(children, child, styles, childID)
+			appendLayoutChildren(parent, child, styles, nextID)
 			continue
 		}
-		childBox := buildTreeWithStableID(child, styles, childID)
+		childBox := buildTreeWithIDs(child, styles, nextID)
 		if childBox != nil {
-			childBox.Parent = nil
-			children = append(children, childBox)
+			childBox.Parent = parent
+			parent.Children = append(parent.Children, childBox)
+			parent.hasFloats = parent.hasFloats || isFloated(childBox) || childBox.hasFloats && !establishesFloatContext(childBox)
 		}
 	}
-	return children
 }
 
 func isFlexItem(node *dom.Node, styles style.Map) bool {

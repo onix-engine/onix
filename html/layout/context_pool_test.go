@@ -10,7 +10,7 @@ import (
 )
 
 func TestLayoutContextResetReleasesDocument(t *testing.T) {
-	node := dom.NewElement("div", nil)
+	node := dom.NewElement("div")
 	ctx := newLayoutContext()
 	ctx.inlineSegments = []inlineSegment{{Node: node}}
 	ctx.controlTokens = []controlToken{{text: "document"}}

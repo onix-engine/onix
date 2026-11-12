@@ -36,8 +36,8 @@ func TestScopeStylesheetSubjectClassMatchesComponentElement(t *testing.T) {
 		t.Fatal(err)
 	}
 	document := dom.NewDocument()
-	body := dom.NewElement("body", nil)
-	card := dom.NewElement("div", map[string]string{"class": "card active onix-scope-test"})
+	body := dom.NewElement("body")
+	card := dom.NewElement("div", dom.Attribute{Name: "class", Value: "card active onix-scope-test"})
 	document.AppendChild(body)
 	body.AppendChild(card)
 	if !Match(stylesheet.Rules[0].Selectors[0], card) {

@@ -59,7 +59,7 @@ func TestParserResetAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(root.Children) != 1 || len(root.Children[0].Attributes) != 0 || root.Children[0].States != (StateSet[ElementState]{}) {
+	if len(root.Children) != 1 || root.Children[0].AttrCount() != 0 || root.Children[0].States != (StateSet[ElementState]{}) {
 		t.Fatalf("retained previous state: %s", root.String())
 	}
 	var order uint32
@@ -68,7 +68,7 @@ func TestParserResetAndOwnership(t *testing.T) {
 	for _, block := range parser.blocks {
 		for i := range block {
 			n := &block[i].node
-			if n.Data != "" || n.Parent != nil || len(n.Children) != 0 || len(n.Attributes) != 0 || n.States != (StateSet[ElementState]{}) {
+			if n.Data != "" || n.Parent != nil || len(n.Children) != 0 || n.AttrCount() != 0 || n.States != (StateSet[ElementState]{}) {
 				t.Fatal("reset retained source or tree references")
 			}
 		}
@@ -88,7 +88,7 @@ func TestParserBorrowsUnchangedSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	element := root.Children[0]
-	for _, value := range []string{element.Data, element.Attributes["data-name"], element.Children[0].Data} {
+	for _, value := range []string{element.Data, element.AttrValue("data-name"), element.Children[0].Data} {
 		offset := strings.Index(source, value)
 		if unsafe.StringData(value) != unsafe.StringData(source[offset:]) {
 			t.Errorf("copied unchanged source %q", value)
@@ -144,18 +144,18 @@ func TestTokenizerHTMLRecovery(t *testing.T) {
 		if err != nil || token.Type != test.kind || token.Data != test.data {
 			t.Fatalf("%q => %#v, %v", test.source, token, err)
 		}
-		if len(token.Attributes) != len(test.attrs) {
-			t.Fatalf("%q attrs = %#v", test.source, token.Attributes)
+		if token.AttrCount() != len(test.attrs) {
+			t.Fatalf("%q attrs = %#v", test.source, token.data)
 		}
 		for key, value := range test.attrs {
-			if token.Attributes[key] != value {
-				t.Fatalf("%q attrs = %#v", test.source, token.Attributes)
+			if token.AttrValue(key) != value {
+				t.Fatalf("%q attrs = %#v", test.source, token.data)
 			}
 		}
 	}
 	// ASCII folding must leave non-ASCII tag/attribute letters untouched.
 	token, _ := NewTokenizer(`<x-Ä DATA-Ä=ok>`).Next()
-	if token.Data != "x-Ä" || token.Attributes["data-Ä"] != "ok" {
+	if token.Data != "x-Ä" || token.AttrValue("data-Ä") != "ok" {
 		t.Fatalf("non-ASCII folding: %#v", token)
 	}
 }

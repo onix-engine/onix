@@ -61,7 +61,7 @@ func TestMacOSNativeIdle(t *testing.T) {
 	defer cancel()
 	args := []string{"clang", "-std=gnu11", "-fblocks", "-Werror", "-Wno-deprecated-declarations",
 		"tests/macos_idle_test.m", "macos_native.m", "-o", binary,
-		"-framework", "AppKit", "-framework", "Foundation", "-framework", "QuartzCore", "-framework", "CoreGraphics"}
+		"-framework", "AppKit", "-framework", "Foundation", "-framework", "QuartzCore", "-framework", "CoreGraphics", "-framework", "UniformTypeIdentifiers"}
 	if output, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput(); err != nil {
 		t.Fatalf("compile native macOS idle test: %v\n%s", err, output)
 	}

@@ -53,19 +53,19 @@ func updateRetained(tb testing.TB, cache *Cache, root *dom.Node, styles style.Ma
 
 func assertRetainedMatchesFull(t *testing.T, got, want *Box) {
 	t.Helper()
-	if got.StableID != want.StableID || got.Node != want.Node || !reflect.DeepEqual(got.Style, want.Style) || got.Padding != want.Padding || got.Border != want.Border || got.Margin != want.Margin || len(got.Children) != len(want.Children) {
+	if got.Node != want.Node || !reflect.DeepEqual(got.Style, want.Style) || got.Padding != want.Padding || got.Border != want.Border || got.Margin != want.Margin || len(got.Children) != len(want.Children) {
 		detail := ""
 		if debugStyleDiff != nil && got.Style != nil && want.Style != nil {
 			detail = debugStyleDiff(got.Style, want.Style)
 		}
-		t.Fatalf("box identity/style differs: %s id=%v node=%v style=%v pad=%v border=%v margin=%v children=%d/%d %s",
-			got.StableID, got.StableID == want.StableID, got.Node == want.Node, reflect.DeepEqual(got.Style, want.Style),
+		t.Fatalf("box identity/style differs: %d node=%v style=%v pad=%v border=%v margin=%v children=%d/%d %s",
+			got.StableID, got.Node == want.Node, reflect.DeepEqual(got.Style, want.Style),
 			got.Padding == want.Padding, got.Border == want.Border, got.Margin == want.Margin, len(got.Children), len(want.Children), detail)
 	}
 	assertRetainedRect(t, got.Content, want.Content)
 	assertRetainedRect(t, got.FlowMarginBox, want.FlowMarginBox)
 	if math.Abs(got.TextHeight-want.TextHeight) > 1e-8 {
-		t.Fatalf("text height differs at %s: %g != %g", got.StableID, got.TextHeight, want.TextHeight)
+		t.Fatalf("text height differs at %d: %g != %g", got.StableID, got.TextHeight, want.TextHeight)
 	}
 	assertRetainedText(t, got.TextFragments, want.TextFragments)
 	if len(got.ImageFragments) != len(want.ImageFragments) || len(got.ControlFragments) != len(want.ControlFragments) {
@@ -253,7 +253,7 @@ func BenchmarkRetainedBlockLayout(b *testing.B) {
 func TestRetainedLayoutCascadeTopologySignal(t *testing.T) {
 	root, styles, _ := retainedFixture(t, `<div id="target">One</div>`)
 	target := retainedNode(root, "target")
-	target.Attributes["style"] = "display:flex"
+	target.SetAttr("style", "display:flex")
 	var cache style.MutationCache
 	var changes []style.NodeChange
 	_, _, err := style.RecomputeSubtreesWithChanges(root, &css.Stylesheet{}, style.Viewport{Width: 320, Height: 200}, nil, styles, []*dom.Node{target}, &changes, &cache)
@@ -324,7 +324,7 @@ func TestRetainedLayoutMixedMutationSequence(t *testing.T) {
 	var dirty []*dom.Node
 	for i := 0; i < 100; i++ {
 		node := nodes[(i*7+i/5)%len(nodes)]
-		node.Attributes["style"] = declarations[(i*3+i/10)%len(declarations)]
+		node.SetAttr("style", declarations[(i*3+i/10)%len(declarations)])
 		changes = changes[:0]
 		dirty = dirty[:0]
 		_, _, err := style.RecomputeSubtreesWithChanges(root, nil, style.Viewport{Width: 320, Height: 200}, nil, styles, []*dom.Node{root}, &changes, &styleCache)

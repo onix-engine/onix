@@ -528,7 +528,7 @@ func TestInvalidInlineScrollbarWidthKeepsLowerPriorityValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := dom.NewDocument()
-	node := dom.NewElement("div", map[string]string{"class": "scroll", "style": "scrollbar-width: widest"})
+	node := dom.NewElement("div", dom.Attribute{Name: "class", Value: "scroll"}, dom.Attribute{Name: "style", Value: "scrollbar-width: widest"})
 	root.AppendChild(node)
 	styles, err := Compute(root, stylesheet)
 	if err != nil {
@@ -1861,7 +1861,7 @@ func TestFragmentRootFontSizeControlsRem(t *testing.T) {
 	if got := styles[label].FontSize; got != LengthPx(13) {
 		t.Fatalf("initial font size = %#v, want 13px", got)
 	}
-	root.Attributes["style"] = "font-size:18px"
+	root.SetAttr("style", "font-size:18px")
 	styles, err = RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, Viewport{}, nil, nil, styles, []*dom.Node{root})
 	if err != nil {
 		t.Fatal(err)

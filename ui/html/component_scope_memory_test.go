@@ -39,7 +39,7 @@ func TestHTMLComponentScopeSharedAttributesMutationIsolation(t *testing.T) {
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	if left.node.Attributes["class"] != "edited "+scope {
+	if left.node.AttrValue("class") != "edited "+scope {
 		t.Fatal("removing a sibling class changed the edited node")
 	}
 	for _, node := range []*dom.Node{a, b, b.Children[0], b.Children[1]} {
@@ -64,7 +64,7 @@ func TestHTMLComponentScopeSharedAttributesMutationIsolation(t *testing.T) {
 func TestHTMLComponentScopePopulationAllocations(t *testing.T) {
 	root := dom.NewDocument()
 	for range 1000 {
-		root.AppendChild(dom.NewElement("td", nil))
+		root.AppendChild(dom.NewElement("td"))
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		for _, node := range root.Children {

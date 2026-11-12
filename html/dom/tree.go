@@ -6,7 +6,6 @@ package dom
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 )
 
@@ -280,7 +279,7 @@ func (p *treeBuilder) addFormattingElement() {
 		if n.Data != tagName {
 			continue
 		}
-		if !maps.Equal(n.Attributes, p.top().Attributes) {
+		if !n.attributeList.equal(&p.top().attributeList) {
 			continue
 		}
 
@@ -836,8 +835,8 @@ func inBodyIM(p *treeBuilder) bool {
 			p.acknowledgeSelfClosingTag()
 			if p.tok.Data == "input" {
 				for _, t := range p.tok.Attr {
-					if t.Key == "type" {
-						if strings.EqualFold(t.Val, "hidden") {
+					if t.Name == "type" {
+						if strings.EqualFold(t.Value, "hidden") {
 							return true
 						}
 					}
@@ -1221,7 +1220,7 @@ func inTableIM(p *treeBuilder) bool {
 			return inHeadIM(p)
 		case "input":
 			for _, t := range p.tok.Attr {
-				if t.Key == "type" && strings.EqualFold(t.Val, "hidden") {
+				if t.Name == "type" && strings.EqualFold(t.Value, "hidden") {
 					p.addElement()
 					p.oe.pop()
 					return true
@@ -1712,7 +1711,7 @@ func parseForeignContent(p *treeBuilder) bool {
 		if p.tok.Data == "font" {
 		loop:
 			for _, attr := range p.tok.Attr {
-				switch attr.Key {
+				switch attr.Name {
 				case "color", "face", "size":
 					b = true
 					break loop

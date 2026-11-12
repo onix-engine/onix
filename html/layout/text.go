@@ -308,12 +308,12 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			}
 		}
 		baseline := 0.0
-		lineHeight := 0.0
+		descent := math.Inf(-1)
 		newGlyphs := 0
 		nextFragment := len(fragments)
 		for _, item := range currentLine {
 			baseline = math.Max(baseline, item.Ascent)
-			lineHeight = math.Max(lineHeight, item.Ascent+item.Descent)
+			descent = math.Max(descent, item.Descent)
 			if item.Kind == inlineSegmentText {
 				needed := len(item.Glyphs) + len(item.Ellipsis)
 				if nextFragment >= cap(fragments) || cap(fragments[:cap(fragments)][nextFragment].Glyphs) < needed {
@@ -328,6 +328,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		if newGlyphs > 0 {
 			lineGlyphs = make([]GlyphFragment, newGlyphs)
 		}
+		lineHeight := baseline + descent
 		updateLineBounds(lineHeight)
 		startTrim, endTrim := 0.0, 0.0
 		if line == 0 {
@@ -360,7 +361,12 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 					Node:  item.Node,
 					Style: item.Style,
 					Line:  line,
-					Rect:  Rect{X: cursorX, Y: top, Width: item.Width, Height: item.Height},
+					Rect: Rect{
+						X:      cursorX + item.Margin.Left,
+						Y:      top + item.Margin.Top,
+						Width:  item.Width - item.Margin.Left - item.Margin.Right,
+						Height: item.Height - item.Margin.Top - item.Margin.Bottom,
+					},
 				})
 			case inlineSegmentText:
 				fragment := TextFragment{
@@ -492,12 +498,25 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			if width <= 0 || height <= 0 {
 				continue
 			}
+			margin := resolveEdges(segment.Style.Margin, options.Width)
+			width += margin.Left + margin.Right
+			height += margin.Top + margin.Bottom
+			ascent := height
+			if segment.Style.VerticalAlign.Keyword == "middle" {
+				parent, _ := options.StyleMap.Get(segment.Node.Parent)
+				if face := fontForStyle(options.Face, parent, options.Context); face != nil && face.Head.UnitsPerEm > 0 {
+					// CSS 2.2: center the margin box on the parent's baseline
+					// plus half its x-height (upwards in font coordinates).
+					xHeight := float64(face.XHeight()) * parent.FontSize.LengthPx / float64(face.Head.UnitsPerEm)
+					ascent = (height + xHeight) / 2
+				}
+			}
 			fitFloatLine(width, height)
 			if currentWidth > 0 && currentWidth+width > lineWidth {
 				flushLine()
 				fitFloatLine(width, height)
 			}
-			currentLine = append(currentLine, lineItem{Kind: inlineSegmentImage, Node: segment.Node, Style: segment.Style, Width: width, Height: height, Ascent: height, Descent: 0})
+			currentLine = append(currentLine, lineItem{Kind: inlineSegmentImage, Node: segment.Node, Style: segment.Style, Width: width, Height: height, Ascent: ascent, Descent: height - ascent, Margin: margin})
 			currentWidth += width
 			prevEndedWithSpace = false
 			continue

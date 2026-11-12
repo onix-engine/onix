@@ -3,6 +3,7 @@ package scene
 import (
 	"fmt"
 	"testing"
+	"unsafe"
 
 	"github.com/onix-engine/onix/ecs"
 )
@@ -107,6 +108,60 @@ func TestHierarchySameTickWrites(t *testing.T) {
 	}}
 	if err := system.Run(w); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHierarchyDepthTracksTopologyAndCycles(t *testing.T) {
+	if bytes := unsafe.Sizeof(hierarchyNode{}); bytes != 48 {
+		t.Fatalf("shared depth cache enlarged hierarchy nodes: %d B", bytes)
+	}
+	w, entities := hierarchyFixture(15)
+	var scope ecs.QueryScope
+	scope.Reset(entities[14:])
+	w.SetQueryScope(&scope)
+	depth := func(entity ecs.Entity, want int) {
+		t.Helper()
+		if got := HierarchyFor(w).Depth(entity); got != want {
+			t.Fatalf("depth(%d)=%d, want %d", entity, got, want)
+		}
+	}
+	depth(entities[14], 3)
+	depth(0, -1)
+	w.GetMut[Parent](entities[6]).Entity = entities[7]
+	depth(entities[14], 5)
+	depth(entities[12], 3)
+	w.GetMut[Parent](entities[0]).Entity = entities[14]
+	for _, entity := range entities {
+		depth(entity, -1)
+		if IsActive(w, entity) {
+			t.Fatal("depth lookup hid a cycle from inherited flags")
+		}
+	}
+	w.Remove[Parent](entities[0])
+	depth(entities[14], 5)
+	if !IsInteractive(w, entities[14]) {
+		t.Fatal("cycle repair did not restore inherited flags")
+	}
+	w.Despawn(entities[0])
+	depth(entities[0], -1)
+	depth(entities[14], 4)
+	spawn := w.NewSpawner1[Parent]()
+	replacement := spawn.Spawn(Parent{})
+	depth(replacement, 0)
+	depth(entities[14], 4)
+	for range 3 {
+		w.GetMut[Parent](entities[6]).Entity = entities[2]
+		depth(entities[14], 2)
+		w.GetMut[Parent](entities[6]).Entity = entities[7]
+		depth(entities[14], 4)
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		w.GetMut[Parent](entities[6]).Entity = entities[2]
+		depth(entities[14], 2)
+		w.GetMut[Parent](entities[6]).Entity = entities[7]
+		depth(entities[14], 4)
+	}); allocations != 0 {
+		t.Fatalf("warm depth updates allocated %g times", allocations)
 	}
 }
 

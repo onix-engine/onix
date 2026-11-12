@@ -3,8 +3,8 @@ package dom
 import "testing"
 
 func TestSharedAttributesDetachOnMutation(t *testing.T) {
-	attributes := map[string]string{"class": "scope", "hidden": ""}
-	left, right := NewElement("td", nil), NewElement("td", nil)
+	attributes := NewElement("td", Attribute{"class", "scope"}, Attribute{"hidden", ""})
+	left, right := NewElement("td"), NewElement("td")
 	left.ShareAttributes(attributes)
 	right.ShareAttributes(attributes)
 	if allocations := testing.AllocsPerRun(100, func() {
@@ -17,13 +17,13 @@ func TestSharedAttributesDetachOnMutation(t *testing.T) {
 	if !left.SetAttr("class", "changed") || !right.RemoveAttr("hidden") {
 		t.Fatal("attribute mutations were lost")
 	}
-	if left.Attributes["class"] != "changed" || right.Attributes["class"] != "scope" || attributes["class"] != "scope" {
+	if left.AttrValue("class") != "changed" || right.AttrValue("class") != "scope" || attributes.AttrValue("class") != "scope" {
 		t.Fatal("class edit changed another node or the shared source")
 	}
 	if _, ok := left.Attr("hidden"); !ok {
 		t.Fatal("attribute removal changed another node")
 	}
-	if _, ok := attributes["hidden"]; !ok {
+	if _, ok := attributes.Attr("hidden"); !ok {
 		t.Fatal("attribute removal changed the shared source")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
@@ -42,7 +42,7 @@ func TestParserResetReleasesSharedAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attributes := map[string]string{"class": "scope"}
+	attributes := NewElement("p", Attribute{"class", "scope"})
 	for _, child := range root.Children {
 		child.ShareAttributes(attributes)
 	}
@@ -50,10 +50,10 @@ func TestParserResetReleasesSharedAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if attributes["class"] != "scope" || len(attributes) != 1 {
-		t.Fatal("parser reset cleared or reused a shared attribute map")
+	if attributes.AttrValue("class") != "scope" || attributes.AttrCount() != 1 {
+		t.Fatal("parser reset cleared or reused shared attribute storage")
 	}
-	if root.Children[0].Attributes["id"] != "first" || root.Children[1].Attributes["id"] != "second" {
+	if root.Children[0].AttrValue("id") != "first" || root.Children[1].AttrValue("id") != "second" {
 		t.Fatal("parser reused shared storage for independent elements")
 	}
 }

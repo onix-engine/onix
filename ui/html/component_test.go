@@ -1081,13 +1081,16 @@ func TestHTMLComponentKeyedVNodeRemovalReleasesNestedState(t *testing.T) {
 }
 
 func TestHTMLComponentVNodeStateResetClearsCapacity(t *testing.T) {
-	state := newHTMLComponentVNodeState()
+	state := htmlComponentVNodeState{
+		ComponentChildren: make(map[string]htmlComponentVNodeList[ComponentVNode]),
+	}
 	keyed := make([]VNode, 1, 2)
 	keyed[0] = TextVNode(1, "span", strings.Repeat("source", 1024))
-	state.Keyed["code"] = htmlComponentVNodeList[VNode]{Values: keyed[:0], Active: true}
+	list := &htmlComponentKeyedList{Pending: htmlComponentVNodeList[VNode]{Values: keyed[:0], Active: true}}
 	state.ComponentChildren["projects"] = htmlComponentVNodeList[ComponentVNode]{Values: make([]ComponentVNode, 0, 2), Active: true}
 	state.reset()
-	if retained := state.Keyed["code"].Values[:cap(state.Keyed["code"].Values)]; retained[0].Text != "" {
+	list.resetPending()
+	if retained := list.Pending.Values[:cap(list.Pending.Values)]; retained[0].Text != "" {
 		t.Fatal("keyed VNode backing storage retained text")
 	}
 	if retained := state.ComponentChildren["projects"].Values[:cap(state.ComponentChildren["projects"].Values)]; retained[0].values != nil {

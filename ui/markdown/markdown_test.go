@@ -136,7 +136,7 @@ func TestMarkdownCodeBlockRendersHighlightedText(t *testing.T) {
 		t.Fatal("highlighted code generated nested wrappers")
 	}
 	spawn := markdownDOMText(html.Document, "span", "Spawn")
-	if class, _ := code.Attr("class"); class != "syntax language-go" || spawn == nil || spawn.Attributes["style"] != "color:#a6e22e" {
+	if class, _ := code.Attr("class"); class != "syntax language-go" || spawn == nil || spawn.AttrValue("style") != "color:#a6e22e" {
 		t.Fatalf("tree-sitter DOM is missing colored functions: %s", html.Document)
 	}
 	if !strings.Contains(html.CSS, ".syntax{color:#f8f8f2;background-color:#272822}") {
@@ -555,7 +555,7 @@ func markdownDOMFirst(root *dom.Node, tag, class string) *dom.Node {
 	if root == nil {
 		return nil
 	}
-	if root.Data == tag && (class == "" || strings.Contains(root.Attributes["class"], class)) {
+	if root.Data == tag && (class == "" || strings.Contains(root.AttrValue("class"), class)) {
 		return root
 	}
 	for _, child := range root.Children {

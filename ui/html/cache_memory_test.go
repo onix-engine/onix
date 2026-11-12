@@ -12,7 +12,7 @@ func TestHTMLComponentCompactDiffHandlesDuplicatesAndReplacements(t *testing.T) 
 	world := ecs.NewWorld()
 	spawn := world.NewSpawner1[htmlRenderState]()
 	owner := spawn.Spawn(htmlRenderState{})
-	parent := dom.NewElement("ul", nil)
+	parent := dom.NewElement("ul")
 	children := make(map[*dom.Node]*htmlComponentVNodeChildren)
 	var list htmlComponentVNodeChildren
 	commit := func(next []VNode) {

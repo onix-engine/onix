@@ -85,7 +85,7 @@ func TestHTMLComponentDocumentTemplateScopeAndValidation(t *testing.T) {
 	if htmlComponentScopeClass(a, "") != htmlComponentScopeClass(b, "") || htmlComponentScopeClass(a, "") == htmlComponentScopeClass(c, "") || htmlComponentScopeClass(a, "") == htmlComponentScopeClass(a, "p{color:red}") {
 		t.Fatal("document scope must be stable across map order and distinguish content and CSS")
 	}
-	for _, root := range []*dom.Node{nil, dom.NewElement("p", nil)} {
+	for _, root := range []*dom.Node{nil, dom.NewElement("p")} {
 		if _, err := NewDocumentTemplate(root); err == nil {
 			t.Fatal("accepted an invalid document root")
 		}

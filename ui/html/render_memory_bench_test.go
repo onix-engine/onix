@@ -9,7 +9,7 @@ import (
 )
 
 func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
-	node := dom.NewElement("div", nil)
+	node := dom.NewElement("div")
 	styles, err := style.Compute(node, nil)
 	if err != nil {
 		b.Fatal(err)

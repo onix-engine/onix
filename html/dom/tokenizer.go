@@ -14,9 +14,9 @@ const (
 )
 
 type Token struct {
-	Attributes map[string]string
-	Data       string
-	Type       TokenType
+	attributeList
+	Data string
+	Type TokenType
 }
 
 // Tokenizer scans UTF-8 HTML, borrowing unchanged source text. It skips comments
@@ -39,12 +39,7 @@ func (t *Tokenizer) Next() (Token, error) {
 		}
 		source := p.token(kind)
 		token := Token{Type: kind, Data: source.Data}
-		if len(source.Attr) != 0 {
-			token.Attributes = make(map[string]string, len(source.Attr))
-			for _, attr := range source.Attr {
-				token.Attributes[attr.Key] = attr.Val
-			}
-		}
+		token.SetAttributes(source.Attr...)
 		return token, nil
 	}
 }

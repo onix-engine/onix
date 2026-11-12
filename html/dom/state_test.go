@@ -42,7 +42,7 @@ func TestElementStatesSeparateLiveAndAuthoredCheckedness(t *testing.T) {
 	if _, authored := check.Attr("checked"); !authored {
 		t.Fatal("changing live checkedness removed the authored attribute")
 	}
-	delete(check.Attributes, "checked")
+	check.RemoveAttr("checked")
 	check.States.Set(StateChecked, true)
 	if !IsChecked(check) {
 		t.Fatal("live checkedness required a checked attribute")
@@ -106,13 +106,13 @@ func TestSelectedAttributeUsesPerOptionDirtyness(t *testing.T) {
 	second := findNodeByID(doc, "second")
 	SetSelectedIndex(selectNode, 1)
 
-	first.Attributes["selected"] = ""
+	first.SetAttr("selected", "")
 	SynchronizeSelectedAttribute(first, true)
 	if got := SelectedIndex(selectNode); got != 0 {
 		t.Fatalf("non-dirty option selected attribute produced index %d, want 0", got)
 	}
 
-	second.Attributes["selected"] = ""
+	second.SetAttr("selected", "")
 	SynchronizeSelectedAttribute(second, true)
 	if got := SelectedIndex(selectNode); got != 0 {
 		t.Fatalf("dirty option selected attribute changed live index to %d", got)
@@ -167,7 +167,7 @@ func TestSelectMultipleAndSizeAttributeNormalization(t *testing.T) {
 		t.Fatal(err)
 	}
 	multiple := findNodeByID(doc, "multiple")
-	delete(multiple.Attributes, "multiple")
+	multiple.RemoveAttr("multiple")
 	SynchronizeSelectAttribute(multiple, "multiple")
 	if !IsChecked(findNodeByID(doc, "a")) || IsChecked(findNodeByID(doc, "b")) || IsChecked(findNodeByID(doc, "c")) {
 		t.Fatal("removing multiple did not retain only the first selection")
@@ -176,7 +176,7 @@ func TestSelectMultipleAndSizeAttributeNormalization(t *testing.T) {
 	if SelectedIndex(list) != -1 {
 		t.Fatalf("initial list selection = %d, want -1", SelectedIndex(list))
 	}
-	delete(list.Attributes, "size")
+	list.RemoveAttr("size")
 	SynchronizeSelectAttribute(list, "size")
 	if SelectedIndex(list) != 0 {
 		t.Fatalf("default-size selection = %d, want 0", SelectedIndex(list))
@@ -201,8 +201,8 @@ func TestSelectChildChangesNormalizeLiveSelection(t *testing.T) {
 			mode := findNodeByID(doc, "mode")
 			SetSelectedIndex(mode, 1)
 			previous := mode.Children[1]
-			group := NewElement("optgroup", nil)
-			option := NewElement("option", map[string]string{"selected": "", "disabled": ""})
+			group := NewElement("optgroup")
+			option := NewElement("option", Attribute{"selected", ""}, Attribute{"disabled", ""})
 			group.AppendChild(option)
 			mode.AppendChild(group)
 			SynchronizeSelectChildren(group)
@@ -285,12 +285,12 @@ func TestDirtyValueKeepsLivePlaceholderState(t *testing.T) {
 	}
 	field := findNodeByID(doc, "field")
 	SetLiveValue(field, "", true)
-	field.Attributes["value"] = "new default"
+	field.SetAttr("value", "new default")
 	SynchronizeValueAttribute(field)
 	if !IsPlaceholderShown(field) {
 		t.Fatal("dirty empty value was replaced by a non-empty value attribute")
 	}
-	delete(field.Attributes, "placeholder")
+	field.RemoveAttr("placeholder")
 	SynchronizePlaceholderAttribute(field)
 	if IsPlaceholderShown(field) {
 		t.Fatal("removed placeholder attribute still matched :placeholder-shown")
@@ -312,9 +312,9 @@ func TestRadioGroupUsesExplicitFormOwnerAndDirtyCheckedness(t *testing.T) {
 	if !dirty {
 		t.Fatal("radio unchecked by group normalization was not marked dirty")
 	}
-	delete(first.Attributes, "checked")
+	first.RemoveAttr("checked")
 	SynchronizeCheckedAttribute(first, false)
-	first.Attributes["checked"] = ""
+	first.SetAttr("checked", "")
 	SynchronizeCheckedAttribute(first, true)
 	if IsChecked(first) {
 		t.Fatal("checked attribute replaced dirty radio checkedness")

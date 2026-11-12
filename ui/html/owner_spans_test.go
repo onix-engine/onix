@@ -18,7 +18,7 @@ func assertHTMLOwnerSpans(t *testing.T, state htmlRenderState) {
 	visit = func(box *layout.Box) {
 		rendered := state.BoxRenderings[box.Node]
 		if rendered.OwnerStart != cursor {
-			t.Fatalf("wrong span start at %s: got %d want %d", box.StableID, rendered.OwnerStart, cursor)
+			t.Fatalf("wrong span start at %d: got %d want %d", box.StableID, rendered.OwnerStart, cursor)
 		}
 		for _, entity := range rendered.Entities {
 			if cursor >= len(state.Children) || state.Children[cursor] != entity {

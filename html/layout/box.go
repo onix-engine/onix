@@ -37,15 +37,17 @@ type Box struct {
 	Parent            *Box
 	Node              *dom.Node
 	floats            *floatContext
-	StableID          string
 	ControlFragments  []ControlFragment
 	InlineBackgrounds []InlineBackground
 	ImageFragments    []ImageFragment
 	TextFragments     []TextFragment
 	Children          []*Box
 	reflow            boxLayoutCache
-	Padding           Edges
-	FlowMarginBox     Rect
+	// StableID identifies this box within its builder/cache lifetime. It survives
+	// sibling insertions, reordering and reparenting; zero means unassigned.
+	StableID      uint64
+	Padding       Edges
+	FlowMarginBox Rect
 	// ScrollbarGutter is reserved between the padding edge and border.
 	ScrollbarGutter   Edges
 	Border            Edges

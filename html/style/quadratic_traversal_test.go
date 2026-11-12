@@ -12,7 +12,7 @@ import (
 
 func TestIndexedKeyframesKeepLastMatchingDefinition(t *testing.T) {
 	root := dom.NewDocument()
-	node := dom.NewElement("div", nil)
+	node := dom.NewElement("div")
 	root.AppendChild(node)
 	sheet, err := css.Parse(`
 div { animation: fade 1s linear forwards; color: red !important; }
@@ -44,7 +44,7 @@ func BenchmarkAnimationCascadeTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			root := dom.NewDocument()
-			node := dom.NewElement("div", nil)
+			node := dom.NewElement("div")
 			root.AppendChild(node)
 			var source strings.Builder
 			names := make([]string, count)

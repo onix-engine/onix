@@ -2,9 +2,8 @@ package dom
 
 import (
 	"fmt"
-	"maps"
-	"sort"
 	"strings"
+	"sync/atomic"
 )
 
 type NodeType int
@@ -16,23 +15,24 @@ const (
 )
 
 type Node struct {
-	Attributes       map[string]string
-	Parent           *Node
-	Data             string
-	namespace        string
-	Children         []*Node
-	Type             NodeType
-	Order            uint32
-	States           StateSet[ElementState]
-	sharedAttributes bool
+	attributeList
+	Parent    *Node
+	Data      string
+	namespace string
+	Children  []*Node
+	Type      NodeType
+	Order     uint32
+	States    StateSet[ElementState]
 }
 
 func NewDocument() *Node {
 	return &Node{Type: DocumentNode, Data: "#document"}
 }
 
-func NewElement(tag string, attrs map[string]string) *Node {
-	return &Node{Type: ElementNode, Data: tag, Attributes: attrs}
+func NewElement(tag string, attrs ...Attribute) *Node {
+	node := &Node{Type: ElementNode, Data: tag}
+	node.SetAttributes(attrs...)
+	return node
 }
 
 func NewText(text string) *Node {
@@ -44,50 +44,20 @@ func (n *Node) AppendChild(child *Node) {
 	n.Children = append(n.Children, child)
 }
 
-func (n *Node) Attr(name string) (string, bool) {
-	if n.Attributes == nil {
-		return "", false
+// ShareAttributes shares source's storage without copying it. Subsequent edits
+// to either node detach its attributes. A nil source clears the attributes.
+// Sharing does not extend the lifetime of parser-owned names or values.
+// Independent destinations may share a read-only source concurrently.
+func (n *Node) ShareAttributes(source *Node) {
+	if n == source {
+		return
 	}
-
-	value, ok := n.Attributes[name]
-	return value, ok
-}
-
-// ShareAttributes installs an immutable attribute map. Neither the caller nor
-// readers of Attributes may write to it directly. SetAttr and RemoveAttr detach
-// the map on the first change, keeping other nodes that share it isolated.
-func (n *Node) ShareAttributes(attributes map[string]string) {
-	n.Attributes, n.sharedAttributes = attributes, true
-}
-
-// SetAttr changes an attribute, returning whether its value changed.
-func (n *Node) SetAttr(name, value string) bool {
-	if current, ok := n.Attr(name); ok && current == value {
-		return false
+	if source == nil || source.AttrCount() == 0 {
+		n.attributeList = attributeList{}
+		return
 	}
-	n.writableAttributes()
-	n.Attributes[name] = value
-	return true
-}
-
-// RemoveAttr removes an attribute, returning whether it was present.
-func (n *Node) RemoveAttr(name string) bool {
-	if _, ok := n.Attr(name); !ok {
-		return false
-	}
-	n.writableAttributes()
-	delete(n.Attributes, name)
-	return true
-}
-
-func (n *Node) writableAttributes() {
-	if n.sharedAttributes {
-		n.Attributes = maps.Clone(n.Attributes)
-		n.sharedAttributes = false
-	}
-	if n.Attributes == nil {
-		n.Attributes = make(map[string]string)
-	}
+	atomic.StoreUint32(&source.data.shared, 1)
+	n.data = source.data
 }
 
 func HasInputType(node *Node, inputType string) bool {
@@ -116,8 +86,8 @@ func (n *Node) writeTo(builder *strings.Builder, depth int) {
 	case ElementNode:
 		builder.WriteString("<")
 		builder.WriteString(n.Data)
-		for _, name := range sortedAttributeNames(n.Attributes) {
-			builder.WriteString(fmt.Sprintf(" %s=%q", name, n.Attributes[name]))
+		for name, value := range n.SortedAttributes() {
+			builder.WriteString(fmt.Sprintf(" %s=%q", name, value))
 		}
 		builder.WriteString(">")
 	case TextNode:
@@ -129,17 +99,4 @@ func (n *Node) writeTo(builder *strings.Builder, depth int) {
 	for _, child := range n.Children {
 		child.writeTo(builder, depth+1)
 	}
-}
-
-func sortedAttributeNames(attrs map[string]string) []string {
-	if len(attrs) == 0 {
-		return nil
-	}
-
-	names := make([]string, 0, len(attrs))
-	for name := range attrs {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }

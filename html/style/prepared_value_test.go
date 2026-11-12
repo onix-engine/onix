@@ -21,7 +21,7 @@ func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
 			target := body.Children[0]
 			cssSource := "div{" + declarations + "}"
 			if inline {
-				target.Attributes = map[string]string{"style": declarations}
+				target.SetAttributes(dom.Attribute{Name: "style", Value: declarations})
 				cssSource = ""
 			}
 			sheet, err := css.Parse(cssSource)
@@ -29,7 +29,7 @@ func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			for index, fontSize := range []float64{20, 30} {
-				body.Attributes["style"] = fmt.Sprintf("font-size:%gpx", fontSize)
+				body.SetAttr("style", fmt.Sprintf("font-size:%gpx", fontSize))
 				viewport := Viewport{Width: 400 * float64(index+1), Height: 300 * float64(index+1)}
 				styles, err := ComputeWithViewport(doc, sheet, viewport)
 				if err != nil {

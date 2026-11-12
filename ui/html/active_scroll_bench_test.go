@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func BenchmarkHTMLAnimationActivePopulation(b *testing.B) {
@@ -21,7 +21,7 @@ func BenchmarkHTMLAnimationActivePopulation(b *testing.B) {
 			state := world.GetRef[htmlRenderState](owner)
 			idle := incrementalHTMLNode(b, world, owner, "idle")
 			for range count {
-				node := dom.NewElement("div", nil)
+				node := dom.NewElement("div")
 				state.Root.AppendChild(node)
 				prepareHTMLNodeAnimation(state, node, state.Styles[idle.node])
 			}

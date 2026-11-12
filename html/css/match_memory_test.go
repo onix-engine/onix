@@ -8,9 +8,9 @@ import (
 )
 
 func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
-	parent := dom.NewElement("section", nil)
-	first := dom.NewElement("span", map[string]string{"id": "first", "class": "item selected"})
-	second := dom.NewElement("input", map[string]string{"id": "second", "class": "item"})
+	parent := dom.NewElement("section")
+	first := dom.NewElement("span", dom.Attribute{Name: "id", Value: "first"}, dom.Attribute{Name: "class", Value: "item selected"})
+	second := dom.NewElement("input", dom.Attribute{Name: "id", Value: "second"}, dom.Attribute{Name: "class", Value: "item"})
 	parent.AppendChild(first)
 	parent.AppendChild(dom.NewText("ignored"))
 	parent.AppendChild(second)
@@ -35,10 +35,10 @@ func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
 	if len(ctx.nodes) != 0 || len(ctx.typeCounts) != 0 {
 		t.Fatal("reset retained DOM or type keys")
 	}
-	first.Attributes["id"] = "second"
-	second.Attributes["id"] = "first"
-	first.Attributes["class"] = "item"
-	second.Attributes["class"] = "item selected"
+	first.SetAttr("id", "second")
+	second.SetAttr("id", "first")
+	first.SetAttr("class", "item")
+	second.SetAttr("class", "item selected")
 	parent.Children[0], parent.Children[2] = parent.Children[2], parent.Children[0]
 	state.Focused = first
 	check()
@@ -50,14 +50,14 @@ func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
 func TestMatchContextOversizedWorkspaceReleased(t *testing.T) {
 	ctx := NewMatchContext()
 	for range maxCachedMatchNodes + 1 {
-		ctx.store(dom.NewElement("div", nil), nodeMatchData{})
+		ctx.store(dom.NewElement("div"), nodeMatchData{})
 	}
 	ctx.typeCounts = map[string]int32{"custom-tag": 1}
 	ctx.Reset()
 	if ctx.nodes != nil || ctx.typeCounts != nil {
 		t.Fatal("oversized matcher workspace was pooled")
 	}
-	node := dom.NewElement("span", map[string]string{"class": "item"})
+	node := dom.NewElement("span", dom.Attribute{Name: "class", Value: "item"})
 	sheet, err := Parse(`.item {color:red}`)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestMatchContextRecordLayout(t *testing.T) {
 }
 
 func TestAttributeOnlyMatchingNeedsNoWorkspace(t *testing.T) {
-	node := dom.NewElement("div", map[string]string{"id": "target", "class": "item selected"})
+	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"}, dom.Attribute{Name: "class", Value: "item selected"})
 	sheet, err := Parse(`#target.item.selected {color:red}`)
 	if err != nil {
 		t.Fatal(err)

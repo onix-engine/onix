@@ -3,7 +3,7 @@
 package window
 
 /*
-#cgo LDFLAGS: -framework AppKit -framework Foundation -framework QuartzCore -framework CoreGraphics
+#cgo LDFLAGS: -framework AppKit -framework Foundation -framework QuartzCore -framework CoreGraphics -framework UniformTypeIdentifiers
 #cgo onix_opengl CFLAGS: -DONIX_MAC_OPENGL
 #include <stdlib.h>
 #include "macos_native.h"
@@ -309,6 +309,10 @@ func (c *Context) handleEvent(event *C.OnixMacEvent) {
 			c.shouldClose = true
 		} else {
 			C.onix_macos_cancel_close(c.nativeWindow)
+			// poll_events_batch captured this flag before dispatching events.
+			// Clear that snapshot too, or LoopGame exits despite the veto.
+			c.nativeShouldClose = 0
+			c.RequestFrame()
 		}
 	case int(C.ONIX_MAC_EVENT_RESIZE):
 		c.Width, c.Height = int(event.x), int(event.y)

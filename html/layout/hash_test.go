@@ -17,11 +17,11 @@ func TestBuildAssignsStableBoxIDsAcrossRenders(t *testing.T) {
 	if firstCard == nil || secondCard == nil {
 		t.Fatalf("card boxes missing: %#v %#v", firstCard, secondCard)
 	}
-	if firstCard.StableID == "" {
+	if firstCard.StableID == 0 {
 		t.Fatal("stable ID should be assigned")
 	}
 	if firstCard.StableID != secondCard.StableID {
-		t.Fatalf("stable ID = %q, want %q", secondCard.StableID, firstCard.StableID)
+		t.Fatalf("stable ID = %d, want %d", secondCard.StableID, firstCard.StableID)
 	}
 	if first.GeometryHash() != second.GeometryHash() {
 		t.Fatal("same layout should produce the same geometry hash")
@@ -41,7 +41,7 @@ func TestGeometryHashChangesWhenViewportChangesLayout(t *testing.T) {
 		t.Fatalf("card boxes missing: %#v %#v", smallCard, largeCard)
 	}
 	if smallCard.StableID != largeCard.StableID {
-		t.Fatalf("stable ID changed across viewport resize: %q vs %q", smallCard.StableID, largeCard.StableID)
+		t.Fatalf("stable ID changed across viewport resize: %d vs %d", smallCard.StableID, largeCard.StableID)
 	}
 }
 

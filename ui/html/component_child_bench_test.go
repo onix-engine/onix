@@ -24,7 +24,7 @@ func BenchmarkHTMLComponentChildSlot(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	instance := &htmlComponentInstance{Current: newHTMLComponentVNodeState(), Next: newHTMLComponentVNodeState()}
+	instance := &htmlComponentInstance{}
 	view := &View{instance: instance, template: template}
 	render := func() {
 		view.reset()

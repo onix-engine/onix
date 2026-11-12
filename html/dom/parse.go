@@ -29,7 +29,7 @@ type parsedNode struct {
 	node Node
 }
 
-type htmlAttribute struct{ Key, Val string }
+type htmlAttribute = Attribute
 type htmlToken struct {
 	Data string
 	Attr []htmlAttribute
@@ -57,12 +57,9 @@ func (p *Parser) Reset() {
 		for i := range count {
 			slot := &block[i]
 			n := &slot.node
-			if n.sharedAttributes {
-				n.Attributes = nil
-			}
-			clear(n.Attributes)
+			n.attributeList.reset()
 			clear(n.Children)
-			*n = Node{Attributes: n.Attributes, Children: n.Children[:0]}
+			*n = Node{attributeList: n.attributeList, Children: n.Children[:0]}
 			slot.text = slot.text[:0]
 		}
 		remaining -= count
@@ -158,12 +155,7 @@ func (p *Parser) newNode(kind NodeType, data string) *Node {
 func (p *Parser) cloneNode(source *Node) *Node {
 	n := p.newNode(source.Type, source.Data)
 	n.namespace = source.namespace
-	if len(source.Attributes) > 0 && n.Attributes == nil {
-		n.Attributes = make(map[string]string, len(source.Attributes))
-	}
-	for key, value := range source.Attributes {
-		n.Attributes[key] = value
-	}
+	n.attributeList.copyFrom(&source.attributeList)
 	return n
 }
 
@@ -185,12 +177,13 @@ func byteString(value []byte) string {
 }
 
 func copyTokenAttributes(dst *Node, src htmlToken) {
-	if len(src.Attr) > 0 && dst.Attributes == nil {
-		dst.Attributes = make(map[string]string, len(src.Attr))
+	if dst.AttrCount() == 0 {
+		dst.SetAttributes(src.Attr...)
+		return
 	}
 	for _, attr := range src.Attr {
-		if _, exists := dst.Attributes[attr.Key]; !exists {
-			dst.Attributes[attr.Key] = attr.Val
+		if _, exists := dst.Attr(attr.Name); !exists {
+			dst.SetAttr(attr.Name, attr.Value)
 		}
 	}
 }

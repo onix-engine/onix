@@ -5,12 +5,12 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
 	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLAnimationTrackMatchingPreservesDuplicateTimes(t *testing.T) {
@@ -46,12 +46,12 @@ func TestHTMLAnimationTrackMatchingPreservesDuplicateTimes(t *testing.T) {
 }
 
 func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
-	root, left, right := dom.NewDocument(), dom.NewElement("div", nil), dom.NewElement("div", nil)
-	child := dom.NewElement("span", nil)
+	root, left, right := dom.NewDocument(), dom.NewElement("div"), dom.NewElement("div")
+	child := dom.NewElement("span")
 	root.AppendChild(left)
 	root.AppendChild(right)
 	left.AppendChild(child)
-	detached := dom.NewElement("div", nil)
+	detached := dom.NewElement("div")
 	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: root, Mutations: map[*dom.Node]htmlMutation{
 		left: htmlMutationStyle, child: htmlMutationStyle, right: htmlMutationStyle, detached: htmlMutationStyle,
 	}}}
@@ -98,7 +98,7 @@ func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entit
 	children := world.NewSpawner3[htmlChild, scene.UITransform, scene.Parent]()
 	for i := range count {
 		id := fmt.Sprint(i)
-		node := dom.NewElement("div", map[string]string{"id": id})
+		node := dom.NewElement("div", dom.Attribute{Name: "id", Value: id})
 		state.Root.AppendChild(node)
 		state.NodeByID[id] = node
 		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{ID: id, Offset: mgl32.Vec2{float32(i), 1}})
@@ -172,7 +172,7 @@ func BenchmarkHTMLMutationRootTraversal(b *testing.B) {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), Mutations: make(map[*dom.Node]htmlMutation)}}
 			for range count {
-				node := dom.NewElement("div", nil)
+				node := dom.NewElement("div")
 				state.Root.AppendChild(node)
 				state.Mutations[node] = htmlMutationStyle
 			}
@@ -209,7 +209,7 @@ func BenchmarkHTMLAnimationVisibilityTraversal(b *testing.B) {
 			visible := &style.ComputedStyle{}
 			visible.Display = style.Keyword("block")
 			for i := range count {
-				node := dom.NewElement("div", nil)
+				node := dom.NewElement("div")
 				parent.AppendChild(node)
 				state.Styles[node] = visible
 				if i == 0 {
@@ -235,11 +235,11 @@ func BenchmarkHTMLComponentAttributeTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := ecs.NewWorld()
-			node := dom.NewElement("div", make(map[string]string))
+			node := dom.NewElement("div")
 			attributes := make([]VNodeAttribute, count)
 			for i := range attributes {
 				name := fmt.Sprintf("data-%d", i)
-				node.Attributes[name] = "value"
+				node.SetAttr(name, "value")
 				attributes[i] = VNodeAttribute{Name: name, Value: "value"}
 			}
 			clearHTMLComponentAttributes(world, 0, node, attributes, "")

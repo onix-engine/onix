@@ -14,7 +14,7 @@ func BenchmarkCascadeWorkspacePopulation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	node := dom.NewElement("div", map[string]string{"class": "item"})
+	node := dom.NewElement("div", dom.Attribute{Name: "class", Value: "item"})
 	compiled := compileStylesheet(sheet)
 	b.ReportAllocs()
 	for b.Loop() {

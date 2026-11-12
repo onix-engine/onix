@@ -24,6 +24,7 @@ func TestUILayoutHierarchyCacheInvalidation(t *testing.T) {
 			transform := world.GetMut[scene.UITransform](child)
 			transform.Translation.X.Value++
 		}},
+		{name: "unrelated_migration", rebuild: false, mutate: func(world *ecs.World, _, child, _ ecs.Entity) { _ = world.Insert(child, "unrelated") }},
 		{name: "reparent", rebuild: true, mutate: func(world *ecs.World, _, child, other ecs.Entity) {
 			parent := world.GetMut[scene.Parent](child)
 			parent.Entity = other
@@ -66,8 +67,15 @@ func TestUILayoutHierarchyCacheInvalidation(t *testing.T) {
 			}
 			var fresh uiLayoutScratch
 			refreshUILayoutHierarchy(world, &fresh)
-			if !slices.Equal(cache.children, fresh.children) || !slices.Equal(cache.nodes, fresh.nodes) {
-				t.Fatalf("cached topology differs from a fresh traversal: children=%v nodes=%v", cache.children, cache.nodes)
+			if !slices.Equal(cache.nodes, fresh.nodes) {
+				t.Fatalf("cached topology differs from a fresh traversal: nodes=%v", cache.nodes)
+			}
+			for _, node := range cache.nodes {
+				cache.collectChildren(world, node.entity, &uiLayoutRuntimeState{})
+				fresh.collectChildren(world, node.entity, &uiLayoutRuntimeState{})
+				if !slices.Equal(cache.layoutChildren, fresh.layoutChildren) {
+					t.Fatalf("cached child order differs from a fresh traversal at %d", node.entity)
+				}
 			}
 			if refreshUILayoutHierarchy(world, &cache) {
 				t.Fatal("unchanged topology rebuilt again")
@@ -86,12 +94,12 @@ func TestUILayoutHierarchyCacheTracksAncestorsWithoutLayout(t *testing.T) {
 	leaf := layouts.Spawn(scene.Parent{Entity: ancestor}, NewLayout(), scene.NewUITransform())
 	var cache uiLayoutScratch
 	refreshUILayoutHierarchy(world, &cache)
-	if cache.depths[leaf] != 2 {
-		t.Fatalf("initial depth=%d, want 2", cache.depths[leaf])
+	if len(cache.nodes) != 1 || cache.nodes[0] != (uiLayoutNode{entity: leaf, depth: 2}) {
+		t.Fatalf("initial layout order=%v, want leaf at depth 2", cache.nodes)
 	}
 	world.Remove[scene.Parent](ancestor)
-	if !refreshUILayoutHierarchy(world, &cache) || cache.depths[leaf] != 1 {
-		t.Fatalf("ancestor change not reflected: depth=%d", cache.depths[leaf])
+	if !refreshUILayoutHierarchy(world, &cache) || cache.nodes[0].depth != 1 {
+		t.Fatalf("ancestor change not reflected: nodes=%v", cache.nodes)
 	}
 }
 
@@ -105,6 +113,65 @@ func TestUILayoutHierarchyCacheDoesNotAllocate(t *testing.T) {
 		}
 	}); allocations != 0 {
 		t.Fatalf("allocations=%v, want 0", allocations)
+	}
+}
+
+func TestUILayoutSharedHierarchyPreservesScopeAndSiblingOrder(t *testing.T) {
+	world := ecs.NewWorld()
+	roots := world.NewSpawner1[scene.UITransform]()
+	root := roots.Spawn(scene.NewUITransform())
+	parents := world.NewSpawner5[Layout, scene.UITransform, scene.Size2D, scene.Anchor, scene.Parent]()
+	parent := parents.Spawn(Layout{Type: LayoutHorizontal, AutoAlignment: true}, scene.NewUITransform(), scene.Size2D{Width: 100, Height: 20}, scene.AnchorTopLeft, scene.Parent{Entity: root})
+	children := world.NewSpawner5[scene.Parent, scene.UITransform, scene.Size2D, scene.Anchor, scene.SiblingOrder]()
+	one := children.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform(), scene.Size2D{Width: 10, Height: 10}, scene.AnchorTopLeft, 0)
+	two := children.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform(), scene.Size2D{Width: 10, Height: 10}, scene.AnchorTopLeft, 0)
+	first := children.Spawn(scene.Parent{Entity: parent}, scene.NewUITransform(), scene.Size2D{Width: 10, Height: 10}, scene.AnchorTopLeft, -1)
+	var scope ecs.QueryScope
+	scope.Reset([]ecs.Entity{parent, one, two})
+	world.SetQueryScope(&scope)
+	update := func() {
+		t.Helper()
+		if err := UpdateLayout(world); err != nil {
+			t.Fatal(err)
+		}
+	}
+	position := func(entity ecs.Entity, want float32) {
+		t.Helper()
+		if transform := world.GetRef[scene.UITransform](entity); transform.Translation.X.Value != want {
+			t.Fatalf("position(%d)=%v, want %v", entity, transform.Translation.X, want)
+		}
+	}
+	update()
+	position(one, 0)
+	position(two, 10)
+	world.GetMut[scene.Size2D](one).Width = 20
+	update()
+	position(two, 20)
+	scope.Reset([]ecs.Entity{parent, two, first, one})
+	update()
+	position(first, 0)
+	position(one, 10)
+	position(two, 30)
+	// A disabled layout may skip several topology versions before it returns.
+	world.GetMut[Layout](parent).Type = LayoutNone
+	*world.GetMut[scene.SiblingOrder](two) = -2
+	update()
+	world.GetMut[Layout](parent).Type = LayoutHorizontal
+	update()
+	position(two, 0)
+	position(first, 10)
+	position(one, 20)
+	// Reparenting remains visible even when the old and new ancestors are
+	// outside the scope selected by the layout system.
+	world.GetMut[scene.Parent](one).Entity = root
+	update()
+	position(two, 0)
+	position(first, 10)
+	for range 3 {
+		update()
+	}
+	if allocations := testing.AllocsPerRun(100, update); allocations != 0 {
+		t.Fatalf("stable scoped layout allocated %g times", allocations)
 	}
 }
 

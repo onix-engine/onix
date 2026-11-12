@@ -29,7 +29,7 @@ func TestTokenizer(t *testing.T) {
 		t.Fatalf("first token = %#v", got)
 	}
 
-	if got, want := tokens[0].Attributes["id"], "app"; got != want {
+	if got, want := tokens[0].AttrValue("id"), "app"; got != want {
 		t.Fatalf("div id = %q, want %q", got, want)
 	}
 
@@ -66,7 +66,7 @@ func TestTokenizerAcceptsSlashInUnquotedAttributeValue(t *testing.T) {
 	if token.Type != TokenStartTag || token.Data != "img" {
 		t.Fatalf("token = %#v", token)
 	}
-	if got, want := token.Attributes["src"], "http://example.test/icon.png"; got != want {
+	if got, want := token.AttrValue("src"), "http://example.test/icon.png"; got != want {
 		t.Fatalf("src = %q, want %q", got, want)
 	}
 }

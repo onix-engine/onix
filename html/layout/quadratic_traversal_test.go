@@ -76,7 +76,7 @@ func BenchmarkDirtyLayoutTraversal(b *testing.B) {
 			root := dom.NewDocument()
 			parent := root
 			for range count {
-				node := dom.NewElement("div", map[string]string{"style": "height:1px"})
+				node := dom.NewElement("div", dom.Attribute{Name: "style", Value: "height:1px"})
 				parent.AppendChild(node)
 				parent = node
 			}

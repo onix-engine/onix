@@ -461,6 +461,10 @@ func macOSBuildEnvironment(hostOS string, architecture BuildArchitecture, lookPa
 		"CGO_CXXFLAGS="+archFlag,
 		"CGO_LDFLAGS="+archFlag,
 	)
+	if hostOS == "darwin" {
+		// Go adds -lobjc for each Objective-C package.
+		env = appendEnvironmentFlag(env, "CGO_LDFLAGS", "-Wl,-no_warn_duplicate_libraries")
+	}
 	return appendVcpkgEnvironment(env, "darwin", string(architecture))
 }
 

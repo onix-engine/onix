@@ -3,7 +3,6 @@ package html
 import (
 	"fmt"
 	"hash/fnv"
-	"sort"
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
@@ -293,23 +292,16 @@ func htmlComponentScopeClass(template Template, cssText string) string {
 	if template.compiled == nil {
 		_, _ = hash.Write([]byte(template.Source))
 	} else {
-		// Attribute map order must not change a document template's scope.
-		// Reuse one key buffer throughout the traversal.
-		var names []string
+		// Attributes already iterate in name order, keeping document scopes stable.
 		var visit func(*dom.Node)
 		visit = func(node *dom.Node) {
 			_, _ = hash.Write([]byte{byte(node.Type)})
 			_, _ = hash.Write([]byte(node.Data))
 			_, _ = hash.Write([]byte{0})
-			names = names[:0]
-			for name := range node.Attributes {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			for _, name := range names {
+			for name, value := range node.SortedAttributes() {
 				_, _ = hash.Write([]byte(name))
 				_, _ = hash.Write([]byte{0})
-				_, _ = hash.Write([]byte(node.Attributes[name]))
+				_, _ = hash.Write([]byte(value))
 				_, _ = hash.Write([]byte{0})
 			}
 			_, _ = hash.Write([]byte{0})
@@ -434,7 +426,7 @@ func (v *View) Text(ref, value string) bool {
 	if v == nil || v.instance == nil || !v.template.hasRef(ref) {
 		return false
 	}
-	v.instance.Next.Texts[ref] = value
+	v.instance.Next.Texts.set(ref, value)
 	return true
 }
 
@@ -444,7 +436,7 @@ func (v *View) Attr(ref, name, value string) bool {
 		return false
 	}
 	key := htmlComponentAttrKey{Ref: ref, Name: strings.ToLower(strings.TrimSpace(name))}
-	v.instance.Next.Attrs[key] = htmlComponentAttrValue{Value: value}
+	v.instance.Next.Attrs.set(key, htmlComponentAttrValue{Value: value})
 	return true
 }
 
@@ -454,7 +446,7 @@ func (v *View) RemoveAttr(ref, name string) bool {
 		return false
 	}
 	key := htmlComponentAttrKey{Ref: ref, Name: strings.ToLower(strings.TrimSpace(name))}
-	v.instance.Next.Attrs[key] = htmlComponentAttrValue{Removed: true}
+	v.instance.Next.Attrs.set(key, htmlComponentAttrValue{Removed: true})
 	return true
 }
 
@@ -465,7 +457,7 @@ func (v *View) Event(ref string, kind EventKind) bool {
 	if v == nil || v.instance == nil || !v.template.hasRef(ref) || !htmlComponentEventKindSupported(kind) {
 		return false
 	}
-	v.instance.Next.Events[htmlComponentEventKey{Ref: ref, Kind: kind}] = struct{}{}
+	v.instance.Next.Events.set(htmlComponentEventKey{Ref: ref, Kind: kind}, struct{}{})
 	return true
 }
 
@@ -485,14 +477,13 @@ func (v *View) Keyed(ref string, nodes []VNode) bool {
 	if v == nil || v.instance == nil || !v.template.hasRef(ref) {
 		return false
 	}
-	if v.instance.Keyed[ref] == nil {
-		v.instance.Keyed[ref] = &htmlComponentKeyedList{}
+	list := v.instance.Keyed[ref]
+	if list == nil {
+		list = &htmlComponentKeyedList{}
+		v.instance.Keyed.set(ref, list)
 	}
-	list := v.instance.Next.Keyed[ref]
-	values := list.Values[:0]
-	values = append(values, nodes...)
-	list.Values, list.Active = values, true
-	v.instance.Next.Keyed[ref] = list
+	list.Pending.Values = append(list.Pending.Values[:0], nodes...)
+	list.Pending.Active = true
 	return true
 }
 
@@ -555,12 +546,12 @@ type htmlDefinitionRuntime struct {
 type htmlComponentInstance struct {
 	Next              htmlComponentVNodeState
 	Current           htmlComponentVNodeState
-	Keyed             map[string]*htmlComponentKeyedList
+	Keyed             htmlComponentMap[string, *htmlComponentKeyedList]
 	ComponentChildren map[string]*htmlComponentChildList
 	Definition        *htmlDefinitionRuntime
 	Refs              map[string]*dom.Node
 	Handlers          map[string]ClickHandler
-	EventNodes        map[htmlComponentEventKey]*dom.Node
+	EventNodes        htmlComponentMap[htmlComponentEventKey, *dom.Node]
 	renderView        View
 	Roots             []*dom.Node
 	Children          []ecs.Entity
@@ -577,11 +568,20 @@ type htmlComponentInstance struct {
 }
 
 type htmlComponentVNodeState struct {
-	Texts             map[string]string
-	Attrs             map[htmlComponentAttrKey]htmlComponentAttrValue
-	Events            map[htmlComponentEventKey]struct{}
-	Keyed             map[string]htmlComponentVNodeList[VNode]
+	Texts             htmlComponentMap[string, string]
+	Attrs             htmlComponentMap[htmlComponentAttrKey, htmlComponentAttrValue]
+	Events            htmlComponentMap[htmlComponentEventKey, struct{}]
 	ComponentChildren map[string]htmlComponentVNodeList[ComponentVNode]
+}
+
+// Optional bindings allocate on their first write and keep storage across renders.
+type htmlComponentMap[K comparable, V any] map[K]V
+
+func (values *htmlComponentMap[K, V]) set(key K, value V) {
+	if *values == nil {
+		*values = make(htmlComponentMap[K, V])
+	}
+	(*values)[key] = value
 }
 
 type htmlComponentAttrValue struct {
@@ -624,6 +624,7 @@ type htmlComponentKeyedList struct {
 	Nodes    map[*dom.Node]bool
 	Anchor   *dom.Node
 	htmlComponentVNodeChildren
+	Pending htmlComponentVNodeList[VNode]
 }
 
 type htmlComponentChildItem struct {
@@ -831,10 +832,9 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 	}
 	instance := htmlComponentInstance{
 		Page: page, Parent: parent, Key: key, Definition: definition.runtime,
-		Refs: make(map[string]*dom.Node), Handlers: make(map[string]ClickHandler), EventNodes: make(map[htmlComponentEventKey]*dom.Node),
-		Keyed:             make(map[string]*htmlComponentKeyedList),
-		ComponentChildren: make(map[string]*htmlComponentChildList),
-		Current:           newHTMLComponentVNodeState(), Next: newHTMLComponentVNodeState(),
+	}
+	if len(definition.runtime.template.Refs) != 0 {
+		instance.Refs = make(map[string]*dom.Node, len(definition.runtime.template.Refs))
 	}
 	if adoptedRoots != nil {
 		for _, root := range adoptedRoots {
@@ -1299,24 +1299,10 @@ func markHTMLComponentDirty(world *ecs.World, entity ecs.Entity) {
 	}
 }
 
-func newHTMLComponentVNodeState() htmlComponentVNodeState {
-	return htmlComponentVNodeState{
-		Texts: make(map[string]string), Attrs: make(map[htmlComponentAttrKey]htmlComponentAttrValue),
-		Events:            make(map[htmlComponentEventKey]struct{}),
-		Keyed:             make(map[string]htmlComponentVNodeList[VNode]),
-		ComponentChildren: make(map[string]htmlComponentVNodeList[ComponentVNode]),
-	}
-}
-
 func (s *htmlComponentVNodeState) reset() {
 	clear(s.Texts)
 	clear(s.Attrs)
 	clear(s.Events)
-	for ref, list := range s.Keyed {
-		clear(list.Values[:cap(list.Values)])
-		list.Values, list.Active = list.Values[:0], false
-		s.Keyed[ref] = list
-	}
 	for slot, list := range s.ComponentChildren {
 		for index := range cap(list.Values) {
 			list.Values[:cap(list.Values)][index].reset()
@@ -1331,6 +1317,16 @@ func (v *View) reset() {
 		return
 	}
 	v.instance.Next.reset()
+	for _, list := range v.instance.Keyed {
+		list.resetPending()
+	}
+}
+
+func (list *htmlComponentKeyedList) resetPending() {
+	if list.Pending.Active {
+		clear(list.Pending.Values[:cap(list.Pending.Values)])
+		list.Pending.Values, list.Pending.Active = list.Pending.Values[:0], false
+	}
 }
 
 func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *htmlComponentInstance, view *View) {
@@ -1352,7 +1348,7 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 				if node := instance.Refs[ref]; node != nil {
 					Node{world: world, owner: instance.Page, node: node}.SetText(value)
 				}
-				instance.Current.Texts[ref] = value
+				instance.Current.Texts.set(ref, value)
 			}
 		}
 		for key, value := range instance.Next.Attrs {
@@ -1363,16 +1359,16 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 					setHTMLComponentAttribute(world, instance, node, key.Name, value.Value)
 				}
 			}
-			instance.Current.Attrs[key] = value
+			instance.Current.Attrs.set(key, value)
 		}
-		for ref, next := range instance.Next.Keyed {
-			if !next.Active {
+		for ref, list := range instance.Keyed {
+			if !list.Pending.Active {
 				continue
 			}
-			if node, list := instance.Refs[ref], instance.Keyed[ref]; node != nil && list != nil {
-				reconcileHTMLComponentKeyedList(world, instance.Page, node, list, next.Values, instance.Definition.scopeClass)
+			if node := instance.Refs[ref]; node != nil {
+				reconcileHTMLComponentKeyedList(world, instance.Page, node, list, list.Pending.Values, instance.Definition.scopeClass)
 			}
-			instance.Current.Keyed[ref], instance.Next.Keyed[ref] = next, instance.Current.Keyed[ref]
+			list.resetPending()
 		}
 		instance.Next.reset()
 		return
@@ -1393,7 +1389,7 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 		if node := instance.Refs[ref]; node != nil {
 			Node{world: world, owner: instance.Page, node: node}.SetText(value)
 		}
-		instance.Current.Texts[ref] = value
+		instance.Current.Texts.set(ref, value)
 	}
 	for key, old := range instance.Current.Attrs {
 		if _, present := instance.Next.Attrs[key]; present || old.Removed {
@@ -1434,9 +1430,9 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 				bindHTMLComponentClick(world, entity, instance, key.Ref, node)
 			}
 		}
-		instance.EventNodes[key] = instance.Refs[key.Ref]
+		instance.EventNodes.set(key, instance.Refs[key.Ref])
 		addHTMLComponentEventBinding(world, instance.Page, htmlComponentEventBinding{Component: entity, Ref: key.Ref, Kind: key.Kind}, instance.Refs[key.Ref])
-		instance.Current.Events[key] = struct{}{}
+		instance.Current.Events.set(key, struct{}{})
 	}
 	reconcileHTMLComponentKeyed(world, instance)
 	instance.ChildrenPending = len(instance.ComponentChildren) != 0
@@ -1623,14 +1619,17 @@ func reconcileHTMLComponentKeyed(world *ecs.World, instance *htmlComponentInstan
 	for ref, list := range instance.Keyed {
 		container := instance.Refs[ref]
 		if container == nil || container.Type != dom.ElementNode || list == nil {
+			if list != nil {
+				list.resetPending()
+			}
 			continue
 		}
-		state := instance.Next.Keyed[ref]
-		next := state.Values
-		if !state.Active {
+		next := list.Pending.Values
+		if !list.Pending.Active {
 			next = nil
 		}
 		reconcileHTMLComponentKeyedList(world, instance.Page, container, list, next, instance.Definition.scopeClass)
+		list.resetPending()
 	}
 }
 
@@ -1689,7 +1688,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 		}
 		list.Index.values[vnode.Key] = entry
 		if node == nil {
-			node = dom.NewElement(tag, nil)
+			node = dom.NewElement(tag)
 		}
 		syncHTMLComponentVNodeNode(world, owner, node, vnode, children, scopeClass)
 		items = append(items, htmlComponentKeyedItem{Key: vnode.Key, Node: node})
@@ -1810,11 +1809,11 @@ func htmlComponentVoidTag(tag string) bool {
 }
 
 func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *dom.Node, attributes []VNodeAttribute, scopeClass string) {
-	if node == nil || len(node.Attributes) == 0 {
+	if node == nil || node.AttrCount() == 0 {
 		return
 	}
 	if len(attributes) == 0 {
-		for name := range node.Attributes {
+		for name := range node.Attributes() {
 			removeHTMLComponentAttributeWithScope(world, owner, node, name, scopeClass)
 		}
 		return
@@ -1823,7 +1822,7 @@ func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *dom.
 	for _, attribute := range attributes {
 		names[strings.ToLower(strings.TrimSpace(attribute.Name))] = struct{}{}
 	}
-	for name := range node.Attributes {
+	for name := range node.Attributes() {
 		if _, found := names[name]; !found {
 			removeHTMLComponentAttributeWithScope(world, owner, node, name, scopeClass)
 		}
@@ -1835,21 +1834,20 @@ func addHTMLComponentScopeClass(node *dom.Node, scopeClass string) {
 }
 
 func prepareHTMLComponentSubtree(node *dom.Node, scopeClass string, refs map[string]*dom.Node) {
-	// Empty elements need only the common scope class. Share that immutable
-	// map across this subtree; attribute edits detach through dom.Node setters.
-	var scopeAttributes map[string]string
+	// Empty elements share the common scope attribute; edits detach its storage.
+	var scopeAttributes dom.Node
 	var visit func(*dom.Node)
 	visit = func(node *dom.Node) {
 		if node == nil {
 			return
 		}
 		if node.Type == dom.ElementNode && scopeClass != "" {
-			classValue := node.Attributes["class"]
-			if len(node.Attributes) == 0 {
-				if scopeAttributes == nil {
-					scopeAttributes = map[string]string{"class": scopeClass}
+			classValue := node.AttrValue("class")
+			if node.AttrCount() == 0 {
+				if scopeAttributes.AttrCount() == 0 {
+					scopeAttributes.SetAttr("class", scopeClass)
 				}
-				node.ShareAttributes(scopeAttributes)
+				node.ShareAttributes(&scopeAttributes)
 			} else if !htmlClassContains(classValue, scopeClass) {
 				if classValue == "" {
 					classValue = scopeClass
@@ -2005,10 +2003,14 @@ func bindHTMLComponentClick(world *ecs.World, entity ecs.Entity, instance *htmlC
 }
 
 type htmlComponentPageCSS struct {
-	Values map[*htmlDefinitionRuntime]string
-	Counts map[*htmlDefinitionRuntime]int
-	Base   string
-	Order  []*htmlDefinitionRuntime
+	Entries map[*htmlDefinitionRuntime]htmlComponentCSSEntry
+	Base    string
+	Order   []*htmlDefinitionRuntime
+}
+
+type htmlComponentCSSEntry struct {
+	CSS   string
+	Count int
 }
 
 // SetBaseCSS replaces the page stylesheet while preserving mounted component
@@ -2043,17 +2045,22 @@ func attachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlD
 	}
 	state := world.GetMut[htmlComponentPageCSS](page)
 	if state == nil {
-		state = &htmlComponentPageCSS{Base: html.CSS, Values: make(map[*htmlDefinitionRuntime]string), Counts: make(map[*htmlDefinitionRuntime]int)}
+		state = &htmlComponentPageCSS{Base: html.CSS, Entries: make(map[*htmlDefinitionRuntime]htmlComponentCSSEntry)}
 		if err := world.Insert(page, *state); err != nil {
 			return err
 		}
 		state = world.GetMut[htmlComponentPageCSS](page)
 	}
-	if state.Counts[definition] == 0 {
+	entry := state.Entries[definition]
+	if entry.Count == 0 {
 		state.Order = append(state.Order, definition)
-		state.Values[definition] = cssText
+		entry.CSS = cssText
 	}
-	state.Counts[definition]++
+	entry.Count++
+	state.Entries[definition] = entry
+	if entry.Count > 1 {
+		return nil
+	}
 	return rebuildHTMLComponentCSS(world, page, state)
 }
 
@@ -2062,11 +2069,12 @@ func detachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlD
 	if state == nil || definition == nil {
 		return nil
 	}
-	if state.Counts[definition] > 1 {
-		state.Counts[definition]--
+	if entry := state.Entries[definition]; entry.Count > 1 {
+		entry.Count--
+		state.Entries[definition] = entry
+		return nil
 	} else {
-		delete(state.Counts, definition)
-		delete(state.Values, definition)
+		delete(state.Entries, definition)
 		for index, candidate := range state.Order {
 			if candidate == definition {
 				copy(state.Order[index:], state.Order[index+1:])
@@ -2087,7 +2095,7 @@ func rebuildHTMLComponentCSS(world *ecs.World, page ecs.Entity, state *htmlCompo
 	builder.Grow(len(state.Base) + 64)
 	builder.WriteString(state.Base)
 	for _, definition := range state.Order {
-		if cssText := state.Values[definition]; cssText != "" {
+		if cssText := state.Entries[definition].CSS; cssText != "" {
 			if builder.Len() != 0 {
 				builder.WriteByte('\n')
 			}

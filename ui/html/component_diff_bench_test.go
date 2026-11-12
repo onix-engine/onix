@@ -11,12 +11,12 @@ func BenchmarkHTMLComponentDiff(b *testing.B) {
 	world := ecs.NewWorld()
 	spawn := world.NewSpawner1[htmlRenderState]()
 	owner := spawn.Spawn(htmlRenderState{})
-	parent := dom.NewElement("ul", nil)
+	parent := dom.NewElement("ul")
 	old := make([]htmlComponentKeyedItem, 1024)
 	spare := make([]htmlComponentKeyedItem, 0, len(old))
 	next := make([]VNode, len(old))
 	for index := range old {
-		node := dom.NewElement("li", nil)
+		node := dom.NewElement("li")
 		node.AppendChild(dom.NewText("item"))
 		parent.AppendChild(node)
 		old[index] = htmlComponentKeyedItem{Node: node, Key: uint64(index)}

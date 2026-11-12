@@ -54,7 +54,7 @@ func TestWorkspaceComponentPickerFloatsAndDismisses(t *testing.T) {
 	var menu *dom.Node
 	var findMenu func(*dom.Node)
 	findMenu = func(node *dom.Node) {
-		if node.Attributes["id"] == "content-picker-list" {
+		if node.AttrValue("id") == "content-picker-list" {
 			menu = node
 			return
 		}
@@ -63,11 +63,11 @@ func TestWorkspaceComponentPickerFloatsAndDismisses(t *testing.T) {
 		}
 	}
 	findMenu(root)
-	if menu == nil || menu.Attributes["role"] != "menu" {
+	if menu == nil || menu.AttrValue("role") != "menu" {
 		t.Fatal("component picker is not a context menu")
 	}
 	for parent := menu.Parent; parent != nil; parent = parent.Parent {
-		if parent.Attributes["id"] == "inspector" {
+		if parent.AttrValue("id") == "inspector" {
 			t.Fatal("component menu is inside the inspector scroll container")
 		}
 	}

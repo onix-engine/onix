@@ -26,7 +26,7 @@ func TestMotionExtensionsShareAndDetach(t *testing.T) {
 	if shared == nil || styles[first] == styles[second] || styles[first].motion != shared || styles[second].motion != shared || styles[static].motion != nil {
 		t.Fatal("different layout styles did not share motion, or static child inherited it implicitly")
 	}
-	first.Attributes["style"] = "width:10px;transition:inherit;transition-duration:3s;animation:inherit;animation-delay:4s"
+	first.SetAttr("style", "width:10px;transition:inherit;transition-duration:3s;animation:inherit;animation-delay:4s")
 	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestMotionExtensionsShareAndDetach(t *testing.T) {
 			t.Fatal("overriding one child changed a shared motion extension")
 		}
 	}
-	first.Attributes["style"] = "width:10px"
+	first.SetAttr("style", "width:10px")
 	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
