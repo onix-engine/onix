@@ -1,12 +1,14 @@
 package scene
 
 import (
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestSpriteTrail2DSamplesMovementCapsHistoryAndExpires(t *testing.T) {
@@ -54,7 +56,7 @@ func TestSpriteTrail2DSamplesMovementCapsHistoryAndExpires(t *testing.T) {
 	if component.SampleCount() != 2 {
 		t.Fatalf("capped sample count = %d, want 2", component.SampleCount())
 	}
-	if component.samples[0].transform[12] != 6 || component.samples[1].transform[12] != 12 {
+	if component.sample(0).transform[12] != 6 || component.sample(1).transform[12] != 12 {
 		t.Fatalf("unexpected retained samples: %+v", component.samples)
 	}
 
@@ -144,5 +146,90 @@ func TestSpriteTrail2DReserveAndClearKeepStorage(t *testing.T) {
 		trail.Clear()
 	}); allocations != 0 {
 		t.Fatalf("reserved trail update allocated %f objects", allocations)
+	}
+}
+
+func TestSpriteTrailRingKeepsOrderAndReleasesReferences(t *testing.T) {
+	trail := NewSpriteTrail2D()
+	trail.MaxSamples = 4
+	trail.Reserve(4)
+	texture := &graphics.Texture{}
+	for i := 1; i <= 12; i++ {
+		var survivor *spriteTrailSample2D
+		if trail.SampleCount() == 4 {
+			survivor = trail.sample(1)
+		}
+		trail.appendSample(spriteTrailSample2D{sprite: Sprite2D{Texture: texture}, width: float32(i)})
+		if survivor != nil && trail.sample(0) != survivor {
+			t.Fatal("a full trail moved its surviving samples")
+		}
+		for index := range trail.SampleCount() {
+			if trail.sample(index).width != float32(max(1, i-3)+index) {
+				t.Fatal("wrapped trail changed chronological order")
+			}
+		}
+	}
+	trail.MaxSamples = 2
+	trail.appendSample(spriteTrailSample2D{sprite: Sprite2D{Texture: texture}, width: 13})
+	if trail.SampleCount() != 2 || trail.sample(0).width != 12 || trail.sample(1).width != 13 {
+		t.Fatal("lowering the sample limit retained excess history")
+	}
+	trail.Reserve(10)
+	if trail.SampleCount() != 2 || trail.sample(0).width != 12 || trail.sample(1).width != 13 {
+		t.Fatal("growing a wrapped trail lost live snapshots")
+	}
+	trail.Lifetime = 1
+	trail.sample(0).age, trail.sample(1).age = .9, .2
+	survivor := trail.sample(1)
+	trail.advance(.2)
+	if trail.SampleCount() != 1 || trail.sample(0) != survivor || trail.sample(0).width != 13 {
+		t.Fatal("expiration moved or lost the surviving snapshot")
+	}
+	trail.Clear()
+	for _, sample := range trail.samples[:cap(trail.samples)] {
+		if sample.sprite.Texture != nil {
+			t.Fatal("clear or expiration retained a retired texture")
+		}
+	}
+	// Clear a physically wrapped range as well as a grown, linear range.
+	for range 11 {
+		trail.appendSample(spriteTrailSample2D{sprite: Sprite2D{Texture: texture}})
+	}
+	trail.Clear()
+	for _, sample := range trail.samples[:cap(trail.samples)] {
+		if sample.sprite.Texture != nil {
+			t.Fatal("clearing a wrapped trail left an old texture")
+		}
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		trail.appendSample(spriteTrailSample2D{})
+		trail.advance(.01)
+	}); allocations != 0 {
+		t.Fatalf("warm ring updates allocated %g times", allocations)
+	}
+}
+
+func BenchmarkSpriteTrailBuffer(b *testing.B) {
+	for _, count := range []int{24, 1024} {
+		b.Run("ring/"+strconv.Itoa(count), func(b *testing.B) {
+			trail := NewSpriteTrail2D()
+			trail.MaxSamples = count
+			trail.Reserve(count)
+			for range count {
+				trail.appendSample(spriteTrailSample2D{})
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				trail.appendSample(spriteTrailSample2D{})
+			}
+		})
+		b.Run("shift/"+strconv.Itoa(count), func(b *testing.B) {
+			values := make([]spriteTrailSample2D, count)
+			b.ReportAllocs()
+			for b.Loop() {
+				values = slices.Delete(values, 0, 1)
+				values = append(values, spriteTrailSample2D{})
+			}
+		})
 	}
 }

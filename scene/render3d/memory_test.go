@@ -5,12 +5,12 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestExtractionReclaimsCandidateScratch(t *testing.T) {
@@ -32,6 +32,7 @@ func TestExtractionReclaimsCandidateScratch(t *testing.T) {
 		if err := ExtractSystem("").Run(w); err != nil {
 			t.Fatal(err)
 		}
+		w.Maintain()
 	}
 	frame()
 	if len(scratch.Values) != len(entities) {

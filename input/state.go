@@ -3,6 +3,8 @@ package input
 import (
 	"slices"
 	"strings"
+
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 // Modifiers records the modifier keys held at a key press.
@@ -47,6 +49,8 @@ type State struct {
 	textConfig      TextInputConfig
 	textBuffer      TextBuffer
 	textSelection   TextSelection
+	queueRetention  [2]reuse.Retention
+	drainedEvents   int
 	textRevision    uint64
 	nextEventSeq    uint64
 	pointer         Pointer
@@ -110,14 +114,28 @@ func (s *State) Enqueue(event Event) {
 }
 
 // DrainEvents returns events in platform arrival order. The returned slice is
-// owned by the caller until the next Enqueue call.
+// borrowed until ReleaseEvents, EndFrame, or the next Enqueue call.
 func (s *State) DrainEvents() []Event {
 	if s == nil || len(s.events) == 0 {
 		return nil
 	}
 	events := s.events
+	s.drainedEvents = max(s.drainedEvents, len(events))
+	s.queueRetention[0].Record(len(events))
 	s.events = s.events[:0]
 	return events
+}
+
+// ReleaseEvents clears consumed events while preserving events queued since
+// the last drain. Call after processing the borrowed slice.
+func (s *State) ReleaseEvents() {
+	if s == nil {
+		return
+	}
+	if len(s.events) < s.drainedEvents {
+		clear(s.events[len(s.events):s.drainedEvents])
+	}
+	s.drainedEvents = 0
 }
 
 func (s *State) HasPendingEvents() bool {
@@ -184,9 +202,11 @@ func (s *State) EndFrame() {
 	}
 	s.keys.endFrame()
 	s.mouse.endFrame()
-	s.compositionKeys = s.compositionKeys[:0]
+	s.ReleaseEvents()
+	s.events = s.queueRetention[0].Trim(s.events, 32)
 	clear(s.consumedEvents)
-	s.textEdits = s.textEdits[:0]
+	s.clearTextInputEvents()
+	s.textEdits = s.queueRetention[1].Trim(s.textEdits, 16)
 	s.hasSelection = false
 	s.pointer.DeltaX = 0
 	s.pointer.DeltaY = 0
@@ -484,6 +504,8 @@ func (s *State) TextInputConfig() TextInputConfig {
 }
 
 func (s *State) clearTextInputEvents() {
+	s.queueRetention[1].Record(len(s.textEdits))
+	clear(s.textEdits)
 	s.textEdits = s.textEdits[:0]
 	s.compositionKeys = s.compositionKeys[:0]
 }

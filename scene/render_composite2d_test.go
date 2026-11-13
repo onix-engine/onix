@@ -4,10 +4,10 @@ import (
 	"image"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func incrementalFrame(t testing.TB, world *ecs.World, canvas *graphics.Canvas2D) {
@@ -22,6 +22,7 @@ func incrementalFrame(t testing.TB, world *ecs.World, canvas *graphics.Canvas2D)
 	if err := canvas.FinishFrame(); err != nil {
 		t.Fatal(err)
 	}
+	world.Maintain()
 }
 
 func TestRetainedRender2DSparseSnapshotsAndOrder(t *testing.T) {

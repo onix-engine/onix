@@ -564,7 +564,7 @@ func (snapshots *renderSnapshots2D) appendSpriteTrailRenderItems2D[T renderGloba
 		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
 		material := material2DForEntity(world, entity)
 		for sampleIndex := range trail.samples {
-			sample := &trail.samples[sampleIndex]
+			sample := trail.sample(sampleIndex)
 			if !renderItemVisible2D(viewport, sample.transform, sample.anchor, sample.width, sample.height, ui, sample.clip, cull) {
 				continue
 			}

@@ -4,11 +4,11 @@ import (
 	"image"
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Content snapshots belong to their entity, so extracting one changed entity
@@ -743,15 +743,8 @@ func (cache *retainedRender2D) extractDirect(c *graphics.Canvas2D, world *ecs.Wo
 	return items
 }
 
-type renderItemsRetention2DScratch struct{}
-
 // Observe once per extraction, including clean frames where no collector runs.
 func (cache *retainedRender2D) trim(world *ecs.World) {
-	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
-	scratch.ReleaseUnused()
-	scratch.Values = world.FrameValue[renderItemsRetention2DScratch, reuse.Retention]().Trim(scratch.Values, 64)
-	visible := world.FrameScratch[visibleRenderItems2DScratch, uint32]()
-	visible.Values = world.FrameValue[visibleRenderItems2DScratch, reuse.Retention]().Trim(visible.Values, 64)
 	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
 	if world.FrameValue[renderSnapshots2DScratch, reuse.Retention]().TrimCapacity(snapshots.capacity(), 0, 64) != 0 {
 		// These are collector intermediates. Retained owners have copied their

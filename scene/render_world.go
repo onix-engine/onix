@@ -4,12 +4,11 @@ import (
 	"cmp"
 	"reflect"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/internal/smallsort"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type CameraPipeline uint8
@@ -331,6 +330,5 @@ func visibleRenderItems2D(world *ecs.World, items []renderItem2D, camera Extract
 		}
 	}
 	visible.ReleaseUnused()
-	world.FrameValue[visibleRenderItems2DScratch, reuse.Retention]().Record(len(visible.Values))
 	return visible.Values
 }

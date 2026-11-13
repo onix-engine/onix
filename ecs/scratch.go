@@ -36,6 +36,25 @@ type valueCacheKey[Tag, T any] struct{}
 type sliceCacheKey[Tag, T any] struct{}
 type mapCacheKey[Tag any, K comparable, V any] struct{}
 
+type sliceScratch[T any] struct {
+	scratch   Scratch[T]
+	retention reuse.Retention
+	used      bool
+}
+
+func (s *sliceScratch[T]) MaintainCache() {
+	values := &s.scratch
+	if s.used {
+		values.ReleaseUnused()
+	} else {
+		clear(values.Values[:min(cap(values.Values), max(len(values.Values), values.previousLen))])
+		values.Values = values.Values[:0]
+	}
+	values.Values = s.retention.Trim(values.Values, 64)
+	values.previousLen = len(values.Values)
+	s.used = false
+}
+
 type mapScratch[K comparable, V any] struct {
 	values    map[K]V
 	retention reuse.Retention
@@ -87,18 +106,25 @@ func cachedValue[Tag, T any](values map[reflect.Type]any) *T {
 	return value
 }
 
+// FrameScratch borrows reusable storage until the next call with the same
+// types or World.Maintain. Maintenance clears idle references and trims peaks.
 func (world *World) FrameScratch[Tag, T any]() *Scratch[T] {
 	requireWorld(world)
 	key := reflect.TypeFor[sliceCacheKey[Tag, T]]()
 	if value, ok := world.frameScratch[key]; ok {
-		scratch := value.(*Scratch[T])
+		owner := value.(*sliceScratch[T])
+		scratch := &owner.scratch
+		if owner.used {
+			owner.retention.Record(len(scratch.Values))
+		}
 		scratch.previousLen = max(scratch.previousLen, len(scratch.Values))
 		scratch.Values = scratch.Values[:0]
+		owner.used = true
 		return scratch
 	}
-	scratch := &Scratch[T]{}
-	world.frameScratch[key] = scratch
-	return scratch
+	owner := &sliceScratch[T]{used: true}
+	world.frameScratch[key] = owner
+	return &owner.scratch
 }
 
 // FrameScratchMap returns a per-frame map that is cleared on every call. Maps

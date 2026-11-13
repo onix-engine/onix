@@ -140,7 +140,6 @@ func collectRenderSnapshots2D(c *graphics.Canvas2D, world *ecs.World, cull, borr
 	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
 	scratch.Values = collectRenderSnapshotsInto2D(c, world, scratch.Values, cull, borrow)
 	scratch.ReleaseUnused()
-	world.FrameValue[renderItemsRetention2DScratch, reuse.Retention]().Record(len(scratch.Values))
 	return scratch.Values
 }
 

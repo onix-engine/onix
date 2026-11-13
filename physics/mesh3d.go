@@ -151,7 +151,7 @@ func NewTriangleMesh(vertices []Vector3D, indices []uint32) (TriangleMesh, error
 		}
 		scratch.remap[index] = mapped
 	}
-	mesh := TriangleMesh{Vertices: uniqueVertices, Bounds: emptyBounds3D()}
+	mesh := TriangleMesh{Vertices: reuse.Exact(uniqueVertices), Bounds: emptyBounds3D()}
 	mesh.Indices = make([]uint32, 0, len(indices))
 	scratch.refs = reuse.Resize(scratch.refs, len(indices)/3)[:0]
 	for triangle := 0; triangle < len(indices); triangle += 3 {
@@ -175,6 +175,7 @@ func NewTriangleMesh(vertices []Vector3D, indices []uint32) (TriangleMesh, error
 	if len(mesh.Indices) == 0 {
 		return TriangleMesh{}, fmt.Errorf("physics: triangle mesh has no non-degenerate triangles")
 	}
+	mesh.Indices = reuse.Exact(mesh.Indices)
 	mesh.buildBVH(scratch.refs)
 	return mesh, nil
 }

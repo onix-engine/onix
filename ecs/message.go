@@ -3,6 +3,8 @@ package ecs
 import (
 	"iter"
 	"reflect"
+
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 type messageStore interface {
@@ -12,6 +14,7 @@ type messageStore interface {
 type messageBuffer[T any] struct {
 	older      []T
 	newer      []T
+	retention  [2]reuse.Retention
 	olderStart uint64
 	newerStart uint64
 	count      uint64
@@ -59,12 +62,18 @@ func (b *messageBuffer[T]) readInto(cursor *uint64, out []T) []T {
 }
 
 func (b *messageBuffer[T]) advance() {
-	recycled := b.older
-	clear(recycled)
+	recycled := recycleMessages(b.older, &b.retention[0])
 	b.older = b.newer
 	b.olderStart = b.newerStart
-	b.newer = recycled[:0]
+	b.newer = recycled
 	b.newerStart = b.count
+	b.retention[0], b.retention[1] = b.retention[1], b.retention[0]
+}
+
+func recycleMessages[T any](values []T, retention *reuse.Retention) []T {
+	retention.Record(len(values))
+	clear(values)
+	return retention.Trim(values[:0], 64)
 }
 
 // MessageReader tracks consumption of one message type within one world.
@@ -153,15 +162,16 @@ func (world *World) AdvanceMessages() {
 type messageScratchKey[Tag, T any] struct{}
 
 type messageScratch[T any] struct {
-	older   []T
-	scratch Scratch[T]
+	older     []T
+	scratch   Scratch[T]
+	retention [2]reuse.Retention
 }
 
 func (s *messageScratch[T]) advance() {
-	recycled := s.older
-	clear(recycled)
+	recycled := recycleMessages(s.older, &s.retention[0])
 	s.older = s.scratch.Values
-	s.scratch.Values = recycled[:0]
+	s.scratch.Values = recycled
+	s.retention[0], s.retention[1] = s.retention[1], s.retention[0]
 }
 
 // MessageScratch provides two-buffer storage for data borrowed by messages.

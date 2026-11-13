@@ -7,12 +7,12 @@ import (
 	"reflect"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Mesh attaches asset-owned geometry to a scene entity.
@@ -516,8 +516,6 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 	state.extractLocalLights[AreaLight](world)
 
 	meshScratch := world.FrameScratch[extractedMeshes3DScratch, extractedMeshCandidate3D]()
-	meshRetention := world.FrameValue[extractedMeshes3DScratch, reuse.Retention]()
-	meshScratch.Values = meshRetention.Trim(meshScratch.Values, 64)
 	var deformationErr error
 	for entity, access := range world.Query2[Mesh, scene.GlobalTransform]().All {
 		mesh := access.A.Get()
@@ -554,7 +552,6 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		})
 	}
 	meshScratch.ReleaseUnused()
-	meshRetention.Record(len(meshScratch.Values))
 	for _, camera := range renderState.Cameras {
 		if camera.Pipeline != scene.CameraPipeline3D {
 			continue

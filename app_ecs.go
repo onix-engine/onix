@@ -293,6 +293,7 @@ func processInputEventsWithHandlers(context *ecs.SystemContext, handlers *[input
 	if !ok || state == nil {
 		return nil
 	}
+	defer state.ReleaseEvents()
 	for _, event := range state.DrainEvents() {
 		state.ApplyEvent(event)
 		context.World.WriteMessage(event)

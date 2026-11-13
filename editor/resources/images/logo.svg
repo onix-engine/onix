@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Onix — blue and violet emblem</title>
-  <desc id="desc">A cyan, blue and violet open ring crossed by two sweeping ribbons, on a rounded midnight-blue tile. Redrawn entirely with vector paths and gradients.</desc>
+  <title id="title">Onix — cyan and blue emblem</title>
+  <desc id="desc">A cyan and blue open ring crossed by two sweeping ribbons, on a rounded midnight-blue tile. Redrawn entirely with vector paths and gradients.</desc>
   <defs>
     <linearGradient id="tile" x1="180" y1="0" x2="1060" y2="1254" gradientUnits="userSpaceOnUse">
       <stop stop-color="#020b24"/>
@@ -19,7 +19,7 @@
     </radialGradient>
     <linearGradient id="tile-edge" x1="0" y1="0" x2="1254" y2="1254" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0a286d"/>
-      <stop offset=".4" stop-color="#100735"/>
+      <stop offset=".4" stop-color="#071535"/>
       <stop offset=".73" stop-color="#090b3d"/>
       <stop offset="1" stop-color="#2448ff"/>
     </linearGradient>
@@ -36,14 +36,14 @@
     </linearGradient>
     <linearGradient id="lower-ring" x1="832" y1="480" x2="716" y2="1047" gradientUnits="userSpaceOnUse">
       <stop stop-color="#060a35"/>
-      <stop offset=".34" stop-color="#2221c5"/>
-      <stop offset=".65" stop-color="#5527ff"/>
-      <stop offset="1" stop-color="#b733f5"/>
+      <stop offset=".34" stop-color="#214ac5"/>
+      <stop offset=".65" stop-color="#276bff"/>
+      <stop offset="1" stop-color="#338bf5"/>
     </linearGradient>
     <radialGradient id="lower-shade" cx="0" cy="0" r="1" gradientTransform="translate(530 853) rotate(44) scale(277 188)" gradientUnits="userSpaceOnUse">
       <stop stop-color="#00031d" stop-opacity=".98"/>
-      <stop offset=".46" stop-color="#08043e" stop-opacity=".85"/>
-      <stop offset="1" stop-color="#160357" stop-opacity="0"/>
+      <stop offset=".46" stop-color="#040f3e" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#031b57" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="right-shade" cx="0" cy="0" r="1" gradientTransform="translate(919 631) rotate(12) scale(151 235)" gradientUnits="userSpaceOnUse">
       <stop stop-color="#000216" stop-opacity=".92"/>
@@ -53,34 +53,34 @@
       <stop stop-color="#50fff4"/>
       <stop offset=".22" stop-color="#20d8f5"/>
       <stop offset=".49" stop-color="#237afa"/>
-      <stop offset=".66" stop-color="#4334ff"/>
-      <stop offset="1" stop-color="#c04af3"/>
+      <stop offset=".66" stop-color="#346aff"/>
+      <stop offset="1" stop-color="#4aa4f3"/>
     </linearGradient>
     <linearGradient id="cross-edge" x1="466" y1="420" x2="1050" y2="852" gradientUnits="userSpaceOnUse">
       <stop stop-color="#8afff9" stop-opacity=".8"/>
       <stop offset=".5" stop-color="#3496ff" stop-opacity=".15"/>
-      <stop offset="1" stop-color="#df6aff" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#6ac4ff" stop-opacity=".7"/>
     </linearGradient>
     <linearGradient id="front-ribbon" x1="553" y1="503" x2="891" y2="824" gradientUnits="userSpaceOnUse">
       <stop stop-color="#28dce9"/>
       <stop offset=".35" stop-color="#1d96fa"/>
       <stop offset=".72" stop-color="#3466ff"/>
-      <stop offset="1" stop-color="#785cff"/>
+      <stop offset="1" stop-color="#347bff"/>
     </linearGradient>
     <linearGradient id="front-tip" x1="280" y1="977" x2="678" y2="638" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#b6b3ff" stop-opacity=".72"/>
+      <stop stop-color="#b3d9ff" stop-opacity=".72"/>
       <stop offset=".4" stop-color="#7b9eff" stop-opacity=".3"/>
       <stop offset="1" stop-color="#68a9ff" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="front-violet" x1="600" y1="620" x2="650" y2="985" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7650ff" stop-opacity="0"/>
-      <stop offset="1" stop-color="#8058ff" stop-opacity=".85"/>
+    <linearGradient id="front-blue" x1="600" y1="620" x2="650" y2="985" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#508aff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#5895ff" stop-opacity=".85"/>
     </linearGradient>
     <linearGradient id="front-edge" x1="275" y1="975" x2="1096" y2="400" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#d1cdff"/>
+      <stop stop-color="#cdeaff"/>
       <stop offset=".47" stop-color="#79c8ff"/>
       <stop offset=".76" stop-color="#54e9ff"/>
-      <stop offset="1" stop-color="#9a8aff"/>
+      <stop offset="1" stop-color="#8acaff"/>
     </linearGradient>
     <path id="tile-shape" d="M290 1H964C1124 1 1253 130 1253 290V964C1253 1124 1124 1253 964 1253H290C130 1253 1 1124 1 964V290C1 130 130 1 290 1Z"/>
     <path id="ring-bottom" d="M1019 432C1048 486 1064 545 1064 607C1064 846 876 1040 640 1040C555 1040 482 1021 424 984L536 895C569 907 605 912 642 912C798 912 924 775 924 607C924 573 918 539 907 510Z"/>
@@ -98,13 +98,13 @@
     <use href="#ring-bottom" fill="url(#lower-ring)"/>
     <use href="#ring-bottom" fill="url(#lower-shade)"/>
     <use href="#ring-bottom" fill="url(#right-shade)"/>
-    <path d="M424 984C482 1021 555 1040 640 1040C876 1040 1064 846 1064 607" stroke="#af44ff" stroke-opacity=".36" stroke-width="3"/>
+    <path d="M424 984C482 1021 555 1040 640 1040C876 1040 1064 846 1064 607" stroke="#449aff" stroke-opacity=".36" stroke-width="3"/>
     <path d="M315 891C237 813 191 712 191 597C191 372 386 184 620 184C769 184 895 255 966 362H915C884 362 860 373 839 393C783 341 707 309 626 309C463 309 329 438 329 597C329 671 359 738 411 789Z" fill="url(#upper-ring)"/>
     <path d="M315 891C237 813 191 712 191 597C191 372 386 184 620 184C769 184 895 255 966 362M839 393C783 341 707 309 626 309C463 309 329 438 329 597" stroke="url(#upper-gloss)" stroke-width="2.5"/>
     <use href="#cross-shape" fill="url(#cross-ribbon)"/>
     <use href="#cross-shape" stroke="url(#cross-edge)" stroke-width="2.5"/>
     <use href="#front-shape" fill="url(#front-ribbon)"/>
-    <use href="#front-shape" fill="url(#front-violet)"/>
+    <use href="#front-shape" fill="url(#front-blue)"/>
     <use href="#front-shape" fill="url(#front-tip)"/>
     <use href="#front-shape" stroke="url(#front-edge)" stroke-opacity=".6" stroke-width="3"/>
   </g>

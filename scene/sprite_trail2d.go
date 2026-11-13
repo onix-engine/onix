@@ -1,11 +1,9 @@
 package scene
 
 import (
-	"slices"
-
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // SpriteTrail2D records resolved transform snapshots and renders them as fading afterimages.
@@ -13,6 +11,7 @@ import (
 type SpriteTrail2D struct {
 	samples      []spriteTrailSample2D
 	MaxSamples   int
+	head         int
 	lastPosition mgl32.Vec2
 	Lifetime     float32
 	Interval     float32
@@ -127,7 +126,7 @@ func (t *SpriteTrail2D) Clear() {
 	if t == nil {
 		return
 	}
-	t.samples = t.samples[:0]
+	t.discard(len(t.samples))
 	t.elapsed = 0
 	t.lastPosition = mgl32.Vec2{}
 	t.hasLast = false
@@ -139,7 +138,7 @@ func (t *SpriteTrail2D) Reserve(maxSamples int) {
 	if t == nil || maxSamples <= cap(t.samples) {
 		return
 	}
-	t.samples = make([]spriteTrailSample2D, 0, maxSamples)
+	t.grow(maxSamples)
 }
 
 func (t *SpriteTrail2D) normalize() {
@@ -160,19 +159,17 @@ func (t *SpriteTrail2D) normalize() {
 }
 
 func (t *SpriteTrail2D) advance(dt float32) {
-	write := 0
-	for read := range t.samples {
-		sample := &t.samples[read]
+	expired := 0
+	for index := range len(t.samples) {
+		sample := t.sample(index)
 		sample.age += dt
-		if sample.age >= t.Lifetime {
-			continue
+		// Samples are appended in age order, so expiration removes a prefix.
+		if index == expired && sample.age >= t.Lifetime {
+			*sample = spriteTrailSample2D{}
+			expired++
 		}
-		if write != read {
-			t.samples[write] = *sample
-		}
-		write++
 	}
-	t.samples = t.samples[:write]
+	t.advanceHead(expired)
 }
 
 func (t *SpriteTrail2D) shouldSample(position mgl32.Vec2) bool {
@@ -188,10 +185,48 @@ func (t *SpriteTrail2D) shouldSample(position mgl32.Vec2) bool {
 
 func (t *SpriteTrail2D) appendSample(sample spriteTrailSample2D) {
 	if len(t.samples) >= t.MaxSamples {
-		overflow := len(t.samples) - t.MaxSamples + 1
-		t.samples = slices.Delete(t.samples, 0, overflow)
+		t.discard(len(t.samples) - t.MaxSamples + 1)
 	}
-	t.samples = append(t.samples, sample)
+	if len(t.samples) == cap(t.samples) {
+		t.grow(min(t.MaxSamples, max(1, cap(t.samples)*2)))
+	}
+	index := len(t.samples)
+	t.samples = t.samples[:index+1]
+	*t.sample(index) = sample
+}
+
+func (t *SpriteTrail2D) sample(index int) *spriteTrailSample2D {
+	index += t.head
+	if index >= cap(t.samples) {
+		index -= cap(t.samples)
+	}
+	return &t.samples[:cap(t.samples)][index]
+}
+
+func (t *SpriteTrail2D) discard(count int) {
+	for index := range count {
+		*t.sample(index) = spriteTrailSample2D{}
+	}
+	t.advanceHead(count)
+}
+
+func (t *SpriteTrail2D) advanceHead(count int) {
+	if count == 0 {
+		return
+	}
+	t.head = (t.head + count) % cap(t.samples)
+	t.samples = t.samples[:len(t.samples)-count]
+	if len(t.samples) == 0 {
+		t.head = 0
+	}
+}
+
+func (t *SpriteTrail2D) grow(capacity int) {
+	values := make([]spriteTrailSample2D, len(t.samples), capacity)
+	for index := range values {
+		values[index] = *t.sample(index)
+	}
+	t.samples, t.head = values, 0
 }
 
 func (t *SpriteTrail2D) alphaAt(age float32) float32 {

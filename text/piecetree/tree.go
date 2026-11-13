@@ -88,8 +88,16 @@ func (t *Tree) Reset(value string) {
 	t.original, t.snapshot, t.cached = value, value, true
 	t.prefix = len(value)
 	t.appendSnapshot.Reset()
-	t.added = t.added[:0]
-	clear(t.nodes)
+	if cap(t.added) > 64<<10 {
+		t.added = nil
+	} else {
+		t.added = t.added[:0]
+	}
+	// Nodes contain no references and alloc overwrites every reused slot.
+	// Keep a small warm arena, but retire a previous document's large peak.
+	if cap(t.nodes) > max(128, 4*(len(value)/pieceBytes+2)) {
+		t.nodes = nil
+	}
 	t.nodes = t.nodes[:0]
 	t.root, t.free = 0, 0
 	if value != "" {
@@ -585,5 +593,6 @@ func (t *Tree) ApplySnapshot(snapshot string, start, oldEnd, newEnd int) {
 	t.appendSnapshot.Reset()
 }
 
-// RetainedBytes includes the original buffer and discarded edit bytes.
-func (t *Tree) RetainedBytes() int { return len(t.original) + len(t.added) }
+// RetainedBytes counts source text storage, including unused edit capacity.
+// It excludes node storage and materialized snapshots.
+func (t *Tree) RetainedBytes() int { return len(t.original) + cap(t.added) }

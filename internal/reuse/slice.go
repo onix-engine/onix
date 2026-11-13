@@ -1,6 +1,17 @@
 // Package reuse provides operations on reusable scratch storage.
 package reuse
 
+// Exact releases unused backing storage by copying only when capacity exceeds
+// length. Use for finalized payloads that no longer need room for growth.
+func Exact[T any](values []T) []T {
+	if len(values) == cap(values) {
+		return values
+	}
+	result := make([]T, len(values))
+	copy(result, values)
+	return result
+}
+
 // Resize reuses storage when capacity permits. Growth starts with zeroed values;
 // callers fill the result rather than relying on old contents after growth.
 func Resize[T any](values []T, length int) []T {

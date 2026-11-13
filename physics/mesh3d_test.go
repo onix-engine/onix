@@ -18,6 +18,26 @@ func TestTriangleMeshCooksBVHAndDropsDegenerateTriangles(t *testing.T) {
 	}
 }
 
+func TestTriangleMeshOwnsExactCookedCapacity(t *testing.T) {
+	vertices := make([]Vector3D, 30000)
+	triangle := [3]Vector3D{V3(0, 0, 0), V3(1, 0, 0), V3(0, 0, 1)}
+	for i := range vertices {
+		vertices[i] = triangle[i%3]
+	}
+	indices := make([]uint32, 30000)
+	indices[0], indices[1], indices[2] = 0, 1, 2
+	mesh, err := NewTriangleMesh(vertices, indices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mesh.Vertices) != 3 || len(mesh.Indices) != 3 || cap(mesh.Vertices) != 3 || cap(mesh.Indices) != 3 {
+		t.Fatalf("cooked mesh retained input capacity: vertices=%d/%d indices=%d/%d", len(mesh.Vertices), cap(mesh.Vertices), len(mesh.Indices), cap(mesh.Indices))
+	}
+	if hit, ok := mesh.Raycast(V3(.25, 1, .25), V3(0, -1, 0), 10); !ok || hit.Distance != 1 {
+		t.Fatal("compacted cooked mesh lost its collision geometry")
+	}
+}
+
 func TestTriangleMeshBVHAllocatesExactlyAndIndexesEveryTriangle(t *testing.T) {
 	const grid = 24
 	vertices := make([]Vector3D, 0, (grid+1)*(grid+1))
