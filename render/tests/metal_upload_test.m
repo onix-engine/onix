@@ -74,6 +74,7 @@ __attribute__((objc_root_class))
 typedef void *CVMetalTextureCacheRef;
 typedef void *CVMetalTextureRef;
 typedef struct { double x, y, width, height, near, far; } MTLViewport;
+typedef struct { double red, green, blue, alpha; } MTLClearColor;
 typedef struct { NSUInteger x, y, width, height; } MTLScissorRect;
 typedef enum { MTLCullModeNone, MTLCullModeFront, MTLCullModeBack } MTLCullMode;
 #define MTLWindingCounterClockwise 0
@@ -99,6 +100,7 @@ static void onix_metal_apply_dynamic_state(OnixMetalDriver *driver) { (void)driv
 static void onix_metal_set_error(const char *message) { (void)message; }
 // GPU pipeline creation is covered by metal_lazy_test.m on Apple hardware.
 static int onix_metal_require_depth(OnixMetalDriver *driver) { (void)driver; return 1; }
+static int onix_metal_require_encoder(OnixMetalDriver *driver) { return driver->encoder != nil; }
 static id<MTLRenderPipelineState> onix_metal_mesh_pipeline(OnixMetalDriver *driver, int transparent, uint32_t blend, int picking, int variant) {
 	(void)transparent; (void)blend; (void)picking; (void)variant;
 	return (id<MTLRenderPipelineState>)driver->device;

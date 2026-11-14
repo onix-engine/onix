@@ -35,6 +35,7 @@ static void require(int success, const char *message) {
 @end
 
 static void finish_frame(OnixMetalDriver *driver, uint8_t *pixels) {
+	if (pixels != NULL) require(onix_metal_require_encoder(driver), "materialize clear-only surface");
 	[driver->encoder endEncoding];
 	[driver->encoder release];
 	driver->encoder = nil;

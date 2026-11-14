@@ -2666,7 +2666,7 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 		inheritedInput = state.BoxRenderings[box.Parent.Node].Input
 	}
 	rendered.setInputContext(inheritedInput, htmlBoxInput{Control: control, FocusOwner: focusOwner, ControlRect: controlRect})
-	bindHTMLBoxNodeEvents(world, owner, state, box, baseStack, passThrough, visible)
+	bindHTMLBoxNodeEvents(world, owner, state, box, state.Children[entityStart:], baseStack, passThrough, visible)
 	state.EmittingBox = nil
 	if state.LocalReconcile {
 		return
@@ -2686,9 +2686,26 @@ func htmlSpawnBoxesPaint(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 // bindHTMLBoxNodeEvents installs direct DOM-node callbacks on the generated
 // input entity for one laid-out box. Nodes without a painted surface get
 // a transparent target so their layout box remains pointer-addressable.
-func bindHTMLBoxNodeEvents(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, stackIndex int, passThrough, visible bool) {
+func bindHTMLBoxNodeEvents(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, entities []ecs.Entity, stackIndex int, passThrough, visible bool) {
 	if state == nil || box == nil || box.Node == nil || len(state.NodeEvents) == 0 {
 		return
+	}
+	// Inline text and images have their own input targets. Route their events
+	// through DOM ancestors even when the link has no independent layout box.
+	for _, entity := range entities {
+		child, ok := world.Get[htmlChild](entity)
+		if !ok || !world.Has[scene.InputTarget2D](entity) {
+			continue
+		}
+		for node := child.Node; node != nil; node = node.Parent {
+			if isHTMLControlNode(node) {
+				break // Native controls already route their descendants' input.
+			}
+			if _, bound := state.NodeEvents[node]; bound {
+				installHTMLNodeEventHandler(world, owner, child.Node, entity)
+				break
+			}
+		}
 	}
 	if _, bound := state.NodeEvents[box.Node]; !bound {
 		return
@@ -2722,7 +2739,11 @@ func bindHTMLNodeEvents(world *ecs.World, owner ecs.Entity, state *htmlRenderSta
 	if world == nil || state == nil || box == nil || len(state.NodeEvents) == 0 {
 		return
 	}
-	bindHTMLBoxNodeEvents(world, owner, state, box, htmlBoxStackIndex(box, stackIndex), passThrough, visible)
+	var entities []ecs.Entity
+	if rendered := state.BoxRenderings[box.Node]; rendered != nil {
+		entities = rendered.Entities
+	}
+	bindHTMLBoxNodeEvents(world, owner, state, box, entities, htmlBoxStackIndex(box, stackIndex), passThrough, visible)
 	for _, child := range box.Children {
 		bindHTMLNodeEvents(world, owner, state, child, passThrough, visible, stackIndex)
 	}
@@ -2820,10 +2841,16 @@ func dispatchHTMLNodePointer(world *ecs.World, owner ecs.Entity, node *dom.Node,
 	if state == nil {
 		return
 	}
-	binding, ok := state.NodeEvents[node]
-	if !ok {
+	for node != nil {
+		if _, bound := state.NodeEvents[node]; bound {
+			break
+		}
+		node = node.Parent
+	}
+	if node == nil {
 		return
 	}
+	binding := state.NodeEvents[node]
 	arena := world.FrameValue[htmlPointerEventArenaTag, htmlPointerEventArena]()
 	index := len(arena.Events)
 	arena.Events = append(arena.Events, PointerEvent{
@@ -2850,15 +2877,7 @@ func dispatchHTMLNodePointer(world *ecs.World, owner ecs.Entity, node *dom.Node,
 		arena.Events = arena.Events[:0]
 	}
 	if context.Event.Kind == scene.InputEventTap && !context.Handled {
-		for ancestor := node.Parent; ancestor != nil; ancestor = ancestor.Parent {
-			if _, bound := state.NodeEvents[ancestor]; !bound {
-				continue
-			}
-			dispatchHTMLNodePointer(world, owner, ancestor, context)
-			if context.Handled {
-				break
-			}
-		}
+		dispatchHTMLNodePointer(world, owner, node.Parent, context)
 	}
 }
 

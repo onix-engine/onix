@@ -85,6 +85,65 @@ func TestHTMLNodePointerAndClickCallbacks(t *testing.T) {
 	}
 }
 
+func TestHTMLInlineLinkCallbacksFollowDOMAncestors(t *testing.T) {
+	for _, label := range []string{"冲刺活动开发文档", "<code>guide.md</code>"} {
+		t.Run(label, func(t *testing.T) {
+			world, owner := incrementalHTMLFixture(t, `<div id="outer"><p id="paragraph">已保存：<a id="link" href="guide.md">`+label+`</a>。</p></div>`)
+			link, ok := NodeByID(world, owner, "link")
+			if !ok {
+				t.Fatal("missing link")
+			}
+			paragraph, _ := NodeByID(world, owner, "paragraph")
+			outer, _ := NodeByID(world, owner, "outer")
+			clicks, bubbled, outerClicks := 0, 0, 0
+			link.OnClick(func(*PointerEvent) { clicks++ })
+			paragraph.OnClick(func(*PointerEvent) { bubbled++ })
+			outer.OnClick(func(*PointerEvent) { outerClicks++ })
+			if err := Sync(world); err != nil {
+				t.Fatal(err)
+			}
+			var fragments []ecs.Entity
+			for entity, access := range world.Query2[htmlChild, scene.Text2D]().All {
+				child := access.A.Get()
+				if child.Owner != owner {
+					continue
+				}
+				for node := child.Node; node != nil; node = node.Parent {
+					if node == link.node {
+						fragments = append(fragments, entity)
+						break
+					}
+				}
+			}
+			if len(fragments) == 0 {
+				t.Fatal("missing link text fragments")
+			}
+			for _, entity := range fragments {
+				scene.DispatchInputEvent(world, scene.InputEvent{Entity: entity, Kind: scene.InputEventTap})
+			}
+			if clicks != len(fragments) || bubbled != clicks || outerClicks != clicks {
+				t.Fatalf("inline clicks = %d, bubbled = %d, outer = %d, fragments = %d", clicks, bubbled, outerClicks, len(fragments))
+			}
+			entity := fragments[0]
+			event := scene.InputEvent{Entity: entity, Kind: scene.InputEventTap}
+			scene.DispatchInputEvent(world, event)
+			if n := testing.AllocsPerRun(100, func() { scene.DispatchInputEvent(world, event) }); n != 0 {
+				t.Fatalf("warm inline link dispatch allocated %g", n)
+			}
+			before := clicks
+			link.OnClick(nil)
+			if err := Sync(world); err != nil {
+				t.Fatal(err)
+			}
+			previous := bubbled
+			scene.DispatchInputEvent(world, event)
+			if clicks != before || bubbled != previous+1 {
+				t.Fatal("removing the link callback lost DOM event routing")
+			}
+		})
+	}
+}
+
 func TestHTMLLinearGradientBackgroundCreatesSpriteTexture(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="gradient" style="width:40px;height:20px;background:linear-gradient(to right,#ef4444,#3b82f6)"></div>`)
 	found := false

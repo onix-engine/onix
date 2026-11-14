@@ -119,6 +119,8 @@ struct OnixMetalDriver {
 	OnixMetalUploadFrame uploads[ONIX_METAL_FRAMES_IN_FLIGHT];
 	MTLRenderPassDescriptor *surface_pass;
 	MTLRenderPassDescriptor *target_pass;
+	MTLClearColor clear_color;
+	int surface_initialized;
 	uint32_t frame_index;
     MTLViewport viewport;
     MTLScissorRect scissor;
@@ -501,7 +503,7 @@ int onix_metal_destroy_mesh_shader(OnixMetalDriver *driver, uint32_t shader) {
 		onix_metal_set_error("Metal mesh shader is already destroyed");
 		return 0;
 	}
-	uint32_t frame_index = driver->encoder != nil
+	uint32_t frame_index = driver->command_buffer != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
 	if (pipeline->opaque != nil) [driver->frame_resources[frame_index] addObject:pipeline->opaque];
@@ -574,7 +576,7 @@ int onix_metal_destroy_material2d_shader(OnixMetalDriver *driver, uint32_t shade
 		onix_metal_set_error("invalid Metal Material2D shader");
 		return 0;
 	}
-	uint32_t frame_index = driver->encoder != nil
+	uint32_t frame_index = driver->command_buffer != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
 	for (uint32_t depth = 0; depth < 3; depth++) {
@@ -602,24 +604,41 @@ static int onix_metal_create_depth_texture(OnixMetalDriver *driver, uint32_t wid
 	return 1;
 }
 
-// Resume the surface without discarding any preceding 2D or 3D draws.
+// Acquire the drawable only when the surface is actually used. Offscreen work
+// can be encoded first without occupying a display buffer or clearing it twice.
 static int onix_metal_resume_surface(OnixMetalDriver *driver, MTLLoadAction depth_load) {
-	MTLRenderPassDescriptor *pass = driver->surface_pass;
-	pass.colorAttachments[0].texture = driver->drawable.texture;
-	pass.colorAttachments[0].loadAction = MTLLoadActionLoad;
-	pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-	pass.depthAttachment.texture = driver->depth_texture;
-	pass.depthAttachment.loadAction = depth_load;
-	pass.depthAttachment.clearDepth = 0.0;
-	pass.depthAttachment.storeAction = MTLStoreActionStore;
-	driver->encoder = [[driver->command_buffer renderCommandEncoderWithDescriptor:pass] retain];
-	pass.colorAttachments[0].texture = nil;
-	pass.depthAttachment.texture = nil;
-	if (driver->encoder == nil) {
-		onix_metal_set_error("Metal surface encoder restoration failed");
-		return 0;
+	@autoreleasepool {
+		if (driver->drawable == nil) {
+			driver->drawable = [[driver->layer nextDrawable] retain];
+			if (driver->drawable == nil) {
+				onix_metal_set_error("CAMetalLayer returned no drawable");
+				return 0;
+			}
+		}
+		MTLRenderPassDescriptor *pass = driver->surface_pass;
+		pass.colorAttachments[0].texture = driver->drawable.texture;
+		pass.colorAttachments[0].loadAction = driver->surface_initialized ? MTLLoadActionLoad : MTLLoadActionClear;
+		pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+		pass.colorAttachments[0].clearColor = driver->clear_color;
+		pass.depthAttachment.texture = driver->depth_texture;
+		pass.depthAttachment.loadAction = driver->surface_initialized ? depth_load : MTLLoadActionClear;
+		pass.depthAttachment.clearDepth = 0.0;
+		pass.depthAttachment.storeAction = MTLStoreActionStore;
+		driver->encoder = [[driver->command_buffer renderCommandEncoderWithDescriptor:pass] retain];
+		pass.colorAttachments[0].texture = nil;
+		pass.depthAttachment.texture = nil;
+		if (driver->encoder == nil) {
+			onix_metal_set_error("Metal surface encoder restoration failed");
+			return 0;
+		}
+		driver->surface_initialized = 1;
+		return 1;
 	}
-	return 1;
+}
+
+static int onix_metal_require_encoder(OnixMetalDriver *driver) {
+	return driver->encoder != nil || (driver->command_buffer != nil &&
+		driver->active_render_target == 0 && onix_metal_resume_surface(driver, MTLLoadActionLoad));
 }
 
 static int onix_metal_has_depth(OnixMetalDriver *driver) {
@@ -658,7 +677,7 @@ static int onix_metal_require_depth(OnixMetalDriver *driver) {
 		}
 	}
 	if (driver->active_render_target != 0 || driver->depth_texture != nil) return 1;
-	if (!onix_metal_create_depth_texture(driver, driver->drawable.texture.width, driver->drawable.texture.height)) return 0;
+	if (!onix_metal_create_depth_texture(driver, driver->layer.drawableSize.width, driver->layer.drawableSize.height)) return 0;
 	[driver->encoder endEncoding];
 	[driver->encoder release];
 	driver->encoder = nil;
@@ -702,6 +721,10 @@ OnixMetalDriver *onix_metal_create(void *layer_pointer, uint32_t width, uint32_t
         driver->layer.device = driver->device;
         driver->layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
         driver->layer.framebufferOnly = YES;
+        // A third full-size drawable costs another surface allocation. Acquire
+        // late and keep two presentation buffers while uploads retain their
+        // independent three-frame lifetime.
+        driver->layer.maximumDrawableCount = 2;
         driver->layer.drawableSize = CGSizeMake(width, height);
         MTLSamplerAddressMode modes[] = {MTLSamplerAddressModeClampToEdge, MTLSamplerAddressModeRepeat, MTLSamplerAddressModeMirrorRepeat};
         MTLSamplerDescriptor *sampler = [[MTLSamplerDescriptor alloc] init];
@@ -952,7 +975,8 @@ static void onix_metal_trim_readback(OnixMetalDriver *driver) {
 
 int onix_metal_begin_frame(OnixMetalDriver *driver, const float clear_color[4]) {
 	@autoreleasepool {
-		if (driver == NULL || driver->encoder != nil || driver->active_render_target != 0) return driver != NULL;
+		if (driver == NULL || clear_color == NULL) return 0;
+		if (driver->command_buffer != nil) return 1;
 		onix_metal_trim_readback(driver);
 		uint32_t frame_index = driver->frame_index;
 		if (driver->inflight_commands[frame_index] != nil) {
@@ -962,38 +986,13 @@ int onix_metal_begin_frame(OnixMetalDriver *driver, const float clear_color[4]) 
 			[driver->frame_resources[frame_index] removeAllObjects];
 		}
 		onix_metal_reset_uploads(&driver->uploads[frame_index]);
-		driver->drawable = [[driver->layer nextDrawable] retain];
-        if (driver->drawable == nil) {
-            onix_metal_set_error("CAMetalLayer returned no drawable");
-            return 0;
-        }
 		driver->command_buffer = [[driver->queue commandBuffer] retain];
 		if (driver->command_buffer == nil) {
 			onix_metal_set_error("Metal command buffer allocation failed");
-			[driver->drawable release];
-			driver->drawable = nil;
 			return 0;
 		}
-        MTLRenderPassDescriptor *pass = driver->surface_pass;
-        pass.colorAttachments[0].texture = driver->drawable.texture;
-        pass.colorAttachments[0].loadAction = MTLLoadActionClear;
-        pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-        pass.colorAttachments[0].clearColor = MTLClearColorMake(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-		pass.depthAttachment.texture = driver->depth_texture;
-		pass.depthAttachment.loadAction = MTLLoadActionClear;
-		pass.depthAttachment.storeAction = MTLStoreActionStore;
-		pass.depthAttachment.clearDepth = 0.0;
-		driver->encoder = [[driver->command_buffer renderCommandEncoderWithDescriptor:pass] retain];
-		pass.colorAttachments[0].texture = nil;
-		pass.depthAttachment.texture = nil;
-        if (driver->encoder == nil) {
-            onix_metal_set_error("Metal render encoder creation failed");
-			[driver->command_buffer release];
-			[driver->drawable release];
-			driver->command_buffer = nil;
-			driver->drawable = nil;
-            return 0;
-        }
+		driver->clear_color = MTLClearColorMake(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+		driver->surface_initialized = 0;
         return 1;
     }
 }
@@ -1054,10 +1053,12 @@ static void onix_metal_apply_dynamic_state(OnixMetalDriver *driver) {
 }
 
 int onix_metal_present(OnixMetalDriver *driver) {
-	if (driver == NULL || driver->encoder == nil || driver->active_render_target != 0) {
+	if (driver == NULL || driver->command_buffer == nil || driver->active_render_target != 0) {
 		if (driver != NULL && driver->active_render_target != 0) onix_metal_set_error("cannot present while a Metal render target is active");
 		return driver != NULL && driver->active_render_target == 0;
 	}
+	// A clear-only frame still needs a surface pass and presentation.
+	if (!onix_metal_require_encoder(driver)) return 0;
 	[driver->encoder endEncoding];
 	[driver->command_buffer presentDrawable:driver->drawable];
 	[driver->command_buffer commit];
@@ -1247,7 +1248,7 @@ int onix_metal_destroy_texture(OnixMetalDriver *driver, uint32_t handle) {
 		onix_metal_set_error("invalid Metal texture destruction");
 		return 0;
 	}
-	uint32_t frame_index = driver->encoder != nil
+	uint32_t frame_index = driver->command_buffer != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
 	[driver->frame_resources[frame_index] addObject:driver->textures[handle - 1].texture];
@@ -1268,7 +1269,7 @@ static int onix_metal_render_target_slot(OnixMetalDriver *driver, uint32_t *slot
 
 static void onix_metal_retire_target_depth(OnixMetalDriver *driver, OnixMetalRenderTarget *target) {
 	if (target->depth_texture == nil) return;
-	uint32_t frame_index = driver->encoder != nil
+	uint32_t frame_index = driver->command_buffer != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
 	[driver->frame_resources[frame_index] addObject:target->depth_texture];
@@ -1404,7 +1405,7 @@ int onix_metal_begin_render_target(
 	double clear_depth,
 	int clear_color_enabled,
 	int clear_depth_enabled) {
-	if (driver == NULL || driver->encoder == nil || driver->command_buffer == nil || driver->active_render_target != 0 ||
+	if (driver == NULL || driver->command_buffer == nil || driver->active_render_target != 0 ||
 		handle == 0 || handle > driver->target_slots.count || clear_color == NULL) {
 		onix_metal_set_error("invalid Metal render target begin");
 		return 0;
@@ -1432,11 +1433,12 @@ int onix_metal_begin_render_target(
 		pass.depthAttachment.storeAction = MTLStoreActionStore;
 		pass.depthAttachment.clearDepth = clear_depth;
 	}
-	driver->encoder = [[driver->command_buffer renderCommandEncoderWithDescriptor:pass] retain];
+	@autoreleasepool {
+		driver->encoder = [[driver->command_buffer renderCommandEncoderWithDescriptor:pass] retain];
+	}
 	pass.colorAttachments[0].texture = nil;
 	pass.depthAttachment.texture = nil;
 	if (driver->encoder == nil) {
-		onix_metal_resume_surface(driver, MTLLoadActionLoad);
 		onix_metal_set_error("Metal render target encoder creation failed");
 		return 0;
 	}
@@ -1453,7 +1455,6 @@ int onix_metal_end_render_target(OnixMetalDriver *driver) {
 	[driver->encoder endEncoding];
 	[driver->encoder release];
 	driver->encoder = nil;
-	if (!onix_metal_resume_surface(driver, MTLLoadActionLoad)) return 0;
 	driver->active_render_target = 0;
 	return 1;
 }
@@ -1562,7 +1563,7 @@ int onix_metal_destroy_mesh(OnixMetalDriver *driver, uint32_t handle) {
 		return 0;
 	}
 	OnixMetalMesh *mesh = &driver->meshes[handle - 1];
-	uint32_t frame_index = driver->encoder != nil
+	uint32_t frame_index = driver->command_buffer != nil
 		? driver->frame_index
 		: (driver->frame_index + ONIX_METAL_FRAMES_IN_FLIGHT - 1) % ONIX_METAL_FRAMES_IN_FLIGHT;
 	[driver->frame_resources[frame_index] addObject:mesh->vertices];
@@ -1612,7 +1613,7 @@ static int onix_metal_upload(OnixMetalDriver *driver, const void *data, NSUInteg
 }
 
 int onix_metal_draw_sprites(OnixMetalDriver *driver, const OnixMetalSpriteUniforms *uniforms, const OnixMetalInstance *instances, uint32_t instance_count, const OnixNativeSpriteDraw *draws, uint32_t draw_count) {
-	if (driver == NULL || driver->encoder == nil || uniforms == NULL || instances == NULL || instance_count == 0 || draws == NULL || draw_count == 0) {
+	if (driver == NULL || (driver->command_buffer == nil && driver->encoder == nil) || uniforms == NULL || instances == NULL || instance_count == 0 || draws == NULL || draw_count == 0) {
 		onix_metal_set_error("invalid Metal sprite draw");
 		return 0;
 	}
@@ -1635,6 +1636,7 @@ int onix_metal_draw_sprites(OnixMetalDriver *driver, const OnixMetalSpriteUnifor
 			}
 		}
 	}
+	if (!onix_metal_require_encoder(driver)) return 0;
 	OnixNativeUpload instance_upload;
 	if (!onix_metal_upload(driver, NULL, byte_length, 16, 0, &instance_upload)) return 0;
 	id<MTLBuffer> instance_buffer = (id<MTLBuffer>)(uintptr_t)instance_upload.resource;
@@ -1695,10 +1697,11 @@ int onix_metal_draw_sprites(OnixMetalDriver *driver, const OnixMetalSpriteUnifor
 }
 
 int onix_metal_draw_shapes(OnixMetalDriver *driver, const OnixMetalSpriteUniforms *uniforms, const OnixMetalShapeInstance *instances, uint32_t instance_count) {
-	if (driver == NULL || driver->encoder == nil || uniforms == NULL || instances == NULL || instance_count == 0) {
+	if (driver == NULL || (driver->command_buffer == nil && driver->encoder == nil) || uniforms == NULL || instances == NULL || instance_count == 0) {
 		onix_metal_set_error("invalid Metal shape draw");
 		return 0;
 	}
+	if (!onix_metal_require_encoder(driver)) return 0;
 	NSUInteger byte_length = (NSUInteger)instance_count * sizeof(OnixMetalShapeInstance);
 	OnixNativeUpload instance_upload;
 	if (!onix_metal_upload(driver, instances, byte_length, 16, 0, &instance_upload)) return 0;
@@ -1732,7 +1735,7 @@ int onix_metal_draw_meshes(
 	uint32_t deformation_word_count,
 	const OnixNativeMeshDraw3D *draws,
 	uint32_t draw_count) {
-	if (driver == NULL || driver->encoder == nil || uniforms == NULL || instances == NULL || instance_count == 0 || deformation_words == NULL || deformation_word_count == 0 || draws == NULL || draw_count == 0) {
+	if (driver == NULL || (driver->command_buffer == nil && driver->encoder == nil) || uniforms == NULL || instances == NULL || instance_count == 0 || deformation_words == NULL || deformation_word_count == 0 || draws == NULL || draw_count == 0) {
 		onix_metal_set_error("invalid Metal mesh draw");
 		return 0;
 	}
@@ -1764,7 +1767,7 @@ int onix_metal_draw_meshes(
 			return 0;
 		}
 	}
-	if (!onix_metal_require_depth(driver)) return 0;
+	if (!onix_metal_require_depth(driver) || !onix_metal_require_encoder(driver)) return 0;
 	OnixNativeUpload vertex_upload = {0}, index_upload = {0}, instance_upload, uniform_upload;
 	if (dynamic && (!onix_metal_upload(driver, vertices, (NSUInteger)vertex_count * sizeof(*vertices), 16, 1, &vertex_upload) ||
 		!onix_metal_upload(driver, indices, (NSUInteger)index_count * sizeof(*indices), 16, 1, &index_upload))) return 0;

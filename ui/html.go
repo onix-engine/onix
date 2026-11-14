@@ -175,9 +175,14 @@ func syncHTMLRuntime(context *ecs.SystemContext) error {
 	if context == nil || context.World == nil {
 		return nil
 	}
+	request, _ := context.World.GetResource[*scene.RenderRequest]()
+	needsFrame := request != nil && htmlui.NeedsFrame(context.World)
 	state, preserve := captureHTMLFocusRebuildState(context.World)
 	if err := htmlui.SyncSystem("").System(context); err != nil {
 		return err
+	}
+	if needsFrame {
+		request.Request()
 	}
 	enrichHTMLControls(context.World)
 	if preserve && (!context.World.IsAlive(state.Entity) || !context.World.Has[htmlui.Focusable](state.Entity)) {
