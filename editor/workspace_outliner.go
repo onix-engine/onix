@@ -93,15 +93,15 @@ func (a *ModuleEditor) outlinerScroll(world *ecs.World) *scene.UIScroll {
 	if a.Document == nil || len(a.Document.Spec.Scenes) == 0 {
 		return nil
 	}
-	control, ok := htmlui.ControlByID(world, a.shell, "scene:"+url.PathEscape(string(a.Document.Spec.Scenes[0])))
+	node, ok := htmlui.NodeByID(world, a.shell, "scene-tree-viewport")
 	if !ok {
 		return nil
 	}
-	content, ok := world.Get[htmlui.ScrollContent](control)
+	area, ok := node.ScrollContainer()
 	if !ok {
 		return nil
 	}
-	return world.GetMut[scene.UIScroll](content.Area)
+	return world.GetMut[scene.UIScroll](area)
 }
 
 func (a *ModuleEditor) captureOutlinerScroll(world *ecs.World) {
@@ -292,11 +292,11 @@ func (a *ModuleEditor) updateOutlinerMenu(in *input.State) {
 	if !in.MousePressed(input.MouseRight) {
 		return
 	}
-	if a.outlinerContains("resource-panel", p.X, p.Y) {
+	if x, y, inside := a.outlinerContentPoint("resource-panel", p.X, p.Y); inside {
 		a.contextOpen, a.resourceMenuOpen = false, false
 		a.contextFile = ""
 		for _, file := range a.files {
-			if a.outlinerContains("file:"+url.PathEscape(file.Path), p.X, p.Y) {
+			if a.outlinerContains("file:"+url.PathEscape(file.Path), x, y) {
 				a.contextFile = file.Path
 				a.lastFile = file.Path
 				break
@@ -308,14 +308,15 @@ func (a *ModuleEditor) updateOutlinerMenu(in *input.State) {
 		a.changed()
 		return
 	}
-	if !a.outlinerContains("scene-panel", p.X, p.Y) {
+	x, y, inside := a.outlinerContentPoint("scene-tree-viewport", p.X, p.Y)
+	if !inside {
 		return
 	}
 	a.fileMenuOpen = false
 	a.contextScene, a.contextParent, a.contextElement, a.contextResource, a.contextMod = a.Document.Active, "", "", "", ""
 	a.contextSlot = ""
 	for _, row := range a.rows {
-		if a.outlinerContains(a.treeRowControlID(row), p.X, p.Y) {
+		if a.outlinerContains(a.treeRowControlID(row), x, y) {
 			a.contextScene, a.contextParent = row.Scene, row.ID
 			a.contextElement, a.contextMod = row.Element, row.Mod
 			a.contextResource = row.Resource
@@ -325,7 +326,7 @@ func (a *ModuleEditor) updateOutlinerMenu(in *input.State) {
 	}
 	if a.contextParent == "" {
 		for _, id := range a.Document.Spec.Scenes {
-			if a.outlinerContains("scene:"+url.PathEscape(string(id)), p.X, p.Y) {
+			if a.outlinerContains("scene:"+url.PathEscape(string(id)), x, y) {
 				a.contextScene = id
 				break
 			}
@@ -342,6 +343,21 @@ func (a *ModuleEditor) updateOutlinerMenu(in *input.State) {
 	a.resourceMenuOpen = false
 	a.menuOpen, a.submenu, a.dragID = "", "", ""
 	a.changed()
+}
+
+// Map the pointer into layout coordinates once before scanning scrolled rows.
+// Test the viewport first so clipped rows cannot receive context actions.
+func (a *ModuleEditor) outlinerContentPoint(id string, x, y float32) (float32, float32, bool) {
+	node, ok := htmlui.NodeByID(a.world, a.shell, id)
+	if !ok || !workspaceNodeContains(node, x, y) {
+		return x, y, false
+	}
+	if area, ok := node.ScrollContainer(); ok {
+		if offset, ok := scene.GetUIScrollOffset(a.world, area); ok {
+			x, y = x-offset[0], y-offset[1]
+		}
+	}
+	return x, y, true
 }
 
 func (a *ModuleEditor) outlinerContains(id string, x, y float32) bool {

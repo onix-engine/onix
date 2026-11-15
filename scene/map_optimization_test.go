@@ -22,6 +22,7 @@ func TestRenderHierarchySparseDenseAndGeneration(t *testing.T) {
 	for _, entity := range entities {
 		cache.resolve(w, entity)
 	}
+	cache.MaintainCache()
 	if cache.sparse != nil || cache.values.Len() != len(entities) {
 		t.Fatal("dense population did not adopt slot indexing")
 	}
@@ -37,6 +38,7 @@ func TestRenderHierarchySparseDenseAndGeneration(t *testing.T) {
 	}
 	cache.resetValues()
 	cache.resolve(w, replacement)
+	cache.MaintainCache()
 	if cache.values.Len() != 0 || len(cache.sparse) != 1 {
 		t.Fatal("sparse reset retained dense storage")
 	}

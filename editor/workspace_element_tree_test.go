@@ -1,12 +1,81 @@
 package editor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	htmlui "github.com/onix-engine/onix/ui/html"
 )
+
+func TestWorkspaceOutlinerDeletesRightClickedElementAfterScroll(t *testing.T) {
+	for _, offset := range []float32{0, -560} {
+		t.Run(fmt.Sprint(offset), func(t *testing.T) {
+			a := workspaceEditorFixture(t)
+			if err := a.Document.EditMod("button", "Tree fixture", func(mod *project.ModSpec) error {
+				mod.Elements = nil
+				for i := range 48 {
+					mod.Elements = append(mod.Elements, project.ModElementSpec{ID: fmt.Sprintf("node%d", i)})
+				}
+				mod.Elements = append(mod.Elements, project.ModElementSpec{ID: "child", Parent: "node22"})
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			a.enterModuleEdit(a.Document.Active, "start")
+			a.selectElement("start", "node0")
+			world := ecs.NewWorld()
+			syncWorkspaceTest(t, a, world)
+			scroll := a.outlinerScroll(world)
+			if scroll == nil {
+				t.Fatal("missing tree scroll container")
+			}
+			scroll.Position[1] = offset
+			target := "node2"
+			if offset != 0 {
+				target = "node22"
+			}
+			node, ok := htmlui.NodeByID(world, a.shell, "element:main.json/start/"+target)
+			if !ok {
+				t.Fatal("missing target row")
+			}
+			box, ok := node.Bounds()
+			if !ok {
+				t.Fatal("missing target bounds")
+			}
+			in := input.NewState()
+			in.PressMouse(input.MouseRight, float64(box.X+12), float64(box.Y+box.Height/2+offset))
+			a.updateOutlinerMenu(in)
+			if !a.contextOpen || a.contextElement != target || a.selectedElement != "node0" {
+				t.Fatalf("right click targeted %q, want %q (selection %q)", a.contextElement, target, a.selectedElement)
+			}
+			syncWorkspaceTest(t, a, world)
+			if scroll := a.outlinerScroll(world); scroll == nil || scroll.Position[1] != offset {
+				t.Fatal("opening the context menu lost the tree scroll position")
+			}
+			a.handleEvent(htmlui.Event{ID: "outliner-delete-element", Kind: htmlui.EventClick})
+			for _, element := range a.modElements("button") {
+				if element.ID == target || target == "node22" && element.ID == "child" {
+					t.Fatalf("deleted subtree still contains %q", element.ID)
+				}
+			}
+			want := 48
+			if target == "node22" {
+				want--
+			}
+			if got := len(a.modElements("button")); got != want {
+				t.Fatalf("deletion changed unrelated nodes: got %d elements, want %d", got, want)
+			}
+			a.action("undo")
+			if len(a.modElements("button")) != 49 {
+				t.Fatal("undo did not restore the subtree")
+			}
+		})
+	}
+}
 
 func TestWorkspaceOutlinerElementsExpandOneLevelAndKeepInstanceState(t *testing.T) {
 	a := workspaceEditorFixture(t)

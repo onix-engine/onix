@@ -47,28 +47,44 @@ type PreserveAspectRatio struct {
 
 func Decode(r io.Reader) (*Document, error) {
 	decoder := xml.NewDecoder(r)
+	start, err := decodeRoot(decoder)
+	if err != nil {
+		return nil, err
+	}
+	return parseDocument(decoder, start)
+}
+
+func decodeRoot(decoder *xml.Decoder) (xml.StartElement, error) {
 	for {
 		token, err := decoder.Token()
 		if err != nil {
 			if err == io.EOF {
-				return nil, fmt.Errorf("svg: missing root element")
+				return xml.StartElement{}, fmt.Errorf("svg: missing root element")
 			}
-			return nil, err
+			return xml.StartElement{}, err
 		}
 		start, ok := token.(xml.StartElement)
 		if !ok {
 			continue
 		}
 		if localName(start.Name) != "svg" {
-			return nil, fmt.Errorf("svg: expected <svg>, got <%s>", localName(start.Name))
+			return xml.StartElement{}, fmt.Errorf("svg: expected <svg>, got <%s>", localName(start.Name))
 		}
-		return parseDocument(decoder, start)
+		return start, nil
 	}
 }
 
+// DecodeConfig reads dimensions and validates the XML without constructing or
+// validating paths, gradients and other rendering geometry.
 func DecodeConfig(r io.Reader) (image.Config, error) {
-	doc, err := Decode(r)
+	decoder := xml.NewDecoder(r)
+	start, err := decodeRoot(decoder)
 	if err != nil {
+		return image.Config{}, err
+	}
+	var doc Document
+	doc.readViewport(start.Attr)
+	if err := decoder.Skip(); err != nil {
 		return image.Config{}, err
 	}
 	width, height := doc.outputSize(Options{})
@@ -128,17 +144,42 @@ func (d *Document) Rasterize(width, height int) (*image.NRGBA, error) {
 }
 
 func parseDocument(decoder *xml.Decoder, start xml.StartElement) (*Document, error) {
-	attrs := attrsOf(start.Attr)
 	doc := &Document{
-		Width:               parseLength(attrs["width"], 0),
-		Height:              parseLength(attrs["height"], 0),
-		PreserveAspectRatio: parsePreserveAspectRatio(attrs["preserveaspectratio"]),
-		style:               parseStylePatch(start.Attr),
-		transform:           parseTransform(attrs["transform"]),
+		style: parseStylePatch(start.Attr),
 	}
-	if viewBox, ok := parseViewBox(attrs["viewbox"]); ok {
-		doc.ViewBox = viewBox
-		doc.HasViewBox = true
+	doc.readViewport(start.Attr)
+	doc.transform = identityMatrix()
+	doc.PreserveAspectRatio = parsePreserveAspectRatio("")
+	for _, attr := range start.Attr {
+		switch localName(attr.Name) {
+		case "transform":
+			doc.transform = parseTransform(attr.Value)
+		case "preserveaspectratio":
+			doc.PreserveAspectRatio = parsePreserveAspectRatio(attr.Value)
+		}
+	}
+	parser := documentParser{decoder: decoder}
+	children, err := parser.parseChildren("svg")
+	if err != nil {
+		return nil, err
+	}
+	doc.children = children
+	doc.definitions = parser.definitions
+	doc.clipPaths = parser.clipPaths
+	doc.gradients = resolveGradients(parser.gradients, doc.viewport())
+	return doc, nil
+}
+
+func (doc *Document) readViewport(attrs []xml.Attr) {
+	for _, attr := range attrs {
+		switch localName(attr.Name) {
+		case "width":
+			doc.Width = parseLength(attr.Value, 0)
+		case "height":
+			doc.Height = parseLength(attr.Value, 0)
+		case "viewbox":
+			doc.ViewBox, doc.HasViewBox = parseViewBox(attr.Value)
+		}
 	}
 	if doc.Width <= 0 && doc.HasViewBox {
 		doc.Width = doc.ViewBox.Width
@@ -152,17 +193,6 @@ func parseDocument(decoder *xml.Decoder, start xml.StartElement) (*Document, err
 	if doc.Height <= 0 {
 		doc.Height = 150
 	}
-
-	parser := documentParser{decoder: decoder}
-	children, err := parser.parseChildren("svg")
-	if err != nil {
-		return nil, err
-	}
-	doc.children = children
-	doc.definitions = parser.definitions
-	doc.clipPaths = parser.clipPaths
-	doc.gradients = resolveGradients(parser.gradients, doc.viewport())
-	return doc, nil
 }
 
 func (d *Document) outputSize(opts Options) (int, int) {

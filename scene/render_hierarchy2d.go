@@ -26,19 +26,32 @@ type renderEntity2DInfo struct {
 type renderHierarchy2DCacheScratch struct{}
 
 type renderHierarchy2DCache struct {
-	hierarchy *Hierarchy
-	sparse    map[ecs.Entity]renderHierarchy2DInfo
-	values    entitycache.Store[renderHierarchy2DInfo]
-	retention reuse.MapRetention
-	highest   uint32
-	versions  [6]uint64
-	structure uint64
+	hierarchy  *Hierarchy
+	sparse     map[ecs.Entity]renderHierarchy2DInfo
+	values     entitycache.Store[renderHierarchy2DInfo]
+	retention  reuse.MapRetention
+	population int
+	highest    uint32
+	versions   [6]uint64
+	structure  uint64
 }
 
 func (c *renderHierarchy2DCache) MaintainCache() {
+	// Decide density after a complete population, so a high ID visited first
+	// cannot repeatedly discard and rebuild warm dense storage.
+	if c.sparse != nil && len(c.sparse) > 64 && uint64(c.highest) < uint64(len(c.sparse))*4 {
+		for entity, value := range c.sparse {
+			*c.values.Ensure(entity) = value
+		}
+		c.sparse, c.retention = nil, reuse.MapRetention{}
+	} else if c.sparse == nil && uint64(c.highest) >= uint64(max(128, c.values.Len()*8)) {
+		c.useSparse()
+	}
 	if c.sparse != nil {
+		c.population = len(c.sparse)
 		c.sparse = c.retention.Trim(c.sparse, 64)
 	} else {
+		c.population = c.values.Len()
 		c.values.Trim()
 	}
 }
@@ -110,29 +123,27 @@ func (c *renderHierarchy2DCache) resolve(world *ecs.World, entity ecs.Entity) re
 	return info
 }
 
-// Keep a compact slot index for dense populations. Sparse high IDs use a map
-// so a few rendered entities never reserve an index for the entire World.
+// Bound provisional dense growth using the previous complete population.
+// Widely separated IDs use a map before reserving a large World index.
 func (c *renderHierarchy2DCache) setValue(entity ecs.Entity, value renderHierarchy2DInfo) {
 	index, _ := entity.Index()
 	c.highest = max(c.highest, index)
-	if c.sparse == nil && uint64(c.highest) >= uint64(max(128, (c.values.Len()+1)*4)) {
-		c.sparse = make(map[ecs.Entity]renderHierarchy2DInfo, c.values.Len()+1)
-		for entity, value := range c.values.All {
-			c.sparse[entity] = *value
-		}
-		c.values = entitycache.Store[renderHierarchy2DInfo]{}
+	if c.sparse == nil && uint64(c.highest) >= uint64(max(128, max(c.population, c.values.Len()+1)*8)) {
+		c.useSparse()
 	}
 	if c.sparse != nil {
 		c.sparse[entity] = value
-		if len(c.sparse) > 64 && uint64(c.highest) < uint64(len(c.sparse))*4 {
-			for entity, value := range c.sparse {
-				*c.values.Ensure(entity) = value
-			}
-			c.sparse, c.retention = nil, reuse.MapRetention{}
-		}
 	} else {
 		*c.values.Ensure(entity) = value
 	}
+}
+
+func (c *renderHierarchy2DCache) useSparse() {
+	c.sparse = make(map[ecs.Entity]renderHierarchy2DInfo, c.values.Len()+1)
+	for entity, value := range c.values.All {
+		c.sparse[entity] = *value
+	}
+	c.values = entitycache.Store[renderHierarchy2DInfo]{}
 }
 
 func (c *renderHierarchy2DCache) resetValues() {
