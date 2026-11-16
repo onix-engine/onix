@@ -10,11 +10,13 @@
 static unsigned int modifiers;
 static int last_key;
 static unsigned int last_modifiers;
+static unsigned char held_keys[349];
 
 static void drain_keys(OnixNativeWindow *window) {
 	OnixEvent event;
 	while (onix_window_pop_event(window, &event)) {
 		if (event.kind != ONIX_EVENT_KEY_DOWN && event.kind != ONIX_EVENT_KEY_UP) continue;
+		if (event.arg0 > 0 && event.arg0 < 349) held_keys[event.arg0] = event.kind == ONIX_EVENT_KEY_DOWN;
 		if (event.arg0 >= 340 && event.arg0 <= 347) {
 			unsigned int bit = 1u << (event.arg0 - 340);
 			if (event.kind == ONIX_EVENT_KEY_DOWN) modifiers |= bit;
@@ -66,6 +68,13 @@ static void test_wayland_modifiers(void) {
 		assert(modifiers == 0);
 		onix_wayland_keyboard_modifiers(window, NULL, 0, 0, 0, 0, 0);
 	}
+	// Key releases delivered to another surface must not leave shortcuts held.
+	onix_wayland_keyboard_key(window, NULL, 0, 0, KEY_H, WL_KEYBOARD_KEY_STATE_PRESSED);
+	drain_keys(window);
+	assert(held_keys['H']);
+	onix_wayland_keyboard_leave(window, NULL, 0, NULL);
+	drain_keys(window);
+	assert(!held_keys['H']);
 	xkb_state_unref(window->state.wayland.xkb_state);
 	xkb_keymap_unref(keymap);
 	xkb_context_unref(context);
@@ -132,11 +141,15 @@ int main(void) {
 	// Focus loss must release modifiers even when releases go to another window.
 	key(display, XK_Control_L, True);
 	key(display, XK_Shift_L, True);
+	key(display, XK_h, True);
 	poll_window(window);
 	assert(modifiers == 0x03);
+	assert(held_keys['H']);
 	XSetInputFocus(display, DefaultRootWindow(display), RevertToParent, CurrentTime);
 	poll_window(window);
 	assert(modifiers == 0);
+	assert(!held_keys['H']);
+	key(display, XK_h, False);
 	key(display, XK_Control_L, False);
 	key(display, XK_Shift_L, False);
 	XSetInputFocus(display, native, RevertToParent, CurrentTime);

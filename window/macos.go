@@ -263,41 +263,28 @@ func (c *Context) SetIcon(data []byte) error    { return nil }
 func (c *Context) SetVsyncEnabled(enabled bool) { c.Device.SetVSync(enabled) }
 func (c *Context) SetTargetFPS(fps int)         { c.framePacer.setTargetFPS(fps) }
 func (c *Context) LoopGame(frame func() (bool, error)) error {
-	for !c.shouldClose {
-		c.ActivateRender()
-		if wait, idle := c.idleWait(); idle {
-			C.onix_macos_wait(c.nativeWindow, C.int(idleTimeoutMillis(wait)))
-			c.framePacer.reset()
-		}
-		// AppKit can dispatch WebKit callbacks while polling, so keep callback
-		// support and reuse the output field instead of passing a stack local.
-		count := int(C.onix_macos_poll_events_batch(c.nativeWindow, &c.events[0], C.int(len(c.events)), &c.nativeShouldClose))
-		if count != 0 {
-			// Includes redraw notifications from focus, exposure and Dock reopen.
-			c.RequestFrame()
-		}
-		for index := 0; index < count; index++ {
-			c.handleEvent(&c.events[index])
-		}
-		if c.renderErr != nil {
-			return c.renderErr
-		}
-		if c.shouldClose || c.nativeShouldClose != 0 {
-			break
-		}
-		c.framePacer.wait()
-		rendered, err := frame()
-		if err != nil {
-			return err
-		}
-		if rendered {
-			if err := c.Device.Present(); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	var loop EventLoop
+	loop.Add(c, frame, nil)
+	return loop.Run()
 }
+
+func (c *Context) pollFrame() error {
+	// AppKit can dispatch callbacks while polling; retain callback support.
+	count := int(C.onix_macos_poll_events_batch(c.nativeWindow, &c.events[0], C.int(len(c.events)), &c.nativeShouldClose))
+	if count != 0 {
+		c.RequestFrame()
+	}
+	for index := 0; index < count; index++ {
+		c.handleEvent(&c.events[index])
+	}
+	if c.nativeShouldClose != 0 {
+		c.shouldClose = true
+	}
+	return c.renderErr
+}
+
+func (c *Context) frameVisible() bool  { return true }
+func (c *Context) presentFrame() error { return c.Device.Present() }
 
 func (c *Context) handleEvent(event *C.OnixMacEvent) {
 	switch int(event.kind) {
@@ -404,3 +391,5 @@ func (c *Context) Destroy() {
 		c.nativeWindow = nil
 	}
 }
+
+func (c *Context) IsFocused() bool { return C.onix_macos_is_focused(c.nativeWindow) != 0 }

@@ -3,6 +3,7 @@ package style
 import (
 	"fmt"
 	"iter"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -35,6 +36,7 @@ type cascadeScratch struct {
 	matcher    *css.MatchContext
 	compiled   *compiledStylesheet
 	persistent *styleIndex
+	previous   Map
 	styles     styleIndex
 	motion     motionStyle
 	values     cascadedValues
@@ -90,6 +92,7 @@ func releaseCascadeScratch(scratch *cascadeScratch) {
 	scratch.compiled = nil
 	scratch.changes = nil
 	scratch.persistent = nil
+	scratch.previous = nil
 	scratch.styles.reset()
 	scratch.motion = motionStyle{}
 	cascadeScratchPool.Put(scratch)
@@ -161,6 +164,16 @@ func ComputeWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewp
 	if err != nil {
 		return nil, err
 	}
+	if len(styles) > 0 {
+		if cache.previous == nil {
+			cache.previous = make(Map, len(styles))
+		}
+		// Keep per-node values across cache eviction without retaining detached
+		// nodes after this pass. Full recomputation still reuses the caller's map.
+		maps.Copy(cache.previous, styles)
+		cache.previous = cache.previousRetention.Trim(cache.previous, 64)
+		defer clear(cache.previous)
+	}
 	if styles == nil {
 		styles = make(Map)
 	} else {
@@ -171,6 +184,7 @@ func ComputeWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewp
 	scratch.compiled = cache.matcher(stylesheet)
 	cache.prepareStyleIndex()
 	scratch.persistent = &cache.styles
+	scratch.previous = cache.previous
 	defer releaseCascadeScratch(scratch)
 	if err := computeStyleSubtree(root, nil, false, 16, stylesheet, input, &queries, styles, definitions, scratch, nil); err != nil {
 		return nil, err
@@ -181,6 +195,9 @@ func ComputeWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewp
 func computeStyleSubtree(node *dom.Node, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
 	scratch.visited++
 	previous := styles[node]
+	if previous == nil {
+		previous = scratch.previous[node]
+	}
 	// Resolve into a stack local, then keep whichever stored instance already
 	// carries these values, so nodes with an identical style share one block.
 	computed := defaultStyle(node)

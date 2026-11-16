@@ -644,51 +644,40 @@ func (c *Context) SetTargetFPS(fps int) {
 	c.framePacer.setTargetFPS(fps)
 }
 
-func (c *Context) LoopGame(f func() (bool, error)) error {
-	for !c.shouldClose {
-		c.ActivateRender()
-		if wait, idle := c.idleWait(); idle {
-			msgWaitForMultipleObjectsEx(0, 0, uint32(idleTimeoutMillis(wait)), 0x04ff, 0x0004)
-			c.framePacer.reset()
-		}
-		wasMinimized := c.minimized
-		if quit := c.pollEvents(); quit {
-			break
-		}
-		if c.minimized {
-			c.waitForEvents()
-			continue
-		}
-		immediateFrame := wasMinimized || c.resizePending
-		if c.resizePending {
-			if err := c.Device.ResizeSurface(c.Width, c.Height); err != nil {
-				return err
-			}
-			// Input regions and surface masks use the final client bounds after
-			// resize and DPI messages have been dispatched.
-			if c.inputRegion != nil {
-				c.applyWindowRegion()
-			}
-			c.applyRoundedCorners()
-			c.adjustViewport()
-			c.resizePending = false
-		}
-		if immediateFrame {
-			c.framePacer.reset()
-		} else {
-			c.framePacer.wait()
-		}
-		rendered, err := f()
-		if err != nil {
+func (c *Context) LoopGame(frame func() (bool, error)) error {
+	var loop EventLoop
+	loop.Add(c, frame, nil)
+	return loop.Run()
+}
+
+func (c *Context) pollFrame() error {
+	wasMinimized := c.minimized
+	if c.pollEvents() || c.shouldClose || c.minimized {
+		return nil
+	}
+	if wasMinimized || c.resizePending {
+		c.framePacer.reset()
+	}
+	if c.resizePending {
+		if err := c.Device.ResizeSurface(c.Width, c.Height); err != nil {
 			return err
 		}
-		if rendered {
-			if err := c.Device.Present(); err != nil {
-				return err
-			}
-			c.show()
+		if c.inputRegion != nil {
+			c.applyWindowRegion()
 		}
+		c.applyRoundedCorners()
+		c.adjustViewport()
+		c.resizePending = false
 	}
+	return nil
+}
+
+func (c *Context) frameVisible() bool { return !c.minimized }
+func (c *Context) presentFrame() error {
+	if err := c.Device.Present(); err != nil {
+		return err
+	}
+	c.show()
 	return nil
 }
 
@@ -1372,3 +1361,5 @@ func mustUTF16Ptr(s string) *uint16 {
 	}
 	return ptr
 }
+
+func (c *Context) IsFocused() bool { return c.window != 0 && getForegroundWindow() == c.window }

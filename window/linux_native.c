@@ -140,6 +140,7 @@ typedef struct {
 	struct zwp_text_input_v3 *text_input;
 	int configured;
 	int text_input_entered;
+	int keyboard_entered;
 	uint32_t text_input_commit_count;
 	uint32_t text_input_session_serial;
 	char *pending_preedit;
@@ -167,6 +168,7 @@ struct OnixNativeWindow {
 	int mouse_captured;
 	int cursor;
 	uint8_t modifiers;
+	uint64_t keys[6]; // Canonical key codes 0..348, including non-modifier keys.
 	char *clipboard_text;
 	OnixEventQueue queue;
 	union {
@@ -215,6 +217,11 @@ static void onix_push_event(OnixNativeWindow *window, OnixEventKind kind, int ar
 		if (kind == ONIX_EVENT_KEY_DOWN) window->modifiers |= bit;
 		else if (kind == ONIX_EVENT_KEY_UP) window->modifiers &= ~bit;
 	}
+	if (arg0 > 0 && arg0 <= 348) {
+		uint64_t bit = UINT64_C(1) << (arg0 % 64);
+		if (kind == ONIX_EVENT_KEY_DOWN) window->keys[arg0 / 64] |= bit;
+		else if (kind == ONIX_EVENT_KEY_UP) window->keys[arg0 / 64] &= ~bit;
+	}
 	// High-rate relative motion must not overflow the fixed event queue.
 	if (kind == ONIX_EVENT_MOUSE_DELTA && window->queue.head != window->queue.tail) {
 		OnixEvent *previous = &window->queue.items[(window->queue.tail + ONIX_EVENT_QUEUE_CAPACITY - 1) % ONIX_EVENT_QUEUE_CAPACITY];
@@ -241,6 +248,14 @@ static void onix_release_modifiers(OnixNativeWindow *window, uint8_t mask) {
 	uint8_t released = window->modifiers & mask;
 	for (int index = 0; index < 8; index++) {
 		if (released & (1u << index)) onix_push_event(window, ONIX_EVENT_KEY_UP, 340 + index, 0, 0, 0);
+	}
+}
+
+static void onix_release_keys(OnixNativeWindow *window) {
+	for (int key = 1; key <= 348; key++) {
+		if (window->keys[key / 64] & (UINT64_C(1) << (key % 64))) {
+			onix_push_event(window, ONIX_EVENT_KEY_UP, key, 0, 0, 0);
+		}
 	}
 }
 
@@ -1565,7 +1580,7 @@ static void onix_wayland_keyboard_enter(void *data, struct wl_keyboard *keyboard
 	(void)keyboard;
 	OnixNativeWindow *window = data;
 	window->state.wayland.last_serial = serial;
-	(void)surface;
+	window->state.wayland.keyboard_entered = surface == window->state.wayland.surface;
 	(void)keys;
 }
 
@@ -1574,7 +1589,8 @@ static void onix_wayland_keyboard_leave(void *data, struct wl_keyboard *keyboard
 	(void)serial;
 	(void)surface;
 	OnixNativeWindow *window = data;
-	onix_release_modifiers(window, 0xff);
+	window->state.wayland.keyboard_entered = 0;
+	onix_release_keys(window);
 	onix_window_set_mouse_captured(window, 0);
 	if (window->state.wayland.xkb_compose_state != NULL) {
 		xkb_compose_state_reset(window->state.wayland.xkb_compose_state);
@@ -1998,7 +2014,7 @@ static void onix_poll_x11(OnixNativeWindow *window) {
 		case FocusOut:
 			if (event.xfocus.mode != NotifyNormal) break;
 			window->state.x11.focused = 0;
-			onix_release_modifiers(window, 0xff);
+			onix_release_keys(window);
 			onix_window_set_mouse_captured(window, 0);
 			if (window->state.x11.ic != NULL) {
 				XUnsetICFocus(window->state.x11.ic);
@@ -2803,6 +2819,26 @@ void onix_window_poll_events(OnixNativeWindow *window) {
 	if (window->backend == ONIX_BACKEND_WAYLAND) {
 		onix_poll_wayland(window);
 	}
+}
+
+int onix_window_is_focused(OnixNativeWindow *window) {
+	if (window == NULL) return 0;
+	if (window->backend == ONIX_BACKEND_X11) return window->state.x11.focused;
+	if (window->backend == ONIX_BACKEND_WAYLAND) return window->state.wayland.keyboard_entered;
+	return 0;
+}
+
+int onix_window_event_fd(OnixNativeWindow *window) {
+	if (window == NULL || window->should_close || window->queue.head != window->queue.tail) return -2;
+	if (window->backend == ONIX_BACKEND_X11) {
+		if (XPending(window->state.x11.display) != 0) return -2;
+		return ConnectionNumber(window->state.x11.display);
+	}
+	if (window->backend == ONIX_BACKEND_WAYLAND) {
+		wl_display_flush(window->state.wayland.display);
+		return wl_display_get_fd(window->state.wayland.display);
+	}
+	return -1;
 }
 
 void onix_window_wait_events(OnixNativeWindow *window, int wake_fd, int timeout_ms) {

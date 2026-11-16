@@ -55,19 +55,20 @@ type Context struct {
 	inputRegion []InputRegionRect
 	cursorSupport
 	mouseCaptureSupport
-	viewport       viewportState
-	events         [256]C.OnixEvent
-	Height         int
-	windowHeight   int
-	Width          int
-	windowWidth    int
-	cornerRadius   int
-	roundedCorners bool
-	shadow         bool
-	resizable      bool
-	border         bool
-	transparent    bool
-	shouldClose    bool
+	viewport          viewportState
+	events            [256]C.OnixEvent
+	Height            int
+	windowHeight      int
+	Width             int
+	windowWidth       int
+	cornerRadius      int
+	nativeShouldClose C.int
+	roundedCorners    bool
+	shadow            bool
+	resizable         bool
+	border            bool
+	transparent       bool
+	shouldClose       bool
 }
 
 // NativeHandle returns the native surface identifier when the host needs to
@@ -337,42 +338,28 @@ func (c *Context) SetTargetFPS(fps int) {
 	c.framePacer.setTargetFPS(fps)
 }
 
-func (c *Context) LoopGame(f func() (bool, error)) error {
-	for !c.shouldClose {
-		c.ActivateRender()
-		if wait, idle := c.idleWait(); idle {
-			C.onix_window_wait_events(c.nativeWindow, C.int(c.wakePipe.read), C.int(idleTimeoutMillis(wait)))
-			c.wakePipe.drain()
-			c.framePacer.reset()
-		}
-		var nativeShouldClose C.int
-		count := int(C.onix_window_poll_events_batch(c.nativeWindow, &c.events[0], C.int(len(c.events)), &nativeShouldClose))
-		if count != 0 {
-			c.RequestFrame()
-		}
-		for index := 0; index < count; index++ {
-			c.handleEvent(&c.events[index])
-		}
-		if c.renderErr != nil {
-			return c.renderErr
-		}
-		if c.shouldClose || nativeShouldClose != 0 {
-			c.shouldClose = true
-			break
-		}
-		c.framePacer.wait()
-		rendered, err := f()
-		if err != nil {
-			return err
-		}
-		if rendered {
-			if err := c.Device.Present(); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+func (c *Context) LoopGame(frame func() (bool, error)) error {
+	var loop EventLoop
+	loop.Add(c, frame, nil)
+	return loop.Run()
 }
+
+func (c *Context) pollFrame() error {
+	count := int(C.onix_window_poll_events_batch(c.nativeWindow, &c.events[0], C.int(len(c.events)), &c.nativeShouldClose))
+	if count != 0 {
+		c.RequestFrame()
+	}
+	for index := 0; index < count; index++ {
+		c.handleEvent(&c.events[index])
+	}
+	if c.nativeShouldClose != 0 {
+		c.shouldClose = true
+	}
+	return c.renderErr
+}
+
+func (c *Context) frameVisible() bool  { return true }
+func (c *Context) presentFrame() error { return c.Device.Present() }
 
 func (c *Context) handleEvent(event *C.OnixEvent) {
 	switch int(event.kind) {
@@ -380,6 +367,7 @@ func (c *Context) handleEvent(event *C.OnixEvent) {
 		if c.acceptCloseRequest() {
 			c.shouldClose = true
 		} else {
+			c.nativeShouldClose = 0
 			C.onix_window_cancel_close(c.nativeWindow)
 		}
 	case int(C.ONIX_EVENT_WINDOW_SIZE):
@@ -472,3 +460,5 @@ func (c *Context) Destroy() {
 		c.nativeWindow = nil
 	}
 }
+
+func (c *Context) IsFocused() bool { return C.onix_window_is_focused(c.nativeWindow) != 0 }

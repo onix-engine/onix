@@ -3,6 +3,7 @@ package style
 import (
 	"github.com/onix-engine/onix/html/css"
 	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*dom.Node) (Map, error) {
@@ -254,12 +255,14 @@ func selectorNeedsSiblingMutation(selector css.Selector) bool {
 // MutationCache retains document resources across full and partial updates. DOM
 // content/attribute changes other than class/style must invalidate definitions.
 type MutationCache struct {
-	root             *dom.Node
-	definitions      filterDefinitions
-	stylesheet       *css.Stylesheet
-	compiled         *compiledStylesheet
-	ContainerMetrics map[*dom.Node]ContainerMetrics
-	styles           styleIndex
+	root              *dom.Node
+	definitions       filterDefinitions
+	stylesheet        *css.Stylesheet
+	compiled          *compiledStylesheet
+	ContainerMetrics  map[*dom.Node]ContainerMetrics
+	previous          Map
+	styles            styleIndex
+	previousRetention reuse.MapRetention
 }
 
 const maxDocumentStyleInterned = 2048

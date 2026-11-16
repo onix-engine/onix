@@ -86,6 +86,8 @@ int onix_window_set_clipboard_text(OnixNativeWindow *window, const char *text);
 int onix_window_get_clipboard_text(OnixNativeWindow *window, char *buffer, int capacity);
 void onix_window_poll_events(OnixNativeWindow *window);
 void onix_window_wait_events(OnixNativeWindow *window, int wake_fd, int timeout_ms);
+int onix_window_event_fd(OnixNativeWindow *window);
+int onix_window_is_focused(OnixNativeWindow *window);
 int onix_window_pop_event(OnixNativeWindow *window, OnixEvent *event);
 
 #endif

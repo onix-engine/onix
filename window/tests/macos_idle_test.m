@@ -191,6 +191,7 @@ static void test_keys(OnixMacWindow *state, NSWindow *window, BOOL wait) {
                     OnixMacEvent event;
                     while (onix_macos_pop_event(state, &event)) {
                         if (event.kind == ONIX_MAC_EVENT_KEY_DOWN || event.kind == ONIX_MAC_EVENT_KEY_UP) {
+                            if (event.arg0 >= 340 && event.arg0 <= 347) continue;
                             assert(event.kind == (release ? ONIX_MAC_EVENT_KEY_UP : ONIX_MAC_EVENT_KEY_DOWN));
                             assert(event.arg0 == 86); // V
                             received++;
@@ -211,6 +212,81 @@ static void test_keys(OnixMacWindow *state, NSWindow *window, BOOL wait) {
     }
 }
 
+static void drain_keyboard(OnixMacWindow *state, unsigned char *held) {
+    OnixMacEvent event;
+    while (onix_macos_pop_event(state, &event)) {
+        if ((event.kind == ONIX_MAC_EVENT_KEY_DOWN || event.kind == ONIX_MAC_EVENT_KEY_UP) && event.arg0 > 0 && event.arg0 <= 348) {
+            held[event.arg0] = event.kind == ONIX_MAC_EVENT_KEY_DOWN;
+        }
+        onix_macos_release_event(&event);
+    }
+}
+
+static void send_keyboard(NSWindow *window, NSEventType type, unsigned short code, NSEventModifierFlags flags) {
+    NSEvent *event = [NSEvent keyEventWithType:type location:NSZeroPoint modifierFlags:flags timestamp:0
+        windowNumber:window.windowNumber context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO keyCode:code];
+    if (type == NSEventTypeFlagsChanged) [window.contentView flagsChanged:event];
+    else if (type == NSEventTypeKeyDown) [window.contentView keyDown:event];
+    else [window.contentView keyUp:event];
+}
+
+static void test_keyboard_lifecycle(OnixMacWindow *state, NSWindow *window) {
+    unsigned char held[349] = {0};
+    NSEventModifierFlags chord = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+    send_keyboard(window, NSEventTypeFlagsChanged, 55, NSEventModifierFlagCommand);
+    send_keyboard(window, NSEventTypeFlagsChanged, 56, chord);
+    send_keyboard(window, NSEventTypeKeyDown, 4, chord); // H
+    drain_keyboard(state, held);
+    assert(held[340] && held[343] && held['H']);
+    [window.delegate windowDidResignKey:[NSNotification notificationWithName:NSWindowDidResignKeyNotification object:window]];
+    drain_keyboard(state, held);
+    for (int key = 1; key <= 348; key++) assert(!held[key]);
+
+    // Missing flagsChanged releases cannot turn plain ch into Cmd+Shift+H.
+    send_keyboard(window, NSEventTypeFlagsChanged, 55, NSEventModifierFlagCommand);
+    send_keyboard(window, NSEventTypeFlagsChanged, 56, chord);
+    send_keyboard(window, NSEventTypeKeyDown, 8, 0); // C
+    send_keyboard(window, NSEventTypeKeyUp, 8, 0);
+    send_keyboard(window, NSEventTypeKeyDown, 4, 0);
+    drain_keyboard(state, held);
+    assert(held['H']);
+    for (int key = 340; key <= 347; key++) assert(!held[key]);
+    send_keyboard(window, NSEventTypeKeyUp, 4, 0);
+
+    // Releasing one Shift while the other stays down preserves only that side.
+    send_keyboard(window, NSEventTypeFlagsChanged, 56, NSEventModifierFlagShift);
+    send_keyboard(window, NSEventTypeFlagsChanged, 60, NSEventModifierFlagShift);
+    send_keyboard(window, NSEventTypeFlagsChanged, 56, NSEventModifierFlagShift);
+    drain_keyboard(state, held);
+    assert(!held[340] && held[344]);
+    send_keyboard(window, NSEventTypeFlagsChanged, 60, 0);
+    drain_keyboard(state, held);
+    for (int key = 1; key <= 348; key++) assert(!held[key]);
+}
+
+static void test_windows(OnixMacWindow *first, NSWindow *firstWindow) {
+    id delegate = NSApp.delegate;
+    OnixMacWindow *second = onix_macos_create(320, 240, "Second window", 0, 1, 40, 1, 1);
+    assert(second != NULL);
+    NSWindow *secondWindow = (NSWindow *)onix_macos_native_window(second);
+    assert(NSApp.delegate == delegate);
+    assert([NSApp.windows containsObject:firstWindow]);
+    assert([NSApp.windows containsObject:secondWindow]);
+    [secondWindow makeKeyAndOrderFront:nil];
+    assert(onix_macos_is_focused(second));
+    onix_macos_poll(first);
+    drain(first);
+    drain(second);
+    [secondWindow performClose:nil];
+    assert(onix_macos_should_close(second));
+    assert(!onix_macos_should_close(first));
+    assert(onix_macos_events_pending(second));
+    onix_macos_destroy(second);
+    assert([NSApp.windows containsObject:firstWindow]);
+    [firstWindow makeKeyAndOrderFront:nil];
+    assert(onix_macos_is_focused(first));
+}
+
 int main(int argc, const char **argv) {
     assert(argc == 2);
     @autoreleasepool {
@@ -227,6 +303,8 @@ int main(int argc, const char **argv) {
         else if (strcmp(argv[1], "drag") == 0) test_drag(state, window);
         else if (strcmp(argv[1], "keys-poll") == 0) test_keys(state, window, NO);
         else if (strcmp(argv[1], "keys-wait") == 0) test_keys(state, window, YES);
+        else if (strcmp(argv[1], "keyboard-lifecycle") == 0) test_keyboard_lifecycle(state, window);
+        else if (strcmp(argv[1], "windows") == 0) test_windows(state, window);
         else assert(false);
         onix_macos_destroy(state);
         assert([NSApp.delegate applicationShouldHandleReopen:NSApp hasVisibleWindows:NO]);

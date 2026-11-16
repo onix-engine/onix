@@ -40,6 +40,7 @@ struct OnixMacWindow {
     int resizable;
     int waiting;
     OnixMacInputRect *input_rects;
+    uint64_t keys[6]; // Canonical key codes 0..348.
     OnixMacEvent events[ONIX_MAC_EVENT_CAPACITY];
 };
 
@@ -75,6 +76,11 @@ static _Thread_local char onix_macos_error[512];
 
 static void onix_macos_push(OnixMacWindow *window, int kind, int arg0, double x, double y, const char *text) {
     if (window == NULL) return;
+    if (arg0 > 0 && arg0 <= 348) {
+        uint64_t bit = UINT64_C(1) << (arg0 % 64);
+        if (kind == ONIX_MAC_EVENT_KEY_DOWN) window->keys[arg0 / 64] |= bit;
+        else if (kind == ONIX_MAC_EVENT_KEY_UP) window->keys[arg0 / 64] &= ~bit;
+    }
     int was_empty = window->event_head == window->event_tail;
     if (kind == ONIX_MAC_EVENT_MOUSE_DELTA && window->event_head != window->event_tail) {
         OnixMacEvent *previous = &window->events[(window->event_tail + ONIX_MAC_EVENT_CAPACITY - 1) % ONIX_MAC_EVENT_CAPACITY];
@@ -108,6 +114,40 @@ static void onix_macos_push(OnixMacWindow *window, int kind, int arg0, double x,
     // AppKit may deliver delegate callbacks inside nextEventMatchingMask
     // without returning an NSEvent. Wake the wait when our queue gains work.
     if (was_empty && window->waiting) onix_macos_wake();
+}
+
+static int onix_macos_key_held(OnixMacWindow *window, int key) {
+    return (window->keys[key / 64] & (UINT64_C(1) << (key % 64))) != 0;
+}
+
+static void onix_macos_release_keys(OnixMacWindow *window) {
+    for (int key = 1; key <= 348; key++) {
+        if (onix_macos_key_held(window, key)) onix_macos_push(window, ONIX_MAC_EVENT_KEY_UP, key, 0, 0, NULL);
+    }
+}
+
+// Every native key event carries the authoritative modifier mask. Repair missed
+// flagsChanged events before the key reaches the shortcut matcher.
+static void onix_macos_sync_modifiers(OnixMacWindow *window, NSEventModifierFlags flags, int changed) {
+    const NSEventModifierFlags masks[] = {
+        NSEventModifierFlagShift, NSEventModifierFlagControl,
+        NSEventModifierFlagOption, NSEventModifierFlagCommand,
+    };
+    for (int i = 0; i < 4; i++) {
+        int left = 340 + i, right = 344 + i;
+        int l = onix_macos_key_held(window, left), r = onix_macos_key_held(window, right);
+        if (!(flags & masks[i])) {
+            if (l) onix_macos_push(window, ONIX_MAC_EVENT_KEY_UP, left, 0, 0, NULL);
+            if (r) onix_macos_push(window, ONIX_MAC_EVENT_KEY_UP, right, 0, 0, NULL);
+        } else if (changed == left || changed == right) {
+            // The aggregate mask stays set when only one of two held sides is
+            // released. Do not mistake that flagsChanged event for a key-down.
+            int release = onix_macos_key_held(window, changed) && l && r;
+            onix_macos_push(window, release ? ONIX_MAC_EVENT_KEY_UP : ONIX_MAC_EVENT_KEY_DOWN, changed, 0, 0, NULL);
+        } else if (!l && !r) {
+            onix_macos_push(window, ONIX_MAC_EVENT_KEY_DOWN, left, 0, 0, NULL);
+        }
+    }
 }
 
 static void onix_macos_push_text_input(OnixMacWindow *window, const char *text) {
@@ -248,11 +288,13 @@ static int onix_macos_key(NSEvent *event) {
     [self addTrackingArea:[[[NSTrackingArea alloc] initWithRect:NSZeroRect options:options owner:self userInfo:nil] autorelease]];
 }
 - (void)keyDown:(NSEvent *)event {
+    onix_macos_sync_modifiers(self.state, event.modifierFlags, 0);
     int key = onix_macos_key(event);
     if (key != 0) onix_macos_push(self.state, ONIX_MAC_EVENT_KEY_DOWN, key, 0, 0, NULL);
     if (_textInputActive) [self interpretKeyEvents:@[event]];
 }
 - (void)keyUp:(NSEvent *)event {
+    onix_macos_sync_modifiers(self.state, event.modifierFlags, 0);
     int key = onix_macos_key(event);
     if (key != 0) onix_macos_push(self.state, ONIX_MAC_EVENT_KEY_UP, key, 0, 0, NULL);
 }
@@ -272,7 +314,8 @@ static int onix_macos_key(NSEvent *event) {
     case 57: key = 280; mask = NSEventModifierFlagCapsLock; break;
     default: break;
     }
-    if (key != 0) {
+    onix_macos_sync_modifiers(self.state, modifier, key);
+    if (key == 280) {
         int kind = (modifier & mask) != 0 ? ONIX_MAC_EVENT_KEY_DOWN : ONIX_MAC_EVENT_KEY_UP;
         onix_macos_push(self.state, kind, key, 0, 0, NULL);
     }
@@ -468,6 +511,7 @@ static int onix_macos_key(NSEvent *event) {
     }
 }
 - (void)windowDidResignKey:(NSNotification *)notification {
+    onix_macos_release_keys(self.state);
     onix_macos_set_mouse_captured(self.state, 0);
 }
 - (BOOL)windowShouldClose:(NSWindow *)sender {
@@ -581,9 +625,9 @@ OnixMacWindow *onix_macos_create(int width, int height, const char *title, int t
         if (onix_macos_app_delegate == nil) {
             onix_macos_app_delegate = [[OnixMacApplicationDelegate alloc] init];
             NSApp.delegate = onix_macos_app_delegate;
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+            [NSApp finishLaunching];
         }
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        [NSApp finishLaunching];
         OnixMacWindow *state = calloc(1, sizeof(OnixMacWindow));
         if (state == NULL) {
             snprintf(onix_macos_error, sizeof(onix_macos_error), "failed to allocate macOS window state");
@@ -775,6 +819,10 @@ static void onix_macos_send_event(NSEvent *event) {
     }
 }
 
+int onix_macos_is_focused(OnixMacWindow *state) {
+    return state != NULL && (state->window.isKeyWindow || state->window.isMainWindow);
+}
+
 void onix_macos_poll(OnixMacWindow *state) {
     if (state == NULL) return;
     @autoreleasepool {
@@ -786,6 +834,10 @@ void onix_macos_poll(OnixMacWindow *state) {
         [NSApp updateWindows];
         onix_macos_layout_window_buttons(state);
     }
+}
+
+int onix_macos_events_pending(OnixMacWindow *state) {
+    return state == NULL || state->should_close || state->event_head != state->event_tail;
 }
 
 void onix_macos_wait(OnixMacWindow *state, int timeout_ms) {

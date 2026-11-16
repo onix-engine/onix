@@ -84,6 +84,14 @@ func TestHTMLComponentCSSReferencesPreserveOrderAndBase(t *testing.T) {
 	css := func() string { return world.GetRef[Surface](owner).CSS }
 	attach(first, firstCSS)
 	attach(second, secondCSS)
+	absent := &htmlDefinitionRuntime{}
+	before := css()
+	if allocations := testing.AllocsPerRun(100, func() { detach(absent) }); allocations != 0 {
+		t.Fatalf("unregistered component removal allocated %g times", allocations)
+	}
+	if css() != before {
+		t.Fatal("unregistered component removal changed the stylesheet")
+	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		attach(first, firstCSS)
 		detach(first)

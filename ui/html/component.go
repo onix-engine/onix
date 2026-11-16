@@ -2069,19 +2069,22 @@ func detachHTMLComponentCSS(world *ecs.World, page ecs.Entity, definition *htmlD
 	if state == nil || definition == nil {
 		return nil
 	}
-	if entry := state.Entries[definition]; entry.Count > 1 {
+	entry, exists := state.Entries[definition]
+	if !exists {
+		return nil
+	}
+	if entry.Count > 1 {
 		entry.Count--
 		state.Entries[definition] = entry
 		return nil
-	} else {
-		delete(state.Entries, definition)
-		for index, candidate := range state.Order {
-			if candidate == definition {
-				copy(state.Order[index:], state.Order[index+1:])
-				state.Order[len(state.Order)-1] = nil
-				state.Order = state.Order[:len(state.Order)-1]
-				break
-			}
+	}
+	delete(state.Entries, definition)
+	for index, candidate := range state.Order {
+		if candidate == definition {
+			copy(state.Order[index:], state.Order[index+1:])
+			state.Order[len(state.Order)-1] = nil
+			state.Order = state.Order[:len(state.Order)-1]
+			break
 		}
 	}
 	return rebuildHTMLComponentCSS(world, page, state)
@@ -2091,8 +2094,25 @@ func rebuildHTMLComponentCSS(world *ecs.World, page ecs.Entity, state *htmlCompo
 	if state == nil {
 		return nil
 	}
+	html := world.GetMut[Surface](page)
+	if html == nil {
+		return fmt.Errorf("ecs: HTML page %d is missing", page)
+	}
+	if len(state.Order) == 0 {
+		html.CSS = state.Base
+		return nil
+	}
+	size := len(state.Base)
+	for _, definition := range state.Order {
+		if cssText := state.Entries[definition].CSS; cssText != "" {
+			if size > 0 {
+				size++
+			}
+			size += len(cssText)
+		}
+	}
 	var builder strings.Builder
-	builder.Grow(len(state.Base) + 64)
+	builder.Grow(size)
 	builder.WriteString(state.Base)
 	for _, definition := range state.Order {
 		if cssText := state.Entries[definition].CSS; cssText != "" {
@@ -2101,10 +2121,6 @@ func rebuildHTMLComponentCSS(world *ecs.World, page ecs.Entity, state *htmlCompo
 			}
 			builder.WriteString(cssText)
 		}
-	}
-	html := world.GetMut[Surface](page)
-	if html == nil {
-		return fmt.Errorf("ecs: HTML page %d is missing", page)
 	}
 	html.CSS = builder.String()
 	return nil

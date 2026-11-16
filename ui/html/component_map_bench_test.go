@@ -1,6 +1,7 @@
 package html
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
@@ -60,6 +61,22 @@ func BenchmarkHTMLComponentCSSReferences(b *testing.B) {
 			b.Fatal(err)
 		}
 		if err := detachHTMLComponentCSS(world, owner, definition); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkHTMLComponentCSSAbsentDetach(b *testing.B) {
+	world := ecs.NewWorld()
+	pages := world.NewSpawner1[Surface]()
+	owner := pages.Spawn(New(`<main></main>`))
+	registered, absent := &htmlDefinitionRuntime{}, &htmlDefinitionRuntime{}
+	if err := attachHTMLComponentCSS(world, owner, registered, strings.Repeat(".component{color:red}\n", 2048)); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := detachHTMLComponentCSS(world, owner, absent); err != nil {
 			b.Fatal(err)
 		}
 	}

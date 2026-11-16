@@ -65,6 +65,8 @@ void onix_macos_destroy(OnixMacWindow *window);
 void onix_macos_set_cursor(OnixMacWindow *window, int cursor);
 int onix_macos_set_mouse_captured(OnixMacWindow *window, int captured);
 void onix_macos_poll(OnixMacWindow *window);
+int onix_macos_events_pending(OnixMacWindow *window);
+int onix_macos_is_focused(OnixMacWindow *window);
 void onix_macos_wait(OnixMacWindow *window, int timeout_ms);
 void onix_macos_wake(void);
 int onix_macos_pop_event(OnixMacWindow *window, OnixMacEvent *event);

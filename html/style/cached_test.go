@@ -1,6 +1,7 @@
 package style
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -93,6 +94,48 @@ func TestComputeWithCacheWarmAllocations(t *testing.T) {
 	}
 }
 
+func TestComputeWithCacheReusesStylesBeyondInternLimit(t *testing.T) {
+	root := dom.NewElement("section")
+	for i := range maxDocumentStyleInterned + 256 {
+		node := dom.NewElement("div", dom.Attribute{Name: "style", Value: fmt.Sprintf("left:%dpx", i)})
+		node.Parent = root
+		root.Children = append(root.Children, node)
+	}
+	var cache MutationCache
+	styles, err := ComputeWithCache(root, nil, Viewport{}, nil, nil, &cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, last := root.Children[0], root.Children[len(root.Children)-1]
+	beforeFirst, beforeLast := styles[first], styles[last]
+	for range 2 {
+		styles, err = ComputeWithCache(root, nil, Viewport{}, nil, styles, &cache)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if styles[first] != beforeFirst || styles[last] != beforeLast {
+			t.Fatal("full cascade replaced unchanged styles after the intern cache filled")
+		}
+		if len(cache.previous) != 0 {
+			t.Fatal("full cascade retained previous DOM nodes in scratch")
+		}
+	}
+	first.SetAttr("style", "left:42px")
+	styles, err = ComputeWithCache(root, nil, Viewport{}, nil, styles, &cache)
+	if err != nil || styles[first].Left != LengthPx(42) || beforeFirst.Left != LengthPx(0) || styles[last] != beforeLast {
+		t.Fatal("full cascade failed to update or mutated an immutable previous style", err)
+	}
+	root.Children = root.Children[:len(root.Children)-1]
+	last.Parent = nil
+	styles, err = ComputeWithCache(root, nil, Viewport{}, nil, styles, &cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := styles[last]; exists || len(cache.previous) != 0 {
+		t.Fatal("full cascade retained a removed node")
+	}
+}
+
 func cachedStyleNode(node *dom.Node, id string) *dom.Node {
 	if value, _ := node.Attr("id"); value == id {
 		return node
@@ -161,6 +204,34 @@ func BenchmarkComputeFullStyles(b *testing.B) {
 				compute()
 			}
 		})
+	}
+}
+
+func BenchmarkComputeFullStylesUnique(b *testing.B) {
+	var source strings.Builder
+	source.WriteString(`<section>`)
+	for i := range maxDocumentStyleInterned + 256 {
+		fmt.Fprintf(&source, `<div style="left:%dpx"></div>`, i)
+	}
+	source.WriteString(`</section>`)
+	root, err := dom.Parse(source.String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	var cache MutationCache
+	var styles Map
+	for range 2 {
+		styles, err = ComputeWithCache(root, nil, Viewport{}, nil, styles, &cache)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		styles, err = ComputeWithCache(root, nil, Viewport{}, nil, styles, &cache)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
