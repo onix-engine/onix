@@ -14,23 +14,173 @@ import (
 // Content snapshots belong to their entity, so extracting one changed entity
 // cannot overwrite a snapshot still used by an unchanged entity.
 type retainedEntity2D struct {
-	sourceText      *textPaint2D
-	snapshots       *renderSnapshots2D
-	text            *textPaint2D
-	texts           []textPaint2D
-	sprites         []Sprite2D
-	nineSlices      []NineSlice2D
-	extra           []int
-	previousSprites int
-	count           int
-	first           int
-	matrix          mgl32.Mat4
-	clip            clipRect2D
-	queued          bool
-	dynamic         uint8
-	ui              bool
-	properties      bool
-	allocated       bool
+	text                  *textPaint2D
+	snapshots             *renderSnapshots2D
+	sourceText            *textPaint2D
+	extra                 []int
+	nineSlices            []NineSlice2D
+	sprites               []Sprite2D
+	texts                 []textPaint2D
+	renderLayers          RenderLayers
+	renderBounds          image.Rectangle
+	renderScene           SceneLayer
+	first                 int
+	previousSprites       int
+	renderParent          ecs.Entity
+	renderFirstChild      ecs.Entity
+	renderNextSibling     ecs.Entity
+	renderPreviousSibling ecs.Entity
+	count                 int
+	id                    uint64
+	renderTarget          ecs.Entity
+	matrix                mgl32.Mat4
+	clip                  clipRect2D
+	renderVisible         bool
+	dynamic               uint8
+	dirty                 renderNodeDirty2D
+	allocated             bool
+	properties            bool
+	ui                    bool
+	queued                bool
+}
+
+type renderNodeDirty2D uint8
+
+const (
+	renderNodeDirtyGeometry2D renderNodeDirty2D = 1 << iota
+	renderNodeDirtyContent2D
+	renderNodeDirtyVisibility2D
+	renderNodeDirtyOrder2D
+)
+
+// renderTree2D owns the retained render topology. Its nodes are keyed by
+// source entity, while render links skip entities that produce no draw item.
+type renderTree2D struct {
+	nodes            map[ecs.Entity]*retainedEntity2D
+	freeNodes        []*retainedEntity2D
+	nodeBlocks       [][]retainedEntity2D
+	nodeMapRetention reuse.MapRetention
+	nextID           uint64
+}
+
+func (tree *renderTree2D) allocateNode() *retainedEntity2D {
+	if len(tree.freeNodes) == 0 {
+		block := make([]retainedEntity2D, 64)
+		tree.nodeBlocks = append(tree.nodeBlocks, block)
+		for i := range block {
+			tree.freeNodes = append(tree.freeNodes, &block[i])
+		}
+	}
+	last := len(tree.freeNodes) - 1
+	node := tree.freeNodes[last]
+	tree.freeNodes[last] = nil
+	tree.freeNodes = tree.freeNodes[:last]
+	tree.nextID++
+	if tree.nextID == 0 {
+		tree.nextID++
+	}
+	*node = retainedEntity2D{id: tree.nextID, first: -1, allocated: true}
+	return node
+}
+
+func (tree *renderTree2D) clearLinks() {
+	for _, node := range tree.nodes {
+		node.renderParent = 0
+		node.renderFirstChild = 0
+		node.renderNextSibling = 0
+		node.renderPreviousSibling = 0
+	}
+}
+
+func (tree *renderTree2D) unlink(entity ecs.Entity) {
+	node := tree.nodes[entity]
+	if node == nil || node.renderParent == 0 {
+		return
+	}
+	parent := tree.nodes[node.renderParent]
+	previous := tree.nodes[node.renderPreviousSibling]
+	next := tree.nodes[node.renderNextSibling]
+	if previous != nil {
+		previous.renderNextSibling = node.renderNextSibling
+	} else if parent != nil {
+		parent.renderFirstChild = node.renderNextSibling
+	}
+	if next != nil {
+		next.renderPreviousSibling = node.renderPreviousSibling
+	}
+	node.renderParent = 0
+	node.renderNextSibling = 0
+	node.renderPreviousSibling = 0
+}
+
+func (tree *renderTree2D) reparent(entity ecs.Entity, hierarchy *Hierarchy) {
+	node := tree.nodes[entity]
+	if node == nil {
+		return
+	}
+	tree.unlink(entity)
+	for remaining, parent := len(tree.nodes)+1, hierarchy.Parent(entity); parent != 0 && remaining > 0; remaining, parent = remaining-1, hierarchy.Parent(parent) {
+		ancestor := tree.nodes[parent]
+		if ancestor == nil {
+			continue
+		}
+		node.renderParent = parent
+		node.renderNextSibling = ancestor.renderFirstChild
+		if next := tree.nodes[node.renderNextSibling]; next != nil {
+			next.renderPreviousSibling = entity
+		}
+		ancestor.renderFirstChild = entity
+		return
+	}
+}
+
+func (tree *renderTree2D) rebuildLinks(hierarchy *Hierarchy) {
+	tree.clearLinks()
+	for entity := range tree.nodes {
+		tree.reparent(entity, hierarchy)
+	}
+}
+
+func (node *retainedEntity2D) captureRenderMetadata(items []renderItem2D) {
+	node.renderBounds = image.Rectangle{}
+	node.renderVisible = false
+	for position := range node.positions {
+		item := &items[position]
+		if item.paint == nil {
+			continue
+		}
+		bounds := item.paint.boundsRect(item)
+		if !node.renderVisible {
+			node.renderBounds = bounds
+			node.renderLayers = item.layers
+			node.renderScene = item.scene
+			node.renderTarget = item.target
+			node.ui = item.ui
+			node.renderVisible = true
+		} else {
+			node.renderBounds = node.renderBounds.Union(bounds)
+		}
+	}
+}
+
+func (node *retainedEntity2D) renderForCamera(camera ExtractedCamera, defaultUICamera ecs.Entity) bool {
+	if !node.renderVisible {
+		return false
+	}
+	if camera.Scene.ID != 0 && node.renderScene.ID != 0 && camera.Scene.ID != node.renderScene.ID {
+		return false
+	}
+	if !camera.RenderLayers.Intersects(node.renderLayers) {
+		return false
+	}
+	if !node.ui {
+		return camera.Pipeline == CameraPipeline2D
+	}
+	target := node.renderTarget
+	if target == 0 {
+		target = defaultUICamera
+	}
+	return target == camera.Entity
 }
 
 func (node *retainedEntity2D) reset() {
@@ -44,6 +194,7 @@ func (node *retainedEntity2D) reset() {
 	node.nineSlices = node.nineSlices[:0]
 	node.count = 0
 	node.sourceText, node.text = nil, nil
+	node.dirty = 0
 }
 
 func (node *retainedEntity2D) snapshot(item renderItem2D) renderItem2D {
@@ -119,6 +270,7 @@ func (node *retainedEntity2D) releaseUnused() {
 
 func (cache *retainedRender2D) snapshot(node *retainedEntity2D, position int, item renderItem2D, device *render.Device) renderItem2D {
 	item = node.snapshot(item)
+	item.renderNode = node.id
 	cache.paints[position] = preparePaintItem2D(&item, device)
 	item.paint = &cache.paints[position]
 	return item
@@ -126,38 +278,24 @@ func (cache *retainedRender2D) snapshot(node *retainedEntity2D, position int, it
 
 // Fixed-size blocks avoid allocating one GC object for every entity. Owners
 // stay stable during growth; maintenance can relocate them to compact sparse blocks.
-func (cache *retainedRender2D) allocateNode() *retainedEntity2D {
-	if len(cache.freeNodes) == 0 {
-		block := make([]retainedEntity2D, 64)
-		cache.nodeBlocks = append(cache.nodeBlocks, block)
-		for i := range block {
-			cache.freeNodes = append(cache.freeNodes, &block[i])
-		}
-	}
-	last := len(cache.freeNodes) - 1
-	node := cache.freeNodes[last]
-	cache.freeNodes[last] = nil
-	cache.freeNodes = cache.freeNodes[:last]
-	node.first = -1
-	node.allocated = true
-	return node
-}
-
 type renderInput2D struct {
 	revision func(*ecs.World) (uint64, uint64)
 	changed  func(*ecs.World, *ecs.SystemContext, *retainedRender2D)
 	poll     func(*ecs.World, *retainedRender2D) int
+	dirty    renderNodeDirty2D
 }
 
 func retainedInput2D[T any]() renderInput2D {
-	return renderInput2D{
+	input := renderInput2D{
 		revision: (*ecs.World).ComponentValueRevision[T],
+		dirty:    renderNodeDirtyContent2D,
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
 			for entity := range world.Query[T](changes.Changed[T]()).All {
-				cache.mark(entity)
+				cache.mark(entity, renderNodeDirtyContent2D)
 			}
 		},
 	}
+	return input
 }
 
 // Local ordering cannot make an entity drawable. Ignore writes to ancestors
@@ -167,7 +305,7 @@ func localRetainedInput2D[T any]() renderInput2D {
 	input.changed = func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
 		for entity := range world.Query[T](changes.Changed[T]()).All {
 			if cache.nodes[entity] != nil {
-				cache.mark(entity)
+				cache.mark(entity, renderNodeDirtyOrder2D)
 			}
 		}
 	}
@@ -175,14 +313,16 @@ func localRetainedInput2D[T any]() renderInput2D {
 }
 
 func inheritedRetainedInput2D[T any]() renderInput2D {
-	return renderInput2D{
+	input := renderInput2D{
 		revision: (*ecs.World).ComponentValueRevision[T],
+		dirty:    renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D,
 		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
 			for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
 				cache.enqueueHierarchy(entity)
 			}
 		},
 	}
+	return input
 }
 
 func (cache *retainedRender2D) beginHierarchyChanges(world *ecs.World) {
@@ -203,8 +343,15 @@ func (cache *retainedRender2D) markHierarchyChanges(world *ecs.World) {
 	hierarchy := HierarchyFor(world)
 	for i := 0; i < len(cache.hierarchyQueue); i++ {
 		entity := cache.hierarchyQueue[i]
-		if cache.nodes[entity] != nil {
-			cache.mark(entity)
+		if node := cache.nodes[entity]; node != nil {
+			cache.reparent(entity, hierarchy)
+			cache.mark(entity, renderNodeDirtyGeometry2D|renderNodeDirtyVisibility2D|renderNodeDirtyOrder2D)
+			for child := node.renderFirstChild; child != 0; {
+				next := cache.nodes[child].renderNextSibling
+				cache.enqueueHierarchy(child)
+				child = next
+			}
+			continue
 		}
 		for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
 			cache.enqueueHierarchy(child)
@@ -221,14 +368,24 @@ func (cache *retainedRender2D) enqueueHierarchy(entity ecs.Entity) {
 	}
 }
 
-func (cache *retainedRender2D) mark(entity ecs.Entity) {
+func (cache *retainedRender2D) mark(entity ecs.Entity, dirty ...renderNodeDirty2D) {
 	if node := cache.nodes[entity]; node == nil {
 		cache.missing = true
-	} else if !node.queued {
-		node.queued = true
-		cache.dirty = append(cache.dirty, entity)
-		if node.positionCount() != 0 {
-			cache.dirtyNodes++
+	} else {
+		flags := renderNodeDirtyContent2D | renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D
+		if len(dirty) != 0 {
+			flags = 0
+			for _, value := range dirty {
+				flags |= value
+			}
+		}
+		node.dirty |= flags
+		if !node.queued {
+			node.queued = true
+			cache.dirty = append(cache.dirty, entity)
+			if node.positionCount() != 0 {
+				cache.dirtyNodes++
+			}
 		}
 	}
 }
@@ -260,7 +417,7 @@ func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T,
 				} else {
 					node.dynamic &^= flag
 				}
-				cache.mark(entity)
+				cache.mark(entity, renderNodeDirtyContent2D)
 			}
 		}
 		return active
@@ -305,24 +462,21 @@ const inheritedRenderInputs2D = 6
 const dynamicRenderInputs2D = 19
 
 type retainedRender2D struct {
+	renderTree2D
 	nestedRetention     map[ecs.Entity]reuse.Retention
 	textureRetention    map[*graphics.Texture]reuse.Retention
-	nodes               map[ecs.Entity]*retainedEntity2D
 	queryScope          *ecs.QueryScope
 	textures            map[*graphics.Texture]*retainedTexture2D
 	device              *render.Device
 	changes             ecs.SystemContext
 	damageFlags         []bool
 	damage              []renderDamage2D
-	freeNodes           []*retainedEntity2D
 	hierarchyQueue      []ecs.Entity
 	hierarchyMarks      []uint64
 	paints              []paintItem2D
 	dirty               []ecs.Entity
 	items               []renderItem2D
-	nodeBlocks          [][]retainedEntity2D
 	scope               ecs.QueryScope
-	nodeMapRetention    reuse.MapRetention
 	textureMapRetention reuse.MapRetention
 	hierarchyRetention  [2]reuse.Retention
 	itemRetention       reuse.Retention
@@ -357,21 +511,22 @@ type retainedRender2D struct {
 
 type renderDamage2D struct {
 	position int
+	node     uint64
 	previous image.Rectangle
 }
 
 func (cache *retainedRender2D) recordDamage(node *retainedEntity2D) {
 	if cache.damageValid {
 		for position := range node.positions {
-			cache.recordItemDamage(position)
+			cache.recordItemDamage(position, node.id)
 		}
 	}
 }
 
-func (cache *retainedRender2D) recordItemDamage(position int) {
+func (cache *retainedRender2D) recordItemDamage(position int, nodeID uint64) {
 	if cache.damageValid && !cache.damageFlags[position] {
 		cache.damageFlags[position] = true
-		cache.damage = append(cache.damage, renderDamage2D{position: position, previous: cache.paints[position].boundsRect(&cache.items[position])})
+		cache.damage = append(cache.damage, renderDamage2D{position: position, node: nodeID, previous: cache.paints[position].boundsRect(&cache.items[position])})
 	}
 }
 
@@ -468,6 +623,7 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 		}
 	}
 	node.matrix, node.clip = matrix, clip
+	node.dirty = 0
 	return true
 }
 
@@ -592,6 +748,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 					full = true
 					break
 				}
+				node.captureRenderMetadata(cache.items)
 				updated += node.positionCount()
 			}
 			if !full {
@@ -637,6 +794,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			node.queued = false
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
+			node.captureRenderMetadata(cache.items)
 		}
 		if !full {
 			cache.stats.Extracted, cache.stats.Reused = len(items), len(cache.items)-len(items)
@@ -697,12 +855,14 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			node.queued = false
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
+			node.captureRenderMetadata(cache.items)
 			if node.positionCount() == 0 && node.dynamic == 0 {
 				delete(cache.nodes, entity)
 				*node = retainedEntity2D{first: -1}
 				cache.freeNodes = append(cache.freeNodes, node)
 			}
 		}
+		cache.rebuildLinks(HierarchyFor(world))
 		cache.stats.Extracted, cache.stats.Sorted = len(items), true
 	}
 	cache.capture(c, world, state)

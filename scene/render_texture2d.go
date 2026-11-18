@@ -66,7 +66,7 @@ func (cache *retainedRender2D) refreshTextures() {
 				cache.mark(item.entity)
 				continue
 			}
-			cache.recordItemDamage(position)
+			cache.recordItemDamage(position, item.renderNode)
 			cache.paints[position] = preparePaintItem2D(item, cache.device)
 			item.paint = &cache.paints[position]
 			cache.stats.PaintUpdated++

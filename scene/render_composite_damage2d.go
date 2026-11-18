@@ -52,6 +52,9 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 	screen := image.Rect(0, 0, view.width, view.height)
 	for _, change := range damage {
 		item := &state.Items2D[change.position]
+		if change.node != 0 && item.renderNode != change.node {
+			return false
+		}
 		previous := change.previous.Intersect(screen)
 		var next image.Rectangle
 		if renderItemForCamera2D(item, camera, defaultUICamera) {
