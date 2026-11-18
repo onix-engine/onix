@@ -17,8 +17,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/onix-engine/onix/resource"
 	"github.com/go-gl/mathgl/mgl32"
+	"github.com/onix-engine/onix/resource"
 )
 
 type modIndices struct {
@@ -58,8 +58,7 @@ func (cache *CompileCache) Compile(source fs.FS, root string, definitions []ModI
 	return compileProjectDefinitions(source, root, definitions, cache)
 }
 
-// CompileProject reads only the module-system format. It never falls back to
-// scenes.json, node hierarchies, prefabs, or project-global resource references.
+// CompileProject reads project, scene, and module documents.
 // Compilation owns allocations; the resulting plans use indices and typed data.
 func CompileProject(source fs.FS, root string) (*ProjectPlan, error) {
 	return compileProjectDefinitions(source, root, nil, nil)

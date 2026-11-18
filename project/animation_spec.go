@@ -85,8 +85,7 @@ func cloneAnimationTrackSpecs[T any](tracks []AnimationTrackSpec[T]) []Animation
 	return clone
 }
 
-// Validate validates an inline animation clip owned by a scene or prefab
-// node.
+// Validate validates an inline animation clip.
 func (s AnimationClipSpec) Validate() error {
 	id := "inline"
 	if s.Duration <= 0 || !finiteAnimationSpecValue(s.Duration) {
@@ -262,8 +261,7 @@ func validateAnimationBindingPath(path string) error {
 }
 
 // compileAnimationClipSpec builds the immutable runtime clip embedded in a
-// scene or prefab animation component. Every non-empty binding path is
-// resolved by the scene spawn plan to a real descendant entity.
+// animation component. Non-empty binding paths resolve to descendant entities.
 func (r *Resources) compileAnimationClipSpec(spec AnimationClipSpec, id string) (*scene.AnimationClip, error) {
 	if r == nil {
 		return nil, fmt.Errorf("resources are nil")

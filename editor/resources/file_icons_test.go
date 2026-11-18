@@ -110,7 +110,7 @@ func TestFileIconStructuredPathsAndFallback(t *testing.T) {
 		dir  bool
 	}{
 		{path: "assets.json", dir: true, want: "folder"},
-		{path: "button/mod.json", dir: false, want: "prefab"},
+		{path: "button/mod.json", dir: false, want: "module"},
 		{path: "resources/scenes/main.json", dir: false, want: "scene"},
 		{path: "levels/main.scene.json", dir: false, want: "scene"},
 		{path: "button/private/data.json", dir: false, want: "json"},

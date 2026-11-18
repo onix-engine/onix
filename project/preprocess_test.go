@@ -14,7 +14,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/typedbin"
 	sceneapi "github.com/onix-engine/onix/scene"
@@ -43,66 +42,6 @@ func TestPreprocessManifestsCompilesReferencedJSONAtlasOnly(t *testing.T) {
 	}
 	if _, ok := compiled["resources/business.json"]; ok {
 		t.Fatal("unreferenced business JSON was treated as an atlas")
-	}
-}
-
-func TestPreprocessManifestsCompilesRegisteredPrefab(t *testing.T) {
-	source := fstest.MapFS{
-		"resources/resources.json": {Data: []byte(`{
-  "prefabs":[{"id":"effect","path":"resources/prefabs/effect.prefab.json"}]
-}`)},
-		"resources/scenes.json":            {Data: []byte(`{"entry":"main","scenes":[{"id":"main","path":"scenes/main.scene.json"}]}`)},
-		"resources/scenes/main.scene.json": {Data: []byte(`{"nodes":[{"id":"host","coordinateSpace":"ui"}]}`)},
-		"resources/prefabs/effect.prefab.json": {Data: []byte(`{
-  "root":{"id":"root","coordinateSpace":"ui","visible":false}
-}`)},
-	}
-	files, err := PreprocessManifests(source, PreprocessOptions{Root: "."})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var prefab prefabManifest
-	found := false
-	for _, file := range files {
-		if file.Path != "resources/prefabs/effect.prefab.json" {
-			continue
-		}
-		found = true
-		if !typedbin.IsEncoded(file.Data) {
-			t.Fatal("prefab manifest was not compiled")
-		}
-		if decoded, err := typedbin.Unmarshal[prefabManifest](file.Data); err != nil {
-			t.Fatal(err)
-		} else {
-			prefab = decoded
-		}
-	}
-	if !found {
-		t.Fatal("preprocessor did not return the registered prefab")
-	}
-	if !prefab.Prepared || len(prefab.SpawnPlan.Nodes) != 1 || prefab.Root.ID != "" {
-		t.Fatalf("compiled prefab = %#v", prefab)
-	}
-	for _, file := range files {
-		if file.Remove {
-			delete(source, file.Path)
-			continue
-		}
-		source[file.Path] = &fstest.MapFile{Data: file.Data}
-	}
-	bundle, err := loadTestProject(source, ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bundle.Dispose()
-	world := ecs.NewWorld()
-	scene, err := bundle.InstantiateEntryScene(world)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer scene.Dispose()
-	if _, err := scene.MountPrefab(scene.MustEntity("host"), "effect", "compiled-effect"); err != nil {
-		t.Fatal(err)
 	}
 }
 

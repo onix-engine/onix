@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type sceneSpawnPlan struct {
@@ -25,9 +25,8 @@ type sceneSpawnNode struct {
 	// clips themselves live in Bundle's immutable cache because spawn plans are
 	// serialized by the preprocessor.
 	AnimationKey string
-	// LocalID is stable across prefab mounts and runtime clones. Binding paths
-	// are authored with these hierarchy-local IDs, while Spec.ID may be
-	// namespaced for a mounted or cloned instance.
+	// LocalID stays stable when a runtime clone namespaces Spec.ID. Animation
+	// binding paths use these hierarchy-local IDs.
 	LocalID                 string
 	AnimationBoolTargets    []uint32
 	AnimationTextureTargets []uint32
@@ -299,9 +298,8 @@ func animationTrackCount(plan *sceneSpawnPlan) int {
 }
 
 // DefaultAnimationClip creates the initial clip for an animation component
-// that has no authored clip yet.  Keeping this construction in the project
-// package makes scene loading, prefab instantiation, and the editor agree on
-// the same first keyframe.
+// that has no authored clip yet. Scene loading and the editor use the same
+// first keyframe.
 func DefaultAnimationClip(spec SceneNodeSpec) AnimationClipSpec {
 	return AnimationClipSpec{
 		Duration:   1,

@@ -6,37 +6,6 @@ import (
 	"testing"
 )
 
-func TestLoadDirectoryFromManifestFindsModuleRoot(t *testing.T) {
-	root := t.TempDir()
-	projectDir := filepath.Join(root, "apps", "game")
-	if err := os.MkdirAll(filepath.Join(projectDir, "resources", "scenes"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/game\n\ngo 1.26\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "resources", "project.json"), []byte(`{"engine":{"features":["render2d","input2d","ui-controls"],"resources":["images","fonts"]}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "resources", "resources.json"), []byte(`{}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "resources", "scenes.json"), []byte(`{"entry":"main","scenes":[{"id":"main","path":"scenes/main.scene.json"}]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "resources", "scenes", "main.scene.json"), []byte(`{"nodes":[]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	bundle, err := LoadDirectoryFromManifest[ResourceFeature](projectDir)
-	if err != nil {
-		t.Fatalf("load project directory: %v", err)
-	}
-	defer bundle.Dispose()
-	if bundle.EntrySceneID() != "main" {
-		t.Fatalf("entry scene = %q, want main", bundle.EntrySceneID())
-	}
-}
-
 func TestLoadDirectoryWithRender2DProfile(t *testing.T) {
 	root := t.TempDir()
 	projectDir := filepath.Join(root, "apps", "game")

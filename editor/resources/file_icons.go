@@ -54,7 +54,7 @@ func FileIconName(filename string, directory bool) string {
 	extension := path.Ext(name)
 	if extension == ".json" {
 		if name == "mod.json" {
-			return "prefab"
+			return "module"
 		}
 		name = strings.TrimSuffix(name, extension)
 		extension = path.Ext(name)
@@ -68,8 +68,6 @@ func FileIconName(filename string, directory bool) string {
 			return "animation"
 		case ".tile", ".tilemap", ".tileset":
 			return "tile"
-		case ".prefab":
-			return "prefab"
 		case ".atlas":
 			return "image"
 		default:
@@ -91,8 +89,6 @@ func FileIconName(filename string, directory bool) string {
 		return "shader"
 	case ".scene":
 		return "scene"
-	case ".prefab":
-		return "prefab"
 	case ".go", ".js", ".ts", ".jsx", ".tsx", ".lua", ".py", ".cs", ".rs", ".c", ".h", ".cpp", ".sh":
 		return "script"
 	case ".mp4", ".webm", ".mov", ".avi", ".mkv":

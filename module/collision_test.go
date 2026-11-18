@@ -10,9 +10,9 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 	plan, source := compileFixture(t, map[string]string{
 		"resources/project.json":     `{"entry":"main.json","scenes":["main.json"]}`,
 		"resources/scenes/main.json": `{"modules":[{"id":"ball","mod":"ball"},{"id":"wall","mod":"wall"},{"id":"body3d","mod":"body3d"},{"id":"log","mod":"log"}]}`,
-		"ball/mod.json":              `{"space":"world","elements":[{"id":"body","components":{"rigidBody2D":{"type":"dynamic"},"circleCollider2D":{"radius":1,"sensor":true,"collisionType":7},"collision":{"emit":"hit"}}}]}`,
-		"wall/mod.json":              `{"space":"world","components":{"rigidBody2D":{"type":"static"},"circleCollider2D":{"radius":1,"collisionType":11}}}`,
-		"body3d/mod.json":            `{"space":"world","components":{"rigidBody3D":{"type":"dynamic"},"collision":{"emit":"hit"}}}`,
+		"ball/mod.json":              `{"space":"world","elements":[{"id":"body","components":{"rigidBody2D":{"type":"dynamic","mass":1},"circleCollider2D":{"radius":1,"sensor":true,"collisionType":7},"collision":{"emit":"hit"}}}]}`,
+		"wall/mod.json":              `{"space":"world","components":{"rigidBody2D":{"type":"static","mass":1},"circleCollider2D":{"radius":1,"collisionType":11}}}`,
+		"body3d/mod.json":            `{"space":"world","components":{"rigidBody3D":{"type":"dynamic","mass":1},"collision":{"emit":"hit"}}}`,
 		"log/mod.json":               `{}`,
 	})
 	var count2D, count3D int

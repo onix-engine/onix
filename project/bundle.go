@@ -32,7 +32,6 @@ type Bundle struct {
 	scenePlansByID       map[SceneID]sceneSpawnPlan
 	particleSpecs        map[string]ParticleSpec
 	modelSpecs           map[string]ModelSpec
-	prefabPlansByID      map[PrefabID]*prefabPlan
 	clearComponents      sceneComponentClearer
 	inlineAnimationClips *resourceCache[string, *scene.AnimationClip]
 	tilemapSpecs         map[string]TilemapSpec
@@ -41,7 +40,6 @@ type Bundle struct {
 	spineSpecs           map[string]SpineSpec
 	entrySceneID         SceneID
 	engineConfig         EngineConfig
-	prefabIDs            []PrefabID
 	sceneIDs             []SceneID
 	windowIcon           []byte
 	appConfig            AppConfig
@@ -89,17 +87,16 @@ func (value modelResource) dispose() error {
 }
 
 type resourceManifest struct {
-	Fonts    []FileResource       `json:"fonts"`
-	Audio    []FileResource       `json:"audio"`
-	Videos   []FileResource       `json:"videos"`
-	Effects  []ParticleSpec       `json:"effects"`
-	Tilemaps []TilemapSpec        `json:"tilemaps"`
-	Models   []ModelSpec          `json:"models"`
-	Spines   []SpineSpec          `json:"spines"`
-	Shaders  []ShaderSpec         `json:"shaders"`
-	HTML     []FileResource       `json:"html"`
-	Prefabs  []PrefabResourceSpec `json:"prefabs"`
-	Prepared bool                 `json:"-"`
+	Fonts    []FileResource `json:"fonts"`
+	Audio    []FileResource `json:"audio"`
+	Videos   []FileResource `json:"videos"`
+	Effects  []ParticleSpec `json:"effects"`
+	Tilemaps []TilemapSpec  `json:"tilemaps"`
+	Models   []ModelSpec    `json:"models"`
+	Spines   []SpineSpec    `json:"spines"`
+	Shaders  []ShaderSpec   `json:"shaders"`
+	HTML     []FileResource `json:"html"`
+	Prepared bool           `json:"-"`
 }
 
 type gameManifest struct {
@@ -648,7 +645,6 @@ type Resources struct {
 	named             map[string]any
 	modHTMLBases      map[string]string
 	baseDir           string
-	prefabSpecs       []PrefabResourceSpec
 	namedMu           sync.RWMutex
 }
 
@@ -810,10 +806,6 @@ func loadProfileBundle[P LoadProfile](source iofs.FS, root string, profile P, fe
 			_ = project.resources.Dispose()
 		}
 	}()
-	project.prefabPlansByID, project.prefabIDs, err = loadPrefabResources(source, root, project.resources.prefabSpecs)
-	if err != nil {
-		return nil, err
-	}
 	project.entrySceneID, project.scenePlansByID, project.sceneIDs, err = loadSceneCatalog(source, manifestDir)
 	if err != nil {
 		return nil, err
@@ -876,29 +868,6 @@ func (b *Bundle) prepareInlineAnimationPlans() error {
 		}
 		b.scenePlansByID[id] = plan
 	}
-	for id, prefab := range b.prefabPlansByID {
-		if prefab == nil {
-			continue
-		}
-		for index := range prefab.plan.Nodes {
-			node := &prefab.plan.Nodes[index]
-			component := node.Spec.Components.Animation
-			if component == nil || !component.Clip.HasContent() {
-				continue
-			}
-			key := "prefab/" + string(id) + "/" + node.Spec.ID
-			if err := component.Clip.Validate(); err != nil {
-				return fmt.Errorf("prefab %q node %q: %w", id, node.Spec.ID, err)
-			}
-			spec := component.Clip.Clone()
-			if err := b.inlineAnimationClips.register(key, func() (*scene.AnimationClip, error) {
-				return b.resources.compileAnimationClipSpec(spec, key)
-			}, nil); err != nil {
-				return fmt.Errorf("prefab %q node %q animation cache: %w", id, node.Spec.ID, err)
-			}
-			node.AnimationKey = key
-		}
-	}
 	return nil
 }
 
@@ -916,7 +885,7 @@ func (b *Bundle) Resources() *Resources {
 
 // CompileAnimationClip compiles an inline authoring clip against this
 // bundle's texture resources. The returned clip is independent of any scene
-// instance and can be shared by editor previews and prefab instances.
+// instance and can be shared across instances and editor previews.
 func (b *Bundle) CompileAnimationClip(spec AnimationClipSpec) (*scene.AnimationClip, error) {
 	if b == nil || b.resources == nil {
 		return nil, fmt.Errorf("project bundle is nil")
@@ -956,11 +925,6 @@ func (b *Bundle) Has3D() bool {
 			return true
 		}
 	}
-	for _, prefab := range b.prefabPlansByID {
-		if prefab.plan.Has3D {
-			return true
-		}
-	}
 	return false
 }
 
@@ -970,11 +934,6 @@ func (b *Bundle) HasUI() bool {
 	}
 	for _, plan := range b.scenePlansByID {
 		if plan.HasUI {
-			return true
-		}
-	}
-	for _, prefab := range b.prefabPlansByID {
-		if prefab.plan.HasUI {
 			return true
 		}
 	}
@@ -993,14 +952,6 @@ func (b *Bundle) SceneIDs() []SceneID {
 		return nil
 	}
 	return slices.Clone(b.sceneIDs)
-}
-
-// PrefabIDs returns every prefab registered by resources.json.
-func (b *Bundle) PrefabIDs() []PrefabID {
-	if b == nil {
-		return nil
-	}
-	return slices.Clone(b.prefabIDs)
 }
 
 func (b *Bundle) WindowIcon() []byte {
@@ -1084,10 +1035,6 @@ func loadResources(source iofs.FS, projectDir, path string, feature ResourceFeat
 			return nil, nil, nil, nil, nil, err
 		}
 	}
-	prefabSpecs, err := normalizePrefabResourceSpecs(manifest.Prefabs)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("%s: %w", pathpkg.Base(path), err)
-	}
 	particleSpecs, err := indexManifestItems(path, manifest.Effects, "effect", func(spec ParticleSpec) string {
 		return spec.ID
 	}, func(spec ParticleSpec) error {
@@ -1165,7 +1112,6 @@ func loadResources(source iofs.FS, projectDir, path string, feature ResourceFeat
 	store.shaders = newResourceCache[string, shaderResource](len(shaderSpecs))
 	store.material2DShaders = newResourceCache[string, *graphics.Material2DShader](len(shaderSpecs))
 	store.meshShaders = newResourceCache[string, *graphics.MeshShader](len(shaderSpecs))
-	store.prefabSpecs = prefabSpecs
 	if len(manifest.Audio) > 0 && feature == nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("%s contains audio resources but no audio resource feature is installed", pathpkg.Base(path))
 	}
@@ -1593,7 +1539,6 @@ func (r *Resources) Dispose() error {
 	disposeResource("shader source", r.shaders, &errList)
 	disposeResource("texture", r.textures, &errList)
 	disposeResource("environment", r.environments, &errList)
-	r.prefabSpecs = nil
 	return errors.Join(errList...)
 }
 
@@ -1656,7 +1601,7 @@ func normalizeSceneCatalog(catalog *sceneCatalog) error {
 		if _, exists := ids[entry.ID]; exists {
 			return fmt.Errorf("%s contains duplicate scene id %q", sceneCatalogFileName, entry.ID)
 		}
-		path, err := normalizeResourceFilePath[sceneResourceFile](entry.Path)
+		path, err := normalizeSceneResourcePath(entry.Path)
 		if err != nil {
 			return fmt.Errorf("scene %q path %q must be a relative *.scene.json path", entry.ID, entry.Path)
 		}

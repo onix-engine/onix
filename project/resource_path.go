@@ -19,21 +19,6 @@ type localResourcePath struct{}
 
 func (localResourcePath) allowParent() bool { return false }
 
-type resourceManifestFile interface {
-	suffix() string
-	description() string
-}
-
-type sceneResourceFile struct{}
-
-func (sceneResourceFile) suffix() string      { return ".scene.json" }
-func (sceneResourceFile) description() string { return "scene file" }
-
-type prefabResourceFile struct{}
-
-func (prefabResourceFile) suffix() string      { return ".prefab.json" }
-func (prefabResourceFile) description() string { return "prefab file" }
-
 // NormalizeResourcePath validates and canonicalizes a project-relative file
 // reference. Parent segments are retained so projects mounted below an fs.FS
 // root can share repository resources; ResolveResourcePath enforces that root.
@@ -74,11 +59,10 @@ func ResolveLocalResourcePath(baseDir, value string) (string, error) {
 	return resolved, nil
 }
 
-func normalizeResourceFilePath[T resourceManifestFile](value string) (string, error) {
-	normalized, err := normalizeResourcePath[localResourcePath](value)
-	var file T
-	if err != nil || !strings.HasSuffix(strings.ToLower(normalized), file.suffix()) {
-		return "", fmt.Errorf("%s must be a relative *%s path", file.description(), file.suffix())
+func normalizeSceneResourcePath(value string) (string, error) {
+	normalized, err := NormalizeLocalResourcePath(value)
+	if err != nil || !strings.HasSuffix(strings.ToLower(normalized), ".scene.json") {
+		return "", fmt.Errorf("scene file must be a relative *.scene.json path")
 	}
 	return normalized, nil
 }

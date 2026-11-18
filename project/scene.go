@@ -2278,7 +2278,7 @@ func bindSceneAnimationTargets(world *ecs.World, plan sceneSpawnPlan, entities [
 }
 
 // bindRuntimeAnimationTargets resolves inline clip paths once for entities
-// created outside a precompiled scene/prefab plan (editor ApplyNode and
+// created outside a precompiled scene plan (editor ApplyNode and
 // runtime clones). Playback receives only these concrete entities; no path or
 // name lookup is performed by the animator update system.
 func (s *SceneInstance) bindRuntimeAnimationTargets(owners ...ecs.Entity) error {

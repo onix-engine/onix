@@ -15,7 +15,7 @@ import (
 	spineruntime "github.com/onix-engine/onix/spine"
 )
 
-// PreprocessManifests compiles project, resource, prefab, catalog, and scene manifests.
+// PreprocessManifests compiles project, resource, catalog, and scene manifests.
 func PreprocessManifests(source iofs.FS, options PreprocessOptions) ([]PreprocessedFile, error) {
 	if source == nil {
 		return nil, fmt.Errorf("project resource source is nil")
@@ -85,31 +85,6 @@ func PreprocessManifests(source iofs.FS, options PreprocessOptions) ([]Preproces
 			return nil, err
 		}
 		result = append(result, spines...)
-		prefabs, err := normalizePrefabResourceSpecs(manifest.Prefabs)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", resourceFileName, err)
-		}
-		for _, entry := range prefabs {
-			prefabPath, err := ResolveResourcePath(root, entry.Path)
-			if err != nil {
-				return nil, fmt.Errorf("resolve prefab %q: %w", entry.ID, err)
-			}
-			prefab, err := readSourceJSON[prefabManifest](source, prefabPath)
-			if err != nil {
-				return nil, fmt.Errorf("load prefab %q: %w", entry.ID, err)
-			}
-			if err := collectGameObjectAtlasPaths(atlasPaths, root, []SceneNodeSpec{prefab.Root}); err != nil {
-				return nil, fmt.Errorf("prefab %q: %w", entry.ID, err)
-			}
-			if err := compilePrefabManifest(string(entry.ID), &prefab); err != nil {
-				return nil, err
-			}
-			compiled, err := preprocessManifest(source, prefabPath, prefab)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, compiled)
-		}
 		manifest.Prepared = true
 		compiled, err := preprocessManifest(source, resourcePath, manifest)
 		if err != nil {

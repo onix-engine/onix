@@ -154,7 +154,7 @@ func TestWorkspaceResourcesUseFlatIconTilesAndKeepSelection(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	a.Selected = "start"
 	source := workspaceShellTest(t, a)
-	for _, value := range []string{`class="resource-tiles"`, `class="resource-tile"`, `src="onix-file-icons/prefab"`, `src="onix-file-icons/script"`, `src="onix-file-icons/folder"`, `>private</span>`} {
+	for _, value := range []string{`class="resource-tiles"`, `class="resource-tile"`, `src="onix-file-icons/module"`, `src="onix-file-icons/script"`, `src="onix-file-icons/folder"`, `>private</span>`} {
 		if !strings.Contains(source, value) {
 			t.Fatalf("resource tiles missing %s", value)
 		}

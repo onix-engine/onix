@@ -38,7 +38,6 @@ type migrationResources struct {
 	Models                     []project.ModelSpec
 	Spines                     []project.SpineSpec
 	Shaders                    []project.ShaderSpec
-	Prefabs                    []project.PrefabResourceSpec
 }
 
 type moduleMigration struct {
@@ -146,9 +145,6 @@ func MigrateModuleProject(source, output string) (ModuleMigrationReport, error) 
 		v.WGSLFragment = m.privateFile(v.WGSLFragment)
 		m.shaders[v.ID] = v
 	}
-	for _, prefab := range m.resources.Prefabs {
-		m.issue(prefab.Path, "", "prefab business boundary must be split into independent modules")
-	}
 	err = filepath.WalkDir(filepath.Join(source, "resources"), func(file string, e fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -163,7 +159,7 @@ func MigrateModuleProject(source, output string) (ModuleMigrationReport, error) 
 			return fmt.Errorf("migration asset %s must be a regular file", file)
 		}
 		name := e.Name()
-		if name == "project.json" || name == "resources.json" || name == "scenes.json" || strings.HasSuffix(name, ".prefab.json") {
+		if name == "project.json" || name == "resources.json" || name == "scenes.json" {
 			return nil
 		}
 		rel, err := filepath.Rel(filepath.Join(source, "resources"), file)

@@ -13,40 +13,25 @@ import (
 
 func TestModuleShaderProgramsAreSharedAndUniformsBelongToElements(t *testing.T) {
 	render.Uninstall()
+	const fragment = "resources/effect.frag"
 	source := fstest.MapFS{
-		"resources/project.json":     {Data: []byte(`{"entry":"main.json"}`)},
-		"resources/scenes/main.json": {Data: []byte(`{"modules":[{"id":"effect","mod":"effect"}]}`)},
-		"effect/mod.json": {Data: []byte(`{"elements":[
-			{"id":"first","components":{"sprite":{"color":"#ffffff"},"shader":{"wgslFragment":"resources/effect.wgsl","custom":[[0.25,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]}}},
-			{"id":"second","components":{"sprite":{"color":"#ffffff"},"shader":{"wgslFragment":"resources/effect.wgsl","custom":[[0.75,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]}}}
-		]}`)},
-		"effect/resources/effect.wgsl": {Data: []byte("fragment")},
+		"effect/" + fragment: {Data: []byte("generated fragment")},
 	}
-	plan, err := CompileProject(source, ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	files, err := PreprocessModuleAssets(source, plan, PreprocessOptions{ShaderTarget: ShaderTargetWebGL2, ShaderCompiler: shaderCompileTestCompiler{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		if file.Remove {
-			delete(source, file.Path)
-		} else {
-			source[file.Path] = &fstest.MapFile{Data: file.Data}
-		}
-	}
-	mod := &plan.Mods[0]
-	resources, err := OpenModResources(source, mod, nil)
+	resources, err := OpenModResources(source, &ModPlan{ID: "effect"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = resources.Dispose() })
 	world := ecs.NewWorld()
 	var entities [2]ecs.Entity
-	for i, element := range mod.Elements {
-		bundle, err := resources.ModContent(element.Spec.Components)
+	for i, uniform := range [2]float32{.25, .75} {
+		bundle, err := resources.ModContent(ModComponents{
+			Sprite: &ModSpriteSpec{Color: "#ffffff"},
+			Shader: &ShaderComponentSpec{
+				Compiled: ShaderSources{WebGL2Fragment: fragment, WebGL2Generated: true},
+				Custom:   [4][4]float32{{uniform}},
+			},
+		})
 		if err != nil {
 			t.Fatal(err)
 		}

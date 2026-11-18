@@ -1,3 +1,5 @@
+//go:build !onix_release
+
 package project
 
 import (

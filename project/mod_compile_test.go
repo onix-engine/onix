@@ -184,12 +184,12 @@ func TestModuleContentRejectsInvalidParticlesInputAndPhysics(t *testing.T) {
 		{"emitter duplicate particle", `{"elements":[{"id":"spark","components":{"particle":{"color":"#ffffff"}}}],"components":{"emitter":{"particles":["spark","spark"],"count":10,"lifetime":1}}}`, "", "repeats particle element"},
 		{"emitter slot instead of element", `{"slots":{"spark":{"type":"string","default":"spark"}},"components":{"emitter":{"particles":["spark"],"count":10,"lifetime":1}}}`, "", "unknown particle element"},
 		{"orphan collider", `{"space":"world","components":{"circleCollider2D":{"radius":2}}}`, "", "same element"},
-		{"mixed bodies", `{"space":"world","components":{"rigidBody2D":{"type":"dynamic"},"rigidBody3D":{"type":"dynamic"}}}`, "", "both 2D and 3D"},
+		{"mixed bodies", `{"space":"world","components":{"rigidBody2D":{"type":"dynamic","mass":1},"rigidBody3D":{"type":"dynamic","mass":1}}}`, "", "both 2D and 3D"},
 		{"collision body", `{"components":{"collision":{"emit":"hit"}}}`, "", "exactly one rigid body"},
-		{"private scale", `{"space":"world","elements":[{"id":"parent","transform":{"scale":[2,2,2]}},{"id":"body","parent":"parent","components":{"rigidBody3D":{"type":"dynamic"}}}]}`, "", "unit scale"},
-		{"scene scale", `{"space":"world","components":{"rigidBody2D":{"type":"dynamic"}}}`, `{"transform":{"scale":[2,2,2]},"modules":[{"id":"a","mod":"mod"}]}`, "unit scale"},
-		{"placement scale", `{"space":"world","components":{"rigidBody3D":{"type":"dynamic"}}}`, `{"modules":[{"id":"a","mod":"mod","placement":{"scale":[1,2,1]}}]}`, "unit scale"},
-		{"2D tilt", `{"space":"world","transform":{"rotation":[0.2,0,0]},"components":{"rigidBody2D":{"type":"dynamic"}}}`, "", "XY plane"},
+		{"private scale", `{"space":"world","elements":[{"id":"parent","transform":{"scale":[2,2,2]}},{"id":"body","parent":"parent","components":{"rigidBody3D":{"type":"dynamic","mass":1}}}]}`, "", "unit scale"},
+		{"scene scale", `{"space":"world","components":{"rigidBody2D":{"type":"dynamic","mass":1}}}`, `{"transform":{"scale":[2,2,2]},"modules":[{"id":"a","mod":"mod"}]}`, "unit scale"},
+		{"placement scale", `{"space":"world","components":{"rigidBody3D":{"type":"dynamic","mass":1}}}`, `{"modules":[{"id":"a","mod":"mod","placement":{"scale":[1,2,1]}}]}`, "unit scale"},
+		{"2D tilt", `{"space":"world","transform":{"rotation":[0.2,0,0]},"components":{"rigidBody2D":{"type":"dynamic","mass":1}}}`, "", "XY plane"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			scene := test.scene

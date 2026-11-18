@@ -5,9 +5,9 @@ import (
 	"math"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // AnimationTween controls the curve applied from one keyframe to the next.
@@ -556,7 +556,7 @@ type Animator struct {
 	boolTargetCount    int
 	textureTargetCount int
 	loops              uint64
-	// Bound target entities are compiled by the scene/prefab plan.  They are
+	// Bound target entities are resolved when content is instantiated. They are
 	// indexed by the corresponding typed track and let playback touch real
 	// nodes without resolving a path or consulting a map each frame.
 	owner                 ecs.Entity

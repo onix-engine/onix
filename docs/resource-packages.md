@@ -16,7 +16,7 @@ Cache output is `<project>/dist/.onix-resource-cache/<platform>-<mode>/`. Finger
 
 ## Paths and configuration
 
-Logical paths use `/`. Absolute paths, backslashes and escapes outside the repository resource root are rejected. Project resource references use the project root; permitted `../` references must remain inside that root boundary. Scene-list paths are relative to `resources/`; prefab paths are project-relative without parent traversal. Internal atlas, glTF, OBJ, MTL and JSON references resolve only relative to the referring file. glTF/GLB dependencies come from `buffers[].uri` and `images[].uri`, never names, descriptions or extras.
+Logical paths use `/`. Absolute paths, backslashes and escapes outside the repository resource root are rejected. Project resource references use the project root. Permitted `../` references must remain inside that root boundary. Scene-list paths are relative to `resources/`. Internal atlas, glTF, OBJ, MTL and JSON references resolve only relative to the referring file. glTF/GLB dependencies come from `buffers[].uri` and `images[].uri`, never names, descriptions or extras.
 
 Resources unmatched by named packages enter `base.dat`. Configure `resources/packages.json`, also editable through Project Settings → Resource Packages. `*`, `?` and character classes match one segment; `**` spans levels. Every include must match a file, and a file cannot belong to two named packages. Named packages automatically depend on `base`.
 

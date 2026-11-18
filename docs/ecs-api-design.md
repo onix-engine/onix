@@ -102,7 +102,7 @@ Scene owns hierarchy, transforms, visibility, cameras, shared 2D geometry, input
 and animation. UI owns container layout, widget constraints, controls and text
 interaction. HTML owns DOM integration and reconciliation. `scene/render3d` owns
 optional 3D extraction, materials and systems over `graphics`/`render`. Project
-loads scene, prefab and module data; `onix` composes engine features. Keep these
+loads scene and module data. `onix` composes engine features. Keep these
 boundaries free of import cycles and UI-specific calls inside ECS.
 
 ## Delivery and acceptance

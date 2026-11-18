@@ -1,6 +1,6 @@
 # Project data, creation and module runtime
 
-The engine provides strict project compilation, independent project creation, module/scenario lifecycles, typed messages, visual slots, scene management, editor workflows and generated generic registration. Editor/build entry points consume the new documents and ProjectPlan directly; legacy nodes, Prefab, scenes.json and resources.json are not fallback inputs. Application examples are maintained outside the engine checkout.
+The engine provides strict project compilation, independent project creation, module/scenario lifecycles, typed messages, visual slots, scene management, editor workflows and generated generic registration. Editor and build entry points consume project, scene and module documents and the compiled ProjectPlan. Application examples are maintained outside the engine checkout.
 
 ## Create and validate an independent project
 

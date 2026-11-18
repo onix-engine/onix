@@ -719,8 +719,7 @@ func (w *WorkspaceDocument) ModuleFiles(id project.ModID) []WorkspaceFile {
 	return result
 }
 
-// workspaceFS overlays authoring documents without modifying the disk or
-// projecting them into the removed node/prefab data model.
+// workspaceFS overlays unsaved authoring documents on the project filesystem.
 type workspaceFS struct {
 	w         *WorkspaceDocument
 	overrides map[DocumentID][]byte

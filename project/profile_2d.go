@@ -128,10 +128,6 @@ func load2DResources(source iofs.FS, projectDir, file string, feature ResourceFe
 	if len(manifest.Audio) > 0 || len(manifest.Videos) > 0 || len(manifest.Effects) > 0 || len(manifest.Tilemaps) > 0 || len(manifest.Models) > 0 || len(manifest.Spines) > 0 || len(manifest.HTML) > 0 {
 		return nil, fmt.Errorf("%s contains resources unavailable in the selected 2D profile", pathpkg.Base(file))
 	}
-	prefabSpecs, err := normalizePrefabResourceSpecs(manifest.Prefabs)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", pathpkg.Base(file), err)
-	}
 	shaderSpecs, err := indexManifestItems(file, manifest.Shaders, "shader", func(spec ShaderSpec) string { return spec.ID }, func(spec ShaderSpec) error {
 		if err := spec.Validate(); err != nil {
 			return fmt.Errorf("%s: %w", pathpkg.Base(file), err)
@@ -144,7 +140,6 @@ func load2DResources(source iofs.FS, projectDir, file string, feature ResourceFe
 	store.fonts = newResourceCache[string, fontResource](len(manifest.Fonts))
 	store.shaders = newResourceCache[string, shaderResource](len(shaderSpecs))
 	store.material2DShaders = newResourceCache[string, *graphics.Material2DShader](len(shaderSpecs))
-	store.prefabSpecs = prefabSpecs
 	if err := configureResourceFeature(store, source, projectDir, feature, ResourceEntries{}); err != nil {
 		return nil, err
 	}

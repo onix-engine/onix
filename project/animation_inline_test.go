@@ -99,55 +99,6 @@ func TestBundleDisposeClearsInlineAnimationClipCache(t *testing.T) {
 	}
 }
 
-func TestPrefabInlineAnimationSharesClipAndIsolatesPlayback(t *testing.T) {
-	dir := t.TempDir()
-	writeTestFile(t, dir, "resources/project.json", `{}`)
-	writeTestFile(t, dir, "resources/resources.json", `{"prefabs":[{"id":"pulse","path":"resources/pulse.prefab.json"}]}`)
-	writeTestFile(t, dir, "resources/scenes.json", `{"entry":"main","scenes":[{"id":"main","path":"scenes/main.scene.json"}]}`)
-	writeTestFile(t, dir, "resources/scenes/main.scene.json", `{"nodes":[{"id":"host"}]}`)
-	writeTestFile(t, dir, "resources/pulse.prefab.json", `{"root":{"id":"pulse","components":{"animation":{"clip":{"duration":1,"loop":true,"floatTracks":[{"binding":{"target":"transform.position.x"},"keyframes":[{"time":0,"value":0},{"time":1,"value":10}]}]}}}}}`)
-	bundle, err := loadTestProject(os.DirFS(dir), ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bundle.Dispose()
-	world := ecs.NewWorld()
-	clock := sceneapi.NewTime()
-	world.InsertResource(clock)
-	scene, err := bundle.InstantiateEntryScene(world)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer scene.Dispose()
-	first, err := scene.MountPrefab(scene.MustEntity("host"), "pulse", "first")
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := scene.MountPrefab(scene.MustEntity("host"), "pulse", "second")
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstEntity, _ := first.Entity("pulse")
-	secondEntity, _ := second.Entity("pulse")
-	firstAnimator := world.GetMut[sceneapi.Animator](firstEntity)
-	secondAnimator := world.GetMut[sceneapi.Animator](secondEntity)
-	if firstAnimator.Clip == nil || firstAnimator.Clip != secondAnimator.Clip {
-		t.Fatal("prefab instances did not share immutable clip")
-	}
-	firstAnimator.Seek(.25)
-	firstAnimator.Pause()
-	secondAnimator.Seek(.75)
-	secondAnimator.Pause()
-	if err := sceneapi.UpdateWorldAnimatorSystem("").Run(world); err != nil {
-		t.Fatal(err)
-	}
-	firstTransform, _ := world.Get[sceneapi.Transform](firstEntity)
-	secondTransform, _ := world.Get[sceneapi.Transform](secondEntity)
-	if firstTransform.Translation.X() != 2.5 || secondTransform.Translation.X() != 7.5 {
-		t.Fatalf("prefab playback = %v/%v, want 2.5/7.5", firstTransform.Translation.X(), secondTransform.Translation.X())
-	}
-}
-
 func TestInlineAnimationRejectsAnimatorOwnershipConflict(t *testing.T) {
 	animation := &AnimationComponentSpec{Clip: AnimationClipSpec{
 		Duration: 1,
@@ -533,48 +484,6 @@ func TestEmptyAnimationComponentCompilesForSceneAndDynamicNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEmptyAnimation(scene.MustEntity("dynamic"), 11)
-}
-
-func TestEmptyAnimationComponentCompilesForMountedPrefab(t *testing.T) {
-	dir := t.TempDir()
-	writeTestFile(t, dir, "resources/project.json", `{}`)
-	writeTestFile(t, dir, "resources/resources.json", `{"prefabs":[{"id":"pulse","path":"resources/pulse.prefab.json"}]}`)
-	writeTestFile(t, dir, "resources/scenes.json", `{"entry":"main","scenes":[{"id":"main","path":"scenes/main.scene.json"}]}`)
-	writeTestFile(t, dir, "resources/scenes/main.scene.json", `{"nodes":[{"id":"host"}]}`)
-	writeTestFile(t, dir, "resources/pulse.prefab.json", `{"root":{"id":"pulse","x":5,"components":{"animation":{}}}}`)
-	bundle, err := loadTestProject(os.DirFS(dir), ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bundle.Dispose()
-	world := ecs.NewWorld()
-	clock := sceneapi.NewTime()
-	world.InsertResource(clock)
-	scene, err := bundle.InstantiateEntryScene(world)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer scene.Dispose()
-	first, err := scene.MountPrefab(scene.MustEntity("host"), "pulse", "first")
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := scene.MountPrefab(scene.MustEntity("host"), "pulse", "second")
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstEntity, _ := first.Entity("pulse")
-	secondEntity, _ := second.Entity("pulse")
-	firstAnimator := world.GetMut[sceneapi.Animator](firstEntity)
-	ok := firstAnimator != nil
-	if !ok || firstAnimator == nil || !firstAnimator.IsBound() || firstAnimator.Clip == nil {
-		t.Fatal("mounted prefab did not initialize a bound empty animation")
-	}
-	secondAnimator := world.GetMut[sceneapi.Animator](secondEntity)
-	ok = secondAnimator != nil
-	if !ok || secondAnimator == nil || firstAnimator.Clip != secondAnimator.Clip {
-		t.Fatal("mounted prefab instances did not share the compiled default clip")
-	}
 }
 
 func TestReplaceNodesBindsInlineAnimationWithoutBundleCacheKey(t *testing.T) {
