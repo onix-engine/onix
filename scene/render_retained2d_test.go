@@ -5,10 +5,10 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestRetainedRender2DUnusedDynamicInputs(t *testing.T) {
@@ -119,7 +119,7 @@ func TestRetainedRender2DNonRenderingDynamicCandidates(t *testing.T) {
 		entity = spawner.Spawn(SpriteLayers2D{Layers: []SpriteLayer2D{layer}}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 	}
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	generation := cache.generation
 	for range 3 {
 		incrementalFrame(t, world, canvas)
@@ -156,7 +156,7 @@ func TestRetainedRender2DDenseDynamicReturnsToStatic(t *testing.T) {
 		}
 	}
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	for frame := range reuse.RetentionFrames * 2 {
 		incrementalFrame(t, world, canvas)
 		if !cache.direct || len(RenderWorldFor(world).Items2D) != 200 {
@@ -186,7 +186,7 @@ func TestRetainedRender2DDenseDynamicReturnsToStatic(t *testing.T) {
 func TestRetainedRender2DReclaimsPeakStorage(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 10000, false)
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	scratch := world.FrameScratch[renderItems2DScratch, renderItem2D]()
 	if cap(scratch.Values) != 0 {
 		t.Fatal("full retained collection allocated a second render item array")
@@ -252,7 +252,7 @@ func TestRetainedRender2DReclaimsPeakStorage(t *testing.T) {
 func TestRetainedRender2DDenseWritesReleaseAndRestore(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	frame := func() {
 		for _, entity := range entities {
 			sprite := world.GetMut[Sprite2D](entity)
@@ -283,7 +283,7 @@ func TestRetainedRender2DDenseWritesReleaseAndRestore(t *testing.T) {
 func TestRetainedRender2DNodeGrowthAndReuse(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	owner := cache.nodes[entities[0]]
 	spawner := world.NewSpawner3[Sprite2D, UIGlobalTransform, Visibility]()
 	for range 200 {
@@ -335,7 +335,7 @@ func BenchmarkRetainedRender2DStatic(b *testing.B) {
 				incrementalFrame(b, world, canvas)
 			}
 			b.StopTimer()
-			cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+			cache := world.ScopeValue[renderTree2D, renderTree2D]()
 			bytes := uintptr(cap(cache.items))*unsafe.Sizeof(renderItem2D{}) + uintptr(cap(cache.paints))*unsafe.Sizeof(paintItem2D{})
 			for _, block := range cache.nodeBlocks {
 				bytes += uintptr(cap(block)) * unsafe.Sizeof(retainedEntity2D{})

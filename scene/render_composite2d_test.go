@@ -198,11 +198,11 @@ func TestRetainedRender2DClipTextureAndDenseRecovery(t *testing.T) {
 		world.GetMut[Sprite2D](entity).Alpha = .5
 	}
 	incrementalFrame(t, world, canvas)
-	if !world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
+	if !world.ScopeValue[renderTree2D, renderTree2D]().direct {
 		t.Fatal("dense frame retained")
 	}
 	incrementalFrame(t, world, canvas)
-	if world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
+	if world.ScopeValue[renderTree2D, renderTree2D]().direct {
 		t.Fatal("quiet frame failed to recover")
 	}
 	incrementalFrame(t, world, canvas)
@@ -260,7 +260,7 @@ func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 		t.Fatal("disabled budget retained cache")
 	}
 	for _, view := range state.compositors2D {
-		if view.target != nil || view.retained != nil || view.tiles != nil || view.coverage != nil || view.reuse != nil || view.damageTiles != nil || view.usedSlots != nil {
+		if view.target != nil || view.tree != nil || view.tiles != nil || view.coverage != nil || view.reuse != nil || view.damageTiles != nil || view.usedSlots != nil {
 			t.Fatal("disabled compositor retained CPU workspace")
 		}
 	}
@@ -269,7 +269,7 @@ func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 		world.GetMut[Sprite2D](entity).Shape.Fill = graphics.Black
 	}
 	incrementalFrame(t, world, canvas)
-	if !world.ScopeValue[retainedRender2D, retainedRender2D]().direct {
+	if !world.ScopeValue[renderTree2D, renderTree2D]().direct {
 		t.Fatal("dense changes did not use sequential path")
 	}
 	incrementalFrame(t, world, canvas)

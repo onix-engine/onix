@@ -1297,7 +1297,6 @@ type renderItem2D struct {
 	layers     RenderLayers
 	scene      SceneLayer
 	material   renderMaterialKey
-	renderNode uint64
 	glyphStart int
 	order      uint64
 	sortIndex  int
@@ -1312,6 +1311,7 @@ type renderItem2D struct {
 	width      float32
 	height     float32
 	sequence   uint32
+	part       renderPart2D
 	depth      float32
 	outlined   bool
 	lcdText    bool

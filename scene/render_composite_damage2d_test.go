@@ -43,8 +43,8 @@ func TestComposite2DSparsePreparationMatchesFullRebuild(t *testing.T) {
 		}
 		incrementalFrame(t, world, canvas)
 		hashes := make([]uint64, len(view.tiles))
-		items := make([][]uint32, len(view.tiles))
-		candidates := make([][]uint32, len(view.tiles))
+		items := make([][]renderPart2D, len(view.tiles))
+		candidates := make([][]renderPart2D, len(view.tiles))
 		for i := range view.tiles {
 			hashes[i] = view.tiles[i].hash
 			items[i] = slices.Clone(view.tiles[i].visibleItems())
@@ -113,8 +113,55 @@ func TestComposite2DSparseWorkAndSkippedGenerations(t *testing.T) {
 		t.Fatal("skipped generation did not rebuild spatial bins")
 	}
 	for _, view := range state.compositors2D {
-		if position := world.ScopeValue[retainedRender2D, retainedRender2D]().nodes[entities[0]].first; !slices.Contains(view.tiles[4].candidates, uint32(position)) {
+		tree := world.ScopeValue[renderTree2D, renderTree2D]()
+		if part := tree.items[tree.nodes[entities[0]].first].part; !slices.Contains(view.tiles[4].candidates, part) {
 			t.Fatal("earlier movement was lost after a skipped generation")
+		}
+	}
+}
+
+func TestComposite2DRetargetRemovesAndRestoresTreePart(t *testing.T) {
+	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
+	entity := entities[0]
+	if err := world.Insert(entity, UITargetCamera{Entity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	incrementalFrame(t, world, canvas)
+	state := RenderWorldFor(world)
+	tree := world.ScopeValue[renderTree2D, renderTree2D]()
+	part := tree.items[tree.nodes[entity].first].part
+	view := state.compositors2D[compositeViewKey2D{Camera: 1}]
+	originalHash := view.tiles[0].hash
+
+	world.SetIfChanged(entity, UITargetCamera{Entity: 2})
+	incrementalFrame(t, world, canvas)
+	if stats := state.Composite2D; stats.PreparedTiles != 1 || stats.DirtyTiles != 1 ||
+		slices.Contains(view.tiles[0].candidates, part) || view.tiles[0].hash == originalHash {
+		t.Fatalf("leaving the camera did not clear the old tile: %+v", stats)
+	}
+
+	world.SetIfChanged(entity, UITargetCamera{Entity: 1})
+	incrementalFrame(t, world, canvas)
+	if stats := state.Composite2D; stats.PreparedTiles != 1 || stats.DirtyTiles+stats.ReusedTiles != 1 ||
+		!slices.Contains(view.tiles[0].candidates, part) || view.tiles[0].hash != originalHash {
+		t.Fatalf("returning to the camera did not restore the original tile: %+v", stats)
+	}
+}
+
+func TestComposite2DSwitchesTreesWithEqualGenerations(t *testing.T) {
+	world, canvas, _, entities := incrementalRenderFixture(t, 2, false)
+	state := RenderWorldFor(world)
+	var scopes [2]ecs.QueryScope
+	for i := range scopes {
+		scopes[i].Reset(entities[i : i+1])
+		world.SetQueryScope(&scopes[i])
+		incrementalFrame(t, world, canvas)
+
+		tree := world.ScopeValue[renderTree2D, renderTree2D]()
+		view := state.compositors2D[compositeViewKey2D{Camera: 1}]
+		parts := view.tiles[0].visibleItems()
+		if tree.generation != 1 || view.tree != tree || len(parts) != 1 || tree.itemForPart(parts[0]).entity != entities[i] {
+			t.Fatalf("scope %d reused a tile index from a different tree", i)
 		}
 	}
 }

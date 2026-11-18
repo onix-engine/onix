@@ -39,7 +39,7 @@ func TestRetainedTextureChangesStayLocal(t *testing.T) {
 	texture.UpdateRegions(updates)
 	w.GetMut[UIGlobalTransform](entities[0]).Matrix[12] = 600
 	incrementalFrame(t, w, canvas)
-	cache := w.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := w.ScopeValue[renderTree2D, renderTree2D]()
 	if len(cache.damage) != 1 || state.Composite2D.DirtyTiles != 2 {
 		t.Fatal("combined pixel and transform changes damaged an item twice", state.Composite2D)
 	}
@@ -60,7 +60,7 @@ func TestRetainedAtlasViewDependencyReplacement(t *testing.T) {
 	incrementalFrame(t, w, canvas)
 	w.GetMut[Sprite2D](entities[0]).Texture = right
 	incrementalFrame(t, w, canvas)
-	cache := w.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := w.ScopeValue[renderTree2D, renderTree2D]()
 	if cache.textures[left] != nil || cache.textures[right] == nil {
 		t.Fatal("sparse replacement retained a stale atlas view dependency")
 	}

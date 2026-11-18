@@ -98,7 +98,7 @@ func NewRenderWorld() *RenderWorld {
 type material2DReader struct {
 	read      func(*ecs.World, ecs.Entity) (graphics.Material2DData, bool)
 	structure func(*ecs.World) uint64
-	poll      func(*ecs.World, *retainedRender2D)
+	poll      func(*ecs.World, *renderTree2D)
 }
 
 // RegisterMaterial2D enables extraction of MeshMaterial2D[T] components. It
@@ -116,15 +116,15 @@ func (state *RenderWorld) RegisterMaterial2D[T graphics.Material2D]() {
 			return graphics.Material2DData{}, false
 		}
 		return (*component.Material).Material2D(), true
-	}, structure: (*ecs.World).ComponentStructureVersion[MeshMaterial2D[T]], poll: func(world *ecs.World, cache *retainedRender2D) {
+	}, structure: (*ecs.World).ComponentStructureVersion[MeshMaterial2D[T]], poll: func(world *ecs.World, cache *renderTree2D) {
 		// Material pointers may be edited without replacing their ECS component.
 		// Inspect only entities using this type, preserving the static scene cache.
 		for entity := range world.Query[MeshMaterial2D[T]]().All {
-			if node := cache.nodes[entity]; node != nil && !node.queued {
+			if node := cache.nodes[entity]; node != nil && node.dirty == 0 {
 				material := material2DForEntity(world, entity)
 				for position := range node.positions {
 					if cache.items[position].materialData() != material {
-						cache.mark(entity)
+						cache.mark(entity, renderNodeDirtyContent2D)
 						break
 					}
 				}

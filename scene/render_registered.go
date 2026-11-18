@@ -125,7 +125,7 @@ func extractRender2D(context *ecs.SystemContext) error {
 	if c == nil || context.World == nil {
 		return nil
 	}
-	cache := context.World.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := context.World.ScopeValue[renderTree2D, renderTree2D]()
 	state := RenderWorldFor(context.World)
 	state.Items2D = cache.extract(c, context.World, state)
 	state.Preparation2D = cache.stats
@@ -234,7 +234,7 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 		state.activeCamera2D = camera
 		state.activeCamera2DSet = true
 	}
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	if state.compositeAllowed2D && cache.initialized && !cache.direct && state.cameraRenderers[camera.Pipeline] == nil {
 		budget := int64(defaultCompositeBudget2D)
 		if settings, ok := world.GetResource[CompositeSettings2D](); ok && settings.MaxCacheBytes != 0 {
@@ -272,9 +272,16 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 		}
 	}
 	state.Composite2D.Direct = true
-	items := visibleRenderItems2D(world, state.Items2D, camera, defaultUICamera)
+	var items []uint32
+	drawItems := state.Items2D
+	if cache.initialized && !cache.direct {
+		drawItems = cache.items
+		items = cache.visiblePositions(world, camera, defaultUICamera)
+	} else {
+		items = visibleRenderItems2D(world, state.Items2D, camera, defaultUICamera)
+	}
 	if camera.Pipeline == CameraPipeline2D || len(items) > 0 {
-		drawRenderItemList2D(c, world, renderItemList2D{items: state.Items2D, indices: items, count: len(items)}, DrawViews2D{}, true)
+		drawRenderItemList2D(c, world, renderItemList2D{items: drawItems, indices: items, count: len(items)}, DrawViews2D{}, true)
 	}
 	state.activeCamera2DSet = false
 	return nil

@@ -4,8 +4,8 @@ import (
 	"image"
 	"testing"
 
-	"github.com/onix-engine/onix/graphics"
 	"github.com/go-gl/mathgl/mgl32"
+	"github.com/onix-engine/onix/graphics"
 )
 
 func TestParticleSnapshotsReleaseUnusedTextures(t *testing.T) {
@@ -46,7 +46,7 @@ func TestRetainedDynamicNodesReleasedAfterRemoval(t *testing.T) {
 			texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))
 			t.Cleanup(func() { _ = texture.Dispose() })
 			spawner := world.NewSpawner3[Tilemap2D, UIGlobalTransform, Visibility]()
-			cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+			cache := world.ScopeValue[renderTree2D, renderTree2D]()
 			for range 32 {
 				entity := spawner.Spawn(Tilemap2D{Texture: texture, Tiles: []int{0}, Width: 1, Height: 1, TileWidth: 2, TileHeight: 2, Columns: 1, Alpha: 1}, UIGlobalTransform{Matrix: mgl32.Ident4()}, Visibility{Visible: true})
 				incrementalFrame(t, world, canvas)

@@ -7,7 +7,7 @@ type retainedTexture2D struct {
 	content, geometry uint64
 }
 
-func (cache *retainedRender2D) trackTexture(position int) {
+func (cache *renderTree2D) trackTexture(position int) {
 	texture := cache.items[position].texture
 	if texture == nil {
 		return
@@ -24,7 +24,7 @@ func (cache *retainedRender2D) trackTexture(position int) {
 	dependency.content, dependency.geometry = texture.ContentRevision(), texture.GeometryRevision()
 }
 
-func (cache *retainedRender2D) replaceTexture(position int, previous *graphics.Texture) {
+func (cache *renderTree2D) replaceTexture(position int, previous *graphics.Texture) {
 	if previous == cache.items[position].texture {
 		return
 	}
@@ -49,7 +49,7 @@ func (cache *retainedRender2D) replaceTexture(position int, previous *graphics.T
 // Check unique texture dependencies only after the global change signal moves.
 // Pixel changes refresh paint fingerprints and damage without extracting ECS
 // geometry; bounds and lifetime changes enqueue their owning entities.
-func (cache *retainedRender2D) refreshTextures() {
+func (cache *renderTree2D) refreshTextures() {
 	revision := graphics.TextureRevision()
 	if cache.textureRevision == revision {
 		return
@@ -63,10 +63,10 @@ func (cache *retainedRender2D) refreshTextures() {
 		for _, position := range dependency.positions {
 			item := &cache.items[position]
 			if dependency.geometry != geometry {
-				cache.mark(item.entity)
+				cache.mark(item.entity, renderNodeDirtyContent2D)
 				continue
 			}
-			cache.recordItemDamage(position, item.renderNode)
+			cache.recordItemDamage(position)
 			cache.paints[position] = preparePaintItem2D(item, cache.device)
 			item.paint = &cache.paints[position]
 			cache.stats.PaintUpdated++

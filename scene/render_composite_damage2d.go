@@ -26,8 +26,6 @@ func (view *compositor2D) tileIndices(bounds image.Rectangle) iter.Seq[int] {
 	}
 }
 
-func compareCompositeIndex2D(a, b uint32) int { return cmp.Compare(b, a) }
-
 func (view *compositor2D) damageTile(index int) {
 	if tile := &view.tiles[index]; !tile.changed {
 		// Remove the old visible prefix before any insertion/deletion shifts
@@ -45,27 +43,28 @@ func (view *compositor2D) damageTile(index int) {
 	}
 }
 
-// Stable retained positions let a sparse frame edit just the old/new spatial
+// Stable render parts let a sparse frame edit just the old/new spatial
 // bins. Keeping occluded candidates allows a moved cover to reveal its content.
-func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamera, defaultUICamera ecs.Entity, damage []renderDamage2D) bool {
+func (view *compositor2D) updateDamage(tree *renderTree2D, camera ExtractedCamera, defaultUICamera ecs.Entity, damage []renderDamage2D) bool {
 	view.damageTiles = view.damageTiles[:0]
 	screen := image.Rect(0, 0, view.width, view.height)
+	compare := func(a, b renderPart2D) int {
+		return cmp.Compare(tree.partPositions[b], tree.partPositions[a])
+	}
 	for _, change := range damage {
-		item := &state.Items2D[change.position]
-		if change.node != 0 && item.renderNode != change.node {
-			return false
+		item := tree.itemForPart(change.part)
+		coverage := &view.coverage[change.part]
+		var previous image.Rectangle
+		if coverage.present {
+			previous = change.previous.Intersect(screen)
 		}
-		previous := change.previous.Intersect(screen)
 		var next image.Rectangle
 		if renderItemForCamera2D(item, camera, defaultUICamera) {
 			if item.paint == nil || !item.paint.cacheable {
 				return false
 			}
 			next = item.paint.boundsRect(item).Intersect(screen)
-		} else {
-			previous = image.Rectangle{}
 		}
-		coverage := &view.coverage[change.position]
 		if coverage.present && coverage.visible == 0 {
 			view.occluded--
 		}
@@ -79,7 +78,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 				continue
 			}
 			tile := &view.tiles[index]
-			if position, found := slices.BinarySearchFunc(tile.candidates, uint32(change.position), compareCompositeIndex2D); found {
+			if position, found := slices.BinarySearchFunc(tile.candidates, change.part, compare); found {
 				tile.candidates = slices.Delete(tile.candidates, position, position+1)
 			}
 		}
@@ -89,8 +88,8 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 				continue
 			}
 			tile := &view.tiles[index]
-			position, _ := slices.BinarySearchFunc(tile.candidates, uint32(change.position), compareCompositeIndex2D)
-			tile.candidates = slices.Insert(tile.candidates, position, uint32(change.position))
+			position, _ := slices.BinarySearchFunc(tile.candidates, change.part, compare)
+			tile.candidates = slices.Insert(tile.candidates, position, change.part)
 		}
 	}
 	for _, index := range view.damageTiles {
@@ -100,7 +99,7 @@ func (view *compositor2D) updateDamage(state *RenderWorld, camera ExtractedCamer
 		tile.hash, tile.covered, tile.changed = paintMix2D(uint64(rect.Dx()), uint64(rect.Dy())), false, false
 		for _, position := range tile.candidates {
 			view.stats.PreparedItems++
-			item := &state.Items2D[position]
+			item := tree.itemForPart(position)
 			coverage := &view.coverage[position]
 			if coverage.visible == 0 {
 				view.occluded--

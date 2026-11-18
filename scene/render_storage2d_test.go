@@ -5,10 +5,10 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestSparseMaterialSnapshotsOwnValuesAcrossGrowthAndCompaction(t *testing.T) {
@@ -63,7 +63,7 @@ func TestRetainedNestedStorageShrinksWhileEntitySurvives(t *testing.T) {
 		}
 	}
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	node := cache.nodes[entities[0]]
 	_, peak := node.storage()
 	world.GetMut[SpriteLayers2D](entities[0]).Layers = layers[:2]
@@ -100,7 +100,7 @@ func TestRetainedNestedStorageShrinksWhileEntitySurvives(t *testing.T) {
 func TestRetainedNodePoolCompactsScatteredSurvivors(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 4096, false)
 	incrementalFrame(t, world, canvas)
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	survivors := make(map[ecs.Entity]*Sprite2D)
 	for i, entity := range entities {
 		if i%64 == 0 {

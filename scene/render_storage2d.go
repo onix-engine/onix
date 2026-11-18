@@ -35,7 +35,7 @@ func (node *retainedEntity2D) storage() (used, capacity int) {
 	return
 }
 
-func (cache *retainedRender2D) releaseNode(entity ecs.Entity, node *retainedEntity2D) {
+func (cache *renderTree2D) releaseNode(entity ecs.Entity, node *retainedEntity2D) {
 	node.releaseUnused()
 	used, capacity := node.storage()
 	if capacity <= 1024 || used > capacity/4 {
@@ -125,7 +125,7 @@ func (node *retainedEntity2D) compact(items []renderItem2D) {
 	}
 }
 
-func (cache *retainedRender2D) trimNested() {
+func (cache *renderTree2D) trimNested() {
 	for entity, retention := range cache.nestedRetention {
 		node := cache.nodes[entity]
 		if node == nil {
@@ -161,7 +161,7 @@ func (cache *retainedRender2D) trimNested() {
 	}
 }
 
-func (cache *retainedRender2D) retainTexture(texture *graphics.Texture, dependency *retainedTexture2D) {
+func (cache *renderTree2D) retainTexture(texture *graphics.Texture, dependency *retainedTexture2D) {
 	if cap(dependency.positions) <= 16 || len(dependency.positions) > cap(dependency.positions)/4 {
 		return
 	}
@@ -173,7 +173,7 @@ func (cache *retainedRender2D) retainTexture(texture *graphics.Texture, dependen
 	}
 }
 
-func (cache *retainedRender2D) compactNodes(target int) {
+func (cache *renderTree2D) compactNodes(target int) {
 	blocks := cache.nodeBlocks[:0]
 	for _, block := range cache.nodeBlocks {
 		used := false

@@ -5,11 +5,11 @@ import (
 	"image"
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/render"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const compositeTileSize2D = 128
@@ -186,7 +186,7 @@ func finitePaintBounds2D(values ...float32) bool {
 }
 
 type compositeTile2D struct {
-	candidates     []uint32 // front to back, including occluded content
+	candidates     []renderPart2D // front to back, including occluded content
 	hash, previous uint64
 	slot           int
 	visible        uint32 // visible candidates form a prefix
@@ -195,7 +195,7 @@ type compositeTile2D struct {
 	changed        bool
 }
 
-func (tile *compositeTile2D) visibleItems() []uint32 { return tile.candidates[:tile.visible] }
+func (tile *compositeTile2D) visibleItems() []renderPart2D { return tile.candidates[:tile.visible] }
 
 type compositeCoverage2D struct {
 	visible uint32
@@ -226,21 +226,24 @@ type CompositeStatistics2D struct {
 
 type compositor2D struct {
 	texture           *graphics.Texture
-	retained          *retainedRender2D
+	tree              *renderTree2D
 	target            *render.RenderTarget
 	device            *render.Device
 	tiles             []compositeTile2D
 	damageTiles       []int
 	coverage          []compositeCoverage2D
 	usedSlots         []bool
+	visiblePositions  []uint32
 	reuse             []compositeReuse2D
 	replay            renderItem2D
 	indicesRetention  reuse.Retention
 	coverageRetention reuse.Retention
+	visibleRetention  reuse.Retention
 	stats             CompositeStatistics2D
 	columns           int
 	seen              uint64
 	cameraKey         uint64
+	routingRevision   uint64
 	occluded          int
 	generation        uint64
 	height            int
@@ -253,8 +256,8 @@ type compositor2D struct {
 
 // compositeUI2D consumes a full UI output. Other camera pipelines, transparent
 // outputs and custom materials keep their normal rendering semantics.
-func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, camera ExtractedCamera, defaultUICamera ecs.Entity, cache *retainedRender2D, budget int64) (bool, error) {
-	generation := cache.generation
+func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, camera ExtractedCamera, defaultUICamera ecs.Entity, tree *renderTree2D, budget int64) (bool, error) {
+	generation := tree.generation
 	widthValue, heightValue := c.Size()
 	width, height := int(widthValue), int(heightValue)
 	bytes := int64(width) * int64(height) * 4
@@ -292,7 +295,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 	for _, block := range camera.RenderLayers.blocks {
 		cameraKey = paintMix2D(cameraKey, block)
 	}
-	if !view.prepared || view.generation != generation || clearChanged || view.cameraKey != cameraKey {
+	if !view.prepared || view.tree != tree || view.generation != generation || clearChanged || view.cameraKey != cameraKey {
 		clear(view.reuse)
 		if view.valid && !clearChanged {
 			for i := range view.tiles {
@@ -301,8 +304,8 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				*entry = compositeReuse2D{hash: tile.previous, slot: tile.slot, used: true}
 			}
 		}
-		if view.prepared && view.spatial && view.retained == cache && view.generation+1 == generation && cache.damageValid && !clearChanged && view.cameraKey == cameraKey && len(view.coverage) == len(state.Items2D) {
-			if !view.updateDamage(state, camera, defaultUICamera, cache.damage) {
+		if view.prepared && view.spatial && view.tree == tree && view.generation+1 == generation && tree.damageValid && !clearChanged && view.cameraKey == cameraKey && len(view.coverage) == len(tree.items) {
+			if !view.updateDamage(tree, camera, defaultUICamera, tree.damage) {
 				view.stats.Direct = true
 				return false, view.releaseTarget()
 			}
@@ -311,9 +314,9 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 			view.occluded = 0
 			// Dense scrolling uses sequential preparation without maintaining a
 			// spatial index that will be replaced again on the next frame.
-			spatial := cache.stats.PropertiesUpdated <= max(16, len(state.Items2D)/8)
+			spatial := tree.stats.PropertiesUpdated <= max(16, len(tree.items)/8)
 			if spatial {
-				view.coverage = reuse.Resize(view.coverage, len(state.Items2D))
+				view.coverage = reuse.Resize(view.coverage, len(tree.items))
 				clear(view.coverage)
 			}
 			for i := range view.tiles {
@@ -325,14 +328,16 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 				tile.hash, tile.covered = paintMix2D(uint64(r.Dx()), uint64(r.Dy())), false
 			}
 			screen := image.Rect(0, 0, width, height)
-			// One reverse traversal builds spatial bins, computes damage and rejects
-			// occluded content. No separate scene pass is needed for each concern.
-			for i := len(state.Items2D) - 1; i >= 0; i-- {
+			if !view.prepared || view.tree != tree || view.cameraKey != cameraKey || view.routingRevision != tree.routingRevision {
+				view.visiblePositions = tree.appendVisiblePositions(world, camera, defaultUICamera, view.visiblePositions[:0])
+				view.routingRevision = tree.routingRevision
+			}
+			positions := view.visiblePositions
+			// One reverse traversal builds spatial bins and rejects occluded parts.
+			for i := len(positions) - 1; i >= 0; i-- {
 				view.stats.PreparedItems++
-				item := &state.Items2D[i]
-				if !renderItemForCamera2D(item, camera, defaultUICamera) {
-					continue
-				}
+				item := &tree.items[positions[i]]
+				part := item.part
 				paint := item.paint
 				if paint == nil || !paint.cacheable {
 					view.stats.Direct = true
@@ -344,7 +349,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 					continue
 				}
 				if spatial {
-					view.coverage[i].present = true
+					view.coverage[part].present = true
 				}
 				x0, y0 := bounds.Min.X/compositeTileSize2D, bounds.Min.Y/compositeTileSize2D
 				x1, y1 := (bounds.Max.X-1)/compositeTileSize2D, (bounds.Max.Y-1)/compositeTileSize2D
@@ -354,14 +359,14 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 						index := y*view.columns + x
 						tile := &view.tiles[index]
 						if spatial || !tile.covered {
-							tile.candidates = append(tile.candidates, uint32(i))
+							tile.candidates = append(tile.candidates, part)
 						}
 						if tile.covered {
 							continue
 						}
 						visible = true
 						if spatial {
-							view.coverage[i].visible++
+							view.coverage[part].visible++
 						}
 						tile.visible++
 						tile.hash = paintMix2D(tile.hash, paint.tileHash(item, view.tileRect(index)))
@@ -377,10 +382,11 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 			view.spatial = spatial
 		}
 		view.generation, view.prepared = generation, true
-		view.retained = cache
+		view.tree = tree
 		view.cameraKey = cameraKey
 	}
 	view.stats.Tiles, view.stats.CacheBytes, view.stats.Occluded = len(view.tiles), bytes, view.occluded
+	view.visiblePositions = view.visibleRetention.Trim(view.visiblePositions, 64)
 	if !view.spatial {
 		view.coverage = view.coverage[:0]
 	}
@@ -405,7 +411,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 			tile := &view.tiles[i]
 			target := max(16, len(tile.candidates)*2)
 			if cap(tile.candidates) > target {
-				indices := make([]uint32, len(tile.candidates), target)
+				indices := make([]renderPart2D, len(tile.candidates), target)
 				copy(indices, tile.candidates)
 				tile.candidates = indices
 			}
@@ -489,7 +495,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 					c.DrawShapeMatrices(model, mgl32.Ident3(), float32(r.Dx()), float32(r.Dy()), render.ShapeRoundedRect, view.clear, graphics.ColorRGBA{}, 0, 0, 1)
 				}
 				for j := int(tile.visible) - 1; j >= 0; j-- {
-					view.replay = state.Items2D[tile.candidates[j]]
+					view.replay = *tree.itemForPart(tile.candidates[j])
 					item := &view.replay
 					item.transform[12] += dx
 					item.transform[13] += dy
@@ -583,17 +589,22 @@ func (view *compositor2D) releaseTarget() error {
 		}
 	}
 	view.target, view.texture, view.valid, view.prepared = nil, nil, false, false
+	view.tree = nil
+	view.visiblePositions = view.visiblePositions[:0]
 	return nil
 }
 
 func renderItemForCamera2D(item *renderItem2D, camera ExtractedCamera, defaultUICamera ecs.Entity) bool {
-	if camera.Scene.ID != 0 && item.scene.ID != 0 && camera.Scene.ID != item.scene.ID || !camera.RenderLayers.Intersects(item.layers) {
+	return matchesRenderCamera2D(item.scene.ID, item.layers, item.ui, item.target, camera, defaultUICamera)
+}
+
+func matchesRenderCamera2D(sceneID uint64, layers RenderLayers, ui bool, target ecs.Entity, camera ExtractedCamera, defaultUICamera ecs.Entity) bool {
+	if camera.Scene.ID != 0 && sceneID != 0 && camera.Scene.ID != sceneID || !camera.RenderLayers.Intersects(layers) {
 		return false
 	}
-	if !item.ui {
+	if !ui {
 		return camera.Pipeline == CameraPipeline2D
 	}
-	target := item.target
 	if target == 0 {
 		target = defaultUICamera
 	}

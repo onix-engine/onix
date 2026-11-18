@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type cacheOptimizationMarker struct{}
@@ -176,7 +176,7 @@ func TestInheritedRenderChangesShareTraversal(t *testing.T) {
 	if err := extractRender2D(context); err != nil {
 		t.Fatal(err)
 	}
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	generation := cache.hierarchyGeneration
 	*world.GetMut[RenderLayers](parent) = RenderLayer(1)
 	world.GetMut[UITargetCamera](parent).Entity = entities[99]
@@ -269,7 +269,7 @@ func TestRetainedTextPreservesCollectorState(t *testing.T) {
 	if err := extractRender2D(&ecs.SystemContext{World: world}); err != nil {
 		t.Fatal(err)
 	}
-	cache := world.ScopeValue[retainedRender2D, retainedRender2D]()
+	cache := world.ScopeValue[renderTree2D, renderTree2D]()
 	if cache.stats.Extracted != 0 || cache.nodes[entities[0]].sourceText != nil {
 		t.Fatal("text migration rebuilt snapshots or retained an ECS column pointer")
 	}

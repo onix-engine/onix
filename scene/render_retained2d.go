@@ -3,6 +3,8 @@ package scene
 import (
 	"image"
 	"math"
+	"math/bits"
+	"slices"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
@@ -22,7 +24,6 @@ type retainedEntity2D struct {
 	sprites               []Sprite2D
 	texts                 []textPaint2D
 	renderLayers          RenderLayers
-	renderBounds          image.Rectangle
 	renderScene           SceneLayer
 	first                 int
 	previousSprites       int
@@ -35,13 +36,12 @@ type retainedEntity2D struct {
 	renderTarget          ecs.Entity
 	matrix                mgl32.Mat4
 	clip                  clipRect2D
-	renderVisible         bool
+	mixedCamera           bool
 	dynamic               uint8
 	dirty                 renderNodeDirty2D
 	allocated             bool
 	properties            bool
 	ui                    bool
-	queued                bool
 }
 
 type renderNodeDirty2D uint8
@@ -52,16 +52,6 @@ const (
 	renderNodeDirtyVisibility2D
 	renderNodeDirtyOrder2D
 )
-
-// renderTree2D owns the retained render topology. Its nodes are keyed by
-// source entity, while render links skip entities that produce no draw item.
-type renderTree2D struct {
-	nodes            map[ecs.Entity]*retainedEntity2D
-	freeNodes        []*retainedEntity2D
-	nodeBlocks       [][]retainedEntity2D
-	nodeMapRetention reuse.MapRetention
-	nextID           uint64
-}
 
 func (tree *renderTree2D) allocateNode() *retainedEntity2D {
 	if len(tree.freeNodes) == 0 {
@@ -115,15 +105,22 @@ func (tree *renderTree2D) unlink(entity ecs.Entity) {
 
 func (tree *renderTree2D) reparent(entity ecs.Entity, hierarchy *Hierarchy) {
 	node := tree.nodes[entity]
-	if node == nil {
+	if node == nil || node.first < 0 {
 		return
 	}
-	tree.unlink(entity)
-	for remaining, parent := len(tree.nodes)+1, hierarchy.Parent(entity); parent != 0 && remaining > 0; remaining, parent = remaining-1, hierarchy.Parent(parent) {
+	if hierarchy.Depth(entity) < 0 {
+		tree.unlink(entity)
+		return
+	}
+	for remaining, parent := len(hierarchy.Entities()), hierarchy.Parent(entity); parent != 0 && remaining > 0; remaining, parent = remaining-1, hierarchy.Parent(parent) {
 		ancestor := tree.nodes[parent]
-		if ancestor == nil {
+		if ancestor == nil || ancestor.first < 0 {
 			continue
 		}
+		if node.renderParent == parent {
+			return
+		}
+		tree.unlink(entity)
 		node.renderParent = parent
 		node.renderNextSibling = ancestor.renderFirstChild
 		if next := tree.nodes[node.renderNextSibling]; next != nil {
@@ -132,6 +129,7 @@ func (tree *renderTree2D) reparent(entity ecs.Entity, hierarchy *Hierarchy) {
 		ancestor.renderFirstChild = entity
 		return
 	}
+	tree.unlink(entity)
 }
 
 func (tree *renderTree2D) rebuildLinks(hierarchy *Hierarchy) {
@@ -141,46 +139,72 @@ func (tree *renderTree2D) rebuildLinks(hierarchy *Hierarchy) {
 	}
 }
 
-func (node *retainedEntity2D) captureRenderMetadata(items []renderItem2D) {
-	node.renderBounds = image.Rectangle{}
-	node.renderVisible = false
-	for position := range node.positions {
+// A part identifies one output of a render node. Parts are assigned by node
+// when the tree rebuilds. They retain their slots through sparse updates.
+type renderPart2D uint32
+
+func (tree *renderTree2D) itemForPart(part renderPart2D) *renderItem2D {
+	return &tree.items[tree.partPositions[part]]
+}
+
+func (node *retainedEntity2D) captureCamera(items []renderItem2D) {
+	node.mixedCamera = false
+	if node.first < 0 {
+		node.renderLayers = RenderLayers{}
+		return
+	}
+	first := &items[node.first]
+	node.renderLayers, node.renderScene, node.renderTarget = first.layers, first.scene, first.target
+	for _, position := range node.extra {
 		item := &items[position]
-		if item.paint == nil {
-			continue
-		}
-		bounds := item.paint.boundsRect(item)
-		if !node.renderVisible {
-			node.renderBounds = bounds
-			node.renderLayers = item.layers
-			node.renderScene = item.scene
-			node.renderTarget = item.target
-			node.ui = item.ui
-			node.renderVisible = true
-		} else {
-			node.renderBounds = node.renderBounds.Union(bounds)
+		if !sameRenderCamera2D(item, first) {
+			node.mixedCamera = true
+			return
 		}
 	}
 }
 
-func (node *retainedEntity2D) renderForCamera(camera ExtractedCamera, defaultUICamera ecs.Entity) bool {
-	if !node.renderVisible {
-		return false
+func sameRenderCamera2D(a, b *renderItem2D) bool {
+	return a.ui == b.ui && a.target == b.target && a.scene.ID == b.scene.ID &&
+		a.layers.empty == b.layers.empty && slices.Equal(a.layers.blocks, b.layers.blocks)
+}
+
+type cameraRenderPositions2DScratch struct{}
+
+func (tree *renderTree2D) visiblePositions(world *ecs.World, camera ExtractedCamera, defaultUICamera ecs.Entity) []uint32 {
+	visible := world.FrameScratch[visibleRenderItems2DScratch, uint32]()
+	visible.Values = tree.appendVisiblePositions(world, camera, defaultUICamera, visible.Values)
+	visible.ReleaseUnused()
+	return visible.Values
+}
+
+func (tree *renderTree2D) appendVisiblePositions(world *ecs.World, camera ExtractedCamera, defaultUICamera ecs.Entity, dst []uint32) []uint32 {
+	// Nodes can emit parts that interleave with other nodes in painter order.
+	// Resolve routing per node, then use a bitset to emit in that order.
+	mask := world.FrameScratch[cameraRenderPositions2DScratch, uint64]()
+	mask.Values = reuse.Resize(mask.Values, (len(tree.items)+63)/64)
+	clear(mask.Values)
+	for _, node := range tree.nodes {
+		if node.first < 0 {
+			continue
+		}
+		if !node.mixedCamera && !matchesRenderCamera2D(node.renderScene.ID, node.renderLayers, tree.items[node.first].ui, node.renderTarget, camera, defaultUICamera) {
+			continue
+		}
+		for position := range node.positions {
+			if !node.mixedCamera || renderItemForCamera2D(&tree.items[position], camera, defaultUICamera) {
+				mask.Values[position/64] |= uint64(1) << (position % 64)
+			}
+		}
 	}
-	if camera.Scene.ID != 0 && node.renderScene.ID != 0 && camera.Scene.ID != node.renderScene.ID {
-		return false
+	for index, word := range mask.Values {
+		for word != 0 {
+			position := index*64 + bits.TrailingZeros64(word)
+			dst = append(dst, uint32(position))
+			word &= word - 1
+		}
 	}
-	if !camera.RenderLayers.Intersects(node.renderLayers) {
-		return false
-	}
-	if !node.ui {
-		return camera.Pipeline == CameraPipeline2D
-	}
-	target := node.renderTarget
-	if target == 0 {
-		target = defaultUICamera
-	}
-	return target == camera.Entity
+	return dst
 }
 
 func (node *retainedEntity2D) reset() {
@@ -268,9 +292,8 @@ func (node *retainedEntity2D) releaseUnused() {
 	}
 }
 
-func (cache *retainedRender2D) snapshot(node *retainedEntity2D, position int, item renderItem2D, device *render.Device) renderItem2D {
+func (cache *renderTree2D) snapshot(node *retainedEntity2D, position int, item renderItem2D, device *render.Device) renderItem2D {
 	item = node.snapshot(item)
-	item.renderNode = node.id
 	cache.paints[position] = preparePaintItem2D(&item, device)
 	item.paint = &cache.paints[position]
 	return item
@@ -280,18 +303,18 @@ func (cache *retainedRender2D) snapshot(node *retainedEntity2D, position int, it
 // stay stable during growth; maintenance can relocate them to compact sparse blocks.
 type renderInput2D struct {
 	revision func(*ecs.World) (uint64, uint64)
-	changed  func(*ecs.World, *ecs.SystemContext, *retainedRender2D)
-	poll     func(*ecs.World, *retainedRender2D) int
+	changed  func(*ecs.World, *ecs.SystemContext, *renderTree2D)
+	poll     func(*ecs.World, *renderTree2D) int
 	dirty    renderNodeDirty2D
 }
 
-func retainedInput2D[T any]() renderInput2D {
+func retainedInput2D[T any](flags renderNodeDirty2D) renderInput2D {
 	input := renderInput2D{
 		revision: (*ecs.World).ComponentValueRevision[T],
-		dirty:    renderNodeDirtyContent2D,
-		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
+		dirty:    flags,
+		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
 			for entity := range world.Query[T](changes.Changed[T]()).All {
-				cache.mark(entity, renderNodeDirtyContent2D)
+				cache.mark(entity, flags)
 			}
 		},
 	}
@@ -301,8 +324,8 @@ func retainedInput2D[T any]() renderInput2D {
 // Local ordering cannot make an entity drawable. Ignore writes to ancestors
 // and other entities that have no retained output.
 func localRetainedInput2D[T any]() renderInput2D {
-	input := retainedInput2D[T]()
-	input.changed = func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
+	input := retainedInput2D[T](renderNodeDirtyOrder2D)
+	input.changed = func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
 		for entity := range world.Query[T](changes.Changed[T]()).All {
 			if cache.nodes[entity] != nil {
 				cache.mark(entity, renderNodeDirtyOrder2D)
@@ -316,7 +339,7 @@ func inheritedRetainedInput2D[T any]() renderInput2D {
 	input := renderInput2D{
 		revision: (*ecs.World).ComponentValueRevision[T],
 		dirty:    renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D,
-		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *retainedRender2D) {
+		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
 			for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
 				cache.enqueueHierarchy(entity)
 			}
@@ -325,7 +348,7 @@ func inheritedRetainedInput2D[T any]() renderInput2D {
 	return input
 }
 
-func (cache *retainedRender2D) beginHierarchyChanges(world *ecs.World) {
+func (cache *renderTree2D) beginHierarchyChanges(world *ecs.World) {
 	cache.hierarchyQueue = cache.hierarchyQueue[:0]
 	cache.hierarchyMarks = reuse.Resize(cache.hierarchyMarks, world.EntitySlots())
 	cache.hierarchyRetention[1].Record(len(cache.hierarchyMarks))
@@ -336,16 +359,19 @@ func (cache *retainedRender2D) beginHierarchyChanges(world *ecs.World) {
 	}
 }
 
-func (cache *retainedRender2D) markHierarchyChanges(world *ecs.World) {
+func (cache *renderTree2D) markHierarchyChanges(world *ecs.World) {
 	if len(cache.hierarchyQueue) == 0 {
 		return
 	}
 	hierarchy := HierarchyFor(world)
 	for i := 0; i < len(cache.hierarchyQueue); i++ {
 		entity := cache.hierarchyQueue[i]
-		if node := cache.nodes[entity]; node != nil {
-			cache.reparent(entity, hierarchy)
+		node := cache.nodes[entity]
+		if node != nil {
 			cache.mark(entity, renderNodeDirtyGeometry2D|renderNodeDirtyVisibility2D|renderNodeDirtyOrder2D)
+		}
+		if node != nil && node.first >= 0 {
+			cache.reparent(entity, hierarchy)
 			for child := node.renderFirstChild; child != 0; {
 				next := cache.nodes[child].renderNextSibling
 				cache.enqueueHierarchy(child)
@@ -360,7 +386,7 @@ func (cache *retainedRender2D) markHierarchyChanges(world *ecs.World) {
 	cache.hierarchyRetention[0].Record(len(cache.hierarchyQueue))
 }
 
-func (cache *retainedRender2D) enqueueHierarchy(entity ecs.Entity) {
+func (cache *renderTree2D) enqueueHierarchy(entity ecs.Entity) {
 	index, _ := entity.Index()
 	if cache.hierarchyMarks[index] != cache.hierarchyGeneration {
 		cache.hierarchyMarks[index] = cache.hierarchyGeneration
@@ -368,32 +394,25 @@ func (cache *retainedRender2D) enqueueHierarchy(entity ecs.Entity) {
 	}
 }
 
-func (cache *retainedRender2D) mark(entity ecs.Entity, dirty ...renderNodeDirty2D) {
-	if node := cache.nodes[entity]; node == nil {
+func (cache *renderTree2D) mark(entity ecs.Entity, flags renderNodeDirty2D) {
+	node := cache.nodes[entity]
+	if node == nil {
 		cache.missing = true
-	} else {
-		flags := renderNodeDirtyContent2D | renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D
-		if len(dirty) != 0 {
-			flags = 0
-			for _, value := range dirty {
-				flags |= value
-			}
-		}
-		node.dirty |= flags
-		if !node.queued {
-			node.queued = true
-			cache.dirty = append(cache.dirty, entity)
-			if node.positionCount() != 0 {
-				cache.dirtyNodes++
-			}
+		return
+	}
+	if node.dirty == 0 {
+		cache.dirty = append(cache.dirty, entity)
+		if node.positionCount() != 0 {
+			cache.dirtyNodes++
 		}
 	}
+	node.dirty |= flags
 }
 
 func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T, *render.Device) bool) renderInput2D {
-	input := retainedInput2D[T]()
+	input := retainedInput2D[T](renderNodeDirtyContent2D)
 	flag := uint8(1 << kind)
-	input.poll = func(world *ecs.World, cache *retainedRender2D) int {
+	input.poll = func(world *ecs.World, cache *renderTree2D) int {
 		active := 0
 		for entity, access := range world.Query2[T, Visibility]().All {
 			node := cache.nodes[entity]
@@ -431,12 +450,12 @@ var retainedInputs2D = [...]renderInput2D{
 	inheritedRetainedInput2D[PainterGroup2D](), inheritedRetainedInput2D[Parent](), inheritedRetainedInput2D[SceneLayer](),
 	inheritedRetainedInput2D[RenderLayers](), inheritedRetainedInput2D[UITargetCamera](),
 	inheritedRetainedInput2D[UIStackIndex](), localRetainedInput2D[RenderOrder2D](),
-	retainedInput2D[Sprite2D](), retainedInput2D[Text2D](),
-	retainedInput2D[GlobalTransform](), retainedInput2D[UIGlobalTransform](),
-	retainedInput2D[Visibility](), retainedInput2D[Anchor](),
-	retainedInput2D[Size2D](), retainedInput2D[UIBackground2D](),
-	retainedInput2D[UIImage2D](), retainedInput2D[UIBorder2D](),
-	retainedInput2D[RenderOutput2D](), retainedInput2D[Shader[graphics.Material2DShader]](),
+	retainedInput2D[Sprite2D](renderNodeDirtyContent2D), retainedInput2D[Text2D](renderNodeDirtyContent2D),
+	retainedInput2D[GlobalTransform](renderNodeDirtyGeometry2D), retainedInput2D[UIGlobalTransform](renderNodeDirtyGeometry2D),
+	retainedInput2D[Visibility](renderNodeDirtyVisibility2D), retainedInput2D[Anchor](renderNodeDirtyContent2D),
+	retainedInput2D[Size2D](renderNodeDirtyContent2D), retainedInput2D[UIBackground2D](renderNodeDirtyContent2D),
+	retainedInput2D[UIImage2D](renderNodeDirtyContent2D), retainedInput2D[UIBorder2D](renderNodeDirtyContent2D),
+	retainedInput2D[RenderOutput2D](renderNodeDirtyContent2D), retainedInput2D[Shader[graphics.Material2DShader]](renderNodeDirtyContent2D),
 	dynamicRetainedInput2D(renderCollectorSpriteTrail2D, func(t *SpriteTrail2D, device *render.Device) bool { return len(t.samples) != 0 }),
 	dynamicRetainedInput2D(renderCollectorSpriteLayers2D, func(l *SpriteLayers2D, device *render.Device) bool {
 		for i := range l.Layers {
@@ -461,42 +480,51 @@ const retainedRenderInputCount2D = 24
 const inheritedRenderInputs2D = 6
 const dynamicRenderInputs2D = 19
 
-type retainedRender2D struct {
-	renderTree2D
-	nestedRetention     map[ecs.Entity]reuse.Retention
-	textureRetention    map[*graphics.Texture]reuse.Retention
-	queryScope          *ecs.QueryScope
-	textures            map[*graphics.Texture]*retainedTexture2D
+// renderTree2D owns the render topology, snapshots in paint order, and the
+// changes consumed by each camera's compositor.
+type renderTree2D struct {
 	device              *render.Device
+	textureRetention    map[*graphics.Texture]reuse.Retention
+	nodes               map[ecs.Entity]*retainedEntity2D
+	textures            map[*graphics.Texture]*retainedTexture2D
+	queryScope          *ecs.QueryScope
+	nestedRetention     map[ecs.Entity]reuse.Retention
 	changes             ecs.SystemContext
-	damageFlags         []bool
-	damage              []renderDamage2D
-	hierarchyQueue      []ecs.Entity
-	hierarchyMarks      []uint64
 	paints              []paintItem2D
+	damageFlags         []bool
 	dirty               []ecs.Entity
+	freeNodes           []*retainedEntity2D
+	partPositions       []uint32
+	hierarchyMarks      []uint64
+	hierarchyQueue      []ecs.Entity
+	damage              []renderDamage2D
 	items               []renderItem2D
+	nodeBlocks          [][]retainedEntity2D
 	scope               ecs.QueryScope
-	textureMapRetention reuse.MapRetention
+	versions            [retainedRenderInputCount2D]uint64
+	structures          [retainedRenderInputCount2D]uint64
 	hierarchyRetention  [2]reuse.Retention
-	itemRetention       reuse.Retention
-	paintRetention      reuse.Retention
+	stats               RenderPreparation2D
+	textureMapRetention reuse.MapRetention
+	nodeMapRetention    reuse.MapRetention
+	partRetention       reuse.Retention
 	flagRetention       reuse.Retention
 	nodeRetention       reuse.Retention
 	damageRetention     reuse.Retention
 	dirtyRetention      reuse.Retention
-	structures          [retainedRenderInputCount2D]uint64
-	versions            [retainedRenderInputCount2D]uint64
-	stats               RenderPreparation2D
+	paintRetention      reuse.Retention
+	itemRetention       reuse.Retention
+	rasterScale         float64
 	dirtyNodes          int
 	retiredNodes        int
 	outputRevision      uint64
-	rasterScale         float64
+	nextID              uint64
 	hierarchyGeneration uint64
 	registry            uint64
 	textureRevision     uint64
-	// Changed is a generation, independent of ECS writes during drawing.
+	// Generation advances when a new set of changes is published.
 	generation        uint64
+	routingRevision   uint64
 	materialStructure uint64
 	scopeVersion      uint64
 	height            float32
@@ -510,23 +538,23 @@ type retainedRender2D struct {
 }
 
 type renderDamage2D struct {
-	position int
-	node     uint64
 	previous image.Rectangle
+	part     renderPart2D
 }
 
-func (cache *retainedRender2D) recordDamage(node *retainedEntity2D) {
+func (cache *renderTree2D) recordDamage(node *retainedEntity2D) {
 	if cache.damageValid {
 		for position := range node.positions {
-			cache.recordItemDamage(position, node.id)
+			cache.recordItemDamage(position)
 		}
 	}
 }
 
-func (cache *retainedRender2D) recordItemDamage(position int, nodeID uint64) {
-	if cache.damageValid && !cache.damageFlags[position] {
-		cache.damageFlags[position] = true
-		cache.damage = append(cache.damage, renderDamage2D{position: position, node: nodeID, previous: cache.paints[position].boundsRect(&cache.items[position])})
+func (cache *renderTree2D) recordItemDamage(position int) {
+	item := &cache.items[position]
+	if cache.damageValid && !cache.damageFlags[item.part] {
+		cache.damageFlags[item.part] = true
+		cache.damage = append(cache.damage, renderDamage2D{part: item.part, previous: item.paint.boundsRect(item)})
 	}
 }
 
@@ -627,17 +655,17 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 	return true
 }
 
-func (cache *retainedRender2D) revisions(world *ecs.World) (versions, structures [retainedRenderInputCount2D]uint64) {
+func (cache *renderTree2D) revisions(world *ecs.World) (versions, structures [retainedRenderInputCount2D]uint64) {
 	for i, input := range retainedInputs2D {
 		versions[i], structures[i] = input.revision(world)
 	}
 	return
 }
 
-func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) []renderItem2D {
+func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) []renderItem2D {
 	cache.stats = RenderPreparation2D{}
 	for _, change := range cache.damage {
-		cache.damageFlags[change.position] = false
+		cache.damageFlags[change.part] = false
 	}
 	cache.damageRetention.Record(len(cache.damage))
 	cache.damage, cache.damageValid = cache.damage[:0], false
@@ -659,7 +687,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 		}
 	}
 	for i := range versions {
-		if i != 9 && i != 10 && versions[i] != cache.versions[i] {
+		if retainedInputs2D[i].dirty != renderNodeDirtyGeometry2D && versions[i] != cache.versions[i] {
 			propertiesOnly = false
 		}
 	}
@@ -743,12 +771,10 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			for _, entity := range cache.dirty {
 				node := cache.nodes[entity]
 				cache.recordDamage(node)
-				node.queued = false
 				if !node.updateProperties(c, world, entity, cache.items) {
 					full = true
 					break
 				}
-				node.captureRenderMetadata(cache.items)
 				updated += node.positionCount()
 			}
 			if !full {
@@ -761,6 +787,7 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			}
 		}
 	}
+	routingChanged := false
 	if !full {
 		cache.scope.Reset(cache.dirty)
 		previous := world.SetQueryScope(&cache.scope)
@@ -779,10 +806,12 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			position := node.positionAt(node.count)
 			// Sequence only breaks ties between parts emitted by the same entity.
 			item.sequence = cache.items[position].sequence
+			item.part = cache.items[position].part
 			if item.renderSortKey() != cache.items[position].renderSortKey() {
 				full = true
 				break
 			}
+			routingChanged = routingChanged || !sameRenderCamera2D(&item, &cache.items[position])
 			previousTexture := cache.items[position].texture
 			cache.items[position] = cache.snapshot(node, position, item, c.Device())
 			cache.replaceTexture(position, previousTexture)
@@ -791,10 +820,10 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 		for _, entity := range cache.dirty {
 			node := cache.nodes[entity]
 			full = full || node.count != node.positionCount()
-			node.queued = false
+			node.dirty = 0
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
-			node.captureRenderMetadata(cache.items)
+			node.captureCamera(cache.items)
 		}
 		if !full {
 			cache.stats.Extracted, cache.stats.Reused = len(items), len(cache.items)-len(items)
@@ -821,7 +850,6 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 			node.dynamic = 0
 			node.first = -1
 			node.extra = node.extra[:0]
-			node.queued = false
 		}
 		for i, item := range cache.items {
 			node := cache.nodes[item.entity]
@@ -851,11 +879,18 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 				retainedInputs2D[dynamicRenderInputs2D+i].poll(world, cache)
 			}
 		}
+		cache.partPositions = reuse.Resize(cache.partPositions, len(items))
+		part := renderPart2D(0)
 		for entity, node := range cache.nodes {
-			node.queued = false
+			node.dirty = 0
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
-			node.captureRenderMetadata(cache.items)
+			node.captureCamera(cache.items)
+			for position := range node.positions {
+				cache.items[position].part = part
+				cache.partPositions[part] = uint32(position)
+				part++
+			}
 			if node.positionCount() == 0 && node.dynamic == 0 {
 				delete(cache.nodes, entity)
 				*node = retainedEntity2D{first: -1}
@@ -866,6 +901,9 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 		cache.stats.Extracted, cache.stats.Sorted = len(items), true
 	}
 	cache.capture(c, world, state)
+	if full || routingChanged {
+		cache.routingRevision++
+	}
 	if full || cache.stats.Extracted != 0 || cache.stats.PaintUpdated != 0 {
 		cache.generation++
 	}
@@ -875,11 +913,11 @@ func (cache *retainedRender2D) extract(c *graphics.Canvas2D, world *ecs.World, s
 	return cache.items
 }
 
-func (cache *retainedRender2D) extractDirect(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) []renderItem2D {
+func (cache *renderTree2D) extractDirect(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) []renderItem2D {
 	items := collectRenderItems2D(c, world, false)
 	for _, entity := range cache.dirty {
 		if node := cache.nodes[entity]; node != nil {
-			node.queued = false
+			node.dirty = 0
 		}
 	}
 	cache.capture(c, world, state)
@@ -895,7 +933,7 @@ func (cache *retainedRender2D) extractDirect(c *graphics.Canvas2D, world *ecs.Wo
 		cache.nodes, cache.textures = nil, nil
 		cache.nestedRetention, cache.textureRetention = nil, nil
 		cache.nodeBlocks, cache.freeNodes = nil, nil
-		cache.items, cache.paints, cache.damageFlags = nil, nil, nil
+		cache.items, cache.paints, cache.partPositions, cache.damageFlags = nil, nil, nil, nil
 		cache.dirty, cache.damage = nil, nil
 		cache.scope.Reset(nil)
 	}
@@ -904,7 +942,7 @@ func (cache *retainedRender2D) extractDirect(c *graphics.Canvas2D, world *ecs.Wo
 }
 
 // Observe once per extraction, including clean frames where no collector runs.
-func (cache *retainedRender2D) trim(world *ecs.World) {
+func (cache *renderTree2D) trim(world *ecs.World) {
 	snapshots := world.FrameValue[renderSnapshots2DScratch, renderSnapshots2D]()
 	if world.FrameValue[renderSnapshots2DScratch, reuse.Retention]().TrimCapacity(snapshots.capacity(), 0, 64) != 0 {
 		// These are collector intermediates. Retained owners have copied their
@@ -919,6 +957,7 @@ func (cache *retainedRender2D) trim(world *ecs.World) {
 	cache.nodes = cache.nodeMapRetention.Trim(cache.nodes, 64)
 	cache.textures = cache.textureMapRetention.Trim(cache.textures, 16)
 	cache.items = cache.itemRetention.Trim(cache.items, 64)
+	cache.partPositions = cache.partRetention.Trim(cache.partPositions, 64)
 	previous := cap(cache.paints)
 	cache.paints = cache.paintRetention.Trim(cache.paints, 64)
 	if cap(cache.paints) != previous {
@@ -941,7 +980,7 @@ func (cache *retainedRender2D) trim(world *ecs.World) {
 	cache.compactNodes(target)
 }
 
-func (cache *retainedRender2D) capture(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) {
+func (cache *renderTree2D) capture(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) {
 	cache.versions, cache.structures = cache.revisions(world)
 	cache.width, cache.height = c.Size()
 	cache.rasterScale, cache.device = c.RasterScale(), c.Device()
