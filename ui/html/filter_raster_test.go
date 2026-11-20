@@ -6,9 +6,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLFiltersApplyInOrderAndClampEachFunction(t *testing.T) {
@@ -229,7 +229,7 @@ func TestHTMLBoxShadowBlursMaskAndExcludesBoxInterior(t *testing.T) {
 func TestHTMLBoxShadowCacheIgnoresUnrelatedStyle(t *testing.T) {
 	state := &htmlRenderState{}
 	defer state.Textures.dispose()
-	node := &dom.Node{}
+	node := &uinode.Node{}
 	computed := &style.ComputedStyle{BoxShadow: []style.Shadow{{BlurRadius: style.LengthPx(4), Color: style.Color{A: 255}}}}
 	for _, maskOnly := range []bool{false, true} {
 		texture, version := htmlBoxShadowTextureForMode(state, node, computed, 0, 38, 38, 20, 20, 9, maskOnly)

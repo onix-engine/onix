@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestTextBoxEdgesCascadeAndInherit(t *testing.T) {
-	document, err := dom.Parse(`<html><body><div id="parent"><span id="child"></span><span id="inherit"></span><span id="reset"></span><span id="invalid"></span></div></body></html>`)
+	document, err := parse.Parse(`<html><body><div id="parent"><span id="child"></span><span id="inherit"></span><span id="reset"></span><span id="invalid"></span></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}

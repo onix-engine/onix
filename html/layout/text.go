@@ -12,10 +12,11 @@ import (
 	"weak"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/resource"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type TextLayoutOptions struct {
@@ -23,8 +24,8 @@ type TextLayoutOptions struct {
 	Face               *font.Face
 	StyleMap           style.Map
 	Reuse              *Box
-	InlineBoxes        map[*dom.Node]*Box
-	Node               *dom.Node
+	InlineBoxes        map[*uinode.Node]*Box
+	Node               *uinode.Node
 	FlowBoxes          []*Box
 	InlineBoxFragments []inlineBoxFragment
 	AbsoluteContaining Rect
@@ -370,11 +371,12 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				})
 			case inlineSegmentText:
 				fragment := TextFragment{
-					Node:  item.Node,
-					Text:  item.Text,
-					Style: item.Style,
-					Line:  line,
-					Rect:  Rect{X: cursorX, Y: top, Width: item.Width, Height: item.Ascent + item.Descent},
+					IsPlaceholder: item.IsPlaceholder,
+					Node:          item.Node,
+					Text:          item.Text,
+					Style:         item.Style,
+					Line:          line,
+					Rect:          Rect{X: cursorX, Y: top, Width: item.Width, Height: item.Ascent + item.Descent},
 				}
 				if len(fragments) < cap(fragments) {
 					previous := fragments[:cap(fragments)][len(fragments)]
@@ -553,7 +555,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 		leading := segmentLineHeight - (fontAscent + fontDescent)
 		ascent := fontAscent + leading/2
 		descent := fontDescent + leading/2
-		if segment.Node != nil && segment.Node.Type == dom.ElementNode && segment.Node.Data == "select" {
+		if segment.Node != nil && segment.Node.Type == uinode.ElementNode && segment.Node.Data == "select" {
 			// A select is a single-line control even when its current value
 			// contains CJK text. Keep it as one visual so the widget state sync
 			// cannot duplicate the full label across rune fragments.
@@ -564,7 +566,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			if width == 0 {
 				continue
 			}
-			currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Text: segment.Text, Glyphs: glyphs, Width: width, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
+			currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, IsPlaceholder: segment.IsPlaceholder, Text: segment.Text, Glyphs: glyphs, Width: width, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
 			currentWidth += width
 			prevEndedWithSpace = false
 			continue
@@ -602,7 +604,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				}
 				if width > 0 {
 					currentLine = append(currentLine, lineItem{
-						Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Width: width,
+						Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, IsPlaceholder: segment.IsPlaceholder, Width: width,
 						Height: segmentLineHeight, Ascent: ascent, Descent: descent,
 					})
 					currentWidth += width
@@ -634,7 +636,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 					run := glyphs[:fit]
 					var text string
 					text, remainingText = splitGlyphRunText(remainingText, run)
-					currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Text: text, Glyphs: run, GlyphOffset: run[0].X, Width: runWidth, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
+					currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, IsPlaceholder: segment.IsPlaceholder, Text: text, Glyphs: run, GlyphOffset: run[0].X, Width: runWidth, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
 					currentWidth += runWidth
 					glyphs = glyphs[fit:]
 					if len(glyphs) > 0 {
@@ -644,7 +646,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 				prevEndedWithSpace = false
 				continue
 			}
-			currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, Text: token.Text, Glyphs: glyphs, Width: width, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
+			currentLine = append(currentLine, lineItem{Kind: inlineSegmentText, Node: segment.Node, Style: segment.Style, IsPlaceholder: segment.IsPlaceholder, Text: token.Text, Glyphs: glyphs, Width: width, Height: segmentLineHeight, Ascent: ascent, Descent: descent})
 			currentWidth += width
 			prevEndedWithSpace = token.IsSpace
 		}
@@ -693,7 +695,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 	return fragments, imageFragments, controlFragments, inlineBoxFragments, maxY - options.OriginY, nil
 }
 
-func nextTextFlowBox(boxes []*Box, inlineBoxes map[*dom.Node]*Box, index *int, before uint32) *Box {
+func nextTextFlowBox(boxes []*Box, inlineBoxes map[*uinode.Node]*Box, index *int, before uint32) *Box {
 	for *index < len(boxes) {
 		child := boxes[*index]
 		if child == nil || inlineBoxForNode(inlineBoxes, child.Node) != nil || isAbsolutePositioned(child) {
@@ -757,25 +759,26 @@ type inlineBoxFragment struct {
 }
 
 type lineItem struct {
-	Node        *dom.Node
-	Style       *style.ComputedStyle
-	Box         *Box
-	Text        string
-	Glyphs      []shapedGlyph
-	Ellipsis    []shapedGlyph // Read-only shaped cache entry, emitted after the prefix.
-	Margin      Edges
-	Border      Edges
-	Padding     Edges
-	EllipsisX   float64
-	Height      float64
-	Ascent      float64
-	Descent     float64
-	Width       float64
-	Kind        inlineSegmentKind
-	GlyphOffset float64 // Read-only subruns keep their original shaping coordinates.
+	Node          *uinode.Node
+	Style         *style.ComputedStyle
+	Box           *Box
+	Text          string
+	Glyphs        []shapedGlyph
+	Ellipsis      []shapedGlyph // Read-only shaped cache entry, emitted after the prefix.
+	Margin        Edges
+	Border        Edges
+	Padding       Edges
+	EllipsisX     float64
+	Height        float64
+	Ascent        float64
+	Descent       float64
+	Width         float64
+	GlyphOffset   float64 // Read-only subruns keep their original shaping coordinates.
+	Kind          inlineSegmentKind
+	IsPlaceholder bool
 }
 
-type inlineSegmentKind int
+type inlineSegmentKind uint8
 
 const (
 	inlineSegmentText inlineSegmentKind = iota
@@ -785,15 +788,16 @@ const (
 )
 
 type inlineSegment struct {
-	Node               *dom.Node
+	Node               *uinode.Node
 	Style              *style.ComputedStyle
 	Box                *Box
 	Text               string
 	Kind               inlineSegmentKind
 	PreserveWhitespace bool
+	IsPlaceholder      bool
 }
 
-func collectInlineSegmentsWithIndex(node *dom.Node, styles style.Map, ctx *layoutContext, index map[*dom.Node]*Box) []inlineSegment {
+func collectInlineSegmentsWithIndex(node *uinode.Node, styles style.Map, ctx *layoutContext, index map[*uinode.Node]*Box) []inlineSegment {
 	if ctx == nil {
 		var segments []inlineSegment
 		appendInlineRootSegments(&segments, node, styles, index)
@@ -805,10 +809,10 @@ func collectInlineSegmentsWithIndex(node *dom.Node, styles style.Map, ctx *layou
 	return ctx.inlineSegments
 }
 
-func appendInlineRootSegments(segments *[]inlineSegment, node *dom.Node, styles style.Map, inlineBoxes map[*dom.Node]*Box) {
+func appendInlineRootSegments(segments *[]inlineSegment, node *uinode.Node, styles style.Map, inlineBoxes map[*uinode.Node]*Box) {
 	// Buttons contain styled flow content; unlike input/select labels their
 	// descendants retain independent paint styles, including visibility.
-	if node != nil && node.Type == dom.ElementNode && node.Data == "button" {
+	if node != nil && node.Type == uinode.ElementNode && node.Data == "button" {
 		for _, child := range node.Children {
 			collectSegmentsInto(segments, child, styles, inlineBoxes)
 		}
@@ -823,15 +827,11 @@ func appendInlineRootSegments(segments *[]inlineSegment, node *dom.Node, styles 
 	if !ok {
 		return
 	}
-	if control.IsPlaceholder {
-		placeholder := *computed
-		placeholder.Color = placeholder.PlaceholderColor
-		computed = &placeholder
-	}
-	*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: control.Text, PreserveWhitespace: control.PreserveWhitespace})
+
+	*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: control.Text, PreserveWhitespace: control.PreserveWhitespace, IsPlaceholder: control.IsPlaceholder})
 }
 
-func appendInlineSegments(segments *[]inlineSegment, node *dom.Node, styles style.Map, inlineBoxes map[*dom.Node]*Box) {
+func appendInlineSegments(segments *[]inlineSegment, node *uinode.Node, styles style.Map, inlineBoxes map[*uinode.Node]*Box) {
 	if node == nil {
 		return
 	}
@@ -851,7 +851,7 @@ func appendInlineSegments(segments *[]inlineSegment, node *dom.Node, styles styl
 		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Box: box, Kind: inlineSegmentBox})
 		return
 	}
-	if node.Type == dom.TextNode {
+	if node.Type == uinode.TextNode {
 		computed, ok := styles.Get(node)
 		if ok {
 			*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: node.Data})
@@ -867,12 +867,8 @@ func appendInlineSegments(segments *[]inlineSegment, node *dom.Node, styles styl
 		if !hasStyle {
 			return
 		}
-		if control.IsPlaceholder {
-			placeholder := *computed
-			placeholder.Color = placeholder.PlaceholderColor
-			computed = &placeholder
-		}
-		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: control.Text, PreserveWhitespace: control.PreserveWhitespace})
+
+		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: control.Text, PreserveWhitespace: control.PreserveWhitespace, IsPlaceholder: control.IsPlaceholder})
 		return
 	}
 	for _, child := range node.Children {
@@ -880,7 +876,7 @@ func appendInlineSegments(segments *[]inlineSegment, node *dom.Node, styles styl
 	}
 }
 
-func collectSegmentsInto(segments *[]inlineSegment, node *dom.Node, styles style.Map, inlineBoxes map[*dom.Node]*Box) {
+func collectSegmentsInto(segments *[]inlineSegment, node *uinode.Node, styles style.Map, inlineBoxes map[*uinode.Node]*Box) {
 	if node == nil {
 		return
 	}
@@ -901,11 +897,11 @@ func collectSegmentsInto(segments *[]inlineSegment, node *dom.Node, styles style
 		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Box: box, Kind: inlineSegmentBox})
 		return
 	}
-	if node.Type == dom.TextNode {
+	if node.Type == uinode.TextNode {
 		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentText, Text: node.Data})
 		return
 	}
-	if node.Type == dom.ElementNode && node.Data == "img" && !isLayoutContainerDisplay(computed.Display.Keyword) {
+	if node.Type == uinode.ElementNode && node.Data == "img" && !isLayoutContainerDisplay(computed.Display.Keyword) {
 		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentImage})
 		return
 	}
@@ -913,7 +909,7 @@ func collectSegmentsInto(segments *[]inlineSegment, node *dom.Node, styles style
 		*segments = append(*segments, inlineSegment{Node: node, Style: computed, Kind: inlineSegmentControl})
 		return
 	}
-	if node.Type == dom.ElementNode && isLayoutContainerDisplay(computed.Display.Keyword) {
+	if node.Type == uinode.ElementNode && isLayoutContainerDisplay(computed.Display.Keyword) {
 		return
 	}
 	for _, child := range node.Children {
@@ -921,7 +917,7 @@ func collectSegmentsInto(segments *[]inlineSegment, node *dom.Node, styles style
 	}
 }
 
-func inlineBoxForNode(boxes map[*dom.Node]*Box, node *dom.Node) *Box {
+func inlineBoxForNode(boxes map[*uinode.Node]*Box, node *uinode.Node) *Box {
 	return boxes[node]
 }
 
@@ -931,8 +927,8 @@ type controlText struct {
 	PreserveWhitespace bool
 }
 
-func syntheticControlText(node *dom.Node) (controlText, bool) {
-	if node == nil || node.Type != dom.ElementNode {
+func syntheticControlText(node *uinode.Node) (controlText, bool) {
+	if node == nil || node.Type != uinode.ElementNode {
 		return controlText{}, false
 	}
 
@@ -996,8 +992,8 @@ func syntheticControlText(node *dom.Node) (controlText, bool) {
 	}
 }
 
-func isControlElementNode(node *dom.Node) bool {
-	if node == nil || node.Type != dom.ElementNode {
+func isControlElementNode(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	switch node.Data {
@@ -1008,7 +1004,7 @@ func isControlElementNode(node *dom.Node) bool {
 	}
 }
 
-func layoutControlImageFragments(node *dom.Node, content Rect, line int, styles style.Map, ctx *layoutContext, textFragments []TextFragment) []ImageFragment {
+func layoutControlImageFragments(node *uinode.Node, content Rect, line int, styles style.Map, ctx *layoutContext, textFragments []TextFragment) []ImageFragment {
 	if node == nil || content.Width <= 0 || content.Height <= 0 {
 		return nil
 	}
@@ -1095,12 +1091,12 @@ func shiftTextFragments(fragments []TextFragment, dx float64) {
 	}
 }
 
-func appendControlImageFragments(images []ImageFragment, node *dom.Node, styles style.Map, ctx *layoutContext) []ImageFragment {
+func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styles style.Map, ctx *layoutContext) []ImageFragment {
 	if node == nil {
 		return images
 	}
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		computed, ok := styles.Get(child)
@@ -1122,8 +1118,8 @@ func appendControlImageFragments(images []ImageFragment, node *dom.Node, styles 
 	return images
 }
 
-func shouldInlineRenderControl(node *dom.Node, computed *style.ComputedStyle) bool {
-	if node == nil || node.Type != dom.ElementNode {
+func shouldInlineRenderControl(node *uinode.Node, computed *style.ComputedStyle) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	switch node.Data {
@@ -1140,7 +1136,7 @@ func isDisplayNone(computed *style.ComputedStyle) bool {
 	return computed.Display.Kind == style.ValueKeyword && computed.Display.Keyword == "none"
 }
 
-func newControlLineItem(node *dom.Node, computed *style.ComputedStyle, face *font.Face, ctx *layoutContext, styles style.Map, base float64) (lineItem, bool) {
+func newControlLineItem(node *uinode.Node, computed *style.ComputedStyle, face *font.Face, ctx *layoutContext, styles style.Map, base float64) (lineItem, bool) {
 	temp := &Box{
 		Node:    node,
 		Style:   computed,
@@ -1180,7 +1176,7 @@ type controlToken struct {
 	width  float64
 }
 
-func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, content Rect, line int, face *font.Face, ctx *layoutContext, styles style.Map, reuse []TextFragment) []TextFragment {
+func layoutControlTextFragments(node *uinode.Node, computed *style.ComputedStyle, content Rect, line int, face *font.Face, ctx *layoutContext, styles style.Map, reuse []TextFragment) []TextFragment {
 	if node != nil && node.Data == "button" {
 		retained := Box{TextFragments: reuse}
 		fragments, _, _, _, _, err := layoutText(TextLayoutOptions{
@@ -1203,17 +1199,11 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	if !ok || strings.TrimSpace(text.Text) == "" {
 		return nil
 	}
-	fragmentStyle := computed
-	if text.IsPlaceholder {
-		placeholder := *computed
-		placeholder.Color = placeholder.PlaceholderColor
-		fragmentStyle = &placeholder
-	}
-	fontSize := fragmentStyle.FontSize.LengthPx
+	fontSize := computed.FontSize.LengthPx
 	if fontSize <= 0 {
 		fontSize = 16
 	}
-	lineHeight := UsedLineHeight(fragmentStyle, face)
+	lineHeight := UsedLineHeight(computed, face)
 	fontAscent := float64(face.Hhea.Ascent) * (fontSize / float64(face.Head.UnitsPerEm))
 	fontDescent := math.Abs(float64(face.Hhea.Descent)) * (fontSize / float64(face.Head.UnitsPerEm))
 	leading := lineHeight - (fontAscent + fontDescent)
@@ -1234,7 +1224,7 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	}
 	totalWidth := 0.0
 	availableWidth := content.Width
-	indent := resolveLength(fragmentStyle.TextIndent, content.Width)
+	indent := resolveLength(computed.TextIndent, content.Width)
 	if indent < 0 {
 		indent = 0
 	}
@@ -1246,15 +1236,15 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 		// A select displays one current value. CJK tokenization normally splits
 		// each rune into a separate fragment, but keeping those fragments would
 		// let the widget sync replace every one with the complete label.
-		glyphs, width, err := shapeToken(face, textToken{Text: text.Text}, fontSize, fragmentStyle.LetterSpacing.LengthPx, ctx)
+		glyphs, width, err := shapeToken(face, textToken{Text: text.Text}, fontSize, computed.LetterSpacing.LengthPx, ctx)
 		if err != nil || width == 0 {
 			return nil
 		}
 		shaped = append(shaped, controlToken{text: text.Text, glyphs: glyphs, width: width})
 		totalWidth = width
 	} else {
-		mode := whiteSpaceMode(fragmentStyle, text.PreserveWhitespace)
-		breakAll := fragmentStyle.WordBreak.Keyword == "break-all"
+		mode := whiteSpaceMode(computed, text.PreserveWhitespace)
+		breakAll := computed.WordBreak.Keyword == "break-all"
 		tokens := textTokens(text.Text, mode, false, breakAll)
 		allowsWrap := whiteSpaceAllowsWrap(mode)
 		lineWidth := 0.0
@@ -1267,11 +1257,11 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 				continue
 			}
 			if token.IsTab {
-				_, spaceWidth, err := shapeToken(face, textToken{Text: " "}, fontSize, fragmentStyle.LetterSpacing.LengthPx, ctx)
+				_, spaceWidth, err := shapeToken(face, textToken{Text: " "}, fontSize, computed.LetterSpacing.LengthPx, ctx)
 				if err != nil {
 					return nil
 				}
-				width := tabAdvance(lineWidth, tabStopWidth(fragmentStyle.TabSize, spaceWidth))
+				width := tabAdvance(lineWidth, tabStopWidth(computed.TabSize, spaceWidth))
 				if width > 0 {
 					shaped = append(shaped, controlToken{width: width})
 					totalWidth += width
@@ -1279,7 +1269,7 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 				}
 				continue
 			}
-			glyphs, width, err := shapeToken(face, token, fontSize, fragmentStyle.LetterSpacing.LengthPx, ctx)
+			glyphs, width, err := shapeToken(face, token, fontSize, computed.LetterSpacing.LengthPx, ctx)
 			if err != nil || width == 0 {
 				continue
 			}
@@ -1309,11 +1299,12 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	fragments := reuse[:0]
 	for _, token := range shaped {
 		fragment := TextFragment{
-			Node:  node,
-			Text:  token.text,
-			Style: fragmentStyle,
-			Line:  line,
-			Rect:  Rect{X: cursorX, Y: textTop, Width: token.width, Height: ascent + descent},
+			Node:          node,
+			Text:          token.text,
+			Style:         computed,
+			IsPlaceholder: text.IsPlaceholder,
+			Line:          line,
+			Rect:          Rect{X: cursorX, Y: textTop, Width: token.width, Height: ascent + descent},
 		}
 		if len(fragments) < cap(fragments) {
 			fragment.Glyphs = fragments[:cap(fragments)][len(fragments)].Glyphs[:0]
@@ -1334,7 +1325,7 @@ func layoutControlTextFragments(node *dom.Node, computed *style.ComputedStyle, c
 	return scrollTextInputTextFragmentsIntoView(node, content, fragments)
 }
 
-func selectedOptionText(node *dom.Node) string {
+func selectedOptionText(node *uinode.Node) string {
 	if selected := selectedOption(node); selected != nil {
 		return strings.TrimSpace(descendantText(selected))
 	}
@@ -1343,16 +1334,16 @@ func selectedOptionText(node *dom.Node) string {
 
 // Render live selectedness, including an empty or disabled selected option.
 // The DOM owns default selection and dirtyness; layout must not pick a fallback.
-func selectedOption(node *dom.Node) *dom.Node {
+func selectedOption(node *uinode.Node) *uinode.Node {
 	if node == nil {
 		return nil
 	}
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
-			if dom.IsChecked(child) {
+			if element.IsChecked(child) {
 				return child
 			}
 			continue
@@ -1364,11 +1355,11 @@ func selectedOption(node *dom.Node) *dom.Node {
 	return nil
 }
 
-func descendantText(node *dom.Node) string {
+func descendantText(node *uinode.Node) string {
 	if node == nil {
 		return ""
 	}
-	if node.Type == dom.TextNode {
+	if node.Type == uinode.TextNode {
 		return node.Data
 	}
 	var first string
@@ -1380,11 +1371,11 @@ func descendantText(node *dom.Node) string {
 	return builder.String()
 }
 
-func appendDescendantText(builder *strings.Builder, first *string, node *dom.Node) {
+func appendDescendantText(builder *strings.Builder, first *string, node *uinode.Node) {
 	if node == nil {
 		return
 	}
-	if node.Type == dom.TextNode {
+	if node.Type == uinode.TextNode {
 		if node.Data == "" {
 			return
 		}
@@ -1406,39 +1397,39 @@ func appendDescendantText(builder *strings.Builder, first *string, node *dom.Nod
 	}
 }
 
-func isCheckboxInputNode(node *dom.Node) bool {
+func isCheckboxInputNode(node *uinode.Node) bool {
 	return isInputTypeNode(node, "checkbox")
 }
 
-func isRadioInputNode(node *dom.Node) bool {
+func isRadioInputNode(node *uinode.Node) bool {
 	return isInputTypeNode(node, "radio")
 }
 
-func isPasswordInputNode(node *dom.Node) bool {
+func isPasswordInputNode(node *uinode.Node) bool {
 	return isInputTypeNode(node, "password")
 }
 
-func isButtonInputNode(node *dom.Node) bool {
+func isButtonInputNode(node *uinode.Node) bool {
 	return isInputTypeNode(node, "button") || isInputTypeNode(node, "submit") || isInputTypeNode(node, "reset")
 }
 
-func isHiddenInputNode(node *dom.Node) bool {
+func isHiddenInputNode(node *uinode.Node) bool {
 	return isInputTypeNode(node, "hidden")
 }
 
-func isChoiceInputNode(node *dom.Node) bool {
+func isChoiceInputNode(node *uinode.Node) bool {
 	return isCheckboxInputNode(node) || isRadioInputNode(node)
 }
 
-func isTextInputNode(node *dom.Node) bool {
-	if node == nil || node.Type != dom.ElementNode || node.Data != "input" {
+func isTextInputNode(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "input" {
 		return false
 	}
 	return !isChoiceInputNode(node) && !isButtonInputNode(node) && !isHiddenInputNode(node)
 }
 
-func isInputTypeNode(node *dom.Node, inputType string) bool {
-	return dom.HasInputType(node, inputType)
+func isInputTypeNode(node *uinode.Node, inputType string) bool {
+	return element.HasInputType(node, inputType)
 }
 
 func whiteSpaceMode(computed *style.ComputedStyle, preserveWhitespace bool) string {
@@ -1729,8 +1720,8 @@ func tabAdvance(position, interval float64) float64 {
 	return max(nextStop*interval-position, 0)
 }
 
-func resolveInlineImageSize(node *dom.Node, computed *style.ComputedStyle, ctx *layoutContext) (float64, float64) {
-	if node == nil || node.Type != dom.ElementNode || node.Data != "img" {
+func resolveInlineImageSize(node *uinode.Node, computed *style.ComputedStyle, ctx *layoutContext) (float64, float64) {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "img" {
 		return 0, 0
 	}
 	src, ok := node.Attr("src")
@@ -1742,9 +1733,9 @@ func resolveInlineImageSize(node *dom.Node, computed *style.ComputedStyle, ctx *
 		// HTML image providers can resolve assets outside the engine resource
 		// source. Explicit CSS or HTML dimensions are enough to lay out those
 		// images before the provider supplies the texture.
-		return resolveImageSize(node, computed, 0, 0, 0, 0)
+		return resolveImageSize(node, computed.Width, computed.Height, 0, 0, 0, 0)
 	}
-	width, height := resolveImageSize(node, computed, intrinsicWidth, intrinsicHeight, intrinsicWidth, intrinsicHeight)
+	width, height := resolveImageSize(node, computed.Width, computed.Height, intrinsicWidth, intrinsicHeight, intrinsicWidth, intrinsicHeight)
 	return width, height
 }
 
@@ -1765,14 +1756,14 @@ func resourceImageSize(ctx *layoutContext, source string) (float64, float64, boo
 	return result.width, result.height, result.valid
 }
 
-func resolveImageSize(node *dom.Node, computed *style.ComputedStyle, intrinsicWidth, intrinsicHeight, widthBase, heightBase float64) (float64, float64) {
+func resolveImageSize(node *uinode.Node, usedWidth, usedHeight style.Value, intrinsicWidth, intrinsicHeight, widthBase, heightBase float64) (float64, float64) {
 	width := resolveImageDimensionAttr(node, "width")
 	height := resolveImageDimensionAttr(node, "height")
-	if style.IsLength(computed.Width) {
-		width = resolveLength(computed.Width, widthBase)
+	if style.IsLength(usedWidth) {
+		width = resolveLength(usedWidth, widthBase)
 	}
-	if style.IsLength(computed.Height) {
-		height = resolveLength(computed.Height, heightBase)
+	if style.IsLength(usedHeight) {
+		height = resolveLength(usedHeight, heightBase)
 	}
 	if width <= 0 {
 		width = intrinsicWidth
@@ -1781,10 +1772,10 @@ func resolveImageSize(node *dom.Node, computed *style.ComputedStyle, intrinsicWi
 		height = intrinsicHeight
 	}
 	if intrinsicWidth > 0 && intrinsicHeight > 0 {
-		if style.IsLength(computed.Width) && !style.IsLength(computed.Height) {
+		if style.IsLength(usedWidth) && !style.IsLength(usedHeight) {
 			height = width * intrinsicHeight / intrinsicWidth
 		}
-		if style.IsLength(computed.Height) && !style.IsLength(computed.Width) {
+		if style.IsLength(usedHeight) && !style.IsLength(usedWidth) {
 			width = height * intrinsicWidth / intrinsicHeight
 		}
 		if width <= 0 {
@@ -1803,7 +1794,7 @@ func resolveImageSize(node *dom.Node, computed *style.ComputedStyle, intrinsicWi
 	return width, height
 }
 
-func resolveImageDimensionAttr(node *dom.Node, name string) float64 {
+func resolveImageDimensionAttr(node *uinode.Node, name string) float64 {
 	if node == nil {
 		return 0
 	}

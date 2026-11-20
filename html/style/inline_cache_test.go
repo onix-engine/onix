@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestInlineStyleCacheOwnsSource(t *testing.T) {
@@ -49,7 +49,7 @@ func TestInlineStyleCacheOwnsSource(t *testing.T) {
 }
 
 func TestInlineStyleCacheSurvivesParserReuse(t *testing.T) {
-	var parser dom.Parser
+	var parser parse.Parser
 	root, err := parser.Parse(`<div style="color:r&#101;d"></div>`)
 	if err != nil {
 		t.Fatal(err)

@@ -1,9 +1,9 @@
 package html
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Group retained consumers by every scroll container they depend on. Scopes

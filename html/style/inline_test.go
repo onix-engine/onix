@@ -3,11 +3,11 @@ package style
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestInlineDeclarationsKeepSemicolonsInsideFunctions(t *testing.T) {
-	doc, err := dom.Parse(`<div style="background-image: url(data:image/svg+xml;base64,abc;def); /* ignored; declaration */ color: #010203"></div>`)
+	doc, err := parse.Parse(`<div style="background-image: url(data:image/svg+xml;base64,abc;def); /* ignored; declaration */ color: #010203"></div>`)
 	if err != nil {
 		t.Fatalf("parse DOM: %v", err)
 	}

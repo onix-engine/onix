@@ -307,7 +307,7 @@ func controlVariantMatches(world *ecs.World, entity ecs.Entity, variant ControlV
 	disabled := target != nil && target.Disabled
 	focused := field != nil && field.Focused
 	checked := toggle != nil && toggle.Value
-	open := menu != nil && menu.Open || selector != nil && selector.Open
+	open := menu != nil && menu.Open || selectorIsOpen(world, entity, selector)
 	switch variant {
 	case VariantAlways:
 		return true

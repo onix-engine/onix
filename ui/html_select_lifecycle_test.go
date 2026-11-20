@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
@@ -33,7 +34,7 @@ func TestHTMLSelectPopupTextFollowsCSSColor(t *testing.T) {
 				t.Fatal(err)
 			}
 			control := htmlControlByID(t, world, owner, "mode")
-			world.GetMut[Selector](control).Open = true
+			SetHTMLSelectOpen(world, control, true)
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +92,7 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 	option, _ := htmlui.NodeByID(world, owner, "first")
 	for _, step := range []string{"resize width", "resize height", "option text"} {
 		t.Run(step, func(t *testing.T) {
-			world.GetMut[Selector](control).Open = true
+			SetHTMLSelectOpen(world, control, true)
 			runtime := world.GetRef[htmlSelectorRuntime](control)
 			state := world.GetMut[scene.InputState2D](runtime.Items[0])
 			state.Hovered, state.Pressed = true, true
@@ -135,5 +136,38 @@ func TestHTMLSelectRefreshRemovesAllPopupElements(t *testing.T) {
 				t.Errorf("popup entity count grew from %d to %d", len(previous), count)
 			}
 		})
+	}
+}
+
+func TestHTMLSelectPopupRetainsViewportPositionOnRefresh(t *testing.T) {
+	world := ecs.NewWorld()
+	RegisterRuntimeFeature[HTMLRenderer](world)
+	world.InsertResource(scene.ViewportSize{Width: 320, Height: 320})
+	surface := htmlui.New(`<select id="mode" style="width:180px;height:28px"><option id="first">First</option>` +
+		strings.Repeat(`<option>Other</option>`, 30) + `</select>`)
+	surface.Width, surface.Height, surface.Font = 320, 320, notosanssc.NotoSansSCRegular
+	surfaces := world.NewSpawner1[htmlui.Surface]()
+	owner := surfaces.Spawn(surface)
+	sync := SyncSystem("")
+	if err := sync.Run(world); err != nil {
+		t.Fatal(err)
+	}
+	control := htmlControlByID(t, world, owner, "mode")
+	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
+		t.Fatal(err)
+	}
+	SetHTMLSelectOpen(world, control, true)
+	previous := world.GetRef[htmlSelectorRuntime](control).List
+	world.GetMut[scene.UIScroll](previous).Position[1] = -80
+
+	option, _ := htmlui.NodeByID(world, owner, "first")
+	option.SetText("Changed")
+	if err := sync.Run(world); err != nil {
+		t.Fatal(err)
+	}
+	list := world.GetRef[htmlSelectorRuntime](control).List
+	scroll := world.GetRef[scene.UIScroll](list)
+	if list == previous || world.IsAlive(previous) || scroll == nil || scroll.Position[1] != -80 {
+		t.Fatalf("popup refresh lost its scroll position: list=%v scroll=%+v", list, scroll)
 	}
 }

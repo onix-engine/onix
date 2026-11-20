@@ -2,11 +2,79 @@ package scene
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"unsafe"
 
 	"github.com/onix-engine/onix/ecs"
 )
+
+func TestHierarchyPreservesExplicitSiblingOrder(t *testing.T) {
+	world := ecs.NewWorld()
+	parent := world.Spawn(ecs.NewBundle(0))
+	other := world.Spawn(ecs.NewBundle(0))
+	spawn := world.NewSpawner2[Parent, SiblingOrder]()
+	first := spawn.Spawn(Parent{parent}, 10)
+	second := spawn.Spawn(Parent{parent}, 5)
+	third := spawn.Spawn(Parent{parent}, 5)
+	unordered := world.NewSpawner1[Parent]()
+	last := unordered.Spawn(Parent{parent})
+	hierarchy := HierarchyFor(world)
+	check := func(parent ecs.Entity, want ...ecs.Entity) {
+		t.Helper()
+		var children []ecs.Entity
+		for child := hierarchy.FirstChild(parent); child != 0 && len(children) <= len(want); child = hierarchy.NextSibling(child) {
+			children = append(children, child)
+		}
+		if !slices.Equal(children, want) {
+			t.Fatalf("children of %v = %v, want %v", parent, children, want)
+		}
+	}
+	check(parent, second, third, first, last)
+	version := hierarchy.Version()
+	if err := (ecs.SystemConfig{System: func(*ecs.SystemContext) error {
+		world.SetIfChanged(first, SiblingOrder(-1))
+		HierarchyFor(world)
+		check(parent, first, second, third, last)
+		world.SetIfChanged(first, SiblingOrder(20))
+		HierarchyFor(world)
+		check(parent, second, third, first, last)
+		return nil
+	}}).Run(world); err != nil {
+		t.Fatal(err)
+	}
+	if hierarchy.invalidated != 0 || hierarchy.Version() != version {
+		t.Fatal("sibling reorder invalidated inherited activity, visibility or depth")
+	}
+	world.Remove[SiblingOrder](second)
+	HierarchyFor(world)
+	check(parent, third, first, second, last)
+	world.SetIfChanged(first, Parent{other})
+	HierarchyFor(world)
+	check(parent, third, second, last)
+	check(other, first)
+	world.Despawn(third)
+	replacement := spawn.Spawn(Parent{parent}, 0)
+	HierarchyFor(world)
+	check(parent, replacement, second, last)
+	if hierarchy.FirstChild(third) != 0 || hierarchy.NextSibling(third) != 0 {
+		t.Fatal("retired entity still has links")
+	}
+	for range 2 {
+		world.SetIfChanged(replacement, SiblingOrder(-1))
+		HierarchyFor(world)
+		world.SetIfChanged(replacement, SiblingOrder(1))
+		HierarchyFor(world)
+	}
+	if allocs := testing.AllocsPerRun(30, func() {
+		world.SetIfChanged(replacement, SiblingOrder(-1))
+		HierarchyFor(world)
+		world.SetIfChanged(replacement, SiblingOrder(1))
+		HierarchyFor(world)
+	}); allocs != 0 {
+		t.Fatalf("warm sibling reorders allocated %g times", allocs)
+	}
+}
 
 func hierarchyFixture(count int) (*ecs.World, []ecs.Entity) {
 	w := ecs.NewWorld()
@@ -108,6 +176,24 @@ func TestHierarchySameTickWrites(t *testing.T) {
 	}}
 	if err := system.Run(w); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHierarchyMembershipInvalidatesOnlyAffectedSubtrees(t *testing.T) {
+	world, entities := hierarchyFixture(511)
+	parent, child, grandchild := entities[1], entities[3], entities[7]
+	world.GetMut[Activity](parent).Active = false
+	if IsActive(world, grandchild) {
+		t.Fatal("descendant did not inherit activity")
+	}
+	world.Despawn(parent)
+	world.Despawn(child)
+	spawner := world.NewSpawner2[Parent, Activity]()
+	replacement := spawner.Spawn(Parent{Entity: entities[2]}, Activity{Active: true})
+	hierarchy := HierarchyFor(world)
+	if !IsActive(world, grandchild) || hierarchy.Depth(grandchild) != 0 ||
+		hierarchy.Parent(replacement) != entities[2] || hierarchy.invalidated >= len(entities)/2 {
+		t.Fatalf("batch removal and slot reuse left stale topology or rebuilt the whole index, invalidated %d", hierarchy.invalidated)
 	}
 }
 

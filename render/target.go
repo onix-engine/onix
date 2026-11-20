@@ -11,6 +11,8 @@ const (
 	RenderTargetRGBA8 RenderTargetColorFormat = iota
 	RenderTargetUint32
 	RenderTargetR8
+	// RenderTargetDepth exposes the depth attachment for sampling and allocates no color image.
+	RenderTargetDepth
 )
 
 type RenderTargetDescriptor struct {
@@ -18,14 +20,19 @@ type RenderTargetDescriptor struct {
 	Height      int
 	ColorFormat RenderTargetColorFormat
 	Depth       bool
+	// SingleSample skips window MSAA for targets used for compositing and filtering.
+	SingleSample bool
 }
 
 func (descriptor RenderTargetDescriptor) Validate() error {
 	if descriptor.Width <= 0 || descriptor.Height <= 0 {
 		return errors.New("render: render target dimensions must be positive")
 	}
-	if descriptor.ColorFormat > RenderTargetR8 {
+	if descriptor.ColorFormat > RenderTargetDepth {
 		return errors.New("render: invalid render target color format")
+	}
+	if descriptor.ColorFormat == RenderTargetDepth && !descriptor.Depth {
+		return errors.New("render: a depth-only target requires a depth attachment")
 	}
 	if descriptor.ColorFormat == RenderTargetR8 && descriptor.Depth {
 		return errors.New("render: R8 render targets require no depth attachment")
@@ -78,8 +85,8 @@ type RenderTargetReadbackDriver interface {
 	ReadRenderTarget(RenderTargetHandle, RenderTargetRegion, []byte) error
 }
 
-// RenderTarget owns a renderer-neutral offscreen color attachment and optional
-// depth attachment. Resize is deferred until the target is next used.
+// RenderTarget owns the offscreen attachments in its descriptor. Resize is
+// deferred until the target is next used.
 type RenderTarget struct {
 	active      *Device
 	residencies DeviceValues[targetResidency]
@@ -133,6 +140,21 @@ func (target *RenderTarget) ColorTexture() (TextureHandle, error) {
 }
 
 func (target *RenderTarget) ColorTextureFor(device *Device) (TextureHandle, error) {
+	if target != nil && target.descriptor.ColorFormat == RenderTargetDepth {
+		return TextureHandle{}, errors.New("render: depth-only target has no color attachment")
+	}
+	return target.sampledTextureFor(device)
+}
+
+// DepthTextureFor returns the sampled image owned by a depth-only target.
+func (target *RenderTarget) DepthTextureFor(device *Device) (TextureHandle, error) {
+	if target == nil || target.descriptor.ColorFormat != RenderTargetDepth {
+		return TextureHandle{}, errors.New("render: target has no sampleable depth attachment")
+	}
+	return target.sampledTextureFor(device)
+}
+
+func (target *RenderTarget) sampledTextureFor(device *Device) (TextureHandle, error) {
 	if err := target.ensureRealizedFor(device); err != nil {
 		return TextureHandle{}, err
 	}
@@ -174,6 +196,9 @@ func (target *RenderTarget) End() error {
 }
 
 func (target *RenderTarget) Read(region RenderTargetRegion, destination []byte) error {
+	if target != nil && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: color readback requires a color attachment")
+	}
 	if err := target.ensureRealizedFor(ActiveDevice()); err != nil {
 		return err
 	}

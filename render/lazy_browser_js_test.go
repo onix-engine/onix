@@ -61,7 +61,7 @@ func testBrowserLazySurfaceDepthPixels(t *testing.T, antialias bool) {
 	driver.SetViewport(Rect{Width: 16, Height: 16})
 	meshes := driver.(MeshDriver)
 	targets := driver.(RenderTargetDriver)
-	target, _, err := targets.CreateRenderTarget(RenderTargetDescriptor{Width: 16, Height: 16, Depth: true})
+	target, _, err := targets.CreateRenderTarget(RenderTargetDescriptor{Width: 16, Height: 16, Depth: true, SingleSample: true})
 	must(err)
 	defer targets.DestroyRenderTarget(target)
 	mesh, err := meshes.CreateMesh([]Vertex3D{{Position: [3]float32{-.5, -.5, .75}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{.5, -.5, .75}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{.5, .5, .75}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{-.5, .5, .75}, Normal: [3]float32{0, 0, 1}}}, []uint32{0, 1, 2, 0, 2, 3})
@@ -125,6 +125,57 @@ func testBrowserLazySurfaceDepthPixels(t *testing.T, antialias bool) {
 			}
 		}
 	}
+	trim := driver.(IdleBufferTrimmer)
+	must(trim.TrimIdleBuffers())
+	assertLazyBrowserResources(t, driver, false, true)
+	depth, sampled, err := targets.CreateRenderTarget(RenderTargetDescriptor{Width: 16, Height: 16, Depth: true, ColorFormat: RenderTargetDepth})
+	must(err)
+	defer targets.DestroyRenderTarget(depth)
+	shaders := driver.(MeshShaderDriver)
+	probe, err := shaders.CreateMeshShader(ShaderDescriptor{
+		WebGPUFragmentSource: `@group(0) @binding(18) var shadowTex: texture_2d<f32>;
+			@fragment fn mesh_fragment() -> @location(0) vec4<f32> {
+				return vec4<f32>(textureLoad(shadowTex, vec2<i32>(8), 0).r, 0, 0, 1);
+			}`,
+		WebGL2FragmentSource: "#version 300 es\nprecision highp float; uniform highp sampler2D shadowTex; out vec4 color; void main() { color=vec4(texelFetch(shadowTex,ivec2(8),0).r,0,0,1); }",
+	})
+	must(err)
+	defer shaders.DestroyMeshShader(probe)
+	must(driver.BeginFrame(Color{}))
+	if trim.TrimIdleBuffers() == nil {
+		t.Fatal("trim accepted an active frame")
+	}
+	must(driver.DrawSprites(sprite))
+	batch.Instances[0].Model = identity
+	must(meshes.DrawMeshes(batch))
+	must(targets.BeginRenderTarget(depth, RenderTargetClear{ClearDepth: true}))
+	driver.SetViewport(Rect{Width: 16, Height: 16})
+	batch.Lighting.Params[1] = MeshPassShadowDepth
+	must(meshes.DrawMeshes(batch))
+	must(targets.EndRenderTarget())
+	must(targets.BeginRenderTarget(target, RenderTargetClear{ClearColor: true, ClearDepth: true}))
+	batch.Lighting.Params[1] = MeshPassLit
+	batch.Lighting.ShadowTexture = sampled
+	batch.Draws[0].Shader = probe
+	must(meshes.DrawMeshes(batch))
+	must(targets.EndRenderTarget())
+	must(driver.Present())
+	check()
+	var probePixel [4]byte
+	must(driver.(RenderTargetReadbackDriver).ReadRenderTarget(target, RenderTargetRegion{X: 8, Y: 8, Width: 1, Height: 1}, probePixel[:]))
+	if probePixel[0] < 190 || probePixel[0] > 192 {
+		t.Fatalf("sampled depth at center = %v, want 0.75", probePixel)
+	}
+	batch.Draws[0].Shader = MeshShaderHandle{}
+	batch.Lighting.ShadowTexture = TextureHandle{}
+	assertLazyBrowserResources(t, driver, true, true)
+	for range bufferTrimDelay + 2 {
+		must(driver.BeginFrame(Color{}))
+		must(driver.DrawSprites(sprite))
+		must(driver.Present())
+	}
+	check()
+	assertLazyBrowserResources(t, driver, false, true)
 	picking, _, err := targets.CreateRenderTarget(RenderTargetDescriptor{Width: 16, Height: 16, Depth: true, ColorFormat: RenderTargetUint32})
 	must(err)
 	defer targets.DestroyRenderTarget(picking)
@@ -151,5 +202,5 @@ func testBrowserLazySurfaceDepthPixels(t *testing.T, antialias bool) {
 		pickingPipeline = pipeline
 		check()
 	}
-	t.Log("depthless 2D/resize, offscreen isolation, 2D→3D color preservation, scissor, reversed depth, target resume, 2D overlay, presentation and lazy cached picking passed")
+	t.Log("surface depth aging and recreation, sampled depth, single-sample offscreen rendering, compositing and picking passed")
 }

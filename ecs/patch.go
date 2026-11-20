@@ -128,8 +128,8 @@ func (p *patchPlan) finish(row patchRow) {
 	if t.source == t.target {
 		return
 	}
-	moveColumns(t.columns, row.sourceRow)
 	w := p.world
+	moveColumns(w, t.columns, row.sourceRow)
 	w.removeArchetypeEntity(t.source, row.sourceRow)
 	w.commitMigration(row.index, t.target, row.targetRow)
 }

@@ -1,10 +1,12 @@
-package dom
+package parse
 
 import (
 	"errors"
 	"strings"
 	"testing"
 	"unsafe"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestParserReuseAllocs(t *testing.T) {
@@ -59,19 +61,14 @@ func TestParserResetAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(root.Children) != 1 || root.Children[0].AttrCount() != 0 || root.Children[0].States != (StateSet[ElementState]{}) {
+	if len(root.Children) != 1 || root.Children[0].AttrCount() != 0 || root.Children[0].States != (uinode.StateSet[uint16]{}) {
 		t.Fatalf("retained previous state: %s", root.String())
 	}
 	var order uint32
 	validateTree(t, root, nil, &order)
 	parser.Reset()
-	for _, block := range parser.blocks {
-		for i := range block {
-			n := &block[i].node
-			if n.Data != "" || n.Parent != nil || len(n.Children) != 0 || n.AttrCount() != 0 || n.States != (StateSet[ElementState]{}) {
-				t.Fatal("reset retained source or tree references")
-			}
-		}
+	if root.Data != "" || root.Parent != nil || len(root.Children) != 0 || root.AttrCount() != 0 {
+		t.Fatal("reset retained source or tree references")
 	}
 	if parser.scanner.input != "" || parser.builder.doc != nil {
 		t.Fatal("reset retained document")
@@ -145,11 +142,11 @@ func TestTokenizerHTMLRecovery(t *testing.T) {
 			t.Fatalf("%q => %#v, %v", test.source, token, err)
 		}
 		if token.AttrCount() != len(test.attrs) {
-			t.Fatalf("%q attrs = %#v", test.source, token.data)
+			t.Fatalf("%q attrs = %#v", test.source, token)
 		}
 		for key, value := range test.attrs {
 			if token.AttrValue(key) != value {
-				t.Fatalf("%q attrs = %#v", test.source, token.data)
+				t.Fatalf("%q attrs = %#v", test.source, token)
 			}
 		}
 	}
@@ -188,7 +185,7 @@ func TestDoctypeNameUsesASCIICaseAndNoReferences(t *testing.T) {
 	}
 }
 
-func validateTree(t *testing.T, node, parent *Node, order *uint32) {
+func validateTree(t *testing.T, node, parent *uinode.Node, order *uint32) {
 	t.Helper()
 	if node == nil || node.Parent != parent || node.Order != *order {
 		t.Fatalf("invalid parent/order at node %#v", node)

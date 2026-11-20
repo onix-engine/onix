@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Serialize returns the current retained HTML document for page.
 //
 // The returned string is HTML markup, rather than the diagnostic tree emitted
-// by dom.Node.String. The retained DOM is serialized after all mutations that
+// by uinode.Node.String. The retained DOM is serialized after all mutations that
 // have already been applied to the page, so callers should run Sync after
 // changing component state when the serialized output must include that
 // change.
@@ -32,7 +32,7 @@ func (n Node) Serialize() (string, error) {
 	return serializeHTMLNode(n.node), nil
 }
 
-func serializeHTMLNode(node *dom.Node) string {
+func serializeHTMLNode(node *uinode.Node) string {
 	if node == nil {
 		return ""
 	}
@@ -41,18 +41,18 @@ func serializeHTMLNode(node *dom.Node) string {
 	return builder.String()
 }
 
-func writeHTMLNode(builder *strings.Builder, node *dom.Node) {
+func writeHTMLNode(builder *strings.Builder, node *uinode.Node) {
 	if node == nil {
 		return
 	}
 	switch node.Type {
-	case dom.DocumentNode:
+	case uinode.DocumentNode:
 		for _, child := range node.Children {
 			writeHTMLNode(builder, child)
 		}
-	case dom.TextNode:
+	case uinode.TextNode:
 		writeEscapedHTMLText(builder, node.Data)
-	case dom.ElementNode:
+	case uinode.ElementNode:
 		builder.WriteByte('<')
 		builder.WriteString(node.Data)
 		writeHTMLAttributes(builder, node)
@@ -69,7 +69,7 @@ func writeHTMLNode(builder *strings.Builder, node *dom.Node) {
 	}
 }
 
-func writeHTMLAttributes(builder *strings.Builder, node *dom.Node) {
+func writeHTMLAttributes(builder *strings.Builder, node *uinode.Node) {
 	for name, value := range node.SortedAttributes() {
 		builder.WriteByte(' ')
 		builder.WriteString(name)

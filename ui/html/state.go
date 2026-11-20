@@ -1,42 +1,56 @@
 package html
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/internal/reuse"
-	"github.com/go-gl/mathgl/mgl32"
+	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 type htmlDocumentState struct {
-	Mutations       map[*dom.Node]htmlMutation
-	NodeByID        map[string]*dom.Node
-	MutationRootSet map[*dom.Node]struct{}
-	Root            *dom.Node
-	SourceDocument  *dom.Node
+	Mutations       map[*uinode.Node]htmlMutation
+	NodeByID        map[string]*uinode.Node
+	MutationRootSet map[*uinode.Node]struct{}
+	Root            *uinode.Node
 	Source          string
-	EmbeddedCSS     string
-	MutationRoots   []*dom.Node
-	NodeAncestors   htmlAncestorCache[*dom.Node, *dom.Node]
-	NodeFlags       htmlAncestorCache[*dom.Node, bool]
+	EmbeddedCSS     []string
+	MutationRoots   []*uinode.Node
+	NodeAncestors   htmlAncestorCache[*uinode.Node, *uinode.Node]
+	NodeFlags       htmlAncestorCache[*uinode.Node, bool]
 	Revision        uint64
 	EventRevision   uint64
 	IndexDirty      bool
+	FromSource      bool
+	SourceDirty     bool
+	SourceCompacted bool
+}
+
+func (state *htmlDocumentState) matchesSource(value Surface) bool {
+	if state.SourceDirty || state.Root == nil || state.Source != value.Value {
+		return false
+	}
+	if value.Document == nil {
+		return state.FromSource
+	}
+	return !state.FromSource && state.Root == value.Document
 }
 
 type htmlStyleState struct {
 	Stylesheet              *css.Stylesheet
 	AnimationTrackHeads     map[string]int
-	ContainerMetricsScratch map[*dom.Node]style.ContainerMetrics
-	AnimationBaselines      map[*dom.Node]htmlAnimationBaseline
-	Animations              map[*dom.Node]*htmlNodeAnimation
+	ContainerMetricsScratch map[*uinode.Node]style.ContainerMetrics
+	AnimationBaselines      map[*uinode.Node]htmlAnimationBaseline
+	Animations              map[*uinode.Node]*htmlNodeAnimation
 	Styles                  style.Map
 	StylesheetKey           htmlStylesheetKey
-	AnimationRoots          []*dom.Node
-	RestyleNodes            []*dom.Node
-	ActiveAnimations        []*dom.Node
+	AnimationRoots          []*uinode.Node
+	RestyleNodes            []*uinode.Node
+	ActiveAnimations        []*uinode.Node
 	StyleChanges            []style.NodeChange
 	AnimationComposition    htmlAnimationComposition
 	StyleCache              style.MutationCache
@@ -48,61 +62,63 @@ type htmlStyleState struct {
 
 type htmlLayoutState struct {
 	Boxes            *layout.Box
-	LayoutNodes      []*dom.Node
-	LayoutOrderNodes []*dom.Node
+	LayoutNodes      []*uinode.Node
+	LayoutOrderNodes []*uinode.Node
 	LayoutCache      layout.Cache
 	Layout           Layout
 	LayoutTopology   bool
 }
 
 type htmlPaintState struct {
-	BoxRenderings     map[*dom.Node]*htmlBoxRendering
+	BoxRenderings     map[*uinode.Node]*htmlBoxRendering
 	EmittingBox       *htmlBoxRendering
-	StickyBindings    map[*dom.Node]*htmlStickyBinding
-	PaintCullOffsets  map[*dom.Node]mgl32.Vec2
+	StickyBindings    map[*uinode.Node]*htmlStickyBinding
+	PaintCullOffsets  map[*uinode.Node]mgl32.Vec2
 	OverflowExtents   map[*layout.Box]htmlOverflowExtent
-	RenderNodes       map[*dom.Node]*htmlNodeRendering
+	RenderNodes       map[*uinode.Node]*htmlNodeRendering
 	EntityGroups      map[htmlRenderIdentity]*htmlEntityGroup
 	Textures          htmlTextureCache
+	PaintList         *scene.UIPaintList2D
 	RenderQueue       []*htmlBoxRendering
 	Children          []ecs.Entity
 	RemovedBoxes      []*htmlBoxRendering
 	PaintCullRoots    []*htmlBoxRendering
+	PaintCullGroups   []*htmlEntityGroup
+	PaintCullNodes    []*htmlNodeRendering
 	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
 	BoxFlags          htmlAncestorCache[*layout.Box, bool]
 	RenderGeneration  uint64
+	PaintCullEpoch    uint64
 	OwnerSpansValid   bool
 	PartialValid      bool
 	Reconciling       bool
 	LocalReconcile    bool
 	PaintCullDisabled bool
+	PaintCullSync     bool
 	StickyDirty       bool
+	PaintListDirty    bool
 }
 
 type htmlInputState struct {
-	StateRoots           [2]*dom.Node
-	NodeScrollBindings   map[*dom.Node]struct{}
-	OverflowBindings     map[*dom.Node]*htmlOverflowClipBinding
-	EventTargets         map[*dom.Node]ecs.Entity
-	ComponentEvents      map[*dom.Node][]htmlComponentEventBinding
-	ControlSnapshots     map[*dom.Node]htmlControlSnapshot
-	NodeEvents           map[*dom.Node]htmlNodeEventBinding
-	FocusByNode          map[*dom.Node]int
-	OverflowRoutes       map[*dom.Node]*htmlOverflowClipBinding
+	StateRoots           [2]*uinode.Node
+	OverflowBindings     map[*uinode.Node]*htmlOverflowClipBinding
+	EventTargets         map[*uinode.Node]ecs.Entity
+	DetachedFields       map[*uinode.Node]textfield.Field
+	NodeEvents           map[*uinode.Node]htmlNodeEventBinding
+	FocusByNode          map[*uinode.Node]int
+	OverflowRoutes       map[*uinode.Node]*htmlOverflowClipBinding
 	OverflowEntities     map[ecs.Entity]*htmlOverflowClipBinding
-	NodeBindingLocals    map[*dom.Node]htmlBindingIndices
+	NodeBindingLocals    map[*uinode.Node]htmlBindingIndices
 	NodeScrollIDs        map[string]int
 	NodeOffsetIDs        map[string]int
 	PreviousInput        css.State
 	Input                css.State
-	NodeBindingRoutes    htmlAncestorCache[*dom.Node, htmlBindingIndices]
+	NodeBindingRoutes    htmlAncestorCache[*uinode.Node, htmlBindingIndices]
 	NodeScrolls          []htmlNodeScroll
 	NodeOffsets          []htmlNodeOffset
 	FocusTargets         []htmlFocusTargetBinding
 	NodeBindingKey       htmlNodeBindingKey
 	OverflowRetention    [3]reuse.MapRetention
-	SnapshotGeneration   uint32
-	ControlStylesChanged bool
 	NodeBindingsPrepared bool
 }
 

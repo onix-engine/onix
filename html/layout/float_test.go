@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestFloatsExcludeInlineTextOnBothSides(t *testing.T) {
@@ -73,8 +73,8 @@ func TestFloatIncrementalLayoutMatchesFreshAfterWidthChange(t *testing.T) {
 	node := boxes["float"].Node
 	for _, width := range []float64{70, 20, 40} {
 		styles.Exclusive(node).Width = style.LengthPx(width)
-		cache.Restyle([]*dom.Node{node}, styles)
-		got, err := cache.Update(doc, styles, face, nil, 320, 200, []*dom.Node{node}, nil, false, false)
+		cache.Restyle([]*uinode.Node{node}, styles)
+		got, err := cache.Update(doc, styles, face, nil, 320, 200, []*uinode.Node{node}, nil, false, false)
 		if err != nil {
 			t.Fatal(err)
 		}

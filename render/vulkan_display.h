@@ -1,7 +1,7 @@
 #ifndef ONIX_ENGINE_RENDER_VULKAN_DISPLAY_H
 #define ONIX_ENGINE_RENDER_VULKAN_DISPLAY_H
 
-static VkDisplayModeKHR onix_vk_display_mode(const VkDisplayModePropertiesKHR *modes, uint32_t count, OnixVkSurface surface) {
+static VkDisplayModeKHR onix_vk_display_mode(const VkDisplayModePropertiesKHR *modes, uint32_t count, OnixGPUSurface surface) {
     VkDisplayModeKHR selected = VK_NULL_HANDLE;
     uint32_t best_distance = UINT32_MAX;
     uint32_t best_rate = 0;
@@ -32,7 +32,7 @@ static int onix_vk_display_extent_supported(VkExtent2D extent, const VkDisplayPl
         extent.height >= caps->minDstExtent.height && extent.height <= caps->maxDstExtent.height;
 }
 
-static int onix_vk_display_plane_supports(OnixVkDriver *driver, uint32_t plane) {
+static int onix_vk_display_plane_supports(OnixGPUDriver *driver, uint32_t plane) {
     uint32_t count = 0;
     if (vkGetDisplayPlaneSupportedDisplaysKHR(driver->physical_device, plane, &count, NULL) != VK_SUCCESS || count == 0) return 0;
     VkDisplayKHR *displays = calloc(count, sizeof(*displays));
@@ -50,7 +50,7 @@ static int onix_vk_display_plane_supports(OnixVkDriver *driver, uint32_t plane) 
     return supported;
 }
 
-static int onix_vk_create_display_plane(OnixVkDriver *driver, VkDisplayModeKHR mode) {
+static int onix_vk_create_display_plane(OnixGPUDriver *driver, VkDisplayModeKHR mode) {
     uint32_t count = 0;
     if (!onix_vk_result(vkGetPhysicalDeviceDisplayPlanePropertiesKHR(driver->physical_device, &count, NULL), "query Vulkan display planes")) return 0;
     if (count == 0) {
@@ -103,7 +103,7 @@ static int onix_vk_create_display_plane(OnixVkDriver *driver, VkDisplayModeKHR m
     return onix_vk_result(vkCreateDisplayPlaneSurfaceKHR(driver->instance, &info, NULL, &driver->surface), "create Vulkan DRM display surface");
 }
 
-static int onix_vk_display_supports_identity(OnixVkDriver *driver) {
+static int onix_vk_display_supports_identity(OnixGPUDriver *driver) {
     uint32_t count = 0;
     if (!onix_vk_result(vkGetPhysicalDeviceDisplayPropertiesKHR(driver->physical_device, &count, NULL), "query Vulkan displays")) return 0;
     if (count == 0) {
@@ -131,8 +131,8 @@ static int onix_vk_display_supports_identity(OnixVkDriver *driver) {
     return supported;
 }
 
-static int onix_vk_create_drm_surface(OnixVkDriver *driver) {
-    const OnixVkSurface *surface = &driver->native_surface;
+static int onix_vk_create_drm_surface(OnixGPUDriver *driver) {
+    const OnixGPUSurface *surface = &driver->native_surface;
     if (surface->kind != ONIX_GPU_SURFACE_DRM || surface->drm_fd < 0 || surface->drm_connector_id == 0 || surface->transparent) {
         onix_vk_set_error("DRM Vulkan driver requires an opaque DRM connector surface");
         return 0;

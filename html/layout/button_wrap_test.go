@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
@@ -21,7 +21,7 @@ func TestButtonAutoHeightContainsWrappedText(t *testing.T) {
 				{"wrap", "diagnostic diagnostic diagnostic", 3},
 			} {
 				t.Run(display+"/"+sizing+"/"+message.name, func(t *testing.T) {
-					document, err := dom.Parse(`<html><body><div><button id="problem">` + message.text + `</button></div><div id="next">next</div></body></html>`)
+					document, err := parse.Parse(`<html><body><div><button id="problem">` + message.text + `</button></div><div id="next">next</div></body></html>`)
 					if err != nil {
 						t.Fatal(err)
 					}

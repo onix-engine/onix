@@ -8,15 +8,16 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/render"
+	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type htmlTextureKey struct {
-	node     *dom.Node
+	node     *uinode.Node
 	variant  string
 	gradient htmlGradientKey
 }
@@ -38,7 +39,7 @@ type htmlTextureCache struct {
 	entries        map[htmlTextureKey]*htmlOwnedTexture
 	textures       map[*graphics.Texture]*htmlOwnedTexture
 	entities       map[ecs.Entity]*htmlOwnedTexture
-	rasters        map[*dom.Node]*htmlOpacityRaster
+	rasters        map[*uinode.Node]*htmlOpacityRaster
 	gpuBlur        map[htmlTextureKey]*htmlGPUBlur
 	blurShader     *graphics.Material2DShader
 	unused         []*htmlOwnedTexture
@@ -166,6 +167,10 @@ func cleanupHTMLSurface(world *ecs.World, entity ecs.Entity, _ *Surface) {
 	if state := world.GetRef[htmlRenderState](entity); state != nil {
 		state.Textures.dispose()
 		state.Root = nil
+		if state.PaintList != nil {
+			state.PaintList.Reset()
+			world.GetMut[*scene.UIPaintList2D](entity)
+		}
 	}
 }
 
@@ -183,24 +188,27 @@ func Release(world *ecs.World, owner ecs.Entity) {
 		}
 		delete(owners.Children, owner)
 	}
+	world.Remove[*scene.UIPaintList2D](owner)
 	world.Remove[htmlRenderState](owner)
 }
 
 func Dispose(world *ecs.World) {
 	for _, access := range world.Query[htmlRenderState]().All {
 		state := access.Ref()
-
 		state.Textures.dispose()
+		if state.PaintList != nil {
+			state.PaintList.Reset()
+		}
 	}
 }
 
 type htmlOpacityChild struct {
-	node    *dom.Node
+	node    *uinode.Node
 	version uint64
 }
 
 type htmlOpacityInline struct {
-	node       *dom.Node
+	node       *uinode.Node
 	style      *style.ComputedStyle
 	background style.Value
 	radii      style.Corners
@@ -208,7 +216,7 @@ type htmlOpacityInline struct {
 }
 
 type htmlOpacityRaster struct {
-	root                *dom.Node
+	root                *uinode.Node
 	boldFace            *font.Face
 	face                *font.Face
 	style               *style.ComputedStyle
@@ -233,9 +241,9 @@ func updateHTMLOpacityRaster(cache *htmlTextureCache, box *layout.Box, root, cac
 	return cache.updateOpacityRaster(box, box.Node, root, cacheSubtree, gpuBlur)
 }
 
-func (cache *htmlTextureCache) retireOpacityRoot(root *dom.Node) {
-	var retire func(*dom.Node)
-	retire = func(node *dom.Node) {
+func (cache *htmlTextureCache) retireOpacityRoot(root *uinode.Node) {
+	var retire func(*uinode.Node)
+	retire = func(node *uinode.Node) {
 		raster := cache.rasters[node]
 		if raster == nil || raster.root != root {
 			return
@@ -248,9 +256,9 @@ func (cache *htmlTextureCache) retireOpacityRoot(root *dom.Node) {
 	retire(root)
 }
 
-func (cache *htmlTextureCache) updateOpacityRaster(box *layout.Box, owner *dom.Node, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
+func (cache *htmlTextureCache) updateOpacityRaster(box *layout.Box, owner *uinode.Node, root, cacheSubtree, gpuBlur bool) *htmlOpacityRaster {
 	if cache.rasters == nil {
-		cache.rasters = make(map[*dom.Node]*htmlOpacityRaster)
+		cache.rasters = make(map[*uinode.Node]*htmlOpacityRaster)
 	}
 	raster := cache.rasters[box.Node]
 	if raster == nil {

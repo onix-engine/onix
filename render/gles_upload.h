@@ -25,6 +25,21 @@ static void onix_gl_delete_upload_buffer(OnixGLUploadBuffer *buffer) {
 	free(buffer->snapshot);
 }
 
+static void onix_gl_detach_uploads(OnixGLUploadPool *pool) {
+	if (pool->quad_vertex) {
+		glBindBuffer(GL_ARRAY_BUFFER, pool->quad_vertex);
+		for (uint32_t index = 0; index < 3; index++) {
+			glBindVertexArray(pool->vaos[index]);
+			for (GLuint attribute = 0; attribute < 16; attribute++) {
+				glVertexAttribPointer(attribute, 4, GL_FLOAT, GL_FALSE, 20, NULL);
+			}
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, NULL);
+			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (const void *)12);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool->quad_index);
+		}
+	}
+}
+
 static int onix_gl_begin_uploads(OnixGLUploadPool *pool) {
 	if (pool->fence) {
 		GLenum result;
@@ -40,18 +55,7 @@ static int onix_gl_begin_uploads(OnixGLUploadPool *pool) {
 	if (budget) {
 		// Other VAOs can retain deleted buffer storage. Detach the transient
 		// attributes before trimming, so an idle view also releases its peak.
-		if (pool->quad_vertex) {
-			glBindBuffer(GL_ARRAY_BUFFER, pool->quad_vertex);
-			for (uint32_t index = 0; index < 3; index++) {
-				glBindVertexArray(pool->vaos[index]);
-				for (GLuint attribute = 0; attribute < 16; attribute++) {
-					glVertexAttribPointer(attribute, 4, GL_FLOAT, GL_FALSE, 20, NULL);
-				}
-				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, NULL);
-				glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (const void *)12);
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool->quad_index);
-			}
-		}
+		onix_gl_detach_uploads(pool);
 	}
 	{
 		uint32_t keep = 0;
@@ -95,6 +99,20 @@ static void onix_gl_destroy_uploads(OnixGLUploadPool *pool) {
 	free(pool->buffers);
 	onix_upload_cache_destroy(&pool->cache);
 	*pool = (OnixGLUploadPool){0};
+}
+
+static int onix_gl_trim_idle_uploads(OnixGLUploadPool *pool) {
+    if (!onix_gl_begin_uploads(pool)) return 0;
+    onix_gl_detach_uploads(pool);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    for (uint32_t i = 0; i < pool->count; i++) onix_gl_delete_upload_buffer(&pool->buffers[i]);
+    free(pool->buffers);
+    onix_upload_cache_destroy(&pool->cache);
+    pool->buffers = NULL;
+    pool->capacity = pool->count = pool->used = 0;
+    pool->bytes = pool->snapshot_bytes = 0;
+    return 1;
 }
 
 // Stream batches occupy disjoint ranges until this frame's fence completes.

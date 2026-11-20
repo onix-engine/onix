@@ -16,6 +16,7 @@ import (
 // Content snapshots belong to their entity, so extracting one changed entity
 // cannot overwrite a snapshot still used by an unchanged entity.
 type retainedEntity2D struct {
+	paintList             *retainedPaintList2D
 	text                  *textPaint2D
 	snapshots             *renderSnapshots2D
 	sourceText            *textPaint2D
@@ -51,6 +52,7 @@ const (
 	renderNodeDirtyContent2D
 	renderNodeDirtyVisibility2D
 	renderNodeDirtyOrder2D
+	renderNodeDirtyPaintList2D
 )
 
 func (tree *renderTree2D) allocateNode() *retainedEntity2D {
@@ -147,19 +149,31 @@ func (tree *renderTree2D) itemForPart(part renderPart2D) *renderItem2D {
 	return &tree.items[tree.partPositions[part]]
 }
 
-func (node *retainedEntity2D) captureCamera(items []renderItem2D) {
+func (node *retainedEntity2D) captureCamera(world *ecs.World, entity ecs.Entity, items []renderItem2D) {
 	node.mixedCamera = false
 	if node.first < 0 {
 		node.renderLayers = RenderLayers{}
+		node.paintList = nil
 		return
 	}
 	first := &items[node.first]
 	node.renderLayers, node.renderScene, node.renderTarget = first.layers, first.scene, first.target
-	for _, position := range node.extra {
+	binding := world.GetRef[*UIPaintList2D](entity)
+	if binding != nil && *binding != nil {
+		if node.paintList == nil {
+			node.paintList = new(retainedPaintList2D)
+		}
+		node.paintList.reset(*binding)
+	} else {
+		node.paintList = nil
+	}
+	for position := range node.positions {
 		item := &items[position]
+		if item.paintSlot != 0 {
+			node.paintList.record(item, position)
+		}
 		if !sameRenderCamera2D(item, first) {
 			node.mixedCamera = true
-			return
 		}
 	}
 }
@@ -456,6 +470,9 @@ var retainedInputs2D = [...]renderInput2D{
 	retainedInput2D[Size2D](renderNodeDirtyContent2D), retainedInput2D[UIBackground2D](renderNodeDirtyContent2D),
 	retainedInput2D[UIImage2D](renderNodeDirtyContent2D), retainedInput2D[UIBorder2D](renderNodeDirtyContent2D),
 	retainedInput2D[RenderOutput2D](renderNodeDirtyContent2D), retainedInput2D[Shader[graphics.Material2DShader]](renderNodeDirtyContent2D),
+	retainedInput2D[UIPaint2D](renderNodeDirtyContent2D),
+	retainedInput2D[UIVisualRects2D](renderNodeDirtyContent2D),
+	retainedInput2D[*UIPaintList2D](renderNodeDirtyPaintList2D),
 	dynamicRetainedInput2D(renderCollectorSpriteTrail2D, func(t *SpriteTrail2D, device *render.Device) bool { return len(t.samples) != 0 }),
 	dynamicRetainedInput2D(renderCollectorSpriteLayers2D, func(l *SpriteLayers2D, device *render.Device) bool {
 		for i := range l.Layers {
@@ -476,9 +493,9 @@ var retainedInputs2D = [...]renderInput2D{
 
 var dynamicCollectors2D = [...]renderCollector2DKind{renderCollectorSpriteTrail2D, renderCollectorSpriteLayers2D, renderCollectorParticle2D, renderCollectorTilemap2D, renderCollectorSpine2D}
 
-const retainedRenderInputCount2D = 24
+const retainedRenderInputCount2D = 27
 const inheritedRenderInputs2D = 6
-const dynamicRenderInputs2D = 19
+const dynamicRenderInputs2D = retainedRenderInputCount2D - len(dynamicCollectors2D)
 
 // renderTree2D owns the render topology, snapshots in paint order, and the
 // changes consumed by each camera's compositor.
@@ -628,13 +645,13 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 		return false
 	}
 	if node.text != nil {
-		_, canvasHeight := c.Size()
-		text := world.GetRef[Text2D](entity)
-		if text == nil {
-			return false
-		}
-		window := text.visibleGlyphWindow(matrix, anchorForEntity2D(world, entity), node.ui, clip, canvasHeight)
-		if window.valid && (!text.glyphBand.valid || window.top < text.glyphBand.top || window.bottom > text.glyphBand.bottom) {
+		if text := world.GetRef[Text2D](entity); text != nil {
+			_, canvasHeight := c.Size()
+			window := text.visibleGlyphWindow(matrix, anchorForEntity2D(world, entity), node.ui, clip, canvasHeight)
+			if window.valid && (!text.glyphBand.valid || window.top < text.glyphBand.top || window.bottom > text.glyphBand.bottom) {
+				return false
+			}
+		} else if !world.Has[*UIPaintList2D](entity) {
 			return false
 		}
 	}
@@ -749,18 +766,42 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 			since--
 		}
 		cache.changes = world.ChangesSince(since)
-		hierarchyChanged := false
+		hierarchyChanged, paintListsChanged := false, false
 		for i := range retainedInputs2D {
 			if cache.versions[i] != versions[i] {
 				if i < inheritedRenderInputs2D && !hierarchyChanged {
 					cache.beginHierarchyChanges(world)
 					hierarchyChanged = true
 				}
+				paintListsChanged = paintListsChanged || retainedInputs2D[i].dirty == renderNodeDirtyPaintList2D
 				retainedInputs2D[i].changed(world, &cache.changes, cache)
 			}
 		}
 		if hierarchyChanged {
 			cache.markHierarchyChanges(world)
+		}
+		// Consume slot journals before deciding density by ECS entity count.
+		// One surface can own thousands of independently retained items.
+		if paintListsChanged && !cache.direct && !cache.missing {
+			pending := cache.dirty[:0]
+			for _, entity := range cache.dirty {
+				node := cache.nodes[entity]
+				if node.dirty == renderNodeDirtyPaintList2D && cache.patchPaintList(c, world, entity, node) {
+					node.dirty = 0
+					cache.dirtyNodes--
+				} else {
+					pending = append(pending, entity)
+				}
+			}
+			cache.dirty = pending
+			if len(pending) == 0 {
+				cache.stats.Reused = len(cache.items) - cache.stats.Extracted
+				cache.capture(c, world, state)
+				if cache.stats.Extracted != 0 || cache.stats.PaintUpdated != 0 {
+					cache.generation++
+				}
+				return cache.items
+			}
 		}
 		// Dense changes use the sequential collector path; sparse changes reuse
 		// the retained order and touch only matching rows in the ECS tables.
@@ -823,10 +864,11 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 			node.dirty = 0
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
-			node.captureCamera(cache.items)
+			node.captureCamera(world, entity, cache.items)
 		}
 		if !full {
-			cache.stats.Extracted, cache.stats.Reused = len(items), len(cache.items)-len(items)
+			cache.stats.Extracted += len(items)
+			cache.stats.Reused = len(cache.items) - cache.stats.Extracted
 		}
 		clear(items) // Do not retain borrowed component pointers in frame scratch.
 	}
@@ -885,7 +927,7 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 			node.dirty = 0
 			cache.releaseNode(entity, node)
 			node.captureProperties(world, entity, cache.items)
-			node.captureCamera(cache.items)
+			node.captureCamera(world, entity, cache.items)
 			for position := range node.positions {
 				cache.items[position].part = part
 				cache.partPositions[part] = uint32(position)

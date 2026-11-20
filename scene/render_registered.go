@@ -25,6 +25,8 @@ const (
 	renderCollectorSpine2D
 	renderCollectorText2D
 	renderCollectorUIVisual2D
+	renderCollectorUIPaint2D
+	renderCollectorUIPaintList2D
 	renderCollector2DCount
 )
 
@@ -32,6 +34,8 @@ func RegisterSpriteRenderer2D(world *ecs.World) {
 	state := RenderWorldFor(world)
 	state.registry2D++
 	state.collectors2D[renderCollectorSprite2D] = collectSprites2D
+	state.collectors2D[renderCollectorUIPaint2D] = collectUIPaint2D
+	state.collectors2D[renderCollectorUIPaintList2D] = collectUIPaintLists2D
 	state.drawers2D[renderItemSprite2D] = drawSpriteRenderItem2D
 	state.drawers2D[renderItemShape2D] = drawShapeRenderItem2D
 }

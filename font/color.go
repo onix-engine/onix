@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"runtime"
 )
 
 // Borrow table storage from the face. Glyph lookup and measurement do not
@@ -176,6 +177,7 @@ func colorPixelBounds(x, y, width, height, ppem int, size float64, phaseX, phase
 }
 
 func (f *Face) colorBounds(id uint16, size float64, phaseX, phaseY uint8) (image.Rectangle, bool) {
+	defer runtime.KeepAlive(f)
 	if g := f.color.embedded(id, size); len(g.png) != 0 {
 		if g.width <= 0 || g.height <= 0 || g.width > 4096 || g.height > 4096 {
 			return image.Rectangle{}, false

@@ -59,6 +59,9 @@ func (f *Face) loadOutline(glyphID uint16, depth int) (*Outline, error) {
 	// Rasterized masks and atlas glyphs no longer need their source contours.
 	// Share outlines while callers use them without pinning them for the face's
 	// lifetime; a later size or subpixel phase can regenerate a collected one.
+	if len(f.outlineCache) >= 4096 {
+		clear(f.outlineCache)
+	}
 	f.outlineCache[glyphID] = weak.Make(outline)
 	f.cacheMu.Unlock()
 	return outline, nil

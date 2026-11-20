@@ -858,7 +858,7 @@ func render3DView(c *graphics.Canvas2D, state *World, view *renderView3D) error 
 				return err
 			}
 		}
-		texture, err := view.shadow.target.ColorTextureFor(c.Device())
+		texture, err := view.shadow.target.DepthTextureFor(c.Device())
 		if err != nil {
 			return err
 		}

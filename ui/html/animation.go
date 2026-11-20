@@ -4,12 +4,12 @@ import (
 	"math"
 	"slices"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type htmlCSSAnimation struct {
@@ -49,7 +49,7 @@ type htmlNodeAnimation struct {
 	changed      bool
 }
 
-func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle) *htmlNodeAnimation {
+func prepareHTMLNodeAnimation(state *htmlRenderState, node *uinode.Node, computed *style.ComputedStyle) *htmlNodeAnimation {
 	baseline := state.AnimationBaselines[node]
 	animation := state.Animations[node]
 	if baseline.Computed == computed && (animation == nil || animation.Stylesheet == state.Stylesheet && animation.Viewport == state.Viewport) {
@@ -63,7 +63,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	}
 	needsMotion := computed.HasMotion()
 	if state.AnimationBaselines == nil {
-		state.AnimationBaselines = make(map[*dom.Node]htmlAnimationBaseline)
+		state.AnimationBaselines = make(map[*uinode.Node]htmlAnimationBaseline)
 	}
 	if baseline.Computed == nil {
 		baseline.Foreground = style.ColorForAnimation(computed.Color)
@@ -79,7 +79,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	target.Colors[style.AnimationForeground] = style.ColorForAnimation(computed.Color)
 	if animation == nil {
 		if state.Animations == nil {
-			state.Animations = make(map[*dom.Node]*htmlNodeAnimation)
+			state.Animations = make(map[*uinode.Node]*htmlNodeAnimation)
 		}
 		previous := target
 		current := target
@@ -140,7 +140,7 @@ func prepareHTMLNodeAnimation(state *htmlRenderState, node *dom.Node, computed *
 	return animation
 }
 
-func syncHTMLAnimationActivity(state *htmlRenderState, node *dom.Node, animation *htmlNodeAnimation, running bool) {
+func syncHTMLAnimationActivity(state *htmlRenderState, node *uinode.Node, animation *htmlNodeAnimation, running bool) {
 	if running {
 		if animation.activeIndex == 0 {
 			state.ActiveAnimations = append(state.ActiveAnimations, node)
@@ -164,7 +164,7 @@ func deactivateHTMLAnimation(state *htmlRenderState, animation *htmlNodeAnimatio
 	animation.activeIndex = 0
 }
 
-func removeHTMLNodeAnimation(state *htmlRenderState, node *dom.Node) {
+func removeHTMLNodeAnimation(state *htmlRenderState, node *uinode.Node) {
 	if animation := state.Animations[node]; animation != nil {
 		deactivateHTMLAnimation(state, animation)
 		delete(state.Animations, node)
@@ -199,22 +199,26 @@ func syncHTMLAnimationTracks(state *htmlRenderState, animation *htmlNodeAnimatio
 }
 
 func syncHTMLAnimations(state *htmlRenderState) {
-	defer state.NodeFlags.clear()
-	hiddenByAncestor := func(node *dom.Node, hidden bool) bool {
-		value := state.Styles[node]
-		return hidden || value != nil && value.Display == style.Keyword("none")
-	}
-	for node, computed := range state.Styles {
-		if node.Type != dom.ElementNode {
-			continue
+	// A full sync already visits the tree. Pass display:none down once so each
+	// descendant can discard stale animation state without an ancestor lookup.
+	var visit func(*uinode.Node, bool)
+	visit = func(node *uinode.Node, hidden bool) {
+		if computed := state.Styles[node]; computed != nil {
+			hidden = hidden || computed.Display == style.Keyword("none")
+			if node.Type == uinode.ElementNode {
+				if hidden {
+					removeHTMLNodeAnimation(state, node)
+					delete(state.AnimationBaselines, node)
+				} else {
+					prepareHTMLNodeAnimation(state, node, computed)
+				}
+			}
 		}
-		if state.NodeFlags.resolve(node, htmlNodeParent, hiddenByAncestor) {
-			removeHTMLNodeAnimation(state, node)
-			delete(state.AnimationBaselines, node)
-			continue
+		for _, child := range node.Children {
+			visit(child, hidden)
 		}
-		prepareHTMLNodeAnimation(state, node, computed)
 	}
+	visit(state.Root, false)
 	for node := range state.AnimationBaselines {
 		if state.Styles[node] == nil {
 			removeHTMLNodeAnimation(state, node)
@@ -289,7 +293,7 @@ func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float
 	state.AnimationComposition.Batch = true
 	// Coalesce changed subtrees after sampling every animation. Memoize shared
 	// ancestor paths so nested animations do not repeat either traversal.
-	hasChangedAncestor := func(node *dom.Node, changed bool) bool {
+	hasChangedAncestor := func(node *uinode.Node, changed bool) bool {
 		animation := state.Animations[node]
 		return changed || animation != nil && animation.changed
 	}
@@ -308,7 +312,7 @@ func advanceHTMLAnimations(world *ecs.World, state *htmlRenderState, delta float
 	state.AnimationRoots = state.AnimationRoots[:0]
 }
 
-func applyHTMLAnimatedSubtree(world *ecs.World, state *htmlRenderState, node *dom.Node) {
+func applyHTMLAnimatedSubtree(world *ecs.World, state *htmlRenderState, node *uinode.Node) {
 	if computed := state.Styles[node]; computed != nil && computed.Display == style.Keyword("none") {
 		return
 	}
@@ -322,19 +326,19 @@ func applyHTMLAnimatedSubtree(world *ecs.World, state *htmlRenderState, node *do
 	}
 }
 
-func syncHTMLNodeTransform(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *dom.Node, computed *style.ComputedStyle) {
+func syncHTMLNodeTransform(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *uinode.Node, computed *style.ComputedStyle) {
 	if state == nil || computed == nil || node == nil {
 		return
 	}
 	for current := node; current != nil; current = current.Parent {
-		if value := state.Styles[current]; value != nil && current.Type == dom.ElementNode {
+		if value := state.Styles[current]; value != nil && current.Type == uinode.ElementNode {
 			prepareHTMLNodeAnimation(state, current, value)
 		}
 	}
 	applyHTMLAnimatedVisual(world, state, entity, node)
 }
 
-func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *dom.Node) {
+func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *uinode.Node) {
 	child := world.GetRef[htmlChild](entity)
 	ok := child != nil
 	if !ok {
@@ -349,7 +353,7 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	}
 	// A generated control/clip container already carries the DOM transforms
 	// above its node; only compose the portion below that ECS parent.
-	var stop *dom.Node
+	var stop *uinode.Node
 	originOffset := child.scrollOrigin
 	if parent, ok := world.Get[scene.Parent](entity); ok {
 		if ancestor, ok := world.Get[htmlChild](parent.Entity); ok && ancestor.Owner == child.Owner {
@@ -364,10 +368,16 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			}
 		}
 	}
-	translation := transform.Translation.Resolve(scene.UIResolveContext{}).Sub(child.transformOffset)
+	translation := transform.Translation.Resolve(scene.UIResolveContext{})
+	scrollContent := world.GetRef[ScrollContent](entity)
+	if scrollContent != nil {
+		// CSS origins use layout coordinates before scroll and sticky offsets.
+		translation = mgl32.Vec2{scrollContent.X, scrollContent.Y}
+	}
+	translation = translation.Sub(child.transformOffset)
 	matrix := mgl32.Ident4()
 	ownNode := node
-	if ownNode.Type == dom.TextNode {
+	if ownNode.Type == uinode.TextNode {
 		ownNode = ownNode.Parent
 	}
 	visual := state.animationVisualValue(node)
@@ -390,7 +400,7 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 	linear := mgl32.Mat4{}
 	if node != stop {
 		current := node
-		if current.Type == dom.TextNode {
+		if current.Type == uinode.TextNode {
 			current = current.Parent
 		}
 		if box := state.boxForNode(current); ownOnly && current != stop && box != nil {
@@ -415,13 +425,20 @@ func applyHTMLAnimatedVisual(world *ecs.World, state *htmlRenderState, entity ec
 			linear[12], linear[13] = 0, 0
 		}
 	}
-	if transform.Rotation != rotation || transform.Scale != scale || transform.Pivot != pivot || transform.Skew != skew || transform.LinearMatrix != linear || child.transformOffset != offset {
+	delta := offset.Sub(child.transformOffset)
+	if transform.Rotation != rotation || transform.Scale != scale || transform.Pivot != pivot || transform.Skew != skew || transform.LinearMatrix != linear || delta != (mgl32.Vec2{}) {
 		updated := world.GetMut[scene.UITransform](entity)
 		updated.Rotation, updated.Scale, updated.Pivot, updated.Skew, updated.LinearMatrix = rotation, scale, pivot, skew, linear
-		updated.Translation.X.Value += offset.X() - child.transformOffset.X()
-		updated.Translation.Y.Value += offset.Y() - child.transformOffset.Y()
-		mutable := world.GetMut[htmlChild](entity)
-		mutable.transformOffset = offset
+		if delta != (mgl32.Vec2{}) {
+			updated.Translation.X.Value += delta.X()
+			updated.Translation.Y.Value += delta.Y()
+			world.GetMut[htmlChild](entity).transformOffset = offset
+			if scrollContent != nil {
+				content := world.GetMut[ScrollContent](entity)
+				content.X += delta.X()
+				content.Y += delta.Y()
+			}
+		}
 	}
 	if sprite := world.GetRef[scene.Sprite2D](entity); (sprite != nil) && sprite.Alpha != float32(opacity) {
 		updated := world.GetMut[scene.Sprite2D](entity)
@@ -457,7 +474,7 @@ func syncHTMLAnimationChanges(state *htmlRenderState) {
 			syncHTMLAnimations(state)
 			return
 		}
-		if computed := state.Styles[change.Node]; computed != nil && change.Node.Type == dom.ElementNode {
+		if computed := state.Styles[change.Node]; computed != nil && change.Node.Type == uinode.ElementNode {
 			prepareHTMLNodeAnimation(state, change.Node, computed)
 		}
 	}

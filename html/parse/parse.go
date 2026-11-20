@@ -1,13 +1,15 @@
-package dom
+package parse
 
 import (
 	"errors"
-	"math/bits"
 	"strings"
 	"unsafe"
+
+	"github.com/onix-engine/onix/html/element"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-// Parser builds DOM nodes directly from UTF-8 source. Its zero value is ready
+// Parser builds scene nodes directly from UTF-8 source. Its zero value is ready
 // to use. Nodes, attributes, child slices and decoded text are reused on the
 // next Parse or Reset call, which invalidates the previous result. A Parser
 // must not be copied after use or used concurrently.
@@ -15,21 +17,17 @@ import (
 // Unchanged text and names borrow the source string. Decoded strings borrow
 // parser storage; they are immutable until the next Parse or Reset call.
 type Parser struct {
-	builder treeBuilder
-	names   map[string]struct{}
-	blocks  [][]parsedNode
-	decoded []byte
-	attrs   []htmlAttribute
-	scanner htmlScanner
-	used    int
+	builder   treeBuilder
+	names     map[string]struct{}
+	joinIndex map[*uinode.Node]int
+	nodes     uinode.Arena
+	joined    [][]byte
+	decoded   []byte
+	attrs     []htmlAttribute
+	scanner   htmlScanner
 }
 
-type parsedNode struct {
-	text []byte // Only used when adjacent text tokens must be joined.
-	node Node
-}
-
-type htmlAttribute = Attribute
+type htmlAttribute = uinode.Attribute
 type htmlToken struct {
 	Data string
 	Attr []htmlAttribute
@@ -37,34 +35,29 @@ type htmlToken struct {
 }
 
 // ErrNestingDepth reports HTML nesting beyond the parser's 512-element limit.
-var ErrNestingDepth = errors.New("dom: maximum element depth (512) exceeded")
+var ErrNestingDepth = errors.New("html: maximum element depth (512) exceeded")
 
-// Parse returns an independently owned DOM. Use a retained Parser when the
-// previous DOM can be discarded to avoid allocations after warming its storage.
+// Parse returns an independently owned logical tree. Use a retained Parser when the
+// previous tree can be discarded to avoid allocations after warming its storage.
 // Malformed HTML is repaired using the HTML tree construction rules. As before,
 // sources without a leading doctype/html/head/body are parsed as body fragments.
-func Parse(input string) (*Node, error) {
+func Parse(input string) (*uinode.Node, error) {
 	var parser Parser
 	return parser.Parse(input)
 }
 
-// Reset invalidates the last DOM and releases source references while retaining
+// ParseTree constructs an independently owned tree for callers that initialize
+// document order and form state as part of their own document preparation.
+func ParseTree(input string) (*uinode.Node, error) {
+	var parser Parser
+	return parser.parseTree(input)
+}
+
+// Reset invalidates the previous tree and releases source references while retaining
 // reusable capacity. Assign Parser{} to release the retained capacity as well.
 func (p *Parser) Reset() {
-	remaining := p.used
-	for _, block := range p.blocks {
-		count := min(remaining, len(block))
-		for i := range count {
-			slot := &block[i]
-			n := &slot.node
-			n.attributeList.reset()
-			clear(n.Children)
-			*n = Node{attributeList: n.attributeList, Children: n.Children[:0]}
-			slot.text = slot.text[:0]
-		}
-		remaining -= count
-	}
-	p.used = 0
+	p.nodes.Reset()
+	clear(p.joinIndex)
 	p.decoded = p.decoded[:0]
 	clear(p.attrs)
 	p.attrs = p.attrs[:0]
@@ -78,16 +71,24 @@ func (p *Parser) Reset() {
 
 // Parse replaces the previous result. Once capacity is sufficient, parsing
 // reuses all storage, including entity decoding and malformed-tree repairs.
-func (p *Parser) Parse(input string) (root *Node, err error) {
+func (p *Parser) Parse(input string) (*uinode.Node, error) {
+	root, err := p.parseTree(input)
+	if err == nil {
+		element.InitializeElementStates(root)
+	}
+	return root, err
+}
+
+func (p *Parser) parseTree(input string) (root *uinode.Node, err error) {
 	p.Reset()
 	p.scanner.reset(input)
 	b := &p.builder
 	b.arena, b.tokenizer = p, &p.scanner
-	b.doc = p.newNode(DocumentNode, "#document")
+	b.doc = p.newNode(uinode.DocumentNode, "#document")
 	b.scripting, b.framesetOK = true, true
 	b.im = initialIM
 	// Body fragments use the document node as the synthetic html root, so no
-	// wrapper nodes, child copies or second DOM traversal are needed.
+	// wrapper nodes, child copies or second tree traversal are needed.
 	defer func() {
 		if failure := recover(); failure != nil {
 			if failure != ErrNestingDepth {
@@ -98,7 +99,7 @@ func (p *Parser) Parse(input string) (root *Node, err error) {
 	}()
 	for first := true; ; first = false {
 		current := b.oe.top()
-		p.scanner.allowCDATA = current != nil && current.namespace != ""
+		p.scanner.allowCDATA = current != nil && current.Namespace != uinode.HTML
 		kind := p.scanner.scan()
 		if first {
 			// Classify from the first significant token and reuse that token.
@@ -107,7 +108,7 @@ func (p *Parser) Parse(input string) (root *Node, err error) {
 			}
 			if !documentToken(&p.scanner, kind) {
 				b.fragment, b.context = true, &bodyContext
-				b.doc.Type, b.doc.Data = ElementNode, "html"
+				b.doc.Type, b.doc.Data = uinode.ElementNode, "html"
 				b.oe = append(b.oe, b.doc)
 				b.im = inBodyIM
 				// Replay only the skipped prefix, never the significant token.
@@ -133,41 +134,38 @@ func (p *Parser) Parse(input string) (root *Node, err error) {
 			break
 		}
 	}
-	b.doc.Type, b.doc.Data = DocumentNode, "#document"
-	InitializeElementStates(b.doc)
+	b.doc.Type, b.doc.Data = uinode.DocumentNode, "#document"
 	return b.doc, nil
 }
 
-var bodyContext = Node{Type: ElementNode, Data: "body"}
+var bodyContext = uinode.Node{Type: uinode.ElementNode, Data: "body"}
 
-func (p *Parser) newNode(kind NodeType, data string) *Node {
-	index := p.used
-	block := bits.Len(uint(index/4+1)) - 1
-	if block == len(p.blocks) {
-		p.blocks = append(p.blocks, make([]parsedNode, 4<<block))
-	}
-	n := &p.blocks[block][index-4*((1<<block)-1)].node
-	n.Type, n.Data, n.Order = kind, data, uint32(index)
-	p.used++
-	return n
+func (p *Parser) newNode(kind uinode.NodeType, data string) *uinode.Node {
+	return p.nodes.New(kind, data)
 }
 
-func (p *Parser) cloneNode(source *Node) *Node {
+func (p *Parser) cloneNode(source *uinode.Node) *uinode.Node {
 	n := p.newNode(source.Type, source.Data)
-	n.namespace = source.namespace
-	n.attributeList.copyFrom(&source.attributeList)
+	n.Namespace = source.Namespace
+	n.CopyAttributes(source)
 	return n
 }
 
-func (p *Parser) appendText(n *Node, text string) {
-	index := int(n.Order)
-	block := bits.Len(uint(index/4+1)) - 1
-	slot := &p.blocks[block][index-4*((1<<block)-1)]
-	if len(slot.text) == 0 {
-		slot.text = append(slot.text, n.Data...)
+func (p *Parser) appendText(n *uinode.Node, text string) {
+	index, exists := p.joinIndex[n]
+	if !exists {
+		if p.joinIndex == nil {
+			p.joinIndex = make(map[*uinode.Node]int)
+		}
+		index = len(p.joinIndex)
+		p.joinIndex[n] = index
+		if index == len(p.joined) {
+			p.joined = append(p.joined, nil)
+		}
+		p.joined[index] = append(p.joined[index][:0], n.Data...)
 	}
-	slot.text = append(slot.text, text...)
-	n.Data = byteString(slot.text)
+	p.joined[index] = append(p.joined[index], text...)
+	n.Data = byteString(p.joined[index])
 }
 
 // byteString exposes an immutable view into append-only parser storage. Growing
@@ -176,7 +174,7 @@ func byteString(value []byte) string {
 	return unsafe.String(unsafe.SliceData(value), len(value))
 }
 
-func copyTokenAttributes(dst *Node, src htmlToken) {
+func copyTokenAttributes(dst *uinode.Node, src htmlToken) {
 	if dst.AttrCount() == 0 {
 		dst.SetAttributes(src.Attr...)
 		return
@@ -211,7 +209,7 @@ func (p *Parser) token(kind TokenType) htmlToken {
 			}
 			p.names[key] = struct{}{}
 			value := p.decode(z.input[attr[1].start:attr[1].end], true, true, true, false)
-			p.attrs = append(p.attrs, htmlAttribute{key, value})
+			p.attrs = append(p.attrs, htmlAttribute{Name: key, Value: value})
 		}
 		token.Attr = p.attrs
 	}

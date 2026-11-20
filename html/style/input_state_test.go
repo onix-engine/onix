@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestInputStateRecomputeMatchesFullCascade(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><section id="panel"><button id="first"><span>First</span></button><button id="second">Second</button></section><aside>Unchanged</aside></body></html>`)
+	doc, err := parse.Parse(`<html><body><section id="panel"><button id="first"><span>First</span></button><button id="second">Second</button></section><aside>Unchanged</aside></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestInputStateRecomputeMatchesFullCascade(t *testing.T) {
 }
 
 func TestInputStateRecomputeReusesUnchangedStyles(t *testing.T) {
-	doc, err := dom.Parse(`<button>Hover</button><aside>Static shadow</aside>`)
+	doc, err := parse.Parse(`<button>Hover</button><aside>Static shadow</aside>`)
 	if err != nil {
 		t.Fatal(err)
 	}

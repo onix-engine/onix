@@ -4,20 +4,20 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func BenchmarkHTMLComponentDiff(b *testing.B) {
 	world := ecs.NewWorld()
 	spawn := world.NewSpawner1[htmlRenderState]()
 	owner := spawn.Spawn(htmlRenderState{})
-	parent := dom.NewElement("ul")
+	parent := uinode.NewElement("ul")
 	old := make([]htmlComponentKeyedItem, 1024)
 	spare := make([]htmlComponentKeyedItem, 0, len(old))
 	next := make([]VNode, len(old))
 	for index := range old {
-		node := dom.NewElement("li")
-		node.AppendChild(dom.NewText("item"))
+		node := uinode.NewElement("li")
+		node.AppendChild(uinode.NewText("item"))
 		parent.AppendChild(node)
 		old[index] = htmlComponentKeyedItem{Node: node, Key: uint64(index)}
 		next[len(old)-1-index] = TextVNode(uint64(index), "li", "item")

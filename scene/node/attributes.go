@@ -1,4 +1,4 @@
-package dom
+package node
 
 import (
 	"cmp"
@@ -14,9 +14,9 @@ type Attribute struct{ Name, Value string }
 
 const smallAttributeLimit = 8
 
-// Empty nodes need only a nil pointer. Small elements use a compact sorted
+// AttributeSet stores a compact collection of attributes. Empty sets need only a nil pointer. Small elements use a compact sorted
 // list; larger sets use a map without duplicating names in a second index.
-type attributeList struct{ data *attributeStorage }
+type AttributeSet struct{ data *attributeStorage }
 
 type attributeStorage struct {
 	large  map[string]string
@@ -24,7 +24,7 @@ type attributeStorage struct {
 	shared uint32 // Atomic so independent clones can share read-only templates.
 }
 
-func (a *attributeList) Attr(name string) (string, bool) {
+func (a *AttributeSet) Attr(name string) (string, bool) {
 	if a.data == nil {
 		return "", false
 	}
@@ -41,12 +41,12 @@ func (a *attributeList) Attr(name string) (string, bool) {
 }
 
 // AttrValue returns an attribute's value, or an empty string if absent.
-func (a *attributeList) AttrValue(name string) string {
+func (a *AttributeSet) AttrValue(name string) string {
 	value, _ := a.Attr(name)
 	return value
 }
 
-func (a *attributeList) AttrCount() int {
+func (a *AttributeSet) AttrCount() int {
 	if a.data == nil {
 		return 0
 	}
@@ -60,7 +60,7 @@ func (a *attributeList) AttrCount() int {
 // Removing or updating the currently yielded attribute is allowed; other
 // mutations during iteration are not supported. Pairs are values, never
 // writable storage views.
-func (a *attributeList) Attributes() iter.Seq2[string, string] {
+func (a *AttributeSet) Attributes() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		data := a.data
 		if data == nil {
@@ -87,7 +87,7 @@ func (a *attributeList) Attributes() iter.Seq2[string, string] {
 // SortedAttributes visits attributes in name order. Small lists need no extra
 // storage. Large maps allocate a sorted name buffer for deterministic output.
 // Do not change attributes during iteration.
-func (a *attributeList) SortedAttributes() iter.Seq2[string, string] {
+func (a *AttributeSet) SortedAttributes() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		if a.data == nil {
 			return
@@ -114,7 +114,7 @@ func (a *attributeList) SortedAttributes() iter.Seq2[string, string] {
 }
 
 // SetAttr changes an attribute, returning whether its value changed.
-func (a *attributeList) SetAttr(name, value string) bool {
+func (a *AttributeSet) SetAttr(name, value string) bool {
 	if a.data != nil && a.data.large != nil {
 		if previous, found := a.data.large[name]; found && previous == value {
 			return false
@@ -148,7 +148,7 @@ func (a *attributeList) SetAttr(name, value string) bool {
 }
 
 // RemoveAttr removes an attribute, returning whether it was present.
-func (a *attributeList) RemoveAttr(name string) bool {
+func (a *AttributeSet) RemoveAttr(name string) bool {
 	if a.data == nil {
 		return false
 	}
@@ -172,7 +172,7 @@ func (a *attributeList) RemoveAttr(name string) bool {
 
 // SetAttributes replaces all attributes with an owned copy and reuses capacity.
 // Duplicate names keep their first value, matching HTML tokenization.
-func (a *attributeList) SetAttributes(attributes ...Attribute) {
+func (a *AttributeSet) SetAttributes(attributes ...Attribute) {
 	if a.data == nil && len(attributes) == 0 {
 		return
 	}
@@ -214,7 +214,7 @@ func (a *attributeList) SetAttributes(attributes ...Attribute) {
 	data.values = kept
 }
 
-func (a *attributeList) writable(extra int) *attributeStorage {
+func (a *AttributeSet) writable(extra int) *attributeStorage {
 	if a.data == nil {
 		a.data = &attributeStorage{}
 	} else if atomic.LoadUint32(&a.data.shared) != 0 {
@@ -238,7 +238,7 @@ func (data *attributeStorage) promote(capacity int) {
 	data.values = nil
 }
 
-func (a *attributeList) reset() {
+func (a *AttributeSet) reset() {
 	if a.data == nil {
 		return
 	}
@@ -251,7 +251,7 @@ func (a *attributeList) reset() {
 	}
 }
 
-func (a *attributeList) copyFrom(source *attributeList) {
+func (a *AttributeSet) copyFrom(source *AttributeSet) {
 	if source.data == nil || source.data.large == nil {
 		var values []Attribute
 		if source.data != nil {
@@ -268,7 +268,7 @@ func (a *attributeList) copyFrom(source *attributeList) {
 	maps.Copy(data.large, source.data.large)
 }
 
-func (a *attributeList) equal(other *attributeList) bool {
+func (a *AttributeSet) equal(other *AttributeSet) bool {
 	if a.data == other.data {
 		return true
 	}

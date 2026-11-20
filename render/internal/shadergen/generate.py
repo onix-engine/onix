@@ -41,8 +41,14 @@ def generate_native(source_path, output_suffix, directory, compact):
     source = glsl_path.read_text()
     uniform = re.search(r'^.*uniform PBRUniforms_block_0Fragment \{.*\};$', source, re.M).group(0)
     fields = re.search(r'struct PBRUniforms \{(.*?)\n\};', source, re.S).group(1).strip().splitlines()
-    gles = source.replace(uniform, '\n'.join('uniform ' + line.strip() for line in fields))
-    gles = gles.replace('_group_0_binding_0_fs.', '').replace('const bool SHADOW_FLIP_Y = true;', 'const bool SHADOW_FLIP_Y = false;')
+    # Coordinate conventions must be set before constant folding. In
+    # particular, Naga folds the sign of the shadow-map texel gradient.
+    gles_wgsl = directory / 'gles.wgsl'
+    gles_wgsl.write_text(source_path.read_text().replace('SHADOW_FLIP_Y: bool = true', 'SHADOW_FLIP_Y: bool = false'))
+    subprocess.run(['naga', str(gles_wgsl), str(glsl_path), '--entry-point', 'mesh_fragment',
+                    '--profile', 'es300', '--keep-coordinate-space', *(['--compact'] if compact else [])], check=True)
+    gles = glsl_path.read_text().replace(uniform, '\n'.join('uniform ' + line.strip() for line in fields))
+    gles = gles.replace('_group_0_binding_0_fs.', '')
     # GLSL ES 3.0 links interpolation qualifiers textually, while the built-in
     # vertex stages declare smooth varyings without an explicit qualifier.
     gles = gles.replace('smooth in ', 'in ').replace('smooth out ', 'out ')
@@ -57,6 +63,11 @@ def generate_native(source_path, output_suffix, directory, compact):
         gles = gles.replace(f'_group_0_binding_{binding}_fs', name)
         metal = metal.replace(name + ' [[user(fake0)]]', name + f' [[texture({index})]]')
         metal = metal.replace(sampler + ' [[user(fake0)]]', sampler + f' [[sampler({index})]]')
+    if output_suffix == '_depth':
+        start = metal.index('fragment mesh_fragmentOutput mesh_fragment(')
+        end = metal.index('    uint depth =', start)
+        coverage = metal[start:end].replace('fragment mesh_fragmentOutput mesh_fragment(', 'fragment void mesh_depth_only(')
+        metal += '\n' + coverage + '}\n'
     if 'fake0' in metal:
         raise RuntimeError('unmapped Metal binding')
     vk = re.sub(r'(smooth|flat) in (\w+) _vs2fs_location(\d+);', lambda m: f'layout(location={m[3]}) {m[1]} in {m[2]} _vs2fs_location{m[3]};', vk)

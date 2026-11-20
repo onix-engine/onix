@@ -4,8 +4,9 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/html/layout"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type htmlMutation uint8
@@ -24,7 +25,7 @@ const (
 // use this marker to distinguish new/removed targets from retained targets.
 func (n Node) markEventMutation(state *htmlRenderState) {
 	if state.Mutations == nil {
-		state.Mutations = make(map[*dom.Node]htmlMutation)
+		state.Mutations = make(map[*uinode.Node]htmlMutation)
 	}
 	state.Mutations[n.node] |= htmlMutationEvent
 }
@@ -32,7 +33,7 @@ func (n Node) markEventMutation(state *htmlRenderState) {
 // Counters describe work performed by the last sync, for regression tests and
 // benchmarks without timing-dependent assertions.
 type htmlSyncStats struct {
-	UpdatedControls, SnapshottedControls             int
+	UpdatedControls                                  int
 	UpdatedClips, RoutedEntities, ExtentBoxes        int
 	Styled, PaintUpdated, Spawned, Despawned, Reused int
 	LayoutWork                                       layout.Work
@@ -50,7 +51,7 @@ func (n Node) markMutation(kind htmlMutation) {
 		return
 	}
 	if state.Mutations == nil {
-		state.Mutations = make(map[*dom.Node]htmlMutation)
+		state.Mutations = make(map[*uinode.Node]htmlMutation)
 	}
 	state.Mutations[n.node] |= kind
 	state.Revision++
@@ -58,7 +59,7 @@ func (n Node) markMutation(kind htmlMutation) {
 		state.StyleCache.InvalidateDefinitions()
 	}
 	if kind&htmlMutationStructure != 0 {
-		dom.SynchronizeSelectChildren(n.node)
+		element.SynchronizeSelectChildren(n.node)
 		state.IndexDirty = true
 	}
 }
@@ -67,7 +68,7 @@ func (n Node) markMutation(kind htmlMutation) {
 // includes its :empty state and all positional selectors on surviving children.
 // Inspect removed subtrees before detaching them so document-wide SVG resources
 // are invalidated even when their defining nodes no longer belong to the DOM.
-func (n Node) structureMutationKind(changed *dom.Node) htmlMutation {
+func (n Node) structureMutationKind(changed *uinode.Node) htmlMutation {
 	for ancestor := n.node; ancestor != nil; ancestor = ancestor.Parent {
 		if htmlDefinesFilter(ancestor) {
 			return htmlMutationStructure | htmlMutationDefinitions
@@ -83,23 +84,20 @@ func (n Node) structureMutationKind(changed *dom.Node) htmlMutation {
 // used by Clear and structural SetText instead of scanning the parent twice.
 func (n Node) detachChildrenMutationKind() htmlMutation {
 	kind := n.structureMutationKind(nil)
-	for _, child := range n.node.Children {
+	n.node.KeepChildren(func(child *uinode.Node) bool {
 		if kind&htmlMutationDefinitions == 0 && htmlSubtreeDefinesFilter(child) {
 			kind |= htmlMutationDefinitions
 		}
-		child.Parent = nil
-	}
-	children := n.node.Children
-	clear(children[:cap(children)])
-	n.node.Children = children[:0]
+		return false
+	})
 	return kind
 }
 
-func htmlDefinesFilter(node *dom.Node) bool {
-	return node.Type == dom.ElementNode && strings.EqualFold(node.Data, "filter")
+func htmlDefinesFilter(node *uinode.Node) bool {
+	return node.Type == uinode.ElementNode && strings.EqualFold(node.Data, "filter")
 }
 
-func htmlSubtreeDefinesFilter(node *dom.Node) bool {
+func htmlSubtreeDefinesFilter(node *uinode.Node) bool {
 	if htmlDefinesFilter(node) {
 		return true
 	}
@@ -141,24 +139,16 @@ func (n Node) markAttributeDirty(name string) {
 }
 
 func syncHTMLDocumentIndex(state *htmlRenderState) {
-	if state.NodeByID == nil {
-		state.NodeByID = make(map[string]*dom.Node)
-	} else {
-		clear(state.NodeByID)
-	}
+	state.resetNodeIndex()
 	var order uint32
-	var visit func(*dom.Node)
-	visit = func(node *dom.Node) {
+	var visit func(*uinode.Node)
+	visit = func(node *uinode.Node) {
 		if node == nil {
 			return
 		}
 		node.Order = order
 		order++
-		if id, ok := node.Attr("id"); ok && id != "" {
-			if _, exists := state.NodeByID[id]; !exists {
-				state.NodeByID[id] = node
-			}
-		}
+		state.indexNode(node)
 		for _, child := range node.Children {
 			visit(child)
 		}
@@ -171,12 +161,12 @@ func prepareHTMLMutationRoots(state *htmlRenderState) bool {
 	clear(state.MutationRoots)
 	state.MutationRoots = state.MutationRoots[:0]
 	if state.MutationRootSet == nil {
-		state.MutationRootSet = make(map[*dom.Node]struct{})
+		state.MutationRootSet = make(map[*uinode.Node]struct{})
 	}
 	defer clear(state.MutationRootSet)
 	defer state.NodeFlags.clear()
 	defer state.NodeAncestors.clear()
-	withinDocument := func(node *dom.Node, inside bool) bool { return inside || node == state.Root }
+	withinDocument := func(node *uinode.Node, inside bool) bool { return inside || node == state.Root }
 	document := state.StyleCache.NeedsDocumentStyle(state.Stylesheet)
 	siblingStyle := state.StyleCache.NeedsSiblingStyle(state.Stylesheet)
 	layoutDirty := false
@@ -207,7 +197,7 @@ func prepareHTMLMutationRoots(state *htmlRenderState) bool {
 		state.MutationRoots = append(state.MutationRoots, state.Root)
 		return layoutDirty
 	}
-	selectedAncestor := func(node, ancestor *dom.Node) *dom.Node {
+	selectedAncestor := func(node, ancestor *uinode.Node) *uinode.Node {
 		if _, selected := state.MutationRootSet[node]; selected {
 			return node
 		}

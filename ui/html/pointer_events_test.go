@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
@@ -49,7 +49,7 @@ func TestHTMLPointerEventsUpdateWithoutRebuildingControls(t *testing.T) {
 				continue
 			}
 			node := child.Node
-			if node.Type == dom.TextNode && node.Parent != nil { // Text fragments inherit their element's pointer behavior.
+			if node.Type == uinode.TextNode && node.Parent != nil { // Text fragments inherit their element's pointer behavior.
 				node = node.Parent
 			}
 			id, _ := node.Attr("id")

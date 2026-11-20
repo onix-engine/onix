@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // compiledCondition is a rule condition (media or container query) parsed
@@ -39,6 +39,71 @@ func HasContainerQueries(stylesheet *css.Stylesheet) bool {
 		}
 	}
 	return false
+}
+
+// ViewportAffectsStyles reports whether resizing can change the cascade or
+// animation endpoints. Relative lengths only depend on their own viewport axis.
+func ViewportAffectsStyles(root *uinode.Node, sheet *css.Stylesheet, before, after Viewport) bool {
+	width, height := before.Width != after.Width, before.Height != after.Height
+	usesViewport := func(value string) bool {
+		for i := 1; i < len(value); i++ {
+			if value[i-1] != 'v' && value[i-1] != 'V' {
+				continue
+			}
+			unit := value[i] | 0x20
+			if width && unit == 'w' || height && unit == 'h' {
+				return true
+			}
+		}
+		return false
+	}
+	mediaChanged := func(conditions []compiledCondition) bool {
+		for _, condition := range conditions {
+			if condition.kind == css.RuleConditionMedia && condition.matchesMedia(before) != condition.matchesMedia(after) {
+				return true
+			}
+		}
+		return false
+	}
+	if compiled := compiledMatcher(sheet); compiled != nil {
+		for i, rule := range sheet.Rules {
+			if mediaChanged(compiled.conditions[i]) {
+				return true
+			}
+			for _, declaration := range rule.Declarations {
+				if usesViewport(declaration.Value) {
+					return true
+				}
+			}
+		}
+		for _, frames := range compiled.keyframes {
+			for _, definition := range frames.definitions {
+				if mediaChanged(definition.conditions) {
+					return true
+				}
+				for _, frame := range definition.frames.Frames {
+					for _, declaration := range frame.Declarations {
+						if usesViewport(declaration.Value) {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	var visit func(*uinode.Node) bool
+	visit = func(node *uinode.Node) bool {
+		if inline, ok := node.Attr("style"); ok && usesViewport(inline) {
+			return true
+		}
+		for _, child := range node.Children {
+			if child != nil && visit(child) {
+				return true
+			}
+		}
+		return false
+	}
+	return root != nil && visit(root)
 }
 
 type compiledQueryAlternative struct {
@@ -206,7 +271,7 @@ func compileQueryClause(feature string) (compiledQueryClause, bool) {
 	return clause, true
 }
 
-func compiledConditionsMatch(conditions []compiledCondition, node *dom.Node, queries *QueryEnvironment) bool {
+func compiledConditionsMatch(conditions []compiledCondition, node *uinode.Node, queries *QueryEnvironment) bool {
 	for i := range conditions {
 		if !conditions[i].matches(node, queries) {
 			return false
@@ -215,7 +280,7 @@ func compiledConditionsMatch(conditions []compiledCondition, node *dom.Node, que
 	return true
 }
 
-func (c *compiledCondition) matches(node *dom.Node, queries *QueryEnvironment) bool {
+func (c *compiledCondition) matches(node *uinode.Node, queries *QueryEnvironment) bool {
 	if c.never {
 		return false
 	}
@@ -262,7 +327,7 @@ func (a *compiledQueryAlternative) matches(viewport Viewport) bool {
 	return result
 }
 
-func (c *compiledCondition) matchesContainer(node *dom.Node, queries *QueryEnvironment) bool {
+func (c *compiledCondition) matchesContainer(node *uinode.Node, queries *QueryEnvironment) bool {
 	for ancestor := node.Parent; ancestor != nil; ancestor = ancestor.Parent {
 		ancestorStyle, ok := queries.Styles.Get(ancestor)
 		if !ok || !supportsContainerQueries(ancestorStyle) {

@@ -4,15 +4,15 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
-	parent := dom.NewElement("section")
-	first := dom.NewElement("span", dom.Attribute{Name: "id", Value: "first"}, dom.Attribute{Name: "class", Value: "item selected"})
-	second := dom.NewElement("input", dom.Attribute{Name: "id", Value: "second"}, dom.Attribute{Name: "class", Value: "item"})
+	parent := uinode.NewElement("section")
+	first := uinode.NewElement("span", uinode.Attribute{Name: "id", Value: "first"}, uinode.Attribute{Name: "class", Value: "item selected"})
+	second := uinode.NewElement("input", uinode.Attribute{Name: "id", Value: "second"}, uinode.Attribute{Name: "class", Value: "item"})
 	parent.AppendChild(first)
-	parent.AppendChild(dom.NewText("ignored"))
+	parent.AppendChild(uinode.NewText("ignored"))
 	parent.AppendChild(second)
 	sheet, err := Parse(`#first, #second, .selected, .item:nth-child(2), span:first-of-type, input:last-child, .item + .item, section:focus-within {color:red}`)
 	if err != nil {
@@ -22,7 +22,7 @@ func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
 	ctx := NewMatchContext()
 	check := func() {
 		t.Helper()
-		for _, node := range []*dom.Node{parent, first, second} {
+		for _, node := range []*uinode.Node{parent, first, second} {
 			for _, selector := range sheet.Rules[0].Selectors {
 				if got, want := MatchWithStateAndContext(selector, node, state, ctx), MatchWithState(selector, node, state); got != want {
 					t.Fatalf("%s on %s: cached=%v fresh=%v", selector.String(), node.Data, got, want)
@@ -50,14 +50,14 @@ func TestMatchContextResetInvalidatesBorrowedData(t *testing.T) {
 func TestMatchContextOversizedWorkspaceReleased(t *testing.T) {
 	ctx := NewMatchContext()
 	for range maxCachedMatchNodes + 1 {
-		ctx.store(dom.NewElement("div"), nodeMatchData{})
+		ctx.store(uinode.NewElement("div"), nodeMatchData{})
 	}
 	ctx.typeCounts = map[string]int32{"custom-tag": 1}
 	ctx.Reset()
 	if ctx.nodes != nil || ctx.typeCounts != nil {
 		t.Fatal("oversized matcher workspace was pooled")
 	}
-	node := dom.NewElement("span", dom.Attribute{Name: "class", Value: "item"})
+	node := uinode.NewElement("span", uinode.Attribute{Name: "class", Value: "item"})
 	sheet, err := Parse(`.item {color:red}`)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestMatchContextRecordLayout(t *testing.T) {
 }
 
 func TestAttributeOnlyMatchingNeedsNoWorkspace(t *testing.T) {
-	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"}, dom.Attribute{Name: "class", Value: "item selected"})
+	node := uinode.NewElement("div", uinode.Attribute{Name: "id", Value: "target"}, uinode.Attribute{Name: "class", Value: "item selected"})
 	sheet, err := Parse(`#target.item.selected {color:red}`)
 	if err != nil {
 		t.Fatal(err)

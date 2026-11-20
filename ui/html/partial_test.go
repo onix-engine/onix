@@ -126,7 +126,7 @@ func TestHTMLPartialPreservesUnrelatedControlState(t *testing.T) {
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
 	live = world.GetMut[Control](control)
-	if state.SyncStats.PartialReconciles != 1 || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || live.RenderRevision != revision {
+	if state.SyncStats.PartialReconciles != 1 || ControlValue(world, control) != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || live.RenderRevision != revision {
 		t.Fatal("unrelated control was rewritten")
 	}
 }

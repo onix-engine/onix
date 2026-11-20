@@ -5,18 +5,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type MatchContext struct {
-	nodes      map[*dom.Node]nodeMatchData
+	nodes      map[*uinode.Node]nodeMatchData
 	typeCounts map[string]int32
 }
 
 // Keep pointer-bearing fields together and booleans at the end. This cache
 // stores one value per visited node, so padding multiplies across the document.
 type nodeMatchData struct {
-	previousElement   *dom.Node
+	previousElement   *uinode.Node
 	focusWithinState  *State
 	childIndex        int32
 	childReverse      int32
@@ -54,16 +55,16 @@ func (c *MatchContext) Reset() {
 	clear(c.typeCounts)
 }
 
-func Match(selector Selector, node *dom.Node) bool {
+func Match(selector Selector, node *uinode.Node) bool {
 	return MatchWithState(selector, node, nil)
 }
 
-func MatchWithState(selector Selector, node *dom.Node, state *State) bool {
+func MatchWithState(selector Selector, node *uinode.Node, state *State) bool {
 	return MatchWithStateAndContext(selector, node, state, nil)
 }
 
-func MatchWithStateAndContext(selector Selector, node *dom.Node, state *State, ctx *MatchContext) bool {
-	if node == nil || node.Type != dom.ElementNode || len(selector.Parts) == 0 {
+func MatchWithStateAndContext(selector Selector, node *uinode.Node, state *State, ctx *MatchContext) bool {
+	if node == nil || node.Type != uinode.ElementNode || len(selector.Parts) == 0 {
 		return false
 	}
 
@@ -71,7 +72,7 @@ func MatchWithStateAndContext(selector Selector, node *dom.Node, state *State, c
 }
 
 // Backtrack descendant candidates: a nearer match may fail its left-hand chain.
-func matchSelectorPart(parts []CompoundSelector, index int, node *dom.Node, state *State, ctx *MatchContext) bool {
+func matchSelectorPart(parts []CompoundSelector, index int, node *uinode.Node, state *State, ctx *MatchContext) bool {
 	if !matchesCompound(parts[index], node, state, ctx) {
 		return false
 	}
@@ -100,8 +101,8 @@ func matchSelectorPart(parts []CompoundSelector, index int, node *dom.Node, stat
 	}
 }
 
-func matchesCompound(part CompoundSelector, node *dom.Node, state *State, ctx *MatchContext) bool {
-	if node == nil || node.Type != dom.ElementNode {
+func matchesCompound(part CompoundSelector, node *uinode.Node, state *State, ctx *MatchContext) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 
@@ -208,20 +209,20 @@ func matchAttributeFold(operator, actual, value string) bool {
 	return false
 }
 
-func matchesPseudoClass(pseudoClass PseudoClass, node *dom.Node, state *State, ctx *MatchContext) bool {
+func matchesPseudoClass(pseudoClass PseudoClass, node *uinode.Node, state *State, ctx *MatchContext) bool {
 	switch pseudoClass.Name {
 	case "root":
 		return isRootElement(node)
 	case "empty":
 		return isEmptyElement(node)
 	case "disabled":
-		return dom.IsDisabled(node)
+		return element.IsDisabled(node)
 	case "enabled":
-		return dom.SupportsDisabled(node) && !dom.IsDisabled(node)
+		return element.SupportsDisabled(node) && !element.IsDisabled(node)
 	case "checked":
-		return dom.IsChecked(node)
+		return element.IsChecked(node)
 	case "indeterminate":
-		indeterminate, resolved := node.States.Get(dom.StateIndeterminate)
+		indeterminate, resolved := node.States.Get(element.StateIndeterminate)
 		return resolved && indeterminate
 	case "first-child":
 		return childIndex(node, false, false, ctx) == 1
@@ -248,7 +249,7 @@ func matchesPseudoClass(pseudoClass PseudoClass, node *dom.Node, state *State, c
 	case "nth-last-of-type":
 		return matchesNthPseudoClass(node, pseudoClass, true, true, ctx)
 	case "placeholder-shown":
-		return dom.IsPlaceholderShown(node)
+		return element.IsPlaceholderShown(node)
 	case "focus":
 		return isFocused(node, state)
 	case "focus-visible":
@@ -264,7 +265,7 @@ func matchesPseudoClass(pseudoClass PseudoClass, node *dom.Node, state *State, c
 	}
 }
 
-func matchesAnySelector(selectors []Selector, node *dom.Node, state *State, ctx *MatchContext) bool {
+func matchesAnySelector(selectors []Selector, node *uinode.Node, state *State, ctx *MatchContext) bool {
 	for _, selector := range selectors {
 		if MatchWithStateAndContext(selector, node, state, ctx) {
 			return true
@@ -302,18 +303,18 @@ func isClassWhitespace(value byte) bool {
 	}
 }
 
-func (c *MatchContext) store(node *dom.Node, data nodeMatchData) {
+func (c *MatchContext) store(node *uinode.Node, data nodeMatchData) {
 	if c.nodes == nil {
-		c.nodes = make(map[*dom.Node]nodeMatchData)
+		c.nodes = make(map[*uinode.Node]nodeMatchData)
 	}
 	c.nodes[node] = data
 }
 
-func isRootElement(node *dom.Node) bool {
-	return node != nil && node.Parent != nil && node.Parent.Type == dom.DocumentNode
+func isRootElement(node *uinode.Node) bool {
+	return node != nil && node.Parent != nil && node.Parent.Type == uinode.DocumentNode
 }
 
-func isEmptyElement(node *dom.Node) bool {
+func isEmptyElement(node *uinode.Node) bool {
 	if node == nil {
 		return false
 	}
@@ -321,18 +322,18 @@ func isEmptyElement(node *dom.Node) bool {
 		if child == nil {
 			continue
 		}
-		if child.Type == dom.ElementNode {
+		if child.Type == uinode.ElementNode {
 			return false
 		}
-		if child.Type == dom.TextNode && child.Data != "" {
+		if child.Type == uinode.TextNode && child.Data != "" {
 			return false
 		}
 	}
 	return true
 }
 
-func elementParent(node *dom.Node) *dom.Node {
-	if node == nil || node.Parent == nil || node.Parent.Type != dom.ElementNode {
+func elementParent(node *uinode.Node) *uinode.Node {
+	if node == nil || node.Parent == nil || node.Parent.Type != uinode.ElementNode {
 		return nil
 	}
 	return node.Parent
@@ -347,7 +348,7 @@ func isNthPseudoClass(name string) bool {
 	}
 }
 
-func matchesNthPseudoClass(node *dom.Node, pseudoClass PseudoClass, ofType, fromEnd bool, ctx *MatchContext) bool {
+func matchesNthPseudoClass(node *uinode.Node, pseudoClass PseudoClass, ofType, fromEnd bool, ctx *MatchContext) bool {
 	index := childIndex(node, ofType, fromEnd, ctx)
 	if index <= 0 {
 		return false
@@ -370,7 +371,7 @@ func matchesNthPseudoClass(node *dom.Node, pseudoClass PseudoClass, ofType, from
 	return delta%a == 0
 }
 
-func childIndex(node *dom.Node, ofType, fromEnd bool, ctx *MatchContext) int {
+func childIndex(node *uinode.Node, ofType, fromEnd bool, ctx *MatchContext) int {
 	parent := elementParent(node)
 	if parent == nil {
 		return 0
@@ -407,7 +408,7 @@ func childIndex(node *dom.Node, ofType, fromEnd bool, ctx *MatchContext) int {
 	return scanChildIndex(parent, node, ofType, fromEnd)
 }
 
-func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext) {
+func cacheChildIndices(parent *uinode.Node, ofType, fromEnd bool, ctx *MatchContext) {
 	if ofType {
 		cacheTypeIndices(parent, fromEnd, ctx)
 		return
@@ -416,7 +417,7 @@ func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext
 	if fromEnd {
 		for i := len(parent.Children) - 1; i >= 0; i-- {
 			child := parent.Children[i]
-			if child == nil || child.Type != dom.ElementNode {
+			if child == nil || child.Type != uinode.ElementNode {
 				continue
 			}
 			index++
@@ -427,9 +428,9 @@ func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext
 		}
 		return
 	}
-	var previous *dom.Node
+	var previous *uinode.Node
 	for _, child := range parent.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		index++
@@ -442,7 +443,7 @@ func cacheChildIndices(parent *dom.Node, ofType, fromEnd bool, ctx *MatchContext
 	}
 }
 
-func cacheTypeIndices(parent *dom.Node, fromEnd bool, ctx *MatchContext) {
+func cacheTypeIndices(parent *uinode.Node, fromEnd bool, ctx *MatchContext) {
 	index, step := 0, 1
 	if fromEnd {
 		index, step = len(parent.Children)-1, -1
@@ -451,7 +452,7 @@ func cacheTypeIndices(parent *dom.Node, fromEnd bool, ctx *MatchContext) {
 	var firstCount int32
 	for ; index >= 0 && index < len(parent.Children); index += step {
 		child := parent.Children[index]
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if firstCount == 0 {
@@ -481,10 +482,10 @@ func cacheTypeIndices(parent *dom.Node, fromEnd bool, ctx *MatchContext) {
 	clear(ctx.typeCounts)
 }
 
-func scanChildIndex(parent, node *dom.Node, ofType, fromEnd bool) int {
+func scanChildIndex(parent, node *uinode.Node, ofType, fromEnd bool) int {
 	index := 0
-	visit := func(child *dom.Node) bool {
-		if child == nil || child.Type != dom.ElementNode || ofType && child.Data != node.Data {
+	visit := func(child *uinode.Node) bool {
+		if child == nil || child.Type != uinode.ElementNode || ofType && child.Data != node.Data {
 			return false
 		}
 		index++
@@ -506,7 +507,7 @@ func scanChildIndex(parent, node *dom.Node, ofType, fromEnd bool) int {
 	return 0
 }
 
-func hasFocusWithin(node *dom.Node, state *State, ctx *MatchContext) bool {
+func hasFocusWithin(node *uinode.Node, state *State, ctx *MatchContext) bool {
 	if node == nil {
 		return false
 	}
@@ -545,20 +546,20 @@ func hasFocusWithin(node *dom.Node, state *State, ctx *MatchContext) bool {
 	return false
 }
 
-func isFocused(node *dom.Node, state *State) bool {
+func isFocused(node *uinode.Node, state *State) bool {
 	return state != nil && state.Focused == node
 }
 
-func isHovered(node *dom.Node, state *State) bool {
+func isHovered(node *uinode.Node, state *State) bool {
 	return state != nil && isInclusiveAncestor(node, state.Hovered)
 }
 
-func isActive(node *dom.Node, state *State) bool {
+func isActive(node *uinode.Node, state *State) bool {
 	return state != nil && isInclusiveAncestor(node, state.Active)
 }
 
-func isInclusiveAncestor(ancestor, node *dom.Node) bool {
-	if ancestor == nil || ancestor.Type != dom.ElementNode {
+func isInclusiveAncestor(ancestor, node *uinode.Node) bool {
+	if ancestor == nil || ancestor.Type != uinode.ElementNode {
 		return false
 	}
 	for current := node; current != nil; current = current.Parent {
@@ -607,7 +608,7 @@ func parseNthExpression(expr string) (int, int, error) {
 	return a, b, nil
 }
 
-func previousElement(node *dom.Node, ctx *MatchContext) *dom.Node {
+func previousElement(node *uinode.Node, ctx *MatchContext) *uinode.Node {
 	if node.Parent == nil {
 		return nil
 	}
@@ -619,9 +620,9 @@ func previousElement(node *dom.Node, ctx *MatchContext) *dom.Node {
 		cacheChildIndices(node.Parent, false, false, ctx)
 		return ctx.nodes[node].previousElement
 	}
-	var previous *dom.Node
+	var previous *uinode.Node
 	for _, sibling := range node.Parent.Children {
-		if sibling == nil || sibling.Type != dom.ElementNode {
+		if sibling == nil || sibling.Type != uinode.ElementNode {
 			continue
 		}
 		if sibling == node {

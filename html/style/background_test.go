@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestBackgroundInheritanceAndInterningKeepLayersIndependent(t *testing.T) {
-	root, err := dom.Parse(`<section><div id="first"></div><div id="second"></div></section>`)
+	root, err := parse.Parse(`<section><div id="first"></div><div id="second"></div></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,19 +33,19 @@ func TestBackgroundInheritanceAndInterningKeepLayersIndependent(t *testing.T) {
 		}
 	}
 	first.SetAttr("style", "background-size: 20px 30px, 80px 90px")
-	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
+	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*uinode.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
 	if styles[first] == styles[second] || styles[first].Background.SizeX != LengthPx(20) || styles[first].ExtraBackgroundLayers[0].SizeX != LengthPx(80) {
 		t.Fatal("overriding background sizes did not detach both layers")
 	}
-	for _, node := range []*dom.Node{parent, second} {
+	for _, node := range []*uinode.Node{parent, second} {
 		if styles[node].Background.SizeX != LengthPx(20) || styles[node].ExtraBackgroundLayers[0].SizeX != LengthPx(40) {
 			t.Fatal("changing one child corrupted another background")
 		}
 	}
 	first.SetAttr("style", "background: red")
-	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
+	if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, []*uinode.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
 	if styles[first].BackgroundLayerCount() != 1 || styles[first].Background.Image != "" || styles[first].BackgroundColor.Color != (Color{R: 255, A: 255}) {

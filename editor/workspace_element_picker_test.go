@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 )
@@ -136,13 +137,13 @@ func TestWorkspaceParticleElementsDropdownFloatsAndDismisses(t *testing.T) {
 	syncWorkspaceTest(t, a, a.world)
 	a.handleEvent(htmlui.Event{ID: "content-elements:" + id, Kind: htmlui.EventClick})
 	syncWorkspaceTest(t, a, a.world)
-	root, err := dom.Parse(workspaceShellTest(t, a))
+	root, err := parse.Parse(workspaceShellTest(t, a))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var popup *dom.Node
-	var find func(*dom.Node)
-	find = func(node *dom.Node) {
+	var popup *uinode.Node
+	var find func(*uinode.Node)
+	find = func(node *uinode.Node) {
 		if node.AttrValue("id") == "content-elements-list" {
 			popup = node
 		}

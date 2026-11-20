@@ -1,9 +1,11 @@
 package css
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestTokenizer(t *testing.T) {
@@ -43,7 +45,7 @@ func TestAttributeOperatorsAndGeneralSibling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse selector: %v", err)
 	}
-	doc, err := dom.Parse(`<div data-kind="cardinal"></div><span class="target"></span><span class="target"></span>`)
+	doc, err := parse.Parse(`<div data-kind="cardinal"></div><span class="target"></span><span class="target"></span>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -108,7 +110,7 @@ func TestParseDeclarationValuePreservesNestedDelimiters(t *testing.T) {
 }
 
 func TestSelectorValuesAreCaseSensitive(t *testing.T) {
-	doc, err := dom.Parse(`<div id="Card" class="Hero"></div>`)
+	doc, err := parse.Parse(`<div id="Card" class="Hero"></div>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -127,7 +129,7 @@ func TestSelectorValuesAreCaseSensitive(t *testing.T) {
 }
 
 func TestAttributePresenceSelectors(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="hidden" hidden></div><div id="shown"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="hidden" hidden></div><div id="shown"></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +159,7 @@ func TestEmptyAndPlaceholderWhitespaceSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse css: %v", err)
 	}
-	doc, err := dom.Parse("<div>\n</div><textarea placeholder=\"type\"> </textarea>")
+	doc, err := parse.Parse("<div>\n</div><textarea placeholder=\"type\"> </textarea>")
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -167,8 +169,8 @@ func TestEmptyAndPlaceholderWhitespaceSemantics(t *testing.T) {
 	if Match(stylesheet.Rules[0].Selectors[1], doc.Children[1]) {
 		t.Fatal(":placeholder-shown should not match a textarea containing whitespace text")
 	}
-	empty := dom.NewElement("div")
-	empty.AppendChild(dom.NewText(""))
+	empty := uinode.NewElement("div")
+	empty.AppendChild(uinode.NewText(""))
 	if !Match(stylesheet.Rules[0].Selectors[0], empty) {
 		t.Fatal(":empty should ignore zero-length text nodes")
 	}
@@ -200,7 +202,7 @@ func TestUniversalSelector(t *testing.T) {
 		t.Fatalf("universal compound selector string = %q, want %q", got, want)
 	}
 
-	doc, err := dom.Parse(`<div class="card"></div><span></span>`)
+	doc, err := parse.Parse(`<div class="card"></div><span></span>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -222,7 +224,7 @@ func TestChildCombinatorSelector(t *testing.T) {
 		t.Fatalf("child selector string = %q, want %q", got, want)
 	}
 
-	doc, err := dom.Parse(`<div class="parent"><span class="direct"><i class="direct"></i></span></div>`)
+	doc, err := parse.Parse(`<div class="parent"><span class="direct"><i class="direct"></i></span></div>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -241,7 +243,7 @@ func TestClassMatchingDoesNotAllocate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse css: %v", err)
 	}
-	doc, err := dom.Parse(`<div class="card"></div>`)
+	doc, err := parse.Parse(`<div class="card"></div>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -279,7 +281,7 @@ func TestParseAndMatchSelectors(t *testing.T) {
 		t.Fatalf("selector string = %q, want %q", got, want)
 	}
 
-	doc, err := dom.Parse(`<html><body><div id="app" class="card hero"><span>hi</span></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="app" class="card hero"><span>hi</span></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -367,7 +369,7 @@ func TestParsePseudoClasses(t *testing.T) {
 }
 
 func TestMatchStaticPseudoClasses(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="empty"></div><div id="group"><input id="first" type="checkbox" disabled checked><span id="mid"></span><input id="last"></div><select><option id="chosen" selected>One</option></select><section><p id="solo">x</p></section></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="empty"></div><div id="group"><input id="first" type="checkbox" disabled checked><span id="mid"></span><input id="last"></div><select><option id="chosen" selected>One</option></select><section><p id="solo">x</p></section></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -382,7 +384,7 @@ func TestMatchStaticPseudoClasses(t *testing.T) {
 	solo := html.Children[1].Children[3].Children[0]
 
 	tests := []struct {
-		node     *dom.Node
+		node     *uinode.Node
 		selector string
 		want     bool
 	}{
@@ -418,7 +420,7 @@ func TestParseAndMatchFunctionalPseudoClasses(t *testing.T) {
 		t.Fatalf("selector string = %q, want %q", got, want)
 	}
 
-	doc, err := dom.Parse(`<html><body><ul><li class="skip" id="a"></li><li id="b"></li><li id="c"></li></ul><div id="hero" class="hero"></div><p id="lead" class="lead"></p><section><span id="s1"></span><span id="s2"></span></section></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li class="skip" id="a"></li><li id="b"></li><li id="c"></li></ul><div id="hero" class="hero"></div><p id="lead" class="lead"></p><section><span id="s1"></span><span id="s2"></span></section></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -455,7 +457,7 @@ func TestMatchNthLastAndPlaceholderShownPseudoClasses(t *testing.T) {
 		t.Fatalf("selector string = %q, want %q", got, want)
 	}
 
-	doc, err := dom.Parse(`<html><body><ul><li id="a"></li><li id="b"></li><li id="c"></li></ul><div><span id="s1"></span><em></em><span id="s2"></span></div><input id="shown" placeholder="Type here"><input id="filled" placeholder="Type here" value="x"><textarea id="area" placeholder="Describe"></textarea><textarea id="done" placeholder="Describe">ok</textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li id="a"></li><li id="b"></li><li id="c"></li></ul><div><span id="s1"></span><em></em><span id="s2"></span></div><input id="shown" placeholder="Type here"><input id="filled" placeholder="Type here" value="x"><textarea id="area" placeholder="Describe"></textarea><textarea id="done" placeholder="Describe">ok</textarea></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -488,7 +490,7 @@ func TestMatchNthLastAndPlaceholderShownPseudoClasses(t *testing.T) {
 }
 
 func TestMatchContextCachesChildIndicesPerParent(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><ul><li id="a"></li><span id="middle"></span><li id="b"></li><li id="c"></li></ul></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li id="a"></li><span id="middle"></span><li id="b"></li><li id="c"></li></ul></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -499,7 +501,7 @@ func TestMatchContextCachesChildIndicesPerParent(t *testing.T) {
 	}
 	ctx := NewMatchContext()
 	for _, child := range list.Children {
-		if child.Type != dom.ElementNode || child.Data != "li" {
+		if child.Type != uinode.ElementNode || child.Data != "li" {
 			continue
 		}
 		for _, selector := range selectorSheet.Rules[0].Selectors {
@@ -509,7 +511,7 @@ func TestMatchContextCachesChildIndicesPerParent(t *testing.T) {
 		}
 	}
 	globalForward, globalReverse := []int{1, 3, 4}, []int{4, 2, 1}
-	for index, child := range []*dom.Node{list.Children[0], list.Children[2], list.Children[3]} {
+	for index, child := range []*uinode.Node{list.Children[0], list.Children[2], list.Children[3]} {
 		data := ctx.nodes[child]
 		if data.indexFlags&childIndexLoaded == 0 || int(data.childIndex) != globalForward[index] || data.indexFlags&childReverseLoaded == 0 || int(data.childReverse) != globalReverse[index] {
 			t.Fatalf("cached child position %d = %+v", index, data)
@@ -526,7 +528,7 @@ func TestAuthoredAttributesDoNotCreateInputPseudoClasses(t *testing.T) {
 		t.Fatalf("parse css: %v", err)
 	}
 
-	doc, err := dom.Parse(`<html><body><button id="focus" data-focus>ok</button><div id="wrap"><span><input id="inside" data-focus></span></div><a id="hovered" data-hover>link</a><button id="pressed" data-active>go</button><div id="plain"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><button id="focus" data-focus>ok</button><div id="wrap"><span><input id="inside" data-focus></span></div><a id="hovered" data-hover>link</a><button id="pressed" data-active>go</button><div id="plain"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -560,7 +562,7 @@ func TestMatchInputPseudoClassesWithExplicitState(t *testing.T) {
 		t.Fatalf("parse css: %v", err)
 	}
 
-	doc, err := dom.Parse(`<html><body><button id="focus">ok</button><div id="wrap"><span><input id="inside"></span></div><a id="hovered">link</a><button id="pressed">go</button></body></html>`)
+	doc, err := parse.Parse(`<html><body><button id="focus">ok</button><div id="wrap"><span><input id="inside"></span></div><a id="hovered">link</a><button id="pressed">go</button></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -605,7 +607,7 @@ func TestAdjacentSelectorAndAncestorBacktracking(t *testing.T) {
 		{"div + span", `<div><span id="target"></span></div>`, false},
 	} {
 		t.Run(tc.selector+tc.markup, func(t *testing.T) {
-			doc, err := dom.Parse(tc.markup)
+			doc, err := parse.Parse(tc.markup)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -613,9 +615,9 @@ func TestAdjacentSelectorAndAncestorBacktracking(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var target *dom.Node
-			var visit func(*dom.Node)
-			visit = func(n *dom.Node) {
+			var target *uinode.Node
+			var visit func(*uinode.Node)
+			visit = func(n *uinode.Node) {
 				if id, _ := n.Attr("id"); id == "target" {
 					target = n
 				}
@@ -635,4 +637,46 @@ func TestAdjacentSelectorAndAncestorBacktracking(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParsePartsKeepsStylesheetsIndependentAndOrdered(t *testing.T) {
+	sheet, err := ParseParts(
+		`.x { color: red } @keyframes spin { to { opacity: .1 } } .incomplete`,
+		"",
+		`@media (min-width: 1px) { .x { color: blue } } @keyframes spin { to { opacity: .9 } }`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheet.Rules) != 2 || sheet.Rules[0].Declarations[0].Value != "red" || sheet.Rules[1].Declarations[0].Value != "blue" ||
+		len(sheet.Rules[1].Conditions) != 1 {
+		t.Fatalf("unexpected rules across parts: %#v", sheet.Rules)
+	}
+	if len(sheet.Keyframes) != 2 || sheet.Keyframes[0].Frames[0].Declarations[0].Value != ".1" ||
+		sheet.Keyframes[1].Frames[0].Declarations[0].Value != ".9" {
+		t.Fatalf("unexpected keyframes across parts: %#v", sheet.Keyframes)
+	}
+}
+
+func BenchmarkParseStylesheetParts(b *testing.B) {
+	parts := []string{
+		strings.Repeat(".card { color: red; border: 1px solid blue }\n", 1024),
+		strings.Repeat(".panel { background: white; padding: 2px }\n", 1024),
+	}
+	b.Run("joined", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := Parse(strings.Join(parts, "")); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("parts", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := ParseParts(parts...); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }

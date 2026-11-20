@@ -1,4 +1,8 @@
-package dom
+package parse
+
+import (
+	uinode "github.com/onix-engine/onix/scene/node"
+)
 
 type TokenType int
 
@@ -14,7 +18,7 @@ const (
 )
 
 type Token struct {
-	attributeList
+	uinode.AttributeSet
 	Data string
 	Type TokenType
 }

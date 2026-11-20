@@ -48,7 +48,7 @@ func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
 			ecs.Type[Control](), ecs.Type[scene.InputTarget2D](), ecs.Type[scene.InputState2D](),
 			ecs.Type[Variants[ControlVariant]](), ecs.Type[Button](), ecs.Type[Toggle[bool]](),
 			ecs.Type[TextField](), ecs.Type[TextFieldKeyHandler](), ecs.Type[Input](), ecs.Type[Textarea](), ecs.Type[textFieldMaskCache](),
-			ecs.Type[NumberInput](), ecs.Type[Selector](), ecs.Type[SelectorList](), ecs.Type[SelectorItem](),
+			ecs.Type[nativeFieldVisuals](), ecs.Type[pendingButtonIcon](), ecs.Type[NumberInput](), ecs.Type[Selector](), ecs.Type[SelectorList](), ecs.Type[SelectorItem](),
 			ecs.Type[Progress](), ecs.Type[VirtualJoystick](), ecs.Type[ProgressThumb](),
 			ecs.Type[ScrollArea](), ecs.Type[ScrollContent](), ecs.Type[Content[string]](), ecs.Type[Typography](),
 			ecs.Type[NumberInputStep](), ecs.Type[Relation[Control]](), ecs.Type[Relation[scene.Text2D]](),

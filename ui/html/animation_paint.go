@@ -3,9 +3,9 @@ package html
 import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func htmlAnimationColor(color style.AnimationColor) graphics.ColorRGBA {
@@ -13,7 +13,7 @@ func htmlAnimationColor(color style.AnimationColor) graphics.ColorRGBA {
 	return graphics.ColorRGBA{R: float32(r), G: float32(g), B: float32(b), A: float32(a)}
 }
 
-func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *dom.Node, child *htmlChild, foreground style.AnimationColor) {
+func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs.Entity, node *uinode.Node, child *htmlChild, foreground style.AnimationColor) {
 	computed := state.Styles[node]
 	if computed == nil || computed.AnimatedPaint == 0 {
 		return
@@ -33,11 +33,14 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 		}
 	}
 	color := htmlAnimationColor(foreground)
+	if child.role == htmlRoleText {
+		scene.SetUIShapeFragmentFill2D(world, entity, 0, color)
+	}
 	if text := world.GetRef[scene.Text2D](entity); text != nil {
 		placeholder := false
 		if link := world.GetRef[ControlText](entity); link != nil {
 			if control := world.GetRef[Control](link.Control); control != nil {
-				placeholder = control.Value == "" && control.Placeholder != ""
+				placeholder = ControlValue(world, link.Control) == "" && control.Placeholder != ""
 			}
 		}
 		if placeholder {
@@ -52,6 +55,17 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 		mutable := world.GetMut[scene.UIImage2D](entity)
 		mutable.Tint = color
 	}
+	if (child.role == htmlRoleSurface || child.role == htmlRoleBorderList) && computed.AnimatedPaint&style.AnimatedBorders != 0 {
+		if paint := world.GetRef[scene.UIPaint2D](entity); paint != nil {
+			colors := value.Colors[style.AnimationBorderTop : style.AnimationBorderLeft+1]
+			fragments := paint.Fragments()
+			for index, fragment := range fragments[:min(len(fragments), len(colors))] {
+				if fragment.Shape.Kind != 0 {
+					scene.SetUIShapeFragmentFill2D(world, entity, index, htmlAnimationColor(colors[index].Resolve(foreground)))
+				}
+			}
+		}
+	}
 	sprite := world.GetRef[scene.Sprite2D](entity)
 	if sprite == nil || world.Has[htmlOpacitySurface](entity) {
 		return
@@ -60,9 +74,6 @@ func applyHTMLAnimatedPaint(world *ecs.World, state *htmlRenderState, entity ecs
 	switch child.role {
 	case htmlRoleDecoration, htmlRoleCheckbox:
 		fill = color
-	case htmlRoleBorderTop, htmlRoleBorderRight, htmlRoleBorderBottom, htmlRoleBorderLeft:
-		index := style.AnimationBorderTop + int(child.role-htmlRoleBorderTop)
-		fill = htmlAnimationColor(value.Colors[index].Resolve(foreground))
 	case htmlRoleSurface, htmlRoleInlineBackground, htmlRoleControl, htmlRoleCanvas:
 		if htmlNeedsRasterPaint(computed) {
 			if animation == nil || computed.AnimatedPaint&(style.AnimatedBackgroundColor|style.AnimatedBorders) == 0 {

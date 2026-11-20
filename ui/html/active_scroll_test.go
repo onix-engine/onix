@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLInactiveAnimationsRetainTimeAcrossDurationAndPauseChanges(t *testing.T) {

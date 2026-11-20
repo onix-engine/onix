@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func htmlBindingArea(world *ecs.World, x, y float32) ecs.Entity {

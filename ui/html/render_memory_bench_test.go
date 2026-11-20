@@ -4,12 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
-	node := dom.NewElement("div")
+	node := uinode.NewElement("div")
 	styles, err := style.Compute(node, nil)
 	if err != nil {
 		b.Fatal(err)
@@ -24,7 +25,7 @@ func BenchmarkHTMLStaticAnimationPreparation(b *testing.B) {
 }
 
 func BenchmarkHTMLStaticAnimationPopulation(b *testing.B) {
-	root, err := dom.Parse(`<section>` + strings.Repeat(`<div></div>`, 1000) + `</section>`)
+	root, err := parse.Parse(`<section>` + strings.Repeat(`<div></div>`, 1000) + `</section>`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func BenchmarkHTMLStaticAnimationPopulation(b *testing.B) {
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		state := htmlRenderState{htmlStyleState: htmlStyleState{Styles: styles}}
+		state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: root}, htmlStyleState: htmlStyleState{Styles: styles}}
 		syncHTMLAnimations(&state)
 	}
 }

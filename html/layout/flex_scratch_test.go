@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestRetainedNestedFlexScratchMatchesFull(t *testing.T) {
@@ -19,7 +19,7 @@ func TestRetainedNestedFlexScratchMatchesFull(t *testing.T) {
 			styles.Exclusive(inner).Width = style.LengthPx(width / 2)
 			styles.Exclusive(inner).FlexDirection = style.Keyword(direction)
 			styles.Exclusive(inner).AlignItems = style.Keyword("flex-start")
-			got := updateRetained(t, &cache, root, styles, face, []*dom.Node{outer, inner}, false)
+			got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{outer, inner}, false)
 			full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 			if err != nil {
 				t.Fatal(err)
@@ -42,7 +42,7 @@ func TestFlexScratchReleasesDetachedChildren(t *testing.T) {
 	}
 	clear(parent.Children)
 	parent.Children = parent.Children[:0]
-	updateRetained(t, &cache, root, styles, face, []*dom.Node{parent}, true)
+	updateRetained(t, &cache, root, styles, face, []*uinode.Node{parent}, true)
 	scratch := cache.nodes[parent].flex
 	for _, item := range scratch.items[:cap(scratch.items)] {
 		if item.box != nil {

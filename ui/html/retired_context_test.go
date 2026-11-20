@@ -99,7 +99,7 @@ func TestHTMLRetiredSourceKeepsSurvivingScrollAndInput(t *testing.T) {
 	state, _ = world.Get[htmlRenderState](owner)
 	gotScroll, _ := world.Get[scene.UIScroll](clip)
 	gotControl, _ := world.Get[Control](field)
-	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || gotScroll.Position[1] != -15 || gotControl.Value != "Typed" || gotControl.SelectionAnchor != 1 || gotControl.SelectionFocus != 3 {
+	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || gotScroll.Position[1] != -15 || ControlValue(world, field) != "Typed" || gotControl.SelectionAnchor != 1 || gotControl.SelectionFocus != 3 {
 		t.Fatal("survivor state lost")
 	}
 }
@@ -150,7 +150,7 @@ func TestHTMLRetiredSourceEventsAndUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "destination").Append(moved)
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 1 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.UpdatedClips != 1 {
 		t.Fatalf("retired source rebuilt unrelated contexts: %+v", state.SyncStats)
 	}
 	if world.IsAlive(oldTarget) || state.EventTargets[source.node] != 0 {

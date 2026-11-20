@@ -7,6 +7,7 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 func incrementalControl(t testing.TB, world *ecs.World, owner ecs.Entity, id string) ecs.Entity {
@@ -67,21 +68,21 @@ func TestHTMLControlLocalPreservesLiveStateAndSkipsSiblings(t *testing.T) {
 	SetControlValue(world, entity, "typed")
 	SetControlFocus(world, entity, true)
 	incrementalSync(t, world) // Establish focus before testing an ordinary DOM update.
-	live := world.GetMut[Control](entity)
-	live.SelectionAnchor, live.SelectionFocus = 1, 3
+	live := world.GetMut[textfield.Field](entity)
+	live.Anchor, live.Caret = 1, 3
 	input := world.GetMut[scene.InputState2D](entity)
 	input.Pressed, input.Hovered = true, true
 	unchanged, _ := world.Get[Control](other)
 	target.SetAttribute("class", "wide")
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	live = world.GetMut[Control](entity)
+	live = world.GetMut[textfield.Field](entity)
 	input = world.GetMut[scene.InputState2D](entity)
 	after, _ := world.Get[Control](other)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 {
 		t.Fatalf("unrelated controls visited: %+v", state.SyncStats)
 	}
-	if live.Value != "typed" || !live.DirtyValue || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || !input.Pressed || !input.Hovered || state.Input.Focused != target.node || after.RenderRevision != unchanged.RenderRevision {
+	if live.Value != "typed" || !ControlValueDirty(world, entity) || live.Anchor != 1 || live.Caret != 3 || !input.Pressed || !input.Hovered || state.Input.Focused != target.node || after.RenderRevision != unchanged.RenderRevision {
 		t.Fatal("live control/focus state changed")
 	}
 }
@@ -175,12 +176,12 @@ func TestHTMLEditingHostLocalSelectionAndDescendantText(t *testing.T) {
 	target := incrementalHTMLNode(t, world, owner, "target")
 	state, _ := world.Get[htmlRenderState](owner)
 	entity := state.FocusTargets[state.FocusByNode[host.node]].Entity
-	editable := world.GetMut[Editable](entity)
-	editable.Anchor, editable.Focus = 1, 3
+	editable := world.GetMut[textfield.Field](entity)
+	editable.Anchor, editable.Caret = 1, 3
 	host.SetAttribute("style", "width:120px")
 	incrementalSync(t, world)
-	editable = world.GetMut[Editable](entity)
-	if editable.Anchor != 1 || editable.Focus != 3 {
+	editable = world.GetMut[textfield.Field](entity)
+	if editable.Anchor != 1 || editable.Caret != 3 {
 		t.Fatal("geometry update changed editable selection")
 	}
 	target.SetText("Changed")
@@ -224,7 +225,7 @@ func TestHTMLSelectLocalResizePreservesSelectionAndOpenState(t *testing.T) {
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
 	control = world.GetMut[Control](entity)
-	if state.SyncStats.PartialReconciles != 1 || !control.Open || control.Selected != 1 || control.SelectionAnchor != 1 || control.SelectionFocus != 1 || !control.Options[1].Selected {
+	if state.SyncStats.PartialReconciles != 1 || !control.Open || control.Selected != 1 || control.SelectionAnchor != 1 || control.SelectionFocus != 1 || !control.Options[1].Selected() {
 		t.Fatal("local select resize reset live state")
 	}
 }
@@ -239,7 +240,7 @@ func TestHTMLTextareaLocalTextPreservesDirtyValue(t *testing.T) {
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
 	control, _ := world.Get[Control](entity)
-	if state.SyncStats.PartialReconciles != 1 || control.Value != "Typed" || control.DefaultValue != "New default" || !control.DirtyValue {
+	if state.SyncStats.PartialReconciles != 1 || ControlValue(world, entity) != "Typed" || control.DefaultValue != "New default" || !ControlValueDirty(world, entity) {
 		t.Fatalf("local textarea default update lost dirty value: %+v", control)
 	}
 }

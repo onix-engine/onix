@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestCandidateTraversalCascadeWeights(t *testing.T) {
 	// Class order and bucket order must never replace stylesheet source order.
 	for _, classes := range []string{"a b", "b a", "a b a b"} {
-		node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"}, dom.Attribute{Name: "class", Value: classes}, dom.Attribute{Name: "style", Value: "height:7px;color:purple"})
+		node := uinode.NewElement("div", uinode.Attribute{Name: "id", Value: "target"}, uinode.Attribute{Name: "class", Value: classes}, uinode.Attribute{Name: "style", Value: "height:7px;color:purple"})
 		sheet, err := css.Parse(`
 			.b {width:10px;margin-left:8px;color:red!important}
 			#target {height:3px}
@@ -46,7 +46,7 @@ func BenchmarkCandidateCascade(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			node := dom.NewElement("div", dom.Attribute{Name: "class", Value: "c3 c1 c0 c2"})
+			node := uinode.NewElement("div", uinode.Attribute{Name: "class", Value: "c3 c1 c0 c2"})
 			scratch := acquireCascadeScratch()
 			defer releaseCascadeScratch(scratch)
 			scratch.compiled = compileStylesheet(sheet)

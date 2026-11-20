@@ -8,7 +8,6 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/syntax"
 	onixtext "github.com/onix-engine/onix/text"
@@ -77,8 +76,6 @@ type MarkdownOptions struct {
 type MarkdownLayout = htmlui.Layout
 
 type markdownRenderState struct {
-	DOM *dom.Node
-	CSS string
 	Key Markdown
 }
 
@@ -179,7 +176,7 @@ func SpawnMarkdown(world *ecs.World, opts MarkdownOptions) ecs.Entity {
 		html,
 	)
 	_ = world.Insert(entity, scene.Size2D{Width: opts.Width})
-	_ = world.Insert(entity, markdownRenderState{Key: component, CSS: html.CSS, DOM: html.Document})
+	_ = world.Insert(entity, markdownRenderState{Key: component})
 	return entity
 }
 
@@ -290,14 +287,10 @@ func renderMarkdown(world *ecs.World, entity ecs.Entity, value Markdown) {
 	}
 	if state == nil || state.Key.Value != value.Value || current == nil {
 		html.Value = ""
-		html.Document = markdownToDOM(value.Value)
-	} else {
-		html.Document = state.DOM
+		html.Document = markdownToDocument(value.Value)
 	}
 	if state == nil || state.Key.Style != value.Style || current == nil {
 		html.CSS = markdownStylesheet(value.Style, markdownRuntimeFor())
-	} else {
-		html.CSS = state.CSS
 	}
 	html.Width = value.Width
 	html.Font = value.Style.Font
@@ -312,13 +305,10 @@ func renderMarkdown(world *ecs.World, entity ecs.Entity, value Markdown) {
 		_ = world.Insert(entity, html)
 	}
 	if state == nil {
-		_ = world.Insert(entity, markdownRenderState{Key: value, CSS: html.CSS, DOM: html.Document})
+		_ = world.Insert(entity, markdownRenderState{Key: value})
 		return
 	}
-	updated := world.GetMut[markdownRenderState](entity)
-	updated.Key = value
-	updated.CSS = html.CSS
-	updated.DOM = html.Document
+	world.GetMut[markdownRenderState](entity).Key = value
 }
 
 // Convert builds Markdown's DOM and stylesheet for an owned HTML surface.
@@ -326,7 +316,7 @@ func renderMarkdown(world *ecs.World, entity ecs.Entity, value Markdown) {
 func Convert(value Markdown) htmlui.Surface {
 	runtime := markdownRuntimeFor()
 	html := htmlui.New("")
-	html.Document = markdownToDOM(value.Value)
+	html.Document = markdownToDocument(value.Value)
 	html.CSS = markdownStylesheet(value.Style, runtime)
 	html.Width = value.Width
 	html.Font = value.Style.Font
@@ -336,15 +326,6 @@ func Convert(value Markdown) htmlui.Surface {
 	html.StackIndex = value.Style.StackIndex
 	html.PassThrough = value.PassThrough
 	return html
-}
-
-func markdownToHTML(value string) string {
-	runtime := markdownRuntimeFor()
-	var output bytes.Buffer
-	if err := runtime.document.Convert([]byte(value), &output); err != nil {
-		return ""
-	}
-	return output.String()
 }
 
 type markdownHTMLNodeRenderer struct{}

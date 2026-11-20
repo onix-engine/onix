@@ -37,9 +37,8 @@ func TestHTMLNodeSelectionRefreshesSelectorAndLabel(t *testing.T) {
 			t.Fatal(err)
 		}
 		value, _ := world.Get[htmlui.Control](control)
-		selector, _ := world.Get[Selector](control)
-		if value.Selected != index || selector.Selected != index {
-			t.Fatal("selection was overwritten by UI bridge", value.Selected, selector.Selected)
+		if value.Selected != index {
+			t.Fatal("selection was overwritten by UI bridge", value.Selected)
 		}
 		want := ""
 		if index == 0 {

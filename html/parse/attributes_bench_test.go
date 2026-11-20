@@ -1,12 +1,14 @@
-package dom
+package parse
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-var attributeNodeSink *Node
+var attributeNodeSink *uinode.Node
 var attributeValueSink string
 
 func BenchmarkDOMAttributes(b *testing.B) {
@@ -15,8 +17,8 @@ func BenchmarkDOMAttributes(b *testing.B) {
 		for i := range names {
 			names[i] = fmt.Sprintf("data-%03d", i)
 		}
-		populate := func() *Node {
-			node := &Node{Type: ElementNode, Data: "div"}
+		populate := func() *uinode.Node {
+			node := &uinode.Node{Type: uinode.ElementNode, Data: "div"}
 			for _, name := range names {
 				node.SetAttr(name, "value")
 			}

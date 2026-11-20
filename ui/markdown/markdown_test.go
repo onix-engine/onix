@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"bytes"
 	"math"
 	"slices"
 	"strings"
@@ -9,12 +10,22 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 )
+
+func markdownToHTML(value string) string {
+	runtime := markdownRuntimeFor()
+	var output bytes.Buffer
+	if err := runtime.document.Convert([]byte(value), &output); err != nil {
+		return ""
+	}
+	return output.String()
+}
 
 func TestMarkdownConvertsAndRendersThroughHTML(t *testing.T) {
 	world := newUIWorld(t)
@@ -91,12 +102,13 @@ func TestMarkdownDirectDOMMatchesHTMLTree(t *testing.T) {
 		"`a\nb`\n\n```unknown\nraw <code>\n```",
 		"$x^2$\n\n$$\n\\frac{1}{2}\n$$",
 		"<table><tr><td>raw</td></tr></table>\n\n**after**",
+		"# Before\n\n<div>\n\n**inside**\n\n</div>\n\n[after][ref]\n\n[ref]: /page",
 	} {
-		want, err := dom.Parse(markdownToHTML(source))
+		want, err := parse.Parse(markdownToHTML(source))
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := markdownToDOM(source)
+		got := markdownToDocument(source)
 		stripMarkdownHTMLFormatting(want, false)
 		stripMarkdownHTMLFormatting(got, false)
 		if got.String() != want.String() {
@@ -105,11 +117,11 @@ func TestMarkdownDirectDOMMatchesHTMLTree(t *testing.T) {
 	}
 }
 
-func stripMarkdownHTMLFormatting(node *dom.Node, preserve bool) {
-	preserve = preserve || node.Type == dom.ElementNode && (node.Data == "pre" || node.Data == "code")
+func stripMarkdownHTMLFormatting(node *uinode.Node, preserve bool) {
+	preserve = preserve || node.Type == uinode.ElementNode && (node.Data == "pre" || node.Data == "code")
 	children := node.Children[:0]
 	for _, child := range node.Children {
-		if !preserve && child.Type == dom.TextNode && strings.Contains(child.Data, "\n") && strings.TrimSpace(child.Data) == "" {
+		if !preserve && child.Type == uinode.TextNode && strings.Contains(child.Data, "\n") && strings.TrimSpace(child.Data) == "" {
 			continue
 		}
 		stripMarkdownHTMLFormatting(child, preserve)
@@ -314,12 +326,17 @@ func TestMarkdownRendersBoldAndDeletedTextStyles(t *testing.T) {
 
 	boldFound, lineFound := false, false
 	for _, child := range markdownHTMLChildren(world, owner) {
-		if text, ok := world.Get[scene.Text2D](child); ok && text.Value == "bold" {
-			boldFound = text.Font == style.BoldFont
-		}
-		if sprite, ok := world.Get[scene.Sprite2D](child); ok && sprite.Shape.Fill == style.Strike {
-			size, _ := world.Get[scene.Size2D](child)
-			lineFound = size.Width > size.Height && size.Height > 0
+		if text := world.GetRef[scene.Text2D](child); text != nil {
+			switch text.Value {
+			case "bold":
+				boldFound = text.Font == style.BoldFont
+			case "deleted":
+				if paint := world.GetRef[scene.UIPaint2D](child); paint != nil {
+					for _, fragment := range paint.Fragments() {
+						lineFound = lineFound || fragment.Shape.Fill == style.Strike && fragment.Width > fragment.Height && fragment.Height > 0
+					}
+				}
+			}
 		}
 	}
 	if !boldFound || !lineFound {
@@ -488,17 +505,20 @@ func TestMarkdownFractionRendersHorizontalBar(t *testing.T) {
 
 	shapeCount, barCount := 0, 0
 	for _, child := range markdownHTMLChildren(world, owner) {
-		sprite, spriteOK := world.Get[scene.Sprite2D](child)
-		size, sizeOK := world.Get[scene.Size2D](child)
-		if !spriteOK || !sizeOK || sprite.Shape.Kind == 0 {
-			continue
+		if paint := world.GetRef[scene.UIPaint2D](child); paint != nil {
+			for _, fragment := range paint.Fragments() {
+				if fragment.Shape.Kind == 0 {
+					continue
+				}
+				shapeCount++
+				if fragment.Shape.Fill.A > 0 && fragment.Shape.Border.A == 0 &&
+					fragment.Height > 0 && fragment.Height <= 1.01 && fragment.Width > fragment.Height {
+					barCount++
+				}
+			}
 		}
-		shapeCount++
-		if sprite.Shape.Fill.A == 0 || sprite.Shape.Border.A != 0 {
-			continue
-		}
-		if size.Height <= 1.01 && size.Width > size.Height {
-			barCount++
+		if sprite := world.GetRef[scene.Sprite2D](child); sprite != nil && sprite.Shape.Kind != 0 {
+			shapeCount++
 		}
 	}
 	if shapeCount != 1 || barCount != 1 {
@@ -551,7 +571,7 @@ func TestMarkdownSyncDoesNotAllocateAfterWarmup(t *testing.T) {
 	}
 }
 
-func markdownDOMFirst(root *dom.Node, tag, class string) *dom.Node {
+func markdownDOMFirst(root *uinode.Node, tag, class string) *uinode.Node {
 	if root == nil {
 		return nil
 	}
@@ -566,7 +586,7 @@ func markdownDOMFirst(root *dom.Node, tag, class string) *dom.Node {
 	return nil
 }
 
-func markdownDOMCount(root *dom.Node, tag string) int {
+func markdownDOMCount(root *uinode.Node, tag string) int {
 	if root == nil {
 		return 0
 	}
@@ -580,7 +600,7 @@ func markdownDOMCount(root *dom.Node, tag string) int {
 	return count
 }
 
-func markdownDOMText(root *dom.Node, tag, text string) *dom.Node {
+func markdownDOMText(root *uinode.Node, tag, text string) *uinode.Node {
 	if root == nil {
 		return nil
 	}

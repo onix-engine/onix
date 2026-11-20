@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type cascadedValue struct {
@@ -113,28 +113,28 @@ type ContainerMetrics struct {
 }
 
 type QueryEnvironment struct {
-	ContainerMetrics map[*dom.Node]ContainerMetrics
+	ContainerMetrics map[*uinode.Node]ContainerMetrics
 	Styles           Map
 	Viewport         Viewport
 }
 
-func Compute(root *dom.Node, stylesheet *css.Stylesheet) (Map, error) {
+func Compute(root *uinode.Node, stylesheet *css.Stylesheet) (Map, error) {
 	return ComputeWithViewportAndStateAndQueries(root, stylesheet, Viewport{}, nil, nil)
 }
 
-func ComputeWithState(root *dom.Node, stylesheet *css.Stylesheet, input *css.State) (Map, error) {
+func ComputeWithState(root *uinode.Node, stylesheet *css.Stylesheet, input *css.State) (Map, error) {
 	return ComputeWithViewportAndStateAndQueries(root, stylesheet, Viewport{}, input, nil)
 }
 
-func ComputeWithViewport(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport) (Map, error) {
+func ComputeWithViewport(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport) (Map, error) {
 	return ComputeWithViewportAndStateAndQueries(root, stylesheet, viewport, nil, nil)
 }
 
-func ComputeWithViewportAndState(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State) (Map, error) {
+func ComputeWithViewportAndState(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State) (Map, error) {
 	return ComputeWithViewportAndStateAndQueries(root, stylesheet, viewport, input, nil)
 }
 
-func ComputeWithViewportAndStateAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment) (Map, error) {
+func ComputeWithViewportAndStateAndQueries(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment) (Map, error) {
 	nodeCount, definitions, err := collectFilterDefinitionsAndCount(root)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func ComputeWithViewportAndStateAndQueries(root *dom.Node, stylesheet *css.Style
 // and a bounded index of immutable styles. Equal values can be shared even
 // after DOM nodes are replaced. The caller must invalidate filter definitions
 // when their content changes, as for partial recomputation.
-func ComputeWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, styles Map, cache *MutationCache) (Map, error) {
+func ComputeWithCache(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, styles Map, cache *MutationCache) (Map, error) {
 	definitions, err := cache.filterDefinitions(root)
 	if err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ func ComputeWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewp
 	return styles, nil
 }
 
-func computeStyleSubtree(node *dom.Node, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
+func computeStyleSubtree(node *uinode.Node, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
 	scratch.visited++
 	previous := styles[node]
 	if previous == nil {
@@ -234,15 +234,15 @@ func (scratch *cascadeScratch) internIndex() *styleIndex {
 	return &scratch.styles
 }
 
-func computeStyleChildren(node *dom.Node, computed *ComputedStyle, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
+func computeStyleChildren(node *uinode.Node, computed *ComputedStyle, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
 	childRootFontSize := rootFontSize
-	if node != nil && node.Type == dom.ElementNode && node.Parent != nil && node.Parent.Type == dom.DocumentNode && computed.FontSize.Kind == ValueLengthPx {
+	if node != nil && node.Type == uinode.ElementNode && node.Parent != nil && node.Parent.Type == uinode.DocumentNode && computed.FontSize.Kind == ValueLengthPx {
 		childRootFontSize = computed.FontSize.LengthPx
 	}
 	var textStyle *ComputedStyle
 	var textChange ChangeImpact
 	for _, child := range node.Children {
-		if child.Type == dom.TextNode {
+		if child.Type == uinode.TextNode {
 			// Text nodes never match rules and carry no form defaults, so the
 			// computed style is a pure function of the parent style: every text
 			// child of one parent shares the same computed value.
@@ -272,7 +272,7 @@ func computeStyleChildren(node *dom.Node, computed *ComputedStyle, rootFontSize 
 	return nil
 }
 
-func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, definitions filterDefinitions, scratch *cascadeScratch) error {
+func resolveComputedStyle(node *uinode.Node, computed *ComputedStyle, parent *ComputedStyle, hasParent bool, rootFontSize float64, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, definitions filterDefinitions, scratch *cascadeScratch) error {
 	scratch.motion = motionStyle{}
 	computed.motion = &scratch.motion
 	specified, err := collectSpecifiedValuesInto(node, stylesheet, input, queries, scratch)
@@ -285,7 +285,7 @@ func resolveComputedStyle(node *dom.Node, computed *ComputedStyle, parent *Compu
 	}
 	// The HTML user-agent defaults for list containers establish their own
 	// marker type before inherited author values are applied to descendants.
-	if node != nil && node.Type == dom.ElementNode {
+	if node != nil && node.Type == uinode.ElementNode {
 		switch node.Data {
 		case "i", "em", "cite", "dfn", "var", "address":
 			_, hasStyle := specified.get(propertyFontStyle)
@@ -400,7 +400,7 @@ func normalizeOverflow(computed *ComputedStyle) {
 	}
 }
 
-func computedStyleChangeForNode(node *dom.Node, previous, current *ComputedStyle) ChangeImpact {
+func computedStyleChangeForNode(node *uinode.Node, previous, current *ComputedStyle) ChangeImpact {
 	if previous.Display != current.Display || previous.TableLayout != current.TableLayout ||
 		previous.BorderSpacingX != current.BorderSpacingX || previous.BorderSpacingY != current.BorderSpacingY || previous.VerticalAlign != current.VerticalAlign ||
 		previous.BoxSizing != current.BoxSizing ||
@@ -476,8 +476,8 @@ func computedStyleChangeForNode(node *dom.Node, previous, current *ComputedStyle
 // Controls keep a Sprite2D surface even with a transparent background, so a
 // hover fill only changes paint. Other elements need a rebuild to add or
 // remove their surface when their background becomes visible or transparent.
-func isPaintedHTMLControl(node *dom.Node) bool {
-	if node == nil || node.Type != dom.ElementNode {
+func isPaintedHTMLControl(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	switch node.Data {
@@ -505,10 +505,10 @@ func backgroundLayersRequireRebuild(previous, current *ComputedStyle) bool {
 	return previous.Background != current.Background || !slices.Equal(previous.ExtraBackgroundLayers, current.ExtraBackgroundLayers)
 }
 
-func collectSpecifiedValuesInto(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (*cascadedValues, error) {
+func collectSpecifiedValuesInto(node *uinode.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, scratch *cascadeScratch) (*cascadedValues, error) {
 	values := &scratch.values
 	values.reset()
-	if node == nil || node.Type != dom.ElementNode {
+	if node == nil || node.Type != uinode.ElementNode {
 		return values, nil
 	}
 
@@ -975,7 +975,7 @@ func buildCascadePropertyIndex() map[string]cascadePropertyOrder {
 	return index
 }
 
-func applySpecifiedValues(node *dom.Node, computed, parent *ComputedStyle, specified *cascadedValues, definitions filterDefinitions, ctx parseContext) error {
+func applySpecifiedValues(node *uinode.Node, computed, parent *ComputedStyle, specified *cascadedValues, definitions filterDefinitions, ctx parseContext) error {
 	ordered := specified.entries
 	slices.SortFunc(ordered, func(left, right cascadedValue) int {
 		if left.order.group != right.order.group {
@@ -1028,7 +1028,7 @@ func markAnimationImportance(computed *ComputedStyle, entry *cascadedValue) {
 	computed.AnimationImportant |= AnimatedProperty(cascadePropertyNames[entry.order.id])
 }
 
-func applyCascadedLineHeight(node *dom.Node, computed, parent *ComputedStyle, specified *cascadedValues, ctx parseContext) error {
+func applyCascadedLineHeight(node *uinode.Node, computed, parent *ComputedStyle, specified *cascadedValues, ctx parseContext) error {
 	lineHeight, hasLineHeight := specified.get(propertyLineHeight)
 	font, hasFont := specified.get(propertyFont)
 	if !hasLineHeight && !hasFont {
@@ -3328,7 +3328,7 @@ func parseAngleDegrees(input string) (float64, error) {
 	return 0, fmt.Errorf("invalid angle %q", input)
 }
 
-func collectFilterDefinitions(root *dom.Node) (filterDefinitions, error) {
+func collectFilterDefinitions(root *uinode.Node) (filterDefinitions, error) {
 	var definitions filterDefinitions
 	if err := collectFilterDefinitionsInto(root, &definitions); err != nil {
 		return nil, err
@@ -3336,7 +3336,7 @@ func collectFilterDefinitions(root *dom.Node) (filterDefinitions, error) {
 	return definitions, nil
 }
 
-func collectFilterDefinitionsAndCount(root *dom.Node) (int, filterDefinitions, error) {
+func collectFilterDefinitionsAndCount(root *uinode.Node) (int, filterDefinitions, error) {
 	var definitions filterDefinitions
 	nodeCount, err := collectFilterDefinitionsAndCountInto(root, &definitions)
 	if err != nil {
@@ -3345,7 +3345,7 @@ func collectFilterDefinitionsAndCount(root *dom.Node) (int, filterDefinitions, e
 	return nodeCount, definitions, nil
 }
 
-func collectFilterDefinitionsAndCountInto(node *dom.Node, definitions *filterDefinitions) (int, error) {
+func collectFilterDefinitionsAndCountInto(node *uinode.Node, definitions *filterDefinitions) (int, error) {
 	if node == nil {
 		return 0, nil
 	}
@@ -3363,7 +3363,7 @@ func collectFilterDefinitionsAndCountInto(node *dom.Node, definitions *filterDef
 	return nodeCount, nil
 }
 
-func collectFilterDefinitionsInto(node *dom.Node, definitions *filterDefinitions) error {
+func collectFilterDefinitionsInto(node *uinode.Node, definitions *filterDefinitions) error {
 	if node == nil {
 		return nil
 	}
@@ -3378,8 +3378,8 @@ func collectFilterDefinitionsInto(node *dom.Node, definitions *filterDefinitions
 	return nil
 }
 
-func collectFilterDefinition(node *dom.Node, definitions *filterDefinitions) error {
-	if node.Type != dom.ElementNode || !strings.EqualFold(node.Data, "filter") {
+func collectFilterDefinition(node *uinode.Node, definitions *filterDefinitions) error {
+	if node.Type != uinode.ElementNode || !strings.EqualFold(node.Data, "filter") {
 		return nil
 	}
 	id, ok := node.Attr("id")
@@ -3398,10 +3398,10 @@ func collectFilterDefinition(node *dom.Node, definitions *filterDefinitions) err
 	return nil
 }
 
-func compileFilterDefinition(node *dom.Node) ([]Filter, error) {
+func compileFilterDefinition(node *uinode.Node) ([]Filter, error) {
 	filters := make([]Filter, 0, len(node.Children))
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		compiled, err := compileFilterPrimitive(child)
@@ -3413,7 +3413,7 @@ func compileFilterDefinition(node *dom.Node) ([]Filter, error) {
 	return filters, nil
 }
 
-func compileFilterPrimitive(node *dom.Node) ([]Filter, error) {
+func compileFilterPrimitive(node *uinode.Node) ([]Filter, error) {
 	switch {
 	case strings.EqualFold(node.Data, "fegaussianblur"):
 		value, err := parseSVGNumberPair(firstAttr(node, "stdDeviation", "stddeviation"))
@@ -3440,7 +3440,7 @@ func compileFilterPrimitive(node *dom.Node) ([]Filter, error) {
 	}
 }
 
-func compileColorMatrixPrimitive(node *dom.Node) ([]Filter, error) {
+func compileColorMatrixPrimitive(node *uinode.Node) ([]Filter, error) {
 	typeValue := strings.ToLower(strings.TrimSpace(firstAttr(node, "type")))
 	if typeValue == "" || typeValue == "matrix" {
 		matrix, err := parseColorMatrixValues(firstAttr(node, "values"))
@@ -3466,10 +3466,10 @@ func compileColorMatrixPrimitive(node *dom.Node) ([]Filter, error) {
 	return nil, fmt.Errorf("unsupported feColorMatrix type %q", typeValue)
 }
 
-func compileComponentTransferPrimitive(node *dom.Node) (Filter, error) {
+func compileComponentTransferPrimitive(node *uinode.Node) (Filter, error) {
 	matrix := identityColorMatrix()
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		channel, ok := componentTransferChannel(child.Data)
@@ -3500,7 +3500,7 @@ func compileComponentTransferPrimitive(node *dom.Node) (Filter, error) {
 	return Filter{Kind: FilterColorMatrix, Matrix: matrix}, nil
 }
 
-func compileDropShadowPrimitive(node *dom.Node) (Shadow, error) {
+func compileDropShadowPrimitive(node *uinode.Node) (Shadow, error) {
 	dx, err := parseSVGNumberOrDefault(firstAttr(node, "dx"), 0)
 	if err != nil {
 		return Shadow{}, err
@@ -3594,7 +3594,7 @@ func parseColorOrDefault(input string, fallback Color) (Color, error) {
 	return parseColor(input)
 }
 
-func firstAttr(node *dom.Node, names ...string) string {
+func firstAttr(node *uinode.Node, names ...string) string {
 	for _, name := range names {
 		if value, ok := node.Attr(name); ok {
 			return value

@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestClassicScrollbarLayout(t *testing.T) {
@@ -43,7 +43,7 @@ func TestClassicScrollbarWarmReflowDoesNotAllocate(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div id="area" style="width:100px;height:80px;overflow:auto;scrollbar-width:thin"><div id="child" style="height:200px"></div></div>`)
 	cache := Cache{ReserveScrollbarSpace: true}
 	updateRetained(t, &cache, root, styles, face, nil, true)
-	dirty := []*dom.Node{retainedNode(root, "child")}
+	dirty := []*uinode.Node{retainedNode(root, "child")}
 	for range 4 {
 		updateRetained(t, &cache, root, styles, face, dirty, false)
 	}
@@ -87,7 +87,7 @@ func TestClassicScrollbarRetainedChangesAndModeSwitch(t *testing.T) {
 	child := retainedNode(root, "child")
 	for _, height := range []float64{20, 200, 80, 81, 20} {
 		styles[child].Height = style.LengthPx(height)
-		dirty := []*dom.Node{child}
+		dirty := []*uinode.Node{child}
 		got := updateRetained(t, &cache, root, styles, face, dirty, false)
 		fresh := Cache{ReserveScrollbarSpace: true}
 		want := updateRetained(t, &fresh, root, styles, face, nil, true)

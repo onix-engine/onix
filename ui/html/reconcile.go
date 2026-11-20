@@ -4,8 +4,10 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 // Identity is independent of document order. Slots identify fragments of one
@@ -16,10 +18,6 @@ const (
 	htmlRoleSurface htmlRenderRole = iota
 	htmlRoleShadow
 	htmlRoleBackgroundLayer
-	htmlRoleBorderTop
-	htmlRoleBorderRight
-	htmlRoleBorderBottom
-	htmlRoleBorderLeft
 	htmlRoleBorderList
 	htmlRoleInlineBackgroundList
 	htmlRoleDecoration
@@ -40,7 +38,7 @@ const (
 )
 
 type htmlRenderIdentity struct {
-	Node    *dom.Node
+	Node    *uinode.Node
 	Variant string
 	Context ecs.Entity
 	Role    htmlRenderRole
@@ -65,34 +63,58 @@ type htmlNodeRendering struct {
 	Generation uint64
 }
 
+type htmlPaintSpawners struct {
+	surfaces    ecs.Spawner12[scene.UITransform, scene.UIGlobalTransform, scene.Visibility, scene.Anchor, scene.UIStackIndex, scene.Parent, scene.Sprite2D, scene.Size2D, htmlChild, htmlElementSurface, scene.InputTarget2D, scene.InputState2D]
+	texts       ecs.Spawner11[scene.UITransform, scene.UIGlobalTransform, scene.Visibility, scene.Anchor, scene.UIStackIndex, scene.Parent, scene.Text2D, scene.Size2D, htmlChild, scene.InputTarget2D, scene.InputState2D]
+	initialized bool
+}
+
+func htmlPaintSpawnersFor(world *ecs.World) *htmlPaintSpawners {
+	spawners := world.FrameValue[htmlPaintSpawners, htmlPaintSpawners]()
+	if !spawners.initialized {
+		spawners.surfaces = world.NewSpawner12[scene.UITransform, scene.UIGlobalTransform, scene.Visibility, scene.Anchor, scene.UIStackIndex, scene.Parent, scene.Sprite2D, scene.Size2D, htmlChild, htmlElementSurface, scene.InputTarget2D, scene.InputState2D]()
+		spawners.texts = world.NewSpawner11[scene.UITransform, scene.UIGlobalTransform, scene.Visibility, scene.Anchor, scene.UIStackIndex, scene.Parent, scene.Text2D, scene.Size2D, htmlChild, scene.InputTarget2D, scene.InputState2D]()
+		spawners.initialized = true
+	}
+	return spawners
+}
+
 type htmlEntityWriter struct {
 	world       *ecs.World
 	state       *htmlRenderState
-	node        *dom.Node
+	node        *uinode.Node
 	group       *htmlEntityGroup
 	bundle      ecs.Bundle
 	slot        int
+	capacity    int
 	entity      ecs.Entity
 	optional    uint16
 	oldOptional uint16
 	role        htmlRenderRole
 }
 
-func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *dom.Node, role htmlRenderRole, variant string, context ecs.Entity, capacity int) htmlEntityWriter {
+func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *uinode.Node, role htmlRenderRole, variant string, context ecs.Entity, capacity int) htmlEntityWriter {
 	state := world.GetMut[htmlRenderState](owner)
-	writer := htmlEntityWriter{world: world, state: state, node: node, role: role}
+	writer := htmlEntityWriter{world: world, state: state, node: node, role: role, capacity: capacity}
 	if state.EntityGroups == nil {
 		state.EntityGroups = make(map[htmlRenderIdentity]*htmlEntityGroup)
 	}
 	key := htmlRenderIdentity{Node: node, Role: role, Variant: variant, Context: context}
 	group := state.EntityGroups[key]
 	if group == nil {
-		group = &htmlEntityGroup{}
+		if n := len(state.PaintCullGroups); n != 0 {
+			group = state.PaintCullGroups[n-1]
+			state.PaintCullGroups[n-1] = nil
+			state.PaintCullGroups = state.PaintCullGroups[:n-1]
+		} else {
+			group = &htmlEntityGroup{}
+		}
 		state.EntityGroups[key] = group
 	}
 	if active := state.EmittingBox; active != nil {
 		if role == htmlRoleControl || role == htmlRoleFocusable {
 			active.OwnsContext = true
+			active.InlineFocus = active.InlineFocus || node != active.Box.Node
 		}
 		if group.TrackedGeneration == state.RenderGeneration && group.Box != nil && group.Box != active {
 			group.Box.SharedRendering, active.SharedRendering = true, true
@@ -119,9 +141,7 @@ func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *dom.Node, role ht
 			writer.entity, writer.oldOptional = binding.Entity, binding.Optional
 		}
 	}
-	if writer.entity == 0 {
-		writer.bundle = ecs.NewBundle(capacity)
-	} else {
+	if writer.entity != 0 {
 		// These links are added after the primitive is emitted and may change when
 		// its DOM ancestor becomes or ceases to be a control/editing host.
 		world.Remove[FocusOwner](writer.entity)
@@ -169,11 +189,36 @@ func htmlOptionalBit[T any]() uint16 {
 	return 0
 }
 
+// putTextField updates authored configuration while retaining native interaction
+// state. Fields retired by a display change move back from the document here.
+func (writer *htmlEntityWriter) putTextField(value, placeholder string, maxLength int, password, editable bool) {
+	field, present := writer.world.Get[textfield.Field](writer.entity)
+	if !present {
+		field, present = writer.state.DetachedFields[writer.node]
+		delete(writer.state.DetachedFields, writer.node)
+	}
+	dirty, _ := writer.node.States.Get(element.StateDirtyValue)
+	if !present || (editable || !dirty) && field.Buffer == nil && field.Value != value {
+		field.SetValue(value)
+		field.CommittedValue = value
+	}
+	if !present {
+		field.Caret = field.Text().Runes()
+		field.Anchor = field.Caret
+	}
+	field.Placeholder, field.Password, field.MaxRunes = placeholder, password, maxLength
+	writer.putHTML(field)
+}
+
 // The generic writer uses ordinary bundles only for new entities. Updating a
 // retained primitive does not box every component in a freshly allocated bundle.
 func (writer *htmlEntityWriter) putHTML[T any](value T) {
 	writer.optional |= htmlOptionalBit[T]()
 	if writer.entity == 0 {
+		if writer.capacity != 0 {
+			writer.bundle = ecs.NewBundle(writer.capacity)
+			writer.capacity = 0
+		}
 		writer.bundle.Put(value)
 		return
 	}
@@ -186,11 +231,6 @@ func (writer *htmlEntityWriter) putHTML[T any](value T) {
 	case scene.UIGlobalTransform:
 		if world.Has[scene.UIGlobalTransform](entity) {
 			return
-		}
-	case Editable:
-		if old, ok := world.Get[Editable](entity); ok && old.Value == next.Value {
-			next.Anchor, next.Focus = old.Anchor, old.Focus
-			value = any(next).(T)
 		}
 	case scene.UIScroll:
 		if old, ok := world.Get[scene.UIScroll](entity); ok {
@@ -237,10 +277,8 @@ func (writer *htmlEntityWriter) removeMissingHTML[T any]() {
 }
 
 func (writer *htmlEntityWriter) finish() ecs.Entity {
-	fresh := writer.entity == 0
-	if fresh {
-		writer.entity = writer.world.Spawn(writer.bundle)
-		writer.state.SyncStats.Spawned++
+	if writer.entity == 0 {
+		return writer.finishSpawn(writer.world.Spawn(writer.bundle))
 	} else {
 		writer.removeMissingHTML[scene.Sprite2D]()
 		writer.removeMissingHTML[scene.SpriteLayers2D]()
@@ -260,6 +298,16 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		writer.removeMissingHTML[htmlOpacitySurface]()
 		writer.state.SyncStats.Reused++
 	}
+	return writer.bind(false)
+}
+
+func (writer *htmlEntityWriter) finishSpawn(entity ecs.Entity) ecs.Entity {
+	writer.entity = entity
+	writer.state.SyncStats.Spawned++
+	return writer.bind(true)
+}
+
+func (writer *htmlEntityWriter) bind(fresh bool) ecs.Entity {
 	binding := htmlEntityBinding{writer.entity, writer.optional}
 	if writer.slot == len(writer.group.Bindings) {
 		writer.group.Bindings = append(writer.group.Bindings, binding)
@@ -273,11 +321,17 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 		state.Textures.bind(writer.entity, nil)
 	}
 	if state.RenderNodes == nil {
-		state.RenderNodes = make(map[*dom.Node]*htmlNodeRendering)
+		state.RenderNodes = make(map[*uinode.Node]*htmlNodeRendering)
 	}
 	rendered := state.RenderNodes[writer.node]
 	if rendered == nil {
-		rendered = &htmlNodeRendering{}
+		if n := len(state.PaintCullNodes); n != 0 {
+			rendered = state.PaintCullNodes[n-1]
+			state.PaintCullNodes[n-1] = nil
+			state.PaintCullNodes = state.PaintCullNodes[:n-1]
+		} else {
+			rendered = &htmlNodeRendering{}
+		}
 		state.RenderNodes[writer.node] = rendered
 	}
 	if active := state.EmittingBox; active != nil {
@@ -301,7 +355,7 @@ func (writer *htmlEntityWriter) finish() ecs.Entity {
 	return writer.entity
 }
 
-func htmlEntityNode(world *ecs.World, entity ecs.Entity) *dom.Node {
+func htmlEntityNode(world *ecs.World, entity ecs.Entity) *uinode.Node {
 	child, _ := world.Get[htmlChild](entity)
 	return child.Node
 }
@@ -317,6 +371,7 @@ func finishHTMLReconcile(world *ecs.World, state *htmlRenderState) {
 	}
 	for node, rendered := range state.BoxRenderings {
 		if rendered.Generation != state.RenderGeneration {
+			removeHTMLPaintListBox(state, rendered)
 			delete(state.BoxRenderings, node)
 			delete(state.Textures.rasters, node)
 		}
@@ -338,6 +393,7 @@ func trimHTMLGroup(world *ecs.World, state *htmlRenderState, key htmlRenderIdent
 	}
 	for _, binding := range group.Bindings[used:] {
 		state.Textures.bind(binding.Entity, nil)
+		parkHTMLField(world, state, key, binding.Entity)
 		if world.Despawn(binding.Entity) {
 			state.SyncStats.Despawned++
 		}
@@ -346,14 +402,39 @@ func trimHTMLGroup(world *ecs.World, state *htmlRenderState, key htmlRenderIdent
 	group.Bindings = group.Bindings[:used]
 	if used == 0 {
 		if state.LocalReconcile {
-			if key.Role == htmlRoleControl {
-				delete(state.ControlSnapshots, key.Node)
-			}
 			if key.Role == htmlRoleFocusable {
 				removeHTMLFocusTarget(state, key.Node)
 			}
 		}
 		delete(state.EntityGroups, key)
+		if state.PaintCullSync && len(state.PaintCullGroups) < 128 && cap(group.Bindings) <= 8 {
+			*group = htmlEntityGroup{Bindings: group.Bindings[:0]}
+			state.PaintCullGroups = append(state.PaintCullGroups, group)
+		}
 	}
 	return used
+}
+
+// Park the field only while its logical node is still part of this document.
+func parkHTMLField(world *ecs.World, state *htmlRenderState, key htmlRenderIdentity, entity ecs.Entity) {
+	if key.Role != htmlRoleControl && key.Role != htmlRoleFocusable {
+		return
+	}
+	field, ok := world.Get[textfield.Field](entity)
+	if !ok || !key.Node.Within(state.Root) {
+		return
+	}
+	if key.Role == htmlRoleControl {
+		kind, _ := key.Node.Attr("type")
+		if kind != key.Variant || !isHTMLEditableControlNode(key.Node) {
+			return
+		}
+	} else if !element.IsEditingHost(key.Node) {
+		return
+	}
+	field.Focused, field.Selecting, field.Composition = false, false, ""
+	if state.DetachedFields == nil {
+		state.DetachedFields = make(map[*uinode.Node]textfield.Field)
+	}
+	state.DetachedFields[key.Node] = field
 }

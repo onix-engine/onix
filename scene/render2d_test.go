@@ -849,6 +849,24 @@ func TestUIVisualLayersExtractBackgroundImageAndBorder(t *testing.T) {
 	if items[1].width != 40 || items[1].height != 20 {
 		t.Fatalf("UI image size = %vx%v, want 40x20", items[1].width, items[1].height)
 	}
+	rects := UIVisualRects2D{{X: 1, Y: 2, Width: 10, Height: 12}, {X: 3, Y: 16, Width: 20, Height: 8}}
+	if err := world.Insert(entity, rects); err != nil {
+		t.Fatal(err)
+	}
+	items = collectRenderItems2D(graphics.Canvas2DContext(100, 80), world, false)
+	if len(items) != 6 {
+		t.Fatalf("repeated surface emitted %d items", len(items))
+	}
+	for i, item := range items {
+		rect := rects[i%2]
+		if item.width != rect.Width || item.height != rect.Height || item.transform[12] != rect.X || item.transform[13] != rect.Y {
+			t.Fatalf("layer %d geometry %+v", i, item)
+		}
+		if i/2 == 1 && (item.texture != texture || item.snapshot[Sprite2D]().Slice == nil || *item.snapshot[Sprite2D]().Slice != slice) {
+			t.Fatalf("selection row lost its image layer: %+v", item)
+		}
+	}
+
 }
 
 func TestUIImageAutoFitsInsideNode(t *testing.T) {

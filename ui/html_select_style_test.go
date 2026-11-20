@@ -32,7 +32,9 @@ func TestHTMLSelectInteractionPaletteUpdatesRetainedOptions(t *testing.T) {
 			Text: NewStateStyle(graphics.ColorRGBA{}).WithSelected(foreground).WithHovered(foreground).WithPressed(foreground),
 		})
 		for _, state := range []ControlState{{}, {Selected: true}, {Hovered: true}, {Pressed: true}, {Selected: true, Disabled: true}} {
-			SetControlSelected(world, item, state.Selected)
+			if !htmlui.SetControlOptionSelected(world, control, 1, state.Selected) {
+				t.Fatal("failed to set option selectedness")
+			}
 			SetControlDisabled(world, item, state.Disabled)
 			_ = world.Insert(item, scene.InputState2D{Hovered: state.Hovered, Pressed: state.Pressed})
 			// Sync visuals directly to preserve the interaction state under test.

@@ -100,7 +100,7 @@ func setupViewSSAO3D(view *renderView3D, settings SSAOSettings) error {
 	width := max(1, int(math.Ceil(float64(view.frame.Viewport.Width)*float64(settings.ResolutionScale))))
 	height := max(1, int(math.Ceil(float64(view.frame.Viewport.Height)*float64(settings.ResolutionScale))))
 	if view.occlusion == nil {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, Depth: true})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, ColorFormat: render.RenderTargetDepth, Depth: true})
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func renderViewSSAO3D(canvas *graphics.Canvas2D, state *World, view *renderView3
 	if err := render3DView(canvas, state, pass); err != nil {
 		return err
 	}
-	texture, err := pass.frame.Target.ColorTextureFor(canvas.Device())
+	texture, err := pass.frame.Target.DepthTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}

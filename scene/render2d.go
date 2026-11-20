@@ -1311,6 +1311,8 @@ type renderItem2D struct {
 	width      float32
 	height     float32
 	sequence   uint32
+	localOrder uint32
+	paintSlot  uint32
 	part       renderPart2D
 	depth      float32
 	outlined   bool
@@ -1318,6 +1320,11 @@ type renderItem2D struct {
 	kind       renderItemKind2D
 	ui         bool
 }
+
+// Entity returns the ECS entity that produced this extracted item. It lets
+// retained UI producers inspect extraction counts without exposing the item
+// representation or its snapshot payloads.
+func (item *renderItem2D) Entity() ecs.Entity { return item.entity }
 
 // snapshot reads the active payload without allocating or retaining ECS storage.
 func (item renderItem2D) snapshot[T any]() *T { value, _ := item.content.(*T); return value }
@@ -1979,31 +1986,7 @@ func (t *Text2D) buildPrelayout(withGlyphs bool) bool {
 		t.outlineGlyphs = nil
 	}
 	if withGlyphs {
-		logicalScale := float32(rasterScale)
-		byteIndex := 0
-		for _, positioned := range t.Prelayout.Glyphs {
-			currentByte := byteIndex
-			if byteIndex < len(t.Value) {
-				_, size := utf8.DecodeRuneInString(t.Value[byteIndex:])
-				byteIndex += size
-			}
-			raster, reference := t.cache.GlyphWithReference(positioned.Rune)
-			logical := logicalTextGlyph(raster, rasterScale)
-			if !logical.Visible() {
-				continue
-			}
-			if validOutlineWidth(t.OutlineWidth) {
-				t.outlineGlyphs = append(t.outlineGlyphs, t.cache.OutlineWithReference(positioned.Rune, t.OutlineWidth*logicalScale))
-			}
-			t.glyphs = append(t.glyphs, textGlyph2D{
-				raster:        reference,
-				logicalWidth:  float32(raster.Width) / logicalScale,
-				logicalHeight: float32(raster.Height) / logicalScale,
-				x:             positioned.PenX - float32(t.Prelayout.OriginX) + logical.OffsetX,
-				y:             float32(positioned.Y-t.Prelayout.OriginY) + logical.OffsetY,
-				byteIndex:     int32(currentByte),
-			})
-		}
+		t.glyphs, t.outlineGlyphs = appendPrelayoutGlyphs(t.glyphs, t.outlineGlyphs, t.Prelayout, t.cache, rasterScale, t.Value, t.OutlineWidth)
 		t.cache.FlushUploads()
 	}
 	t.glyphlessLayout = !withGlyphs
@@ -2014,6 +1997,32 @@ func (t *Text2D) buildPrelayout(withGlyphs bool) bool {
 	t.lastPrelayoutRevision = t.Prelayout.Revision
 	t.lastOutlineWidth = t.OutlineWidth
 	return true
+}
+
+func appendPrelayoutGlyphs(glyphs []textGlyph2D, outlines []onixtext.GlyphRef, layout TextPrelayout2D, cache *onixtext.GlyphCache, rasterScale float64, value string, outlineWidth float32) ([]textGlyph2D, []onixtext.GlyphRef) {
+	logicalScale := float32(rasterScale)
+	byteIndex := 0
+	for _, positioned := range layout.Glyphs {
+		currentByte := byteIndex
+		if byteIndex < len(value) {
+			_, size := utf8.DecodeRuneInString(value[byteIndex:])
+			byteIndex += size
+		}
+		raster, reference := cache.GlyphWithReference(positioned.Rune)
+		logical := logicalTextGlyph(raster, rasterScale)
+		if !logical.Visible() {
+			continue
+		}
+		if validOutlineWidth(outlineWidth) {
+			outlines = append(outlines, cache.OutlineWithReference(positioned.Rune, outlineWidth*logicalScale))
+		}
+		glyphs = append(glyphs, textGlyph2D{
+			raster: reference, logicalWidth: float32(raster.Width) / logicalScale, logicalHeight: float32(raster.Height) / logicalScale,
+			x: positioned.PenX - float32(layout.OriginX) + logical.OffsetX,
+			y: float32(positioned.Y-layout.OriginY) + logical.OffsetY, byteIndex: int32(currentByte),
+		})
+	}
+	return glyphs, outlines
 }
 
 type textWrapRange2D struct {
@@ -2837,18 +2846,19 @@ func shapeMaterialKey() renderMaterialKey {
 
 func (item renderItem2D) renderSortKey() renderSortKey2D {
 	return renderSortKey2D{
-		scene:     item.scene.Order,
-		group:     item.group,
-		ui:        item.ui,
-		sortIndex: item.sortIndex,
-		depth:     item.depth,
-		order:     item.order,
-		sequence:  item.sequence,
+		scene:      item.scene.Order,
+		group:      item.group,
+		ui:         item.ui,
+		sortIndex:  item.sortIndex,
+		depth:      item.depth,
+		order:      item.order,
+		localOrder: item.localOrder,
+		sequence:   item.sequence,
 	}
 }
 
 func (item *renderItem2D) renderPhaseKeys() (renderSortKey2D, renderMaterialKey) {
-	return renderSortKey2D{scene: item.scene.Order, group: item.group, ui: item.ui, sortIndex: item.sortIndex, depth: item.depth, order: item.order, sequence: item.sequence}, item.material
+	return item.renderSortKey(), item.material
 }
 
 func (item renderItem2D) renderMaterial() renderMaterialKey {

@@ -4,17 +4,17 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLKeyedSlotPreservesStaticChildrenAndReleasesReplacedNodes(t *testing.T) {
 	world := ecs.NewWorld()
 	spawner := world.NewSpawner1[Surface]()
 	page := spawner.Spawn(New(""))
-	parent := dom.NewElement("ul")
-	before, after := dom.NewElement("header"), dom.NewElement("footer")
+	parent := uinode.NewElement("ul")
+	before, after := uinode.NewElement("header"), uinode.NewElement("footer")
 	before.Parent, after.Parent = parent, parent
-	parent.Children = []*dom.Node{before, after}
+	parent.Children = []*uinode.Node{before, after}
 	list := &htmlComponentKeyedList{}
 	reconcileHTMLComponentKeyedList(world, page, parent, list, []VNode{
 		{Key: 1, Tag: "li", Children: []VNode{TextVNode(10, "span", "nested")}},
@@ -50,10 +50,10 @@ func BenchmarkRefactorHTMLKeyedList(b *testing.B) {
 			world := ecs.NewWorld()
 			owner := world.NewSpawner1[Surface]()
 			page := owner.Spawn(New(""))
-			parent := dom.NewElement("ul")
+			parent := uinode.NewElement("ul")
 			keyed := &htmlComponentKeyedList{}
 			children := &htmlComponentVNodeChildren{}
-			states := make(map[*dom.Node]*htmlComponentVNodeChildren)
+			states := make(map[*uinode.Node]*htmlComponentVNodeChildren)
 			var next [2][32]VNode
 			for index := range next[0] {
 				next[0][index] = TextVNode(uint64(index), "li", "item")
@@ -81,8 +81,8 @@ func TestHTMLKeyedBatchRemovalPreservesStaticChildren(t *testing.T) {
 	world := ecs.NewWorld()
 	owners := world.NewSpawner1[Surface]()
 	owner := owners.Spawn(New(""))
-	parent := dom.NewElement("ul")
-	before, after := dom.NewElement("header"), dom.NewElement("footer")
+	parent := uinode.NewElement("ul")
+	before, after := uinode.NewElement("header"), uinode.NewElement("footer")
 	parent.AppendChild(before)
 	parent.AppendChild(after)
 	list := &htmlComponentKeyedList{}

@@ -3,15 +3,17 @@ package html
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLAttributeCloneIsolation(t *testing.T) {
-	source, err := dom.Parse(`<div class=original><input checked type=checkbox></div>`)
+	source, err := parse.Parse(`<div class=original><input checked type=checkbox></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	left, right := cloneHTMLNode(source, nil), cloneHTMLNode(source, nil)
+	var nodes uinode.Arena
+	left, right := nodes.Clone(source), nodes.Clone(source)
 	source.Children[0].SetAttr("class", "source")
 	left.Children[0].SetAttr("class", "left")
 	left.Children[0].Children[0].RemoveAttr("checked")
@@ -20,6 +22,24 @@ func TestHTMLAttributeCloneIsolation(t *testing.T) {
 	}
 	if _, checked := right.Children[0].Children[0].Attr("checked"); !checked {
 		t.Fatal("nested clone attributes lost isolation")
+	}
+}
+
+func TestHTMLTemplateClonePreservesForeignNamespaces(t *testing.T) {
+	source, err := parse.Parse(`<svg><foreignObject><div></div></foreignObject></svg><math><mi>x</mi></math>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nodes uinode.Arena
+	doc := nodes.Clone(source)
+	svg, math := doc.Children[0], doc.Children[1]
+	foreign := svg.Children[0]
+	if svg.Namespace != uinode.SVG || foreign.Namespace != uinode.SVG ||
+		foreign.Children[0].Namespace != uinode.HTML || math.Namespace != uinode.MathML {
+		t.Fatalf("template clone lost namespaces: %v %v %v %v", svg.Namespace, foreign.Namespace, foreign.Children[0].Namespace, math.Namespace)
+	}
+	if svg == source.Children[0] || svg.Parent != doc || foreign.Parent != svg {
+		t.Fatal("clone shared nodes or retained source parents")
 	}
 }
 

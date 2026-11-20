@@ -13,7 +13,7 @@ func TestHTMLControlTextRefreshOnlyMarksChangedText(t *testing.T) {
 	world := ecs.NewWorld()
 	controls := world.NewSpawner1[htmlui.Control]()
 	texts := world.NewSpawner2[htmlui.ControlText, scene.Text2D]()
-	control := htmlui.Control{Tag: "input", Type: "checkbox", Checked: true}
+	control := htmlui.Control{Tag: "select", Options: []htmlui.SelectOption{{Label: "First"}}}
 	owner := controls.Spawn(control)
 	text := texts.Spawn(htmlui.ControlText{Control: owner}, scene.NewText2D(""))
 	other := controls.Spawn(control)
@@ -28,7 +28,7 @@ func TestHTMLControlTextRefreshOnlyMarksChangedText(t *testing.T) {
 	changes := world.ChangesSince(baseline)
 	count := 0
 	for entity, access := range world.Query[scene.Text2D](changes.Changed[scene.Text2D]()).All {
-		if entity != text || access.Ref().Value != "✓" {
+		if entity != text || access.Ref().Value != "First" {
 			t.Fatal("text refresh changed an unrelated text entity")
 		}
 		count++
@@ -55,7 +55,7 @@ func BenchmarkHTMLResetControlTexts(b *testing.B) {
 			controls := world.NewSpawner1[htmlui.Control]()
 			texts := world.NewSpawner2[htmlui.ControlText, scene.Text2D]()
 			for range count {
-				entity := controls.Spawn(htmlui.Control{Owner: owner, Tag: "input", Type: "checkbox", Checked: true})
+				entity := controls.Spawn(htmlui.Control{Owner: owner, Tag: "select", Options: []htmlui.SelectOption{{Label: "First"}}})
 				texts.Spawn(htmlui.ControlText{Control: entity}, scene.NewText2D(""))
 			}
 			syncHTMLControlsAfterReset(world, owner)

@@ -164,7 +164,7 @@ fn pbr_environment(direction: vec3<f32>, level: f32) -> vec3<f32> {
     let b=pbr_atlas(uv,ceil(level));
     return mix(a.rgb*a.a,b.rgb*b.a,fract(level))*16.0;
 }
-fn pbr_shadow_map(index:u32,position: vec3<f32>, normal: vec3<f32>) -> f32 {
+fn pbr_shadow_map(index:u32,position:vec3<f32>,normal:vec3<f32>,receiver:mat4x3<f32>) -> f32 {
     let params=pbr.shadowParams[index];
     let clip = pbr.shadowMatrices[index]*vec4<f32>(position+normal*params.y,1.0);
     if (clip.w<=0.0) { return 1.0; }
@@ -177,14 +177,19 @@ fn pbr_shadow_map(index:u32,position: vec3<f32>, normal: vec3<f32>) -> f32 {
     let tileMin=vec2<i32>(round(origin*vec2<f32>(dims)));
     let tileMax=tileMin+vec2<i32>(round(rect.zw*vec2<f32>(dims)))-vec2<i32>(1);
     // Work in texel-center coordinates. Interpolate comparison results, never
-    // the packed RGB depth: interpolating depth creates false occluders.
+    // depth samples: interpolating depth creates false occluders.
     let texel=uv*vec2<f32>(dims)-0.5;
     let base=floor(texel);
     let fraction=texel-base;
     // Match the receiver plane at each tap to avoid striped self-shadowing on
     // sloped surfaces. Degenerate projections retain the configured bias.
-    let dx=dpdx(vec3<f32>(texel,ndc.z));
-    let dy=dpdy(vec3<f32>(texel,ndc.z));
+    // Project the world-space receiver tangents into this cascade. The
+    // common 1/clip.w scale cancels when solving for the depth gradient.
+    let cx=pbr.shadowMatrices[index]*vec4<f32>(receiver[0]+params.y*receiver[2],0.0);
+    let cy=pbr.shadowMatrices[index]*vec4<f32>(receiver[1]+params.y*receiver[3],0.0);
+    let scale=vec3<f32>(vec2<f32>(dims)*rect.zw*vec2<f32>(0.5,select(0.5,-0.5,SHADOW_FLIP_Y)),1.0);
+    let dx=(cx.xyz-ndc*cx.w)*scale;
+    let dy=(cy.xyz-ndc*cy.w)*scale;
     let determinant=dx.x*dy.y-dx.y*dy.x;
     var gradient=vec2<f32>(0.0);
     if (abs(determinant)>0.00000001) {
@@ -197,26 +202,25 @@ fn pbr_shadow_map(index:u32,position: vec3<f32>, normal: vec3<f32>) -> f32 {
     var visibility=0.0;
     for(var y=0;y<4;y++) { for(var x=0;x<4;x++) {
         let pixel=clamp(vec2<i32>(base)+vec2<i32>(x-1,y-1),tileMin,tileMax);
-        let packed=textureLoad(shadowTex,pixel,0).rgb;
-        let depth=dot(packed,vec3<f32>(65536.0,256.0,1.0))*255.0/16777215.0;
+        let depth=textureLoad(shadowTex,pixel,0).r;
         let receiverDepth=ndc.z+dot(gradient,vec2<f32>(pixel)-texel)+params.x;
         visibility+=weightsX[x]*weightsY[y]*select(0.0,1.0,receiverDepth>=depth);
     }}
     return visibility/9.0;
 }
-fn pbr_light_shadow(light:u32,position:vec3<f32>,normal:vec3<f32>)->f32 {
+fn pbr_light_shadow(light:u32,position:vec3<f32>,normal:vec3<f32>,receiver:mat4x3<f32>)->f32 {
     let mapping=pbr.lightShadows[light];
     if (mapping.x<0.5) { return 1.0; }
     let first=u32(mapping.x)-1u;
     let count=u32(mapping.y);
-    if (count==1u) { return pbr_shadow_map(first,position,normal); }
+    if (count==1u) { return pbr_shadow_map(first,position,normal,receiver); }
     if (pbr.lightDirections[light].w==2.0) {
         let delta=position-pbr.lightPosition[light].xyz;
         let axis=abs(delta);
         var face=select(1u,0u,delta.x>=0.0);
         if (axis.y>axis.x && axis.y>=axis.z) { face=select(3u,2u,delta.y>=0.0); }
         else if (axis.z>axis.x && axis.z>axis.y) { face=select(5u,4u,delta.z>=0.0); }
-        return pbr_shadow_map(first+face,position,normal);
+        return pbr_shadow_map(first+face,position,normal,receiver);
     }
     let distance=dot(position-pbr.cameraPosition.xyz,pbr.cameraForward.xyz);
     if (distance<pbr.shadowParams[first].z) { return 1.0; }
@@ -225,12 +229,12 @@ fn pbr_light_shadow(light:u32,position:vec3<f32>,normal:vec3<f32>)->f32 {
         let index=first+cascade;
         let params=pbr.shadowParams[index];
         if (distance<=params.w) {
-            let visibility=pbr_shadow_map(index,position,normal);
+            let visibility=pbr_shadow_map(index,position,normal,receiver);
             let blendWidth=(params.w-params.z)*mapping.z;
             if (blendWidth<=0.0) { return visibility; }
             let blend=smoothstep(params.w-blendWidth,params.w,distance);
             var next=1.0;
-            if (cascade+1u<count && blend>0.0) { next=pbr_shadow_map(index+1u,position,normal); }
+            if (cascade+1u<count && blend>0.0) { next=pbr_shadow_map(index+1u,position,normal,receiver); }
             return mix(visibility,next,blend);
         }
     }
@@ -308,9 +312,8 @@ fn pbr_screen_occlusion(position:vec3<f32>,normal:vec3<f32>)->f32 {
         let sampleUV=uv+SSAO_DISK[sampleIndex]*diskScale*extent;
         if (any(sampleUV<vec2<f32>(0.0)) || any(sampleUV>=vec2<f32>(1.0))) { continue; }
         let pixel=vec2<i32>(sampleUV*dims);
-        let packed=textureLoad(screenDepthTex,pixel,0);
-        if (packed.a<0.5) { continue; }
-        let depth=dot(packed.rgb,vec3<f32>(65536.0,256.0,1.0))*255.0/16777215.0;
+        let depth=textureLoad(screenDepthTex,pixel,0).r;
+        if (depth<=0.0) { continue; }
         // Reconstruct at the loaded texel's center, never at its random UV.
         let center=(vec2<f32>(pixel)+0.5)/dims;
         let ndc=vec3<f32>(center.x*2.0-1.0,select(center.y*2.0-1.0,1.0-center.y*2.0,SHADOW_FLIP_Y),depth);
@@ -401,14 +404,13 @@ fn pbr_scene_color(uv:vec2<f32>)->vec4<f32> {
     let d=pbr_decode_radiance(textureLoad(shadowTex,clamp(base+vec2<i32>(1),vec2<i32>(0),last),0));
     return mix(mix(a,b,weight.x),mix(c,d,weight.x),weight.y);
 }
-// Returns camera-forward distance and validity. Load packed depth at texel
+// Returns camera-forward distance and validity. Load depth at texel
 // centers, with canonical Y independent of the backend's raster convention.
 fn pbr_scene_depth(uv:vec2<f32>)->vec2<f32> {
     let dims=vec2<i32>(textureDimensions(screenDepthTex));
     let pixel=clamp(vec2<i32>(uv*vec2<f32>(dims)),vec2<i32>(0),dims-vec2<i32>(1));
-    let packed=textureLoad(screenDepthTex,pixel,0);
-    if (packed.a<0.5) { return vec2<f32>(0.0); }
-    let depth=dot(packed.rgb,vec3<f32>(65536.0,256.0,1.0))*255.0/16777215.0;
+    let depth=textureLoad(screenDepthTex,pixel,0).r;
+    if (depth<=0.0) { return vec2<f32>(0.0); }
     let center=(vec2<f32>(pixel)+0.5)/vec2<f32>(dims);
     let world=pbr.occlusionInverseProjection*vec4<f32>(center.x*2.0-1.0,select(center.y*2.0-1.0,1.0-center.y*2.0,SHADOW_FLIP_Y),depth,1.0);
     if (abs(world.w)<0.00000001) { return vec2<f32>(0.0); }
@@ -731,6 +733,8 @@ fn fxaa(uvIn:vec2<f32>)->vec4<f32> {
     var n=normalize(input.normal);
     if ((flags&512u)!=0u && !front) { n=-n; }
     let shadowNormal=n;
+    // Evaluate screen derivatives before divergent light and cascade selection.
+    let receiver=mat4x3<f32>(dpdx(input.worldPosition),dpdy(input.worldPosition),dpdx(n),dpdy(n));
     var ao=1.0;
     if ((flags&16u)!=0u) { ao=mix(1.0,textureSample(occlusionTex,occlusionSampler,input.uv).r,input.custom0.y); }
     if (pbr.renderParams.y!=4.0 && (flags&32768u)==0u && (flags&3u)!=2u) { ao*=pbr_screen_occlusion(input.worldPosition,shadowNormal); }
@@ -826,7 +830,7 @@ fn fxaa(uvIn:vec2<f32>)->vec4<f32> {
     }
     if (pbr.lightMeta.x==0.0) {
         var shadow=1.0;
-        if ((flags&4096u)==0u) { shadow=pbr_light_shadow(0u,input.worldPosition,shadowNormal); }
+        if ((flags&4096u)==0u) { shadow=pbr_light_shadow(0u,input.worldPosition,shadowNormal,receiver); }
         lit+=pbr_brdf(surface,v,normalize(-pbr.lightDirection.xyz))*pbr.directionalLight.rgb*shadow;
     }
     for(var index=0u;index<16u;index++) {
@@ -865,7 +869,7 @@ fn fxaa(uvIn:vec2<f32>)->vec4<f32> {
                 }
             }
         }
-        if ((flags&4096u)==0u) { attenuation*=pbr_light_shadow(index,input.worldPosition,shadowNormal); }
+        if ((flags&4096u)==0u) { attenuation*=pbr_light_shadow(index,input.worldPosition,shadowNormal,receiver); }
         lit+=pbr_brdf(surface,v,l)*pbr.lightColors[index].rgb*attenuation;
     }
     return pbr_surface_output(lit,base.a,input.worldPosition);

@@ -345,3 +345,271 @@ func (s *Spawner8[A, B, C, D, E, F, G, H]) Spawn(a A, b B, c C, d D, e E, f F, g
 	s.plan.finish(entity, row)
 	return entity
 }
+
+// Spawner9 binds component columns once for repeated allocation-free creation.
+type Spawner9[A, B, C, D, E, F, G, H, I any] struct {
+	plan spawnPlan
+	a    *typedColumn[A]
+	b    *typedColumn[B]
+	c    *typedColumn[C]
+	d    *typedColumn[D]
+	e    *typedColumn[E]
+	f    *typedColumn[F]
+	g    *typedColumn[G]
+	h    *typedColumn[H]
+	i    *typedColumn[I]
+}
+
+// Reserve preallocates the archetype and world metadata for capacity entities.
+func (s *Spawner9[A, B, C, D, E, F, G, H, I]) Reserve(capacity int) {
+	if s != nil {
+		s.plan.reserve(capacity)
+	}
+}
+
+func (world *World) NewSpawner9[A, B, C, D, E, F, G, H, I any]() Spawner9[A, B, C, D, E, F, G, H, I] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
+	hID := world.registerComponent[H]()
+	iID := world.registerComponent[I]()
+	ids := [9]componentID{aID, bID, cID, dID, eID, fID, gID, hID, iID}
+	plan := newSpawnPlan(world, ids[:])
+	return Spawner9[A, B, C, D, E, F, G, H, I]{plan: plan,
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
+		h: plan.archetype.componentColumn[H](hID),
+		i: plan.archetype.componentColumn[I](iID),
+	}
+}
+
+func (s *Spawner9[A, B, C, D, E, F, G, H, I]) Spawn(a A, b B, c C, d D, e E, f F, g G, h H, i I) Entity {
+	entity, row, tick := s.plan.begin()
+	s.a.append(a, tick)
+	s.b.append(b, tick)
+	s.c.append(c, tick)
+	s.d.append(d, tick)
+	s.e.append(e, tick)
+	s.f.append(f, tick)
+	s.g.append(g, tick)
+	s.h.append(h, tick)
+	s.i.append(i, tick)
+	s.plan.finish(entity, row)
+	return entity
+}
+
+// Spawner10 binds component columns once for repeated allocation-free creation.
+type Spawner10[A, B, C, D, E, F, G, H, I, J any] struct {
+	plan spawnPlan
+	a    *typedColumn[A]
+	b    *typedColumn[B]
+	c    *typedColumn[C]
+	d    *typedColumn[D]
+	e    *typedColumn[E]
+	f    *typedColumn[F]
+	g    *typedColumn[G]
+	h    *typedColumn[H]
+	i    *typedColumn[I]
+	j    *typedColumn[J]
+}
+
+// Reserve preallocates the archetype and world metadata for capacity entities.
+func (s *Spawner10[A, B, C, D, E, F, G, H, I, J]) Reserve(capacity int) {
+	if s != nil {
+		s.plan.reserve(capacity)
+	}
+}
+
+func (world *World) NewSpawner10[A, B, C, D, E, F, G, H, I, J any]() Spawner10[A, B, C, D, E, F, G, H, I, J] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
+	hID := world.registerComponent[H]()
+	iID := world.registerComponent[I]()
+	jID := world.registerComponent[J]()
+	ids := [10]componentID{aID, bID, cID, dID, eID, fID, gID, hID, iID, jID}
+	plan := newSpawnPlan(world, ids[:])
+	return Spawner10[A, B, C, D, E, F, G, H, I, J]{plan: plan,
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
+		h: plan.archetype.componentColumn[H](hID),
+		i: plan.archetype.componentColumn[I](iID),
+		j: plan.archetype.componentColumn[J](jID),
+	}
+}
+
+func (s *Spawner10[A, B, C, D, E, F, G, H, I, J]) Spawn(a A, b B, c C, d D, e E, f F, g G, h H, i I, j J) Entity {
+	entity, row, tick := s.plan.begin()
+	s.a.append(a, tick)
+	s.b.append(b, tick)
+	s.c.append(c, tick)
+	s.d.append(d, tick)
+	s.e.append(e, tick)
+	s.f.append(f, tick)
+	s.g.append(g, tick)
+	s.h.append(h, tick)
+	s.i.append(i, tick)
+	s.j.append(j, tick)
+	s.plan.finish(entity, row)
+	return entity
+}
+
+// Spawner11 binds component columns once for repeated allocation-free creation.
+type Spawner11[A, B, C, D, E, F, G, H, I, J, K any] struct {
+	plan spawnPlan
+	a    *typedColumn[A]
+	b    *typedColumn[B]
+	c    *typedColumn[C]
+	d    *typedColumn[D]
+	e    *typedColumn[E]
+	f    *typedColumn[F]
+	g    *typedColumn[G]
+	h    *typedColumn[H]
+	i    *typedColumn[I]
+	j    *typedColumn[J]
+	k    *typedColumn[K]
+}
+
+// Reserve preallocates the archetype and world metadata for capacity entities.
+func (s *Spawner11[A, B, C, D, E, F, G, H, I, J, K]) Reserve(capacity int) {
+	if s != nil {
+		s.plan.reserve(capacity)
+	}
+}
+
+func (world *World) NewSpawner11[A, B, C, D, E, F, G, H, I, J, K any]() Spawner11[A, B, C, D, E, F, G, H, I, J, K] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
+	hID := world.registerComponent[H]()
+	iID := world.registerComponent[I]()
+	jID := world.registerComponent[J]()
+	kID := world.registerComponent[K]()
+	ids := [11]componentID{aID, bID, cID, dID, eID, fID, gID, hID, iID, jID, kID}
+	plan := newSpawnPlan(world, ids[:])
+	return Spawner11[A, B, C, D, E, F, G, H, I, J, K]{plan: plan,
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
+		h: plan.archetype.componentColumn[H](hID),
+		i: plan.archetype.componentColumn[I](iID),
+		j: plan.archetype.componentColumn[J](jID),
+		k: plan.archetype.componentColumn[K](kID),
+	}
+}
+
+func (s *Spawner11[A, B, C, D, E, F, G, H, I, J, K]) Spawn(a A, b B, c C, d D, e E, f F, g G, h H, i I, j J, k K) Entity {
+	entity, row, tick := s.plan.begin()
+	s.a.append(a, tick)
+	s.b.append(b, tick)
+	s.c.append(c, tick)
+	s.d.append(d, tick)
+	s.e.append(e, tick)
+	s.f.append(f, tick)
+	s.g.append(g, tick)
+	s.h.append(h, tick)
+	s.i.append(i, tick)
+	s.j.append(j, tick)
+	s.k.append(k, tick)
+	s.plan.finish(entity, row)
+	return entity
+}
+
+// Spawner12 binds component columns once for repeated allocation-free creation.
+type Spawner12[A, B, C, D, E, F, G, H, I, J, K, L any] struct {
+	plan spawnPlan
+	a    *typedColumn[A]
+	b    *typedColumn[B]
+	c    *typedColumn[C]
+	d    *typedColumn[D]
+	e    *typedColumn[E]
+	f    *typedColumn[F]
+	g    *typedColumn[G]
+	h    *typedColumn[H]
+	i    *typedColumn[I]
+	j    *typedColumn[J]
+	k    *typedColumn[K]
+	l    *typedColumn[L]
+}
+
+// Reserve preallocates the archetype and world metadata for capacity entities.
+func (s *Spawner12[A, B, C, D, E, F, G, H, I, J, K, L]) Reserve(capacity int) {
+	if s != nil {
+		s.plan.reserve(capacity)
+	}
+}
+
+func (world *World) NewSpawner12[A, B, C, D, E, F, G, H, I, J, K, L any]() Spawner12[A, B, C, D, E, F, G, H, I, J, K, L] {
+	aID := world.registerComponent[A]()
+	bID := world.registerComponent[B]()
+	cID := world.registerComponent[C]()
+	dID := world.registerComponent[D]()
+	eID := world.registerComponent[E]()
+	fID := world.registerComponent[F]()
+	gID := world.registerComponent[G]()
+	hID := world.registerComponent[H]()
+	iID := world.registerComponent[I]()
+	jID := world.registerComponent[J]()
+	kID := world.registerComponent[K]()
+	lID := world.registerComponent[L]()
+	ids := [12]componentID{aID, bID, cID, dID, eID, fID, gID, hID, iID, jID, kID, lID}
+	plan := newSpawnPlan(world, ids[:])
+	return Spawner12[A, B, C, D, E, F, G, H, I, J, K, L]{plan: plan,
+		a: plan.archetype.componentColumn[A](aID),
+		b: plan.archetype.componentColumn[B](bID),
+		c: plan.archetype.componentColumn[C](cID),
+		d: plan.archetype.componentColumn[D](dID),
+		e: plan.archetype.componentColumn[E](eID),
+		f: plan.archetype.componentColumn[F](fID),
+		g: plan.archetype.componentColumn[G](gID),
+		h: plan.archetype.componentColumn[H](hID),
+		i: plan.archetype.componentColumn[I](iID),
+		j: plan.archetype.componentColumn[J](jID),
+		k: plan.archetype.componentColumn[K](kID),
+		l: plan.archetype.componentColumn[L](lID),
+	}
+}
+
+func (s *Spawner12[A, B, C, D, E, F, G, H, I, J, K, L]) Spawn(a A, b B, c C, d D, e E, f F, g G, h H, i I, j J, k K, l L) Entity {
+	entity, row, tick := s.plan.begin()
+	s.a.append(a, tick)
+	s.b.append(b, tick)
+	s.c.append(c, tick)
+	s.d.append(d, tick)
+	s.e.append(e, tick)
+	s.f.append(f, tick)
+	s.g.append(g, tick)
+	s.h.append(h, tick)
+	s.i.append(i, tick)
+	s.j.append(j, tick)
+	s.k.append(k, tick)
+	s.l.append(l, tick)
+	s.plan.finish(entity, row)
+	return entity
+}

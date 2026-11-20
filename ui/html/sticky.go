@@ -1,12 +1,12 @@
 package html
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Sticky offsets stay separate from layout geometry. Each sticky box is solved
@@ -36,7 +36,7 @@ func trackHTMLStickyBox(state *htmlRenderState, box *layout.Box) {
 		return
 	}
 	if state.StickyBindings == nil {
-		state.StickyBindings = make(map[*dom.Node]*htmlStickyBinding)
+		state.StickyBindings = make(map[*uinode.Node]*htmlStickyBinding)
 	}
 	if state.StickyBindings[box.Node] == nil {
 		state.StickyBindings[box.Node] = &htmlStickyBinding{}

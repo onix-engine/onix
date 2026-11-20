@@ -89,6 +89,9 @@ func (a *ModuleEditor) clickElementPicker(event *htmlui.PointerEvent) {
 	if event.Handled {
 		return
 	}
+	if id, ok := event.OriginalTarget.Attribute("id"); ok && a.fields[id].Kind == "content-element-remove" {
+		return
+	}
 	a.action(a.elementPicker.Trigger)
 	event.Consume()
 }

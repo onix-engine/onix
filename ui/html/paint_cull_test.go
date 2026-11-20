@@ -8,6 +8,7 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 func htmlCullRole(world *ecs.World, owner ecs.Entity, node Node, role htmlRenderRole) ecs.Entity {
@@ -90,8 +91,8 @@ func TestHTMLPaintCullSurfacesAndScrollBuffer(t *testing.T) {
 		t.Fatalf("bottom border was not restored: %v", pixel)
 	}
 
-	if state.SyncStats.PaintCullBoxes > 401 || state.SyncStats.Layouts != 0 || state.SyncStats.Styled != 0 || state.Boxes != root {
-		t.Fatalf("scroll visited unrelated boxes or ran layout: %+v", state.SyncStats)
+	if state.SyncStats.PaintCullBoxes > 40 || state.SyncStats.Layouts != 0 || state.SyncStats.Styled != 0 || state.Boxes != root {
+		t.Fatalf("scroll visited boxes outside the old and new windows or ran layout: %+v", state.SyncStats)
 	}
 	if htmlCullRole(world, owner, scrollNode, htmlRoleSurface) != background {
 		t.Fatal("scroll moved or retired its own background")
@@ -222,8 +223,8 @@ func TestHTMLPaintCullRetainsControlsAndTransformedContent(t *testing.T) {
 		t.Fatal("offscreen control or transformed paint was discarded")
 	}
 	SetControlValue(world, control, "typed")
-	live := world.GetMut[Control](control)
-	live.SelectionAnchor, live.SelectionFocus = 1, 3
+	live := world.GetMut[textfield.Field](control)
+	live.Anchor, live.Caret = 1, 3
 	if htmlCullRole(world, owner, nested, htmlRoleSurface) != 0 {
 		t.Fatal("initial dynamic subtree was not culled")
 	}
@@ -234,8 +235,8 @@ func TestHTMLPaintCullRetainsControlsAndTransformedContent(t *testing.T) {
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -1000)
 	htmlCullScroll(t, world, owner, "scroll", 0, 0)
-	live = world.GetMut[Control](control)
-	if live == nil || htmlCullRole(world, owner, field, htmlRoleControl) != control || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
+	live = world.GetMut[textfield.Field](control)
+	if live == nil || htmlCullRole(world, owner, field, htmlRoleControl) != control || live.Value != "typed" || live.Anchor != 1 || live.Caret != 3 {
 		t.Fatal("scroll discarded live control state")
 	}
 }
@@ -283,6 +284,37 @@ func TestHTMLPaintCullResizeRefreshesDescendants(t *testing.T) {
 	incrementalSync(t, world)
 	if htmlCullRole(world, owner, tail, htmlRoleSurface) != 0 {
 		t.Fatal("shrinking the viewport did not cull unchanged descendants")
+	}
+}
+
+func TestHTMLPaintCullAllocatesClipOnDemand(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div id="host" style="height:80px"><div style="height:600px"></div><div id="tail" style="height:20px;background:red"></div></div>`)
+	world.GetMut[Surface](owner).ReserveScrollbarSpace = true
+	incrementalSync(t, world)
+	host := incrementalHTMLNode(t, world, owner, "host")
+	tail := incrementalHTMLNode(t, world, owner, "tail")
+	state := world.GetRef[htmlRenderState](owner)
+	if state.BoxRenderings[host.node].clipWindow != nil || state.BoxRenderings[tail.node].clipWindow != nil {
+		t.Fatal("unclipped boxes allocated a clip snapshot")
+	}
+	host.SetAttribute("style", "height:80px;overflow:auto")
+	incrementalSync(t, world)
+	state = world.GetRef[htmlRenderState](owner)
+	rendered := state.BoxRenderings[host.node]
+	snapshot := rendered.clipWindow
+	if snapshot == nil || !snapshot.clipped || snapshot.scrollport != rendered.Box.ScrollportBox() ||
+		snapshot.scrollport == rendered.Box.PaddingBox() || htmlCullRole(world, owner, tail, htmlRoleSurface) != 0 {
+		t.Fatal("classic scrollbars did not cull against the reduced scrollport")
+	}
+	host.SetAttribute("style", "height:80px")
+	incrementalSync(t, world)
+	if htmlCullRole(world, owner, tail, htmlRoleSurface) == 0 {
+		t.Fatal("removing overflow did not restore the tail")
+	}
+	host.SetAttribute("style", "height:80px;overflow:auto")
+	incrementalSync(t, world)
+	if state.BoxRenderings[host.node].clipWindow != snapshot || htmlCullRole(world, owner, tail, htmlRoleSurface) != 0 {
+		t.Fatal("restoring overflow failed to reuse the clip snapshot or cull the tail")
 	}
 }
 
@@ -363,13 +395,16 @@ func BenchmarkHTMLPaintCullMovedScroll(b *testing.B) {
 func TestHTMLPaintCullRestoresSeparateBorders(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="scroll" style="height:80px;overflow:auto"><div style="height:1000px"></div><div id="target" style="width:30px;height:20px;background:red;border-top:1px solid blue;border-left:2px solid black">Target</div></div>`)
 	target := incrementalHTMLNode(t, world, owner, "target")
-	if htmlCullRole(world, owner, target, htmlRoleBorderList) != 0 {
-		t.Fatal("offscreen borders were mounted")
+	if htmlCullRole(world, owner, target, htmlRoleSurface) != 0 {
+		t.Fatal("offscreen border host was mounted")
 	}
 	htmlCullScroll(t, world, owner, "scroll", 0, -1000)
-	entity := htmlCullRole(world, owner, target, htmlRoleBorderList)
-	layers := world.GetRef[scene.SpriteLayers2D](entity)
-	if entity == 0 || layers == nil || len(layers.Layers) != 2 {
-		t.Fatal("border paint list was not restored")
+	entity := htmlCullRole(world, owner, target, htmlRoleSurface)
+	paint := world.GetRef[scene.UIPaint2D](entity)
+	if paint == nil || len(paint.Fragments()) != 4 || paint.Fragments()[0].Width != 32 || paint.Fragments()[3].Width != 2 {
+		t.Fatal("border fragments were not restored")
+	}
+	if htmlCullRole(world, owner, target, htmlRoleBorderList) != 0 {
+		t.Fatal("border fragments spawned an additional entity")
 	}
 }

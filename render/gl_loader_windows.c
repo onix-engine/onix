@@ -1,6 +1,8 @@
 //go:build windows && cgo && onix_opengl
 
 #include "gl_api.h"
+PFNGLDRAWBUFFERSPROC onix_ptr_glDrawBuffers;
+PFNGLREADBUFFERPROC onix_ptr_glReadBuffer;
 PFNGLACTIVETEXTUREPROC onix_ptr_glActiveTexture;
 PFNGLATTACHSHADERPROC onix_ptr_glAttachShader;
 PFNGLBINDBUFFERPROC onix_ptr_glBindBuffer;
@@ -77,6 +79,11 @@ PFNGLVIEWPORTPROC onix_ptr_glViewport;
 
 int onix_gl_load(void) {
     HMODULE library = GetModuleHandleA("opengl32.dll");
+    onix_ptr_glDrawBuffers = (PFNGLDRAWBUFFERSPROC)wglGetProcAddress("glDrawBuffers");
+    if ((uintptr_t)onix_ptr_glDrawBuffers <= 3 || (intptr_t)onix_ptr_glDrawBuffers == -1)
+        return 0;
+    onix_ptr_glReadBuffer = (PFNGLREADBUFFERPROC)GetProcAddress(library, "glReadBuffer");
+    if (!onix_ptr_glReadBuffer) return 0;
     onix_ptr_glActiveTexture = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
     if ((uintptr_t)onix_ptr_glActiveTexture <= 3 || (intptr_t)onix_ptr_glActiveTexture == -1)
         onix_ptr_glActiveTexture = (PFNGLACTIVETEXTUREPROC)GetProcAddress(library, "glActiveTexture");

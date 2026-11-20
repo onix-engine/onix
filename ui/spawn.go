@@ -446,13 +446,16 @@ func SpawnButton(world *ecs.World, opts ButtonOptions) ecs.Entity {
 		style = *opts.Style
 		bundle.Put(StyleOverride[ButtonStyle]{Value: style})
 	}
+	if opts.Icon.Empty() {
+		bundle.Put(pendingButtonIcon{})
+	}
 	entity := world.Spawn(bundle)
 	body := spawnControlBody(world, entity, width, opts.Height, color, theme.StackIndex, opts.Radius)
 	applySurface(world, body, width, opts.Height, style.Body.Resolve(controlStateForValues(false, false, false, opts.Disabled)))
 	spawnJoinedEdges(world, entity, opts.JoinLeft, opts.JoinRight, theme)
-	iconText := spawnText[IconPart](world, entity, textIconX, 0, iconFallback(opts.Icon), textTheme)
-	centerTextVertically(world, iconText, opts.Height)
-	spawnSurfacePart[IconPart](world, entity, 0, 0, 0, 0, graphics.ColorRGBA{}, theme.StackIndex+2)
+	if !opts.Icon.Empty() {
+		spawnButtonIcon(world, entity, opts.Icon, opts.Height, textTheme)
+	}
 	iconWidth := measureIconWidth(textTheme, opts.Icon)
 	if opts.Label != "" {
 		x := float32(14)
@@ -465,6 +468,14 @@ func SpawnButton(world *ecs.World, opts ButtonOptions) ecs.Entity {
 		centerTextVertically(world, text, opts.Height)
 	}
 	return entity
+}
+
+type pendingButtonIcon struct{}
+
+func spawnButtonIcon(world *ecs.World, entity ecs.Entity, icon IconStyle, height float32, theme Theme) {
+	iconText := spawnText[IconPart](world, entity, textIconX, 0, iconFallback(icon), theme)
+	centerTextVertically(world, iconText, height)
+	spawnSurfacePart[IconPart](world, entity, 0, 0, 0, 0, graphics.ColorRGBA{}, theme.StackIndex+2)
 }
 
 func measuredButtonLabelWidth(theme Theme, label string) float32 {
@@ -583,6 +594,7 @@ func spawnTextControl[T Input | Textarea](world *ecs.World, opts TextOptions, co
 	bundle := newInteractiveBundle(ControlOptions{X: opts.X, Y: opts.Y, Width: opts.Width, Height: opts.Height, StackIndex: theme.StackIndex, Disabled: opts.Disabled, PassThrough: opts.PassThrough}, 6)
 	bundle.Put(opts.Radius)
 	bundle.Put(component)
+	bundle.Put(nativeFieldVisuals{})
 	bundle.Put(newTextField(opts.Value, opts.Placeholder, opts.Password, opts.MaxRunes, opts.FontSize, opts.DPI))
 	bundle.Put(scene.ClipRect2D{Width: opts.Width, Height: opts.Height})
 	if opts.Password {
@@ -602,7 +614,7 @@ func SpawnInput(world *ecs.World, opts TextOptions) ecs.Entity {
 	entity, theme := spawnTextControl(world, opts, Input{})
 	valueText := spawnText[ValuePart](world, entity, 12, textBaseline(opts.Height), inputDisplay(opts.Value, opts.Placeholder, opts.Password, false, "", 0), theme)
 	centerTextVertically(world, valueText, opts.Height)
-	spawnTextFieldElements(world, entity, theme)
+
 	return entity
 }
 
@@ -630,7 +642,7 @@ func SpawnNumberInput(world *ecs.World, opts NumberInputOptions) ecs.Entity {
 	_ = world.Insert(entity, scene.ClipRect2D{Width: opts.Width, Height: opts.Height})
 	valueText := spawnText[ValuePart](world, entity, 12, textBaseline(opts.Height), inputDisplay(opts.Value, opts.Placeholder, false, false, "", 0), theme)
 	centerTextVertically(world, valueText, opts.Height)
-	spawnTextFieldElements(world, entity, theme)
+	_ = world.Insert(entity, nativeFieldVisuals{})
 	up := spawnInteractiveBox(world, opts.Width-stepButtonWidth, 0, stepButtonWidth, opts.Height*0.5, theme.StackIndex+1, theme.Surface, opts.Disabled, opts.PassThrough)
 	setCornerRadius(world, up, opts.Radius)
 	_ = world.Insert(up, scene.Parent{Entity: entity})
@@ -654,7 +666,7 @@ func SpawnTextarea(world *ecs.World, opts TextOptions) ecs.Entity {
 	opts.Password = false
 	entity, theme := spawnTextControl(world, opts, Textarea{Wrap: opts.Wrap})
 	spawnText[ValuePart](world, entity, textareaTextPaddingX, textareaTextPaddingY, inputDisplay(opts.Value, opts.Placeholder, false, false, "", 0), theme)
-	spawnTextFieldElements(world, entity, theme)
+
 	for _, child := range []ecs.Entity{
 		spawnSurfacePart[ScrollTrackHorizontalPart](world, entity, 0, 0, 0, 0, graphics.ColorRGBA{}, theme.StackIndex),
 		spawnSurfacePart[ScrollTrackVerticalPart](world, entity, 0, 0, 0, 0, graphics.ColorRGBA{}, theme.StackIndex),
@@ -1089,14 +1101,8 @@ func spawnControlBody(world *ecs.World, owner ecs.Entity, width, height float32,
 	return world.Spawn(bundle)
 }
 
-func spawnTextFieldElements(world *ecs.World, parent ecs.Entity, theme Theme) {
-	for index := range 16 {
-		entity := spawnSurfacePart[SelectionPart](world, parent, 0, 0, 1, 1, theme.Primary, theme.StackIndex+1)
-		_ = world.Insert(entity, Indexed[SelectionPart]{Value: index})
-		setVisible(world, entity, false)
-	}
-	entity := spawnSurfacePart[CaretPart](world, parent, 0, 0, 1, 1, theme.Text, theme.StackIndex+3)
-	setVisible(world, entity, false)
+type nativeFieldVisuals struct {
+	caret, selection ecs.Entity
 }
 
 func spawnText[P any](world *ecs.World, parent ecs.Entity, x, y float32, value string, theme Theme) ecs.Entity {

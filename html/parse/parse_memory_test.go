@@ -1,9 +1,11 @@
-package dom
+package parse
 
 import (
 	"html"
 	"strings"
 	"testing"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLDocumentDetection(t *testing.T) {
@@ -42,7 +44,7 @@ func TestLongTextDocumentDetection(t *testing.T) {
 		}
 		var got strings.Builder
 		for _, child := range root.Children {
-			if child.Type != TextNode {
+			if child.Type != uinode.TextNode {
 				t.Fatal("plain fragment gained an element wrapper")
 			}
 			got.WriteString(child.Data)

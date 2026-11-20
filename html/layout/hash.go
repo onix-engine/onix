@@ -72,6 +72,7 @@ func writeBoxOwnGeometryHash(h *geometryHash, box *Box) {
 		writeUintHash(h, uint64(len(fragment.Glyphs)))
 		for _, glyph := range fragment.Glyphs {
 			writeUintHash(h, uint64(glyph.Rune))
+			writeUintHash(h, uint64(math.Float32bits(glyph.PenX)))
 			writeFloatHash(h, glyph.X)
 			writeFloatHash(h, glyph.Y)
 			writeFloatHash(h, glyph.Advance)

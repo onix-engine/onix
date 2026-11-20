@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestComputeCascadeAndInheritance(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="app" class="card hero" style="color: #123456; font-size: 20px;
+	doc, err := parse.Parse(`<html><body><div id="app" class="card hero" style="color: #123456; font-size: 20px;
 line-height: 1.5"><span>hello</span></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
@@ -88,7 +89,7 @@ line-height: 1.5"><span>hello</span></div></body></html>`)
 }
 
 func TestComputeCSSWideKeywords(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent" style="color: #123456; font-size: 20px"><span id="kid">hi</span></div><button id="btn">ok</button></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent" style="color: #123456; font-size: 20px"><span id="kid">hi</span></div><button id="btn">ok</button></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -105,12 +106,12 @@ func TestComputeCSSWideKeywords(t *testing.T) {
 		t.Fatalf("compute styles: %v", err)
 	}
 
-	find := func(id string) *dom.Node {
-		stack := []*dom.Node{doc}
+	find := func(id string) *uinode.Node {
+		stack := []*uinode.Node{doc}
 		for len(stack) > 0 {
 			node := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
-			if node.Type == dom.ElementNode {
+			if node.Type == uinode.ElementNode {
 				if value, ok := node.Attr("id"); ok && value == id {
 					return node
 				}
@@ -163,7 +164,7 @@ func TestComputeCSSWideKeywords(t *testing.T) {
 }
 
 func TestComputeLinearGradientBackgroundImage(t *testing.T) {
-	doc, err := dom.Parse(`<div id="gradient"></div>`)
+	doc, err := parse.Parse(`<div id="gradient"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +187,7 @@ func TestComputeLinearGradientBackgroundImage(t *testing.T) {
 }
 
 func TestComputeBackgroundImageGradientList(t *testing.T) {
-	doc, err := dom.Parse(`<div id="gradient"></div>`)
+	doc, err := parse.Parse(`<div id="gradient"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func TestComputeBackgroundImageGradientList(t *testing.T) {
 }
 
 func TestComputeLinearGradientBackgroundShorthandComponents(t *testing.T) {
-	doc, err := dom.Parse(`<div id="gradient"></div>`)
+	doc, err := parse.Parse(`<div id="gradient"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestComputeLinearGradientBackgroundShorthandComponents(t *testing.T) {
 }
 
 func TestComputeLinearGradientFunctionValidation(t *testing.T) {
-	doc, err := dom.Parse(`<div id="gradient"></div>`)
+	doc, err := parse.Parse(`<div id="gradient"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +269,7 @@ func TestComputeLinearGradientFunctionValidation(t *testing.T) {
 }
 
 func TestImportantCascadeAndInvalidDeclarationRecovery(t *testing.T) {
-	doc, err := dom.Parse(`<div id="box" style="color: blue; width: bad; height: 8px"></div>`)
+	doc, err := parse.Parse(`<div id="box" style="color: blue; width: bad; height: 8px"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +291,7 @@ func TestImportantCascadeAndInvalidDeclarationRecovery(t *testing.T) {
 }
 
 func TestComputeInsetShorthand(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="one"></div><div id="two"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="one"></div><div id="two"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -313,7 +314,7 @@ func TestComputeInsetShorthand(t *testing.T) {
 }
 
 func TestComputeZIndex(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="overlay">overlay</div><div id="default">default</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="overlay">overlay</div><div id="default">default</div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +337,7 @@ func TestComputeZIndex(t *testing.T) {
 }
 
 func TestComputeBoxSizing(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="content"></div><div id="border"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="content"></div><div id="border"></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +359,7 @@ func TestComputeBoxSizing(t *testing.T) {
 }
 
 func TestComputeFlexProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row"><div id="item"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="row"><div id="item"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -411,7 +412,7 @@ func TestComputeFlexProperties(t *testing.T) {
 }
 
 func TestComputeGridProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="grid"><div id="item"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="grid"><div id="item"></div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +436,7 @@ func TestComputeGridProperties(t *testing.T) {
 }
 
 func TestComputeOverflowProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="one"></div><div id="two"></div><div id="three"></div><div id="four"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="one"></div><div id="two"></div><div id="three"></div><div id="four"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -475,7 +476,7 @@ func TestComputeOverflowProperties(t *testing.T) {
 }
 
 func TestComputeScrollbarProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="scroll"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="scroll"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -504,7 +505,7 @@ func TestComputeScrollbarProperties(t *testing.T) {
 }
 
 func TestScrollbarWidthLengthIsApplied(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="scroll"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="scroll"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -527,8 +528,8 @@ func TestInvalidInlineScrollbarWidthKeepsLowerPriorityValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := dom.NewDocument()
-	node := dom.NewElement("div", dom.Attribute{Name: "class", Value: "scroll"}, dom.Attribute{Name: "style", Value: "scrollbar-width: widest"})
+	root := uinode.NewDocument()
+	node := uinode.NewElement("div", uinode.Attribute{Name: "class", Value: "scroll"}, uinode.Attribute{Name: "style", Value: "scrollbar-width: widest"})
 	root.AppendChild(node)
 	styles, err := Compute(root, stylesheet)
 	if err != nil {
@@ -540,7 +541,7 @@ func TestInvalidInlineScrollbarWidthKeepsLowerPriorityValue(t *testing.T) {
 }
 
 func TestComputeFormControlDefaults(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="radio" type="radio" checked><input id="disabled" disabled><button id="button" disabled>Send</button><select id="select" disabled><option>One</option></select></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="radio" type="radio" checked><input id="disabled" disabled><button id="button" disabled>Send</button><select id="select" disabled><option>One</option></select></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -585,7 +586,7 @@ func TestComputeFormControlDefaults(t *testing.T) {
 }
 
 func TestComputeFormControlAppearance(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="default" type="checkbox"><input id="custom" type="checkbox"><select id="select"><option>One</option></select></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="default" type="checkbox"><input id="custom" type="checkbox"><select id="select"><option>One</option></select></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -636,7 +637,7 @@ func TestUniformBorderColorChangeIsPaintOnly(t *testing.T) {
 }
 
 func TestControlBackgroundTransitionIsPaintOnly(t *testing.T) {
-	document, err := dom.Parse(`<button id="close"></button>`)
+	document, err := parse.Parse(`<button id="close"></button>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,14 +646,14 @@ func TestControlBackgroundTransitionIsPaintOnly(t *testing.T) {
 	if impact := computedStyleChangeForNode(document.Children[0], previous, current); impact != ChangePaint {
 		t.Fatalf("control background transition impact = %v, want %v", impact, ChangePaint)
 	}
-	ordinaryElement := &dom.Node{Type: dom.ElementNode, Data: "div"}
+	ordinaryElement := &uinode.Node{Type: uinode.ElementNode, Data: "div"}
 	if impact := computedStyleChangeForNode(ordinaryElement, previous, current); impact != ChangeVisual {
 		t.Fatalf("ordinary element background transition impact = %v, want %v", impact, ChangeVisual)
 	}
 }
 
 func TestComputeTransformRotationAndTransition(t *testing.T) {
-	document, err := dom.Parse(`<html><body><div id="arrow"></div></body></html>`)
+	document, err := parse.Parse(`<html><body><div id="arrow"></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -681,7 +682,7 @@ func TestComputeTransformRotationAndTransition(t *testing.T) {
 }
 
 func TestComputeHiddenAttribute(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="hidden" hidden></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="hidden" hidden></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -696,7 +697,7 @@ func TestComputeHiddenAttribute(t *testing.T) {
 }
 
 func TestComputeHiddenAttributeOnInput(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="hidden" hidden></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="hidden" hidden></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,7 +712,7 @@ func TestComputeHiddenAttributeOnInput(t *testing.T) {
 }
 
 func TestAuthorCSSOverridesTextInputDefaultWidth(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -733,7 +734,7 @@ func TestAuthorCSSOverridesTextInputDefaultWidth(t *testing.T) {
 }
 
 func TestComputeTextAlignPropertyAndInheritance(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent"><span id="child">copy</span><button id="button">Go</button></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent"><span id="child">copy</span><button id="button">Go</button></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -767,7 +768,7 @@ func TestComputeTextAlignPropertyAndInheritance(t *testing.T) {
 }
 
 func TestComputeTextDecorationLineReachesTextNodes(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><span id="deleted">deleted</span><span id="plain">plain</span></body></html>`)
+	doc, err := parse.Parse(`<html><body><span id="deleted">deleted</span><span id="plain">plain</span></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -790,7 +791,7 @@ func TestComputeTextDecorationLineReachesTextNodes(t *testing.T) {
 }
 
 func TestComputeSelectorBucketsPreserveCascadeOrder(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card" class="item">hover</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card" class="item">hover</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -817,7 +818,7 @@ func TestComputeSelectorBucketsPreserveCascadeOrder(t *testing.T) {
 }
 
 func TestComputeSelectorBucketsHandleDescendantClassSelectors(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><section class="panel"><div id="card" class="item">copy</div></section></body></html>`)
+	doc, err := parse.Parse(`<html><body><section class="panel"><div id="card" class="item">copy</div></section></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -842,7 +843,7 @@ func TestComputeSelectorBucketsHandleDescendantClassSelectors(t *testing.T) {
 }
 
 func TestComputeTextStyleProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent"><input id="field" placeholder="Name"><textarea id="notes"></textarea></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent"><input id="field" placeholder="Name"><textarea id="notes"></textarea></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -887,7 +888,7 @@ func TestComputeTextStyleProperties(t *testing.T) {
 }
 
 func TestComputeTabSizeLength(t *testing.T) {
-	doc, err := dom.Parse(`<span id="code"></span>`)
+	doc, err := parse.Parse(`<span id="code"></span>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -905,7 +906,7 @@ func TestComputeTabSizeLength(t *testing.T) {
 }
 
 func TestComputeCSSWideKeywordsOnInheritedProperties(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent"><span id="take"></span><span id="reset"></span></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent"><span id="take"></span><span id="reset"></span></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -951,7 +952,7 @@ func TestComputeCSSWideKeywordsOnInheritedProperties(t *testing.T) {
 }
 
 func TestComputeCSSWideBackgroundLonghandsPreserveSiblingFields(t *testing.T) {
-	doc, err := dom.Parse(`<div id="parent"><div id="image"></div><div id="position"></div><div id="reset"></div></div>`)
+	doc, err := parse.Parse(`<div id="parent"><div id="image"></div><div id="position"></div><div id="reset"></div></div>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -982,7 +983,7 @@ func TestComputeCSSWideBackgroundLonghandsPreserveSiblingFields(t *testing.T) {
 }
 
 func TestComputeColorDoesNotOverridePlaceholderColor(t *testing.T) {
-	doc, err := dom.Parse(`<html><body style="color:#1f2937"><input id="field" placeholder="Name"></body></html>`)
+	doc, err := parse.Parse(`<html><body style="color:#1f2937"><input id="field" placeholder="Name"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1002,7 +1003,7 @@ func TestComputeColorDoesNotOverridePlaceholderColor(t *testing.T) {
 }
 
 func TestComputeBorderLonghands(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1040,7 +1041,7 @@ func TestComputeBorderLonghands(t *testing.T) {
 }
 
 func TestComputeSideBoxLonghands(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1094,7 +1095,7 @@ func TestComputeSideBoxLonghands(t *testing.T) {
 }
 
 func TestComputeBorderSideStylesAreIndependent(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1126,7 +1127,7 @@ func TestComputeBorderSideStylesAreIndependent(t *testing.T) {
 }
 
 func TestComputeBorderSideShorthand(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="box"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="box"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1151,7 +1152,7 @@ func TestComputeBorderSideShorthand(t *testing.T) {
 }
 
 func TestComputeTextareaDefaults(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><textarea id="notes" disabled placeholder="Type here"></textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><textarea id="notes" disabled placeholder="Type here"></textarea></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1174,7 +1175,7 @@ func TestComputeTextareaDefaults(t *testing.T) {
 }
 
 func TestComputeFormControlDisplayDefaults(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><button></button><input><select></select><textarea></textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><button></button><input><select></select><textarea></textarea></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1192,7 +1193,7 @@ func TestComputeFormControlDisplayDefaults(t *testing.T) {
 }
 
 func TestComputePseudoClassSelectors(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="empty"></div><input id="check" type="checkbox" checked disabled><select><option id="selected" selected>One</option></select></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="empty"></div><input id="check" type="checkbox" checked disabled><select><option id="selected" selected>One</option></select></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1236,7 +1237,7 @@ func TestComputePseudoClassSelectors(t *testing.T) {
 }
 
 func TestComputeFunctionalPseudoClassSelectors(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><ul><li id="first"></li><li id="second" class="pick"></li><li id="third"></li></ul><div id="hero" class="hero"></div><p id="lead" class="lead"></p></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li id="first"></li><li id="second" class="pick"></li><li id="third"></li></ul><div id="hero" class="hero"></div><p id="lead" class="lead"></p></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1284,7 +1285,7 @@ func TestComputeFunctionalPseudoClassSelectors(t *testing.T) {
 }
 
 func TestComputeNthLastAndPlaceholderShownSelectors(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><ul><li id="first"></li><li id="second"></li><li id="third"></li></ul><div><span id="left"></span><span id="right"></span></div><input id="shown" placeholder="Email"><input id="filled" placeholder="Email" value="a@b.c"><textarea id="notes" placeholder="Notes"></textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li id="first"></li><li id="second"></li><li id="third"></li></ul><div><span id="left"></span><span id="right"></span></div><input id="shown" placeholder="Email"><input id="filled" placeholder="Email" value="a@b.c"><textarea id="notes" placeholder="Notes"></textarea></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1329,7 +1330,7 @@ func TestComputeNthLastAndPlaceholderShownSelectors(t *testing.T) {
 }
 
 func TestComputeDoesNotInferInputStateFromAttributes(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><button id="focus" data-focus>ok</button><div id="wrap"><span><input id="inside" data-focus></span></div><a id="hovered" data-hover>link</a><button id="pressed" data-active>go</button></body></html>`)
+	doc, err := parse.Parse(`<html><body><button id="focus" data-focus>ok</button><div id="wrap"><span><input id="inside" data-focus></span></div><a id="hovered" data-hover>link</a><button id="pressed" data-active>go</button></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1370,7 +1371,7 @@ func TestComputeDoesNotInferInputStateFromAttributes(t *testing.T) {
 }
 
 func TestComputeInputPseudoClassSelectorsWithExplicitState(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="wrap"><span><input id="inside"></span></div><a id="hovered">link</a><button id="pressed">go</button></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="wrap"><span><input id="inside"></span></div><a id="hovered">link</a><button id="pressed">go</button></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1416,7 +1417,7 @@ func TestComputeInputPseudoClassSelectorsWithExplicitState(t *testing.T) {
 }
 
 func TestComputeButtonLikeAndHiddenInputDefaults(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="submit" type="submit"><input id="button" type="button" value="Run"><input id="hidden" type="hidden"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="submit" type="submit"><input id="button" type="button" value="Run"><input id="hidden" type="hidden"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1442,7 +1443,7 @@ func TestComputeButtonLikeAndHiddenInputDefaults(t *testing.T) {
 }
 
 func TestComputeBorderRadiusAndBoxShadow(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1481,7 +1482,7 @@ func TestComputeBorderRadiusAndBoxShadow(t *testing.T) {
 }
 
 func TestComputeMultipleInsetBoxShadows(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1516,7 +1517,7 @@ func TestComputeMultipleInsetBoxShadows(t *testing.T) {
 }
 
 func TestComputeEllipticalBorderRadiusLonghands(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1554,7 +1555,7 @@ func TestComputeEllipticalBorderRadiusLonghands(t *testing.T) {
 }
 
 func TestComputeFilterBlur(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1577,7 +1578,7 @@ func TestComputeFilterBlur(t *testing.T) {
 }
 
 func TestComputeFilterChain(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1609,7 +1610,7 @@ func TestComputeFilterChain(t *testing.T) {
 }
 
 func TestComputeExtendedFilterChain(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1648,7 +1649,7 @@ func TestComputeExtendedFilterChain(t *testing.T) {
 }
 
 func TestComputeColorFilters(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1677,7 +1678,7 @@ func TestComputeColorFilters(t *testing.T) {
 }
 
 func TestComputeRemainingColorFilters(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1706,7 +1707,7 @@ func TestComputeRemainingColorFilters(t *testing.T) {
 }
 
 func TestComputeFilterURLReference(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><svg><filter id="fx"><feGaussianBlur stdDeviation="2"></feGaussianBlur><feColorMatrix type="saturate" values="0"></feColorMatrix></filter></svg><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><svg><filter id="fx"><feGaussianBlur stdDeviation="2"></feGaussianBlur><feColorMatrix type="saturate" values="0"></feColorMatrix></filter></svg><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1738,7 +1739,7 @@ func TestComputeFilterURLReference(t *testing.T) {
 }
 
 func TestComputeBackgroundPositionVariants(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1775,7 +1776,7 @@ func TestComputeBackgroundPositionVariants(t *testing.T) {
 }
 
 func TestComputeObjectPositionVariants(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><img id="photo" src="a.png"></body></html>`)
+	doc, err := parse.Parse(`<html><body><img id="photo" src="a.png"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1801,7 +1802,7 @@ func TestComputeObjectPositionVariants(t *testing.T) {
 }
 
 func TestComputeResponsiveLengthUnits(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1844,7 +1845,7 @@ func TestComputeResponsiveLengthUnits(t *testing.T) {
 }
 
 func TestFragmentRootFontSizeControlsRem(t *testing.T) {
-	doc, err := dom.Parse(`<div id="root" style="font-size:14px"><span id="label">Label</span></div>`)
+	doc, err := parse.Parse(`<div id="root" style="font-size:14px"><span id="label">Label</span></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1862,7 +1863,7 @@ func TestFragmentRootFontSizeControlsRem(t *testing.T) {
 		t.Fatalf("initial font size = %#v, want 13px", got)
 	}
 	root.SetAttr("style", "font-size:18px")
-	styles, err = RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, Viewport{}, nil, nil, styles, []*dom.Node{root})
+	styles, err = RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, Viewport{}, nil, nil, styles, []*uinode.Node{root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1872,7 +1873,7 @@ func TestFragmentRootFontSizeControlsRem(t *testing.T) {
 }
 
 func TestComputeFontShorthandUpdatesSizeLineHeightAndFamily(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field"><textarea id="notes"></textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field"><textarea id="notes"></textarea></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1897,7 +1898,7 @@ func TestComputeFontShorthandUpdatesSizeLineHeightAndFamily(t *testing.T) {
 }
 
 func TestShorthandCascadeRespectsSourceOrder(t *testing.T) {
-	doc, err := dom.Parse(`<div id="card"></div>`)
+	doc, err := parse.Parse(`<div id="card"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1942,7 +1943,7 @@ func TestShorthandCascadeRespectsSourceOrder(t *testing.T) {
 // pointer identity, so rule changes require re-parsing, which yields a new
 // stylesheet and a fresh compiled matcher.
 func TestStylesheetMatcherInvalidatesForReparsedStylesheet(t *testing.T) {
-	doc, err := dom.Parse(`<div id="card"></div>`)
+	doc, err := parse.Parse(`<div id="card"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1973,7 +1974,7 @@ func TestStylesheetMatcherInvalidatesForReparsedStylesheet(t *testing.T) {
 }
 
 func TestComputeTextBreakPropertiesInherit(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent"><span id="child">copy</span></div><span id="other">x</span></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent"><span id="child">copy</span></div><span id="other">x</span></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2012,7 +2013,7 @@ func TestComputeTextBreakPropertiesInherit(t *testing.T) {
 }
 
 func TestPointerEventsInheritanceAndOverrides(t *testing.T) {
-	doc, err := dom.Parse(`<div style="pointer-events:none"><span id="inherited">text</span><button id="auto" style="pointer-events:auto">auto</button><button id="initial" style="pointer-events:initial">initial</button><button id="inherit" style="pointer-events:INHERIT">inherit</button><button id="unset" style="pointer-events:unset">unset</button></div>`)
+	doc, err := parse.Parse(`<div style="pointer-events:none"><span id="inherited">text</span><button id="auto" style="pointer-events:auto">auto</button><button id="initial" style="pointer-events:initial">initial</button><button id="inherit" style="pointer-events:INHERIT">inherit</button><button id="unset" style="pointer-events:unset">unset</button></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

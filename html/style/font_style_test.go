@@ -2,12 +2,12 @@ package style
 
 import (
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"testing"
 )
 
 func TestFontStyleCascade(t *testing.T) {
-	doc, err := dom.Parse(`<div style="font-style:italic"><span id="inherited">a</span><span id="reset" style="font-style:initial">b</span><span id="short" style="font:16px sans-serif">c</span><span id="both" style="font:italic bold 16px sans-serif">d</span><em id="em">e</em><i id="normal" style="font-style:normal">f</i><span id="oblique" style="font-style:oblique">g</span></div>`)
+	doc, err := parse.Parse(`<div style="font-style:italic"><span id="inherited">a</span><span id="reset" style="font-style:initial">b</span><span id="short" style="font:16px sans-serif">c</span><span id="both" style="font:italic bold 16px sans-serif">d</span><em id="em">e</em><i id="normal" style="font-style:normal">f</i><span id="oblique" style="font-style:oblique">g</span></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,9 @@
 package scene
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type renderPhaseItem2D interface {
@@ -53,13 +53,14 @@ func (items renderItemList2D) slice(start, end int) renderItemList2D {
 }
 
 type renderSortKey2D struct {
-	scene     uint64
-	group     uint64
-	sortIndex int
-	order     uint64
-	depth     float32
-	sequence  uint32
-	ui        bool
+	scene      uint64
+	group      uint64
+	sortIndex  int
+	order      uint64
+	depth      float32
+	sequence   uint32
+	localOrder uint32
+	ui         bool
 }
 
 type renderBatch2D struct {
@@ -108,6 +109,12 @@ func compareRenderPhaseItem2D[T renderPhaseItem2D](a, b T) int {
 		return -1
 	}
 	if aKey.order > bKey.order {
+		return 1
+	}
+	if aKey.localOrder < bKey.localOrder {
+		return -1
+	}
+	if aKey.localOrder > bKey.localOrder {
 		return 1
 	}
 	if aKey.sequence < bKey.sequence {

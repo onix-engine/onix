@@ -9,10 +9,11 @@ import (
 	"unicode"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 	"github.com/onix-engine/onix/window"
@@ -372,24 +373,24 @@ func TestWorkspaceEditorHTMLSemanticsAndEscaping(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.Selected = "start"
-	root, err := dom.Parse(workspaceShellTest(t, a))
+	root, err := parse.Parse(workspaceShellTest(t, a))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := make(map[string]*dom.Node)
+	ids := make(map[string]*uinode.Node)
 	var labels []string
-	var visit func(*dom.Node)
-	visit = func(node *dom.Node) {
+	var visit func(*uinode.Node)
+	visit = func(node *uinode.Node) {
 		if id, ok := node.Attr("id"); ok {
 			if ids[id] != nil {
 				t.Errorf("duplicate HTML id %s", id)
 			}
 			ids[id] = node
 		}
-		if node.Type == dom.ElementNode && node.Data == "script" {
+		if node.Type == uinode.ElementNode && node.Data == "script" {
 			t.Error("unescaped user value became HTML")
 		}
-		if node.Type == dom.ElementNode && node.Data == "label" {
+		if node.Type == uinode.ElementNode && node.Data == "label" {
 			label, ok := node.Attr("for")
 			if !ok {
 				t.Error("label has no associated control")
@@ -638,12 +639,12 @@ func TestWorkspaceEditorWhitespaceFileNamesHaveValidControlIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.Selected = "start"
-	root, err := dom.Parse(workspaceShellTest(t, a))
+	root, err := parse.Parse(workspaceShellTest(t, a))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var visit func(*dom.Node)
-	visit = func(node *dom.Node) {
+	var visit func(*uinode.Node)
+	visit = func(node *uinode.Node) {
 		if id, ok := node.Attr("id"); ok && strings.IndexFunc(id, unicode.IsSpace) >= 0 {
 			t.Errorf("HTML id contains whitespace: %q", id)
 		}
@@ -694,9 +695,9 @@ func TestWorkspaceEditorDiscardAndUndoRestoreLiveHTMLControlValues(t *testing.T)
 	if err := htmlui.Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	_, control := find()
-	if control.Value != "30" {
-		t.Fatalf("discard kept dirty native value %q", control.Value)
+	entity, _ = find()
+	if htmlui.ControlValue(world, entity) != "30" {
+		t.Fatalf("discard kept dirty native value %q", htmlui.ControlValue(world, entity))
 	}
 	entity, _ = find()
 	htmlui.SetControlValue(world, entity, "90")
@@ -715,9 +716,9 @@ func TestWorkspaceEditorDiscardAndUndoRestoreLiveHTMLControlValues(t *testing.T)
 	if err := htmlui.Sync(world); err != nil {
 		t.Fatal(err)
 	}
-	_, control = find()
-	if control.Value != "30" {
-		t.Fatalf("undo left stale native value %q", control.Value)
+	entity, _ = find()
+	if htmlui.ControlValue(world, entity) != "30" {
+		t.Fatalf("undo left stale native value %q", htmlui.ControlValue(world, entity))
 	}
 }
 

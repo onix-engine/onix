@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
@@ -13,7 +14,7 @@ func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
 	for _, inline := range []bool{false, true} {
 		t.Run(fmt.Sprintf("inline=%v", inline), func(t *testing.T) {
 			source := `<html style="font-size:18px"><body style="font-size:20px"><div></div></body></html>`
-			doc, err := dom.Parse(source)
+			doc, err := parse.Parse(source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -21,7 +22,7 @@ func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
 			target := body.Children[0]
 			cssSource := "div{" + declarations + "}"
 			if inline {
-				target.SetAttributes(dom.Attribute{Name: "style", Value: declarations})
+				target.SetAttributes(uinode.Attribute{Name: "style", Value: declarations})
 				cssSource = ""
 			}
 			sheet, err := css.Parse(cssSource)
@@ -45,7 +46,7 @@ func TestPreparedDeclarationsRetainFontAndViewportContext(t *testing.T) {
 }
 
 func TestInvalidDeclarationsPreserveEarlierValidValues(t *testing.T) {
-	doc, err := dom.Parse(`<div style="display:block;display:banana;line-height:2;line-height:invalid;font:16px/invalid sans-serif;color:blue"></div>`)
+	doc, err := parse.Parse(`<div style="display:block;display:banana;line-height:2;line-height:invalid;font:16px/invalid sans-serif;color:blue"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

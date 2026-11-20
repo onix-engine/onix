@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestScopeStylesheetKeepsDocumentAncestors(t *testing.T) {
@@ -35,9 +35,9 @@ func TestScopeStylesheetSubjectClassMatchesComponentElement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document := dom.NewDocument()
-	body := dom.NewElement("body")
-	card := dom.NewElement("div", dom.Attribute{Name: "class", Value: "card active onix-scope-test"})
+	document := uinode.NewDocument()
+	body := uinode.NewElement("body")
+	card := uinode.NewElement("div", uinode.Attribute{Name: "class", Value: "card active onix-scope-test"})
 	document.AppendChild(body)
 	body.AppendChild(card)
 	if !Match(stylesheet.Rules[0].Selectors[0], card) {

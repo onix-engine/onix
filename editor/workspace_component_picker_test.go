@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
@@ -47,13 +48,13 @@ func TestWorkspaceComponentPickerFloatsAndDismisses(t *testing.T) {
 	before := content.ContentSize
 	a.handleEvent(htmlui.Event{ID: "content-picker", Kind: htmlui.EventClick})
 	syncWorkspaceTest(t, a, a.world)
-	root, err := dom.Parse(workspaceShellTest(t, a))
+	root, err := parse.Parse(workspaceShellTest(t, a))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var menu *dom.Node
-	var findMenu func(*dom.Node)
-	findMenu = func(node *dom.Node) {
+	var menu *uinode.Node
+	var findMenu func(*uinode.Node)
+	findMenu = func(node *uinode.Node) {
 		if node.AttrValue("id") == "content-picker-list" {
 			menu = node
 			return

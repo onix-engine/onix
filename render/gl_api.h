@@ -17,6 +17,10 @@
 #endif
 #if defined(_WIN32) && defined(ONIX_DESKTOP_GL)
 #include <windows.h>
+extern PFNGLDRAWBUFFERSPROC onix_ptr_glDrawBuffers;
+extern PFNGLREADBUFFERPROC onix_ptr_glReadBuffer;
+#define glDrawBuffers onix_ptr_glDrawBuffers
+#define glReadBuffer onix_ptr_glReadBuffer
 extern PFNGLACTIVETEXTUREPROC onix_ptr_glActiveTexture;
 static inline void onix_call_glActiveTexture(GLenum texture) { onix_ptr_glActiveTexture(texture); }
 #define glActiveTexture onix_call_glActiveTexture

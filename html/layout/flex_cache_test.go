@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func nestedFlexFixture(depth int) string {
@@ -54,7 +54,7 @@ func TestFlexMeasurementCacheMatchesFull(t *testing.T) {
 				styles.Exclusive(outer).Height = style.LengthPx([]float64{180, 80}[i%2])
 				styles.Exclusive(leaf).Width = []style.Value{style.Auto(), style.LengthPx(75)}[i%2]
 				styles.Exclusive(leaf).AlignSelf = style.Keyword([]string{"stretch", "center", "flex-start"}[i%3])
-				got := updateRetained(t, &cache, root, styles, face, []*dom.Node{outer, leaf}, i == 0)
+				got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{outer, leaf}, i == 0)
 				full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 				if err != nil {
 					t.Fatal(err)
@@ -71,7 +71,7 @@ func TestNestedFlexWarmResizeDoesNotAllocate(t *testing.T) {
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	outer := retainedNode(root, "outer")
 	mutable := styles.Exclusive(outer)
-	dirty := []*dom.Node{outer}
+	dirty := []*uinode.Node{outer}
 	allocations := testing.AllocsPerRun(50, func() {
 		for _, width := range [...]float64{240, 280} {
 			mutable.Width = style.LengthPx(width)
@@ -90,7 +90,7 @@ func TestFlexBasisCacheInvalidatesOnTextChange(t *testing.T) {
 	text := retainedNode(root, "target").Children[0]
 	for i := range 6 {
 		text.Data = []string{"Short", "Words that wrap onto several lines and change the intrinsic flex basis"}[i%2]
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{text}, false)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{text}, false)
 		full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)

@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <string.h>
 
+enum { ONIX_TARGET_DEPTH = 3 }; // RenderTargetDepth in target.go
 enum { ONIX_SPRITE_COMPACT_BYTES = 100, ONIX_SPRITE_CUSTOM_BYTES = 132 };
 
 static size_t onix_sprite_stride(uint32_t shader) {

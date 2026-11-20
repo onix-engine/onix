@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func assertHTMLBoxIndex(t *testing.T, state *htmlRenderState) {
@@ -43,7 +43,9 @@ func TestHTMLBoxIndexFullAndLocalMembership(t *testing.T) {
 		t.Fatal("local emission invalidated an untouched sibling")
 	}
 	assertHTMLBoxIndex(t, state)
-	world.GetMut[Surface](owner).Width++
+	// A DPI change still needs a full emission. A width-only change can reuse
+	// paint membership and update only geometry that actually changed.
+	world.GetMut[Surface](owner).DPI = 96
 	incrementalSync(t, world)
 	state = world.GetRef[htmlRenderState](owner)
 	assertHTMLBoxIndex(t, state)
@@ -94,7 +96,7 @@ func TestHTMLBoxIndexTopologyAndDocumentReplacement(t *testing.T) {
 	if state.boxForNode(wrapper.node) != nil || state.boxForNode(child.node).Parent != state.boxForNode(destination.node) {
 		t.Fatal("reparenting retained the old box owner")
 	}
-	oldNodes := make([]*dom.Node, 0, len(state.BoxRenderings))
+	oldNodes := make([]*uinode.Node, 0, len(state.BoxRenderings))
 	for node := range state.BoxRenderings {
 		oldNodes = append(oldNodes, node)
 	}

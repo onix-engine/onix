@@ -8,6 +8,8 @@ import (
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/text/piecetree"
+	htmlui "github.com/onix-engine/onix/ui/html"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 type CornerRadius float32
@@ -66,6 +68,11 @@ func controlViewFor(world *ecs.World, entity ecs.Entity) (controlView, bool) {
 		view.Hovered, view.Pressed = pointer.Hovered, pointer.Pressed
 	}
 	view.Selected = control.Selected
+	if item := world.GetRef[SelectorItem](entity); item != nil {
+		if selectControl := world.GetRef[htmlui.Control](item.Owner); selectControl != nil {
+			view.Selected = item.Index >= 0 && item.Index < len(selectControl.Options) && selectControl.Options[item.Index].Selected()
+		}
+	}
 	return view, true
 }
 
@@ -227,34 +234,7 @@ type buttonGroupDivider struct {
 
 type Danger struct{}
 
-type TextField struct {
-	Source piecetree.Snapshot
-
-	lastScrollValue piecetree.Snapshot
-	// Buffer optionally binds native input to a document-owned piece tree.
-	Buffer                *input.TextBuffer
-	history               *textFieldHistory
-	Composition           string
-	Placeholder           string
-	Value                 string
-	lastScrollComposition string
-	lastScrollCaret       int
-	Caret                 int
-	MaxRunes              int
-	FontSize              float64
-	DPI                   float64
-	Anchor                int
-	// ScrollX is the signed horizontal text offset. Positive values move the
-	// text right; negative values reveal the caret in overflowing values.
-	ScrollX            float32
-	lastScrollViewport float32
-	Submitted          bool
-	Password           bool
-	lastScrollFocused  bool
-	Selecting          bool
-	scrollInitialized  bool
-	Focused            bool
-}
+type TextField = textfield.Field
 
 // TextFieldKeyHandler intercepts keyboard editing before native text input and
 // focus traversal. Returning true lets editor widgets own Enter, Tab, arrows
@@ -547,11 +527,4 @@ type uiEventState struct {
 
 type caretBlinkState struct {
 	phase uint64
-}
-
-func (f TextField) Text() piecetree.Snapshot {
-	if f.Buffer != nil {
-		return f.Source
-	}
-	return piecetree.FromString(f.Value)
 }

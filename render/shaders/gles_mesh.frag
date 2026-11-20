@@ -304,7 +304,7 @@ vec3 pbr_environment(vec3 direction_3, float level_2) {
     return (mix((_e18.xyz * _e18.w), (_e20.xyz * _e20.w), fract(level_2)) * 16.0);
 }
 
-float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
+float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal, mat4x3 receiver) {
     vec2 gradient = vec2(0.0);
     bool local_17 = false;
     bool local_18 = false;
@@ -313,8 +313,8 @@ float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
     int y = 0;
     int x = 0;
     vec4 params = shadowParams[index_1];
-    mat4x4 _e10 = shadowMatrices[index_1];
-    vec4 clip_1 = (_e10 * vec4((position_2 + (normal * params.y)), 1.0));
+    mat4x4 _e11 = shadowMatrices[index_1];
+    vec4 clip_1 = (_e11 * vec4((position_2 + (normal * params.y)), 1.0));
     if ((clip_1.w <= 0.0)) {
         return 1.0;
     }
@@ -329,8 +329,13 @@ float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
     vec2 texel = ((uv_5 * vec2(dims_3)) - vec2(0.5));
     vec2 base_2 = floor(texel);
     vec2 fraction = (texel - base_2);
-    vec3 dx = dFdx(vec3(texel, ndc.z));
-    vec3 dy = dFdy(vec3(texel, ndc.z));
+    mat4x4 _e87 = shadowMatrices[index_1];
+    vec4 cx = (_e87 * vec4((receiver[0] + (params.y * receiver[2])), 0.0));
+    mat4x4 _e99 = shadowMatrices[index_1];
+    vec4 cy = (_e99 * vec4((receiver[1] + (params.y * receiver[3])), 0.0));
+    vec3 scale_1 = vec3(((vec2(dims_3) * rect.zw) * vec2(0.5, 0.5)), 1.0);
+    vec3 dx = ((cx.xyz - (ndc * cx.w)) * scale_1);
+    vec3 dy = ((cy.xyz - (ndc * cy.w)) * scale_1);
     float determinant_ = ((dx.x * dy.y) - (dx.y * dy.x));
     if ((abs(determinant_) > 1e-8)) {
         gradient = (vec2(((dy.y * dx.z) - (dx.y * dy.z)), ((dx.x * dy.z) - (dy.x * dx.z))) / vec2(determinant_));
@@ -340,20 +345,20 @@ float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
     } else {
         local_17 = true;
     }
-    bool _e131 = local_17;
-    if (!(_e131)) {
+    bool _e169 = local_17;
+    if (!(_e169)) {
         local_18 = (ndc.z < 0.0);
     } else {
         local_18 = true;
     }
-    bool _e139 = local_18;
-    if (!(_e139)) {
+    bool _e177 = local_18;
+    if (!(_e177)) {
         local_19 = (ndc.z > 1.0);
     } else {
         local_19 = true;
     }
-    bool _e147 = local_19;
-    if (_e147) {
+    bool _e185 = local_19;
+    if (_e185) {
         return 1.0;
     }
     vec4 weightsX = vec4((1.0 - fraction.x), 1.0, 1.0, fraction.x);
@@ -361,12 +366,12 @@ float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            int _e222 = y;
-            y = (_e222 + 1);
+            int _e251 = y;
+            y = (_e251 + 1);
         }
         loop_init = false;
-        int _e167 = y;
-        if ((_e167 < 4)) {
+        int _e205 = y;
+        if ((_e205 < 4)) {
         } else {
             break;
         }
@@ -375,37 +380,36 @@ float pbr_shadow_map(uint index_1, vec3 position_2, vec3 normal) {
             bool loop_init_1 = true;
             while(true) {
                 if (!loop_init_1) {
-                    int _e219 = x;
-                    x = (_e219 + 1);
+                    int _e248 = x;
+                    x = (_e248 + 1);
                 }
                 loop_init_1 = false;
-                int _e172 = x;
-                if ((_e172 < 4)) {
+                int _e210 = x;
+                if ((_e210 < 4)) {
                 } else {
                     break;
                 }
                 {
-                    int _e176 = x;
-                    int _e179 = y;
-                    ivec2 pixel_1 = min(max((ivec2(base_2) + ivec2((_e176 - 1), (_e179 - 1))), tileMin), tileMax);
-                    vec4 _e187 = texelFetch(shadowTex, pixel_1, 0);
-                    vec3 packed_ = _e187.xyz;
-                    float depth = ((dot(packed_, vec3(65536.0, 256.0, 1.0)) * 255.0) / 16777215.0);
-                    vec2 _e199 = gradient;
-                    float receiverDepth = ((ndc.z + dot(_e199, (vec2(pixel_1) - texel))) + params.x);
-                    float _e206 = visibility;
-                    int _e207 = x;
-                    int _e209 = y;
-                    visibility = (_e206 + ((weightsX[_e207] * weightsY[_e209]) * ((receiverDepth >= depth) ? 1.0 : 0.0)));
+                    int _e214 = x;
+                    int _e217 = y;
+                    ivec2 pixel_1 = min(max((ivec2(base_2) + ivec2((_e214 - 1), (_e217 - 1))), tileMin), tileMax);
+                    vec4 _e225 = texelFetch(shadowTex, pixel_1, 0);
+                    float depth = _e225.x;
+                    vec2 _e228 = gradient;
+                    float receiverDepth = ((ndc.z + dot(_e228, (vec2(pixel_1) - texel))) + params.x);
+                    float _e235 = visibility;
+                    int _e236 = x;
+                    int _e238 = y;
+                    visibility = (_e235 + ((weightsX[_e236] * weightsY[_e238]) * ((receiverDepth >= depth) ? 1.0 : 0.0)));
                 }
             }
         }
     }
-    float _e224 = visibility;
-    return (_e224 / 9.0);
+    float _e253 = visibility;
+    return (_e253 / 9.0);
 }
 
-float pbr_light_shadow(uint light, vec3 position_3, vec3 normal_1) {
+float pbr_light_shadow(uint light, vec3 position_3, vec3 normal_1, mat4x3 receiver_1) {
     uint face = 0u;
     bool local_20 = false;
     bool local_21 = false;
@@ -419,13 +423,13 @@ float pbr_light_shadow(uint light, vec3 position_3, vec3 normal_1) {
     uint first_1 = (uint(mapping.x) - 1u);
     uint count = uint(mapping.y);
     if ((count == 1u)) {
-        float _e19 = pbr_shadow_map(first_1, position_3, normal_1);
-        return _e19;
+        float _e20 = pbr_shadow_map(first_1, position_3, normal_1, receiver_1);
+        return _e20;
     }
-    float _e24 = lightDirections[light].w;
-    if ((_e24 == 2.0)) {
-        vec4 _e30 = lightPosition[light];
-        vec3 delta_1 = (position_3 - _e30.xyz);
+    float _e25 = lightDirections[light].w;
+    if ((_e25 == 2.0)) {
+        vec4 _e31 = lightPosition[light];
+        vec3 delta_1 = (position_3 - _e31.xyz);
         vec3 axis_1 = abs(delta_1);
         face = ((delta_1.x >= 0.0) ? 0u : 1u);
         if ((axis_1.y > axis_1.x)) {
@@ -433,8 +437,8 @@ float pbr_light_shadow(uint light, vec3 position_3, vec3 normal_1) {
         } else {
             local_20 = false;
         }
-        bool _e50 = local_20;
-        if (_e50) {
+        bool _e51 = local_20;
+        if (_e51) {
             face = ((delta_1.y >= 0.0) ? 2u : 3u);
         } else {
             if ((axis_1.z > axis_1.x)) {
@@ -442,63 +446,63 @@ float pbr_light_shadow(uint light, vec3 position_3, vec3 normal_1) {
             } else {
                 local_21 = false;
             }
-            bool _e66 = local_21;
-            if (_e66) {
+            bool _e67 = local_21;
+            if (_e67) {
                 face = ((delta_1.z >= 0.0) ? 4u : 5u);
             }
         }
-        uint _e73 = face;
-        float _e75 = pbr_shadow_map((first_1 + _e73), position_3, normal_1);
-        return _e75;
+        uint _e74 = face;
+        float _e76 = pbr_shadow_map((first_1 + _e74), position_3, normal_1, receiver_1);
+        return _e76;
     }
-    vec4 _e78 = cameraPosition;
-    vec4 _e83 = cameraForward;
-    float distance_1 = dot((position_3 - _e78.xyz), _e83.xyz);
-    float _e90 = shadowParams[first_1].z;
-    if ((distance_1 < _e90)) {
+    vec4 _e79 = cameraPosition;
+    vec4 _e84 = cameraForward;
+    float distance_1 = dot((position_3 - _e79.xyz), _e84.xyz);
+    float _e91 = shadowParams[first_1].z;
+    if ((distance_1 < _e91)) {
         return 1.0;
     }
     bool loop_init_2 = true;
     while(true) {
         if (!loop_init_2) {
-            uint _e138 = cascade;
-            cascade = (_e138 + 1u);
+            uint _e139 = cascade;
+            cascade = (_e139 + 1u);
         }
         loop_init_2 = false;
-        uint _e95 = cascade;
-        if ((_e95 < 4u)) {
+        uint _e96 = cascade;
+        if ((_e96 < 4u)) {
         } else {
             break;
         }
         {
-            uint _e98 = cascade;
-            if ((_e98 >= count)) {
+            uint _e99 = cascade;
+            if ((_e99 >= count)) {
                 break;
             }
-            uint _e100 = cascade;
-            uint index_4 = (first_1 + _e100);
+            uint _e101 = cascade;
+            uint index_4 = (first_1 + _e101);
             vec4 params_1 = shadowParams[index_4];
             if ((distance_1 <= params_1.w)) {
-                float _e108 = pbr_shadow_map(index_4, position_3, normal_1);
+                float _e109 = pbr_shadow_map(index_4, position_3, normal_1, receiver_1);
                 float blendWidth = ((params_1.w - params_1.z) * mapping.z);
                 if ((blendWidth <= 0.0)) {
-                    return _e108;
+                    return _e109;
                 }
                 float blend = smoothstep((params_1.w - blendWidth), params_1.w, distance_1);
                 next = 1.0;
-                uint _e122 = cascade;
-                if (((_e122 + 1u) < count)) {
+                uint _e123 = cascade;
+                if (((_e123 + 1u) < count)) {
                     local_22 = (blend > 0.0);
                 } else {
                     local_22 = false;
                 }
-                bool _e131 = local_22;
-                if (_e131) {
-                    float _e134 = pbr_shadow_map((index_4 + 1u), position_3, normal_1);
-                    next = _e134;
+                bool _e132 = local_22;
+                if (_e132) {
+                    float _e135 = pbr_shadow_map((index_4 + 1u), position_3, normal_1, receiver_1);
+                    next = _e135;
                 }
-                float _e135 = next;
-                return mix(_e108, _e135, blend);
+                float _e136 = next;
+                return mix(_e109, _e136, blend);
             }
         }
     }
@@ -545,8 +549,8 @@ float pbr_screen_occlusion(vec3 position_5, vec3 normal_2) {
     bool loop_init_3 = true;
     while(true) {
         if (!loop_init_3) {
-            uint _e193 = sampleIndex;
-            sampleIndex = (_e193 + 1u);
+            uint _e183 = sampleIndex;
+            sampleIndex = (_e183 + 1u);
         }
         loop_init_3 = false;
         uint _e95 = sampleIndex;
@@ -571,11 +575,11 @@ float pbr_screen_occlusion(vec3 position_5, vec3 normal_2) {
                 continue;
             }
             ivec2 pixel_2 = ivec2((sampleUV * dims_4));
-            vec4 packed_1 = texelFetch(screenDepthTex, pixel_2, 0);
-            if ((packed_1.w < 0.5)) {
+            vec4 _e123 = texelFetch(screenDepthTex, pixel_2, 0);
+            float depth_1 = _e123.x;
+            if ((depth_1 <= 0.0)) {
                 continue;
             }
-            float depth_1 = ((dot(packed_1.xyz, vec3(65536.0, 256.0, 1.0)) * 255.0) / 16777215.0);
             vec2 center = ((vec2(pixel_2) + vec2(0.5)) / dims_4);
             vec3 ndc_1 = vec3(((center.x * 2.0) - 1.0), (SHADOW_FLIP_Y ? (1.0 - (center.y * 2.0)) : ((center.y * 2.0) - 1.0)), depth_1);
             vec4 world = (m_1 * vec4(ndc_1, 1.0));
@@ -584,14 +588,14 @@ float pbr_screen_occlusion(vec3 position_5, vec3 normal_2) {
             }
             vec3 delta_2 = ((world.xyz / vec3(world.w)) - position_5);
             float distance_2 = length(delta_2);
-            float _e177 = lightMeta.w;
-            float horizon = (max((dot(normal_2, delta_2) - _e177), 0.0) / max(distance_2, 1e-6));
-            float _e184 = blocked;
-            blocked = (_e184 + (horizon * (1.0 - smoothstep((radius_1 * 0.5), radius_1, distance_2))));
+            float _e167 = lightMeta.w;
+            float horizon = (max((dot(normal_2, delta_2) - _e167), 0.0) / max(distance_2, 1e-6));
+            float _e174 = blocked;
+            blocked = (_e174 + (horizon * (1.0 - smoothstep((radius_1 * 0.5), radius_1, distance_2))));
         }
     }
-    float _e197 = blocked;
-    return clamp((1.0 - (((strength * 2.0) * _e197) / float(count_1))), 0.0, 1.0);
+    float _e187 = blocked;
+    return clamp((1.0 - (((strength * 2.0) * _e187) / float(count_1))), 0.0, 1.0);
 }
 
 vec3 pbr_fresnel(float cosine, vec3 f0_, float f90_) {
@@ -664,20 +668,20 @@ vec4 pbr_scene_color(vec2 uv_2) {
 vec2 pbr_scene_depth(vec2 uv_3) {
     ivec2 dims_5 = ivec2(uvec2(textureSize(screenDepthTex, 0).xy));
     ivec2 pixel_3 = min(max(ivec2((uv_3 * vec2(dims_5))), ivec2(0)), (dims_5 - ivec2(1)));
-    vec4 packed_2 = texelFetch(screenDepthTex, pixel_3, 0);
-    if ((packed_2.w < 0.5)) {
+    vec4 _e15 = texelFetch(screenDepthTex, pixel_3, 0);
+    float depth_2 = _e15.x;
+    if ((depth_2 <= 0.0)) {
         return vec2(0.0);
     }
-    float depth_2 = ((dot(packed_2.xyz, vec3(65536.0, 256.0, 1.0)) * 255.0) / 16777215.0);
     vec2 center_1 = ((vec2(pixel_3) + vec2(0.5)) / vec2(dims_5));
-    mat4x4 _e39 = occlusionInverseProjection;
-    vec4 world_1 = (_e39 * vec4(((center_1.x * 2.0) - 1.0), (SHADOW_FLIP_Y ? (1.0 - (center_1.y * 2.0)) : ((center_1.y * 2.0) - 1.0)), depth_2, 1.0));
+    mat4x4 _e29 = occlusionInverseProjection;
+    vec4 world_1 = (_e29 * vec4(((center_1.x * 2.0) - 1.0), (SHADOW_FLIP_Y ? (1.0 - (center_1.y * 2.0)) : ((center_1.y * 2.0) - 1.0)), depth_2, 1.0));
     if ((abs(world_1.w) < 1e-8)) {
         return vec2(0.0);
     }
-    vec4 _e72 = cameraPosition;
-    vec4 _e77 = cameraForward;
-    return vec2(dot(((world_1.xyz / vec3(world_1.w)) - _e72.xyz), _e77.xyz), 1.0);
+    vec4 _e62 = cameraPosition;
+    vec4 _e67 = cameraForward;
+    return vec2(dot(((world_1.xyz / vec3(world_1.w)) - _e62.xyz), _e67.xyz), 1.0);
 }
 
 vec4 pbr_screen_reflection(vec3 position_6, vec3 normal_3, vec3 v_1, float roughness_3) {
@@ -1525,359 +1529,366 @@ void main() {
         n = -(_e333);
     }
     vec3 shadowNormal = n;
+    vec3 _e337 = dFdx(input_.worldPosition);
+    vec3 _e339 = dFdy(input_.worldPosition);
+    vec3 _e340 = n;
+    vec3 _e341 = dFdx(_e340);
+    vec3 _e342 = n;
+    vec3 _e343 = dFdy(_e342);
+    mat4x3 receiver_2 = mat4x3(_e337, _e339, _e341, _e343);
     if (((flags_1 & 16u) != 0u)) {
-        vec4 _e345 = texture(occlusionTex, vec2(input_.uv));
-        ao = mix(1.0, _e345.x, input_.custom0_.y);
+        vec4 _e354 = texture(occlusionTex, vec2(input_.uv));
+        ao = mix(1.0, _e354.x, input_.custom0_.y);
     }
-    float _e354 = renderParams.y;
-    if ((_e354 != 4.0)) {
+    float _e363 = renderParams.y;
+    if ((_e363 != 4.0)) {
         local_6 = ((flags_1 & 32768u) == 0u);
     } else {
         local_6 = false;
     }
-    bool _e364 = local_6;
-    if (_e364) {
+    bool _e373 = local_6;
+    if (_e373) {
         local_7 = ((flags_1 & 3u) != 2u);
     } else {
         local_7 = false;
     }
-    bool _e372 = local_7;
-    if (_e372) {
-        float _e373 = ao;
-        float _e375 = pbr_screen_occlusion(input_.worldPosition, shadowNormal);
-        ao = (_e373 * _e375);
+    bool _e381 = local_7;
+    if (_e381) {
+        float _e382 = ao;
+        float _e384 = pbr_screen_occlusion(input_.worldPosition, shadowNormal);
+        ao = (_e382 * _e384);
     }
-    float _e380 = renderParams.y;
-    if ((_e380 == 6.0)) {
-        float _e383 = ao;
-        _fs2p_location0 = vec4(_e383, 0.0, 0.0, 1.0);
+    float _e389 = renderParams.y;
+    if ((_e389 == 6.0)) {
+        float _e392 = ao;
+        _fs2p_location0 = vec4(_e392, 0.0, 0.0, 1.0);
         return;
     }
-    vec3 _e396 = n;
-    frame = mat3x3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), _e396);
+    vec3 _e405 = n;
+    frame = mat3x3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), _e405);
     if (!(((flags_1 & 4u) != 0u))) {
         if ((input_.custom0_.w > 0.0)) {
             local_9 = ((flags_1 & 262144u) != 0u);
         } else {
             local_9 = false;
         }
-        bool _e417 = local_9;
-        local_8 = _e417;
+        bool _e426 = local_9;
+        local_8 = _e426;
     } else {
         local_8 = true;
     }
-    bool _e419 = local_8;
-    if (!(_e419)) {
+    bool _e428 = local_8;
+    if (!(_e428)) {
         local_10 = (input_.custom3_.x > 0.0);
     } else {
         local_10 = true;
     }
-    bool _e428 = local_10;
-    if (_e428) {
-        vec3 _e429 = n;
-        mat3x3 _e430 = pbr_basis(input_, _e429);
-        frame = _e430;
+    bool _e437 = local_10;
+    if (_e437) {
+        vec3 _e438 = n;
+        mat3x3 _e439 = pbr_basis(input_, _e438);
+        frame = _e439;
     }
-    vec3 _e431 = n;
-    coatNormal = _e431;
+    vec3 _e440 = n;
+    coatNormal = _e440;
     if (((flags_1 & 4u) != 0u)) {
-        mat3x3 _e437 = frame;
-        vec4 _e441 = texture(normalTex, vec2(input_.uv));
-        vec3 _e450 = pbr_mapped_normal(_e437, ((_e441.xyz * 2.0) - vec3(1.0)), input_.custom0_.x);
-        n = _e450;
+        mat3x3 _e446 = frame;
+        vec4 _e450 = texture(normalTex, vec2(input_.uv));
+        vec3 _e459 = pbr_mapped_normal(_e446, ((_e450.xyz * 2.0) - vec3(1.0)), input_.custom0_.x);
+        n = _e459;
     }
     coat = clamp(input_.custom0_.w, 0.0, 1.0);
     coatRoughness = input_.custom1_.w;
-    float _e460 = coat;
-    if ((_e460 > 0.0)) {
+    float _e469 = coat;
+    if ((_e469 > 0.0)) {
         if (((flags_1 & 65536u) != 0u)) {
-            float _e467 = coat;
-            vec4 _e471 = texture(clearcoatTex, vec2(input_.uv));
-            coat = (_e467 * _e471.x);
+            float _e476 = coat;
+            vec4 _e480 = texture(clearcoatTex, vec2(input_.uv));
+            coat = (_e476 * _e480.x);
         }
         if (((flags_1 & 131072u) != 0u)) {
-            float _e478 = coatRoughness;
-            vec4 _e482 = texture(clearcoatRoughnessTex, vec2(input_.uv));
-            coatRoughness = (_e478 * _e482.y);
+            float _e487 = coatRoughness;
+            vec4 _e491 = texture(clearcoatRoughnessTex, vec2(input_.uv));
+            coatRoughness = (_e487 * _e491.y);
         }
         if (((flags_1 & 262144u) != 0u)) {
-            mat3x3 _e489 = frame;
-            vec4 _e493 = texture(clearcoatNormalTex, vec2(input_.uv));
-            vec3 _e502 = pbr_mapped_normal(_e489, ((_e493.xyz * 2.0) - vec3(1.0)), input_.custom3_.w);
-            coatNormal = _e502;
+            mat3x3 _e498 = frame;
+            vec4 _e502 = texture(clearcoatNormalTex, vec2(input_.uv));
+            vec3 _e511 = pbr_mapped_normal(_e498, ((_e502.xyz * 2.0) - vec3(1.0)), input_.custom3_.w);
+            coatNormal = _e511;
         }
     }
-    float _e503 = coatRoughness;
-    coatRoughness = min(1.0, (max(_e503, 0.0525) + geometryRoughness));
+    float _e512 = coatRoughness;
+    coatRoughness = min(1.0, (max(_e512, 0.0525) + geometryRoughness));
     sheen = clamp(input_.custom2_.xyz, vec3(0.0), vec3(1.0));
     sheenRoughness = input_.custom2_.w;
-    vec3 _e520 = sheen;
-    if (any(greaterThan(_e520, vec3(0.0)))) {
+    vec3 _e529 = sheen;
+    if (any(greaterThan(_e529, vec3(0.0)))) {
         if (((flags_1 & 524288u) != 0u)) {
-            vec3 _e529 = sheen;
-            vec4 _e533 = texture(sheenColorTex, vec2(input_.uv));
-            sheen = (_e529 * _e533.xyz);
+            vec3 _e538 = sheen;
+            vec4 _e542 = texture(sheenColorTex, vec2(input_.uv));
+            sheen = (_e538 * _e542.xyz);
         }
         if (((flags_1 & 1048576u) != 0u)) {
-            float _e540 = sheenRoughness;
-            vec4 _e544 = texture(sheenRoughnessTex, vec2(input_.uv));
-            sheenRoughness = (_e540 * _e544.w);
+            float _e549 = sheenRoughness;
+            vec4 _e553 = texture(sheenRoughnessTex, vec2(input_.uv));
+            sheenRoughness = (_e549 * _e553.w);
         }
     }
     anisotropy = clamp(input_.custom3_.x, 0.0, 1.0);
-    float _e557 = anisotropy;
-    if ((_e557 > 0.0)) {
+    float _e566 = anisotropy;
+    if ((_e566 > 0.0)) {
         local_11 = ((flags_1 & 2097152u) != 0u);
     } else {
         local_11 = false;
     }
-    bool _e567 = local_11;
-    if (_e567) {
+    bool _e576 = local_11;
+    if (_e576) {
         vec4 sample_ = texture(anisotropyTex, vec2(input_.uv));
         vec2 encoded_1 = ((sample_.xy * 2.0) - vec2(1.0));
         if ((dot(encoded_1, encoded_1) > 1e-8)) {
             direction = normalize(encoded_1);
         }
-        float _e582 = anisotropy;
-        anisotropy = (_e582 * sample_.z);
+        float _e591 = anisotropy;
+        anisotropy = (_e591 * sample_.z);
     }
-    vec3 _e586 = frame[0];
-    tangent = _e586;
-    vec3 _e589 = frame[1];
-    bitangent = _e589;
-    float _e591 = anisotropy;
-    if ((_e591 > 0.0)) {
+    vec3 _e595 = frame[0];
+    tangent = _e595;
+    vec3 _e598 = frame[1];
+    bitangent = _e598;
+    float _e600 = anisotropy;
+    if ((_e600 > 0.0)) {
         rotation = input_.custom3_.yz;
-        vec2 _e600 = rotation;
-        vec2 _e601 = rotation;
-        vec2 _e602 = rotation;
-        rotation = ((dot(_e601, _e602) > 1e-8) ? _e600 : vec2(1.0, 0.0));
-        float _e608 = rotation.x;
-        float _e610 = direction.x;
-        float _e613 = rotation.y;
-        float _e615 = direction.y;
-        float _e619 = rotation.y;
-        float _e621 = direction.x;
-        float _e624 = rotation.x;
-        float _e626 = direction.y;
-        direction = vec2(((_e608 * _e610) - (_e613 * _e615)), ((_e619 * _e621) + (_e624 * _e626)));
-        vec3 _e631 = frame[0];
-        float _e633 = direction.x;
-        vec3 _e636 = frame[1];
-        float _e638 = direction.y;
-        vec3 rawTangent = ((_e631 * _e633) + (_e636 * _e638));
-        vec3 _e641 = n;
-        vec3 _e642 = n;
-        projectedTangent = (rawTangent - (_e641 * dot(_e642, rawTangent)));
-        vec3 _e647 = projectedTangent;
-        vec3 _e648 = projectedTangent;
-        if ((dot(_e647, _e648) < 1e-8)) {
-            vec3 _e653 = frame[1];
-            vec3 _e654 = n;
-            projectedTangent = cross(_e653, _e654);
-        }
+        vec2 _e609 = rotation;
+        vec2 _e610 = rotation;
+        vec2 _e611 = rotation;
+        rotation = ((dot(_e610, _e611) > 1e-8) ? _e609 : vec2(1.0, 0.0));
+        float _e617 = rotation.x;
+        float _e619 = direction.x;
+        float _e622 = rotation.y;
+        float _e624 = direction.y;
+        float _e628 = rotation.y;
+        float _e630 = direction.x;
+        float _e633 = rotation.x;
+        float _e635 = direction.y;
+        direction = vec2(((_e617 * _e619) - (_e622 * _e624)), ((_e628 * _e630) + (_e633 * _e635)));
+        vec3 _e640 = frame[0];
+        float _e642 = direction.x;
+        vec3 _e645 = frame[1];
+        float _e647 = direction.y;
+        vec3 rawTangent = ((_e640 * _e642) + (_e645 * _e647));
+        vec3 _e650 = n;
+        vec3 _e651 = n;
+        projectedTangent = (rawTangent - (_e650 * dot(_e651, rawTangent)));
         vec3 _e656 = projectedTangent;
-        tangent = normalize(_e656);
-        vec3 _e658 = n;
-        vec3 _e659 = tangent;
-        bitangent = cross(_e658, _e659);
+        vec3 _e657 = projectedTangent;
+        if ((dot(_e656, _e657) < 1e-8)) {
+            vec3 _e662 = frame[1];
+            vec3 _e663 = n;
+            projectedTangent = cross(_e662, _e663);
+        }
+        vec3 _e665 = projectedTangent;
+        tangent = normalize(_e665);
+        vec3 _e667 = n;
+        vec3 _e668 = tangent;
+        bitangent = cross(_e667, _e668);
     }
-    vec4 _e663 = cameraPosition;
-    vec4 _e670 = cameraForward;
-    float _e676 = cameraPosition.w;
-    vec3 v_7 = ((_e676 < 0.0) ? -(_e670.xyz) : normalize((_e663.xyz - input_.worldPosition)));
+    vec4 _e672 = cameraPosition;
+    vec4 _e679 = cameraForward;
+    float _e685 = cameraPosition.w;
+    vec3 v_7 = ((_e685 < 0.0) ? -(_e679.xyz) : normalize((_e672.xyz - input_.worldPosition)));
     specular = input_.custom0_.z;
     specColor = input_.custom1_.xyz;
     if (((flags_1 & 64u) != 0u)) {
-        float _e690 = specular;
-        vec4 _e694 = texture(specularTex, vec2(input_.uv));
-        specular = (_e690 * _e694.w);
+        float _e699 = specular;
+        vec4 _e703 = texture(specularTex, vec2(input_.uv));
+        specular = (_e699 * _e703.w);
     }
     if (((flags_1 & 128u) != 0u)) {
-        vec3 _e701 = specColor;
-        vec4 _e705 = texture(specularColorTex, vec2(input_.uv));
-        specColor = (_e701 * _e705.xyz);
+        vec3 _e710 = specColor;
+        vec4 _e714 = texture(specularColorTex, vec2(input_.uv));
+        specColor = (_e710 * _e714.xyz);
     }
     float iorRatio = ((input_.material.y == 0.0) ? 1.0 : (1.0 - (2.0 / (max(input_.material.y, 1.0) + 1.0))));
-    vec3 _e726 = specColor;
-    float _e731 = specular;
-    vec3 dielectricF0_ = (min((vec3((iorRatio * iorRatio)) * _e726), vec3(1.0)) * _e731);
+    vec3 _e735 = specColor;
+    float _e740 = specular;
+    vec3 dielectricF0_ = (min((vec3((iorRatio * iorRatio)) * _e735), vec3(1.0)) * _e740);
     float diffuseF0_ = max(max(dielectricF0_.x, dielectricF0_.y), dielectricF0_.z);
-    vec4 _e738 = base;
-    float _e740 = metallic;
-    vec3 f0_2 = mix(dielectricF0_, _e738.xyz, _e740);
-    float _e742 = specular;
-    float _e743 = metallic;
-    float f90_2 = mix(_e742, 1.0, _e743);
+    vec4 _e747 = base;
+    float _e749 = metallic;
+    vec3 f0_2 = mix(dielectricF0_, _e747.xyz, _e749);
+    float _e751 = specular;
+    float _e752 = metallic;
+    float f90_2 = mix(_e751, 1.0, _e752);
     emission = input_.emissiveMetallic.xyz;
     if (((flags_1 & 32u) != 0u)) {
-        vec3 _e753 = emission;
-        vec4 _e757 = texture(emissiveTex, vec2(input_.uv));
-        emission = (_e753 * _e757.xyz);
+        vec3 _e762 = emission;
+        vec4 _e766 = texture(emissiveTex, vec2(input_.uv));
+        emission = (_e762 * _e766.xyz);
     }
-    vec3 _e760 = n;
-    float nv_4 = max(dot(_e760, v_7), 0.0001);
-    float _e767 = sheenRoughness;
-    sheenRoughness = clamp(_e767, 0.045, 1.0);
-    vec3 _e771 = sheen;
-    if (any(greaterThan(_e771, vec3(0.0)))) {
-        float _e776 = sheenRoughness;
-        vec2 _e777 = pbr_sheen_response(nv_4, _e776);
-        sheenResponse = _e777;
+    vec3 _e769 = n;
+    float nv_4 = max(dot(_e769, v_7), 0.0001);
+    float _e776 = sheenRoughness;
+    sheenRoughness = clamp(_e776, 0.045, 1.0);
+    vec3 _e780 = sheen;
+    if (any(greaterThan(_e780, vec3(0.0)))) {
+        float _e785 = sheenRoughness;
+        vec2 _e786 = pbr_sheen_response(nv_4, _e785);
+        sheenResponse = _e786;
     }
     float sheenAlbedo = sheenResponse.y;
-    float _e781 = sheen.x;
-    float _e783 = sheen.y;
-    float _e786 = sheen.z;
-    float sheenScale = (1.0 - (max(max(_e781, _e783), _e786) * sheenAlbedo));
-    float _e791 = coat;
-    vec3 _e792 = coatNormal;
-    float coatFresnel = (_e791 * (0.04 + (0.96 * pow((1.0 - clamp(abs(dot(_e792, v_7)), 0.0, 1.0)), 5.0))));
-    vec3 _e807 = n;
-    vec3 _e808 = coatNormal;
-    vec3 _e809 = tangent;
-    vec3 _e810 = bitangent;
-    vec4 _e811 = base;
-    float _e813 = metallic;
-    float _e814 = roughness;
-    float _e815 = specular;
-    float _e816 = coat;
-    float _e817 = coatRoughness;
-    vec3 _e821 = sheen;
-    float _e822 = sheenRoughness;
-    float _e824 = sheenResponse.x;
-    float _e828 = anisotropy;
-    PBRSurface surface = PBRSurface(_e807, _e808, _e809, _e810, _e811.xyz, _e813, _e814, f0_2, f90_2, diffuseF0_, _e815, _e816, clamp(_e817, 0.045, 1.0), coatFresnel, _e821, _e822, sheenAlbedo, sheenScale, min((_e824 * nv_4), 1.0), _e828);
-    float _e833 = renderParams.y;
-    if ((_e833 == 4.0)) {
-        float _e836 = ao;
-        vec4 _e837 = pbr_resolve_reflections(input_, surface, v_7, _e836, flags_1);
-        _fs2p_location0 = _e837;
+    float _e790 = sheen.x;
+    float _e792 = sheen.y;
+    float _e795 = sheen.z;
+    float sheenScale = (1.0 - (max(max(_e790, _e792), _e795) * sheenAlbedo));
+    float _e800 = coat;
+    vec3 _e801 = coatNormal;
+    float coatFresnel = (_e800 * (0.04 + (0.96 * pow((1.0 - clamp(abs(dot(_e801, v_7)), 0.0, 1.0)), 5.0))));
+    vec3 _e816 = n;
+    vec3 _e817 = coatNormal;
+    vec3 _e818 = tangent;
+    vec3 _e819 = bitangent;
+    vec4 _e820 = base;
+    float _e822 = metallic;
+    float _e823 = roughness;
+    float _e824 = specular;
+    float _e825 = coat;
+    float _e826 = coatRoughness;
+    vec3 _e830 = sheen;
+    float _e831 = sheenRoughness;
+    float _e833 = sheenResponse.x;
+    float _e837 = anisotropy;
+    PBRSurface surface = PBRSurface(_e816, _e817, _e818, _e819, _e820.xyz, _e822, _e823, f0_2, f90_2, diffuseF0_, _e824, _e825, clamp(_e826, 0.045, 1.0), coatFresnel, _e830, _e831, sheenAlbedo, sheenScale, min((_e833 * nv_4), 1.0), _e837);
+    float _e842 = renderParams.y;
+    if ((_e842 == 4.0)) {
+        float _e845 = ao;
+        vec4 _e846 = pbr_resolve_reflections(input_, surface, v_7, _e845, flags_1);
+        _fs2p_location0 = _e846;
         return;
     }
-    float _e838 = specular;
-    float ambientF = (diffuseF0_ + ((_e838 - diffuseF0_) * pow((1.0 - clamp(nv_4, 0.0, 1.0)), 5.0)));
-    float _e851 = metallic;
-    float diffuseWeight = ((1.0 - ambientF) * (1.0 - _e851));
-    vec4 _e855 = base;
-    vec4 _e859 = ambientLight;
-    float _e864 = ao;
-    vec3 _e866 = emission;
-    lit = ((((((_e855.xyz * _e859.xyz) * diffuseWeight) * sheenScale) * _e864) + _e866) * (1.0 - coatFresnel));
-    float _e875 = environment.x;
-    if ((_e875 > 0.0)) {
-        vec3 _e878 = n;
-        vec3 _e880 = pbr_environment(_e878, 6.0);
-        vec3 _e881 = pbr_reflection_normal(surface, v_7);
-        float _e882 = roughness;
-        vec3 _e883 = pbr_environment_reflection(_e881, v_7, _e882);
-        float _e884 = roughness;
-        vec4 _e887 = pbr_atlas(vec2(nv_4, _e884), 7.0);
-        vec2 brdf_1 = _e887.xy;
+    float _e847 = specular;
+    float ambientF = (diffuseF0_ + ((_e847 - diffuseF0_) * pow((1.0 - clamp(nv_4, 0.0, 1.0)), 5.0)));
+    float _e860 = metallic;
+    float diffuseWeight = ((1.0 - ambientF) * (1.0 - _e860));
+    vec4 _e864 = base;
+    vec4 _e868 = ambientLight;
+    float _e873 = ao;
+    vec3 _e875 = emission;
+    lit = ((((((_e864.xyz * _e868.xyz) * diffuseWeight) * sheenScale) * _e873) + _e875) * (1.0 - coatFresnel));
+    float _e884 = environment.x;
+    if ((_e884 > 0.0)) {
+        vec3 _e887 = n;
+        vec3 _e889 = pbr_environment(_e887, 6.0);
+        vec3 _e890 = pbr_reflection_normal(surface, v_7);
+        float _e891 = roughness;
+        vec3 _e892 = pbr_environment_reflection(_e890, v_7, _e891);
+        float _e893 = roughness;
+        vec4 _e896 = pbr_atlas(vec2(nv_4, _e893), 7.0);
+        vec2 brdf_1 = _e896.xy;
         vec3 dielectricSingle = ((dielectricF0_ * brdf_1.x) + vec3((f90_2 * brdf_1.y)));
-        vec4 _e895 = base;
-        vec3 metallicSingle = ((_e895.xyz * brdf_1.x) + vec3((f90_2 * brdf_1.y)));
-        vec3 _e903 = pbr_multiscattering(dielectricF0_, f90_2, brdf_1);
         vec4 _e904 = base;
-        vec3 _e906 = pbr_multiscattering(_e904.xyz, f90_2, brdf_1);
-        float _e907 = metallic;
-        vec3 single_1 = mix(dielectricSingle, metallicSingle, _e907);
-        float _e909 = metallic;
-        vec3 multiple = mix(_e903, _e906, _e909);
-        vec4 _e911 = base;
-        float _e913 = metallic;
-        vec3 diffuse_1 = ((_e911.xyz * (1.0 - _e913)) * max(vec3(0.0), ((vec3(1.0) - dielectricSingle) - _e903)));
-        indirect = (((_e883 * single_1) + (_e880 * (multiple + diffuse_1))) * sheenScale);
-        vec3 _e931 = sheen;
-        if (any(greaterThan(_e931, vec3(0.0)))) {
-            vec3 _e936 = indirect;
-            vec3 _e937 = n;
-            float _e938 = sheenRoughness;
-            vec3 _e939 = pbr_environment_reflection(_e937, v_7, _e938);
-            vec3 _e940 = sheen;
-            indirect = (_e936 + ((_e939 * _e940) * sheenAlbedo));
+        vec3 metallicSingle = ((_e904.xyz * brdf_1.x) + vec3((f90_2 * brdf_1.y)));
+        vec3 _e912 = pbr_multiscattering(dielectricF0_, f90_2, brdf_1);
+        vec4 _e913 = base;
+        vec3 _e915 = pbr_multiscattering(_e913.xyz, f90_2, brdf_1);
+        float _e916 = metallic;
+        vec3 single_1 = mix(dielectricSingle, metallicSingle, _e916);
+        float _e918 = metallic;
+        vec3 multiple = mix(_e912, _e915, _e918);
+        vec4 _e920 = base;
+        float _e922 = metallic;
+        vec3 diffuse_1 = ((_e920.xyz * (1.0 - _e922)) * max(vec3(0.0), ((vec3(1.0) - dielectricSingle) - _e912)));
+        indirect = (((_e892 * single_1) + (_e889 * (multiple + diffuse_1))) * sheenScale);
+        vec3 _e940 = sheen;
+        if (any(greaterThan(_e940, vec3(0.0)))) {
+            vec3 _e945 = indirect;
+            vec3 _e946 = n;
+            float _e947 = sheenRoughness;
+            vec3 _e948 = pbr_environment_reflection(_e946, v_7, _e947);
+            vec3 _e949 = sheen;
+            indirect = (_e945 + ((_e948 * _e949) * sheenAlbedo));
         }
-        vec3 _e944 = indirect;
-        indirect = (_e944 * (1.0 - coatFresnel));
-        float _e948 = coat;
-        if ((_e948 > 0.0)) {
-            vec3 _e951 = coatNormal;
-            float cnv_1 = max(dot(_e951, v_7), 0.0001);
-            vec4 _e958 = pbr_atlas(vec2(cnv_1, surface.coatRoughness), 7.0);
-            vec2 coatBRDF = _e958.xy;
-            vec3 _e960 = indirect;
-            vec3 _e961 = coatNormal;
-            vec3 _e963 = pbr_environment_reflection(_e961, v_7, surface.coatRoughness);
-            float _e964 = coat;
-            indirect = (_e960 + ((_e963 * _e964) * ((0.04 * coatBRDF.x) + coatBRDF.y)));
+        vec3 _e953 = indirect;
+        indirect = (_e953 * (1.0 - coatFresnel));
+        float _e957 = coat;
+        if ((_e957 > 0.0)) {
+            vec3 _e960 = coatNormal;
+            float cnv_1 = max(dot(_e960, v_7), 0.0001);
+            vec4 _e967 = pbr_atlas(vec2(cnv_1, surface.coatRoughness), 7.0);
+            vec2 coatBRDF = _e967.xy;
+            vec3 _e969 = indirect;
+            vec3 _e970 = coatNormal;
+            vec3 _e972 = pbr_environment_reflection(_e970, v_7, surface.coatRoughness);
+            float _e973 = coat;
+            indirect = (_e969 + ((_e972 * _e973) * ((0.04 * coatBRDF.x) + coatBRDF.y)));
         }
-        vec3 _e973 = lit;
-        vec3 _e974 = indirect;
-        float _e978 = environment.x;
-        float _e980 = ao;
-        lit = (_e973 + ((_e974 * _e978) * _e980));
+        vec3 _e982 = lit;
+        vec3 _e983 = indirect;
+        float _e987 = environment.x;
+        float _e989 = ao;
+        lit = (_e982 + ((_e983 * _e987) * _e989));
     }
-    float _e986 = lightMeta.x;
-    if ((_e986 == 0.0)) {
+    float _e995 = lightMeta.x;
+    if ((_e995 == 0.0)) {
         if (((flags_1 & 4096u) == 0u)) {
-            float _e997 = pbr_light_shadow(0u, input_.worldPosition, shadowNormal);
-            shadow = _e997;
+            float _e1006 = pbr_light_shadow(0u, input_.worldPosition, shadowNormal, receiver_2);
+            shadow = _e1006;
         }
-        vec3 _e998 = lit;
-        vec4 _e1001 = lightDirection;
-        vec3 _e1005 = pbr_brdf(surface, v_7, normalize(-(_e1001.xyz)));
-        vec4 _e1008 = directionalLight;
-        float _e1011 = shadow;
-        lit = (_e998 + ((_e1005 * _e1008.xyz) * _e1011));
+        vec3 _e1007 = lit;
+        vec4 _e1010 = lightDirection;
+        vec3 _e1014 = pbr_brdf(surface, v_7, normalize(-(_e1010.xyz)));
+        vec4 _e1017 = directionalLight;
+        float _e1020 = shadow;
+        lit = (_e1007 + ((_e1014 * _e1017.xyz) * _e1020));
     }
     bool loop_init_8 = true;
     while(true) {
         if (!loop_init_8) {
-            uint _e1240 = index;
-            index = (_e1240 + 1u);
+            uint _e1249 = index;
+            index = (_e1249 + 1u);
         }
         loop_init_8 = false;
-        uint _e1016 = index;
-        if ((_e1016 < 16u)) {
+        uint _e1025 = index;
+        if ((_e1025 < 16u)) {
         } else {
             break;
         }
         {
-            uint _e1019 = index;
-            float _e1024 = lightMeta.x;
-            if ((float(_e1019) >= _e1024)) {
+            uint _e1028 = index;
+            float _e1033 = lightMeta.x;
+            if ((float(_e1028) >= _e1033)) {
                 break;
             }
-            uint _e1028 = index;
-            float kind_1 = lightDirections[_e1028].w;
+            uint _e1037 = index;
+            float kind_1 = lightDirections[_e1037].w;
             if ((kind_1 == 0.0)) {
                 continue;
             }
             if ((kind_1 >= 6.0)) {
-                vec3 _e1036 = lit;
-                uint _e1037 = index;
-                vec3 _e1039 = area_lighting(_e1037, input_.worldPosition, surface, v_7);
-                lit = (_e1036 + _e1039);
+                vec3 _e1045 = lit;
+                uint _e1046 = index;
+                vec3 _e1048 = area_lighting(_e1046, input_.worldPosition, surface, v_7);
+                lit = (_e1045 + _e1048);
                 continue;
             }
-            uint _e1043 = index;
-            vec4 _e1045 = lightDirections[_e1043];
-            l = -(_e1045.xyz);
+            uint _e1052 = index;
+            vec4 _e1054 = lightDirections[_e1052];
+            l = -(_e1054.xyz);
             attenuation = 1.0;
             if ((kind_1 >= 2.0)) {
-                uint _e1055 = index;
-                vec4 _e1057 = lightPosition[_e1055];
-                vec3 delta_5 = (_e1057.xyz - input_.worldPosition);
-                float distanceSquared_3 = dot(delta_5, delta_5);
                 uint _e1064 = index;
-                float range_2 = lightParams[_e1064].x;
-                uint _e1070 = index;
-                vec4 _e1072 = lightDirections[_e1070];
-                vec3 forward_1 = _e1072.xyz;
-                uint _e1076 = index;
-                vec4 right_1 = lightRight[_e1076];
-                uint _e1081 = index;
-                vec4 up_1 = lightUp[_e1081];
+                vec4 _e1066 = lightPosition[_e1064];
+                vec3 delta_5 = (_e1066.xyz - input_.worldPosition);
+                float distanceSquared_3 = dot(delta_5, delta_5);
+                uint _e1073 = index;
+                float range_2 = lightParams[_e1073].x;
+                uint _e1079 = index;
+                vec4 _e1081 = lightDirections[_e1079];
+                vec3 forward_1 = _e1081.xyz;
+                uint _e1085 = index;
+                vec4 right_1 = lightRight[_e1085];
+                uint _e1090 = index;
+                vec4 up_1 = lightUp[_e1090];
                 if ((kind_1 == 5.0)) {
                     float depth_4 = dot(-(delta_5), forward_1);
                     if (!((depth_4 < 0.0))) {
@@ -1885,59 +1896,59 @@ void main() {
                     } else {
                         local_12 = true;
                     }
-                    bool _e1095 = local_12;
-                    if (!(_e1095)) {
+                    bool _e1104 = local_12;
+                    if (!(_e1104)) {
                         local_13 = (abs(dot(delta_5, right_1.xyz)) > right_1.w);
                     } else {
                         local_13 = true;
                     }
-                    bool _e1105 = local_13;
-                    if (!(_e1105)) {
+                    bool _e1114 = local_13;
+                    if (!(_e1114)) {
                         local_14 = (abs(dot(delta_5, up_1.xyz)) > up_1.w);
                     } else {
                         local_14 = true;
                     }
-                    bool _e1115 = local_14;
-                    if (_e1115) {
+                    bool _e1124 = local_14;
+                    if (_e1124) {
                         continue;
                     }
                     l = -(forward_1);
-                    uint _e1119 = index;
-                    float _e1122 = lightParams[_e1119].y;
-                    attenuation = _e1122;
-                    uint _e1125 = index;
-                    float _e1128 = lightParams[_e1125].z;
-                    if ((_e1128 > 0.5)) {
-                        float _e1131 = attenuation;
-                        float _e1133 = light_range_window((depth_4 * depth_4), range_2);
-                        attenuation = (_e1131 * _e1133);
+                    uint _e1128 = index;
+                    float _e1131 = lightParams[_e1128].y;
+                    attenuation = _e1131;
+                    uint _e1134 = index;
+                    float _e1137 = lightParams[_e1134].z;
+                    if ((_e1137 > 0.5)) {
+                        float _e1140 = attenuation;
+                        float _e1142 = light_range_window((depth_4 * depth_4), range_2);
+                        attenuation = (_e1140 * _e1142);
                     }
                 } else {
                     if ((distanceSquared_3 >= (range_2 * range_2))) {
                         continue;
                     }
                     l = (delta_5 * inversesqrt(max(distanceSquared_3, 1e-8)));
-                    uint _e1143 = index;
-                    float _e1146 = lightColors[_e1143].w;
-                    float _e1147 = light_distance_attenuation(distanceSquared_3, range_2, _e1146);
-                    uint _e1150 = index;
-                    float _e1153 = lightParams[_e1150].y;
-                    attenuation = (_e1147 * _e1153);
+                    uint _e1152 = index;
+                    float _e1155 = lightColors[_e1152].w;
+                    float _e1156 = light_distance_attenuation(distanceSquared_3, range_2, _e1155);
+                    uint _e1159 = index;
+                    float _e1162 = lightParams[_e1159].y;
+                    attenuation = (_e1156 * _e1162);
                     if ((kind_1 == 3.0)) {
-                        vec3 _e1157 = l;
-                        float cone = dot(forward_1, -(_e1157));
-                        uint _e1162 = index;
-                        float inner = lightParams[_e1162].z;
-                        uint _e1168 = index;
-                        float outer = lightParams[_e1168].w;
+                        vec3 _e1166 = l;
+                        float cone = dot(forward_1, -(_e1166));
+                        uint _e1171 = index;
+                        float inner = lightParams[_e1171].z;
+                        uint _e1177 = index;
+                        float outer = lightParams[_e1177].w;
                         angle = ((cone >= outer) ? 1.0 : 0.0);
                         if ((inner > outer)) {
                             angle = clamp(((cone - outer) / (inner - outer)), 0.0, 1.0);
                         }
-                        float _e1184 = attenuation;
-                        float _e1185 = angle;
-                        float _e1186 = angle;
-                        attenuation = (_e1184 * (_e1185 * _e1186));
+                        float _e1193 = attenuation;
+                        float _e1194 = angle;
+                        float _e1195 = angle;
+                        attenuation = (_e1193 * (_e1194 * _e1195));
                     } else {
                         if ((kind_1 == 4.0)) {
                             float depth_5 = dot(-(delta_5), forward_1);
@@ -1946,14 +1957,14 @@ void main() {
                             } else {
                                 local_15 = true;
                             }
-                            bool _e1205 = local_15;
-                            if (!(_e1205)) {
+                            bool _e1214 = local_15;
+                            if (!(_e1214)) {
                                 local_16 = (abs(dot(delta_5, up_1.xyz)) > (depth_5 * up_1.w));
                             } else {
                                 local_16 = true;
                             }
-                            bool _e1216 = local_16;
-                            if (_e1216) {
+                            bool _e1225 = local_16;
+                            if (_e1225) {
                                 continue;
                             }
                         }
@@ -1961,23 +1972,23 @@ void main() {
                 }
             }
             if (((flags_1 & 4096u) == 0u)) {
-                float _e1221 = attenuation;
-                uint _e1222 = index;
-                float _e1224 = pbr_light_shadow(_e1222, input_.worldPosition, shadowNormal);
-                attenuation = (_e1221 * _e1224);
+                float _e1230 = attenuation;
+                uint _e1231 = index;
+                float _e1233 = pbr_light_shadow(_e1231, input_.worldPosition, shadowNormal, receiver_2);
+                attenuation = (_e1230 * _e1233);
             }
-            vec3 _e1226 = lit;
-            vec3 _e1227 = l;
-            vec3 _e1228 = pbr_brdf(surface, v_7, _e1227);
-            uint _e1231 = index;
-            vec4 _e1233 = lightColors[_e1231];
-            float _e1236 = attenuation;
-            lit = (_e1226 + ((_e1228 * _e1233.xyz) * _e1236));
+            vec3 _e1235 = lit;
+            vec3 _e1236 = l;
+            vec3 _e1237 = pbr_brdf(surface, v_7, _e1236);
+            uint _e1240 = index;
+            vec4 _e1242 = lightColors[_e1240];
+            float _e1245 = attenuation;
+            lit = (_e1235 + ((_e1237 * _e1242.xyz) * _e1245));
         }
     }
-    vec3 _e1242 = lit;
-    float _e1244 = base.w;
-    vec4 _e1246 = pbr_surface_output(_e1242, _e1244, input_.worldPosition);
-    _fs2p_location0 = _e1246;
+    vec3 _e1251 = lit;
+    float _e1253 = base.w;
+    vec4 _e1255 = pbr_surface_output(_e1251, _e1253, input_.worldPosition);
+    _fs2p_location0 = _e1255;
     return;
 }

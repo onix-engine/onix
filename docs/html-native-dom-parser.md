@@ -1,28 +1,37 @@
-# Native DOM parsing
+# Native HTML parsing
 
-`html/dom` now tokenizes UTF-8 strings and builds Onix nodes directly. It no
+`html/parse` now tokenizes UTF-8 strings and builds `scene/node.Node` directly. It no
 longer imports `golang.org/x/net/html`, builds a second DOM, or copies an entire
 reader buffer. The direct `golang.org/x/net` module requirement is removed.
 
 The lexical states, tree construction rules, foreign-content adjustments and
 entity data are adapted from the Go Authors' BSD implementation; the license is
-retained in `html/dom/LICENSE.go-html`. The storage model, source views,
+retained in `html/parse/LICENSE.go-html`. The storage model, source views,
 decoding, node construction and reusable API are implemented for Onix. Parsing
 follows the [HTML parsing algorithms](https://html.spec.whatwg.org/multipage/parsing.html),
 including omitted tags, table insertion modes and foster parenting, formatting
 reconstruction/adoption, raw text, RCDATA, script escaping, templates and foreign
 integration points.
 
+The scene node package owns the logical tree and its allocation blocks. HTML
+parsing, Markdown construction and component template cloning use the same
+node storage. CSS selectors and layout consume those nodes directly. HTML
+form state rules live in `html/element`. Sibling order in an HTML document is
+the order of the node's children. ECS siblings use `scene.SiblingOrder`
+through the shared scene hierarchy.
+
 ## Ownership and reuse
 
-`dom.Parse(source)` returns an independent document, as before. Its nodes and
-decoded strings remain valid after other calls to `dom.Parse`.
+`parse.Parse(source)` returns an independent document, as before. Its nodes and
+decoded strings remain valid after other calls to `parse.Parse`.
 
 For repeated parsing where the preceding document can be discarded, retain a
-zero-value `dom.Parser`:
+zero-value `parse.Parser`:
 
 ```go
-var parser dom.Parser
+import "github.com/onix-engine/onix/html/parse"
+
+var parser parse.Parser
 root, err := parser.Parse(source)
 ```
 
@@ -30,7 +39,7 @@ The next `parser.Parse` or `parser.Reset` invalidates the preceding result,
 including node pointers, attribute storage, child slices and decoded strings. The parser
 must not be copied after use or shared concurrently. Independent parsers can run
 concurrently. `Reset` clears source/tree references and retains capacity;
-assigning `dom.Parser{}` releases the retained capacity.
+assigning `parse.Parser{}` releases the retained capacity.
 
 Unchanged names, values and text borrow immutable source substrings. Changed
 strings use append-only decoded storage. A sorted static table handles all 2,231
@@ -75,7 +84,7 @@ prefix instead of colliding with unqualified attributes.
 Doctype names compare without ASCII case sensitivity and do not expand character
 references. Templates inside foreign HTML integration points continue parsing
 the remaining input. Malformed HTML is repaired; nesting beyond 512 open
-elements returns `dom.ErrNestingDepth`. The parser treats scripting as enabled
+elements returns `parse.ErrNestingDepth`. The parser treats scripting as enabled
 for tokenization; it does not execute scripts.
 
 ## Measurements
@@ -108,12 +117,12 @@ newlines, comments and NUL preprocessing.
 ## Validation
 
 ```sh
-go test ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui ./module -count=1
-go vet ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui ./module
-go test -race ./html/dom -count=1
-go test ./html/dom -run '^$' -fuzz '^FuzzParse$' -fuzztime=20s -parallel=2
-go test ./html/dom -run '^$' -fuzz '^FuzzTokenizerProgress$' -fuzztime=10s -parallel=2
-go test ./html/dom -run '^$' -bench 'Benchmark(ParseLongText|ParserReuse)' -benchmem -benchtime=300ms
+go test ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui ./module -count=1
+go vet ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui ./module
+go test -race ./html/parse -count=1
+go test ./html/parse -run '^$' -fuzz '^FuzzParse$' -fuzztime=20s -parallel=2
+go test ./html/parse -run '^$' -fuzz '^FuzzTokenizerProgress$' -fuzztime=10s -parallel=2
+go test ./html/parse -run '^$' -bench 'Benchmark(ParseLongText|ParserReuse)' -benchmem -benchtime=300ms
 git diff --check
 ```
 
@@ -127,7 +136,7 @@ construction sources against the preceding parser, with zero differences after
 applying the intended comment/text and foreign-name projections. This replay uses
 Onix's document/body-fragment selection rather than each fixture's contextual
 fragment entry point. Representative tree outputs are frozen in
-`html/dom/html5_tree_test.go`; tests have no external HTML parser dependency.
+`html/parse/html5_tree_test.go`; tests have no external HTML parser dependency.
 The doctype and foreign-template corrections have dedicated regression cases.
 
 Android tests used NDK 27.2.12479018, `x86_64-linux-android24-clang`,

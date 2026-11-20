@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 const (
@@ -265,7 +265,7 @@ type AnimationTrack struct {
 
 // CompileAnimationTracks resolves lengths once, outside the per-frame path.
 // Tracks contain separate endpoints per property; omitted endpoints use the underlying style.
-func CompileAnimationTracks(node *dom.Node, computed *ComputedStyle, stylesheet *css.Stylesheet, queries *QueryEnvironment) []AnimationTrack {
+func CompileAnimationTracks(node *uinode.Node, computed *ComputedStyle, stylesheet *css.Stylesheet, queries *QueryEnvironment) []AnimationTrack {
 	if stylesheet == nil || len(computed.Animations()) == 0 {
 		return nil
 	}
@@ -276,9 +276,9 @@ func CompileAnimationTracks(node *dom.Node, computed *ComputedStyle, stylesheet 
 		for root.Parent != nil {
 			root = root.Parent
 		}
-		if root.Type == dom.DocumentNode {
+		if root.Type == uinode.DocumentNode {
 			for _, child := range root.Children {
-				if child.Type == dom.ElementNode {
+				if child.Type == uinode.ElementNode {
 					root = child
 					break
 				}

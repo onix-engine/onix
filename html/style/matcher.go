@@ -7,7 +7,7 @@ import (
 	"weak"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type compiledStylesheet struct {
@@ -214,9 +214,9 @@ func (c *compiledStylesheet) add(selector css.Selector, ref compiledSelectorRef)
 
 // Candidate order is irrelevant: cascadeWeight includes source order. Stream
 // the indexed buckets without a per-node copy, sort or retained candidate slice.
-func (c *compiledStylesheet) candidates(node *dom.Node) iter.Seq[compiledSelectorRef] {
+func (c *compiledStylesheet) candidates(node *uinode.Node) iter.Seq[compiledSelectorRef] {
 	return func(yield func(compiledSelectorRef) bool) {
-		if c == nil || node == nil || node.Type != dom.ElementNode {
+		if c == nil || node == nil || node.Type != uinode.ElementNode {
 			return
 		}
 		if id, ok := node.Attr("id"); ok {

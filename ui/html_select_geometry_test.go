@@ -64,7 +64,7 @@ func TestHTMLSelectLongLabelClipsBeforeArrowAndFitsPopup(t *testing.T) {
 			if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			world.GetMut[Selector](control).Open = true
+			SetHTMLSelectOpen(world, control, true)
 			if err := sync.Run(world); err != nil {
 				t.Fatal(err)
 			}
@@ -146,7 +146,7 @@ func TestHTMLSelectAutoWidthFitsLongestOptionAndTransparentRoundedPopup(t *testi
 	}
 	control := htmlControlByID(t, world, owner, "mode")
 	initialWidth := world.GetRef[scene.Size2D](control).Width
-	world.GetMut[Selector](control).Open = true
+	SetHTMLSelectOpen(world, control, true)
 	if err := sync.Run(world); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestHTMLSelectPopupScrollbarOnlyWhenOverflowing(t *testing.T) {
 			if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}
-			world.GetMut[Selector](control).Open = true
+			SetHTMLSelectOpen(world, control, true)
 			if err := SyncSystem("").Run(world); err != nil {
 				t.Fatal(err)
 			}

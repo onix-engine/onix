@@ -306,6 +306,7 @@ typedef struct {
 	VkPipeline opaque_surface;
 	VkPipeline transparent[ONIX_MESH_BLEND_MODE_COUNT];
 	VkPipeline color_only[2][1 + ONIX_MESH_BLEND_MODE_COUNT];
+    VkPipeline depth_only[2];
 	VkShaderModule vertex, fragment;
 	int destroy_pending;
 	uint32_t retire_frame;
@@ -367,6 +368,8 @@ ONIX_NATIVE_SLOTS(onix_vk_meshes, OnixVkMesh, 16, UINT32_MAX)
 ONIX_NATIVE_SLOTS(onix_vk_mesh_shaders, OnixVkMeshPipeline, 8, UINT32_MAX)
 ONIX_NATIVE_SLOTS(onix_vk_material2d_shaders, OnixVkMaterial2DPipeline, 8, UINT32_MAX)
 
+// The first 18 samplers combine two mip filters with three U and V wrap modes.
+enum { ONIX_VK_NEAREST_CLAMP_SAMPLER = 18, ONIX_VK_SAMPLER_COUNT };
 struct OnixGPUDriver {
     OnixGPUSurface native_surface;
     VkInstance instance;
@@ -391,9 +394,9 @@ struct OnixGPUDriver {
     uint32_t image_count;
     VkImage *images;
     VkImageView *image_views;
-	VkImage *depth_images;
-	VkImageView *depth_views;
-	VkDeviceMemory *depth_memories;
+	VkImage depth_images[ONIX_VK_FRAMES_IN_FLIGHT];
+	VkImageView depth_views[ONIX_VK_FRAMES_IN_FLIGHT];
+	VkDeviceMemory depth_memories[ONIX_VK_FRAMES_IN_FLIGHT];
     VkFramebuffer *framebuffers;
 	VkFramebuffer *depth_framebuffers;
 
@@ -401,6 +404,7 @@ struct OnixGPUDriver {
 	VkRenderPass load_render_pass;
 	VkRenderPass color_only_surface_passes[2];
 	VkRenderPass target_render_passes[4];
+    VkRenderPass depth_only_passes[2];
 	VkRenderPass picking_target_render_passes[4];
 	VkRenderPass color_only_target_passes[3][2];
 	VkDescriptorSetLayout texture_layout;
@@ -410,7 +414,7 @@ struct OnixGPUDriver {
 	VkDescriptorSetLayout surface_layout;
 	OnixVkTextureDescriptorPool texture_descriptor_pools[ONIX_VK_TEXTURE_DESCRIPTOR_POOLS];
 	uint32_t texture_descriptor_pool_count;
-    VkSampler texture_samplers[18];
+    VkSampler texture_samplers[ONIX_VK_SAMPLER_COUNT];
 	VkPipelineLayout sprite_layout;
 	VkPipelineLayout shape_layout;
 	VkPipelineLayout mesh_layout;
@@ -437,6 +441,7 @@ struct OnixGPUDriver {
 	uint32_t active_render_target;
 	int frame_cleared;
 	int surface_depth_cleared;
+	uint32_t surface_depth_age;
 	float clear_color[4];
     int vsync_enabled;
 	int swapchain_dirty;
@@ -1074,44 +1079,46 @@ static int onix_vk_create_device(OnixGPUDriver *driver) {
     return 1;
 }
 
+// Framebuffers also reference a swapchain view, while depth storage belongs
+// solely to the fenced frame slot.
+static void onix_vk_release_surface_depth(OnixGPUDriver *driver, uint32_t slot) {
+    if (driver->depth_framebuffers) {
+        for (uint32_t i = 0; i < driver->image_count; i++) {
+            VkFramebuffer *fb = &driver->depth_framebuffers[slot * driver->image_count + i];
+            if (*fb) vkDestroyFramebuffer(driver->device, *fb, NULL);
+            *fb = VK_NULL_HANDLE;
+        }
+    }
+    if (driver->depth_views[slot]) vkDestroyImageView(driver->device, driver->depth_views[slot], NULL);
+    if (driver->depth_images[slot]) vkDestroyImage(driver->device, driver->depth_images[slot], NULL);
+    if (driver->depth_memories[slot]) vkFreeMemory(driver->device, driver->depth_memories[slot], NULL);
+    driver->depth_views[slot] = VK_NULL_HANDLE;
+    driver->depth_images[slot] = VK_NULL_HANDLE;
+    driver->depth_memories[slot] = VK_NULL_HANDLE;
+}
+
 static void onix_vk_destroy_swapchain(OnixGPUDriver *driver) {
     if (driver->device == VK_NULL_HANDLE) {
         return;
     }
+    for (uint32_t slot = 0; slot < ONIX_VK_FRAMES_IN_FLIGHT; slot++) onix_vk_release_surface_depth(driver, slot);
     for (uint32_t index = 0; index < driver->image_count; index++) {
         if (driver->framebuffers != NULL && driver->framebuffers[index] != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(driver->device, driver->framebuffers[index], NULL);
         }
-		if (driver->depth_framebuffers != NULL && driver->depth_framebuffers[index] != VK_NULL_HANDLE) {
-			vkDestroyFramebuffer(driver->device, driver->depth_framebuffers[index], NULL);
-		}
         if (driver->image_views != NULL && driver->image_views[index] != VK_NULL_HANDLE) {
             vkDestroyImageView(driver->device, driver->image_views[index], NULL);
         }
-		if (driver->depth_views != NULL && driver->depth_views[index] != VK_NULL_HANDLE) {
-			vkDestroyImageView(driver->device, driver->depth_views[index], NULL);
-		}
-		if (driver->depth_images != NULL && driver->depth_images[index] != VK_NULL_HANDLE) {
-			vkDestroyImage(driver->device, driver->depth_images[index], NULL);
-		}
-		if (driver->depth_memories != NULL && driver->depth_memories[index] != VK_NULL_HANDLE) {
-			vkFreeMemory(driver->device, driver->depth_memories[index], NULL);
-		}
+
     }
     free(driver->framebuffers);
 	free(driver->depth_framebuffers);
     free(driver->image_views);
     free(driver->images);
-	free(driver->depth_images);
-	free(driver->depth_views);
-	free(driver->depth_memories);
     driver->framebuffers = NULL;
 	driver->depth_framebuffers = NULL;
     driver->image_views = NULL;
     driver->images = NULL;
-	driver->depth_images = NULL;
-	driver->depth_views = NULL;
-	driver->depth_memories = NULL;
     driver->image_count = 0;
     if (driver->swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(driver->device, driver->swapchain, NULL);
@@ -1224,12 +1231,8 @@ static int onix_vk_create_swapchain(OnixGPUDriver *driver) {
     driver->images = calloc(driver->image_count, sizeof(VkImage));
     driver->image_views = calloc(driver->image_count, sizeof(VkImageView));
     driver->framebuffers = calloc(driver->image_count, sizeof(VkFramebuffer));
-	driver->depth_framebuffers = calloc(driver->image_count, sizeof(VkFramebuffer));
-	driver->depth_images = calloc(driver->image_count, sizeof(VkImage));
-	driver->depth_views = calloc(driver->image_count, sizeof(VkImageView));
-	driver->depth_memories = calloc(driver->image_count, sizeof(VkDeviceMemory));
-    if (driver->images == NULL || driver->image_views == NULL || driver->framebuffers == NULL || driver->depth_framebuffers == NULL ||
-		driver->depth_images == NULL || driver->depth_views == NULL || driver->depth_memories == NULL) {
+	driver->depth_framebuffers = calloc((size_t)driver->image_count * ONIX_VK_FRAMES_IN_FLIGHT, sizeof(VkFramebuffer));
+    if (driver->images == NULL || driver->image_views == NULL || driver->framebuffers == NULL || driver->depth_framebuffers == NULL) {
         onix_vk_set_error("failed to allocate Vulkan swapchain resources");
         return 0;
     }
@@ -1323,7 +1326,8 @@ static int onix_vk_create_render_pass_with_load(
 }
 
 static int onix_vk_create_target_render_pass(OnixGPUDriver *driver, uint32_t clear_flags, VkFormat color_format, int depth, VkRenderPass *render_pass) {
-	int clear_color = (clear_flags & 1u) != 0;
+	int depth_only = color_format == VK_FORMAT_UNDEFINED;
+    int clear_color = (clear_flags & 1u) != 0;
 	int clear_depth = (clear_flags & 2u) != 0;
 	VkAttachmentDescription attachments[] = {{
 		.format = color_format,
@@ -1344,33 +1348,37 @@ static int onix_vk_create_target_render_pass(OnixGPUDriver *driver, uint32_t cle
 		.initialLayout = clear_depth ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	}};
-	VkAttachmentReference color_reference = {.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-	VkAttachmentReference depth_reference = {.attachment = 1, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+	if (depth_only) {
+        attachments[1].initialLayout = clear_depth ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    VkAttachmentReference color_reference = {.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkAttachmentReference depth_reference = {.attachment = depth_only ? 0u : 1u, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 	VkSubpassDescription subpass = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-		.colorAttachmentCount = 1,
+		.colorAttachmentCount = depth_only ? 0 : 1,
 		.pColorAttachments = &color_reference,
 		.pDepthStencilAttachment = depth ? &depth_reference : NULL,
 	};
 	VkSubpassDependency dependencies[] = {{
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
 		.dstSubpass = 0,
-		.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 	}, {
 		.srcSubpass = 0,
 		.dstSubpass = VK_SUBPASS_EXTERNAL,
-		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
 	}};
 	VkRenderPassCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.attachmentCount = depth ? 2 : 1,
-		.pAttachments = attachments,
+		.attachmentCount = depth_only || !depth ? 1 : 2,
+		.pAttachments = depth_only ? &attachments[1] : attachments,
 		.subpassCount = 1,
 		.pSubpasses = &subpass,
 		.dependencyCount = sizeof(dependencies) / sizeof(dependencies[0]),
@@ -1379,9 +1387,13 @@ static int onix_vk_create_target_render_pass(OnixGPUDriver *driver, uint32_t cle
 	return onix_vk_result(vkCreateRenderPass(driver->device, &info, NULL, render_pass), "vkCreateRenderPass(target)");
 }
 
+static uint32_t onix_vk_surface_framebuffer_index(const OnixGPUDriver *driver) {
+    return driver->frame_index * driver->image_count + driver->image_index;
+}
+
 static int onix_vk_color_only(const OnixGPUDriver *driver) {
-	return driver->active_render_target == 0 ? driver->depth_framebuffers[driver->image_index] == VK_NULL_HANDLE
-		: driver->render_targets[driver->active_render_target - 1].depth_image == VK_NULL_HANDLE;
+	return driver->active_render_target == 0 ? driver->depth_framebuffers[onix_vk_surface_framebuffer_index(driver)] == VK_NULL_HANDLE
+		: driver->render_targets[driver->active_render_target - 1].color_format != ONIX_TARGET_DEPTH && driver->render_targets[driver->active_render_target - 1].depth_image == VK_NULL_HANDLE;
 }
 
 static int onix_vk_r8_target(const OnixGPUDriver *driver) {
@@ -1389,6 +1401,7 @@ static int onix_vk_r8_target(const OnixGPUDriver *driver) {
 }
 
 static VkRenderPass onix_vk_target_pass(OnixGPUDriver *driver, const OnixVkRenderTarget *target, uint32_t clear_flags) {
+	if (target->color_format == ONIX_TARGET_DEPTH) return driver->depth_only_passes[(clear_flags >> 1) & 1];
 	if (target->depth_image == VK_NULL_HANDLE) return driver->color_only_target_passes[target->color_format][clear_flags & 1u];
 	return target->color_format == 1 ? driver->picking_target_render_passes[clear_flags] : driver->target_render_passes[clear_flags];
 }
@@ -1429,10 +1442,7 @@ static int onix_vk_create_framebuffers(OnixGPUDriver *driver) {
 	return 1;
 }
 
-// Each swapchain image receives depth only on its first surface mesh draw.
-static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
-	uint32_t index = driver->image_index;
-	if (driver->depth_framebuffers[index] != VK_NULL_HANDLE) return 1;
+static int onix_vk_create_frame_depth(OnixGPUDriver *driver, uint32_t slot) {
 	VkImageCreateInfo depth_image = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
@@ -1446,9 +1456,9 @@ static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
-	if (!onix_vk_result(vkCreateImage(driver->device, &depth_image, NULL, &driver->depth_images[index]), "vkCreateImage(depth)")) goto fail;
+	if (!onix_vk_result(vkCreateImage(driver->device, &depth_image, NULL, &driver->depth_images[slot]), "vkCreateImage(depth)")) goto fail;
 	VkMemoryRequirements requirements;
-	vkGetImageMemoryRequirements(driver->device, driver->depth_images[index], &requirements);
+	vkGetImageMemoryRequirements(driver->device, driver->depth_images[slot], &requirements);
 	uint32_t memory_type = onix_vk_find_memory_type(driver, requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkMemoryAllocateInfo allocation = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -1456,17 +1466,33 @@ static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
 		.memoryTypeIndex = memory_type,
 	};
 	if (memory_type == UINT32_MAX ||
-		!onix_vk_result(vkAllocateMemory(driver->device, &allocation, NULL, &driver->depth_memories[index]), "vkAllocateMemory(depth)") ||
-		!onix_vk_result(vkBindImageMemory(driver->device, driver->depth_images[index], driver->depth_memories[index], 0), "vkBindImageMemory(depth)")) goto fail;
+		!onix_vk_result(vkAllocateMemory(driver->device, &allocation, NULL, &driver->depth_memories[slot]), "vkAllocateMemory(depth)") ||
+		!onix_vk_result(vkBindImageMemory(driver->device, driver->depth_images[slot], driver->depth_memories[slot], 0), "vkBindImageMemory(depth)")) goto fail;
 	VkImageViewCreateInfo depth_view = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = driver->depth_images[index],
+		.image = driver->depth_images[slot],
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = VK_FORMAT_D32_SFLOAT,
 		.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1},
 	};
-	if (!onix_vk_result(vkCreateImageView(driver->device, &depth_view, NULL, &driver->depth_views[index]), "vkCreateImageView(depth)")) goto fail;
-	VkImageView attachments[] = {driver->image_views[index], driver->depth_views[index]};
+	if (!onix_vk_result(vkCreateImageView(driver->device, &depth_view, NULL, &driver->depth_views[slot]), "vkCreateImageView(depth)")) goto fail;
+	return 1;
+fail:
+	if (driver->depth_views[slot]) vkDestroyImageView(driver->device, driver->depth_views[slot], NULL);
+	if (driver->depth_images[slot]) vkDestroyImage(driver->device, driver->depth_images[slot], NULL);
+	if (driver->depth_memories[slot]) vkFreeMemory(driver->device, driver->depth_memories[slot], NULL);
+	driver->depth_views[slot] = VK_NULL_HANDLE;
+	driver->depth_images[slot] = VK_NULL_HANDLE;
+	driver->depth_memories[slot] = VK_NULL_HANDLE;
+	return 0;
+}
+
+static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
+    uint32_t index = onix_vk_surface_framebuffer_index(driver);
+    if (driver->depth_framebuffers[index]) return 1;
+    uint32_t slot = driver->frame_index;
+    if (!driver->depth_views[slot] && !onix_vk_create_frame_depth(driver, slot)) return 0;
+	VkImageView attachments[] = {driver->image_views[driver->image_index], driver->depth_views[slot]};
 	VkFramebufferCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.renderPass = driver->render_pass,
@@ -1476,18 +1502,7 @@ static int onix_vk_create_surface_depth(OnixGPUDriver *driver) {
 		.height = driver->extent.height,
 		.layers = 1,
 	};
-	if (!onix_vk_result(vkCreateFramebuffer(driver->device, &info, NULL, &driver->depth_framebuffers[index]), "vkCreateFramebuffer")) {
-		goto fail;
-	}
-	return 1;
-fail:
-	if (driver->depth_views[index]) vkDestroyImageView(driver->device, driver->depth_views[index], NULL);
-	if (driver->depth_images[index]) vkDestroyImage(driver->device, driver->depth_images[index], NULL);
-	if (driver->depth_memories[index]) vkFreeMemory(driver->device, driver->depth_memories[index], NULL);
-	driver->depth_views[index] = VK_NULL_HANDLE;
-	driver->depth_images[index] = VK_NULL_HANDLE;
-	driver->depth_memories[index] = VK_NULL_HANDLE;
-	return 0;
+    return onix_vk_result(vkCreateFramebuffer(driver->device, &info, NULL, &driver->depth_framebuffers[index]), "vkCreateFramebuffer(depth)");
 }
 
 static VkShaderModule onix_vk_shader_module(OnixGPUDriver *driver, OnixGPUShader shader) {
@@ -1510,6 +1525,7 @@ static VkPipeline onix_vk_create_pipeline(
     VkPipelineLayout layout,
 	int kind) {
 	int no_depth = (kind & ONIX_VK_PIPELINE_NO_DEPTH) != 0;
+	int depth_only = driver->active_render_target && driver->render_targets[driver->active_render_target - 1].color_format == ONIX_TARGET_DEPTH;
 	int r8 = (kind & ONIX_VK_PIPELINE_R8) != 0;
 	int compact_sprite = (kind & ONIX_VK_PIPELINE_COMPACT_SPRITE) != 0;
 	kind &= ~(ONIX_VK_PIPELINE_NO_DEPTH | ONIX_VK_PIPELINE_COMPACT_SPRITE | ONIX_VK_PIPELINE_R8);
@@ -1682,7 +1698,7 @@ static VkPipeline onix_vk_create_pipeline(
 	};
     VkPipelineColorBlendStateCreateInfo blend = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .attachmentCount = 1,
+        .attachmentCount = depth_only ? 0 : 1,
         .pAttachments = &attachment,
     };
     VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS};
@@ -1704,7 +1720,7 @@ static VkPipeline onix_vk_create_pipeline(
         .pColorBlendState = &blend,
         .pDynamicState = &dynamic,
         .layout = layout,
-		.renderPass = no_depth ? (driver->active_render_target == 0 ? driver->color_only_surface_passes[0] : driver->color_only_target_passes[r8 ? 2 : kind == 8][1]) : kind == 8 ? driver->picking_target_render_passes[3] : driver->render_pass,
+		.renderPass = depth_only ? driver->depth_only_passes[1] : no_depth ? (driver->active_render_target == 0 ? driver->color_only_surface_passes[0] : driver->color_only_target_passes[r8 ? 2 : kind == 8][1]) : kind == 8 ? driver->picking_target_render_passes[3] : driver->render_pass,
         .subpass = 0,
     };
     VkPipeline result = VK_NULL_HANDLE;
@@ -1956,7 +1972,9 @@ static VkPipeline onix_vk_mesh_pipeline(OnixGPUDriver *driver, const OnixNativeM
 	int kind = draw->alpha_mode == 2 ? 4 + (int)draw->blend_mode : driver->active_render_target == 0 ? 9 : 2;
 	VkPipeline *pipeline = draw->alpha_mode == 2 ? &variants->transparent[draw->blend_mode]
 		: driver->active_render_target == 0 ? &variants->opaque_surface : &variants->opaque;
-	if (onix_vk_color_only(driver)) {
+	if (driver->active_render_target && driver->render_targets[driver->active_render_target-1].color_format == ONIX_TARGET_DEPTH) {
+        pipeline = &variants->depth_only[draw->alpha_mode == 2];
+    } else if (onix_vk_color_only(driver)) {
 		pipeline = &variants->color_only[onix_vk_r8_target(driver)][draw->alpha_mode == 2 ? 1 + draw->blend_mode : 0];
 		kind |= ONIX_VK_PIPELINE_NO_DEPTH | (onix_vk_r8_target(driver) ? ONIX_VK_PIPELINE_R8 : 0);
 	}
@@ -2989,7 +3007,7 @@ static int onix_vk_prepare_draw(OnixGPUDriver *driver) {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.renderPass = onix_vk_color_only(driver) ? driver->color_only_surface_passes[driver->frame_cleared != 0]
 			: (driver->frame_cleared ? driver->load_render_pass : driver->render_pass),
-		.framebuffer = onix_vk_color_only(driver) ? driver->framebuffers[driver->image_index] : driver->depth_framebuffers[driver->image_index],
+		.framebuffer = onix_vk_color_only(driver) ? driver->framebuffers[driver->image_index] : driver->depth_framebuffers[onix_vk_surface_framebuffer_index(driver)],
 		.renderArea = {{0, 0}, driver->extent},
 		.clearValueCount = 2,
 		.pClearValues = clear,
@@ -3009,7 +3027,9 @@ static int onix_vk_prepare_draw(OnixGPUDriver *driver) {
 }
 
 static int onix_vk_require_surface_depth(OnixGPUDriver *driver) {
-	if (driver->active_render_target != 0 || driver->depth_framebuffers[driver->image_index] != VK_NULL_HANDLE) return 1;
+	if (driver->active_render_target != 0) return 1;
+	driver->surface_depth_age = 0;
+	if (driver->depth_framebuffers[onix_vk_surface_framebuffer_index(driver)] != VK_NULL_HANDLE) return 1;
 	if (!onix_vk_create_surface_depth(driver)) return 0;
 	VkCommandBuffer command = driver->frames[driver->frame_index].command_buffer;
 	if (driver->render_pass_active) {
@@ -3025,7 +3045,7 @@ static int onix_vk_require_surface_depth(OnixGPUDriver *driver) {
 			.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = driver->depth_images[driver->image_index],
+			.image = driver->depth_images[driver->frame_index],
 			.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1},
 			.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		};
@@ -3189,6 +3209,7 @@ static void onix_vk_release_render_target_attachments(OnixGPUDriver *driver, Oni
 }
 
 static void onix_vk_release_mesh_pipeline(OnixGPUDriver *driver, OnixVkMeshPipeline *pipeline) {
+	for (uint32_t i = 0; i < 2; i++) if (pipeline->depth_only[i]) vkDestroyPipeline(driver->device, pipeline->depth_only[i], NULL);
 	if (pipeline->opaque != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->opaque, NULL);
 	if (pipeline->opaque_surface != VK_NULL_HANDLE) vkDestroyPipeline(driver->device, pipeline->opaque_surface, NULL);
 	for (uint32_t blend = 0; blend < ONIX_MESH_BLEND_MODE_COUNT; blend++) {
@@ -3338,7 +3359,7 @@ void onix_gpu_destroy(OnixGPUDriver *driver) {
 		if (driver->sprite_layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, driver->sprite_layout, NULL);
 		if (driver->shape_layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, driver->shape_layout, NULL);
 		if (driver->mesh_layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(driver->device, driver->mesh_layout, NULL);
-        for (int i=0;i<18;i++) if (driver->texture_samplers[i] != VK_NULL_HANDLE) vkDestroySampler(driver->device, driver->texture_samplers[i], NULL);
+        for (int i=0;i<ONIX_VK_SAMPLER_COUNT;i++) if (driver->texture_samplers[i] != VK_NULL_HANDLE) vkDestroySampler(driver->device, driver->texture_samplers[i], NULL);
 		for (uint32_t index = 0; index < driver->texture_descriptor_pool_count; index++) {
 			if (driver->texture_descriptor_pools[index].pool) vkDestroyDescriptorPool(driver->device, driver->texture_descriptor_pools[index].pool, NULL);
 		}
@@ -3351,6 +3372,7 @@ void onix_gpu_destroy(OnixGPUDriver *driver) {
 		if (driver->load_render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(driver->device, driver->load_render_pass, NULL);
 		for (uint32_t index = 0; index < 2; index++) if (driver->color_only_surface_passes[index]) vkDestroyRenderPass(driver->device, driver->color_only_surface_passes[index], NULL);
 		for (uint32_t index = 0; index < 4; index++) {
+			if (index < 2 && driver->depth_only_passes[index]) vkDestroyRenderPass(driver->device, driver->depth_only_passes[index], NULL);
 			if (driver->target_render_passes[index] != VK_NULL_HANDLE) vkDestroyRenderPass(driver->device, driver->target_render_passes[index], NULL);
 			if (driver->picking_target_render_passes[index] != VK_NULL_HANDLE) vkDestroyRenderPass(driver->device, driver->picking_target_render_passes[index], NULL);
 		}
@@ -3403,6 +3425,26 @@ static void onix_vk_trim_readback(OnixGPUDriver *driver) {
 	driver->readback_used = 0;
 }
 
+int onix_gpu_trim_idle(OnixGPUDriver *driver) {
+    if (driver->frame_active) { onix_vk_set_error("cannot trim inside a Vulkan frame"); return 0; }
+    if (!onix_vk_submit_staging_burst(driver) || !onix_vk_result(vkDeviceWaitIdle(driver->device), "vkDeviceWaitIdle(trim)")) return 0;
+    for (uint32_t slot = 0; slot < ONIX_VK_FRAMES_IN_FLIGHT; slot++) {
+        OnixVkFrame *frame = &driver->frames[slot];
+        onix_vk_collect_resources(driver, slot);
+        onix_upload_cache_destroy(&frame->mesh_uploads);
+        onix_vk_destroy_instance_buffers(driver, frame);
+        onix_vk_destroy_staging_buffers(driver, frame);
+        frame->instance_buffer_index = frame->staging_buffer_index = 0;
+        frame->staging_reserved = frame->staging_prepared = 0;
+        onix_vk_release_surface_depth(driver, slot);
+    }
+    if (driver->readback.mapping) vkUnmapMemory(driver->device, driver->readback.memory);
+    onix_vk_destroy_buffer(driver, &driver->readback.buffer, &driver->readback.memory);
+    driver->readback = (OnixVkInstanceBuffer){0};
+    driver->readback_used = driver->readback_pending = 0;
+    return 1;
+}
+
 int onix_gpu_begin_frame(OnixGPUDriver *driver, const float clear_color[4]) {
     if (driver == NULL || driver->frame_active) {
         return driver != NULL;
@@ -3414,6 +3456,10 @@ int onix_gpu_begin_frame(OnixGPUDriver *driver, const float clear_color[4]) {
 	if (!onix_vk_result(vkWaitForFences(driver->device, 1, &frame->fence, VK_TRUE, UINT64_MAX), "vkWaitForFences")) {
 		return 0;
 	}
+	// Only this slot's fence has signaled. Other slots release their depth
+	// when they next enter BeginFrame.
+	if (driver->surface_depth_age < ONIX_BUFFER_TRIM_DELAY) driver->surface_depth_age++;
+	else if (driver->depth_images[driver->frame_index]) onix_vk_release_surface_depth(driver, driver->frame_index);
 	onix_vk_observe_commands(driver, frame);
 	onix_vk_trim_readback(driver);
 	onix_vk_trim_uploads(driver);
@@ -3707,27 +3753,29 @@ static int onix_vk_acquire_texture_slot(OnixGPUDriver *driver, uint32_t *slot) {
 static int onix_vk_ensure_texture_sampler(OnixGPUDriver *driver, uint32_t index) {
 	if (driver->texture_samplers[index] != VK_NULL_HANDLE) return 1;
 	const VkSamplerAddressMode modes[] = {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
+	int nearest = index == ONIX_VK_NEAREST_CLAMP_SAMPLER;
 	VkSamplerCreateInfo sampler = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.magFilter = nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
+		.minFilter = nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
+		.mipmapMode = nearest ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR,
 		.addressModeU = modes[index % 9 / 3],
 		.addressModeV = modes[index % 3],
 		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.maxLod = index >= 9 ? 1000.0f : 0.0f,
+		.maxLod = !nearest && index >= 9 ? 1000.0f : 0.0f,
 	};
 	return onix_vk_result(vkCreateSampler(driver->device, &sampler, NULL, &driver->texture_samplers[index]), "vkCreateSampler");
 }
 
 static int onix_vk_create_texture_descriptor(OnixGPUDriver *driver, OnixVkTexture *texture, VkFormat format) {
+	if (format == VK_FORMAT_D32_SFLOAT || format == VK_FORMAT_R32_UINT) texture->sampler_index = ONIX_VK_NEAREST_CLAMP_SAMPLER;
 	if (!onix_vk_ensure_texture_sampler(driver, texture->sampler_index)) return 0;
     VkImageViewCreateInfo view = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = texture->image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = format,
-        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture->mip_levels, 0, 1},
+        .subresourceRange = {format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT, 0, texture->mip_levels, 0, 1},
     };
 	if (texture->format == ONIX_TEXTURE_FORMAT_R8) {
 		view.components = (VkComponentMapping){
@@ -3870,12 +3918,17 @@ static int onix_vk_create_render_target_resources(
 	uint32_t color_format,
 	int depth,
 	OnixVkRenderTarget *target) {
-	if (width == 0 || height == 0 || color_format > 2 || (color_format == 2 && depth)) {
+	if (width == 0 || height == 0 || color_format > ONIX_TARGET_DEPTH || (color_format == ONIX_TARGET_DEPTH && !depth) || (color_format == 2 && depth)) {
 		onix_vk_set_error("unsupported Vulkan render target descriptor");
 		return 0;
 	}
-	if (!depth) {
-		for (uint32_t clear = 0; clear < 2; clear++) {
+	if (color_format == ONIX_TARGET_DEPTH) {
+        for (uint32_t clear = 0; clear < 2; clear++) {
+            VkRenderPass *pass = &driver->depth_only_passes[clear];
+            if (!*pass && !onix_vk_create_target_render_pass(driver, clear << 1, VK_FORMAT_UNDEFINED, 1, pass)) return 0;
+        }
+    } else if (!depth) {
+        for (uint32_t clear = 0; clear < 2; clear++) {
 			VkRenderPass *pass = &driver->color_only_target_passes[color_format][clear];
 			if (*pass == VK_NULL_HANDLE && !onix_vk_create_target_render_pass(driver, clear,
 				color_format == 2 ? VK_FORMAT_R8_UNORM : color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format, 0, pass)) return 0;
@@ -3883,7 +3936,7 @@ static int onix_vk_create_render_target_resources(
 	}
 	uint32_t texture_slot;
 	if (!onix_vk_acquire_texture_slot(driver, &texture_slot)) return 0;
-	VkFormat target_color_format = color_format == 2 ? VK_FORMAT_R8_UNORM : color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format;
+	VkFormat target_color_format = color_format == ONIX_TARGET_DEPTH ? VK_FORMAT_D32_SFLOAT : color_format == 2 ? VK_FORMAT_R8_UNORM : color_format == 1 ? VK_FORMAT_R32_UINT : driver->swapchain_format;
 	OnixVkTexture color = {.width = width, .height = height, .mip_levels = 1, .format = color_format == 2 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8};
 	VkImageCreateInfo color_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -3894,7 +3947,7 @@ static int onix_vk_create_render_target_resources(
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		.usage = color_format == ONIX_TARGET_DEPTH ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
@@ -3916,7 +3969,7 @@ static int onix_vk_create_render_target_resources(
 	}
 
 	OnixVkRenderTarget result = {.width = width, .height = height, .color_texture = texture_slot + 1, .color_format = color_format};
-	if (depth) {
+	if (depth && color_format != ONIX_TARGET_DEPTH) {
 		VkImageCreateInfo depth_info = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.imageType = VK_IMAGE_TYPE_2D,
@@ -3975,7 +4028,7 @@ static int onix_vk_create_render_target_resources(
 	VkFramebufferCreateInfo framebuffer = {
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.renderPass = onix_vk_target_pass(driver, &result, 3),
-		.attachmentCount = depth ? 2 : 1,
+		.attachmentCount = depth && color_format != ONIX_TARGET_DEPTH ? 2 : 1,
 		.pAttachments = attachments,
 		.width = width,
 		.height = height,
@@ -3993,11 +4046,9 @@ static int onix_vk_create_render_target_resources(
 
 static int onix_vk_retire_render_target_attachments(OnixGPUDriver *driver, OnixVkRenderTarget *target) {
 	if (target->framebuffer == VK_NULL_HANDLE && target->depth_image == VK_NULL_HANDLE) return 1;
-	if (!driver->frame_active) {
-		onix_vk_release_render_target_attachments(driver, target);
-		return 1;
-	}
-	OnixVkFrame *frame = &driver->frames[driver->frame_index];
+	uint32_t slot = driver->frame_active ? driver->frame_index :
+        (driver->frame_index + ONIX_VK_FRAMES_IN_FLIGHT - 1) % ONIX_VK_FRAMES_IN_FLIGHT;
+    OnixVkFrame *frame = &driver->frames[slot];
 	if (frame->retired_target_count == frame->retired_target_capacity) {
 		uint32_t capacity = frame->retired_target_capacity == 0 ? 4 : frame->retired_target_capacity * 2;
 		OnixVkRetiredRenderTarget *targets = realloc(frame->retired_targets, (size_t)capacity * sizeof(*targets));
@@ -4134,8 +4185,8 @@ int onix_gpu_begin_render_target(
 		.renderPass = onix_vk_target_pass(driver, target, clear_flags),
 		.framebuffer = target->framebuffer,
 		.renderArea = {{0, 0}, {target->width, target->height}},
-		.clearValueCount = 2,
-		.pClearValues = clear,
+		.clearValueCount = target->color_format == ONIX_TARGET_DEPTH ? 1 : 2,
+		.pClearValues = target->color_format == ONIX_TARGET_DEPTH ? &clear[1] : clear,
 	};
 	vkCmdBeginRenderPass(frame->command_buffer, &begin, VK_SUBPASS_CONTENTS_INLINE);
 	driver->render_pass_active = 1;
@@ -4198,7 +4249,7 @@ int onix_gpu_read_render_target(OnixGPUDriver *driver, uint32_t handle, int32_t 
 		return 0;
 	}
 	OnixVkRenderTarget *target = &driver->render_targets[handle - 1];
-	if (length != (size_t)width * height * (target->color_format == 2 ? 1 : 4) || target->framebuffer == VK_NULL_HANDLE || target->destroy_pending || !target->initialized || target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width || (uint64_t)(uint32_t)y + height > target->height) {
+	if (target->color_format == ONIX_TARGET_DEPTH || length != (size_t)width * height * (target->color_format == 2 ? 1 : 4) || target->framebuffer == VK_NULL_HANDLE || target->destroy_pending || !target->initialized || target->color_texture == 0 || (uint64_t)(uint32_t)x + width > target->width || (uint64_t)(uint32_t)y + height > target->height) {
 		onix_vk_set_error("Vulkan render target readback is outside the image");
 		return 0;
 	}
@@ -4630,6 +4681,10 @@ int onix_gpu_draw_sprites(
 		onix_vk_set_error("invalid Vulkan sprite draw");
 		return 0;
 	}
+	if (driver->active_render_target && driver->render_targets[driver->active_render_target - 1].color_format == ONIX_TARGET_DEPTH) {
+		onix_vk_set_error("2D drawing requires a color attachment");
+		return 0;
+	}
 	if (!onix_vk_prepare_draw(driver)) {
 		return 0;
 	}
@@ -4716,6 +4771,10 @@ int onix_gpu_draw_shapes(
 	uint32_t instance_count) {
 	if (driver == NULL || !driver->frame_active || push == NULL || instances == NULL || instance_count == 0) {
 		onix_vk_set_error("invalid Vulkan shape draw");
+		return 0;
+	}
+	if (driver->active_render_target && driver->render_targets[driver->active_render_target - 1].color_format == ONIX_TARGET_DEPTH) {
+		onix_vk_set_error("2D drawing requires a color attachment");
 		return 0;
 	}
 	if (!onix_vk_ensure_shape_pipeline(driver)) {

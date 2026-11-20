@@ -7,9 +7,9 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLShadowRecordedPixels(t *testing.T) {
@@ -37,10 +37,10 @@ func TestHTMLShadowRecordedPixels(t *testing.T) {
 }
 
 func roundTwoOpacityTree(depth int) *layout.Box {
-	root := &layout.Box{Node: &dom.Node{}, Style: &style.ComputedStyle{Opacity: style.Number(.5)}, Content: layout.Rect{Width: 128, Height: 128}}
+	root := &layout.Box{Node: &uinode.Node{}, Style: &style.ComputedStyle{Opacity: style.Number(.5)}, Content: layout.Rect{Width: 128, Height: 128}}
 	parent := root
 	for i := range depth {
-		child := &layout.Box{Node: &dom.Node{}, Style: &style.ComputedStyle{Opacity: style.Number(1), BackgroundColor: style.ColorValue(style.Color{R: byte(i * 13), G: 97, B: 211, A: 255})}, Content: layout.Rect{Width: 128, Height: 128}}
+		child := &layout.Box{Node: &uinode.Node{}, Style: &style.ComputedStyle{Opacity: style.Number(1), BackgroundColor: style.ColorValue(style.Color{R: byte(i * 13), G: 97, B: 211, A: 255})}, Content: layout.Rect{Width: 128, Height: 128}}
 		parent.Children = []*layout.Box{child}
 		parent = child
 	}

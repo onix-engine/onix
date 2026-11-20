@@ -28,6 +28,7 @@ type componentInfo struct {
 	structure uint64
 	values    uint64
 	members   uint64
+	detached  uint64
 }
 
 type column interface {
@@ -274,6 +275,16 @@ func (world *World) ComponentValueRevision[T any]() (version, membership uint64)
 		return info.values, info.members
 	}
 	return 0, 0
+}
+
+// ComponentDetachRevision changes when a component is removed from a live
+// entity. Despawns can be handled separately through EntityChangesSince.
+func (world *World) ComponentDetachRevision[T any]() uint64 {
+	requireWorld(world)
+	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
+		return world.componentInfos[id].detached
+	}
+	return 0
 }
 
 // ComponentVersion changes for writes, insertion, removal and row migration.

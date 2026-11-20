@@ -106,7 +106,7 @@ struct PBRSurface {
 
 
 
-// Returns camera-forward distance and validity. Load packed depth at texel
+// Returns camera-forward distance and validity. Load depth at texel
 // centers, with canonical Y independent of the backend's raster convention.
 
 // Perspective-correct traversal follows a projected segment rather than

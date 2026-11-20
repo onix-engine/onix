@@ -37,7 +37,7 @@ func TestHTMLStructureStylesStayWithinParent(t *testing.T) {
 			}
 			assertHTMLPartialMatchesFresh(t, world, owner, css+tc.after+siblings+strings.Repeat(`<div>Unchanged</div>`, 1000))
 			for node := range state.Styles {
-				if !htmlNodeWithin(node, state.Root) {
+				if !node.Within(state.Root) {
 					t.Fatal("detached node retained by style map")
 				}
 			}

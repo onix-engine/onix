@@ -191,6 +191,8 @@ type webGL2Driver struct {
 	scissorEnabled    bool
 	blendEnabled      bool
 	depthEnabled      bool
+	frameActive       bool
+	surfaceDepthAge   uint8
 	surfaceTarget     *webGLRenderTarget
 	surfaceSamples    int
 	surfaceMSAA       [3]js.Value // framebuffer, color renderbuffer, depth renderbuffer
@@ -409,7 +411,11 @@ func (d *webGL2Driver) BeginFrame(clear Color) error {
 	if d.activeTarget.Valid() {
 		return errors.New("render: WebGL2 render target is still active")
 	}
+	if d.surfaceTarget != nil && d.surfaceDepthAge >= bufferTrimDelay {
+		d.releaseSurfaceDepth()
+	}
 	if d.surfaceTarget != nil {
+		d.surfaceDepthAge++
 		if err := d.ensureSurfaceDepth(false); err != nil {
 			return err
 		}
@@ -440,6 +446,7 @@ func (d *webGL2Driver) BeginFrame(clear Color) error {
 		d.applyScissor(*d.scissor)
 	}
 	d.trimScratch()
+	d.frameActive = true
 	d.beginFrameStatistics(d.width, d.height)
 	return nil
 }
@@ -761,7 +768,7 @@ func (d *webGL2Driver) EndRenderTarget() error {
 
 func (d *webGL2Driver) ReadRenderTarget(handle RenderTargetHandle, region RenderTargetRegion, destination []byte) error {
 	target, ok := d.targets.Get(handle)
-	if !ok || target == nil || d.activeTarget.Valid() {
+	if !ok || target == nil || target.descriptor.ColorFormat == RenderTargetDepth || d.activeTarget.Valid() {
 		return fmt.Errorf("render: invalid WebGL2 render target readback %s", handle)
 	}
 	d.gl.Call("bindFramebuffer", webGLFramebuffer, target.framebuffer)
@@ -805,8 +812,11 @@ func (d *webGL2Driver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 	}
 	d.bindTexture(texture)
 	internalFormat, format, pixelType := webGLRGBA8, webGLRGBA, webGLUnsignedByte
-	if descriptor.ColorFormat == RenderTargetUint32 {
+	if descriptor.ColorFormat == RenderTargetUint32 || descriptor.ColorFormat == RenderTargetDepth {
 		internalFormat, format, pixelType = webGLR32UI, webGLRedInteger, webGLUnsignedInt
+		if descriptor.ColorFormat == RenderTargetDepth {
+			internalFormat, format, pixelType = webGLDepthComponent24, 0x1902, webGLUnsignedInt
+		}
 		d.gl.Call("texParameteri", webGLTexture2D, webGLTextureMinFilter, webGLNearest)
 		d.gl.Call("texParameteri", webGLTexture2D, webGLTextureMagFilter, webGLNearest)
 		d.gl.Call("texParameteri", webGLTexture2D, webGLTextureWrapS, webGLClampToEdge)
@@ -819,9 +829,17 @@ func (d *webGL2Driver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 	}
 	d.gl.Call("texImage2D", webGLTexture2D, 0, internalFormat, descriptor.Width, descriptor.Height, 0, format, pixelType, js.Null())
 	d.gl.Call("bindFramebuffer", webGLFramebuffer, framebuffer)
-	d.gl.Call("framebufferTexture2D", webGLFramebuffer, webGLColorAttachment0, webGLTexture2D, texture, 0)
+	if descriptor.ColorFormat == RenderTargetDepth {
+		d.gl.Call("framebufferTexture2D", webGLFramebuffer, webGLDepthAttachment, webGLTexture2D, texture, 0)
+		none := js.Global().Get("Array").New(1)
+		none.SetIndex(0, 0)
+		d.gl.Call("drawBuffers", none)
+		d.gl.Call("readBuffer", 0)
+	} else {
+		d.gl.Call("framebufferTexture2D", webGLFramebuffer, webGLColorAttachment0, webGLTexture2D, texture, 0)
+	}
 	depth := js.Undefined()
-	if descriptor.Depth {
+	if descriptor.Depth && descriptor.ColorFormat != RenderTargetDepth {
 		depth = d.gl.Call("createRenderbuffer")
 		if depth.Truthy() {
 			d.gl.Call("bindRenderbuffer", webGLRenderbuffer, depth)
@@ -829,7 +847,7 @@ func (d *webGL2Driver) createRenderTarget(descriptor RenderTargetDescriptor) (*w
 			d.gl.Call("framebufferRenderbuffer", webGLFramebuffer, webGLDepthAttachment, webGLRenderbuffer, depth)
 		}
 	}
-	complete := depth.Truthy() || !descriptor.Depth
+	complete := depth.Truthy() || !descriptor.Depth || descriptor.ColorFormat == RenderTargetDepth
 	complete = complete && d.gl.Call("checkFramebufferStatus", webGLFramebuffer).Int() == webGLFramebufferComplete
 	d.gl.Call("bindRenderbuffer", webGLRenderbuffer, js.Null())
 	d.gl.Call("bindFramebuffer", webGLFramebuffer, d.surfaceFramebuffer())
@@ -876,6 +894,9 @@ func (d *webGL2Driver) deleteRenderTarget(target *webGLRenderTarget, removeColor
 func (d *webGL2Driver) DrawSprites(batch SpriteBatch) error {
 	if len(batch.Instances) == 0 || len(batch.Draws) == 0 {
 		return nil
+	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
 	}
 	scratch := spriteUploadBuffers.get()
 	defer spriteUploadBuffers.put(scratch)
@@ -967,6 +988,9 @@ func (d *webGL2Driver) DrawShapes(batch ShapeBatch) error {
 	if len(batch.Instances) == 0 {
 		return nil
 	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
+	}
 	d.setDepthEnabled(false)
 	d.setBlendEnabled(true)
 	program := &d.programs[PipelineShape]
@@ -1023,6 +1047,7 @@ func (d *webGL2Driver) DrawMeshes(batch MeshBatch3D) error {
 		return err
 	}
 	if !d.activeTarget.Valid() {
+		d.surfaceDepthAge = 0
 		if err := d.ensureSurfaceDepth(true); err != nil {
 			return err
 		}
@@ -1338,6 +1363,50 @@ func (d *webGL2Driver) Present() error {
 		d.copySurfaceColor(d.surfaceTarget.color, js.Null())
 		d.gl.Call("bindFramebuffer", webGLFramebuffer, framebuffer)
 	}
+	d.frameActive = false
+	return nil
+}
+
+func (d *webGL2Driver) releaseSurfaceDepth() {
+	d.deleteSurfaceMSAA(d.surfaceMSAA)
+	d.surfaceMSAA = [3]js.Value{}
+	d.deleteRenderTarget(d.surfaceTarget, true)
+	d.surfaceTarget = nil
+	d.surfaceDepthAge = 0
+}
+
+func (d *webGL2Driver) TrimIdleBuffers() error {
+	if d.frameActive || d.activeTarget.Valid() {
+		return errors.New("render: cannot trim inside a frame")
+	}
+	d.gl.Call("finish")
+	// Re-specifying storage keeps existing VAO attribute bindings valid.
+	for i := range d.spriteGeometry {
+		for _, g := range [...]*webGLGeometry{&d.spriteGeometry[i], &d.shapeGeometry[i]} {
+			if g.instanceBuffer.Truthy() {
+				d.bindArrayBuffer(g.instanceBuffer)
+				d.gl.Call("bufferData", webGLArrayBuffer, 0, webGLDynamicDraw)
+				g.instanceBytes, g.instanceUsed = 0, 0
+				g.retention = bufferRetention{}
+			}
+		}
+	}
+	d.bindVertexArray(d.meshGeometry.vao)
+	for _, b := range [...]js.Value{d.meshGeometry.vertexBuffer, d.meshGeometry.instanceBuffer, d.meshGeometry.indexBuffer} {
+		if b.Truthy() {
+			// ELEMENT_ARRAY_BUFFER objects cannot be rebound to ARRAY_BUFFER in WebGL.
+			target := webGLArrayBuffer
+			if b.Equal(d.meshGeometry.indexBuffer) {
+				target = webGLElementArrayBuffer
+			}
+			d.gl.Call("bindBuffer", target, b)
+			d.gl.Call("bufferData", target, 0, webGLDynamicDraw)
+		}
+	}
+	d.gl.Call("bindBuffer", webGLArrayBuffer, js.Null())
+	d.boundBuffer = js.Null()
+	d.bindVertexArray(js.Null())
+	d.releaseSurfaceDepth()
 	return nil
 }
 

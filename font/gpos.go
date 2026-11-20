@@ -3,6 +3,7 @@ package font
 import (
 	"encoding/binary"
 	"math/bits"
+	"runtime"
 )
 
 // Pair positioning tables stay in the font buffer. Class kerning is queried
@@ -287,6 +288,7 @@ func pairAdvance(data []byte, left, right uint16) (int, bool) {
 // GlyphKerning returns horizontal advance adjustment in font design units.
 // GPOS kern lookups take precedence over the legacy kern table.
 func (f *Face) GlyphKerning(left, right uint16) int {
+	defer runtime.KeepAlive(f)
 	if f == nil {
 		return 0
 	}

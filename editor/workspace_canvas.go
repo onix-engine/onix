@@ -4,13 +4,13 @@ import (
 	"math"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	editorresources "github.com/onix-engine/onix/editor/resources"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const workspaceCanvasImage = "onix-scene-viewport"
@@ -67,7 +67,7 @@ func (a *ModuleEditor) updateViewport2DInput(in *input.State) {
 func (a *ModuleEditor) syncCanvas(w *ecs.World) error {
 	bounds := a.canvasBounds()
 	if a.canvas == 0 {
-		a.canvas = spawnWorkspaceSurface(w, workspaceCanvasHTML, "", a.font, bounds, 10)
+		a.canvas = spawnWorkspaceSurface(w, htmlui.New(workspaceCanvasHTML), a.font, bounds, 10)
 		w.InsertResource[htmlui.ImageProvider](a)
 		root, err := htmlui.Root(w, a.canvas)
 		if err != nil {

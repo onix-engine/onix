@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type Stylesheet struct {
@@ -93,9 +93,9 @@ type Specificity struct {
 }
 
 type State struct {
-	Focused      *dom.Node
-	Hovered      *dom.Node
-	Active       *dom.Node
+	Focused      *uinode.Node
+	Hovered      *uinode.Node
+	Active       *uinode.Node
 	FocusVisible bool
 }
 

@@ -28,6 +28,7 @@ type World struct {
 	queryPlans              map[uint64][]*queryPlan
 	scopes                  *QueryScope
 	queryScope              *QueryScope
+	entityChanges           *[entityChangeCapacity]Entity
 	simpleQueryPlans        map[simpleQueryKey]*queryPlan
 	directSystemContexts    map[string]*SystemContext
 	componentTypes          map[reflect.Type]componentID
@@ -70,6 +71,39 @@ func (w *World) StructureVersion() uint64 {
 func (w *World) EntityVersion() uint64 {
 	requireWorld(w)
 	return w.entityVersion
+}
+
+const entityChangeCapacity = 128
+
+// EntityChangesSince returns the handles affected by recent membership changes.
+// A handle may appear more than once. Read its current state with IsAlive.
+// The first call enables recording for subsequent changes. A false result
+// means callers must refresh from the live entity list.
+func (w *World) EntityChangesSince(version uint64, dst []Entity) ([]Entity, bool) {
+	requireWorld(w)
+	if w.entityChanges == nil {
+		w.entityChanges = new([entityChangeCapacity]Entity)
+		return dst, version == w.entityVersion
+	}
+	if w.entityVersion-version > entityChangeCapacity {
+		return dst, false
+	}
+	for version != w.entityVersion {
+		version++
+		if entity := w.entityChanges[version%entityChangeCapacity]; entity != 0 {
+			dst = append(dst, entity)
+		} else {
+			return dst, false
+		}
+	}
+	return dst, true
+}
+
+func (w *World) recordEntityChange(entity Entity) {
+	w.entityVersion++
+	if w.entityChanges != nil {
+		w.entityChanges[w.entityVersion%entityChangeCapacity] = entity
+	}
 }
 
 // ChangeTick returns the current change-tracking clock without advancing it.
@@ -250,7 +284,7 @@ func (w *World) commitSpawn(index uint32, archetype *archetype, row int) {
 		w.occupiedArchetypes[archetype.id/64] |= uint64(1) << (archetype.id % 64)
 	}
 	w.entityCount++
-	w.entityVersion++
+	w.recordEntityChange(archetype.entities[row])
 	w.structureVersion++
 	w.mutationVersion++
 }
@@ -266,7 +300,7 @@ func (w *World) Despawn(entity Entity) bool {
 	w.removeArchetypeRow(archetype, int(meta.row))
 	w.releaseEntity(index)
 	w.entityCount--
-	w.entityVersion++
+	w.recordEntityChange(entity)
 	w.structureVersion++
 	w.mutationVersion++
 	return true
@@ -414,6 +448,7 @@ func (world *World) Remove[T any](entity Entity) (T, bool) {
 	newRow := newArchetype.appendEntity(entity)
 	moveSharedRow(oldArchetype, newArchetype, oldRow, -1)
 	oldArchetype.columns[removedIndex].swapRemove(oldRow)
+	world.componentInfos[id].detached++
 	world.removeArchetypeEntity(oldArchetype, oldRow)
 	world.commitMigration(index, newArchetype, newRow)
 	return removed, true

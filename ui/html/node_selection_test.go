@@ -35,7 +35,7 @@ func TestHTMLNodeLiveSelectionBeforeAndAfterUserInput(t *testing.T) {
 		t.Fatal("programmatic selection after user input failed")
 	}
 	value, _ = world.Get[Control](control)
-	if value.Selected != 1 || value.Value != "B" {
+	if value.Selected != 1 || ControlValue(world, control) != "B" {
 		t.Fatal("rendered control retained stale selection", value)
 	}
 	if err := Sync(world); err != nil {
@@ -52,7 +52,7 @@ func TestHTMLNodeLiveSelectionBeforeAndAfterUserInput(t *testing.T) {
 		t.Fatal("selection could not be cleared")
 	}
 	value, _ = world.Get[Control](control)
-	if value.Selected != -1 || value.Value != "" {
+	if value.Selected != -1 || ControlValue(world, control) != "" {
 		t.Fatal("cleared selection retained value", value)
 	}
 }

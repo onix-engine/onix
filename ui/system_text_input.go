@@ -7,12 +7,12 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/text/piecetree"
 	"github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const inputDoubleClickInterval = 500 * time.Millisecond
@@ -187,29 +187,25 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 	next := previous
 	var submits int
 	undo, redo := textHistoryShortcut(uiInputState)
-	historyIndex := 0
-	if next.history != nil {
-		historyIndex = next.history.index
-	}
+	historyIndex := next.HistoryPosition()
 	if undo || redo {
-		next.restoreEdit(redo)
+		next.RestoreEdit(redo)
 	} else if next.Buffer != nil {
 		next.Source, next.Caret, next.Anchor, submits = editTextValue(next.Source, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, next.Buffer)
 	} else {
 		next.Value, next.Caret, next.Anchor, submits = editTextValue(next.Value, next.Caret, next.Anchor, next.MaxRunes, multiline, edits.Values, uiInputState, mouseSelecting, nil)
 	}
 	submits += textareaSubmits
+	var inputType, data string
 	if editable && next.Text() != previous.Text() {
-		inputType, data := htmlInputEditMetadata(edits.Values)
+		inputType, data = htmlInputEditMetadata(edits.Values)
 		if undo {
 			inputType, data = "historyUndo", ""
 		} else if redo {
 			inputType, data = "historyRedo", ""
 		}
 		if dispatchHTMLEditableBeforeInput(world, entity, inputType, data) {
-			if next.history != nil {
-				next.history.index = historyIndex
-			}
+			next.RestoreHistoryPosition(historyIndex)
 			if next.Buffer != nil {
 				next.Buffer.SyncSnapshot(previous.Text())
 			}
@@ -217,8 +213,9 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 			uiInputState.SetTextInputSelection(selectionStart, selectionEnd)
 			return
 		}
-		if state := world.GetMut[htmlEditableState](entity); state != nil {
-			state.InputType, state.Data = inputType, data
+		field = world.GetMut[TextField](entity)
+		if field == nil {
+			return
 		}
 	}
 	*field = next
@@ -236,10 +233,20 @@ func editFocused(world *ecs.World, entity ecs.Entity, uiInputState *input.State)
 		} else {
 			world.WriteMessage(InputEvent[string]{Entity: entity, Value: field.Value})
 		}
+		html.CommitTextEdit(world, entity)
+		publishHTMLTextInput(world, entity, inputType, data)
 	}
 	if submits > 0 {
+		field = world.GetMut[TextField](entity)
+		if field == nil {
+			return
+		}
 		field.Submitted = true
 		world.WriteMessage(SubmittedEvent[string]{Entity: entity, Value: field.Value})
+		if control, ok := world.Get[html.Control](entity); ok {
+			commitHTMLControl(world, entity, control)
+			writeHTMLEvent(world, entity, control, html.EventSubmit)
+		}
 		if world.Has[NumberInput](entity) {
 			if state, ok := world.GetResource[*uiEventState](); ok && state != nil {
 				focus(world, state, 0)

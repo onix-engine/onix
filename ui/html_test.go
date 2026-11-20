@@ -61,9 +61,8 @@ func TestHTMLInputEditsAndEmitsEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertHTMLEvent(t, reader.Read(world), owner, "name", htmlui.EventInput, "Onix!")
-	control, _ := world.Get[htmlui.Control](field)
-	if control.Value != "Onix!" {
-		t.Fatalf("HTML control value = %q, want Onix!", control.Value)
+	if htmlui.ControlValue(world, field) != "Onix!" {
+		t.Fatalf("HTML control value = %q, want Onix!", htmlui.ControlValue(world, field))
 	}
 
 	uiInputState.EndFrame()
@@ -1079,7 +1078,7 @@ func TestHTMLCheckboxTogglesAndUpdatesCheckedState(t *testing.T) {
 	}
 	checkbox := htmlControlByID(t, world, owner, "enabled")
 	control, _ := world.Get[htmlui.Control](checkbox)
-	if !control.Checked || !world.Has[Toggle[bool]](checkbox) {
+	if !control.Checked() || world.Has[Toggle[bool]](checkbox) {
 		t.Fatalf("checkbox state = %#v", control)
 	}
 	checkedMark := false
@@ -1107,7 +1106,7 @@ func TestHTMLCheckboxTogglesAndUpdatesCheckedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ = world.Get[htmlui.Control](checkbox)
-	if control.Checked {
+	if control.Checked() {
 		t.Fatalf("checkbox remained checked: %#v", control)
 	}
 	markHidden := false
@@ -1159,7 +1158,7 @@ func TestHTMLCheckboxWithoutIDToggles(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](checkbox)
-	if !control.Checked {
+	if !control.Checked() {
 		t.Fatalf("checkbox without id did not toggle: %#v", control)
 	}
 }
@@ -1228,8 +1227,8 @@ func TestHTMLCheckboxKeepsAuthoredCheckedAttribute(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](checkbox)
-	if control.Checked || !control.DefaultChecked {
-		t.Fatalf("checkbox live/default checkedness = %v/%v", control.Checked, control.DefaultChecked)
+	if control.Checked() || !control.DefaultChecked {
+		t.Fatalf("checkbox live/default checkedness = %v/%v", control.Checked(), control.DefaultChecked)
 	}
 	node, ok := htmlui.NodeByID(world, owner, "enabled")
 	if !ok || !node.SetAttribute("checked", "") {
@@ -1423,7 +1422,7 @@ func TestHTMLControlValueSetterSynchronizesTextField(t *testing.T) {
 	}
 	control, _ := world.Get[htmlui.Control](editor)
 	field, _ := world.Get[TextField](editor)
-	if control.Value != content || field.Value != content || field.Caret != 3 || field.Anchor != 3 {
+	if htmlui.ControlValue(world, editor) != content || field.Value != content || field.Caret != 3 || field.Anchor != 3 {
 		t.Fatalf("textarea value was not synchronized: control=%+v field=%+v", control, field)
 	}
 }
@@ -1597,19 +1596,19 @@ func TestHTMLHoverRebuildsMixedBorderSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, access := range world.Query2[scene.SpriteLayers2D, scene.Parent]().All {
+	for _, access := range world.Query2[scene.UIPaint2D, scene.Parent]().All {
 		parent := access.B.Get()
 		if parent.Entity != owner {
 			continue
 		}
-		for _, layer := range access.A.Ref().Layers {
-			if layer.Visible && layer.Transform.X == 0 && layer.Transform.Y == 0 && layer.Sprite.Width == 2 && layer.Sprite.Shape.Fill == graphics.ColorFromRGB(0x44, 0x55, 0x66) {
+		for _, fragment := range access.A.Ref().Fragments() {
+			if fragment.X == 0 && fragment.Y == 0 && fragment.Width == 2 && fragment.Shape.Fill == graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Fatal("mixed hover border did not rebuild its left-edge surface")
+		t.Fatal("mixed hover border did not emit its left fragment")
 	}
 }
 
@@ -1765,7 +1764,7 @@ func TestHTMLFocusOwnerPreservesDescendantHoverTarget(t *testing.T) {
 	world := ecs.NewWorld()
 	RegisterRuntimeFeature[HTMLRenderer](world)
 	world.InsertResource(input.NewState())
-	html := htmlui.New(`<div id="editor" tabindex="0"><span id="child">Child</span></div><style>#child{color:#112233}#child:hover{color:#445566}</style>`)
+	html := htmlui.New(`<div id="editor" tabindex="0"><span id="child" style="text-decoration-line:line-through">Child</span></div><style>#child{color:#112233}#child:hover{color:#445566}</style>`)
 	html.Width, html.Height = 180, 50
 	html.Font = notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
@@ -1795,6 +1794,10 @@ func TestHTMLFocusOwnerPreservesDescendantHoverTarget(t *testing.T) {
 	text, _ := world.Get[scene.Text2D](childText)
 	if text.Color != graphics.ColorFromRGB(0x44, 0x55, 0x66) {
 		t.Fatalf("descendant hover color = %#v", text.Color)
+	}
+	paint := world.GetRef[scene.UIPaint2D](childText)
+	if paint == nil || len(paint.Fragments()) != 1 || paint.Fragments()[0].Shape.Fill != text.Color {
+		t.Fatalf("descendant decoration did not follow hover on the focusable text target: %+v, text color %v", paint, text.Color)
 	}
 	world.WriteMessage(scene.InputEvent{Entity: childText, Kind: scene.InputEventPress})
 	if err := UpdateSystem("").Run(world); err != nil {
@@ -1909,28 +1912,16 @@ func TestHTMLResetButtonSynchronizesRuntimeControls(t *testing.T) {
 	if !htmlui.SetControlValue(world, field, "edited") || !htmlui.SetControlChecked(world, check, false) || !htmlui.SetControlSelected(world, mode, 0) {
 		t.Fatal("failed to dirty form controls")
 	}
-	if text := world.GetMut[TextField](field); text != nil {
-		text.Value = "edited"
-	}
-	if toggle := world.GetMut[Toggle[bool]](check); toggle != nil {
-		toggle.Value = false
-	}
-	if selector := world.GetMut[Selector](mode); selector != nil {
-		selector.Selected = 0
-	}
 	reader := &ecs.MessageReader[htmlui.Event]{}
 	world.WriteMessage(scene.InputEvent{Entity: reset, Kind: scene.InputEventTap})
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	fieldState, _ := world.Get[htmlui.Control](field)
 	checkState, _ := world.Get[htmlui.Control](check)
 	modeState, _ := world.Get[htmlui.Control](mode)
 	text, _ := world.Get[TextField](field)
-	toggle, _ := world.Get[Toggle[bool]](check)
-	selector, _ := world.Get[Selector](mode)
-	if fieldState.Value != "default" || text.Value != "default" || !checkState.Checked || !toggle.Value || modeState.Selected != 1 || selector.Selected != 1 {
-		t.Fatalf("reset runtime state = field:%#v text:%#v check:%#v toggle:%#v mode:%#v selector:%#v", fieldState, text, checkState, toggle, modeState, selector)
+	if text.Value != "default" || !checkState.Checked() || modeState.Selected != 1 {
+		t.Fatalf("reset runtime state = text:%#v check:%#v mode:%#v", text, checkState, modeState)
 	}
 	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
 		switch access.A.Ref().Control {
@@ -1970,8 +1961,7 @@ func TestHTMLResetDefaultActionCanBePreventedBeforeStateChanges(t *testing.T) {
 		if context.Event.Kind != htmlui.EventReset {
 			return
 		}
-		control, _ := world.Get[htmlui.Control](field)
-		seenPreReset = control.Value == "dirty"
+		seenPreReset = htmlui.ControlValue(world, field) == "dirty"
 		context.PreventDefault()
 	}}); err != nil {
 		t.Fatal(err)
@@ -1982,7 +1972,7 @@ func TestHTMLResetDefaultActionCanBePreventedBeforeStateChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](field)
-	if !seenPreReset || control.Value != "dirty" || !control.DirtyValue {
+	if !seenPreReset || htmlui.ControlValue(world, field) != "dirty" || !htmlui.ControlValueDirty(world, field) {
 		t.Fatalf("cancelled reset changed state: pre=%v control=%#v", seenPreReset, control)
 	}
 	found := false
@@ -2062,7 +2052,7 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 	press(input.KeyDown, true, false)
 	control, _ := world.Get[htmlui.Control](mode)
 	if control.SelectionAnchor != 0 || control.SelectionFocus != 3 || control.SelectedCount != 3 ||
-		!control.Options[0].Selected || !control.Options[1].Selected || control.Options[2].Selected || !control.Options[3].Selected {
+		!control.Options[0].Selected() || !control.Options[1].Selected() || control.Options[2].Selected() || !control.Options[3].Selected() {
 		t.Fatalf("shift range = %#v", control)
 	}
 	for entity, access := range world.Query[SelectorItem]().All {
@@ -2071,7 +2061,7 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 		if item.Owner != mode {
 			continue
 		}
-		state, _ := world.Get[Control](entity)
+		state, _ := controlViewFor(world, entity)
 		want := item.Index == 0 || item.Index == 1 || item.Index == 3
 		if state.Selected != want {
 			t.Fatalf("option %d visual selected = %v, want %v", item.Index, state.Selected, want)
@@ -2084,7 +2074,7 @@ func TestHTMLMultipleSelectKeyboardAnchorAndRange(t *testing.T) {
 	}
 	press(input.KeySpace, false, true)
 	control, _ = world.Get[htmlui.Control](mode)
-	if control.Options[1].Selected || control.SelectedCount != 2 {
+	if control.Options[1].Selected() || control.SelectedCount != 2 {
 		t.Fatalf("ctrl-space did not toggle navigation focus = %#v", control)
 	}
 	selectNode, _ := htmlui.NodeByID(world, owner, "mode")
@@ -2160,7 +2150,7 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	editor := htmlFocusableByID(t, world, owner, "editor")
 	editable, ok := world.Get[htmlui.Editable](editor)
 	field, fieldOK := world.Get[TextField](editor)
-	if !ok || !fieldOK || editable.Value != "ab" || field.Value != "ab" {
+	if !ok || !fieldOK || field.Value != "ab" {
 		t.Fatalf("contenteditable runtime = editable:%#v field:%#v", editable, field)
 	}
 	textCount, caretCount, selectionCount := 0, 0, 0
@@ -2197,9 +2187,9 @@ func TestHTMLContentEditableLiveTextSelectionAndCancelableBeforeInput(t *testing
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	editable, _ = world.Get[htmlui.Editable](editor)
-	if editable.Value != "aXb" || editable.Anchor != 2 || editable.Focus != 2 {
-		t.Fatalf("edited contenteditable = %#v", editable)
+	field, _ = world.Get[TextField](editor)
+	if field.Value != "aXb" || field.Anchor != 2 || field.Caret != 2 {
+		t.Fatalf("edited contenteditable = %#v", field)
 	}
 	events := reader.Read(world)
 	if len(events) < 2 || events[len(events)-2].Kind != htmlui.EventBeforeInput || events[len(events)-2].Value != "ab" ||
@@ -2295,6 +2285,7 @@ func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	mode := htmlControlByID(t, world, owner, "mode")
+	SetHTMLSelectOpen(world, mode, true)
 	var item ecs.Entity
 	for entity, access := range world.Query[SelectorItem]().All {
 		candidate := access.Get()
@@ -2312,9 +2303,8 @@ func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](mode)
-	selector, _ := world.Get[Selector](mode)
-	if control.SelectedCount != 1 || control.Options[0].Selected || !control.Options[1].Selected || control.Options[2].Selected || !selector.Open || control.SelectionAnchor != 1 || control.SelectionFocus != 1 {
-		t.Fatalf("multiple plain-click state = control:%#v selector:%#v", control, selector)
+	if control.SelectedCount != 1 || control.Options[0].Selected() || !control.Options[1].Selected() || control.Options[2].Selected() || !control.Open || control.SelectionAnchor != 1 || control.SelectionFocus != 1 {
+		t.Fatalf("multiple plain-click state = control:%#v", control)
 	}
 	uiInputState, _ := world.GetResource[*input.State]()
 	uiInputState.PressKey(input.KeyLeftControl)
@@ -2323,7 +2313,7 @@ func TestHTMLMultipleSelectItemUsesChromiumModifierSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ = world.Get[htmlui.Control](mode)
-	if control.SelectedCount != 0 || control.Options[1].Selected {
+	if control.SelectedCount != 0 || control.Options[1].Selected() {
 		t.Fatalf("multiple ctrl-click did not toggle target = %#v", control)
 	}
 }
@@ -2381,7 +2371,7 @@ func TestHTMLRadioActivationUpdatesOneLiveCheckedState(t *testing.T) {
 	}
 	firstState, _ := world.Get[htmlui.Control](first)
 	secondState, _ := world.Get[htmlui.Control](second)
-	if firstState.Checked || !secondState.Checked || !firstState.DefaultChecked || secondState.DefaultChecked {
+	if firstState.Checked() || !secondState.Checked() || !firstState.DefaultChecked || secondState.DefaultChecked {
 		t.Fatalf("radio live/default state = first:%#v second:%#v", firstState, secondState)
 	}
 	firstSprite, _ := world.Get[scene.Sprite2D](first)
@@ -2474,7 +2464,7 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	}
 	selectEntity := htmlControlByID(t, world, owner, "mode")
 	control, _ := world.Get[htmlui.Control](selectEntity)
-	if control.Selected != 1 || control.Value != "b" || len(control.Options) != 2 || !world.Has[Selector](selectEntity) {
+	if control.Selected != 1 || htmlui.ControlValue(world, selectEntity) != "b" || len(control.Options) != 2 || !world.Has[Selector](selectEntity) {
 		t.Fatalf("select state = %#v", control)
 	}
 	selectLabel := func() string {
@@ -2527,8 +2517,8 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := world.Get[Selector](selectEntity)
-	if !selector.Open {
+	selectState, _ := world.Get[htmlui.Control](selectEntity)
+	if !selectState.Open {
 		t.Fatal("select did not open")
 	}
 	listVisible := false
@@ -2611,7 +2601,7 @@ func TestHTMLSelectOpensAndSelectsOption(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ = world.Get[htmlui.Control](selectEntity)
-	if control.Selected != 0 || control.Value != "a" || control.Open {
+	if control.Selected != 0 || htmlui.ControlValue(world, selectEntity) != "a" || control.Open {
 		t.Fatalf("selected option state = %#v", control)
 	}
 	if got := selectLabel(); got != "Alpha" {
@@ -2648,8 +2638,7 @@ func TestHTMLSelectPopupKeepsItsOwnBoundsAndRoundedClip(t *testing.T) {
 		{name: "shown again", open: true, visible: true},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			selector := world.GetMut[Selector](selectEntity)
-			selector.Open = step.open
+			SetHTMLSelectOpen(world, selectEntity, step.open)
 			parentVisibility := world.GetMut[scene.Visibility](parent)
 			parentVisibility.Visible = !step.hidden
 			if err := SyncSystem("").Run(world); err != nil {
@@ -2722,8 +2711,8 @@ func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := world.Get[Selector](selectEntity)
-	if !selector.Open {
+	selectState, _ := world.Get[htmlui.Control](selectEntity)
+	if !selectState.Open {
 		t.Fatal("select did not open")
 	}
 
@@ -2732,9 +2721,8 @@ func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](selectEntity)
-	selector, _ = world.Get[Selector](selectEntity)
-	if selector.Open || control.Open {
-		t.Fatalf("select remained open after focus left: selector=%v control=%v", selector.Open, control.Open)
+	if control.Open {
+		t.Fatal("select remained open after focus left")
 	}
 	listVisible := false
 	for _, access := range world.Query2[SelectorList, scene.Visibility]().All {
@@ -2759,10 +2747,9 @@ func TestHTMLSelectClosesWhenFocusLeaves(t *testing.T) {
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ = world.Get[Selector](selectEntity)
 	control, _ = world.Get[htmlui.Control](selectEntity)
-	if selector.Open || control.Open {
-		t.Fatalf("select remained open after direct focus loss: selector=%v control=%v", selector.Open, control.Open)
+	if control.Open {
+		t.Fatal("select remained open after direct focus loss")
 	}
 }
 
@@ -2864,7 +2851,7 @@ func TestHTMLDisabledSelectOptionDoesNotChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, _ := world.Get[htmlui.Control](selectEntity)
-	if control.Selected != 1 || control.Value != "Available" {
+	if control.Selected != 1 || htmlui.ControlValue(world, selectEntity) != "Available" {
 		t.Fatalf("disabled option changed select = %#v", control)
 	}
 	if events := reader.Read(world); len(events) != 0 {
@@ -2895,14 +2882,7 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 	if err := UpdateSystem("").Run(world); err != nil {
 		t.Fatal(err)
 	}
-	selector, _ := world.Get[Selector](selectEntity)
-	selector.Open = true
-	if current := world.GetMut[Selector](selectEntity); current != nil {
-		*current = selector
-	}
-	if current := world.GetMut[htmlui.Control](selectEntity); current != nil {
-		current.Open = true
-	}
+	SetHTMLSelectOpen(world, selectEntity, true)
 	root, _ := htmlui.NodeByID(world, owner, "root")
 	root.SetAttribute("data-rebuild", "1")
 	if err := sync.Run(world); err != nil {
@@ -2910,7 +2890,7 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 	}
 	checkbox = htmlControlByID(t, world, owner, "enabled")
 	control, _ := world.Get[htmlui.Control](checkbox)
-	if control.Checked {
+	if control.Checked() {
 		t.Fatal("checkbox checked state was lost during HTML rebuild")
 	}
 	selectEntity = htmlControlByID(t, world, owner, "mode")
@@ -2918,9 +2898,8 @@ func TestHTMLChoiceStateSurvivesRebuildAndSelectorPopupCleansUp(t *testing.T) {
 	if control.Selected != 1 {
 		t.Fatalf("select selected state was lost during HTML rebuild: %#v", control)
 	}
-	selector, ok := world.Get[Selector](selectEntity)
-	if !ok || !selector.Open {
-		t.Fatalf("select open state was lost during HTML rebuild: %#v, ok=%v", selector, ok)
+	if !control.Open {
+		t.Fatal("select open state was lost during HTML rebuild")
 	}
 	listVisible := false
 	itemVisible := false
@@ -3143,12 +3122,12 @@ func TestHTMLRetainedControlsRefreshAuthoredAttributes(t *testing.T) {
 		t.Fatal("authored attribute update replaced controls")
 	}
 	field, _ := world.Get[TextField](fieldEntity)
-	toggle, _ := world.Get[Toggle[bool]](checkEntity)
+	check, _ := world.Get[htmlui.Control](checkEntity)
 	editor, _ := world.Get[TextField](editorEntity)
 	runtime, _ := world.Get[htmlSelectorRuntime](selectEntity)
 	item, _ := world.Get[SelectorItem](runtime.Items[0])
-	if field.Placeholder != "After" || field.MaxRunes != 4 || field.Value != "New" || !toggle.Value || editor.Value != "After" || item.Label != "After" {
-		t.Fatalf("stale authored values: field=%+v toggle=%+v editor=%+v item=%+v", field, toggle, editor, item)
+	if field.Placeholder != "After" || field.MaxRunes != 4 || field.Value != "New" || !check.Checked() || editor.Value != "After" || item.Label != "After" {
+		t.Fatalf("stale authored values: field=%+v checked=%v editor=%+v item=%+v", field, check.Checked(), editor, item)
 	}
 }
 
@@ -3340,11 +3319,10 @@ func TestHTMLStructureKeepsUnchangedTextFieldState(t *testing.T) {
 	control.SelectionAnchor, control.SelectionFocus = 1, 3
 	revision := control.RenderRevision
 	selectEntity := htmlControlByID(t, world, owner, "select")
-	selectControl := world.GetMut[htmlui.Control](selectEntity)
-	selectControl.Open = true
+	SetHTMLSelectOpen(world, selectEntity, true)
+	selectControl := world.GetRef[htmlui.Control](selectEntity)
 	selectRevision := selectControl.RenderRevision
 	selector := world.GetMut[Selector](selectEntity)
-	selector.Open = true
 	focus, _ := world.Get[htmlui.Focusable](entity)
 	removed, _ := htmlui.NodeByID(world, owner, "remove")
 	removed.Remove()
@@ -3360,7 +3338,7 @@ func TestHTMLStructureKeepsUnchangedTextFieldState(t *testing.T) {
 	selector = world.GetMut[Selector](selectEntity)
 	selectControl = world.GetMut[htmlui.Control](selectEntity)
 	selectStack, _ := world.Get[scene.UIStackIndex](selectEntity)
-	if selector.StackIndex != int(selectStack) || !selector.Open || !selectControl.Open || selectControl.RenderRevision != selectRevision {
+	if selector.StackIndex != int(selectStack) || !selectControl.Open || selectControl.RenderRevision != selectRevision {
 		t.Fatal("selector order cache or live state changed incorrectly")
 	}
 	if field.Value != "Typed" || field.Anchor != 1 || field.Caret != 3 || after.RenderRevision != revision || nextFocus.Order >= focus.Order {

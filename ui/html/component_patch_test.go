@@ -62,7 +62,7 @@ func TestHTMLComponentBindingPatchPreservesChildrenAndEvents(t *testing.T) {
 	if !world.IsAlive(originalChild) || instance.ComponentChildren["slot"].Items[0].Entity != originalChild || instance.Refs["keyed"].Children[0] != originalKeyed {
 		t.Fatal("patch replaced owned children")
 	}
-	definition.runtime.event(world, entity, "button", Event{Kind: EventClick}, nil, false)
+	definition.runtime.event(world, entity, "button", Event{Kind: EventClick}, nil)
 	if clicks != 1 || len(instance.Current.Events) != 1 {
 		t.Fatal("patch lost event handler")
 	}

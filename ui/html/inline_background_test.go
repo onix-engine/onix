@@ -138,27 +138,28 @@ func TestHTMLWrappedInlineBackgroundUsesPaintList(t *testing.T) {
 		t.Fatal("wrapped background did not produce one paint list")
 	}
 	entity := group.Bindings[0].Entity
-	layers, ok := world.Get[scene.SpriteLayers2D](entity)
-	if !ok || len(layers.Layers) < 2 {
-		t.Fatalf("paint list has %d fragments", len(layers.Layers))
+	paint := world.GetRef[scene.UIPaint2D](entity)
+	if paint == nil || len(paint.Fragments()) < 2 {
+		t.Fatal("wrapped background did not retain its paint fragments")
 	}
-	for _, layer := range layers.Layers {
-		if layer.Sprite.Shape.Fill != graphics.ColorFromRGB(204, 34, 0) {
-			t.Fatalf("wrong inline paint: %+v", layer.Sprite.Shape.Fill)
+	count := len(paint.Fragments())
+	for _, fragment := range paint.Fragments() {
+		if fragment.Shape.Fill != graphics.ColorFromRGB(204, 34, 0) {
+			t.Fatalf("wrong inline paint: %+v", fragment.Shape.Fill)
 		}
 	}
 	node.SetAttribute("style", "background:#00aa33")
 	incrementalSync(t, world)
-	updated, ok := world.Get[scene.SpriteLayers2D](entity)
-	if !ok || len(updated.Layers) != len(layers.Layers) || updated.Layers[0].Sprite.Shape.Fill != graphics.ColorFromRGB(0, 170, 51) {
-		t.Fatalf("local paint update did not reuse and refresh the list: present=%v count=%d previous=%d color=%v", ok, len(updated.Layers), len(layers.Layers), updated.Layers[0].Sprite.Shape.Fill)
+	updated := world.GetRef[scene.UIPaint2D](entity)
+	if updated == nil || len(updated.Fragments()) != count || updated.Fragments()[0].Shape.Fill != graphics.ColorFromRGB(0, 170, 51) {
+		t.Fatalf("local paint update did not reuse and refresh the fragments: %+v", updated)
 	}
 	if allocations := testing.AllocsPerRun(50, func() { incrementalSync(t, world) }); allocations != 0 {
 		t.Fatalf("idle paint list allocated %g times", allocations)
 	}
 	node.SetAttribute("style", "background:linear-gradient(red,blue)")
 	incrementalSync(t, world)
-	if world.IsAlive(entity) && world.Has[scene.SpriteLayers2D](entity) {
+	if world.IsAlive(entity) && world.Has[scene.UIPaint2D](entity) {
 		t.Fatal("paint list survived an unsupported gradient style")
 	}
 }

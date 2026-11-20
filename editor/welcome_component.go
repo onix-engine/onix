@@ -37,34 +37,6 @@ var (
 
 func editorWelcomeDefinitions() (*html.Definition[welcomeComponentProps, welcomeComponentState], error) {
 	welcomeDefinitionsOnce.Do(func() {
-		welcomeRowDefinition, welcomeDefinitionErr = html.DefineScoped[welcomeRecentProjectProps, struct{}](
-			html.NewTemplate(`<div data-ref="row" class="welcome-recent-row">
-  <button data-ref="button" class="welcome-row-button" type="button">
-    <img data-ref="icon" class="welcome-row-icon" src="onix-titlebar/folder.svg" alt="">
-    <span data-ref="name" class="welcome-row-name"></span>
-    <span data-ref="path" class="welcome-row-path"></span>
-  </button>
-  <button data-ref="remove" class="welcome-row-remove icon-only" type="button" aria-label="Remove">
-    <img data-ref="remove-icon" src="onix-titlebar/trash-2.svg" alt="">
-  </button>
-</div>`), "", html.Behavior[welcomeRecentProjectProps, struct{}]{
-				Render: func(context html.RenderContext[welcomeRecentProjectProps, struct{}], view *html.View) {
-					props := context.Props
-					view.Attr("row", "id", welcomeRecentProjectID(props.Index))
-					view.Attr("row", "style", welcomeRelativeRectStyle(props.Row, props.Panel))
-					view.Attr("button", "id", welcomeRecentProjectID(props.Index)+"-button")
-					view.Attr("icon", "id", welcomeRecentProjectID(props.Index)+"-icon")
-					view.Attr("name", "id", welcomeRecentProjectID(props.Index)+"-name")
-					view.Attr("path", "id", welcomeRecentProjectID(props.Index)+"-path")
-					view.Attr("remove", "id", welcomeRecentProjectID(props.Index)+"-remove")
-					view.Attr("remove", "style", welcomeRelativeRectStyle(relativeRect(props.RemoveRect, props.Row), rect{}))
-					view.Text("name", filepath.Base(props.Path))
-					view.Text("path", props.Path)
-				},
-			})
-		if welcomeDefinitionErr != nil {
-			return
-		}
 		welcomeDefinition, welcomeDefinitionErr = html.DefineScoped[welcomeComponentProps, welcomeComponentState](
 			html.NewTemplate(editorresources.DialogHTML("welcome")), "", html.Behavior[welcomeComponentProps, welcomeComponentState]{
 				Render: func(context html.RenderContext[welcomeComponentProps, welcomeComponentState], view *html.View) {
@@ -90,6 +62,34 @@ func editorWelcomeDefinitions() (*html.Definition[welcomeComponentProps, welcome
 						}, struct{}{})
 					}
 					view.Components("recent", children[:count])
+				},
+			})
+		if welcomeDefinitionErr != nil {
+			return
+		}
+		welcomeRowDefinition, welcomeDefinitionErr = welcomeDefinition.DefineScopedChild[welcomeRecentProjectProps, struct{}](
+			html.NewTemplate(`<div data-ref="row" class="welcome-recent-row">
+  <button data-ref="button" class="welcome-row-button" type="button">
+    <img data-ref="icon" class="welcome-row-icon" src="onix-titlebar/folder.svg" alt="">
+    <span data-ref="name" class="welcome-row-name"></span>
+    <span data-ref="path" class="welcome-row-path"></span>
+  </button>
+  <button data-ref="remove" class="welcome-row-remove icon-only" type="button" aria-label="Remove">
+    <img data-ref="remove-icon" src="onix-titlebar/trash-2.svg" alt="">
+  </button>
+</div>`), html.Behavior[welcomeRecentProjectProps, struct{}]{
+				Render: func(context html.RenderContext[welcomeRecentProjectProps, struct{}], view *html.View) {
+					props := context.Props
+					view.Attr("row", "id", welcomeRecentProjectID(props.Index))
+					view.Attr("row", "style", welcomeRelativeRectStyle(props.Row, props.Panel))
+					view.Attr("button", "id", welcomeRecentProjectID(props.Index)+"-button")
+					view.Attr("icon", "id", welcomeRecentProjectID(props.Index)+"-icon")
+					view.Attr("name", "id", welcomeRecentProjectID(props.Index)+"-name")
+					view.Attr("path", "id", welcomeRecentProjectID(props.Index)+"-path")
+					view.Attr("remove", "id", welcomeRecentProjectID(props.Index)+"-remove")
+					view.Attr("remove", "style", welcomeRelativeRectStyle(relativeRect(props.RemoveRect, props.Row), rect{}))
+					view.Text("name", filepath.Base(props.Path))
+					view.Text("path", props.Path)
 				},
 			})
 	})

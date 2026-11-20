@@ -39,7 +39,7 @@ type gridScratch struct {
 	occupied      []bool
 }
 
-func layoutGridContainer(box *Box, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutGridContainer(box *Box, height style.Value, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if box.grid == nil {
 		box.grid = &gridScratch{}
 	}
@@ -124,7 +124,7 @@ func layoutGridContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 	rowGap := resolveLength(box.Style.RowGap, box.Content.Height)
 	resolveGridTracks(columns, box.Content.Width, columnGap, items, true, face, styles, ctx)
 	resolveGridTracks(rows, box.Content.Height, rowGap, items, false, face, styles, ctx)
-	if !style.IsLength(box.Style.Height) {
+	if !style.IsLength(height) {
 		box.Content.Height = gridTracksSize(rows, rowGap)
 		rowGap = resolveLength(box.Style.RowGap, box.Content.Height)
 		resolveGridTracks(rows, box.Content.Height, rowGap, items, false, face, styles, ctx)
@@ -445,20 +445,13 @@ func layoutGridItem(child, container *Box, cell, absoluteContaining Rect, face *
 	justify, align := gridItemAlignment(child.Style.JustifySelf, container.Style.JustifyItems), gridItemAlignment(child.Style.AlignSelf, container.Style.AlignItems)
 	original := child.Style
 	width, height := original.Width, original.Height
-	changed := false
 	if justify == "stretch" && original.Width.Kind == style.ValueAuto {
 		width = gridStretchDimension(cell.Width, original, true)
-		changed = true
 	}
 	if align == "stretch" && original.Height.Kind == style.ValueAuto {
 		height = gridStretchDimension(cell.Height, original, false)
-		changed = true
 	}
-	if changed {
-		child.Style = child.measureStyle(&child.gridMeasureStyle, width, height)
-	}
-	layoutBlock(child, cell, absoluteContaining, face, styles, ctx)
-	child.Style = original
+	layoutBlockSized(child, width, height, cell, absoluteContaining, face, styles, ctx)
 	outer := child.FlowMarginBox
 	dx := gridAlignedOffset(justify, maxFloat(cell.Width-outer.Width, 0))
 	dy := gridAlignedOffset(align, maxFloat(cell.Height-outer.Height, 0))

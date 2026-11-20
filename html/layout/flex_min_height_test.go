@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
 func TestFlexRowMinHeightCentersSingleLine(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="summary"><div id="toggle"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="summary"><div id="toggle"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse html: %v", err)
 	}

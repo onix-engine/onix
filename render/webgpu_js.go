@@ -106,12 +106,12 @@ type webGPUMesh struct {
 }
 
 type webGPUPipelineKey struct {
-	blend           BlendState
-	depth, coverage bool
+	blend                        BlendState
+	depth, coverage, multisample bool
 }
 
 type webGPUShader struct {
-	meshPipelines  [3][5]js.Value
+	meshPipelines  [6][5]js.Value
 	vertex         js.Value
 	fragment       js.Value
 	blendPipelines map[webGPUPipelineKey]js.Value
@@ -212,6 +212,7 @@ type webGPUDriver struct {
 	blendSet                      bool
 	frameActive                   bool
 	surfaceDepthEnabled           bool
+	surfaceDepthAge               uint8
 }
 
 // NewWebGPUDriver creates the browser renderer. Device acquisition is awaited
@@ -411,7 +412,11 @@ func (d *webGPUDriver) BeginFrame(clear Color) error {
 	}
 	frame.offset = 0
 	depthView := js.Null()
+	if d.surfaceDepthEnabled && d.surfaceDepthAge >= bufferTrimDelay {
+		d.releaseSurfaceDepth()
+	}
 	if d.surfaceDepthEnabled {
+		d.surfaceDepthAge++
 		d.ensureDepth()
 		depthView = d.depth.view
 	}
@@ -691,14 +696,16 @@ func (d *webGPUDriver) BeginRenderTarget(handle RenderTargetHandle, clear Render
 	if !d.frameActive || !ok || target == nil || d.activeTarget.Valid() {
 		return fmt.Errorf("render: invalid WebGPU render target begin %s", handle)
 	}
-	target.clearValue.Set("r", clear.Color.R)
-	target.clearValue.Set("g", clear.Color.G)
-	target.clearValue.Set("b", clear.Color.B)
-	target.clearValue.Set("a", clear.Color.A)
-	if clear.ClearColor {
-		target.colorAttachment.Set("loadOp", "clear")
-	} else {
-		target.colorAttachment.Set("loadOp", "load")
+	if target.descriptor.ColorFormat != RenderTargetDepth {
+		target.clearValue.Set("r", clear.Color.R)
+		target.clearValue.Set("g", clear.Color.G)
+		target.clearValue.Set("b", clear.Color.B)
+		target.clearValue.Set("a", clear.Color.A)
+		if clear.ClearColor {
+			target.colorAttachment.Set("loadOp", "clear")
+		} else {
+			target.colorAttachment.Set("loadOp", "load")
+		}
 	}
 	if target.descriptor.Depth {
 		target.depthAttachment.Set("depthClearValue", clear.Depth)
@@ -728,7 +735,7 @@ func (d *webGPUDriver) EndRenderTarget() error {
 
 func (d *webGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region RenderTargetRegion, destination []byte) error {
 	target, ok := d.targets.Get(handle)
-	if d.frameActive || d.activeTarget.Valid() || !ok || target == nil {
+	if d.frameActive || d.activeTarget.Valid() || !ok || target == nil || target.descriptor.ColorFormat == RenderTargetDepth {
 		return fmt.Errorf("render: invalid WebGPU render target readback %s", handle)
 	}
 	texture := d.textureForDraw(target.color)
@@ -769,13 +776,22 @@ func (d *webGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region Render
 }
 
 func (d *webGPUDriver) createRenderTarget(descriptor RenderTargetDescriptor) (*webGPURenderTarget, error) {
+	if descriptor.ColorFormat == RenderTargetDepth {
+		value := d.device.Call("createTexture", webGPUObject("size", webGPUArray(descriptor.Width, descriptor.Height, 1), "format", "depth24plus", "usage", webGPUTextureBinding|webGPUTextureRender))
+		view := value.Call("createView")
+		// The sampled handle owns the image, also used as the pass attachment.
+		texture := &webGPUTexture{value: value, view: view, sampler: d.device.Call("createSampler")}
+		target := &webGPURenderTarget{descriptor: descriptor, color: d.textures.Insert(texture)}
+		target.depthAttachment = webGPUObject("view", view, "depthClearValue", 0, "depthLoadOp", "clear", "depthStoreOp", "store")
+		target.renderPassDescriptor = webGPUObject("colorAttachments", webGPUArray(), "depthStencilAttachment", target.depthAttachment)
+		return target, nil
+	}
 	format := d.format
-	sampleCount := d.sampleCount
+	sampleCount := d.targetSamples(descriptor)
 	if descriptor.ColorFormat == RenderTargetUint32 {
 		format = "r32uint"
-		sampleCount = 1
 	} else if descriptor.ColorFormat == RenderTargetR8 {
-		format, sampleCount = "r8unorm", 1
+		format = "r8unorm"
 	}
 	colorValue := d.device.Call("createTexture", webGPUObject(
 		"size", webGPUArray(descriptor.Width, descriptor.Height, 1), "format", format,
@@ -871,6 +887,9 @@ func (d *webGPUDriver) DrawSprites(batch SpriteBatch) error {
 	if len(batch.Instances) == 0 || len(batch.Draws) == 0 {
 		return nil
 	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
+	}
 	if !d.frameActive {
 		return errors.New("render: WebGPU draw is outside a frame")
 	}
@@ -948,6 +967,9 @@ func (d *webGPUDriver) DrawSprites(batch SpriteBatch) error {
 func (d *webGPUDriver) DrawShapes(batch ShapeBatch) error {
 	if len(batch.Instances) == 0 {
 		return nil
+	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
 	}
 	if !d.frameActive {
 		return errors.New("render: WebGPU draw is outside a frame")
@@ -1413,6 +1435,61 @@ func (d *webGPUDriver) createFrameBuffer(capacity int) webGPUBuffer {
 	return webGPUBuffer{value: d.device.Call("createBuffer", webGPUObject("size", capacity, "usage", webGPUBufferCopyDst|webGPUBufferVertex|webGPUBufferIndex|webGPUBufferUniform|webGPUBufferStorage)), capacity: capacity}
 }
 
+func (d *webGPUDriver) targetSamples(target RenderTargetDescriptor) int {
+	if target.SingleSample || target.ColorFormat != RenderTargetRGBA8 {
+		return 1
+	}
+	return d.sampleCount
+}
+
+func (d *webGPUDriver) passSamples() int {
+	if target, ok := d.targets.Get(d.activeTarget); ok {
+		return d.targetSamples(target.descriptor)
+	}
+	return d.sampleCount
+}
+
+func (d *webGPUDriver) releaseSurfaceDepth() {
+	if d.depth.value.Truthy() {
+		d.depth.value.Call("destroy")
+	}
+	d.depth = webGPUDepthBuffer{}
+	d.surfaceDepthEnabled = false
+	d.surfaceDepthAge = 0
+}
+
+func (d *webGPUDriver) TrimIdleBuffers() error {
+	if d.frameActive {
+		return errors.New("render: cannot trim inside a WebGPU frame")
+	}
+	// All encoders have been submitted. GPUBuffer.destroy defers physical release
+	// until submitted commands finish using their resources.
+	for i := range d.frames {
+		frame := &d.frames[i]
+		frame.destroyRetired()
+		if frame.buffer.value.Truthy() {
+			frame.buffer.value.Call("destroy")
+		}
+		frame.buffer = webGPUBuffer{}
+		frame.retention = bufferRetention{}
+		frame.offset = 0
+		frame.generation++
+	}
+	d.targets.Range(func(target *webGPURenderTarget) bool {
+		if target.readback.value.Truthy() {
+			target.readback.value.Call("destroy")
+			target.readback = webGPUBuffer{}
+		}
+		return true
+	})
+	d.releaseSurfaceDepth()
+	if d.multisample.value.Truthy() {
+		d.multisample.value.Call("destroy")
+		d.multisample = webGPUColorBuffer{}
+	}
+	return nil
+}
+
 func (d *webGPUDriver) hasDepth() bool {
 	if target, ok := d.targets.Get(d.activeTarget); ok && target != nil {
 		return target.descriptor.Depth
@@ -1421,7 +1498,11 @@ func (d *webGPUDriver) hasDepth() bool {
 }
 
 func (d *webGPUDriver) requireSurfaceDepth() {
-	if d.activeTarget.Valid() || d.surfaceDepthEnabled {
+	if d.activeTarget.Valid() {
+		return
+	}
+	d.surfaceDepthAge = 0
+	if d.surfaceDepthEnabled {
 		return
 	}
 	d.ensureDepth()
@@ -1578,7 +1659,9 @@ func (d *webGPUDriver) reserve(required int) {
 }
 
 func (d *webGPUDriver) replaceFrameBuffer(frame *webGPUFrame, capacity int) {
-	frame.retired = append(frame.retired, frame.buffer.value)
+	if frame.buffer.value.Truthy() {
+		frame.retired = append(frame.retired, frame.buffer.value)
+	}
 	frame.buffer = d.createFrameBuffer(capacity)
 	frame.generation++
 }
@@ -1704,7 +1787,7 @@ func (d *webGPUDriver) createPipeline(descriptor js.Value) (pipeline js.Value, e
 func (d *webGPUDriver) pipeline(shader *webGPUShader, blend BlendState) (js.Value, error) {
 	// Blend constants are dynamic and must not create a pipeline per text color.
 	blend.Constant = Color{}
-	key := webGPUPipelineKey{blend: blend, depth: d.hasDepth(), coverage: d.r8Target()}
+	key := webGPUPipelineKey{multisample: d.passSamples() > 1, blend: blend, depth: d.hasDepth(), coverage: d.r8Target()}
 	if value, ok := shader.blendPipelines[key]; ok && value.Truthy() {
 		return value, nil
 	}
@@ -1723,8 +1806,12 @@ func (d *webGPUDriver) meshPipeline(shader *webGPUShader, transparent int, mode 
 		index = int(mode) + 1
 	}
 	depth := boolInt(d.hasDepth())
-	if d.r8Target() {
+	if d.depthOnlyTarget() {
+		depth = 5
+	} else if d.r8Target() {
 		depth = 2
+	} else if d.passSamples() > 1 {
+		depth += 3
 	}
 	if pipeline := shader.meshPipelines[depth][index]; pipeline.Truthy() {
 		return pipeline, nil
@@ -1778,12 +1865,13 @@ func (d *webGPUDriver) pipelineDescriptor(shader *webGPUShader, mesh bool, blend
 	if mesh && transparent == 0 {
 		blend = BlendState{}
 	}
-	fragment := webGPUObject("module", shader.fragment, "entryPoint", webGPUEntryPoint(shader.pipelineKind, false), "targets", webGPUArray(d.colorTarget(blend, transparent)))
-	descriptor := webGPUObject("layout", layout, "vertex", vertex, "fragment", fragment, "primitive", webGPUObject("topology", "triangle-list", "cullMode", "none"))
-	sampleCount := d.sampleCount
-	if d.r8Target() {
-		sampleCount = 1
+	targets := webGPUArray()
+	if !d.depthOnlyTarget() {
+		targets.Call("push", d.colorTarget(blend, transparent))
 	}
+	fragment := webGPUObject("module", shader.fragment, "entryPoint", webGPUEntryPoint(shader.pipelineKind, false), "targets", targets)
+	descriptor := webGPUObject("layout", layout, "vertex", vertex, "fragment", fragment, "primitive", webGPUObject("topology", "triangle-list", "cullMode", "none"))
+	sampleCount := d.passSamples()
 	descriptor.Set("multisample", webGPUObject("count", sampleCount))
 	if d.hasDepth() && mesh {
 		descriptor.Set("depthStencil", webGPUObject("format", "depth24plus", "depthWriteEnabled", transparent == 0, "depthCompare", "greater"))
@@ -1811,6 +1899,11 @@ func webGPUEntryPoint(kind Pipeline, vertex bool) string {
 		}
 		return "sprite_fragment"
 	}
+}
+
+func (d *webGPUDriver) depthOnlyTarget() bool {
+	target, ok := d.targets.Get(d.activeTarget)
+	return ok && target.descriptor.ColorFormat == RenderTargetDepth
 }
 
 func (d *webGPUDriver) r8Target() bool {
@@ -1926,9 +2019,9 @@ func (d *webGPUDriver) createBindGroupLayouts() (js.Value, js.Value) {
 		webGPUObject("binding", 15, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
 		webGPUObject("binding", 16, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
 		webGPUObject("binding", 17, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 18, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
+		webGPUObject("binding", 18, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "unfilterable-float")),
 		webGPUObject("binding", 19, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 20, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
+		webGPUObject("binding", 20, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "unfilterable-float")),
 		webGPUObject("binding", 21, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
 		webGPUObject("binding", 22, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
 		webGPUObject("binding", 23, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),

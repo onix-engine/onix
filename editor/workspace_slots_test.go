@@ -54,7 +54,7 @@ func TestWorkspaceSlotControlsSaveTypedOverrides(t *testing.T) {
 	if err := htmlui.Sync(a.world); err != nil {
 		t.Fatal(err)
 	}
-	for _, access := range a.world.Query[htmlui.Control]().All {
+	for entity, access := range a.world.Query[htmlui.Control]().All {
 		control := access.Ref()
 		if control.Owner != a.shell {
 			continue
@@ -65,11 +65,11 @@ func TestWorkspaceSlotControlsSaveTypedOverrides(t *testing.T) {
 				t.Fatalf("%s did not create a number input", control.ID)
 			}
 		case id("text", ""):
-			if control.Type != "text" || control.Value != "Hello" {
+			if control.Type != "text" || htmlui.ControlValue(a.world, entity) != "Hello" {
 				t.Fatalf("string did not use a decoded text input: %+v", control)
 			}
 		case id("enabled", ""):
-			if control.Type != "checkbox" || !control.Checked {
+			if control.Type != "checkbox" || !control.Checked() {
 				t.Fatal("boolean did not show its inherited value in a checkbox")
 			}
 		}

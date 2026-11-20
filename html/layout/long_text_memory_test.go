@@ -9,8 +9,9 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestLongTextLayoutRecordings(t *testing.T) {
@@ -28,7 +29,7 @@ func TestLongTextLayoutRecordings(t *testing.T) {
 		{"inline", `A<span>mixed 中文 text</span><img style="width:12px;height:9px"><button>Button 中文</button><span style="font-size:19px"> large text</span> tail`, "", "be467ad94e0c6d0600bd73a3f220ab8b4471f0bd39145156114bfe5b2dbf7f23"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			root, err := dom.Parse(`<div style="width:137px;` + test.declarations + `">` + test.source + `</div>`)
+			root, err := parse.Parse(`<div style="width:137px;` + test.declarations + `">` + test.source + `</div>`)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +101,7 @@ func TestLongTextWarmReflowAllocations(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			root, styles, face := retainedFixture(t, `<div id="text" style="`+test.declarations+`">`+test.text+`</div>`)
 			var cache Cache
-			dirty := []*dom.Node{retainedNode(root, "text")}
+			dirty := []*uinode.Node{retainedNode(root, "text")}
 			if allocs := testing.AllocsPerRun(20, func() {
 				if _, err := cache.Update(root, styles, face, face, 640, 480, dirty, nil, false, false); err != nil {
 					panic(err)
@@ -118,7 +119,7 @@ func TestLongTextGlyphStorageAndReflow(t *testing.T) {
 	var cache Cache
 	node := retainedNode(root, "text")
 	for _, width := range []float64{640, 137, 920, 640} {
-		got, err := cache.Update(root, styles, face, face, width, 480, []*dom.Node{node}, nil, false, false)
+		got, err := cache.Update(root, styles, face, face, width, 480, []*uinode.Node{node}, nil, false, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -138,7 +139,7 @@ func TestLongTextGlyphStorageAndReflow(t *testing.T) {
 		t.Fatal("appending a glyph overwrote an adjacent fragment")
 	}
 	node.Children[0].Data = "short"
-	if _, err := cache.Update(root, styles, face, face, 640, 480, []*dom.Node{node}, nil, false, false); err != nil {
+	if _, err := cache.Update(root, styles, face, face, 640, 480, []*uinode.Node{node}, nil, false, false); err != nil {
 		t.Fatal(err)
 	}
 	want, err := BuildWithFonts(root, styles, face, face, 640, 480)
@@ -151,7 +152,7 @@ func TestLongTextGlyphStorageAndReflow(t *testing.T) {
 func TestLongWordWrapWithIndentAndInvalidUTF8(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div id="text" style="width:70px;text-indent:18px;overflow-wrap:break-word"></div>`)
 	node := retainedNode(root, "text")
-	node.AppendChild(dom.NewText(strings.Repeat("Abé\xff", 256)))
+	node.AppendChild(uinode.NewText(strings.Repeat("Abé\xff", 256)))
 	var err error
 	styles, err = style.Compute(root, nil)
 	if err != nil {
@@ -191,9 +192,9 @@ func BenchmarkLayoutLongText(b *testing.B) {
 				}
 				b.Run(name, func(b *testing.B) {
 					var cache Cache
-					var dirty []*dom.Node
+					var dirty []*uinode.Node
 					if retained {
-						dirty = []*dom.Node{retainedNode(root, "text")}
+						dirty = []*uinode.Node{retainedNode(root, "text")}
 					}
 					build := func() {
 						var err error

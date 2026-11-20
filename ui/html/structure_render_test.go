@@ -51,7 +51,7 @@ func TestHTMLStructuralRenderingMatchesFresh(t *testing.T) {
 					}
 				}
 				for node := range state.BoxRenderings {
-					if !htmlNodeWithin(node, state.Root) {
+					if !node.Within(state.Root) {
 						t.Fatal("retired box retained")
 					}
 				}
@@ -103,7 +103,7 @@ func TestHTMLStructureRetainsBoundControlState(t *testing.T) {
 	next, _ := world.Get[scene.UITransform](other)
 	scroll, _ := world.Get[ScrollContent](other)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || after.Value != "Typed" || after.SelectionAnchor != 1 || after.SelectionFocus != 3 || after.RenderRevision != before.RenderRevision || next != transform || scroll != content {
+	if state.SyncStats.PartialReconciles != 1 || ControlValue(world, other) != "Typed" || after.SelectionAnchor != 1 || after.SelectionFocus != 3 || after.RenderRevision != before.RenderRevision || next != transform || scroll != content {
 		t.Fatal("unrelated bound control changed")
 	}
 }
@@ -226,7 +226,7 @@ func TestHTMLStructuralUpdateSkipsUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "child").Remove()
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.SnapshottedControls != 0 || state.SyncStats.ReconciledBoxes > 3 || state.SyncStats.OrderUpdated == 0 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.ReconciledBoxes > 3 || state.SyncStats.OrderUpdated == 0 {
 		t.Fatalf("unrelated controls rebuilt: %+v", state.SyncStats)
 	}
 }

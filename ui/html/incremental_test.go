@@ -148,7 +148,7 @@ func TestHTMLMutationReusesControlsTextAndScroll(t *testing.T) {
 	live = world.GetMut[Control](control)
 	input = world.GetMut[scene.InputState2D](control)
 	scroll = world.GetMut[scene.UIScroll](clip)
-	if live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || !input.Pressed || !input.Hovered || scroll.Position[1] != -25 {
+	if ControlValue(world, control) != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 || !input.Pressed || !input.Hovered || scroll.Position[1] != -25 {
 		t.Fatalf("lost live state: control=%+v input=%+v scroll=%+v", live, input, scroll)
 	}
 	value, _ := world.Get[scene.Text2D](text)
@@ -440,7 +440,7 @@ func TestHTMLTextUpdateRetainsUnaffectedLayout(t *testing.T) {
 		if state.Boxes != root || state.boxForNode(sibling.node) != siblingBox || &siblingBox.TextFragments[0].Glyphs[0] != glyph {
 			t.Fatal("unrelated layout/text storage replaced")
 		}
-		if state.SyncStats.Styled != 2 || state.SyncStats.LayoutWork.Reflowed != 2 || state.SyncStats.LayoutWork.Created != 0 || state.SyncStats.LayoutWork.Reused != 101 {
+		if state.SyncStats.Styled != 2 || state.SyncStats.LayoutWork.Reflowed != 2 || state.SyncStats.LayoutWork.Created != 0 || state.SyncStats.LayoutWork.Visited != 2 {
 			t.Fatalf("local text update work: %+v", state.SyncStats)
 		}
 	}

@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func BenchmarkComputeHoverStylesFull(b *testing.B) {
@@ -36,7 +37,7 @@ func BenchmarkComputeHoverStylesIncremental(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, viewport, input, nil, baseStyles, []*dom.Node{hovered}); err != nil {
+		if _, err := RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, viewport, input, nil, baseStyles, []*uinode.Node{hovered}); err != nil {
 			b.Fatalf("recompute styles: %v", err)
 		}
 	}
@@ -55,7 +56,7 @@ func BenchmarkComputeHoverStylesIncrementalInPlace(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, viewport, input, nil, baseStyles, []*dom.Node{hovered}); err != nil {
+		if _, err := RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, viewport, input, nil, baseStyles, []*uinode.Node{hovered}); err != nil {
 			b.Fatalf("recompute styles: %v", err)
 		}
 	}
@@ -69,7 +70,7 @@ func TestRecomputeHoverStylesInPlaceWarmPathDoesNotAllocate(t *testing.T) {
 		t.Fatalf("compute base styles: %v", err)
 	}
 	input := &css.State{Hovered: hovered}
-	roots := []*dom.Node{hovered}
+	roots := []*uinode.Node{hovered}
 	if _, err := RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(doc, stylesheet, viewport, input, nil, styles, roots); err != nil {
 		t.Fatalf("warm style scratch: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestRecomputeHoverStylesInPlaceWarmPathDoesNotAllocate(t *testing.T) {
 }
 
 func TestRecomputeFocusWithinInvalidatesAncestorBranch(t *testing.T) {
-	doc, err := dom.Parse(`<div id="wrap"><input id="field"></div>`)
+	doc, err := parse.Parse(`<div id="wrap"><input id="field"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestRecomputeFocusWithinInvalidatesAncestorBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	input := &css.State{Focused: field}
-	styles, _, err = RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, input, nil, styles, []*dom.Node{doc})
+	styles, _, err = RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, input, nil, styles, []*uinode.Node{doc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestRecomputeReportsLayoutImpact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	styles, impact, err := RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, &css.State{Hovered: hovered}, nil, styles, []*dom.Node{doc})
+	styles, impact, err := RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, &css.State{Hovered: hovered}, nil, styles, []*uinode.Node{doc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,7 @@ func TestRecomputeReportsLayoutImpact(t *testing.T) {
 }
 
 func TestRecomputeReportsPaintImpact(t *testing.T) {
-	doc, err := dom.Parse(`<button id="button">Button</button>`)
+	doc, err := parse.Parse(`<button id="button">Button</button>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestRecomputeReportsPaintImpact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, impact, err := RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, &css.State{Hovered: button}, nil, styles, []*dom.Node{doc})
+	_, impact, err := RecomputeSubtreesInPlaceWithImpact(doc, stylesheet, Viewport{}, &css.State{Hovered: button}, nil, styles, []*uinode.Node{doc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func TestRecomputeReportsPaintImpact(t *testing.T) {
 	}
 }
 
-func buildHoverBenchmarkFixture(tb testing.TB) (*dom.Node, *css.Stylesheet, *dom.Node) {
+func buildHoverBenchmarkFixture(tb testing.TB) (*uinode.Node, *css.Stylesheet, *uinode.Node) {
 	tb.Helper()
 
 	var html strings.Builder
@@ -163,7 +164,7 @@ func buildHoverBenchmarkFixture(tb testing.TB) (*dom.Node, *css.Stylesheet, *dom
 	}
 	html.WriteString("</body></html>")
 
-	doc, err := dom.Parse(html.String())
+	doc, err := parse.Parse(html.String())
 	if err != nil {
 		tb.Fatalf("parse dom: %v", err)
 	}

@@ -9,9 +9,9 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func htmlAnimationRole(t *testing.T, world *ecs.World, owner ecs.Entity, id string, role htmlRenderRole) ecs.Entity {
@@ -35,16 +35,14 @@ func TestHTMLCSSColorAnimationRetainsTransparentPaint(t *testing.T) {
 	@keyframes paint {from {background:transparent;border-color:transparent} to {background:red;border-top-color:blue;border-right-color:red}}
 	</style><div id="item"></div>`)
 	background := htmlAnimationRole(t, world, owner, "item", htmlRoleSurface)
-	top := htmlAnimationRole(t, world, owner, "item", htmlRoleBorderTop)
-	right := htmlAnimationRole(t, world, owner, "item", htmlRoleBorderRight)
 	initial, _ := world.Get[htmlRenderState](owner)
 	children := slices.Clone(initial.Children)
 	node := incrementalHTMLNode(t, world, owner, "item")
 	computed := initial.Styles[node.node]
 	htmlAnimationStep(t, world, clock, 500*time.Millisecond)
 	fill, _ := world.Get[scene.Sprite2D](background)
-	borderTop, _ := world.Get[scene.Sprite2D](top)
-	borderRight, _ := world.Get[scene.Sprite2D](right)
+	fragments := world.GetRef[scene.UIPaint2D](background).Fragments()
+	borderTop, borderRight := fragments[0], fragments[1]
 	if fill.Shape.Fill != (graphics.ColorRGBA{R: 1, A: .5}) || borderTop.Shape.Fill != (graphics.ColorRGBA{B: 1, A: .5}) || borderRight.Shape.Fill != (graphics.ColorRGBA{R: 1, A: .5}) {
 		t.Fatalf("premultiplied color animation: fill=%v top=%v right=%v", fill.Shape.Fill, borderTop.Shape.Fill, borderRight.Shape.Fill)
 	}
@@ -83,14 +81,20 @@ func TestHTMLCSSAnimatedColorInheritanceAndCurrentColor(t *testing.T) {
 	} {
 		node := incrementalHTMLNode(t, world, owner, c.id)
 		texts, decorations, surfaces := 0, 0, 0
-		for _, access := range world.Query2[htmlChild, scene.Text2D]().All {
+		for entity, access := range world.Query2[htmlChild, scene.Text2D]().All {
 			child := access.A.Ref()
 			text := access.B.Ref()
 
-			if child.Node != nil && child.Node.Type == dom.TextNode && child.Node.Parent == node.node {
+			if child.Node != nil && child.Node.Type == uinode.TextNode && child.Node.Parent == node.node {
 				texts++
 				if text.Color != c.want {
 					t.Errorf("%s text color=%v; want %v", c.id, text.Color, c.want)
+				}
+				if paint := world.GetRef[scene.UIPaint2D](entity); paint != nil && len(paint.Fragments()) == 1 {
+					decorations++
+					if fill := paint.Fragments()[0].Shape.Fill; fill != c.want {
+						t.Errorf("%s decoration color=%v; want %v", c.id, fill, c.want)
+					}
 				}
 			}
 		}
@@ -99,12 +103,7 @@ func TestHTMLCSSAnimatedColorInheritanceAndCurrentColor(t *testing.T) {
 			sprite := access.B.Ref()
 
 			if child.Node == node.node || child.Node != nil && child.Node.Parent == node.node {
-				if child.role == htmlRoleDecoration {
-					decorations++
-					if sprite.Shape.Fill != c.want {
-						t.Errorf("%s decoration color=%v", c.id, sprite.Shape.Fill)
-					}
-				} else if child.role == htmlRoleSurface {
+				if child.role == htmlRoleSurface {
 					surfaces++
 					if sprite.Shape.Fill != c.want {
 						t.Errorf("%s currentColor background=%v", c.id, sprite.Shape.Fill)

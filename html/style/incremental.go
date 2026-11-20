@@ -2,22 +2,22 @@ package style
 
 import (
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/internal/reuse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*dom.Node) (Map, error) {
+func RecomputeSubtreesInPlaceWithViewportAndStateAndQueries(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*uinode.Node) (Map, error) {
 	if previousStyles == nil {
 		return ComputeWithViewportAndStateAndQueries(root, stylesheet, viewport, input, queries)
 	}
 	return recomputeSubtreesWithStyles(root, stylesheet, viewport, input, queries, previousStyles, roots, nil)
 }
 
-func RecomputeSubtreesInPlaceWithImpact(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*dom.Node) (Map, ChangeImpact, error) {
+func RecomputeSubtreesInPlaceWithImpact(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*uinode.Node) (Map, ChangeImpact, error) {
 	return RecomputeSubtreesInPlaceWithImpactAndQueries(root, stylesheet, viewport, input, queries, previousStyles, roots)
 }
 
-func RecomputeSubtreesInPlaceWithImpactAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*dom.Node) (Map, ChangeImpact, error) {
+func RecomputeSubtreesInPlaceWithImpactAndQueries(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, previousStyles Map, roots []*uinode.Node) (Map, ChangeImpact, error) {
 	if previousStyles == nil {
 		styles, err := ComputeWithViewportAndStateAndQueries(root, stylesheet, viewport, input, queries)
 		return styles, ChangeRebuild, err
@@ -27,7 +27,7 @@ func RecomputeSubtreesInPlaceWithImpactAndQueries(root *dom.Node, stylesheet *cs
 	return styles, impact, err
 }
 
-func recomputeSubtreesWithStyles(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, styles Map, roots []*dom.Node, impact *ChangeImpact) (Map, error) {
+func recomputeSubtreesWithStyles(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, queries *QueryEnvironment, styles Map, roots []*uinode.Node, impact *ChangeImpact) (Map, error) {
 	queryEnv := QueryEnvironment{Viewport: viewport, Styles: styles}
 	if queries != nil {
 		queryEnv.ContainerMetrics = queries.ContainerMetrics
@@ -51,7 +51,7 @@ func recomputeSubtreesWithStyles(root *dom.Node, stylesheet *css.Stylesheet, vie
 	return styles, nil
 }
 
-func recomputeStyleSubtree(node *dom.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
+func recomputeStyleSubtree(node *uinode.Node, stylesheet *css.Stylesheet, input *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
 	var parent *ComputedStyle
 	hasParent := false
 	if node != nil && node.Parent != nil {
@@ -64,9 +64,9 @@ func recomputeStyleSubtree(node *dom.Node, stylesheet *css.Stylesheet, input *cs
 	return computeStyleSubtree(node, parent, hasParent, rootFontSize, stylesheet, input, queries, styles, definitions, scratch, impact)
 }
 
-func rootFontSizeForNode(node *dom.Node, styles Map) float64 {
+func rootFontSizeForNode(node *uinode.Node, styles Map) float64 {
 	for ancestor := node; ancestor != nil; ancestor = ancestor.Parent {
-		if ancestor.Type == dom.ElementNode && ancestor.Parent != nil && ancestor.Parent.Type == dom.DocumentNode {
+		if ancestor.Type == uinode.ElementNode && ancestor.Parent != nil && ancestor.Parent.Type == uinode.DocumentNode {
 			if computed, ok := styles.Get(ancestor); ok && computed.FontSize.Kind == ValueLengthPx {
 				return computed.FontSize.LengthPx
 			}
@@ -86,27 +86,27 @@ func viewportFromQueries(queries *QueryEnvironment) Viewport {
 // RecomputeInputStateInPlaceWithImpact visits the document once, recomputing
 // only branches whose selector matches changed. Recomputing each affected
 // branch also propagates inherited values to its descendants.
-func RecomputeInputStateInPlaceWithImpact(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map) (Map, ChangeImpact, error) {
+func RecomputeInputStateInPlaceWithImpact(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map) (Map, ChangeImpact, error) {
 	return RecomputeInputStateInPlaceWithImpactAndQueries(root, stylesheet, viewport, previous, current, styles, nil)
 }
 
-func RecomputeInputStateInPlaceWithImpactAndQueries(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment) (Map, ChangeImpact, error) {
+func RecomputeInputStateInPlaceWithImpactAndQueries(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment) (Map, ChangeImpact, error) {
 	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, queries, nil, nil)
 }
 
 // RecomputeInputStateWithCache shares immutable styles with full and mutation
 // cascades, so toggling back to a previous input state reuses its values.
-func RecomputeInputStateWithCache(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, cache *MutationCache) (Map, ChangeImpact, error) {
+func RecomputeInputStateWithCache(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, cache *MutationCache) (Map, ChangeImpact, error) {
 	return RecomputeInputStateWithChanges(root, stylesheet, viewport, previous, current, styles, nil, cache)
 }
 
 // RecomputeInputStateWithChanges emits changed styles during the input cascade.
 // The caller owns and reuses the output slice, as with subtree mutations.
-func RecomputeInputStateWithChanges(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, changes *[]NodeChange, cache *MutationCache) (Map, ChangeImpact, error) {
+func RecomputeInputStateWithChanges(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, changes *[]NodeChange, cache *MutationCache) (Map, ChangeImpact, error) {
 	return recomputeInputState(root, stylesheet, viewport, previous, current, styles, &QueryEnvironment{ContainerMetrics: cache.ContainerMetrics}, cache, changes)
 }
 
-func recomputeInputState(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment, cache *MutationCache, changes *[]NodeChange) (Map, ChangeImpact, error) {
+func recomputeInputState(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, previous, current *css.State, styles Map, queries *QueryEnvironment, cache *MutationCache, changes *[]NodeChange) (Map, ChangeImpact, error) {
 	if styles == nil {
 		if cache != nil {
 			computed, err := ComputeWithCache(root, stylesheet, viewport, current, nil, cache)
@@ -144,7 +144,7 @@ func recomputeInputState(root *dom.Node, stylesheet *css.Stylesheet, viewport Vi
 	return styles, impact, err
 }
 
-func recomputeInputStateBranch(node *dom.Node, stylesheet *css.Stylesheet, previous, current *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
+func recomputeInputStateBranch(node *uinode.Node, stylesheet *css.Stylesheet, previous, current *css.State, queries *QueryEnvironment, styles Map, definitions filterDefinitions, scratch *cascadeScratch, impact *ChangeImpact) error {
 	if node == nil {
 		return nil
 	}
@@ -169,7 +169,7 @@ func recomputeInputStateBranch(node *dom.Node, stylesheet *css.Stylesheet, previ
 // NodeChange records the result of the cascade, rather than the mutation that
 // triggered it. The caller owns and reuses the output slice.
 type NodeChange struct {
-	Node *dom.Node
+	Node *uinode.Node
 	// Tree changes box membership, order or positioning dependencies.
 	Tree bool
 	// Reorder means order is the only changed tree property; other non-tree
@@ -180,7 +180,7 @@ type NodeChange struct {
 
 // RecomputeSubtreesWithChanges updates retained styles and emits changes during
 // the same traversal. Roots must be disjoint and belong to the document.
-func RecomputeSubtreesWithChanges(root *dom.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, styles Map, roots []*dom.Node, changes *[]NodeChange, cache *MutationCache) (ChangeImpact, int, error) {
+func RecomputeSubtreesWithChanges(root *uinode.Node, stylesheet *css.Stylesheet, viewport Viewport, input *css.State, styles Map, roots []*uinode.Node, changes *[]NodeChange, cache *MutationCache) (ChangeImpact, int, error) {
 	queries := QueryEnvironment{Viewport: viewport, Styles: styles, ContainerMetrics: cache.ContainerMetrics}
 	definitions, err := cache.filterDefinitions(root)
 	if err != nil {
@@ -255,11 +255,11 @@ func selectorNeedsSiblingMutation(selector css.Selector) bool {
 // MutationCache retains document resources across full and partial updates. DOM
 // content/attribute changes other than class/style must invalidate definitions.
 type MutationCache struct {
-	root              *dom.Node
+	root              *uinode.Node
 	definitions       filterDefinitions
 	stylesheet        *css.Stylesheet
 	compiled          *compiledStylesheet
-	ContainerMetrics  map[*dom.Node]ContainerMetrics
+	ContainerMetrics  map[*uinode.Node]ContainerMetrics
 	previous          Map
 	styles            styleIndex
 	previousRetention reuse.MapRetention
@@ -276,7 +276,7 @@ func (cache *MutationCache) prepareStyleIndex() {
 
 func (cache *MutationCache) InvalidateDefinitions() { cache.root = nil; cache.definitions = nil }
 
-func (cache *MutationCache) filterDefinitions(root *dom.Node) (filterDefinitions, error) {
+func (cache *MutationCache) filterDefinitions(root *uinode.Node) (filterDefinitions, error) {
 	if cache.root != root {
 		definitions, err := collectFilterDefinitions(root)
 		if err != nil {

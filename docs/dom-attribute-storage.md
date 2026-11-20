@@ -12,42 +12,42 @@
 
 诊断输出、HTML 序列化和文档模板作用域哈希仍按属性名称排序。小列表无需临时名称缓冲；大 map 按需建立排序缓冲。解析时重复属性仍保留首次值，保留 ASCII 名称折叠、SVG／MathML 名称修正及限定名称。这与 [HTML 属性名解析规则](https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state) 一致；本轮不修改其他 HTML 语义。
 
-Linux amd64 下，`Node` 本体由 96 B 降到 88 B，`Token` 保持 32 B；独立节点的 Go 堆分配仍落在 96 B 档。属性存储头为 40 B、每个属性对为 32 B，不包含切片容量、map 桶及分配器对齐。空节点不分配属性存储。
+Linux amd64 下，当时的 `Node` 本体由 96 B 降到 88 B，`Token` 保持 32 B；独立节点的 Go 堆分配仍落在 96 B 档。属性存储头为 40 B、每个属性对为 32 B，不包含切片容量、map 桶及分配器对齐。空节点不分配属性存储。
 
 ## API 迁移
 
 删除 `Node.Attributes` 和 `Token.Attributes` 公开 map；仓库内的 DOM、CSS、布局、HTML 组件、Markdown 和编辑器测试调用均已迁移。`NewElement` 接受属性对并取得独立副本，不再借用可写 map：
 
 ```go
-node := dom.NewElement("div",
-    dom.Attribute{Name: "id", Value: "target"},
-    dom.Attribute{Name: "class", Value: "card"},
+target := node.NewElement("div",
+    node.Attribute{Name: "id", Value: "target"},
+    node.Attribute{Name: "class", Value: "card"},
 )
-node.SetAttr("hidden", "")
-value, present := node.Attr("hidden") // 空值与不存在仍可区分
+target.SetAttr("hidden", "")
+value, present := target.Attr("hidden") // 空值与不存在仍可区分
 _ = value
 _ = present
-node.RemoveAttr("hidden")
+target.RemoveAttr("hidden")
 ```
 
 只需要字符串时可用 `AttrValue`，数量用 `AttrCount`；`SetAttributes(attrs...)` 复用容量替换整组属性，重复名称取首次值。`Token` 提供相同的读写方法，已经返回的 token 不会被下一次分词覆盖。
 
 ```go
-for name, value := range node.Attributes() {
+for name, value := range target.Attributes() {
     // 无序、零分配，可修改或移除当前这一项。
     if name == "data-old" {
-        node.RemoveAttr(name)
+        target.RemoveAttr(name)
     }
     _ = value
 }
-for name, value := range node.SortedAttributes() {
+for name, value := range target.SortedAttributes() {
     // 按名称排序；小列表不分配，大 map 分配名称缓冲。
     // 此遍历期间不修改属性。
     _, _ = name, value
 }
-clone := dom.NewElement("div")
-clone.ShareAttributes(node)
-clone.SetAttr("class", "changed") // node 保持原值
+clone := node.NewElement("div")
+clone.ShareAttributes(target)
+clone.SetAttr("class", "changed") // target 保持原值
 ```
 
 ## 基准结果
@@ -94,25 +94,25 @@ Linux amd64、Go 1.27.3、Intel Core i5-11500。固定 `GOMAXPROCS=1` 和 CPU 2�
 
 ## 验证与复现
 
-相关包测试通过：`html/dom`、`html/css`、`html/style`、`html/layout`、`ui/html`、`ui`、`module`、`editor` 和根包。`ui/markdown` 的 `TestMarkdownFractionRendersHorizontalBar` 在改动前及 overlay 恢复基线后都失败（未找到横线 shape），本轮未修改它的渲染逻辑；排除这一已有失败后，Markdown 包其他测试通过。
+相关包测试通过：`html/parse`、`html/css`、`html/style`、`html/layout`、`ui/html`、`ui`、`module`、`editor` 和根包。`ui/markdown` 的 `TestMarkdownFractionRendersHorizontalBar` 在改动前及 overlay 恢复基线后都失败（未找到横线 shape），本轮未修改它的渲染逻辑；排除这一已有失败后，Markdown 包其他测试通过。
 
 定向 race 检查通过，覆盖属性操作、共享源／克隆隔离、并发只读模板克隆、解析器重用及 HTML 组件作用域。最终自适应实现的解析模糊测试约执行 30 万个输入，无失败。WebAssembly DOM 测试通过，Android arm64 DOM 测试二进制编译通过。ADB 地址 `10.0.0.174:16384` 连接被拒绝，未做本轮真机运行。没有启动编辑器。
 
 相关七个包的 `go vet`、`fieldalignment` 均无诊断，`git diff --check` 通过。
 
 ```sh
-GOMAXPROCS=1 taskset -c 2 go test -p 1 ./html/dom ./ui/html ./html/style \
+GOMAXPROCS=1 taskset -c 2 go test -p 1 ./html/parse ./ui/html ./html/style \
   -run '^$' \
   -bench '^Benchmark(DOMAttributes|DOMAttributeParsing|HTMLAttributeTemplates|HTMLComponentChildSlot|HTMLComponentDiff|ComputeFullStyles)$' \
   -benchmem -benchtime=300ms -count=3
 
-go test -p 2 ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./ui ./module ./editor . \
+go test -p 2 ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./ui ./module ./editor . \
   -skip '^TestMarkdownFractionRendersHorizontalBar$'
-go test -race ./html/dom ./ui/html \
+go test -race ./html/parse ./ui/html \
   -run 'Test(Attributes|SharedAttributes|Parser|Tokenizer|HTMLAttribute|HTMLComponentScope)' -count=1
-go test ./html/dom -run '^$' -fuzz '^FuzzParse$' -fuzztime=15s -parallel=2
-go vet ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./editor
-fieldalignment ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./editor
+go test ./html/parse -run '^$' -fuzz '^FuzzParse$' -fuzztime=15s -parallel=2
+go vet ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./editor
+fieldalignment ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui/markdown ./editor
 ```
 
-新增基准在 `html/dom/attributes_bench_test.go` 和 `ui/html/attributes_bench_test.go`。本次会话原始记录在 `/tmp/onix-dom-attrs-sz2hruoq`：`before/`、`before-overlay.json` 保存基线，`final-before.txt`／`final-after.txt` 为最终原始数据，`comparison.json` 为中位数，`markdown-baseline-failure.txt` 记录原有失败。给基准命令加 `-overlay /tmp/onix-dom-attrs-sz2hruoq/before-overlay.json` 可重测本地基线；临时目录可能随环境清理而失效。
+新增基准在 `html/parse/attributes_bench_test.go` 和 `ui/html/attributes_bench_test.go`。本次会话原始记录在 `/tmp/onix-dom-attrs-sz2hruoq`：`before/`、`before-overlay.json` 保存基线，`final-before.txt`／`final-after.txt` 为最终原始数据，`comparison.json` 为中位数，`markdown-baseline-failure.txt` 记录原有失败。给基准命令加 `-overlay /tmp/onix-dom-attrs-sz2hruoq/before-overlay.json` 可重测本地基线；临时目录可能随环境清理而失效。

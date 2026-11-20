@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type flexConfig struct {
@@ -59,11 +59,19 @@ type flexLine struct {
 // Each container owns its scratch so recursive flex measurements never alias.
 // Pointer-bearing buffers are cleared after use to release detached children.
 type flexScratch struct {
-	items     []flexItem
-	lines     []flexLine
-	positions []float64
-	basis     []flexBasisMeasurement
-	baseline  float64
+	items                                        []flexItem
+	lines                                        []flexLine
+	positions                                    []float64
+	basis                                        []flexBasisMeasurement
+	baseline                                     float64
+	orderPass, reorderChangedPass, localFlexPass uint64
+}
+
+func (box *Box) flexScratch() *flexScratch {
+	if box.flex == nil {
+		box.flex = &flexScratch{}
+	}
+	return box.flex
 }
 
 // Auto basis needs only the intrinsic height, not the subtree's final geometry.
@@ -76,21 +84,18 @@ type flexBasisMeasurement struct {
 	result               float64
 }
 
-func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
-	if style.IsLength(box.Style.Height) {
-		box.Content.Height = resolveLength(box.Style.Height, layoutContaining.Height)
+func layoutFlexContainer(box *Box, height style.Value, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+	if style.IsLength(height) {
+		box.Content.Height = resolveLength(height, layoutContaining.Height)
 		if isBorderBox(box.Style) {
 			box.Content.Height -= verticalBoxExtras(box.Padding, box.Border)
 		}
 	}
-	if style.IsLength(box.Style.Height) {
+	if style.IsLength(height) {
 		box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
 	}
-	config := resolveFlexConfig(box)
-	if box.flex == nil {
-		box.flex = &flexScratch{}
-	}
-	scratch := box.flex
+	config := resolveFlexConfig(box, height)
+	scratch := box.flexScratch()
 	items := slices.Grow(scratch.items[:0], len(box.Children))
 	defer func() {
 		clear(items)
@@ -142,12 +147,12 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 	// An absolutely positioned flex container with both block-axis insets has
 	// a definite used height even when its CSS height is auto. Preserve that
 	// stretch size instead of replacing it with the intrinsic line extent.
-	definiteHeight := style.IsLength(box.Style.Height) ||
+	definiteHeight := style.IsLength(height) ||
 		(isAbsolutePositioned(box) && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom))
 	if config.isRow {
 		if definiteHeight {
-			box.Content.Height = contentDimension(box.Style.Height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
-			if box.Style.Height.Kind == style.ValueAuto {
+			box.Content.Height = contentDimension(height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+			if height.Kind == style.ValueAuto {
 				box.Content.Height = maxFloat(layoutContaining.Height-resolveLength(box.Style.Top, layoutContaining.Height)-resolveLength(box.Style.Bottom, layoutContaining.Height)-verticalBoxExtras(box.Padding, box.Border)-box.Margin.Top-box.Margin.Bottom, 0)
 			}
 			box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
@@ -157,8 +162,8 @@ func layoutFlexContainer(box *Box, layoutContaining Rect, absoluteContaining Rec
 		config.crossSize = box.Content.Height
 	} else {
 		if definiteHeight {
-			box.Content.Height = contentDimension(box.Style.Height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
-			if box.Style.Height.Kind == style.ValueAuto {
+			box.Content.Height = contentDimension(height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+			if height.Kind == style.ValueAuto {
 				box.Content.Height = maxFloat(layoutContaining.Height-resolveLength(box.Style.Top, layoutContaining.Height)-resolveLength(box.Style.Bottom, layoutContaining.Height)-verticalBoxExtras(box.Padding, box.Border)-box.Margin.Top-box.Margin.Bottom, 0)
 			}
 			box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
@@ -212,7 +217,7 @@ func flexItemPreservesNoWrapIntrinsicSize(child *Box, config flexConfig) bool {
 	return minimum.Kind == style.ValueAuto && overflow.Kind == style.ValueKeyword && overflow.Keyword == "visible"
 }
 
-func resolveFlexConfig(box *Box) flexConfig {
+func resolveFlexConfig(box *Box, height style.Value) flexConfig {
 	direction := box.Style.FlexDirection.Keyword
 	wrap := box.Style.FlexWrap.Keyword
 	config := flexConfig{
@@ -226,12 +231,12 @@ func resolveFlexConfig(box *Box) flexConfig {
 		hasDefiniteMain:  true,
 		mainSize:         box.Content.Width,
 		crossSize:        box.Content.Height,
-		hasDefiniteCross: style.IsLength(box.Style.Height) || style.IsLength(box.Style.MinHeight) || (isAbsolutePositioned(box) && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom)),
+		hasDefiniteCross: style.IsLength(height) || style.IsLength(box.Style.MinHeight) || (isAbsolutePositioned(box) && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom)),
 		mainGap:          resolveLength(box.Style.ColumnGap, box.Content.Width),
 		crossGap:         resolveLength(box.Style.RowGap, box.Content.Width),
 	}
 	if !config.isRow {
-		config.hasDefiniteMain = style.IsLength(box.Style.Height)
+		config.hasDefiniteMain = style.IsLength(height)
 		config.mainSize = box.Content.Height
 		config.crossSize = box.Content.Width
 		config.hasDefiniteCross = true
@@ -409,8 +414,6 @@ func measureFlexItem(item *flexItem, container *Box, config flexConfig, absolute
 		}
 	}
 
-	// Copy-on-write: box.Style is shared with the style map, so flex sizing
-	// overrides must apply to a private copy for the duration of the measure.
 	original := item.box.Style
 	width, height := original.Width, original.Height
 	if config.isRow {
@@ -449,10 +452,8 @@ func measureFlexItem(item *flexItem, container *Box, config flexConfig, absolute
 			width = style.LengthPx(maxFloat(crossSize, 0))
 		}
 	}
-	item.box.Style = item.box.measureStyle(&item.box.flexMeasureStyle, width, height)
 	containing := Rect{X: container.Content.X, Y: container.Content.Y, Width: container.Content.Width, Height: container.Content.Height}
-	layoutBlock(item.box, containing, absoluteContaining, face, styles, ctx)
-	item.box.Style = original
+	layoutBlockSized(item.box, width, height, containing, absoluteContaining, face, styles, ctx)
 	item.outerMain = flexOuterMain(item.box, config)
 	item.outerCross = flexOuterCross(item.box, config)
 	item.mainSize = maxFloat(flexContentMain(item.box, config), 0)
@@ -485,39 +486,33 @@ func resolveFlexBaseSize(item *flexItem, container *Box, config flexConfig, abso
 	// A column's auto basis is the laid-out content height at its available
 	// width, including wrapped flex lines and normal-flow block children.
 	original := item.box.Style
+	width, height := original.Width, original.Height
 	if original.Width.Kind == style.ValueAuto && item.alignSelf != "stretch" {
-		width := intrinsicFlexContentWidth(item.box, face, ctx, styles)
+		usedWidth := intrinsicFlexContentWidth(item.box, face, ctx, styles)
 		if isBorderBox(original) {
-			width += computedHorizontalBoxExtras(original, container.Content.Width)
+			usedWidth += computedHorizontalBoxExtras(original, container.Content.Width)
 		}
-		// Copy-on-write: box.Style is shared with the style map, so the auto
-		// basis must not leak into the node's computed style.
-		item.box.Style = item.box.measureStyle(&item.box.flexMeasureStyle, style.LengthPx(width), original.Height)
+		width = style.LengthPx(usedWidth)
 	}
 	containing := Rect{X: container.Content.X, Y: container.Content.Y, Width: container.Content.Width, Height: container.Content.Height}
 	absolute := descendantAbsoluteContaining(container, absoluteContaining)
 	var scratch *flexScratch
 	if ctx != nil && ctx.retained != nil && !item.box.hasFloats && (ctx.floatContext == nil || len(ctx.floatContext.areas) == 0) {
-		if item.box.flex == nil {
-			item.box.flex = &flexScratch{}
-		}
-		scratch = item.box.flex
+		scratch = item.box.flexScratch()
 		if len(scratch.basis) > 0 && scratch.basis[0].pass != ctx.retained.pass {
 			scratch.basis = scratch.basis[:0]
 		}
 		for _, basis := range scratch.basis {
-			if basis.containing == containing && basis.absolute == absolute && basis.width == item.box.Style.Width && basis.height == item.box.Style.Height {
-				item.box.Style = original
+			if basis.containing == containing && basis.absolute == absolute && basis.width == width && basis.height == height {
 				return basis.result
 			}
 		}
 	}
-	layoutBlock(item.box, containing, absolute, face, styles, ctx)
+	layoutBlockSized(item.box, width, height, containing, absolute, face, styles, ctx)
 	result := clampContentDimension(item.box.Content.Height, original.MinHeight, original.MaxHeight, container.Content.Height, computedVerticalBoxExtras(original, container.Content.Width), isBorderBox(original))
 	if scratch != nil && ctx.err == nil {
-		scratch.basis = append(scratch.basis, flexBasisMeasurement{pass: ctx.retained.pass, containing: containing, absolute: absolute, width: item.box.Style.Width, height: item.box.Style.Height, result: result})
+		scratch.basis = append(scratch.basis, flexBasisMeasurement{pass: ctx.retained.pass, containing: containing, absolute: absolute, width: width, height: height, result: result})
 	}
-	item.box.Style = original
 	return result
 }
 
@@ -578,7 +573,7 @@ func intrinsicFlexContentWidth(box *Box, face *font.Face, ctx *layoutContext, st
 	}
 	// A control that is itself a flex container sizes from its flex children;
 	// native control metrics apply only to controls with their native display.
-	if box.Node != nil && box.Node.Type == dom.ElementNode && !isFlexDisplay(box.Style.Display.Keyword) {
+	if box.Node != nil && box.Node.Type == uinode.ElementNode && !isFlexDisplay(box.Style.Display.Keyword) {
 		if width, _ := intrinsicControlSize(box, face, ctx, styles); width > 0 {
 			extra := box.Padding.Left + box.Padding.Right + box.Border.Left + box.Border.Right
 			return maxFloat(width-extra, 0)
@@ -914,21 +909,6 @@ func maxFloat(left, right float64) float64 {
 		return left
 	}
 	return right
-}
-
-// measureStyle returns the style a measure pass reads. The forced size lives on
-// a private copy because fragments retain its address, so only reuse the shared
-// map style when the sizes it would carry are already identical.
-func (box *Box) measureStyle(slot **style.ComputedStyle, width, height style.Value) *style.ComputedStyle {
-	if box.Style == nil || box.Style.Width == width && box.Style.Height == height {
-		return box.Style
-	}
-	if *slot == nil {
-		*slot = &style.ComputedStyle{}
-	}
-	**slot = *box.Style
-	(*slot).Width, (*slot).Height = width, height
-	return *slot
 }
 
 // start/end follow the physical start in the currently supported horizontal LTR

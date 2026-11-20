@@ -125,6 +125,13 @@ func (d *nativeGPUDriver) BufferMemoryStatistics() BufferMemoryStatistics {
 	}
 }
 
+func (d *nativeGPUDriver) TrimIdleBuffers() error {
+	if C.onix_gpu_trim_idle(d.native) == 0 {
+		return nativeGPUError("trim idle buffers")
+	}
+	return nil
+}
+
 func (d *nativeGPUDriver) RendererInfo() RendererInfo {
 	return RendererInfo{Backend: CompiledBackend.String(), Device: d.deviceName}
 }
@@ -416,7 +423,7 @@ func (d *nativeGPUDriver) EndRenderTarget() error {
 
 func (d *nativeGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region RenderTargetRegion, destination []byte) error {
 	target := d.targets.getRef(handle)
-	if target == nil {
+	if target == nil || len(destination) == 0 {
 		return fmt.Errorf("render: invalid GPU render target readback %s", handle)
 	}
 	if C.onix_gpu_read_render_target(d.native, C.uint32_t(target.native), C.int32_t(region.X), C.int32_t(region.Y), C.uint32_t(region.Width), C.uint32_t(region.Height), (*C.uint8_t)(unsafe.Pointer(&destination[0])), C.size_t(len(destination))) == 0 {

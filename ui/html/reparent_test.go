@@ -8,6 +8,7 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 func htmlBoxDepth(box *layout.Box) int {
@@ -85,8 +86,8 @@ func TestHTMLReparentPreservesInputAndNestedScroll(t *testing.T) {
 	right := incrementalHTMLNode(t, world, owner, "right")
 	field := incrementalControl(t, world, owner, "field")
 	SetControlValue(world, field, "Typed")
-	control := world.GetMut[Control](field)
-	control.SelectionAnchor, control.SelectionFocus = 1, 3
+	control := world.GetMut[textfield.Field](field)
+	control.Anchor, control.Caret = 1, 3
 	state, _ := world.Get[htmlRenderState](owner)
 	clip := state.OverflowBindings[moved.node].entity
 	scroll := world.GetMut[scene.UIScroll](clip)
@@ -96,8 +97,8 @@ func TestHTMLReparentPreservesInputAndNestedScroll(t *testing.T) {
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
 	scrollValue, _ := world.Get[scene.UIScroll](clip)
-	controlValue, _ := world.Get[Control](field)
-	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[moved.node].entity != clip || scrollValue.Position[1] != -15 || controlValue.Value != "Typed" || controlValue.SelectionAnchor != 1 || controlValue.SelectionFocus != 3 {
+	controlValue, _ := world.Get[textfield.Field](field)
+	if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[moved.node].entity != clip || scrollValue.Position[1] != -15 || controlValue.Value != "Typed" || controlValue.Anchor != 1 || controlValue.Caret != 3 {
 		t.Fatal("move reset input or scroll state")
 	}
 	parent, _ := world.Get[scene.Parent](clip)
@@ -188,7 +189,7 @@ func TestHTMLReparentSkipsUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "right").Append(moved)
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 2 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.UpdatedClips != 2 {
 		t.Fatalf("move updated unrelated contexts: %+v", state.SyncStats)
 	}
 }

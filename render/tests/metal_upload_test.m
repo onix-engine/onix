@@ -105,6 +105,9 @@ static id<MTLRenderPipelineState> onix_metal_mesh_pipeline(OnixMetalDriver *driv
 	(void)transparent; (void)blend; (void)picking; (void)variant;
 	return (id<MTLRenderPipelineState>)driver->device;
 }
+static id<MTLLibrary> onix_metal_mesh_library(OnixMetalDriver *driver, int variant) {
+	(void)variant; return (id<MTLLibrary>)driver->device;
+}
 static id onix_metal_mesh_vertex_descriptor(void) { return nil; }
 static id<MTLRenderPipelineState> onix_metal_pipeline(OnixMetalDriver *driver, id<MTLLibrary> vertex, id<MTLLibrary> fragment, id vertex_name, id fragment_name, id descriptor, int blend, int depth) {
 	(void)vertex; (void)fragment; (void)vertex_name; (void)fragment_name; (void)descriptor; (void)blend; (void)depth;

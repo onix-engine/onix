@@ -27,12 +27,7 @@ func TestHTMLHoverKeepsSiblingInputEntityAndValue(t *testing.T) {
 	}
 	field := htmlControlByID(t, world, owner, "name")
 	button := htmlControlByID(t, world, owner, "send")
-	if control := world.GetMut[htmlui.Control](field); control != nil {
-		control.Value = "edited"
-	}
-	if text := world.GetMut[TextField](field); text != nil {
-		text.Value = "edited"
-	}
+	SetHTMLControlValue(world, field, "edited")
 
 	world.WriteMessage(scene.InputEvent{Entity: button, Kind: scene.InputEventEnter})
 	if err := UpdateSystem("").Run(world); err != nil {
@@ -45,7 +40,7 @@ func TestHTMLHoverKeepsSiblingInputEntityAndValue(t *testing.T) {
 		t.Fatal("hover rebuilt the HTML tree and despawned the input control")
 	}
 	control, ok := world.Get[htmlui.Control](field)
-	if !ok || control.Value != "edited" {
+	if !ok || htmlui.ControlValue(world, field) != "edited" {
 		t.Fatalf("hover changed input control value: %#v, ok=%v", control, ok)
 	}
 	text, ok := world.Get[TextField](field)

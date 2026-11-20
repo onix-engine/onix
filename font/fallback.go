@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"slices"
 	"sync"
+	"weak"
 )
 
 type resolvedGlyph struct {
@@ -12,15 +13,15 @@ type resolvedGlyph struct {
 	id   uint16
 }
 
-// Sources and their parsed faces are shared across styles for the process
-// lifetime. Coverage is read first so a missing character never loads every
-// installed font's outlines and metrics.
+// Sources share coverage metadata across styles. Parsed faces are weakly held
+// here; active glyph resolutions own them until the bounded cache is trimmed.
 type fallbackSource struct {
 	coverage cmap
-	face     *Face
+	face     weak.Pointer[Face]
 	font     SystemFont
 	cmapOnce sync.Once
-	faceOnce sync.Once
+	faceMu   sync.Mutex
+	failed   bool
 }
 
 func (s *fallbackSource) glyph(r rune) resolvedGlyph {
@@ -36,18 +37,26 @@ func (s *fallbackSource) glyph(r rune) resolvedGlyph {
 		}
 		table, err := data.table("cmap")
 		if err == nil {
-			// Format 4 retains table bytes after the temporary mapping closes.
+			// The parsed cmap retains table bytes after the temporary mapping closes.
 			s.coverage, _ = parseCmap(bytes.Clone(table))
 		}
 	})
 	if s.coverage == nil || s.coverage.GlyphIndex(r) == 0 {
 		return resolvedGlyph{}
 	}
-	s.faceOnce.Do(func() { s.face, _ = s.font.Load() })
-	if s.face == nil || s.face.Head.UnitsPerEm == 0 {
+	s.faceMu.Lock()
+	defer s.faceMu.Unlock()
+	face := s.face.Value()
+	if face == nil && !s.failed {
+		var err error
+		face, err = s.font.Load()
+		s.failed = err != nil
+		s.face = weak.Make(face)
+	}
+	if face == nil || face.Head.UnitsPerEm == 0 {
 		return resolvedGlyph{}
 	}
-	return resolvedGlyph{s.face, s.face.GlyphIndex(r)}
+	return resolvedGlyph{face, face.GlyphIndex(r)}
 }
 
 type fallbackStyle struct {
@@ -167,6 +176,9 @@ func (s *fallbackSet) resolve(r rune) resolvedGlyph {
 			break
 		}
 	}
+	if s.glyphs == nil {
+		s.glyphs = make(map[rune]resolvedGlyph)
+	}
 	// Keep hits and misses in a bounded FIFO; arbitrary unsupported Unicode
 	// input must not grow every style's process-wide map indefinitely.
 	if len(s.order) < fallbackGlyphCacheLimit {
@@ -198,5 +210,23 @@ func fallbackFamilyRank(family string) int {
 		return 2
 	default:
 		return 3
+	}
+}
+
+// TrimSystemFallbackCaches drops transient resolutions and raster masks. It
+// never closes faces still owned by callers, scaled faces, or live layouts.
+func TrimSystemFallbackCaches() {
+	systemFallbacks.Lock()
+	defer systemFallbacks.Unlock()
+	for _, set := range systemFallbacks.styles {
+		set.mu.Lock()
+		for _, glyph := range set.glyphs {
+			if glyph.face != nil {
+				glyph.face.TrimCaches()
+			}
+		}
+		set.glyphs = nil
+		set.order, set.head = nil, 0
+		set.mu.Unlock()
 	}
 }

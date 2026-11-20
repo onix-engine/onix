@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestListMarkerSharesFirstLineBaseline(t *testing.T) {
@@ -39,7 +39,7 @@ func TestListMarkerReflowDoesNotAllocate(t *testing.T) {
 	t.Cleanup(func() { _ = face.Close() })
 	var cache Cache
 	item := retainedNode(root, "item")
-	dirty := []*dom.Node{item}
+	dirty := []*uinode.Node{item}
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	mutable := styles.Exclusive(item)
 	if allocations := testing.AllocsPerRun(50, func() {
@@ -61,14 +61,14 @@ func TestListMarkerCacheOrdinalAndStyleChanges(t *testing.T) {
 	var cache Cache
 	check := func(a, b string) {
 		t.Helper()
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{list, first, second}, false)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{list, first, second}, false)
 		fresh, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)
 		}
 		assertRetainedMatchesFull(t, got, fresh)
 		for _, item := range []struct {
-			node *dom.Node
+			node *uinode.Node
 			text string
 		}{{first, a}, {second, b}} {
 			box := cache.nodes[item.node]

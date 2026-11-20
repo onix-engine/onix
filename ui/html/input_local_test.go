@@ -26,7 +26,7 @@ func TestHTMLHoverReconcilesOnlyChangedRows(t *testing.T) {
 			if changed > 2 {
 				t.Fatalf("hover refreshed %d text entities, want at most two rows", changed)
 			}
-			if state.SyncStats.Layouts != 0 || state.SyncStats.ReconciledBoxes > 4 || state.SyncStats.Styled > 4 || state.SyncStats.SnapshottedControls > 2 {
+			if state.SyncStats.Layouts != 0 || state.SyncStats.ReconciledBoxes > 4 || state.SyncStats.Styled > 4 {
 				t.Fatalf("hover updated unrelated branches: %+v", state.SyncStats)
 			}
 			for entity, access := range world.Query[ControlText]().All {

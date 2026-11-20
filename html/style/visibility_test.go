@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestVisibilityCascade(t *testing.T) {
-	doc, err := dom.Parse(`<div style="visibility:hidden"><span id="inherited">a</span><span id="visible" class="visible">b</span><span id="inherit" style="visibility:INHERIT">c</span><span id="unset" style="visibility:unset">d</span><span id="initial" style="visibility:initial">e</span><span id="revert" style="visibility:revert">f</span><span id="invalid" class="invalid">g</span><span id="collapse" style="visibility:collapse">h</span></div>`)
+	doc, err := parse.Parse(`<div style="visibility:hidden"><span id="inherited">a</span><span id="visible" class="visible">b</span><span id="inherit" style="visibility:INHERIT">c</span><span id="unset" style="visibility:unset">d</span><span id="initial" style="visibility:initial">e</span><span id="revert" style="visibility:revert">f</span><span id="invalid" class="invalid">g</span><span id="collapse" style="visibility:collapse">h</span></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

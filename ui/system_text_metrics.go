@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type buttonLabelWidthsScratch struct{}
@@ -29,14 +30,20 @@ func collectSelectorLabels(world *ecs.World) map[ecs.Entity]string {
 		if _, exists := labels[item.Owner]; exists {
 			continue
 		}
-		if selector := world.GetRef[Selector](item.Owner); (selector != nil) && selector.Selected == item.Index {
+		if selector := world.GetRef[Selector](item.Owner); (selector != nil) && !world.Has[htmlui.Control](item.Owner) && selector.Selected == item.Index {
 			labels[item.Owner] = item.Label
 		}
 	}
 	return labels
 }
 
-func selectorCurrentLabel(labels map[ecs.Entity]string, owner ecs.Entity, selector *Selector) string {
+func selectorCurrentLabel(world *ecs.World, labels map[ecs.Entity]string, owner ecs.Entity, selector *Selector) string {
+	if control := world.GetRef[htmlui.Control](owner); control != nil && control.Tag == "select" {
+		if control.Selected >= 0 && control.Selected < len(control.Options) {
+			return control.Options[control.Selected].Label
+		}
+		return ""
+	}
 	if label, ok := labels[owner]; ok {
 		return label
 	}

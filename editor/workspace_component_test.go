@@ -8,9 +8,10 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	editorresources "github.com/onix-engine/onix/editor/resources"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
+	uinode "github.com/onix-engine/onix/scene/node"
 	engineui "github.com/onix-engine/onix/ui"
 	"github.com/onix-engine/onix/ui/html"
 )
@@ -21,7 +22,7 @@ func TestWorkspaceComponentsRetainControlsAndFocusAcrossUpdates(t *testing.T) {
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
 	shell, _ := world.Get[html.Surface](a.shell)
-	if shell.Value != editorresources.WorkspaceHTML {
+	if shell.Document == nil || shell.Value != "" {
 		t.Fatal("workspace is not using its compiled template")
 	}
 	if _, ok := world.Get[html.Component[workspaceComponentProps, workspaceComponentState]](a.shellComponent); !ok {
@@ -163,8 +164,8 @@ func TestWorkspaceResourcesUseFlatIconTilesAndKeepSelection(t *testing.T) {
 		t.Fatal("resource root displayed nested files")
 	}
 	fileID := "file:" + url.PathEscape("button/mod.go")
-	var find func(*dom.Node) *dom.Node
-	find = func(node *dom.Node) *dom.Node {
+	var find func(*uinode.Node) *uinode.Node
+	find = func(node *uinode.Node) *uinode.Node {
 		if id, _ := node.Attr("id"); id == fileID {
 			return node
 		}
@@ -175,7 +176,7 @@ func TestWorkspaceResourcesUseFlatIconTilesAndKeepSelection(t *testing.T) {
 		}
 		return nil
 	}
-	root, err := dom.Parse(source)
+	root, err := parse.Parse(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestWorkspaceResourcesUseFlatIconTilesAndKeepSelection(t *testing.T) {
 		t.Fatal("file tile DOM node missing")
 	}
 	a.handleEvent(html.Event{ID: fileID, Kind: html.EventClick})
-	root, err = dom.Parse(workspaceShellTest(t, a))
+	root, err = parse.Parse(workspaceShellTest(t, a))
 	if err != nil {
 		t.Fatal(err)
 	}

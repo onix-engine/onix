@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestIndexedKeyframesKeepLastMatchingDefinition(t *testing.T) {
-	root := dom.NewDocument()
-	node := dom.NewElement("div")
+	root := uinode.NewDocument()
+	node := uinode.NewElement("div")
 	root.AppendChild(node)
 	sheet, err := css.Parse(`
 div { animation: fade 1s linear forwards; color: red !important; }
@@ -43,8 +43,8 @@ div { animation: fade 1s linear forwards; color: red !important; }
 func BenchmarkAnimationCascadeTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			root := dom.NewDocument()
-			node := dom.NewElement("div")
+			root := uinode.NewDocument()
+			node := uinode.NewElement("div")
 			root.AppendChild(node)
 			var source strings.Builder
 			names := make([]string, count)
@@ -63,7 +63,7 @@ func BenchmarkAnimationCascadeTraversal(b *testing.B) {
 			}
 			var cache MutationCache
 			var changes []NodeChange
-			roots := []*dom.Node{node}
+			roots := []*uinode.Node{node}
 			run := func() {
 				changes = changes[:0]
 				if _, _, err := RecomputeSubtreesWithChanges(root, sheet, Viewport{}, nil, styles, roots, &changes, &cache); err != nil {

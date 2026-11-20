@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestRetainedBoxIDsSurviveTopologyChanges(t *testing.T) {
@@ -13,14 +13,14 @@ func TestRetainedBoxIDsSurviveTopologyChanges(t *testing.T) {
 	t.Cleanup(func() { _ = face.Close() })
 	var cache Cache
 	updateRetained(t, &cache, root, styles, face, nil, true)
-	original := make(map[*dom.Node]*Box, len(cache.nodes))
-	ids := make(map[*dom.Node]uint64, len(cache.nodes))
+	original := make(map[*uinode.Node]*Box, len(cache.nodes))
+	ids := make(map[*uinode.Node]uint64, len(cache.nodes))
 	for node, box := range cache.nodes {
 		original[node], ids[node] = box, box.StableID
 	}
 	list, a, slot := retainedNode(root, "list"), retainedNode(root, "a"), retainedNode(root, "slot")
 	for _, mutate := range []func(){
-		func() { list.InsertBefore(&dom.Node{Type: dom.ElementNode, Data: "div"}, a) },
+		func() { list.InsertBefore(&uinode.Node{Type: uinode.ElementNode, Data: "div"}, a) },
 		func() { list.RemoveChild(a); list.AppendChild(a) },
 		func() { list.RemoveChild(a); slot.AppendChild(a) },
 		func() { slot.Parent.RemoveChild(slot); list.AppendChild(slot) },

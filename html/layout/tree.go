@@ -6,18 +6,18 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func Build(root *dom.Node, styles style.Map, face *font.Face, viewportWidth, viewportHeight float64) (*Box, error) {
+func Build(root *uinode.Node, styles style.Map, face *font.Face, viewportWidth, viewportHeight float64) (*Box, error) {
 	return BuildWithFonts(root, styles, face, nil, viewportWidth, viewportHeight)
 }
 
 // BuildWithFonts lays out a document using separate regular and bold faces.
 // The bold face is selected for text whose computed font weight is 600 or
 // heavier, matching the font used when its visual is spawned.
-func BuildWithFonts(root *dom.Node, styles style.Map, face, boldFace *font.Face, viewportWidth, viewportHeight float64) (*Box, error) {
+func BuildWithFonts(root *uinode.Node, styles style.Map, face, boldFace *font.Face, viewportWidth, viewportHeight float64) (*Box, error) {
 	if root == nil {
 		return nil, fmt.Errorf("layout root is nil")
 	}
@@ -39,12 +39,12 @@ func BuildWithFonts(root *dom.Node, styles style.Map, face, boldFace *font.Face,
 	return box, nil
 }
 
-func buildTree(node *dom.Node, styles style.Map) *Box {
+func buildTree(node *uinode.Node, styles style.Map) *Box {
 	var nextID uint64
 	return buildTreeWithIDs(node, styles, &nextID)
 }
 
-func buildTreeWithIDs(node *dom.Node, styles style.Map, nextID *uint64) *Box {
+func buildTreeWithIDs(node *uinode.Node, styles style.Map, nextID *uint64) *Box {
 	if !nodeCreatesBox(node, styles) {
 		return nil
 	}
@@ -63,7 +63,7 @@ func buildTreeWithIDs(node *dom.Node, styles style.Map, nextID *uint64) *Box {
 	return box
 }
 
-func appendLayoutChildren(parent *Box, node *dom.Node, styles style.Map, nextID *uint64) {
+func appendLayoutChildren(parent *Box, node *uinode.Node, styles style.Map, nextID *uint64) {
 	for _, child := range node.Children {
 		computed, ok := styles.Get(child)
 		if !ok {
@@ -82,23 +82,23 @@ func appendLayoutChildren(parent *Box, node *dom.Node, styles style.Map, nextID 
 	}
 }
 
-func isFlexItem(node *dom.Node, styles style.Map) bool {
-	if node == nil || node.Parent == nil || node.Type == dom.TextNode && strings.TrimSpace(node.Data) == "" {
+func isFlexItem(node *uinode.Node, styles style.Map) bool {
+	if node == nil || node.Parent == nil || node.Type == uinode.TextNode && strings.TrimSpace(node.Data) == "" {
 		return false
 	}
 	parentStyle, ok := effectiveLayoutParentStyle(node.Parent, styles)
 	return ok && isFlexDisplay(parentStyle.Display.Keyword)
 }
 
-func isGridItem(node *dom.Node, styles style.Map) bool {
-	if node == nil || node.Parent == nil || node.Type == dom.TextNode && strings.TrimSpace(node.Data) == "" {
+func isGridItem(node *uinode.Node, styles style.Map) bool {
+	if node == nil || node.Parent == nil || node.Type == uinode.TextNode && strings.TrimSpace(node.Data) == "" {
 		return false
 	}
 	parentStyle, ok := effectiveLayoutParentStyle(node.Parent, styles)
 	return ok && isGridDisplay(parentStyle.Display.Keyword)
 }
 
-func effectiveLayoutParentStyle(node *dom.Node, styles style.Map) (*style.ComputedStyle, bool) {
+func effectiveLayoutParentStyle(node *uinode.Node, styles style.Map) (*style.ComputedStyle, bool) {
 	for current := node; current != nil; current = current.Parent {
 		computed, ok := styles.Get(current)
 		if !ok {
@@ -141,7 +141,7 @@ func flexOrder(box *Box) float64 {
 	return box.Style.Order.Number
 }
 
-func nodeCreatesBox(node *dom.Node, styles style.Map) bool {
+func nodeCreatesBox(node *uinode.Node, styles style.Map) bool {
 	if node == nil {
 		return false
 	}
@@ -154,11 +154,11 @@ func nodeCreatesBox(node *dom.Node, styles style.Map) bool {
 		return false
 	}
 
-	if node.Type == dom.TextNode && !isFlexItem(node, styles) && !isGridItem(node, styles) {
+	if node.Type == uinode.TextNode && !isFlexItem(node, styles) && !isGridItem(node, styles) {
 		return false
 	}
 
-	if node.Type == dom.ElementNode {
+	if node.Type == uinode.ElementNode {
 		// Flex and Grid items are blockified. Inline-block controls retain their
 		// own boxes and participate in normal flow as atomic inline boxes.
 		flexItem, gridItem := isFlexItem(node, styles), isGridItem(node, styles)

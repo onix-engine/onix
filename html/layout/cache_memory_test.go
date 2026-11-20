@@ -7,8 +7,9 @@ import (
 	"weak"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/internal/reuse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func textWorkspaceCapacities(ctx *layoutContext) [4]int {
@@ -40,13 +41,13 @@ func TestRetainedLayoutReclaimsWorkspacePeaks(t *testing.T) {
 	clear(target.Children[1:])
 	target.Children = target.Children[:1]
 	target.Children[0].Data = "small"
-	dom.SynchronizeTextContent(target)
+	element.SynchronizeTextContent(target)
 	for _, node := range blocks.Children {
 		node.Parent = nil
 	}
 	clear(blocks.Children)
 	blocks.Children = blocks.Children[:0]
-	dirty := []*dom.Node{target, blocks}
+	dirty := []*uinode.Node{target, blocks}
 	updateRetained(t, &cache, root, styles, face, dirty, true)
 	for range reuse.RetentionFrames*2 + 2 {
 		updateRetained(t, &cache, root, styles, face, dirty, false)
@@ -55,7 +56,7 @@ func TestRetainedLayoutReclaimsWorkspacePeaks(t *testing.T) {
 	if after[0] >= peak[0] || after[1] >= peak[1] || after[3] >= peak[3] || cap(cache.Changed) > 64 || cap(cache.Removed) > 64 {
 		t.Fatalf("layout retained its peak: workspace %v -> %v, changed/removed=%d/%d", peak, after, cap(cache.Changed), cap(cache.Removed))
 	}
-	probe := dom.NewElement("probe")
+	probe := uinode.NewElement("probe")
 	oldIndex[probe] = &Box{}
 	if cache.nodes[probe] != nil {
 		t.Fatal("layout node map retained its historical buckets")

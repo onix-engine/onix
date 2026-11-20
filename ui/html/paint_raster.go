@@ -9,8 +9,8 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type htmlRasterGradient struct {
@@ -37,7 +37,7 @@ func htmlNeedsRasterPaint(computed *style.ComputedStyle) bool {
 	return radii.TopLeft != radii.TopRight || radii.TopLeft != radii.BottomRight || radii.TopLeft != radii.BottomLeft
 }
 
-func htmlPaintTextureFor(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle, width, height float32) *graphics.Texture {
+func htmlPaintTextureFor(state *htmlRenderState, node *uinode.Node, computed *style.ComputedStyle, width, height float32) *graphics.Texture {
 	if state == nil || node == nil || computed == nil || width <= 0 || height <= 0 {
 		return nil
 	}
@@ -293,7 +293,7 @@ func (border *htmlRasterBorder) colorAt(x, y, width, height float64) color.RGBA 
 	return border.colors[side]
 }
 
-func htmlBoxShadowTextureFor(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32) *graphics.Texture {
+func htmlBoxShadowTextureFor(state *htmlRenderState, node *uinode.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32) *graphics.Texture {
 	texture, _ := htmlBoxShadowTextureForMode(state, node, computed, shadowIndex, width, height, boxWidth, boxHeight, padding, false)
 	return texture
 }
@@ -314,7 +314,7 @@ type htmlShadowRaster struct {
 	version                     uint64
 }
 
-func htmlBoxShadowTextureForMode(state *htmlRenderState, node *dom.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32, maskOnly bool) (*graphics.Texture, uint64) {
+func htmlBoxShadowTextureForMode(state *htmlRenderState, node *uinode.Node, computed *style.ComputedStyle, shadowIndex int, width, height, boxWidth, boxHeight, padding float32, maskOnly bool) (*graphics.Texture, uint64) {
 	if state == nil || node == nil || computed == nil || shadowIndex < 0 || shadowIndex >= len(computed.BoxShadow) {
 		return nil, 0
 	}

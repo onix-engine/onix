@@ -1,4 +1,4 @@
-package dom
+package node
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-type NodeType int
+type NodeType int8
 
 const (
 	DocumentNode NodeType = iota
@@ -14,15 +14,25 @@ const (
 	TextNode
 )
 
+type Namespace uint8
+
+const (
+	HTML Namespace = iota
+	MathML
+	SVG
+)
+
+// Node is the ordered logical node shared by native UI content producers.
+// Its address stays stable while attached, detached, or moved to another parent.
 type Node struct {
-	attributeList
+	AttributeSet
 	Parent    *Node
 	Data      string
-	namespace string
 	Children  []*Node
-	Type      NodeType
 	Order     uint32
-	States    StateSet[ElementState]
+	States    StateSet[uint16]
+	Type      NodeType
+	Namespace Namespace
 }
 
 func NewDocument() *Node {
@@ -53,22 +63,11 @@ func (n *Node) ShareAttributes(source *Node) {
 		return
 	}
 	if source == nil || source.AttrCount() == 0 {
-		n.attributeList = attributeList{}
+		n.AttributeSet = AttributeSet{}
 		return
 	}
 	atomic.StoreUint32(&source.data.shared, 1)
 	n.data = source.data
-}
-
-func HasInputType(node *Node, inputType string) bool {
-	if node == nil || node.Type != ElementNode || node.Data != "input" {
-		return false
-	}
-	typeValue, ok := node.Attr("type")
-	if !ok {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(typeValue), inputType)
 }
 
 func (n *Node) String() string {
@@ -99,4 +98,14 @@ func (n *Node) writeTo(builder *strings.Builder, depth int) {
 	for _, child := range n.Children {
 		child.writeTo(builder, depth+1)
 	}
+}
+
+// CopyAttributes copies into independently writable storage.
+func (n *Node) CopyAttributes(source *Node) {
+	n.AttributeSet.copyFrom(&source.AttributeSet)
+}
+
+// EqualAttributes compares authored attributes without exposing their storage.
+func (n *Node) EqualAttributes(other *Node) bool {
+	return n.AttributeSet.equal(&other.AttributeSet)
 }

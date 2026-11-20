@@ -46,12 +46,12 @@ func TestHTMLStructureClipInsertionRemovalMatchesFresh(t *testing.T) {
 					}
 					assertHTMLContextMatchesFresh(t, world, owner, prefix+content+suffix)
 					for node, binding := range state.OverflowBindings {
-						if !world.IsAlive(binding.entity) || !htmlNodeWithin(node, state.Root) {
+						if !world.IsAlive(binding.entity) || !node.Within(state.Root) {
 							t.Fatal("retired clip remains indexed")
 						}
 					}
 					for node, binding := range state.OverflowRoutes {
-						if !htmlNodeWithin(node, state.Root) || !world.IsAlive(binding.entity) {
+						if !node.Within(state.Root) || !world.IsAlive(binding.entity) {
 							t.Fatal("retired route remains indexed")
 						}
 					}
@@ -227,7 +227,7 @@ func TestHTMLStructuralClippingSkipsUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "child").Remove()
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.SnapshottedControls != 0 || state.SyncStats.ReconciledBoxes > 3 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedClips != 1 || state.SyncStats.UpdatedControls != 0 || state.SyncStats.ReconciledBoxes > 3 {
 		t.Fatalf("unrelated clipped controls updated: %+v", state.SyncStats)
 	}
 }

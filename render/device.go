@@ -481,8 +481,8 @@ const (
 	EnvironmentRGBE
 )
 
-// MeshLighting is shared by all backends. Shadow depth is encoded in an RGBA8
-// color target, allowing filtering without requiring sampleable depth support.
+// MeshLighting is shared by all backends. Shadow and occlusion passes sample
+// the depth attachment directly.
 type MeshLighting struct {
 	FogColor                   [3]float32 // linear radiance in nits
 	FogParams                  [4]float32 // start, end, density, mode (0 disabled, 1 linear, 2 exp2)

@@ -4,16 +4,16 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/internal/reuse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLComponentCompactDiffHandlesDuplicatesAndReplacements(t *testing.T) {
 	world := ecs.NewWorld()
 	spawn := world.NewSpawner1[htmlRenderState]()
 	owner := spawn.Spawn(htmlRenderState{})
-	parent := dom.NewElement("ul")
-	children := make(map[*dom.Node]*htmlComponentVNodeChildren)
+	parent := uinode.NewElement("ul")
+	children := make(map[*uinode.Node]*htmlComponentVNodeChildren)
 	var list htmlComponentVNodeChildren
 	commit := func(next []VNode) {
 		reconcileHTMLComponentVNodeChildren(world, owner, parent, &list, next, children, "")

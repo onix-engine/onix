@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/render"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLOpacityTextureReusesRasterAndTexture(t *testing.T) {
@@ -16,10 +16,10 @@ func TestHTMLOpacityTextureReusesRasterAndTexture(t *testing.T) {
 	}
 	t.Cleanup(render.Uninstall)
 	state := htmlRenderState{}
-	root := &layout.Box{Node: &dom.Node{}, Content: layout.Rect{Width: 16, Height: 16}, Style: &style.ComputedStyle{}}
+	root := &layout.Box{Node: &uinode.Node{}, Content: layout.Rect{Width: 16, Height: 16}, Style: &style.ComputedStyle{}}
 	root.Style.BackgroundColor = style.Value{Kind: style.ValueColor, Color: style.Color{R: 255, A: 255}}
 	root.Style.Opacity = style.Value{Kind: style.ValueNumber, Number: 0.5}
-	child := &layout.Box{Node: &dom.Node{}, Content: layout.Rect{Width: 8, Height: 8}, Style: &style.ComputedStyle{}}
+	child := &layout.Box{Node: &uinode.Node{}, Content: layout.Rect{Width: 8, Height: 8}, Style: &style.ComputedStyle{}}
 	child.Style.BackgroundColor = style.Value{Kind: style.ValueColor, Color: style.Color{B: 255, A: 255}}
 	child.Style.Opacity = style.Value{Kind: style.ValueNumber, Number: 1}
 	root.Children = []*layout.Box{child}

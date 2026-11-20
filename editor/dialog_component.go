@@ -284,13 +284,13 @@ func updateEditorDialogComponent(context *html.ComponentContext[editorDialogComp
 				textarea.FollowTail = element.FollowTail
 			}
 		}
-		if set && control.Value != value {
+		if set && html.ControlValue(context.World, entity) != value {
 			engineui.SetHTMLControlValue(context.World, entity, value)
 		}
-		if element.CheckedSet && control.Checked != element.Checked {
+		if element.CheckedSet && control.Checked() != element.Checked {
 			engineui.SetHTMLControlChecked(context.World, entity, element.Checked)
 		}
-		if element.SelectedSet && control.Value != element.Selected {
+		if element.SelectedSet && html.ControlValue(context.World, entity) != element.Selected {
 			for index, option := range control.Options {
 				if option.Value != element.Selected {
 					continue

@@ -4,6 +4,7 @@ package render
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,10 @@ func TestMetalRoundedClip(t *testing.T) {
 	testMetalNative(t, "metal_rounded_clip_test")
 }
 
+func TestMetalMemoryLifecycle(t *testing.T) {
+	testMetalNative(t, "metal_memory_test")
+}
+
 func testMetalNative(t *testing.T, name string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -34,9 +39,13 @@ func testMetalNative(t *testing.T, name string) {
 	}
 	command = exec.CommandContext(ctx, binary)
 	command.Env = append(os.Environ(), "MTL_DEBUG_LAYER=1")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("Metal regression: %v\n%s", err, output)
-	} else {
-		t.Log(string(output))
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 77 {
+		t.Skipf("Metal device unavailable: %s", output)
 	}
+	if err != nil {
+		t.Fatalf("Metal regression: %v\n%s", err, output)
+	}
+	t.Log(string(output))
 }

@@ -659,7 +659,8 @@ OnixMacWindow *onix_macos_create(int width, int height, const char *title, int t
         state->window.delegate = state->delegate;
         state->window.contentView = state->view;
         [state->view registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
-        state->window.title = title != NULL ? [NSString stringWithUTF8String:title] : @"Onix";
+        NSString *windowTitle = title != NULL ? [NSString stringWithUTF8String:title] : nil;
+        state->window.title = windowTitle ?: @"Onix";
         [state->window center];
         [state->window makeKeyAndOrderFront:nil];
         [state->window makeFirstResponder:state->view];
@@ -883,7 +884,9 @@ void *onix_macos_layer(OnixMacWindow *state) { return state != NULL ? state->lay
 void *onix_macos_native_window(OnixMacWindow *state) { return state != NULL ? state->window : NULL; }
 
 void onix_macos_set_title(OnixMacWindow *state, const char *title) {
-    if (state != NULL && title != NULL) state->window.title = [NSString stringWithUTF8String:title];
+    if (state == NULL || title == NULL) return;
+    NSString *windowTitle = [NSString stringWithUTF8String:title];
+    if (windowTitle != nil) state->window.title = windowTitle;
 }
 
 void onix_macos_set_decorations(OnixMacWindow *state, int mode) {

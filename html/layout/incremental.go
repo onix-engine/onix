@@ -6,9 +6,9 @@ import (
 	"slices"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/internal/reuse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Work counts formatting calls separately from reused and translated subtrees.
@@ -24,8 +24,8 @@ type Work struct {
 // whose content or geometry changed, including inherited style changes.
 type Cache struct {
 	Root           *Box
-	nodes          map[*dom.Node]*Box
-	document       *dom.Node
+	nodes          map[*uinode.Node]*Box
+	document       *uinode.Node
 	face, boldFace *font.Face
 	// Changed contains boxes needing render synchronization: reflowed or
 	// translated boxes, plus ancestors whose descendant bounds may have changed.
@@ -62,29 +62,39 @@ func (cache *Cache) MaintainCache() {
 
 type boxLayoutCache struct {
 	measurement          *style.ComputedStyle
-	height               style.Value
-	width                style.Value
+	width, height        layoutDimension
 	containing, absolute Rect
 	changedPass          uint64
 	placementX           float64
 	pass                 uint64
 	index                int
-	orderPass            uint64
 	generation           uint64
 	placementY           float64
-	localFlexPass        uint64
-	reorderChangedPass   uint64
 	restylePass          uint64
 	dirtyPass            uint64
+	dirtyFirst           int
+	dirtyLast            int
 	placementReusable    bool
 	shiftable            bool
 	dirty                bool
+	dirtySelf            bool
+	plainFlow            bool
 	valid                bool
+}
+
+// Block layout resolves dimensions from their kind and two length terms.
+type layoutDimension struct {
+	pixels, percent float64
+	kind            style.ValueKind
+}
+
+func dimensionKey(v style.Value) layoutDimension {
+	return layoutDimension{pixels: v.LengthPx, percent: v.Percent, kind: v.Kind}
 }
 
 // BoxForNode returns the node's box from the latest layout update. Nodes with
 // display:none or display:contents and inline nodes without a box return nil.
-func (cache *Cache) BoxForNode(node *dom.Node) *Box {
+func (cache *Cache) BoxForNode(node *uinode.Node) *Box {
 	return cache.nodes[node]
 }
 
@@ -92,7 +102,7 @@ func (cache *Cache) BoxForNode(node *dom.Node) *Box {
 // inputs through the existing formatting algorithm. Force invalidates all
 // geometry for environment/resource changes. Reordered nodes only require
 // sorting their retained flex parent; topology handles DOM/display changes.
-func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *font.Face, width, height float64, dirty, reordered []*dom.Node, topology, force bool) (*Box, error) {
+func (cache *Cache) Update(root *uinode.Node, styles style.Map, face, boldFace *font.Face, width, height float64, dirty, reordered []*uinode.Node, topology, force bool) (*Box, error) {
 	if root == nil {
 		return nil, fmt.Errorf("layout root is nil")
 	}
@@ -130,7 +140,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 		cache.context = layoutContext{}
 		topology, force = true, true
 	}
-	if cache.face != face || cache.boldFace != boldFace || cache.viewport != viewport || cache.context.reserveScrollbarSpace != cache.ReserveScrollbarSpace {
+	if cache.face != face || cache.boldFace != boldFace || cache.context.reserveScrollbarSpace != cache.ReserveScrollbarSpace {
 		force = true
 	}
 	cache.face, cache.boldFace, cache.viewport = face, boldFace, viewport
@@ -144,7 +154,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 	if topology || cache.Root == nil {
 		cache.nodeRetention.Record(len(cache.nodes))
 		if cache.nodes == nil {
-			cache.nodes = make(map[*dom.Node]*Box)
+			cache.nodes = make(map[*uinode.Node]*Box)
 		}
 		cache.generation++
 		cache.Root = cache.reconcile(root, nil, 0, styles, force)
@@ -186,7 +196,7 @@ func (cache *Cache) Update(root *dom.Node, styles style.Map, face, boldFace *fon
 
 // Restyle repoints retained boxes and fragments at the instances the cascade
 // chose for changed nodes. Interning can move a node to another pointer.
-func (cache *Cache) Restyle(nodes []*dom.Node, styles style.Map) {
+func (cache *Cache) Restyle(nodes []*uinode.Node, styles style.Map) {
 	cache.restylePass++
 	for _, node := range nodes {
 		// A changed inline or text node has no box of its own; its fragments
@@ -237,14 +247,14 @@ func (box *Box) Restyle(styles style.Map) {
 	}
 }
 
-func styleInstance(styles style.Map, node *dom.Node, current *style.ComputedStyle) *style.ComputedStyle {
+func styleInstance(styles style.Map, node *uinode.Node, current *style.ComputedStyle) *style.ComputedStyle {
 	if computed := styles[node]; computed != nil {
 		return computed
 	}
 	return current
 }
 
-func (cache *Cache) reconcile(node *dom.Node, parent *Box, index int, styles style.Map, force bool) *Box {
+func (cache *Cache) reconcile(node *uinode.Node, parent *Box, index int, styles style.Map, force bool) *Box {
 	cache.Work.TopologyVisited++
 	if !nodeCreatesBox(node, styles) {
 		return nil
@@ -290,11 +300,20 @@ func (cache *Cache) reconcile(node *dom.Node, parent *Box, index int, styles sty
 	if isFlexContainer(box) {
 		slices.SortStableFunc(box.Children, compareFlexOrder)
 	}
+	box.reflow.plainFlow = len(children) >= 8 && len(children) == len(node.Children) && (node.Type == uinode.DocumentNode || box.Style.Display == style.Keyword("block") && !isControlElementNode(node))
+	if box.reflow.plainFlow {
+		for i, child := range children {
+			if child.Node != node.Children[i] || child.Style.Display != style.Keyword("block") || isAbsolutePositioned(child) {
+				box.reflow.plainFlow = false
+				break
+			}
+		}
+	}
 	box.reflow.shiftable = shiftable
 	return box
 }
 
-func (cache *Cache) reconcileLayoutChild(node *dom.Node, parent *Box, old, children []*Box, childIndex *int, shiftable bool, styles style.Map, force bool) ([]*Box, bool) {
+func (cache *Cache) reconcileLayoutChild(node *uinode.Node, parent *Box, old, children []*Box, childIndex *int, shiftable bool, styles style.Map, force bool) ([]*Box, bool) {
 	computed, ok := styles.Get(node)
 	if !ok {
 		return children, shiftable
@@ -320,31 +339,54 @@ func (cache *Cache) reconcileLayoutChild(node *dom.Node, parent *Box, old, child
 }
 
 func (cache *Cache) markLayoutDirty(box *Box) {
+	if box.reflow.dirtyPass != cache.pass {
+		box.reflow.dirtyFirst, box.reflow.dirtyLast = 0, 0
+	}
+	box.reflow.dirtySelf = true
+	var child *Box
 	for current := box; current != nil; current = current.Parent {
-		if current.reflow.dirtyPass == cache.pass {
+		reflow := &current.reflow
+		alreadyDirty := reflow.dirtyPass == cache.pass
+		if !alreadyDirty {
+			reflow.dirtyFirst, reflow.dirtyLast = 0, 0
+			reflow.dirtySelf = child == nil
+		}
+		if child != nil {
+			index := child.reflow.index + 1
+			if reflow.dirtyFirst == 0 {
+				reflow.dirtyFirst = index
+			}
+			reflow.dirtyFirst, reflow.dirtyLast = min(reflow.dirtyFirst, index), max(reflow.dirtyLast, index)
+		}
+		if alreadyDirty {
 			break
 		}
-		current.reflow.dirtyPass = cache.pass
-		current.reflow.dirty = true
+		reflow.dirtyPass = cache.pass
+		reflow.dirty = true
+		child = current
 	}
 }
 
 func layoutBlock(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+	layoutBlockSized(box, box.Style.Width, box.Style.Height, containing, absolute, face, styles, ctx)
+}
+
+func layoutBlockSized(box *Box, width, height style.Value, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if ctx == nil || ctx.retained == nil {
-		layoutBlockScrollbars(box, containing, absolute, face, styles, ctx)
+		layoutBlockScrollbars(box, width, height, containing, absolute, face, styles, ctx)
 		return
 	}
 	cache := ctx.retained
 	cache.Work.Visited++
 	previous := box.reflow
-	// Flex/grid sizing overrides Width/Height on a reusable style copy. Include
-	// those values in the key without confusing intrinsic and final stretch
-	// sizes. Other temporary styles (e.g. table sizing) have distinct identities.
+	widthKey, heightKey := dimensionKey(width), dimensionKey(height)
+	// Include used dimensions in the key, since intrinsic and final layout can
+	// size the same box differently. Table measurement can also override style.
 	var measurement *style.ComputedStyle
 	if box.Style != styles[box.Node] {
 		measurement = box.Style
 	}
-	if ctx.uncached == 0 && !box.hasFloats && (ctx.floatContext == nil || len(ctx.floatContext.areas) == 0) && previous.valid && !previous.dirty && previous.measurement == measurement && previous.width == box.Style.Width && previous.height == box.Style.Height {
+	if ctx.uncached == 0 && !box.hasFloats && (ctx.floatContext == nil || len(ctx.floatContext.areas) == 0) && previous.valid && !previous.dirty && previous.measurement == measurement && previous.width == widthKey && previous.height == heightKey {
 		if previous.containing == containing && previous.absolute == absolute {
 			translateBox(box, -previous.placementX, -previous.placementY, ctx)
 			box.reflow.placementX, box.reflow.placementY = 0, 0
@@ -364,6 +406,14 @@ func layoutBlock(box *Box, containing, absolute Rect, face *font.Face, styles st
 	}
 	cache.Work.Reflowed++
 	cache.recordChanged(box)
+	if previous.plainFlow && previous.valid && !previous.dirtySelf && previous.dirtyFirst != 0 && previous.dirtyLast <= len(box.Children) &&
+		previous.containing == containing && previous.absolute == absolute && previous.width == widthKey && previous.height == heightKey &&
+		previous.placementX == 0 && previous.placementY == 0 && previous.measurement == measurement &&
+		!ctx.reserveScrollbarSpace && ctx.uncached == 0 && !box.hasFloats && (ctx.floatContext == nil || len(ctx.floatContext.areas) == 0) &&
+		reflowUnchangedBlockFlow(box, face, styles, ctx, previous.dirtyFirst-1, previous.dirtyLast) {
+		box.reflow.pass, box.reflow.dirty = cache.pass, false
+		return
+	}
 	// A fresh layout tree starts with no previous used size. In particular,
 	// bottom-only absolute positioning must not read last frame's height here.
 	// Preserve intermediate measurements only within the same layout pass.
@@ -373,13 +423,37 @@ func layoutBlock(box *Box, containing, absolute Rect, face *font.Face, styles st
 	}
 	box.reflow.valid = false
 	box.InvalidatePaintHash()
-	layoutBlockScrollbars(box, containing, absolute, face, styles, ctx)
+	layoutBlockScrollbars(box, width, height, containing, absolute, face, styles, ctx)
 	box.reflow.containing, box.reflow.absolute = containing, absolute
 	box.reflow.dirty = false
-	box.reflow.width, box.reflow.height = box.Style.Width, box.Style.Height
+	box.reflow.width, box.reflow.height = widthKey, heightKey
 	box.reflow.measurement = measurement
 	box.reflow.placementX, box.reflow.placementY = 0, 0
 	box.reflow.valid = ctx.err == nil
+}
+
+// Direct block children with unchanged flow positions leave the containing
+// box's flow geometry and the layout inputs of every later sibling intact.
+func reflowUnchangedBlockFlow(box *Box, face *font.Face, styles style.Map, ctx *layoutContext, first, end int) bool {
+	for _, child := range box.Children[first:end] {
+		if !child.reflow.dirty {
+			continue
+		}
+		if !child.reflow.valid || child.Style.Display != style.Keyword("block") || isAbsolutePositioned(child) || isFloated(child) || child.hasFloats {
+			return false
+		}
+		previous := child.FlowMarginBox
+		marginBottom := child.Margin.Bottom
+		// A changed top margin can change the collapse at this boundary.
+		if child.Margin.Top != resolveLength(child.Style.Margin.Top, child.reflow.containing.Width) {
+			return false
+		}
+		layoutBlock(child, child.reflow.containing, child.reflow.absolute, face, styles, ctx)
+		if ctx.err != nil || previous.Y != child.FlowMarginBox.Y || previous.Height != child.FlowMarginBox.Height || marginBottom != child.Margin.Bottom {
+			return false
+		}
+	}
+	return true
 }
 
 func (cache *Cache) recordChanged(box *Box) {
@@ -398,21 +472,22 @@ func compareRetainedFlexOrder(left, right *Box) int {
 	return cmp.Compare(left.reflow.index, right.reflow.index)
 }
 
-func (cache *Cache) reorderFlexContainers(nodes []*dom.Node) {
+func (cache *Cache) reorderFlexContainers(nodes []*uinode.Node) {
 	for _, node := range nodes {
 		box := cache.nodes[node]
 		if box == nil || box.Parent == nil || !isFlexContainer(box.Parent) {
 			continue
 		}
 		parent := box.Parent
-		if parent.reflow.orderPass == cache.pass {
+		scratch := parent.flexScratch()
+		if scratch.orderPass == cache.pass {
 			continue
 		}
-		parent.reflow.orderPass = cache.pass
+		scratch.orderPass = cache.pass
 		cache.Work.OrderContainers++
 		if !slices.IsSortedFunc(parent.Children, compareRetainedFlexOrder) {
 			slices.SortFunc(parent.Children, compareRetainedFlexOrder)
-			parent.reflow.reorderChangedPass = cache.pass
+			scratch.reorderChangedPass = cache.pass
 			cache.Reordered = append(cache.Reordered, parent)
 			cache.markLayoutDirty(parent)
 		}
@@ -421,14 +496,14 @@ func (cache *Cache) reorderFlexContainers(nodes []*dom.Node) {
 
 // Coalesce nested changes, then preflight every independent context before
 // laying out any of them. Ancestors stay dirty until all outer geometries agree.
-func (cache *Cache) layoutLocalFlexOrder(dirty []*dom.Node, styles style.Map, face *font.Face) bool {
+func (cache *Cache) layoutLocalFlexOrder(dirty []*uinode.Node, styles style.Map, face *font.Face) bool {
 	if cache.ReserveScrollbarSpace || len(cache.Reordered) == 0 || !cache.Root.reflow.valid {
 		return false
 	}
 	for _, box := range cache.Reordered {
 		covered, independent := false, true
 		for parent := box.Parent; parent != nil; parent = parent.Parent {
-			if parent.reflow.reorderChangedPass == cache.pass {
+			if parent.flex != nil && parent.flex.reorderChangedPass == cache.pass {
 				covered = true
 				break
 			}
@@ -440,13 +515,13 @@ func (cache *Cache) layoutLocalFlexOrder(dirty []*dom.Node, styles style.Map, fa
 		if !independent || !box.reflow.valid || box.Style.Position.Keyword != "static" {
 			return false
 		}
-		box.reflow.localFlexPass = cache.pass
+		box.flex.localFlexPass = cache.pass
 		cache.localFlexRoots = append(cache.localFlexRoots, box)
 	}
 	for _, node := range dirty {
 		covered := false
 		for current := node; current != nil; current = current.Parent {
-			if box := cache.nodes[current]; box != nil && box.reflow.localFlexPass == cache.pass {
+			if box := cache.nodes[current]; box != nil && box.flex != nil && box.flex.localFlexPass == cache.pass {
 				covered = true
 				break
 			}

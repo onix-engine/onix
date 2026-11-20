@@ -11,9 +11,9 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/render"
+	uinode "github.com/onix-engine/onix/scene/node"
 	"github.com/onix-engine/onix/window"
 )
 
@@ -44,7 +44,7 @@ func BenchmarkNativeHTMLGPUBlurCache(b *testing.B) {
 		}
 	}
 	texture := graphics.CreateTextureBySharedImage(source, false, graphics.ResourceUsageDefault)
-	key := htmlTextureKey{node: &dom.Node{}}
+	key := htmlTextureKey{node: &uinode.Node{}}
 	cache.add(key, texture)
 	target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: size, Height: size})
 	if err != nil {

@@ -1,9 +1,9 @@
 package html
 
 import (
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/render"
+	uinode "github.com/onix-engine/onix/scene/node"
 	"image"
 	"image/color"
 	"math"
@@ -16,7 +16,7 @@ func TestHTMLShadowR8MatchesRGBAAndReusesColor(t *testing.T) {
 			radius := style.Radius{Horizontal: style.LengthPx(7), Vertical: style.LengthPx(7)}
 			computed := &style.ComputedStyle{BorderRadius: style.Corners{TopLeft: radius, TopRight: radius, BottomRight: radius, BottomLeft: radius}, BoxShadow: []style.Shadow{{BlurRadius: style.LengthPx(blur), SpreadRadius: style.LengthPx(-2), OffsetX: style.LengthPx(2.5), OffsetY: style.LengthPx(-1.5), Color: style.Color{R: 37, G: 121, B: 213, A: alpha}}}}
 			state := htmlRenderState{}
-			node := &dom.Node{}
+			node := &uinode.Node{}
 			texture, version := htmlBoxShadowTextureForMode(&state, node, computed, 0, 73, 65, 41, 33, 16, false)
 			raster := state.Textures.entries[htmlTextureKey{node: node, variant: "shadow-0"}].shadow
 			var want image.RGBA

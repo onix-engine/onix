@@ -1,12 +1,15 @@
 package style
 
-import "github.com/onix-engine/onix/html/dom"
+import (
+	"github.com/onix-engine/onix/html/element"
+	uinode "github.com/onix-engine/onix/scene/node"
+)
 
 const defaultTextInputWidthPx = 140.0
 
-func defaultStyle(node *dom.Node) ComputedStyle {
+func defaultStyle(node *uinode.Node) ComputedStyle {
 	display := Keyword("inline")
-	if node == nil || node.Type == dom.DocumentNode || isBlockTag(node.Data) {
+	if node == nil || node.Type == uinode.DocumentNode || isBlockTag(node.Data) {
 		display = Keyword("block")
 	}
 
@@ -103,7 +106,7 @@ func defaultStyle(node *dom.Node) ComputedStyle {
 		ObjectPosXOrigin:         "left",
 		ObjectPosYOrigin:         "top",
 	}}
-	if node != nil && node.Type == dom.ElementNode {
+	if node != nil && node.Type == uinode.ElementNode {
 		switch node.Data {
 		case "li":
 			computed.Display = Keyword("list-item")
@@ -136,8 +139,8 @@ func defaultStyle(node *dom.Node) ComputedStyle {
 	return computed
 }
 
-func applyHiddenAttributeDefault(node *dom.Node, computed *ComputedStyle) {
-	if node != nil && node.Type == dom.ElementNode {
+func applyHiddenAttributeDefault(node *uinode.Node, computed *ComputedStyle) {
+	if node != nil && node.Type == uinode.ElementNode {
 		if _, hidden := node.Attr("hidden"); hidden {
 			computed.Display = Keyword("none")
 		}
@@ -154,8 +157,8 @@ func isBlockTag(tag string) bool {
 	}
 }
 
-func applyFormControlDefaults(node *dom.Node, computed *ComputedStyle) {
-	if node == nil || computed == nil || node.Type != dom.ElementNode {
+func applyFormControlDefaults(node *uinode.Node, computed *ComputedStyle) {
+	if node == nil || computed == nil || node.Type != uinode.ElementNode {
 		return
 	}
 
@@ -225,32 +228,32 @@ func applyFormControlDefaults(node *dom.Node, computed *ComputedStyle) {
 	}
 }
 
-func isCheckboxInput(node *dom.Node) bool {
+func isCheckboxInput(node *uinode.Node) bool {
 	return isInputType(node, "checkbox")
 }
 
-func isRadioInput(node *dom.Node) bool {
+func isRadioInput(node *uinode.Node) bool {
 	return isInputType(node, "radio")
 }
 
-func isButtonInput(node *dom.Node) bool {
+func isButtonInput(node *uinode.Node) bool {
 	return isInputType(node, "button") || isInputType(node, "submit") || isInputType(node, "reset")
 }
 
-func isHiddenInput(node *dom.Node) bool {
+func isHiddenInput(node *uinode.Node) bool {
 	return isInputType(node, "hidden")
 }
 
-func isChoiceInput(node *dom.Node) bool {
+func isChoiceInput(node *uinode.Node) bool {
 	return isCheckboxInput(node) || isRadioInput(node)
 }
 
-func isInputType(node *dom.Node, inputType string) bool {
-	return dom.HasInputType(node, inputType)
+func isInputType(node *uinode.Node, inputType string) bool {
+	return element.HasInputType(node, inputType)
 }
 
-func isDisabledControl(node *dom.Node) bool {
-	if node == nil || node.Type != dom.ElementNode {
+func isDisabledControl(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	if _, ok := node.Attr("disabled"); !ok {

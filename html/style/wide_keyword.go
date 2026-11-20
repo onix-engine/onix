@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // cssWideKeywords are the value keywords from CSS Cascade 4 section 7 that
@@ -62,7 +62,7 @@ func isInheritedProperty(property string) bool {
 // applyCSSWideKeyword resolves one winning CSS-wide declaration. Inherit is
 // valid for every property, not only inherited properties; unset inherits only
 // where the property is inherited and resets all other properties.
-func applyCSSWideKeyword(style, parent *ComputedStyle, node *dom.Node, property, raw string) {
+func applyCSSWideKeyword(style, parent *ComputedStyle, node *uinode.Node, property, raw string) {
 	inherits := isWideKeywordOf(raw, "inherit") || isInheritedProperty(property) && (isWideKeywordOf(raw, "unset") || isWideKeywordOf(raw, "revert") || isWideKeywordOf(raw, "revert-layer"))
 	if inherits && parent != nil {
 		copyCSSProperty(style, parent, property)
@@ -71,7 +71,7 @@ func applyCSSWideKeyword(style, parent *ComputedStyle, node *dom.Node, property,
 	resetCSSProperty(style, node, property)
 }
 
-func resetCSSProperty(style *ComputedStyle, node *dom.Node, property string) {
+func resetCSSProperty(style *ComputedStyle, node *uinode.Node, property string) {
 	if style == nil {
 		return
 	}

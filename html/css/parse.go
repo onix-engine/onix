@@ -6,18 +6,28 @@ import (
 )
 
 func Parse(input string) (*Stylesheet, error) {
-	tokenizer := NewTokenizer(input)
+	return ParseParts(input)
+}
+
+// ParseParts parses independent stylesheet sources in cascade order. Each
+// source has its own token boundaries and appends directly to the result.
+func ParseParts(parts ...string) (*Stylesheet, error) {
 	stylesheet := &Stylesheet{}
-	rules, err := parseRuleList(tokenizer, stylesheet, nil, false)
-	if err != nil {
-		return nil, err
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		tokenizer := Tokenizer{input: part}
+		rules, err := parseRuleList(&tokenizer, stylesheet, stylesheet.Rules, nil, false)
+		if err != nil {
+			return nil, err
+		}
+		stylesheet.Rules = rules
 	}
-	stylesheet.Rules = rules
 	return stylesheet, nil
 }
 
-func parseRuleList(tokenizer *Tokenizer, stylesheet *Stylesheet, inherited []RuleCondition, stopOnRBrace bool) ([]Rule, error) {
-	rules := []Rule{}
+func parseRuleList(tokenizer *Tokenizer, stylesheet *Stylesheet, rules []Rule, inherited []RuleCondition, stopOnRBrace bool) ([]Rule, error) {
 	for {
 		token, err := tokenizer.Peek()
 		if err != nil {
@@ -152,7 +162,7 @@ func parseAtRule(tokenizer *Tokenizer, stylesheet *Stylesheet, inherited []RuleC
 		if token.Value == "container" {
 			kind = RuleConditionContainer
 		}
-		return parseRuleList(tokenizer, stylesheet, appendCondition(inherited, RuleCondition{Kind: kind, Prelude: prelude}), true)
+		return parseRuleList(tokenizer, stylesheet, nil, appendCondition(inherited, RuleCondition{Kind: kind, Prelude: prelude}), true)
 	default:
 		if terminator == TokenLBrace {
 			return skipAtRuleBlock(tokenizer)

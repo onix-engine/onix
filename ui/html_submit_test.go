@@ -24,7 +24,8 @@ func TestHTMLSubmitDispatchesOnceToOwningForm(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			world := ecs.NewWorld()
 			RegisterRuntimeFeature[HTMLRenderer](world)
-			world.InsertResource(input.NewState())
+			inputState := input.NewState()
+			world.InsertResource(inputState)
 			calls := 0
 			definition, err := htmlui.Define(htmlui.NewTemplate(test.source), "", htmlui.Behavior[struct{}, struct{}]{
 				Render: func(_ htmlui.RenderContext[struct{}, struct{}], view *htmlui.View) {
@@ -58,7 +59,15 @@ func TestHTMLSubmitDispatchesOnceToOwningForm(t *testing.T) {
 				t.Fatal(err)
 			}
 			if test.keyboard {
-				world.WriteMessage(SubmittedEvent[string]{Entity: htmlControlByID(t, world, owner, "field"), Value: "typed"})
+				field := htmlControlByID(t, world, owner, "field")
+				uiState, _ := world.GetResource[*uiEventState]()
+				focus(world, uiState, field)
+				if err := UpdateSystem("").Run(world); err != nil {
+					t.Fatal(err)
+				}
+				inputState.EndFrame()
+				inputState.CommitText("typed")
+				inputState.PressKey(input.KeyEnter)
 			} else {
 				world.WriteMessage(scene.InputEvent{Entity: htmlControlByID(t, world, owner, "send"), Kind: scene.InputEventTap})
 			}

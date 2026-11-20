@@ -6,6 +6,7 @@ import (
 
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 func TestHTMLVisibilityControlAndEditableDescendants(t *testing.T) {
@@ -137,16 +138,17 @@ func TestHTMLVisibilityRetainsNativeControlState(t *testing.T) {
 	parent := incrementalHTMLNode(t, world, owner, "parent")
 	field := incrementalHTMLNode(t, world, owner, "field")
 	control := htmlCullRole(world, owner, field, htmlRoleControl)
-	value := world.GetMut[Control](control)
-	value.Value, value.DirtyValue, value.SelectionAnchor, value.SelectionFocus = "edited", true, 1, 4
+	SetControlValue(world, control, "edited")
+	value := world.GetMut[textfield.Field](control)
+	value.Anchor, value.Caret = 1, 4
 	for _, class := range []string{"hidden", "", "hidden", ""} {
 		parent.SetAttribute("class", class)
 		incrementalSync(t, world)
 		if next := htmlCullRole(world, owner, field, htmlRoleControl); next != control {
 			t.Fatal("visibility replaced the native control")
 		}
-		value := world.GetRef[Control](control)
-		if value.Value != "edited" || value.SelectionAnchor != 1 || value.SelectionFocus != 4 || !value.DirtyValue {
+		value := world.GetRef[textfield.Field](control)
+		if value.Value != "edited" || value.Anchor != 1 || value.Caret != 4 || !ControlValueDirty(world, control) {
 			t.Fatalf("visibility lost live editing state: %+v", value)
 		}
 		if scene.IsInteractive(world, control) != (class == "") {
@@ -342,5 +344,41 @@ func BenchmarkHTMLVisibilityNativeControlToggle(b *testing.B) {
 		if err := Sync(world); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestHTMLDisplayNoneRetainsLiveFieldUntilFormReset(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<form id="form"><input id="field" value="default"></form>`)
+	field := incrementalHTMLNode(t, world, owner, "field")
+	entity := incrementalControl(t, world, owner, "field")
+	if !SetControlValue(world, entity, "edited") {
+		t.Fatal("could not edit the field")
+	}
+	editor := world.GetMut[textfield.Field](entity)
+	editor.Anchor, editor.Caret = 1, 4
+
+	field.SetHidden(true)
+	incrementalSync(t, world)
+	if world.IsAlive(entity) {
+		t.Fatal("hidden control still has a rendered entity")
+	}
+	field.SetHidden(false)
+	incrementalSync(t, world)
+	entity = incrementalControl(t, world, owner, "field")
+	editor = world.GetMut[textfield.Field](entity)
+	if editor.Value != "edited" || editor.Anchor != 1 || editor.Caret != 4 || !ControlValueDirty(world, entity) {
+		t.Fatalf("restored field lost its editing state: %+v", editor)
+	}
+
+	field.SetHidden(true)
+	incrementalSync(t, world)
+	if !ResetForm(world, owner, "form") {
+		t.Fatal("could not reset form while the field was hidden")
+	}
+	field.SetHidden(false)
+	incrementalSync(t, world)
+	entity = incrementalControl(t, world, owner, "field")
+	if ControlValue(world, entity) != "default" || ControlValueDirty(world, entity) {
+		t.Fatal("form reset did not reset the hidden field")
 	}
 }

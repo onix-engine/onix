@@ -1,6 +1,11 @@
-package dom
+package parse
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/onix-engine/onix/html/element"
+	uinode "github.com/onix-engine/onix/scene/node"
+)
 
 func TestElementStatesMatchHTMLFormSemantics(t *testing.T) {
 	doc, err := Parse(`<div id="plain" disabled></div><fieldset disabled><legend><input id="legend"></legend><input id="field"></fieldset><select><optgroup disabled><option id="option">One</option></optgroup></select><select disabled><option id="select-option">Two</option></select>`)
@@ -12,19 +17,19 @@ func TestElementStatesMatchHTMLFormSemantics(t *testing.T) {
 	field := findNodeByID(doc, "field")
 	option := findNodeByID(doc, "option")
 	selectOption := findNodeByID(doc, "select-option")
-	if IsDisabled(plain) {
+	if element.IsDisabled(plain) {
 		t.Fatal("a div with a disabled attribute matched :disabled")
 	}
-	if IsDisabled(legend) {
+	if element.IsDisabled(legend) {
 		t.Fatal("a control in the first legend inherited fieldset disabledness")
 	}
-	if !IsDisabled(field) {
+	if !element.IsDisabled(field) {
 		t.Fatal("a fieldset descendant did not inherit disabledness")
 	}
-	if !IsDisabled(option) {
+	if !element.IsDisabled(option) {
 		t.Fatal("an option did not inherit optgroup disabledness")
 	}
-	if !IsDisabled(selectOption) {
+	if !element.IsDisabled(selectOption) {
 		t.Fatal("an option did not inherit select disabledness")
 	}
 }
@@ -35,16 +40,16 @@ func TestElementStatesSeparateLiveAndAuthoredCheckedness(t *testing.T) {
 		t.Fatal(err)
 	}
 	check := findNodeByID(doc, "check")
-	check.States.Set(StateChecked, false)
-	if IsChecked(check) {
+	check.States.Set(element.StateChecked, false)
+	if element.IsChecked(check) {
 		t.Fatal("live uncheckedness did not override the checked attribute")
 	}
 	if _, authored := check.Attr("checked"); !authored {
 		t.Fatal("changing live checkedness removed the authored attribute")
 	}
 	check.RemoveAttr("checked")
-	check.States.Set(StateChecked, true)
-	if !IsChecked(check) {
+	check.States.Set(element.StateChecked, true)
+	if !element.IsChecked(check) {
 		t.Fatal("live checkedness required a checked attribute")
 	}
 }
@@ -56,8 +61,8 @@ func TestElementStatesUseLastSelectedOptionAndCheckedPseudoState(t *testing.T) {
 	}
 	first := findNodeByID(doc, "first")
 	last := findNodeByID(doc, "last")
-	if IsChecked(first) || !IsChecked(last) {
-		t.Fatalf("option checkedness = first:%v last:%v", IsChecked(first), IsChecked(last))
+	if element.IsChecked(first) || !element.IsChecked(last) {
+		t.Fatalf("option checkedness = first:%v last:%v", element.IsChecked(first), element.IsChecked(last))
 	}
 	if _, ok := first.Attr("selected"); !ok {
 		t.Fatal("selection normalization changed the authored selected attribute")
@@ -69,7 +74,7 @@ func TestEmptyPlaceholderStillProducesPlaceholderShownState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !IsPlaceholderShown(findNodeByID(doc, "empty")) || !IsPlaceholderShown(findNodeByID(doc, "spaces")) {
+	if !element.IsPlaceholderShown(findNodeByID(doc, "empty")) || !element.IsPlaceholderShown(findNodeByID(doc, "spaces")) {
 		t.Fatal("empty or whitespace placeholder did not match :placeholder-shown")
 	}
 }
@@ -90,7 +95,7 @@ func TestSelectInitializationMatchesChromium(t *testing.T) {
 		{id: "authored", want: 1},
 	}
 	for _, test := range tests {
-		if got := SelectedIndex(findNodeByID(doc, test.id)); got != test.want {
+		if got := element.SelectedIndex(findNodeByID(doc, test.id)); got != test.want {
 			t.Errorf("%s selected index = %d, want %d", test.id, got, test.want)
 		}
 	}
@@ -104,20 +109,20 @@ func TestSelectedAttributeUsesPerOptionDirtyness(t *testing.T) {
 	selectNode := findNodeByID(doc, "mode")
 	first := findNodeByID(doc, "first")
 	second := findNodeByID(doc, "second")
-	SetSelectedIndex(selectNode, 1)
+	element.SetSelectedIndex(selectNode, 1)
 
 	first.SetAttr("selected", "")
-	SynchronizeSelectedAttribute(first, true)
-	if got := SelectedIndex(selectNode); got != 0 {
+	element.SynchronizeSelectedAttribute(first, true)
+	if got := element.SelectedIndex(selectNode); got != 0 {
 		t.Fatalf("non-dirty option selected attribute produced index %d, want 0", got)
 	}
 
 	second.SetAttr("selected", "")
-	SynchronizeSelectedAttribute(second, true)
-	if got := SelectedIndex(selectNode); got != 0 {
+	element.SynchronizeSelectedAttribute(second, true)
+	if got := element.SelectedIndex(selectNode); got != 0 {
 		t.Fatalf("dirty option selected attribute changed live index to %d", got)
 	}
-	if got := DefaultSelectedIndex(selectNode); got != 1 {
+	if got := element.DefaultSelectedIndex(selectNode); got != 1 {
 		t.Fatalf("authored default selected index = %d, want 1", got)
 	}
 }
@@ -131,14 +136,14 @@ func TestMultipleSelectTracksIndependentSelectedOptions(t *testing.T) {
 	first := findNodeByID(doc, "first")
 	second := findNodeByID(doc, "second")
 	third := findNodeByID(doc, "third")
-	if !IsChecked(first) || IsChecked(second) || !IsChecked(third) || SelectedIndex(mode) != 0 {
-		t.Fatalf("initial multiple selection = first:%v second:%v third:%v index:%d", IsChecked(first), IsChecked(second), IsChecked(third), SelectedIndex(mode))
+	if !element.IsChecked(first) || element.IsChecked(second) || !element.IsChecked(third) || element.SelectedIndex(mode) != 0 {
+		t.Fatalf("initial multiple selection = first:%v second:%v third:%v index:%d", element.IsChecked(first), element.IsChecked(second), element.IsChecked(third), element.SelectedIndex(mode))
 	}
-	if !SetOptionSelectedAt(mode, 1, true) || !SetOptionSelectedAt(mode, 2, false) {
+	if !element.SetOptionSelectedAt(mode, 1, true) || !element.SetOptionSelectedAt(mode, 2, false) {
 		t.Fatal("failed to update multiple selectedness")
 	}
-	if !IsChecked(first) || !IsChecked(second) || IsChecked(third) || SelectedIndex(mode) != 0 {
-		t.Fatalf("live multiple selection = first:%v second:%v third:%v index:%d", IsChecked(first), IsChecked(second), IsChecked(third), SelectedIndex(mode))
+	if !element.IsChecked(first) || !element.IsChecked(second) || element.IsChecked(third) || element.SelectedIndex(mode) != 0 {
+		t.Fatalf("live multiple selection = first:%v second:%v third:%v index:%d", element.IsChecked(first), element.IsChecked(second), element.IsChecked(third), element.SelectedIndex(mode))
 	}
 }
 
@@ -148,14 +153,14 @@ func TestSetSelectedRangeSkipsDisabledOptionsInBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	mode := findNodeByID(doc, "mode")
-	if !SetSelectedRange(mode, 1, 4) {
+	if !element.SetSelectedRange(mode, 1, 4) {
 		t.Fatal("set selected range failed")
 	}
 	wants := [...]bool{false, true, true, true, true}
+	options := []*uinode.Node{mode.Children[0], mode.Children[1], mode.Children[2], mode.Children[3].Children[0], mode.Children[4]}
 	for index, want := range wants {
-		optionIndex := 0
-		option := optionAt(mode, index, &optionIndex)
-		if got := IsChecked(option); got != want {
+		option := options[index]
+		if got := element.IsChecked(option); got != want {
 			t.Fatalf("option %d selected = %v, want %v", index, got, want)
 		}
 	}
@@ -168,18 +173,18 @@ func TestSelectMultipleAndSizeAttributeNormalization(t *testing.T) {
 	}
 	multiple := findNodeByID(doc, "multiple")
 	multiple.RemoveAttr("multiple")
-	SynchronizeSelectAttribute(multiple, "multiple")
-	if !IsChecked(findNodeByID(doc, "a")) || IsChecked(findNodeByID(doc, "b")) || IsChecked(findNodeByID(doc, "c")) {
+	element.SynchronizeSelectAttribute(multiple, "multiple")
+	if !element.IsChecked(findNodeByID(doc, "a")) || element.IsChecked(findNodeByID(doc, "b")) || element.IsChecked(findNodeByID(doc, "c")) {
 		t.Fatal("removing multiple did not retain only the first selection")
 	}
 	list := findNodeByID(doc, "list")
-	if SelectedIndex(list) != -1 {
-		t.Fatalf("initial list selection = %d, want -1", SelectedIndex(list))
+	if element.SelectedIndex(list) != -1 {
+		t.Fatalf("initial list selection = %d, want -1", element.SelectedIndex(list))
 	}
 	list.RemoveAttr("size")
-	SynchronizeSelectAttribute(list, "size")
-	if SelectedIndex(list) != 0 {
-		t.Fatalf("default-size selection = %d, want 0", SelectedIndex(list))
+	element.SynchronizeSelectAttribute(list, "size")
+	if element.SelectedIndex(list) != 0 {
+		t.Fatalf("default-size selection = %d, want 0", element.SelectedIndex(list))
 	}
 }
 
@@ -199,30 +204,30 @@ func TestSelectChildChangesNormalizeLiveSelection(t *testing.T) {
 				t.Fatal(err)
 			}
 			mode := findNodeByID(doc, "mode")
-			SetSelectedIndex(mode, 1)
+			element.SetSelectedIndex(mode, 1)
 			previous := mode.Children[1]
-			group := NewElement("optgroup")
-			option := NewElement("option", Attribute{"selected", ""}, Attribute{"disabled", ""})
+			group := uinode.NewElement("optgroup")
+			option := uinode.NewElement("option", uinode.Attribute{Name: "selected", Value: ""}, uinode.Attribute{Name: "disabled", Value: ""})
 			group.AppendChild(option)
 			mode.AppendChild(group)
-			SynchronizeSelectChildren(group)
-			if !IsChecked(option) || IsChecked(previous) != test.multiple {
+			element.SynchronizeSelectChildren(group)
+			if !element.IsChecked(option) || element.IsChecked(previous) != test.multiple {
 				t.Fatal("inserted selected option did not normalize existing selection")
 			}
-			if dirty, _ := previous.States.Get(StateDirtySelected); !dirty {
+			if dirty, _ := previous.States.Get(element.StateDirtySelected); !dirty {
 				t.Fatal("structural change cleared existing dirtyness")
 			}
-			if dirty, _ := option.States.Get(StateDirtySelected); dirty {
+			if dirty, _ := option.States.Get(element.StateDirtySelected); dirty {
 				t.Fatal("structural change dirtied the inserted option")
 			}
-			SetSelectedIndex(mode, 2)
+			element.SetSelectedIndex(mode, 2)
 			mode.Children = mode.Children[:2]
 			group.Parent = nil
-			SynchronizeSelectChildren(mode)
-			if got := SelectedIndex(mode); got != test.fallback {
+			element.SynchronizeSelectChildren(mode)
+			if got := element.SelectedIndex(mode); got != test.fallback {
 				t.Fatalf("selection after removal = %d, want %d", got, test.fallback)
 			}
-			if allocations := testing.AllocsPerRun(100, func() { SynchronizeSelectChildren(mode) }); allocations != 0 {
+			if allocations := testing.AllocsPerRun(100, func() { element.SynchronizeSelectChildren(mode) }); allocations != 0 {
 				t.Fatalf("selection normalization allocated %g times", allocations)
 			}
 		})
@@ -242,34 +247,34 @@ func TestResetFormRestoresDefaultsAndClearsDirtyState(t *testing.T) {
 	first := findNodeByID(doc, "first")
 	second := findNodeByID(doc, "second")
 	external := findNodeByID(doc, "external")
-	SetLiveValue(field, "", true)
-	SetLiveValue(notes, "edited", true)
-	SetLiveValue(external, "changed", true)
-	check.States.Set(StateChecked, false)
-	check.States.Set(StateDirtyChecked, true)
-	SetOptionSelectedAt(mode, 0, false)
-	SetOptionSelectedAt(mode, 1, true)
+	element.SetLiveValue(field, "", true)
+	element.SetLiveValue(notes, "edited", true)
+	element.SetLiveValue(external, "changed", true)
+	check.States.Set(element.StateChecked, false)
+	check.States.Set(element.StateDirtyChecked, true)
+	element.SetOptionSelectedAt(mode, 0, false)
+	element.SetOptionSelectedAt(mode, 1, true)
 
-	if !ResetForm(form) {
+	if !element.ResetForm(form) {
 		t.Fatal("form reset failed")
 	}
-	if IsPlaceholderShown(field) || !IsChecked(check) || !IsChecked(first) || IsChecked(second) {
-		t.Fatalf("reset state = placeholder:%v check:%v first:%v second:%v", IsPlaceholderShown(field), IsChecked(check), IsChecked(first), IsChecked(second))
+	if element.IsPlaceholderShown(field) || !element.IsChecked(check) || !element.IsChecked(first) || element.IsChecked(second) {
+		t.Fatalf("reset state = placeholder:%v check:%v first:%v second:%v", element.IsPlaceholderShown(field), element.IsChecked(check), element.IsChecked(first), element.IsChecked(second))
 	}
-	for _, node := range []*Node{field, notes, external} {
-		if dirty, _ := node.States.Get(StateDirtyValue); dirty {
+	for _, node := range []*uinode.Node{field, notes, external} {
+		if dirty, _ := node.States.Get(element.StateDirtyValue); dirty {
 			t.Fatalf("dirty value remained on %s", node.Data)
 		}
 	}
-	if dirty, _ := check.States.Get(StateDirtyChecked); dirty {
+	if dirty, _ := check.States.Get(element.StateDirtyChecked); dirty {
 		t.Fatal("dirty checkedness remained after reset")
 	}
-	if HasDirtySelectedOption(mode) {
+	if element.HasDirtySelectedOption(mode) {
 		t.Fatal("dirty selectedness remained after reset")
 	}
 
 	allocations := testing.AllocsPerRun(100, func() {
-		if !ResetForm(form) {
+		if !element.ResetForm(form) {
 			panic("form reset failed")
 		}
 	})
@@ -284,15 +289,15 @@ func TestDirtyValueKeepsLivePlaceholderState(t *testing.T) {
 		t.Fatal(err)
 	}
 	field := findNodeByID(doc, "field")
-	SetLiveValue(field, "", true)
+	element.SetLiveValue(field, "", true)
 	field.SetAttr("value", "new default")
-	SynchronizeValueAttribute(field)
-	if !IsPlaceholderShown(field) {
+	element.SynchronizeValueAttribute(field)
+	if !element.IsPlaceholderShown(field) {
 		t.Fatal("dirty empty value was replaced by a non-empty value attribute")
 	}
 	field.RemoveAttr("placeholder")
-	SynchronizePlaceholderAttribute(field)
-	if IsPlaceholderShown(field) {
+	element.SynchronizePlaceholderAttribute(field)
+	if element.IsPlaceholderShown(field) {
 		t.Fatal("removed placeholder attribute still matched :placeholder-shown")
 	}
 }
@@ -305,18 +310,18 @@ func TestRadioGroupUsesExplicitFormOwnerAndDirtyCheckedness(t *testing.T) {
 	first := findNodeByID(doc, "first")
 	second := findNodeByID(doc, "second")
 	other := findNodeByID(doc, "other")
-	if IsChecked(first) || !IsChecked(second) || !IsChecked(other) {
-		t.Fatalf("radio states = first:%v second:%v other:%v", IsChecked(first), IsChecked(second), IsChecked(other))
+	if element.IsChecked(first) || !element.IsChecked(second) || !element.IsChecked(other) {
+		t.Fatalf("radio states = first:%v second:%v other:%v", element.IsChecked(first), element.IsChecked(second), element.IsChecked(other))
 	}
-	dirty, _ := first.States.Get(StateDirtyChecked)
+	dirty, _ := first.States.Get(element.StateDirtyChecked)
 	if !dirty {
 		t.Fatal("radio unchecked by group normalization was not marked dirty")
 	}
 	first.RemoveAttr("checked")
-	SynchronizeCheckedAttribute(first, false)
+	element.SynchronizeCheckedAttribute(first, false)
 	first.SetAttr("checked", "")
-	SynchronizeCheckedAttribute(first, true)
-	if IsChecked(first) {
+	element.SynchronizeCheckedAttribute(first, true)
+	if element.IsChecked(first) {
 		t.Fatal("checked attribute replaced dirty radio checkedness")
 	}
 }
@@ -326,24 +331,24 @@ func TestTabIndexAndContentEditableFocusability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := TabIndex(findNodeByID(doc, "plain")); ok {
+	if _, ok := element.TabIndex(findNodeByID(doc, "plain")); ok {
 		t.Fatal("missing tabindex parsed as explicit")
 	}
-	if index, ok := TabIndex(findNodeByID(doc, "negative")); !ok || index != -1 {
+	if index, ok := element.TabIndex(findNodeByID(doc, "negative")); !ok || index != -1 {
 		t.Fatalf("negative tabindex = %d, %v", index, ok)
 	}
-	if _, ok := TabIndex(findNodeByID(doc, "invalid")); ok {
+	if _, ok := element.TabIndex(findNodeByID(doc, "invalid")); ok {
 		t.Fatal("invalid tabindex became focusable")
 	}
 	editable := findNodeByID(doc, "editable")
 	nested := findNodeByID(doc, "nested")
 	blocked := findNodeByID(doc, "blocked")
-	if !IsEditingHost(editable) || IsEditingHost(nested) || IsContentEditable(blocked) {
-		t.Fatalf("editable states = host:%v nested-host:%v blocked:%v", IsEditingHost(editable), IsEditingHost(nested), IsContentEditable(blocked))
+	if !element.IsEditingHost(editable) || element.IsEditingHost(nested) || element.IsContentEditable(blocked) {
+		t.Fatalf("editable states = host:%v nested-host:%v blocked:%v", element.IsEditingHost(editable), element.IsEditingHost(nested), element.IsContentEditable(blocked))
 	}
 }
 
-func findNodeByID(node *Node, id string) *Node {
+func findNodeByID(node *uinode.Node, id string) *uinode.Node {
 	if node == nil {
 		return nil
 	}

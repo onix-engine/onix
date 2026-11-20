@@ -6,7 +6,7 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
@@ -31,7 +31,7 @@ func TestCompactControlsCenterTextAcrossFonts(t *testing.T) {
 			t.Cleanup(func() { _ = face.Close() })
 			for _, display := range []string{"inline-block", "block"} {
 				t.Run(display, func(t *testing.T) {
-					document, err := dom.Parse(`<html><body><button id="button">Run</button><input id="input" value="Run"><select id="select"><option>Run</option></select></body></html>`)
+					document, err := parse.Parse(`<html><body><button id="button">Run</button><input id="input" value="Run"><select id="select"><option>Run</option></select></body></html>`)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -92,7 +92,7 @@ func TestTextBoxTrimmingPreservesBaselineSpacing(t *testing.T) {
 	t.Cleanup(func() { _ = face.Close() })
 	for _, trim := range []string{"none", "trim-start", "trim-end", "trim-both"} {
 		t.Run(trim, func(t *testing.T) {
-			document, err := dom.Parse("<html><body><div id='text'>HH\nHH</div></body></html>")
+			document, err := parse.Parse("<html><body><div id='text'>HH\nHH</div></body></html>")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestCSSAnimationCascadeAndPropertyKeyframes(t *testing.T) {
-	root := dom.NewDocument()
-	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"})
+	root := uinode.NewDocument()
+	node := uinode.NewElement("div", uinode.Attribute{Name: "id", Value: "target"})
 	root.AppendChild(node)
 	sheet, err := css.Parse(`#target {
  animation: move 2s linear -500ms 2.5 alternate both, fade 4s ease-in infinite;
@@ -121,8 +121,8 @@ func TestCSSAnimationLonghandsAndTransitionLists(t *testing.T) {
 }
 
 func TestCSSAnimationColorInterpolationAndCascade(t *testing.T) {
-	root := dom.NewDocument()
-	node := dom.NewElement("div", dom.Attribute{Name: "id", Value: "target"})
+	root := uinode.NewDocument()
+	node := uinode.NewElement("div", uinode.Attribute{Name: "id", Value: "target"})
 	root.AppendChild(node)
 	sheet, err := css.Parse(`#target {color:red;background:transparent;border:2px solid;animation:paint 1s linear both;border-left-color:green !important}
 	@keyframes paint {
@@ -162,11 +162,11 @@ func TestCSSAnimationColorInterpolationAndCascade(t *testing.T) {
 }
 
 func TestCSSAnimationCurrentColorAndInheritance(t *testing.T) {
-	root := dom.NewDocument()
-	parent := dom.NewElement("div", dom.Attribute{Name: "style", Value: "color:red"})
+	root := uinode.NewDocument()
+	parent := uinode.NewElement("div", uinode.Attribute{Name: "style", Value: "color:red"})
 	root.AppendChild(parent)
 	for _, color := range []string{"", "inherit", "unset", "currentColor", "red", "initial"} {
-		node := dom.NewElement("span", dom.Attribute{Name: "id", Value: color}, dom.Attribute{Name: "style", Value: "background:currentColor;border:1px solid currentColor"})
+		node := uinode.NewElement("span", uinode.Attribute{Name: "id", Value: color}, uinode.Attribute{Name: "style", Value: "background:currentColor;border:1px solid currentColor"})
 		if color != "" {
 			node.SetAttr("style", "color:"+color+";background:currentColor;border:1px solid currentColor")
 		}

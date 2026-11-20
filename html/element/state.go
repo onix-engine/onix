@@ -1,45 +1,14 @@
-package dom
+package element
 
 import (
 	"strconv"
 	"strings"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-// StateSet stores explicitly resolved boolean states in two compact bitsets.
-// A valid bit distinguishes a live false value from an uninitialized state.
-type StateSet[T ~uint16] struct {
-	values T
-	valid  T
-}
-
-func (s StateSet[T]) Get(flag T) (bool, bool) {
-	return s.values&flag != 0, s.valid&flag != 0
-}
-
-func (s *StateSet[T]) Set(flag T, value bool) {
-	if s == nil {
-		return
-	}
-	s.valid |= flag
-	if value {
-		s.values |= flag
-	} else {
-		s.values &^= flag
-	}
-}
-
-func (s *StateSet[T]) Clear(flag T) {
-	if s == nil {
-		return
-	}
-	s.values &^= flag
-	s.valid &^= flag
-}
-
-type ElementState uint16
-
 const (
-	StateChecked ElementState = 1 << iota
+	StateChecked = 1 << iota
 	StatePlaceholderShown
 	StateIndeterminate
 	StateDirtyChecked
@@ -48,35 +17,36 @@ const (
 	StateDirtySelected
 )
 
-func InitializeElementStates(root *Node) {
+func InitializeElementStates(root *uinode.Node) {
+	InitializeDocument(root, nil, nil)
+}
+
+// InitializeDocument sets document order and form state. Visit observes each
+// retained node in preorder. Keep can inspect and exclude a child before its
+// subtree is initialized. Removed metadata can be consumed by Keep.
+func InitializeDocument(root *uinode.Node, visit func(*uinode.Node), keep func(*uinode.Node) bool) {
 	var order uint32
-	if initializeElementStates(root, &order) {
+	if initializeElementStates(root, &order, visit, keep) {
 		initializeRadioStates(root, root)
 	}
 }
 
-// AssignDocumentOrder records preorder positions without allocating.
-func AssignDocumentOrder(root *Node) {
-	var order uint32
-	assignDocumentOrder(root, &order)
+func HasInputType(node *uinode.Node, inputType string) bool {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "input" {
+		return false
+	}
+	typeValue, ok := node.Attr("type")
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(typeValue), inputType)
 }
 
-func assignDocumentOrder(node *Node, order *uint32) {
+func initializeRadioStates(root, node *uinode.Node) {
 	if node == nil {
 		return
 	}
-	node.Order = *order
-	*order++
-	for _, child := range node.Children {
-		assignDocumentOrder(child, order)
-	}
-}
-
-func initializeRadioStates(root, node *Node) {
-	if node == nil {
-		return
-	}
-	if node.Type == ElementNode && HasInputType(node, "radio") {
+	if node.Type == uinode.ElementNode && HasInputType(node, "radio") {
 		name, _ := node.Attr("name")
 		_, authoredChecked := node.Attr("checked")
 		if authoredChecked && name != "" {
@@ -89,11 +59,11 @@ func initializeRadioStates(root, node *Node) {
 	}
 }
 
-func clearCheckedRadio(node, except *Node, name string) {
+func clearCheckedRadio(node, except *uinode.Node, name string) {
 	if node == nil {
 		return
 	}
-	if node != except && node.Type == ElementNode && HasInputType(node, "radio") {
+	if node != except && node.Type == uinode.ElementNode && HasInputType(node, "radio") {
 		candidateName, _ := node.Attr("name")
 		if candidateName == name && FormOwner(node) == FormOwner(except) && IsChecked(node) {
 			node.States.Set(StateChecked, false)
@@ -105,9 +75,9 @@ func clearCheckedRadio(node, except *Node, name string) {
 	}
 }
 
-func ancestorTag(node *Node, tag string) *Node {
+func ancestorTag(node *uinode.Node, tag string) *uinode.Node {
 	for node = node.Parent; node != nil; node = node.Parent {
-		if node.Type == ElementNode && node.Data == tag {
+		if node.Type == uinode.ElementNode && node.Data == tag {
 			return node
 		}
 	}
@@ -116,7 +86,7 @@ func ancestorTag(node *Node, tag string) *Node {
 
 // FormOwner returns the form associated with a form control. An explicit form
 // attribute takes precedence over the nearest ancestor form.
-func FormOwner(node *Node) *Node {
+func FormOwner(node *uinode.Node) *uinode.Node {
 	if node == nil {
 		return nil
 	}
@@ -126,11 +96,11 @@ func FormOwner(node *Node) *Node {
 	return ancestorTag(node, "form")
 }
 
-func findFormByID(node *Node, id string) *Node {
+func findFormByID(node *uinode.Node, id string) *uinode.Node {
 	if node == nil || id == "" {
 		return nil
 	}
-	if node.Type == ElementNode && node.Data == "form" {
+	if node.Type == uinode.ElementNode && node.Data == "form" {
 		if candidate, ok := node.Attr("id"); ok && candidate == id {
 			return node
 		}
@@ -143,14 +113,14 @@ func findFormByID(node *Node, id string) *Node {
 	return nil
 }
 
-func treeRoot(node *Node) *Node {
+func treeRoot(node *uinode.Node) *uinode.Node {
 	for node != nil && node.Parent != nil {
 		node = node.Parent
 	}
 	return node
 }
 
-func SameRadioGroup(left, right *Node) bool {
+func SameRadioGroup(left, right *uinode.Node) bool {
 	if left == nil || right == nil || treeRoot(left) != treeRoot(right) || !HasInputType(left, "radio") || !HasInputType(right, "radio") {
 		return false
 	}
@@ -160,8 +130,8 @@ func SameRadioGroup(left, right *Node) bool {
 }
 
 // TabIndex parses the global tabindex attribute as a valid signed integer.
-func TabIndex(node *Node) (int, bool) {
-	if node == nil || node.Type != ElementNode {
+func TabIndex(node *uinode.Node) (int, bool) {
+	if node == nil || node.Type != uinode.ElementNode {
 		return 0, false
 	}
 	raw, ok := node.Attr("tabindex")
@@ -174,9 +144,9 @@ func TabIndex(node *Node) (int, bool) {
 
 // IsContentEditable resolves the enumerated contenteditable attribute through
 // the element's ancestors.
-func IsContentEditable(node *Node) bool {
+func IsContentEditable(node *uinode.Node) bool {
 	for current := node; current != nil; current = current.Parent {
-		if current.Type != ElementNode {
+		if current.Type != uinode.ElementNode {
 			continue
 		}
 		raw, ok := current.Attr("contenteditable")
@@ -195,24 +165,27 @@ func IsContentEditable(node *Node) bool {
 
 // IsEditingHost reports whether node starts a contenteditable region. Nested
 // editable descendants are not independent sequential focus targets.
-func IsEditingHost(node *Node) bool {
-	if node == nil || node.Type != ElementNode || !IsContentEditable(node) {
+func IsEditingHost(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode || !IsContentEditable(node) {
 		return false
 	}
 	parent := node.Parent
-	for parent != nil && parent.Type != ElementNode {
+	for parent != nil && parent.Type != uinode.ElementNode {
 		parent = parent.Parent
 	}
 	return !IsContentEditable(parent)
 }
 
-func initializeElementStates(node *Node, order *uint32) (hasRadio bool) {
+func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinode.Node), keep func(*uinode.Node) bool) (hasRadio bool) {
 	if node == nil {
 		return false
 	}
 	node.Order = *order
 	*order++
-	if node.Type == ElementNode {
+	if visit != nil {
+		visit(node)
+	}
+	if node.Type == uinode.ElementNode {
 		switch node.Data {
 		case "input":
 			hasRadio = HasInputType(node, "radio")
@@ -222,18 +195,31 @@ func initializeElementStates(node *Node, order *uint32) (hasRadio bool) {
 			}
 			value, _ := node.Attr("value")
 			SetLiveValue(node, value, false)
-		case "textarea":
-			setLiveValueEmpty(node, !hasTextContent(node), false)
 		case "option":
 			_, selected := node.Attr("selected")
 			node.States.Set(StateChecked, selected)
 		}
 	}
-	for _, child := range node.Children {
-		hasRadio = initializeElementStates(child, order) || hasRadio
+	if keep == nil {
+		for _, child := range node.Children {
+			hasRadio = initializeElementStates(child, order, visit, nil) || hasRadio
+		}
+	} else {
+		node.KeepChildren(func(child *uinode.Node) bool {
+			if !keep(child) {
+				return false
+			}
+			hasRadio = initializeElementStates(child, order, visit, keep) || hasRadio
+			return true
+		})
 	}
-	if node.Type == ElementNode && node.Data == "select" {
-		resetSelectStates(node)
+	if node.Type == uinode.ElementNode {
+		switch node.Data {
+		case "select":
+			resetSelectStates(node)
+		case "textarea":
+			setLiveValueEmpty(node, !hasTextContent(node), false)
+		}
 	}
 	return hasRadio
 }
@@ -245,7 +231,7 @@ type selectResetState struct {
 	lastAuthored  int
 }
 
-func resetSelectStates(node *Node) {
+func resetSelectStates(node *uinode.Node) {
 	state := selectResetState{firstEnabled: -1, firstAuthored: -1, lastAuthored: -1}
 	resetSelectOptions(node, &state)
 	if _, multiple := node.Attr("multiple"); multiple {
@@ -258,9 +244,9 @@ func resetSelectStates(node *Node) {
 	setSelectIndex(node, selected, nil)
 }
 
-func resetSelectOptions(node *Node, state *selectResetState) {
+func resetSelectOptions(node *uinode.Node, state *selectResetState) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -283,7 +269,7 @@ func resetSelectOptions(node *Node, state *selectResetState) {
 	}
 }
 
-func selectDisplaySize(node *Node) int {
+func selectDisplaySize(node *uinode.Node) int {
 	raw, ok := node.Attr("size")
 	if !ok {
 		return 1
@@ -296,15 +282,15 @@ func selectDisplaySize(node *Node) int {
 }
 
 // SelectedIndex returns the first live selected option in tree order.
-func SelectedIndex(selectNode *Node) int {
+func SelectedIndex(selectNode *uinode.Node) int {
 	index, selected := 0, -1
 	findSelectedIndex(selectNode, &index, &selected)
 	return selected
 }
 
-func findSelectedIndex(node *Node, index, selected *int) bool {
+func findSelectedIndex(node *uinode.Node, index, selected *int) bool {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -324,7 +310,7 @@ func findSelectedIndex(node *Node, index, selected *int) bool {
 
 // DefaultSelectedIndex returns the effective selection produced by resetting
 // the select from its authored option attributes.
-func DefaultSelectedIndex(selectNode *Node) int {
+func DefaultSelectedIndex(selectNode *uinode.Node) int {
 	state := selectResetState{firstEnabled: -1, firstAuthored: -1, lastAuthored: -1}
 	inspectSelectOptions(selectNode, &state)
 	if _, multiple := selectNode.Attr("multiple"); multiple {
@@ -339,9 +325,9 @@ func DefaultSelectedIndex(selectNode *Node) int {
 	return -1
 }
 
-func inspectSelectOptions(node *Node, state *selectResetState) {
+func inspectSelectOptions(node *uinode.Node, state *selectResetState) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -363,8 +349,8 @@ func inspectSelectOptions(node *Node, state *selectResetState) {
 
 // SetSelectedIndex updates live option selectedness. The selected option gets
 // a dirty flag; options deselected as a consequence retain their dirtyness.
-func SetSelectedIndex(selectNode *Node, selected int) {
-	var dirty *Node
+func SetSelectedIndex(selectNode *uinode.Node, selected int) {
+	var dirty *uinode.Node
 	index := 0
 	dirty = optionAt(selectNode, selected, &index)
 	setSelectIndex(selectNode, selected, dirty)
@@ -372,8 +358,8 @@ func SetSelectedIndex(selectNode *Node, selected int) {
 
 // SetOptionSelected updates one option's selectedness as the selected IDL
 // property does. A single-select keeps at most one selected option.
-func SetOptionSelected(option *Node, selected bool) bool {
-	if option == nil || option.Type != ElementNode || option.Data != "option" {
+func SetOptionSelected(option *uinode.Node, selected bool) bool {
+	if option == nil || option.Type != uinode.ElementNode || option.Data != "option" {
 		return false
 	}
 	option.States.Set(StateChecked, selected)
@@ -392,7 +378,7 @@ func SetOptionSelected(option *Node, selected bool) bool {
 	return true
 }
 
-func SetOptionSelectedAt(selectNode *Node, optionIndex int, selected bool) bool {
+func SetOptionSelectedAt(selectNode *uinode.Node, optionIndex int, selected bool) bool {
 	index := 0
 	option := optionAt(selectNode, optionIndex, &index)
 	return SetOptionSelected(option, selected)
@@ -401,8 +387,8 @@ func SetOptionSelectedAt(selectNode *Node, optionIndex int, selected bool) bool 
 // SetSelectedRange applies a user range selection to a multiple select in one
 // mutation pass. Disabled options retain their selectedness because keyboard
 // and pointer input cannot toggle them.
-func SetSelectedRange(selectNode *Node, start, end int) bool {
-	if selectNode == nil || selectNode.Type != ElementNode || selectNode.Data != "select" || start < 0 || end < 0 {
+func SetSelectedRange(selectNode *uinode.Node, start, end int) bool {
+	if selectNode == nil || selectNode.Type != uinode.ElementNode || selectNode.Data != "select" || start < 0 || end < 0 {
 		return false
 	}
 	if _, multiple := selectNode.Attr("multiple"); !multiple {
@@ -419,10 +405,10 @@ func SetSelectedRange(selectNode *Node, start, end int) bool {
 	return true
 }
 
-func selectOptionCount(node *Node) int {
+func selectOptionCount(node *uinode.Node) int {
 	count := 0
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -434,9 +420,9 @@ func selectOptionCount(node *Node) int {
 	return count
 }
 
-func setSelectedRange(node *Node, start, end int, index *int) {
+func setSelectedRange(node *uinode.Node, start, end int, index *int) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -454,14 +440,14 @@ func setSelectedRange(node *Node, start, end int, index *int) {
 	}
 }
 
-func setSelectIndex(node *Node, selected int, dirty *Node) {
+func setSelectIndex(node *uinode.Node, selected int, dirty *uinode.Node) {
 	index := 0
 	setSelectOptions(node, selected, dirty, &index)
 }
 
-func setSelectOptions(node *Node, selected int, dirty *Node, index *int) {
+func setSelectOptions(node *uinode.Node, selected int, dirty *uinode.Node, index *int) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -476,9 +462,9 @@ func setSelectOptions(node *Node, selected int, dirty *Node, index *int) {
 	}
 }
 
-func optionAt(node *Node, target int, index *int) *Node {
+func optionAt(node *uinode.Node, target int, index *int) *uinode.Node {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -497,8 +483,8 @@ func optionAt(node *Node, target int, index *int) *Node {
 
 // SynchronizeSelectedAttribute applies an option selected content-attribute
 // mutation unless that option's live selectedness is dirty.
-func SynchronizeSelectedAttribute(option *Node, present bool) {
-	if option == nil || option.Type != ElementNode || option.Data != "option" {
+func SynchronizeSelectedAttribute(option *uinode.Node, present bool) {
+	if option == nil || option.Type != uinode.ElementNode || option.Data != "option" {
 		return
 	}
 	dirty, _ := option.States.Get(StateDirtySelected)
@@ -521,8 +507,8 @@ func SynchronizeSelectedAttribute(option *Node, present bool) {
 
 // SynchronizeSelectAttribute applies multiple/size mutations to live
 // selectedness using the select element's normalization rules.
-func SynchronizeSelectAttribute(selectNode *Node, name string) {
-	if selectNode == nil || selectNode.Type != ElementNode || selectNode.Data != "select" {
+func SynchronizeSelectAttribute(selectNode *uinode.Node, name string) {
+	if selectNode == nil || selectNode.Type != uinode.ElementNode || selectNode.Data != "select" {
 		return
 	}
 	if name == "multiple" {
@@ -536,8 +522,8 @@ func SynchronizeSelectAttribute(selectNode *Node, name string) {
 
 // SynchronizeSelectChildren normalizes live selection after an option list
 // changes. Keep the last selected option without resetting defaults or dirtyness.
-func SynchronizeSelectChildren(node *Node) {
-	for node != nil && (node.Type != ElementNode || node.Data != "select") {
+func SynchronizeSelectChildren(node *uinode.Node) {
+	for node != nil && (node.Type != uinode.ElementNode || node.Data != "select") {
 		node = node.Parent
 	}
 	if node == nil {
@@ -546,16 +532,16 @@ func SynchronizeSelectChildren(node *Node) {
 	if _, multiple := node.Attr("multiple"); multiple {
 		return
 	}
-	var first, selected *Node
+	var first, selected *uinode.Node
 	normalizeSelectChildren(node, &first, &selected)
 	if selected == nil && first != nil && selectDisplaySize(node) == 1 {
 		first.States.Set(StateChecked, true)
 	}
 }
 
-func normalizeSelectChildren(node *Node, first, selected **Node) {
+func normalizeSelectChildren(node *uinode.Node, first, selected **uinode.Node) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -574,9 +560,9 @@ func normalizeSelectChildren(node *Node, first, selected **Node) {
 	}
 }
 
-func keepFirstSelectedOption(node *Node, selected *Node) *Node {
+func keepFirstSelectedOption(node *uinode.Node, selected *uinode.Node) *uinode.Node {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -594,9 +580,9 @@ func keepFirstSelectedOption(node *Node, selected *Node) *Node {
 	return selected
 }
 
-func unselectOtherOptions(node, selected *Node) {
+func unselectOtherOptions(node, selected *uinode.Node) {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -609,7 +595,7 @@ func unselectOtherOptions(node, selected *Node) {
 	}
 }
 
-func ensureSelectSelection(selectNode *Node) {
+func ensureSelectSelection(selectNode *uinode.Node) {
 	if _, multiple := selectNode.Attr("multiple"); multiple || selectDisplaySize(selectNode) != 1 || SelectedIndex(selectNode) >= 0 {
 		return
 	}
@@ -618,9 +604,9 @@ func ensureSelectSelection(selectNode *Node) {
 	setSelectIndex(selectNode, firstEnabled, nil)
 }
 
-func findFirstEnabledOption(node *Node, index, first *int) bool {
+func findFirstEnabledOption(node *uinode.Node, index, first *int) bool {
 	for _, child := range node.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -638,9 +624,9 @@ func findFirstEnabledOption(node *Node, index, first *int) bool {
 	return false
 }
 
-func HasDirtySelectedOption(selectNode *Node) bool {
+func HasDirtySelectedOption(selectNode *uinode.Node) bool {
 	for _, child := range selectNode.Children {
-		if child == nil || child.Type != ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -659,8 +645,8 @@ func HasDirtySelectedOption(selectNode *Node) bool {
 
 // ResetForm restores controls owned by form to their authored defaults. The
 // traversal includes controls associated through an explicit form attribute.
-func ResetForm(form *Node) bool {
-	if form == nil || form.Type != ElementNode || form.Data != "form" {
+func ResetForm(form *uinode.Node) bool {
+	if form == nil || form.Type != uinode.ElementNode || form.Data != "form" {
 		return false
 	}
 	root := treeRoot(form)
@@ -669,11 +655,11 @@ func ResetForm(form *Node) bool {
 	return true
 }
 
-func resetFormControls(node, form *Node) {
+func resetFormControls(node, form *uinode.Node) {
 	if node == nil {
 		return
 	}
-	if node.Type == ElementNode && FormOwner(node) == form {
+	if node.Type == uinode.ElementNode && FormOwner(node) == form {
 		switch node.Data {
 		case "input":
 			node.States.Clear(StateDirtyValue)
@@ -695,11 +681,11 @@ func resetFormControls(node, form *Node) {
 	}
 }
 
-func normalizeResetRadioGroups(root, node, form *Node) {
+func normalizeResetRadioGroups(root, node, form *uinode.Node) {
 	if node == nil {
 		return
 	}
-	if node.Type == ElementNode && HasInputType(node, "radio") && FormOwner(node) == form {
+	if node.Type == uinode.ElementNode && HasInputType(node, "radio") && FormOwner(node) == form {
 		name, _ := node.Attr("name")
 		_, checked := node.Attr("checked")
 		if checked && name != "" {
@@ -712,15 +698,15 @@ func normalizeResetRadioGroups(root, node, form *Node) {
 	}
 }
 
-func optionDisabledForSelection(option *Node) bool {
-	if option == nil || option.Type != ElementNode || option.Data != "option" {
+func optionDisabledForSelection(option *uinode.Node) bool {
+	if option == nil || option.Type != uinode.ElementNode || option.Data != "option" {
 		return true
 	}
 	if _, disabled := option.Attr("disabled"); disabled {
 		return true
 	}
 	for ancestor := option.Parent; ancestor != nil; ancestor = ancestor.Parent {
-		if ancestor.Type != ElementNode {
+		if ancestor.Type != uinode.ElementNode {
 			continue
 		}
 		if ancestor.Data == "optgroup" {
@@ -734,8 +720,8 @@ func optionDisabledForSelection(option *Node) bool {
 	return false
 }
 
-func IsChecked(node *Node) bool {
-	if node == nil || node.Type != ElementNode {
+func IsChecked(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	switch node.Data {
@@ -761,8 +747,8 @@ func IsChecked(node *Node) bool {
 
 // SynchronizeCheckedAttribute applies a checked content-attribute mutation to
 // live checkedness while the control's dirty checkedness flag is clear.
-func SynchronizeCheckedAttribute(node *Node, present bool) {
-	if node == nil || node.Type != ElementNode || node.Data != "input" || !HasInputType(node, "checkbox") && !HasInputType(node, "radio") {
+func SynchronizeCheckedAttribute(node *uinode.Node, present bool) {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "input" || !HasInputType(node, "checkbox") && !HasInputType(node, "radio") {
 		return
 	}
 	dirty, _ := node.States.Get(StateDirtyChecked)
@@ -778,8 +764,8 @@ func SynchronizeCheckedAttribute(node *Node, present bool) {
 	node.States.Set(StateChecked, present)
 }
 
-func SupportsDisabled(node *Node) bool {
-	if node == nil || node.Type != ElementNode {
+func SupportsDisabled(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	switch node.Data {
@@ -790,7 +776,7 @@ func SupportsDisabled(node *Node) bool {
 	}
 }
 
-func IsDisabled(node *Node) bool {
+func IsDisabled(node *uinode.Node) bool {
 	if !SupportsDisabled(node) {
 		return false
 	}
@@ -799,18 +785,18 @@ func IsDisabled(node *Node) bool {
 	}
 	if node.Data == "option" {
 		for ancestor := node.Parent; ancestor != nil; ancestor = ancestor.Parent {
-			if ancestor.Type == ElementNode && ancestor.Data == "optgroup" {
+			if ancestor.Type == uinode.ElementNode && ancestor.Data == "optgroup" {
 				if _, disabled := ancestor.Attr("disabled"); disabled {
 					return true
 				}
 			}
-			if ancestor.Type == ElementNode && ancestor.Data == "select" {
+			if ancestor.Type == uinode.ElementNode && ancestor.Data == "select" {
 				return IsDisabled(ancestor)
 			}
 		}
 	}
 	for fieldset := node.Parent; fieldset != nil; fieldset = fieldset.Parent {
-		if fieldset.Type != ElementNode || fieldset.Data != "fieldset" {
+		if fieldset.Type != uinode.ElementNode || fieldset.Data != "fieldset" {
 			continue
 		}
 		if _, disabled := fieldset.Attr("disabled"); !disabled {
@@ -823,10 +809,10 @@ func IsDisabled(node *Node) bool {
 	return false
 }
 
-func withinFirstLegend(node, fieldset *Node) bool {
-	var legend *Node
+func withinFirstLegend(node, fieldset *uinode.Node) bool {
+	var legend *uinode.Node
 	for _, child := range fieldset.Children {
-		if child != nil && child.Type == ElementNode && child.Data == "legend" {
+		if child != nil && child.Type == uinode.ElementNode && child.Data == "legend" {
 			legend = child
 			break
 		}
@@ -842,8 +828,8 @@ func withinFirstLegend(node, fieldset *Node) bool {
 	return false
 }
 
-func SupportsPlaceholder(node *Node) bool {
-	if node == nil || node.Type != ElementNode {
+func SupportsPlaceholder(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
 		return false
 	}
 	if node.Data == "textarea" {
@@ -863,12 +849,12 @@ func SupportsPlaceholder(node *Node) bool {
 
 // SetLiveValue updates the compact value state used by :placeholder-shown.
 // The string itself remains owned by the generated form control.
-func SetLiveValue(node *Node, value string, dirty bool) {
+func SetLiveValue(node *uinode.Node, value string, dirty bool) {
 	setLiveValueEmpty(node, value == "", dirty)
 }
 
-func setLiveValueEmpty(node *Node, empty, dirty bool) {
-	if node == nil || node.Type != ElementNode || node.Data != "input" && node.Data != "textarea" {
+func setLiveValueEmpty(node *uinode.Node, empty, dirty bool) {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "input" && node.Data != "textarea" {
 		return
 	}
 	node.States.Set(StateValueEmpty, empty)
@@ -880,8 +866,8 @@ func setLiveValueEmpty(node *Node, empty, dirty bool) {
 
 // SynchronizeValueAttribute updates live value state from an input value
 // content attribute while the dirty value flag is clear.
-func SynchronizeValueAttribute(node *Node) {
-	if node == nil || node.Type != ElementNode || node.Data != "input" {
+func SynchronizeValueAttribute(node *uinode.Node) {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "input" {
 		return
 	}
 	dirty, _ := node.States.Get(StateDirtyValue)
@@ -894,8 +880,8 @@ func SynchronizeValueAttribute(node *Node) {
 
 // SynchronizeTextContent updates a textarea's live value state from its child
 // text while the dirty value flag is clear.
-func SynchronizeTextContent(node *Node) {
-	if node == nil || node.Type != ElementNode || node.Data != "textarea" {
+func SynchronizeTextContent(node *uinode.Node) {
+	if node == nil || node.Type != uinode.ElementNode || node.Data != "textarea" {
 		return
 	}
 	dirty, _ := node.States.Get(StateDirtyValue)
@@ -905,11 +891,11 @@ func SynchronizeTextContent(node *Node) {
 	setLiveValueEmpty(node, !hasTextContent(node), false)
 }
 
-func SynchronizePlaceholderAttribute(node *Node) {
+func SynchronizePlaceholderAttribute(node *uinode.Node) {
 	synchronizePlaceholderShown(node)
 }
 
-func synchronizePlaceholderShown(node *Node) {
+func synchronizePlaceholderShown(node *uinode.Node) {
 	if !SupportsPlaceholder(node) {
 		node.States.Set(StatePlaceholderShown, false)
 		return
@@ -927,7 +913,7 @@ func synchronizePlaceholderShown(node *Node) {
 	node.States.Set(StatePlaceholderShown, hasPlaceholder && empty)
 }
 
-func IsPlaceholderShown(node *Node) bool {
+func IsPlaceholderShown(node *uinode.Node) bool {
 	if !SupportsPlaceholder(node) {
 		return false
 	}
@@ -946,11 +932,11 @@ func IsPlaceholderShown(node *Node) bool {
 	return value == ""
 }
 
-func hasTextContent(node *Node) bool {
+func hasTextContent(node *uinode.Node) bool {
 	if node == nil {
 		return false
 	}
-	if node.Type == TextNode {
+	if node.Type == uinode.TextNode {
 		return node.Data != ""
 	}
 	for _, child := range node.Children {

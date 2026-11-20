@@ -534,6 +534,11 @@ func (app *App) ensureUIRuntime() error {
 	if err := app.AddSystem(StageRender, final); err != nil {
 		return err
 	}
+	app.World.InsertResource(engineui.RefreshHTMLScope(func() {
+		if app.moduleRuntime != nil {
+			app.moduleRuntime.SyncScopes()
+		}
+	}))
 	app.uiLayoutPending = engineui.LayoutPending
 	app.uiCaretBlinkDelay = engineui.CaretBlinkDelay
 	app.installedSystemSets |= systemSetUIRuntime

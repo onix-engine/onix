@@ -24,7 +24,7 @@ type cmapFormat12Group struct {
 }
 
 type cmapFormat12 struct {
-	Groups []cmapFormat12Group
+	data []byte
 }
 
 func parseCmap(data []byte) (cmap, error) {
@@ -133,19 +133,18 @@ func parseCmapFormat12(data []byte) (*cmapFormat12, error) {
 	if numGroups > (length-16)/12 {
 		return nil, fmt.Errorf("cmap format 12 truncated groups")
 	}
-	groups := make([]cmapFormat12Group, int(numGroups))
-	for i := range groups {
-		offset := 16 + i*12
-		groups[i] = cmapFormat12Group{
-			StartCharCode: binary.BigEndian.Uint32(data[offset : offset+4]),
-			EndCharCode:   binary.BigEndian.Uint32(data[offset+4 : offset+8]),
-			StartGlyphID:  binary.BigEndian.Uint32(data[offset+8 : offset+12]),
-		}
-		if groups[i].StartCharCode > groups[i].EndCharCode || i > 0 && groups[i].StartCharCode <= groups[i-1].EndCharCode {
+	groups := data[16 : 16+int(numGroups)*12]
+	var previous uint32
+	for i := range int(numGroups) {
+		offset := i * 12
+		start := binary.BigEndian.Uint32(groups[offset:])
+		end := binary.BigEndian.Uint32(groups[offset+4:])
+		if start > end || i > 0 && start <= previous {
 			return nil, fmt.Errorf("cmap format 12 unordered or overlapping groups")
 		}
+		previous = end
 	}
-	return &cmapFormat12{Groups: groups}, nil
+	return &cmapFormat12{data: groups}, nil
 }
 
 func (c *cmapFormat4) GlyphIndex(r rune) uint16 {
@@ -183,18 +182,22 @@ func (c *cmapFormat4) GlyphIndex(r rune) uint16 {
 
 func (c *cmapFormat12) GlyphIndex(r rune) uint16 {
 	code := uint32(r)
-	lo, hi := 0, len(c.Groups)
+	lo, hi := 0, len(c.data)/12
 	for lo < hi {
 		mid := lo + (hi-lo)/2
-		if c.Groups[mid].EndCharCode < code {
+		if binary.BigEndian.Uint32(c.data[mid*12+4:]) < code {
 			lo = mid + 1
 		} else {
 			hi = mid
 		}
 	}
-	if lo == len(c.Groups) || code < c.Groups[lo].StartCharCode {
+	if lo == len(c.data)/12 {
 		return 0
 	}
-	group := c.Groups[lo]
-	return uint16(group.StartGlyphID + (code - group.StartCharCode))
+	group := c.data[lo*12:]
+	start := binary.BigEndian.Uint32(group)
+	if code < start {
+		return 0
+	}
+	return uint16(binary.BigEndian.Uint32(group[8:]) + code - start)
 }

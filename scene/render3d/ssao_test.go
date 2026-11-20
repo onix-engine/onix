@@ -126,7 +126,7 @@ func TestSSAOViewRenderingReuseAndLifecycle(t *testing.T) {
 	}
 	settings.SSAO = NewSSAOSettings()
 	frame()
-	if _, err := view.occlusion.frame.Target.ColorTexture(); err != nil {
+	if _, err := view.occlusion.frame.Target.DepthTextureFor(render.ActiveDevice()); err != nil {
 		t.Fatal(err)
 	}
 	world.Despawn(entity)

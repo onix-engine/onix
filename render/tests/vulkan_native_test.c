@@ -334,7 +334,7 @@ static void test_mesh_pipeline_laziness(OnixGPUDriver *driver) {
 	timespec_get(&end, TIME_UTC);
 	require(onix_gpu_end_render_target(driver), "end guide target");
 	require(onix_gpu_present(driver), "present guide");
-	for (uint32_t index=0;index<driver->image_count;index++) require(driver->depth_images[index]==VK_NULL_HANDLE, "offscreen mesh leaves surface depth unallocated");
+	for (uint32_t index=0;index<ONIX_VK_FRAMES_IN_FLIGHT;index++) require(driver->depth_images[index]==VK_NULL_HANDLE, "offscreen mesh leaves surface depth unallocated");
 	require(driver->mesh_builtin[1].transparent[0] != VK_NULL_HANDLE, "guide uses unlit pipeline");
 	for (uint32_t variant = 0; variant < ONIX_MESH_VARIANT_COUNT; variant++) {
 		require(driver->mesh_builtin[variant].opaque == VK_NULL_HANDLE && driver->mesh_builtin[variant].opaque_surface == VK_NULL_HANDLE, "guide avoids unused opaque pipelines");
@@ -480,11 +480,13 @@ static void test_material_layers(OnixGPUDriver *driver) {
 
 static void test_mesh_occlusion(OnixGPUDriver *driver) {
 	uint32_t depth_color, color;
-	uint32_t depth_target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &depth_color);
+	uint32_t depth_target = onix_gpu_create_render_target(driver, 16, 16, ONIX_TARGET_DEPTH, 1, &depth_color);
 	uint32_t target = onix_gpu_create_render_target(driver, 16, 16, 0, 1, &color);
 	const uint8_t white[] = {255, 255, 255, 255};
 	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, white, sizeof(white), 0, 0);
 	require(depth_target && target && texture, "create SSAO resources");
+	require(driver->textures[depth_color - 1].image && !driver->render_targets[depth_target - 1].depth_image,
+		"depth-only target stores its single image in the sampled texture");
 	OnixGPUMeshPush push = {.view_projection = {[0]=1,[5]=1,[10]=1,[15]=1}};
 	OnixGPUVertex3D vertices[] = {
 		{.position={-1,-1,.75f},.normal={0,0,1}}, {.position={1,-1,.75f},.normal={0,0,1}},
@@ -541,7 +543,7 @@ static void test_mesh_occlusion(OnixGPUDriver *driver) {
 
 static void test_screen_reflections(OnixGPUDriver *driver) {
 	uint32_t depth_color,scene_color,out_color;
-	uint32_t depth=onix_gpu_create_render_target(driver,64,64,0,1,&depth_color);
+	uint32_t depth=onix_gpu_create_render_target(driver,64,64,3,1,&depth_color);
 	uint32_t scene=onix_gpu_create_render_target(driver,128,64,0,1,&scene_color);
 	uint32_t target=onix_gpu_create_render_target(driver,128,96,0,1,&out_color);
 	const uint8_t white[]={255,255,255,255},black[]={0,0,0,255};
@@ -678,7 +680,7 @@ static float read_surface_depth(OnixGPUDriver *driver) {
 		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = driver->depth_images[driver->image_index],
+		.image = driver->depth_images[(driver->frame_index + ONIX_VK_FRAMES_IN_FLIGHT - 1) % ONIX_VK_FRAMES_IN_FLIGHT],
 		.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1},
 	};
 	vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
@@ -721,8 +723,8 @@ static void test_surface_2d_laziness(OnixGPUDriver *driver) {
 		"rounded 2D surface uses the color-only corner mask pipeline");
 	onix_gpu_set_corner_radius(driver, 0);
 	require(onix_gpu_resize(driver, 64, 64), "resize pure 2D surface");
-	for (uint32_t index = 0; index < driver->image_count; index++) {
-		require(!driver->depth_images[index] && !driver->depth_views[index] && !driver->depth_memories[index] && !driver->depth_framebuffers[index], "2D frames and resize allocate no surface depth");
+	for (uint32_t index = 0; index < ONIX_VK_FRAMES_IN_FLIGHT; index++) {
+		require(!driver->depth_images[index] && !driver->depth_views[index] && !driver->depth_memories[index], "2D frames and resize allocate no surface depth");
 	}
 	require(!driver->mesh_picking_pipeline && !driver->mesh_builtin[0].opaque_surface && !driver->mesh_builtin[1].opaque_surface, "2D creates no mesh pipelines");
 	require(onix_gpu_destroy_texture(driver, texture), "destroy pure 2D texture");
@@ -821,6 +823,29 @@ static void check_pixel(OnixGPUDriver *driver, uint32_t target, uint8_t red, uin
 		fprintf(stderr, "frame %d pixel = %u,%u,%u,%u, expected %u,%u,0,255\n", frame, pixel[0], pixel[1], pixel[2], pixel[3], red, green);
 		exit(1);
 	}
+}
+
+static void test_idle_trim(OnixGPUDriver *driver) {
+	const uint8_t green[] = {0, 255, 0, 255};
+	const float clear[] = {0, 0, 0, 1};
+	uint32_t sampled, target = onix_gpu_create_render_target(driver, 16, 16, 0, 0, &sampled);
+	uint32_t texture = onix_gpu_create_texture_with_format(driver, 1, 1, 1, ONIX_TEXTURE_FORMAT_RGBA8, 0, green, sizeof(green), 0, 0);
+	require(texture && target && driver->upload_count, "pending texture upload before idle trim");
+	require(onix_gpu_trim_idle(driver), "trim submitted frames and pending texture uploads");
+	OnixBufferMemory memory = {0};
+	onix_gpu_buffer_memory(driver, &memory);
+	require(!memory.instances && !memory.staging && !memory.readback, "trim releases transient GPU buffers");
+	for (uint32_t slot = 0; slot < ONIX_VK_FRAMES_IN_FLIGHT; slot++) {
+		require(!driver->depth_images[slot] && !driver->depth_views[slot] && !driver->depth_memories[slot], "trim releases each depth slot");
+		for (uint32_t image = 0; image < driver->image_count; image++) {
+			require(!driver->depth_framebuffers[slot * driver->image_count + image], "trim releases each depth framebuffer");
+		}
+	}
+	require(onix_gpu_begin_frame(driver, clear) && !onix_gpu_trim_idle(driver), "active frame cannot be trimmed");
+	draw_target(driver, target, texture);
+	require(onix_gpu_present(driver), "present after idle trim");
+	check_pixel(driver, target, 0, 255, -1);
+	require(onix_gpu_destroy_render_target(driver, target) && onix_gpu_destroy_texture(driver, texture), "release idle trim resources");
 }
 
 static void test_external_queue(OnixGPUDriver *driver, uint32_t texture) {
@@ -1993,6 +2018,13 @@ int main(void) {
 	}
 	test_mesh_pipeline_laziness(driver);
 	test_surface_depth(driver);
+	test_idle_trim(driver);
+	test_surface_depth(driver);
+	const float surface_clear[4] = {0};
+	for (uint32_t frame = 0; frame < ONIX_BUFFER_TRIM_DELAY + ONIX_VK_FRAMES_IN_FLIGHT; frame++) {
+		require(onix_gpu_begin_frame(driver, surface_clear) && onix_gpu_present(driver), "age window depth");
+	}
+	for (uint32_t slot = 0; slot < ONIX_VK_FRAMES_IN_FLIGHT; slot++) require(!driver->depth_images[slot], "aged depth slot released");
 	test_target_upload_resume(driver, 1);
 	test_target_upload_resume(driver, 0);
 	test_mesh_lighting(driver);

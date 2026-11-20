@@ -381,6 +381,13 @@ static void onix_gl_begin_frame(GLuint framebuffer, const GLfloat *clear, int se
 	}
 }
 
+static void onix_gl_attach_depth_texture(GLuint texture) {
+    const GLenum none = GL_NONE;
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture, 0);
+    glDrawBuffers(1, &none);
+    glReadBuffer(GL_NONE);
+}
+
 static void onix_gl_begin_render_target(GLuint framebuffer, int clear_color, int uint_color, const GLuint *uint_clear,
 	const GLfloat *clear, int clear_depth, GLfloat depth, int has_depth, int restore_scissor, int scissor_set,
 	GLint scissor_x, GLint scissor_y, GLsizei scissor_width, GLsizei scissor_height, GLsizei framebuffer_height) {
@@ -627,6 +634,8 @@ type openGLESDriver struct {
 	quadVertexBuffer      C.GLuint
 	clearSet              bool
 	depthEnabled          bool
+	frameActive           bool
+	surfaceDepthAge       uint8
 	destroyed             bool
 	blendEnabled          bool
 	scissorEnabled        bool
@@ -736,7 +745,11 @@ func (d *openGLESDriver) BeginFrame(clear Color) error {
 	if d.activeTarget.Valid() {
 		return errors.New("render: OpenGL ES render target is still active")
 	}
+	if d.surfaceTarget != nil && d.surfaceDepthAge >= bufferTrimDelay {
+		d.releaseSurfaceDepth()
+	}
 	if d.surfaceTarget != nil {
+		d.surfaceDepthAge++
 		if err := d.ensureSurfaceDepth(false); err != nil {
 			return err
 		}
@@ -764,6 +777,7 @@ func (d *openGLESDriver) BeginFrame(clear Color) error {
 	d.spriteDraws = (&d.spriteDrawsRetention).trimScratch(d.spriteDraws, 64)
 	d.meshDraws = (&d.meshDrawsRetention).trimScratch(d.meshDraws, 64)
 	d.pickingDraws = (&d.pickingDrawsRetention).trimScratch(d.pickingDraws, 64)
+	d.frameActive = true
 	d.beginFrameStatistics(d.width, d.height)
 	return glError("begin frame")
 }
@@ -1003,7 +1017,7 @@ func (d *openGLESDriver) EndRenderTarget() error {
 
 func (d *openGLESDriver) ReadRenderTarget(handle RenderTargetHandle, region RenderTargetRegion, destination []byte) error {
 	target, ok := d.targets.Get(handle)
-	if !ok || target == nil || d.activeTarget.Valid() {
+	if !ok || target == nil || target.descriptor.ColorFormat == RenderTargetDepth || d.activeTarget.Valid() {
 		return fmt.Errorf("render: invalid OpenGL ES render target readback %s", handle)
 	}
 	format, pixelType := C.GLenum(C.GL_RGBA), C.GLenum(C.GL_UNSIGNED_BYTE)
@@ -1033,8 +1047,11 @@ func (d *openGLESDriver) createRenderTarget(descriptor RenderTargetDescriptor) (
 	d.bindTexture(texture)
 	internalFormat, format, pixelType := C.GLint(C.GL_RGBA8), C.GLenum(C.GL_RGBA), C.GLenum(C.GL_UNSIGNED_BYTE)
 	filter := TextureFilterLinear
-	if descriptor.ColorFormat == RenderTargetUint32 {
+	if descriptor.ColorFormat == RenderTargetUint32 || descriptor.ColorFormat == RenderTargetDepth {
 		internalFormat, format, pixelType = C.GL_R32UI, C.GL_RED_INTEGER, C.GL_UNSIGNED_INT
+		if descriptor.ColorFormat == RenderTargetDepth {
+			internalFormat, format, pixelType = C.GL_DEPTH_COMPONENT24, C.GL_DEPTH_COMPONENT, C.GL_UNSIGNED_INT
+		}
 		filter = TextureFilter(255)
 		C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_MIN_FILTER, C.GL_NEAREST)
 		C.glTexParameteri(C.GL_TEXTURE_2D, C.GL_TEXTURE_MAG_FILTER, C.GL_NEAREST)
@@ -1052,14 +1069,18 @@ func (d *openGLESDriver) createRenderTarget(descriptor RenderTargetDescriptor) (
 	}
 	C.glTexImage2D(C.GL_TEXTURE_2D, 0, internalFormat, C.GLsizei(descriptor.Width), C.GLsizei(descriptor.Height), 0, format, pixelType, nil)
 	C.glBindFramebuffer(C.GL_FRAMEBUFFER, framebuffer)
-	C.glFramebufferTexture2D(C.GL_FRAMEBUFFER, C.GL_COLOR_ATTACHMENT0, C.GL_TEXTURE_2D, texture, 0)
-	if descriptor.Depth {
+	if descriptor.ColorFormat == RenderTargetDepth {
+		C.onix_gl_attach_depth_texture(texture)
+	} else {
+		C.glFramebufferTexture2D(C.GL_FRAMEBUFFER, C.GL_COLOR_ATTACHMENT0, C.GL_TEXTURE_2D, texture, 0)
+	}
+	if descriptor.Depth && descriptor.ColorFormat != RenderTargetDepth {
 		C.glGenRenderbuffers(1, &depth)
 		C.glBindRenderbuffer(C.GL_RENDERBUFFER, depth)
 		C.glRenderbufferStorage(C.GL_RENDERBUFFER, C.GL_DEPTH_COMPONENT24, C.GLsizei(descriptor.Width), C.GLsizei(descriptor.Height))
 		C.glFramebufferRenderbuffer(C.GL_FRAMEBUFFER, C.GL_DEPTH_ATTACHMENT, C.GL_RENDERBUFFER, depth)
 	}
-	complete := (!descriptor.Depth || depth != 0) && C.glCheckFramebufferStatus(C.GL_FRAMEBUFFER) == C.GL_FRAMEBUFFER_COMPLETE
+	complete := (!descriptor.Depth || descriptor.ColorFormat == RenderTargetDepth || depth != 0) && C.glCheckFramebufferStatus(C.GL_FRAMEBUFFER) == C.GL_FRAMEBUFFER_COMPLETE
 	C.glBindRenderbuffer(C.GL_RENDERBUFFER, 0)
 	C.glBindFramebuffer(C.GL_FRAMEBUFFER, 0)
 	if !complete {
@@ -1116,6 +1137,9 @@ func deleteGLESRenderTargetObjects(framebuffer, texture, depth C.GLuint) {
 func (d *openGLESDriver) DrawSprites(batch SpriteBatch) error {
 	if len(batch.Instances) == 0 || len(batch.Draws) == 0 {
 		return nil
+	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
 	}
 	scratch := spriteUploadBuffers.get()
 	defer spriteUploadBuffers.put(scratch)
@@ -1199,6 +1223,9 @@ func (d *openGLESDriver) DrawShapes(batch ShapeBatch) error {
 	if len(batch.Instances) == 0 {
 		return nil
 	}
+	if target, ok := d.targets.Get(d.activeTarget); ok && target.descriptor.ColorFormat == RenderTargetDepth {
+		return errors.New("render: 2D drawing requires a color attachment")
+	}
 	d.setDepthEnabled(false)
 	d.setBlendEnabled(true)
 	program := &d.programs[PipelineShape]
@@ -1257,6 +1284,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 		return err
 	}
 	if !d.activeTarget.Valid() {
+		d.surfaceDepthAge = 0
 		if err := d.ensureSurfaceDepth(true); err != nil {
 			return err
 		}
@@ -1551,9 +1579,31 @@ func (d *openGLESDriver) Present() error {
 	if err := d.swapContextBuffers(); err != nil {
 		return err
 	}
+	d.frameActive = false
 	if d.afterPresent != nil {
 		return d.afterPresent()
 	}
+	return nil
+}
+
+func (d *openGLESDriver) releaseSurfaceDepth() {
+	d.deleteRenderTarget(d.surfaceTarget, true)
+	d.surfaceTarget = nil
+	d.surfaceDepthAge = 0
+}
+
+func (d *openGLESDriver) TrimIdleBuffers() error {
+	if d.frameActive || d.activeTarget.Valid() {
+		return errors.New("render: cannot trim inside a frame")
+	}
+	d.makeContextCurrent()
+	for i := range d.uploads {
+		if C.onix_gl_trim_idle_uploads(&d.uploads[i]) == 0 {
+			return errors.New("render: wait for OpenGL ES uploads")
+		}
+	}
+	d.boundVAO, d.boundBuffer = 0, 0
+	d.releaseSurfaceDepth()
 	return nil
 }
 

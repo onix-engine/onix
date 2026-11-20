@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestRetainedGridLayoutMatchesFull(t *testing.T) {
@@ -15,7 +15,7 @@ func TestRetainedGridLayoutMatchesFull(t *testing.T) {
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	for _, width := range []float64{160, 180, 140, 160} {
 		styles.Exclusive(grid).Width = style.LengthPx(width)
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{grid}, false)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{grid}, false)
 		full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)
@@ -36,7 +36,7 @@ func TestRetainedGridWarmResizeDoesNotAllocate(t *testing.T) {
 	allocations := testing.AllocsPerRun(100, func() {
 		for _, width := range [...]float64{180, 160} {
 			mutable.Width = style.LengthPx(width)
-			if _, err := cache.Update(root, styles, face, face, 320, 200, []*dom.Node{grid}, nil, false, false); err != nil {
+			if _, err := cache.Update(root, styles, face, face, 320, 200, []*uinode.Node{grid}, nil, false, false); err != nil {
 				panic(err)
 			}
 		}

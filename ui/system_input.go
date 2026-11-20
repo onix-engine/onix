@@ -3,9 +3,10 @@ package ui
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
+	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 func isContextMenuPick(world *ecs.World, entity ecs.Entity) bool {
@@ -31,10 +32,12 @@ func closeOtherSelectors(world *ecs.World, picked ecs.Entity) {
 		keep = item.Owner
 	}
 	for entity, access := range world.Query[Selector]().All {
-		selector := access.Mut()
-
 		if entity != keep {
-			selector.Open = false
+			if world.Has[htmlui.Control](entity) {
+				SetHTMLSelectOpen(world, entity, false)
+			} else if access.Ref().Open {
+				access.Mut().Open = false
+			}
 		}
 	}
 }
@@ -176,4 +179,11 @@ func setTabSubtreeVisible(world *ecs.World, parentChildren []tabParentChild, chi
 
 func inputCoordsForUI(screenX, screenY float32) (float32, float32) {
 	return screenX, screenY
+}
+
+func selectorIsOpen(world *ecs.World, entity ecs.Entity, selector *Selector) bool {
+	if control := world.GetRef[htmlui.Control](entity); control != nil {
+		return control.Open
+	}
+	return selector != nil && selector.Open
 }

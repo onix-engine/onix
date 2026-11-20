@@ -64,21 +64,21 @@ static void shadow_map_uniforms(GLuint program,int index,const float *matrix,flo
 
 static int shadow_atlas_pixels(GLuint program,GLuint texture) {
  int failed=0;
- unsigned char depths[12*8*4];
+ float depths[12*8];
  const float center[16]={[14]=.5f,[15]=1};
  const float axes[6][3]={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
  for(int face=0;face<6;face++) {
   // CPU atlas rects are top-left; GLES texture row zero is the bottom row.
   int ox=face%3*4,oy=(1-face/3)*4;
-  unsigned int depth=(unsigned int)((face%2?.25f:.75f)*16777215.0f);
+  float depth=(face%2?.25f:.75f);
   for(int y=0;y<4;y++) for(int x=0;x<4;x++) {
-   int offset=((oy+y)*12+ox+x)*4;
-   depths[offset]=depth>>16;depths[offset+1]=depth>>8;depths[offset+2]=depth;depths[offset+3]=255;
+   int offset=(oy+y)*12+ox+x;
+   depths[offset]=depth;
   }
   shadow_map_uniforms(program,face,center,face%3/3.0f,face/3/2.0f,1/3.0f,.5f,0,0);
  }
  glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,texture);
- glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,12,8,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+ glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,12,8,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
  uniform4(program,"testMaterial",.8f,1.0f,.5f,0);
  uniform4(program,"testSurface",1,1,0,0);
  uniform4(program,"lightMeta",1,0,0,0);
@@ -171,16 +171,15 @@ static int shadow_pixels(GLuint program, GLuint texture) {
  uniform4(program,"testWorldPosition",0,0,0.5f,0);
  uniform4(program,"lightShadows[0]",0,0,0,0);
  float lit=scene_radiance(pixel(program,1,-1));
- unsigned char depths[8*8*4];
+ float depths[8*8];
  glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,texture);
  int failed=0;
  for (int axis=0;axis<2;axis++) {
   for (int y=0;y<8;y++) for (int x=0;x<8;x++) {
-   unsigned int depth=(unsigned int)(((axis?y:x)<4?0.75f:0.25f)*16777215.0f);
-   int i=(y*8+x)*4;
-   depths[i]=depth>>16;depths[i+1]=depth>>8;depths[i+2]=depth;depths[i+3]=255;
+   float depth=((axis?y:x)<4?0.75f:0.25f);
+   depths[y*8+x]=depth;
   }
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,8,8,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,8,8,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
   uniform4(program,"lightShadows[0]",1,1,0,0);
   uniform4(program,"shadowParams[0]",0.0003f,0,0,0);
   float previous=-1;
@@ -205,11 +204,9 @@ static int shadow_pixels(GLuint program, GLuint texture) {
  for (int occluder=0;occluder<2;occluder++) {
   for (int y=0;y<8;y++) for (int x=0;x<8;x++) {
    float z=0.5f+0.25f*((x+0.5f)/4.0f-1)-0.125f*((y+0.5f)/4.0f-1)+0.1f*occluder;
-   unsigned int depth=(unsigned int)(z*16777215.0f);
-   int i=(y*8+x)*4;
-   depths[i]=depth>>16;depths[i+1]=depth>>8;depths[i+2]=depth;depths[i+3]=255;
+   depths[y*8+x]=z;
   }
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,8,8,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,8,8,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
   for (int step=0;step<8;step++) {
    float x=step/32.0f,y=-step/64.0f;
    uniform4(program,"testWorldPosition",x,y,0.5f+0.25f*x-0.125f*y,1);
@@ -309,7 +306,7 @@ static int photometry_pixels(GLuint program) {
 
 static int ssao_pixels(GLuint program) {
  const float identity[16]={[0]=1,[5]=1,[10]=1,[15]=1};
- unsigned char depths[32*32*4];
+ float depths[32*32];
  GLuint depthTexture,whiteTexture;
  unsigned char white[4]={255,255,255,255};
  glGenTextures(1,&whiteTexture);glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,whiteTexture);
@@ -336,11 +333,11 @@ static int ssao_pixels(GLuint program) {
  int reference=draw_pixel(),flat=0,contact=0,background=0,far=0;
  int failed=0;
  for(int scenario=0;scenario<4;scenario++) {
-  unsigned int depth=(unsigned int)((scenario==0?.25f:scenario==3?.95f:.5f)*16777215.0f);
+  float depth=(scenario==0?.25f:scenario==3?.95f:.5f);
   for(int i=0;i<32*32;i++) {
-   depths[i*4]=depth>>16;depths[i*4+1]=depth>>8;depths[i*4+2]=depth;depths[i*4+3]=scenario==2?0:255;
+   depths[i]=scenario==2?0:depth;
   }
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,32,32,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,32,32,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
   uniform4(program,"renderParams",1,0,1,0);
   uniform4(program,"lightMeta",0,0,scenario==3?.5f:1,.025f);
   int value=draw_pixel();
@@ -351,8 +348,8 @@ static int ssao_pixels(GLuint program) {
  }
  failed|=abs(reference-flat)>1 || contact>=reference-15 || abs(reference-background)>1 || abs(reference-far)>1;
  // All three kernels must darken nearby geometry, never an isolated plane.
- for(int i=0;i<32*32;i++) { depths[i*4]=127;depths[i*4+1]=255;depths[i*4+2]=255;depths[i*4+3]=255; }
- glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,32,32,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+ for(int i=0;i<32*32;i++) { depths[i]=.5f; }
+ glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,32,32,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
  uniform4(program,"lightMeta",0,0,1,.025f);
  for(int count=8;count<=32;count*=2) {
   uniform4(program,"cameraForward",0,0,-1,count);
@@ -365,9 +362,9 @@ static int ssao_pixels(GLuint program) {
  uniform4(program,"testWorldPosition",0,0,-2,0);
  uniform4(program,"cameraPosition",0,0,0,1);
  for(int scenario=0;scenario<2;scenario++) {
-  unsigned int depth=(unsigned int)((.1f/(scenario?1.75f:2.0f))*16777215.0f);
-  for(int i=0;i<32*32;i++) {depths[i*4]=depth>>16;depths[i*4+1]=depth>>8;depths[i*4+2]=depth;depths[i*4+3]=255;}
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,32,32,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+  float depth=(.1f/(scenario?1.75f:2.0f));
+  for(int i=0;i<32*32;i++) {depths[i]=depth;}
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,32,32,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
   int value=draw_pixel();
   failed|=scenario?value>=reference-10:abs(value-reference)>1;
  }
@@ -375,8 +372,8 @@ static int ssao_pixels(GLuint program) {
  glUniformMatrix4fv(glGetUniformLocation(program,"occlusionInverseProjection"),1,GL_FALSE,inverseRotated);
  uniform4(program,"testWorldPosition",3,4,.25f,0);
  uniform4(program,"cameraPosition",3,4,2,1);
- for(int i=0;i<32*32;i++) {depths[i*4]=127;depths[i*4+1]=255;depths[i*4+2]=255;depths[i*4+3]=255;}
- glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,32,32,0,GL_RGBA,GL_UNSIGNED_BYTE,depths);
+ for(int i=0;i<32*32;i++) {depths[i]=.5f;}
+ glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,32,32,0,GL_DEPTH_COMPONENT,GL_FLOAT,depths);
  failed|=draw_pixel()>=reference-10;
  glUniformMatrix4fv(glGetUniformLocation(program,"occlusionInverseProjection"),1,GL_FALSE,identity);
  uniform4(program,"testWorldPosition",0,0,.25f,0);
@@ -633,17 +630,18 @@ static int ssr_pixels(GLuint program) {
  glUniformMatrix4fv(glGetUniformLocation(program,"occlusionInverseProjection"),1,GL_FALSE,inverse);
  uniform4(program,"shadowParams[0]",4,.1f,1,.6f);
  uniform4(program,"shadowRects[0]",64,.1f,0,0);
- unsigned char depth[64*64*4],color[128*64*4];
+ float depth[64*64];
+ unsigned char color[128*64*4];
  int reference=0,hit=0,miss=0,foreground=0,coat=0,ao=0;
  for(int scenario=0;scenario<3;scenario++) {
   for(int y=0;y<64;y++) for(int x=0;x<64;x++) {
    int i=(y*64+x)*4,target=x>=37;
-   unsigned int z=(unsigned int)((.1f/(target?(scenario==2?1.0f:2.2f):2.0f))*16777215.0f);
-   depth[i]=z>>16;depth[i+1]=z>>8;depth[i+2]=z;depth[i+3]=(scenario==1&&target)?0:255;
+   float z=(.1f/(target?(scenario==2?1.0f:2.2f):2.0f));
+   depth[y*64+x]=(scenario==1&&target)?0:z;
    encode_radiance(color+i,target?4:.05f,target?0:.05f,target?0:.05f);
   }
   glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,textures[1]);
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,depth);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,64,64,0,GL_DEPTH_COMPONENT,GL_FLOAT,depth);
   glActiveTexture(GL_TEXTURE4);glBindTexture(GL_TEXTURE_2D,textures[2]);
   glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,color);
   if(scenario==0) {
@@ -712,14 +710,14 @@ static int ssr_pixels(GLuint program) {
   float ambient_occlusion=scenario?64.0f/255:1;
   for(int y=0;y<64;y++)for(int x=0;x<64;x++) {
    int i=(y*64+x)*4,target=x>=37;
-   unsigned int z=(unsigned int)((.1f/(target?2.2f:2.0f))*16777215.0f);
-   depth[i]=z>>16;depth[i+1]=z>>8;depth[i+2]=z;depth[i+3]=255;
+   float z=(.1f/(target?2.2f:2.0f));
+   depth[y*64+x]=z;
    float base=.05f+environment_lobe*ambient_occlusion;
    encode_radiance(color+(y*(scenario?128:64)+x)*4,target?4:base,target?0:base,target?0:base);
    if(scenario) {int j=(y*128+x+64)*4;color[j]=64;color[j+1]=color[j+2]=0;color[j+3]=255;}
   }
   glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,textures[1]);
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,depth);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT32F,64,64,0,GL_DEPTH_COMPONENT,GL_FLOAT,depth);
   glActiveTexture(GL_TEXTURE4);glBindTexture(GL_TEXTURE_2D,textures[2]);
   glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,scenario?128:64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,color);
   uniform4(program,"shadowRects[0]",64,.1f,scenario,0);

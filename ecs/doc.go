@@ -17,6 +17,6 @@
 // these caches retain their distinct reset, scope and message lifetimes.
 //
 // World.Query and Query2 through Query7 construct typed query views. World also
-// provides NewSpawner1 through NewSpawner8 and NewPatch1 through NewPatch8 for
+// provides NewSpawner1 through NewSpawner12 and NewPatch1 through NewPatch8 for
 // reusable creation and mutation plans bound to that world.
 package ecs

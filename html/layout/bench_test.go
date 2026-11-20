@@ -6,8 +6,9 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func benchFace(b *testing.B) *font.Face {
@@ -19,9 +20,9 @@ func benchFace(b *testing.B) *font.Face {
 	return face
 }
 
-func buildBenchDocument(b *testing.B, html, cssSource string, width, height float64) (*dom.Node, style.Map, *font.Face) {
+func buildBenchDocument(b *testing.B, html, cssSource string, width, height float64) (*uinode.Node, style.Map, *font.Face) {
 	b.Helper()
-	doc, err := dom.Parse(html)
+	doc, err := parse.Parse(html)
 	if err != nil {
 		b.Fatalf("parse dom: %v", err)
 	}
@@ -54,7 +55,7 @@ func benchLayout(b *testing.B, html, cssSource string, width, height float64) {
 
 func benchStyle(b *testing.B, html, cssSource string, width, height float64) {
 	b.Helper()
-	doc, err := dom.Parse(html)
+	doc, err := parse.Parse(html)
 	if err != nil {
 		b.Fatalf("parse dom: %v", err)
 	}
@@ -147,4 +148,17 @@ func BenchmarkComputeFlexDocument(b *testing.B) {
 func BenchmarkComputeControlsDocument(b *testing.B) {
 	html, cssSource := benchControlsDocument()
 	benchStyle(b, html, cssSource, 800, 2000)
+}
+
+func BenchmarkPlaceholderSegments(b *testing.B) {
+	root, styles, face := retainedFixture(b, `<input id="field" placeholder="Find files">`)
+	defer face.Close()
+	node := retainedNode(root, "field")
+	var ctx layoutContext
+	collectInlineSegmentsWithIndex(node, styles, &ctx, nil)
+	for b.Loop() {
+		if len(collectInlineSegmentsWithIndex(node, styles, &ctx, nil)) != 1 {
+			b.Fatal("missing placeholder")
+		}
+	}
 }

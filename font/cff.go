@@ -21,17 +21,17 @@ type cffFont struct {
 	Names       []string
 	TopDict     map[int][]float64
 	Charset     []uint16
-	CharStrings [][]byte
-	GlobalSubrs [][]byte
-	LocalSubrs  [][]byte
-	FDSelect    []int
+	FDSelect    []uint8
 	FontDicts   []cffFontDict
+	CharStrings cffIndex
+	GlobalSubrs cffIndex
+	LocalSubrs  cffIndex
 }
 
 type cffFontDict struct {
 	Dict       map[int][]float64
 	Private    map[int][]float64
-	LocalSubrs [][]byte
+	LocalSubrs cffIndex
 }
 
 type cffType2State struct {
@@ -63,7 +63,7 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse cff top dict index: %w", err)
 	}
-	if len(topDictIndex) == 0 {
+	if topDictIndex.Len() == 0 {
 		return nil, fmt.Errorf("cff top dict index is empty")
 	}
 	offset = nextOffset
@@ -79,7 +79,7 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 		return nil, fmt.Errorf("parse cff global subrs: %w", err)
 	}
 
-	topDict, err := parseCFFDict(topDictIndex[0])
+	topDict, err := parseCFFDict(topDictIndex.At(0))
 	if err != nil {
 		return nil, fmt.Errorf("parse cff top dict: %w", err)
 	}
@@ -92,27 +92,27 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse cff charstrings: %w", err)
 	}
-	if len(charStrings) == 0 {
+	if charStrings.Len() == 0 {
 		return nil, fmt.Errorf("cff charstrings index is empty")
 	}
-	if numGlyphs != 0 && len(charStrings) != int(numGlyphs) {
-		return nil, fmt.Errorf("cff charstrings count %d does not match maxp glyph count %d", len(charStrings), numGlyphs)
+	if numGlyphs != 0 && charStrings.Len() != int(numGlyphs) {
+		return nil, fmt.Errorf("cff charstrings count %d does not match maxp glyph count %d", charStrings.Len(), numGlyphs)
 	}
 
 	charsetOffset, _ := dictInt(topDict, cffOpCharset, 0)
-	charset := make([]uint16, len(charStrings))
-	if len(charStrings) > 0 {
+	charset := make([]uint16, charStrings.Len())
+	if charStrings.Len() > 0 {
 		charset[0] = 0
 	}
-	if charsetOffset > 0 && len(charStrings) > 1 {
-		parsedCharset, err := parseCFFCharset(data, charsetOffset, len(charStrings))
+	if charsetOffset > 0 && charStrings.Len() > 1 {
+		parsedCharset, err := parseCFFCharset(data, charsetOffset, charStrings.Len())
 		if err != nil {
 			return nil, fmt.Errorf("parse cff charset: %w", err)
 		}
 		charset = parsedCharset
 	}
 
-	localSubrs := [][]byte(nil)
+	localSubrs := cffIndex{}
 	if privateSize, ok := dictInt(topDict, cffOpPrivate, 0); ok {
 		privateOffset, ok := dictInt(topDict, cffOpPrivate, 1)
 		if !ok {
@@ -124,15 +124,16 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 		}
 	}
 
-	fdSelect := []int(nil)
+	fdSelect := []uint8(nil)
 	fontDicts := []cffFontDict(nil)
 	if fdArrayOffset, ok := dictInt(topDict, cffOpFDArray, 0); ok {
 		fdArrayData, _, err := parseCFFIndex(data, fdArrayOffset)
 		if err != nil {
 			return nil, fmt.Errorf("parse cff fdarray: %w", err)
 		}
-		fontDicts = make([]cffFontDict, len(fdArrayData))
-		for i, rawDict := range fdArrayData {
+		fontDicts = make([]cffFontDict, fdArrayData.Len())
+		for i := range fdArrayData.Len() {
+			rawDict := fdArrayData.At(i)
 			dict, err := parseCFFDict(rawDict)
 			if err != nil {
 				return nil, fmt.Errorf("parse cff font dict %d: %w", i, err)
@@ -155,15 +156,15 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 		if !ok {
 			return nil, fmt.Errorf("cff top dict missing FDSelect offset")
 		}
-		fdSelect, err = parseCFFFDSelect(data, fdSelectOffset, len(charStrings), len(fontDicts))
+		fdSelect, err = parseCFFFDSelect(data, fdSelectOffset, charStrings.Len(), len(fontDicts))
 		if err != nil {
 			return nil, fmt.Errorf("parse cff fdselect: %w", err)
 		}
 	}
 
-	names := make([]string, len(nameIndex))
-	for i := range nameIndex {
-		names[i] = string(nameIndex[i])
+	names := make([]string, nameIndex.Len())
+	for i := range nameIndex.Len() {
+		names[i] = string(nameIndex.At(i))
 	}
 
 	return &cffFont{
@@ -178,64 +179,76 @@ func parseCFF(data []byte, numGlyphs uint16) (*cffFont, error) {
 	}, nil
 }
 
-func parseCFFPrivateLocalSubrs(data []byte, privateOffset, privateSize int) ([][]byte, map[int][]float64, error) {
+func parseCFFPrivateLocalSubrs(data []byte, privateOffset, privateSize int) (cffIndex, map[int][]float64, error) {
 	if privateOffset < 0 || privateSize < 0 || privateOffset+privateSize > len(data) {
-		return nil, nil, fmt.Errorf("cff private dict out of bounds")
+		return cffIndex{}, nil, fmt.Errorf("cff private dict out of bounds")
 	}
 	privateDict, err := parseCFFDict(data[privateOffset : privateOffset+privateSize])
 	if err != nil {
-		return nil, nil, fmt.Errorf("parse cff private dict: %w", err)
+		return cffIndex{}, nil, fmt.Errorf("parse cff private dict: %w", err)
 	}
-	localSubrs := [][]byte(nil)
+	localSubrs := cffIndex{}
 	if subrsRelativeOffset, ok := dictInt(privateDict, cffOpSubrs, 0); ok {
 		localSubrsOffset := privateOffset + subrsRelativeOffset
 		localSubrs, _, err = parseCFFIndex(data, localSubrsOffset)
 		if err != nil {
-			return nil, nil, fmt.Errorf("parse cff local subrs: %w", err)
+			return cffIndex{}, nil, fmt.Errorf("parse cff local subrs: %w", err)
 		}
 	}
 	return localSubrs, privateDict, nil
 }
 
-func parseCFFIndex(data []byte, offset int) ([][]byte, int, error) {
-	if offset+2 > len(data) {
-		return nil, offset, fmt.Errorf("cff index truncated")
+// CFF INDEX tables remain in their mapped font backing. A slice header per
+// glyph/subroutine otherwise costs several MiB for a single CJK face.
+type cffIndex struct {
+	data    []byte
+	offsets []byte
+	count   int
+	offSize int
+}
+
+func (index cffIndex) Len() int { return index.count }
+
+func (index cffIndex) At(i int) []byte {
+	start := readUint(index.offsets[i*index.offSize:], index.offSize) - 1
+	end := readUint(index.offsets[(i+1)*index.offSize:], index.offSize) - 1
+	return index.data[start:end:end]
+}
+
+func parseCFFIndex(data []byte, offset int) (cffIndex, int, error) {
+	if offset < 0 || offset > len(data)-2 {
+		return cffIndex{}, offset, fmt.Errorf("cff index truncated")
 	}
 	count := int(binary.BigEndian.Uint16(data[offset : offset+2]))
 	offset += 2
 	if count == 0 {
-		return nil, offset, nil
+		return cffIndex{}, offset, nil
 	}
 	if offset >= len(data) {
-		return nil, offset, fmt.Errorf("cff index missing offsize")
+		return cffIndex{}, offset, fmt.Errorf("cff index missing offsize")
 	}
 	offSize := int(data[offset])
 	offset++
 	if offSize < 1 || offSize > 4 {
-		return nil, offset, fmt.Errorf("invalid cff offsize %d", offSize)
+		return cffIndex{}, offset, fmt.Errorf("invalid cff offsize %d", offSize)
 	}
-	if offset+(count+1)*offSize > len(data) {
-		return nil, offset, fmt.Errorf("cff index offsets truncated")
+	end := offset + (count+1)*offSize
+	if end > len(data) {
+		return cffIndex{}, offset, fmt.Errorf("cff index offsets truncated")
 	}
-	offsets := make([]int, count+1)
-	for i := range offsets {
-		offsets[i] = readUint(data[offset+i*offSize:offset+(i+1)*offSize], offSize)
+	offsets := data[offset:end]
+	previous := readUint(offsets, offSize)
+	if previous != 1 {
+		return cffIndex{}, end, fmt.Errorf("cff index first offset must be 1")
 	}
-	offset += (count + 1) * offSize
-	dataStart := offset
-	if offsets[0] != 1 {
-		return nil, offset, fmt.Errorf("cff index first offset must be 1")
-	}
-	objects := make([][]byte, count)
-	for i := 0; i < count; i++ {
-		start := dataStart + offsets[i] - 1
-		end := dataStart + offsets[i+1] - 1
-		if start < dataStart || end < start || end > len(data) {
-			return nil, offset, fmt.Errorf("cff index object out of bounds")
+	for i := 1; i <= count; i++ {
+		next := readUint(offsets[i*offSize:], offSize)
+		if next < previous || next-1 > len(data)-end {
+			return cffIndex{}, end, fmt.Errorf("cff index object out of bounds")
 		}
-		objects[i] = data[start:end:end]
+		previous = next
 	}
-	return objects, dataStart + offsets[count] - 1, nil
+	return cffIndex{data: data[end : end+previous-1], offsets: offsets, count: count, offSize: offSize}, end + previous - 1, nil
 }
 
 func readUint(data []byte, size int) int {
@@ -435,21 +448,21 @@ func parseCFFCharset(data []byte, offset, glyphCount int) ([]uint16, error) {
 	return charset, nil
 }
 
-func parseCFFFDSelect(data []byte, offset, glyphCount, fontDictCount int) ([]int, error) {
+func parseCFFFDSelect(data []byte, offset, glyphCount, fontDictCount int) ([]uint8, error) {
 	if offset >= len(data) {
 		return nil, fmt.Errorf("cff fdselect offset out of bounds")
 	}
 	format := data[offset]
 	offset++
-	selects := make([]int, glyphCount)
+	selects := make([]uint8, glyphCount)
 	switch format {
 	case 0:
 		if offset+glyphCount > len(data) {
 			return nil, fmt.Errorf("cff fdselect format 0 truncated")
 		}
 		for i := 0; i < glyphCount; i++ {
-			selects[i] = int(data[offset+i])
-			if selects[i] < 0 || selects[i] >= fontDictCount {
+			selects[i] = data[offset+i]
+			if selects[i] < 0 || int(selects[i]) >= fontDictCount {
 				return nil, fmt.Errorf("cff fdselect font dict index %d out of range", selects[i])
 			}
 		}
@@ -487,7 +500,7 @@ func parseCFFFDSelect(data []byte, offset, glyphCount, fontDictCount int) ([]int
 				return nil, fmt.Errorf("cff fdselect invalid range %d..%d", current.first, limit)
 			}
 			for glyphID := current.first; glyphID < limit; glyphID++ {
-				selects[glyphID] = current.fd
+				selects[glyphID] = uint8(current.fd)
 			}
 		}
 	default:
@@ -500,7 +513,7 @@ func (c *cffFont) outline(glyphID uint16) (*Outline, error) {
 	if c == nil {
 		return nil, fmt.Errorf("cff font is nil")
 	}
-	if int(glyphID) >= len(c.CharStrings) {
+	if int(glyphID) >= c.CharStrings.Len() {
 		return nil, fmt.Errorf("cff glyph id %d out of range", glyphID)
 	}
 	localSubrs, err := c.localSubrsForGlyph(glyphID)
@@ -508,28 +521,28 @@ func (c *cffFont) outline(glyphID uint16) (*Outline, error) {
 		return nil, err
 	}
 	state := &cffType2State{}
-	if err := c.execType2Charstring(c.CharStrings[glyphID], localSubrs, state, 0); err != nil {
+	if err := c.execType2Charstring(c.CharStrings.At(int(glyphID)), localSubrs, state, 0); err != nil {
 		return nil, err
 	}
 	state.finishContour()
 	return &Outline{Contours: state.contours, Bounds: outlineBounds(state.contours)}, nil
 }
 
-func (c *cffFont) localSubrsForGlyph(glyphID uint16) ([][]byte, error) {
+func (c *cffFont) localSubrsForGlyph(glyphID uint16) (cffIndex, error) {
 	if len(c.FDSelect) == 0 {
 		return c.LocalSubrs, nil
 	}
 	if int(glyphID) >= len(c.FDSelect) {
-		return nil, fmt.Errorf("cff glyph id %d fdselect out of range", glyphID)
+		return cffIndex{}, fmt.Errorf("cff glyph id %d fdselect out of range", glyphID)
 	}
-	fdIndex := c.FDSelect[glyphID]
+	fdIndex := int(c.FDSelect[glyphID])
 	if fdIndex < 0 || fdIndex >= len(c.FontDicts) {
-		return nil, fmt.Errorf("cff glyph id %d font dict %d out of range", glyphID, fdIndex)
+		return cffIndex{}, fmt.Errorf("cff glyph id %d font dict %d out of range", glyphID, fdIndex)
 	}
 	return c.FontDicts[fdIndex].LocalSubrs, nil
 }
 
-func (c *cffFont) execType2Charstring(data []byte, localSubrs [][]byte, state *cffType2State, depth int) error {
+func (c *cffFont) execType2Charstring(data []byte, localSubrs cffIndex, state *cffType2State, depth int) error {
 	if depth > 16 {
 		return fmt.Errorf("cff subroutine recursion too deep")
 	}
@@ -628,12 +641,12 @@ func (c *cffFont) execType2Charstring(data []byte, localSubrs [][]byte, state *c
 			if len(state.stack) == 0 {
 				return fmt.Errorf("cff callsubr missing operand")
 			}
-			subrIndex := int(state.stack[len(state.stack)-1]) + cffSubrBias(len(localSubrs))
+			subrIndex := int(state.stack[len(state.stack)-1]) + cffSubrBias(localSubrs.Len())
 			state.stack = state.stack[:len(state.stack)-1]
-			if subrIndex < 0 || subrIndex >= len(localSubrs) {
+			if subrIndex < 0 || subrIndex >= localSubrs.Len() {
 				return fmt.Errorf("cff local subr %d out of range", subrIndex)
 			}
-			if err := c.execType2Charstring(localSubrs[subrIndex], localSubrs, state, depth+1); err != nil {
+			if err := c.execType2Charstring(localSubrs.At(subrIndex), localSubrs, state, depth+1); err != nil {
 				return err
 			}
 			i++
@@ -731,12 +744,12 @@ func (c *cffFont) execType2Charstring(data []byte, localSubrs [][]byte, state *c
 			if len(state.stack) == 0 {
 				return fmt.Errorf("cff callgsubr missing operand")
 			}
-			subrIndex := int(state.stack[len(state.stack)-1]) + cffSubrBias(len(c.GlobalSubrs))
+			subrIndex := int(state.stack[len(state.stack)-1]) + cffSubrBias(c.GlobalSubrs.Len())
 			state.stack = state.stack[:len(state.stack)-1]
-			if subrIndex < 0 || subrIndex >= len(c.GlobalSubrs) {
+			if subrIndex < 0 || subrIndex >= c.GlobalSubrs.Len() {
 				return fmt.Errorf("cff global subr %d out of range", subrIndex)
 			}
-			if err := c.execType2Charstring(c.GlobalSubrs[subrIndex], localSubrs, state, depth+1); err != nil {
+			if err := c.execType2Charstring(c.GlobalSubrs.At(subrIndex), localSubrs, state, depth+1); err != nil {
 				return err
 			}
 			i++

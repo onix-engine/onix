@@ -1,10 +1,14 @@
-package dom
+package parse
 
-import "testing"
+import (
+	"testing"
+
+	uinode "github.com/onix-engine/onix/scene/node"
+)
 
 func TestSharedAttributesDetachOnMutation(t *testing.T) {
-	attributes := NewElement("td", Attribute{"class", "scope"}, Attribute{"hidden", ""})
-	left, right := NewElement("td"), NewElement("td")
+	attributes := uinode.NewElement("td", uinode.Attribute{Name: "class", Value: "scope"}, uinode.Attribute{Name: "hidden", Value: ""})
+	left, right := uinode.NewElement("td"), uinode.NewElement("td")
 	left.ShareAttributes(attributes)
 	right.ShareAttributes(attributes)
 	if allocations := testing.AllocsPerRun(100, func() {
@@ -42,7 +46,7 @@ func TestParserResetReleasesSharedAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attributes := NewElement("p", Attribute{"class", "scope"})
+	attributes := uinode.NewElement("p", uinode.Attribute{Name: "class", Value: "scope"})
 	for _, child := range root.Children {
 		child.ShareAttributes(attributes)
 	}

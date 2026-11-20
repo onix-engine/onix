@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestMotionExtensionsShareAndDetach(t *testing.T) {
-	root, err := dom.Parse(`<section style="transition:transform 1s linear;animation:fade 2s linear infinite"><div style="width:10px;transition:inherit;animation:inherit"></div><div style="width:20px;transition:inherit;animation:inherit"></div><div></div></section>`)
+	root, err := parse.Parse(`<section style="transition:transform 1s linear;animation:fade 2s linear infinite"><div style="width:10px;transition:inherit;animation:inherit"></div><div style="width:20px;transition:inherit;animation:inherit"></div><div></div></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,19 +28,19 @@ func TestMotionExtensionsShareAndDetach(t *testing.T) {
 		t.Fatal("different layout styles did not share motion, or static child inherited it implicitly")
 	}
 	first.SetAttr("style", "width:10px;transition:inherit;transition-duration:3s;animation:inherit;animation-delay:4s")
-	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
+	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*uinode.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
 	if styles[first].TransitionFor(0).Duration != 3 || styles[first].Animations()[0].Delay != 4 || styles[first].motion == shared {
 		t.Fatal("longhand overrides did not detach the motion extension")
 	}
-	for _, node := range []*dom.Node{parent, second} {
+	for _, node := range []*uinode.Node{parent, second} {
 		if styles[node].motion != shared || styles[node].TransitionFor(0).Duration != 1 || styles[node].Animations()[0].Delay != 0 {
 			t.Fatal("overriding one child changed a shared motion extension")
 		}
 	}
 	first.SetAttr("style", "width:10px")
-	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*dom.Node{first}, nil, &cache); err != nil {
+	if _, _, err := RecomputeSubtreesWithChanges(root, nil, Viewport{}, nil, styles, []*uinode.Node{first}, nil, &cache); err != nil {
 		t.Fatal(err)
 	}
 	if styles[first].motion != nil || styles[first].HasMotion() {
@@ -64,7 +65,7 @@ func TestMotionCascadeWarmAllocations(t *testing.T) {
 			if inline {
 				source, cssSource = `<section><div style="`+declarations+`"></div><div style="`+declarations+`"></div></section>`, ""
 			}
-			root, err := dom.Parse(source)
+			root, err := parse.Parse(source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +88,7 @@ func TestMotionCascadeWarmAllocations(t *testing.T) {
 }
 
 func TestMotionExplicitDefaultsRemainInactive(t *testing.T) {
-	root, err := dom.Parse(`<div style="transition:none;animation:none;animation-duration:2s"></div>`)
+	root, err := parse.Parse(`<div style="transition:none;animation:none;animation-duration:2s"></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func TestMotionCSSWideLonghands(t *testing.T) {
 					literal = property.parent
 				}
 				source := fmt.Sprintf(`<section style="%s"><div style="%s;%s:%s"></div><div style="%s;%s:%s"></div></section>`, parentValues, childValues, property.name, keyword, childValues, property.name, literal)
-				root, err := dom.Parse(source)
+				root, err := parse.Parse(source)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -149,7 +150,7 @@ func TestMotionCSSWideLonghands(t *testing.T) {
 }
 
 func TestMotionCSSWideShorthandReset(t *testing.T) {
-	root, err := dom.Parse(`<section style="transition:transform 1s;animation:fade 2s"><div style="transition:inherit;animation:inherit;transition:initial;animation:unset"></div></section>`)
+	root, err := parse.Parse(`<section style="transition:transform 1s;animation:fade 2s"><div style="transition:inherit;animation:inherit;transition:initial;animation:unset"></div></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +192,7 @@ func BenchmarkComputeMotionStyles(b *testing.B) {
 	for i := range 256 {
 		fmt.Fprintf(&source, `<div style="width:%dpx"></div>`, i)
 	}
-	root, err := dom.Parse(source.String())
+	root, err := parse.Parse(source.String())
 	if err != nil {
 		b.Fatal(err)
 	}

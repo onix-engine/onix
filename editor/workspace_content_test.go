@@ -9,9 +9,10 @@ import (
 	"unicode"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 	"github.com/onix-engine/onix/window"
@@ -247,12 +248,12 @@ func TestWorkspaceContentLegacyPanelsAndControls(t *testing.T) {
 			t.Errorf("legacy component presentation missing %s", markup)
 		}
 	}
-	root, err := dom.Parse(source)
+	root, err := parse.Parse(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var check func(*dom.Node)
-	check = func(node *dom.Node) {
+	var check func(*uinode.Node)
+	check = func(node *uinode.Node) {
 		if id, ok := node.Attr("id"); ok && strings.IndexFunc(id, unicode.IsSpace) >= 0 {
 			t.Errorf("HTML id contains whitespace: %q", id)
 		}

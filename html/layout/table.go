@@ -43,7 +43,7 @@ type tableScratch struct {
 	occupied []int
 }
 
-func layoutTableContainer(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutTableContainer(box *Box, usedWidth, usedHeight style.Value, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if box.table == nil {
 		box.table = &tableScratch{}
 	}
@@ -103,7 +103,7 @@ func layoutTableContainer(box *Box, containing, absolute Rect, face *font.Face, 
 	clear(scratch.columns)
 	spacingX := resolveLength(box.Style.BorderSpacingX, 0)
 	spacingY := resolveLength(box.Style.BorderSpacingY, 0)
-	fixed := box.Style.TableLayout.Keyword == "fixed" && style.IsLength(box.Style.Width)
+	fixed := box.Style.TableLayout.Keyword == "fixed" && style.IsLength(usedWidth)
 	available := maxFloat(box.Content.Width-spacingX*float64(columnCount+1), 0)
 	for _, cell := range scratch.cells {
 		if fixed && cell.row != 0 {
@@ -137,7 +137,7 @@ func layoutTableContainer(box *Box, containing, absolute Rect, face *font.Face, 
 		minimum += column.minimum
 		preferred += max(column.preferred, column.minimum)
 	}
-	if !fixed && box.Style.Width.Kind == style.ValueAuto {
+	if !fixed && usedWidth.Kind == style.ValueAuto {
 		available = max(minimum, min(available, preferred))
 		box.Content.Width = available + spacingX*float64(columnCount+1)
 	} else if !fixed {
@@ -243,7 +243,7 @@ func layoutTableContainer(box *Box, containing, absolute Rect, face *font.Face, 
 		// Row stretching changes geometry outside layoutBlock's cached inputs.
 		child.reflow.valid = false
 	}
-	if !style.IsLength(box.Style.Height) {
+	if !style.IsLength(usedHeight) {
 		box.Content.Height = maxFloat(y-box.Content.Y, 0)
 	}
 	box.Content.Height = clampContentDimension(box.Content.Height, box.Style.MinHeight, box.Style.MaxHeight, containing.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))

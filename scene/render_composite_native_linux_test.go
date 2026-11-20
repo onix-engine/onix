@@ -9,13 +9,13 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	"github.com/onix-engine/onix/window"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type compositeNativeDriver struct {
@@ -94,6 +94,10 @@ func TestNativeComposite2DMatchesFullRender(t *testing.T) {
 	text.ShadowX, text.ShadowY, text.ShadowColor = 3, 2, graphics.ColorFromRGBA(0, 0, 0, 160)
 	textSpawn := world.NewSpawner5[scene.Text2D, scene.UIGlobalTransform, scene.Visibility, scene.Anchor, scene.UIStackIndex]()
 	label := textSpawn.Spawn(text, scene.UIGlobalTransform{Matrix: mgl32.Translate3D(105, 120, 0)}, scene.Visibility{Visible: true}, scene.AnchorTopLeft, 2)
+	scene.SetUIShapeFragments2D(world, clipped, []scene.UIShapeFragment2D{{
+		Shape: scene.RoundedRectShape2D(graphics.ColorFromRGB(60, 90, 180), 0), StackOffset: 1,
+		X: 6, Y: 17, Width: 120, Height: 2,
+	}})
 	state, _ := world.GetResource[*scene.RenderWorld]()
 	defer state.Dispose()
 	var reference, capture *render.RenderTarget
@@ -219,6 +223,8 @@ func TestNativeComposite2DMatchesFullRender(t *testing.T) {
 	check("reverse tile scroll")
 	world.GetMut[scene.ClipRect2D](clipped).Width = 95.5
 	check("fractional clip update")
+	scene.SetUIShapeFragmentFill2D(world, clipped, 0, graphics.ColorFromRGB(200, 90, 180))
+	check("fragment color")
 	world.GetMut[scene.Sprite2D](foreground).Shape.Fill = graphics.ColorFromRGBA(0, 220, 30, 90)
 	check("alpha color")
 	world.GetMut[scene.UIGlobalTransform](foreground).Matrix = mgl32.Translate3D(205.25, 30.5, 0).Mul4(mgl32.HomogRotate3DZ(.17))

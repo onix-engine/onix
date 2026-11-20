@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix"
 	"github.com/onix-engine/onix/ecs"
 	editorresources "github.com/onix-engine/onix/editor/resources"
@@ -19,12 +20,12 @@ import (
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	onixtext "github.com/onix-engine/onix/text"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 	"github.com/onix-engine/onix/window"
 	windowsvg "github.com/onix-engine/onix/window/codec/svg"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // ModuleEditor edits module definitions and scene instances without running project behavior.
@@ -999,18 +1000,23 @@ func (a *ModuleEditor) syncControlValues() {
 		}
 		if control.Type == "checkbox" {
 			checked := value == "true"
-			if control.Checked != checked {
+			if control.Checked() != checked {
 				htmlui.SetControlChecked(a.world, entity, checked)
 			}
-		} else if control.Value != value {
+		} else if htmlui.ControlValue(a.world, entity) != value {
 			htmlui.SetControlValue(a.world, entity, value)
 		}
 	}
 }
 
-func spawnWorkspaceSurface(w *ecs.World, source, css string, font *onixtext.Font, bounds rect, stack int) ecs.Entity {
-	value := htmlui.New(source)
-	value.CSS, value.Font, value.FontSize = css, font, 13
+func newEditorComponentSurface() htmlui.Surface {
+	value := htmlui.New("")
+	value.Document = uinode.NewDocument()
+	return value
+}
+
+func spawnWorkspaceSurface(w *ecs.World, value htmlui.Surface, font *onixtext.Font, bounds rect, stack int) ecs.Entity {
+	value.Font, value.FontSize = font, 13
 	value.Width, value.Height, value.StackIndex = bounds.W, bounds.H, stack
 	bundle := ecs.NewBundle(5)
 	bundle.Put(scene.UITransformFromXY(bounds.X, bounds.Y))

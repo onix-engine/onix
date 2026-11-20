@@ -9,7 +9,8 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
@@ -31,7 +32,7 @@ func loadLayoutTestFace(t *testing.T) *font.Face {
 }
 
 func TestEmptyButtonsDoNotSynthesizeLabels(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><button type="button"></button><input type="button"><input type="submit"><input type="reset"></body></html>`)
+	doc, err := parse.Parse(`<html><body><button type="button"></button><input type="button"><input type="submit"><input type="reset"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse html: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestPreformattedTabUsesComputedTabSize(t *testing.T) {
 	cssText := `pre { font-family: monospace; font-size: 16px; white-space: pre; tab-size: 2; }`
 	textX := func(source string) float64 {
 		t.Helper()
-		doc, err := dom.Parse(`<html><body><pre>` + source + `</pre></body></html>`)
+		doc, err := parse.Parse(`<html><body><pre>` + source + `</pre></body></html>`)
 		if err != nil {
 			t.Fatalf("parse html: %v", err)
 		}
@@ -179,7 +180,7 @@ func TestEllipsisReflowPreservesCachedGlyphsAndGeometry(t *testing.T) {
 	const source = "abcdefghijklmnopqrstuvwxyz"
 	for _, align := range []string{"left", "center", "right"} {
 		t.Run(align, func(t *testing.T) {
-			doc, err := dom.Parse(`<html><body><div>` + source + `</div></body></html>`)
+			doc, err := parse.Parse(`<html><body><div>` + source + `</div></body></html>`)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -241,7 +242,7 @@ func TestEllipsisTruncatesAcrossWords(t *testing.T) {
 	face := loadLayoutTestFace(t)
 	defer face.Close()
 	for _, source := range []string{"one two three four five six", "first <span>second third fourth</span> fifth sixth"} {
-		doc, err := dom.Parse(`<html><body><div>` + source + `</div></body></html>`)
+		doc, err := parse.Parse(`<html><body><div>` + source + `</div></body></html>`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -303,7 +304,7 @@ func TestShapeTokenCacheSeparatesFonts(t *testing.T) {
 }
 
 func TestSelectedOptionTextFollowsLiveSelection(t *testing.T) {
-	document, err := dom.Parse(`<select><option selected>内置</option><optgroup label="Extensions"><option>Material Design Icons</option><option></option><option disabled>Unavailable</option></optgroup></select>`)
+	document, err := parse.Parse(`<select><option selected>内置</option><optgroup label="Extensions"><option>Material Design Icons</option><option></option><option disabled>Unavailable</option></optgroup></select>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,12 +313,12 @@ func TestSelectedOptionTextFollowsLiveSelection(t *testing.T) {
 		want  string
 		index int
 	}{{index: 0, want: "内置"}, {index: 1, want: "Material Design Icons"}, {index: 2, want: ""}, {index: 3, want: "Unavailable"}, {index: -1, want: ""}} {
-		dom.SetSelectedIndex(selectNode, test.index)
+		element.SetSelectedIndex(selectNode, test.index)
 		if got := selectedOptionText(selectNode); got != test.want {
 			t.Fatalf("selected index %d: text=%q, want %q", test.index, got, test.want)
 		}
 	}
-	dom.SetSelectedIndex(selectNode, 1)
+	element.SetSelectedIndex(selectNode, 1)
 	if allocations := testing.AllocsPerRun(100, func() { selectedOptionText(selectNode) }); allocations != 0 {
 		t.Fatalf("selected option text allocated %g times", allocations)
 	}
@@ -340,7 +341,7 @@ func TestShapeTokenDoesNotCacheLongSourceTokens(t *testing.T) {
 }
 
 func TestLineHeightKeepsNegativeHalfLeading(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="text">+</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="text">+</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -387,7 +388,7 @@ func TestLineHeightKeepsNegativeHalfLeading(t *testing.T) {
 }
 
 func TestUsedLineHeightUsesMetricsForNamedUIFont(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="text">+</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="text">+</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse html: %v", err)
 	}

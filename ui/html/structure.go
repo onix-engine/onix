@@ -28,7 +28,7 @@ func prepareHTMLStructure(state *htmlRenderState, root *layout.Box) bool {
 			continue
 		}
 		// A still-attached node losing its box changes display ownership.
-		if rendered.SharedRendering || htmlNodeWithin(box.Node, state.Root) {
+		if rendered.SharedRendering || box.Node.Within(state.Root) {
 			return false
 		}
 		rendered.Retiring = true
@@ -40,7 +40,7 @@ func prepareHTMLStructure(state *htmlRenderState, root *layout.Box) bool {
 func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered := state.BoxRenderings[box.Node]
 	if rendered == nil {
-		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: box.Style.ZIndex, OverflowX: htmlOverflowModeFor(box.Style.OverflowX), OverflowY: htmlOverflowModeFor(box.Style.OverflowY), ExtentRect: box.BorderBox()}
+		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: htmlStackIndexValue(box.Style.ZIndex), OverflowX: htmlOverflowModeFor(box.Style.OverflowX), OverflowY: htmlOverflowModeFor(box.Style.OverflowY), ExtentRect: box.BorderBox()}
 		state.BoxRenderings[box.Node] = rendered
 		// New boxes must emit even if their first layout produced no geometry.
 		if !queueHTMLBox(state, box) {
@@ -70,9 +70,10 @@ func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 
 // Rebuild membership and update order in the same tree walk. Each box's own
 // primitives share a base stack; their relative offsets remain unchanged.
-func appendHTMLStructureEntities(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int) {
+func appendHTMLStructureEntities(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int, context htmlStackContext) {
 	rendered := state.BoxRenderings[box.Node]
-	updateHTMLBoxOrder(world, state, rendered, stackIndex)
+	context = context.enter(box)
+	updateHTMLBoxOrder(world, state, rendered, context.stack(box, stackIndex))
 	beginHTMLOwnerSpan(state, rendered)
 	state.Children = append(state.Children, rendered.Entities...)
 	if rendered.Clip != 0 {
@@ -83,7 +84,7 @@ func appendHTMLStructureEntities(world *ecs.World, state *htmlRenderState, box *
 	}
 	end := rendered.Stack + 4
 	for _, child := range box.Children {
-		appendHTMLStructureEntities(world, state, child, stackIndex)
+		appendHTMLStructureEntities(world, state, child, stackIndex, context)
 		end = max(end, state.BoxRenderings[child.Node].PaintEnd)
 	}
 	setHTMLScrollbarPaintEnd(world, state, rendered, end)
@@ -119,10 +120,17 @@ func setHTMLScrollbarPaintEnd(world *ecs.World, state *htmlRenderState, rendered
 	return changed
 }
 
-func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *htmlBoxRendering, stackIndex int) {
+func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *htmlBoxRendering, next int) {
 	if !rendered.Queued || !rendered.PaintDirty {
-		next := htmlBoxStackIndex(rendered.Box, stackIndex)
 		delta := scene.UIStackIndex(next - rendered.Stack)
+		orderChanged := rendered.InlineFocus || rendered.Order != rendered.Box.Node.Order
+		if delta == 0 && !orderChanged {
+			return
+		}
+		if rendered.PaintSlot != 0 {
+			state.PaintList.SetOrder(rendered.PaintSlot, next, rendered.Box.Node.Order)
+			state.PaintListDirty = true
+		}
 		for _, entity := range rendered.Entities {
 			if delta != 0 {
 				if stack := world.GetMut[scene.UIStackIndex](entity); stack != nil {
@@ -130,8 +138,13 @@ func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *html
 					state.SyncStats.OrderUpdated++
 				}
 			}
-			if focus := world.GetMut[Focusable](entity); focus != nil {
-				focus.Order = htmlEntityNode(world, entity).Order
+			if orderChanged {
+				if focus, ok := world.Get[Focusable](entity); ok {
+					order := htmlEntityNode(world, entity).Order
+					if focus.Order != order {
+						world.GetMut[Focusable](entity).Order = order
+					}
+				}
 			}
 		}
 		if rendered.Clip != 0 && delta != 0 {
@@ -141,6 +154,7 @@ func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *html
 			}
 		}
 		rendered.Stack = next
+		rendered.Order = rendered.Box.Node.Order
 	}
 }
 
@@ -152,7 +166,7 @@ func updateHTMLChangedStackOrders(world *ecs.World, state *htmlRenderState, stac
 			continue
 		}
 		if !htmlStackChangedAncestor(state, rendered.Box) {
-			updateHTMLStackSubtree(world, state, rendered.Box, stackIndex)
+			updateHTMLStackSubtree(world, state, rendered.Box, stackIndex, htmlStackContextFor(rendered.Box.Parent))
 			for parent := rendered.Box.Parent; parent != nil; parent = parent.Parent {
 				if !updateHTMLScrollbarPaintOrder(world, state, state.BoxRenderings[parent.Node]) {
 					break
@@ -162,12 +176,13 @@ func updateHTMLChangedStackOrders(world *ecs.World, state *htmlRenderState, stac
 	}
 }
 
-func updateHTMLStackSubtree(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int) {
+func updateHTMLStackSubtree(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int, context htmlStackContext) {
 	rendered := state.BoxRenderings[box.Node]
-	updateHTMLBoxOrder(world, state, rendered, stackIndex)
+	context = context.enter(box)
+	updateHTMLBoxOrder(world, state, rendered, context.stack(box, stackIndex))
 	end := rendered.Stack + 4
 	for _, child := range box.Children {
-		updateHTMLStackSubtree(world, state, child, stackIndex)
+		updateHTMLStackSubtree(world, state, child, stackIndex, context)
 		end = max(end, state.BoxRenderings[child.Node].PaintEnd)
 	}
 	setHTMLScrollbarPaintEnd(world, state, rendered, end)

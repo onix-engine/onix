@@ -1,6 +1,6 @@
 package style
 
-import "github.com/onix-engine/onix/html/dom"
+import uinode "github.com/onix-engine/onix/scene/node"
 
 type ValueKind uint8
 
@@ -239,7 +239,7 @@ type ComputedStyle struct {
 // struct, so it is shared by pointer: layout boxes and paint fragments
 // reference the same instance instead of copying it per node. The cascade
 // interns equal instances, so many nodes point at one allocation.
-type Map map[*dom.Node]*ComputedStyle
+type Map map[*uinode.Node]*ComputedStyle
 
 type ChangeImpact uint8
 
@@ -251,14 +251,14 @@ const (
 	ChangeRebuild
 )
 
-func (m Map) Get(node *dom.Node) (*ComputedStyle, bool) {
+func (m Map) Get(node *uinode.Node) (*ComputedStyle, bool) {
 	style, ok := m[node]
 	return style, ok
 }
 
 // Exclusive detaches a node from its interned style so a caller can change it
 // without reaching the sibling nodes which share the same instance.
-func (m Map) Exclusive(node *dom.Node) *ComputedStyle {
+func (m Map) Exclusive(node *uinode.Node) *ComputedStyle {
 	computed := *m[node]
 	m[node] = &computed
 	return &computed

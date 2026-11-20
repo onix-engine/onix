@@ -5,7 +5,7 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 const (
@@ -112,7 +112,7 @@ func paintColorFields(computed *ComputedStyle) [AnimatedColorCount]*Value {
 	return [AnimatedColorCount]*Value{&computed.Color, &computed.BackgroundColor, &computed.BorderColor.Top, &computed.BorderColor.Right, &computed.BorderColor.Bottom, &computed.BorderColor.Left}
 }
 
-func resolvePaintColors(computed, parent *ComputedStyle, hasParent bool, node *dom.Node, specified *cascadedValues) {
+func resolvePaintColors(computed, parent *ComputedStyle, hasParent bool, node *uinode.Node, specified *cascadedValues) {
 	_, declaredColor := specified.get(propertyColor)
 	computed.ColorInherited = hasParent && inheritsFromParent(specified, propertyColor) && (!isDisabledControl(node) || declaredColor)
 	if computed.Color.Keyword == "currentcolor" {

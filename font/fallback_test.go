@@ -9,6 +9,10 @@ import (
 
 const fallbackFixture = "../testdata/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf"
 
+type fallbackFixtureCmap map[rune]uint16
+
+func (c fallbackFixtureCmap) GlyphIndex(r rune) uint16 { return c[r] }
+
 func fallbackFixtureFace(t *testing.T) (*Face, *fallbackSource) {
 	t.Helper()
 	primary, err := Load(fallbackFixture)
@@ -17,14 +21,14 @@ func fallbackFixtureFace(t *testing.T) (*Face, *fallbackSource) {
 	}
 	t.Cleanup(func() { _ = primary.Close() })
 	// Keep real outlines and Latin glyph IDs, but remove non-ASCII coverage.
-	primary.Cmap = &cmapFormat12{Groups: []cmapFormat12Group{{StartCharCode: 'A', EndCharCode: 'A', StartGlyphID: uint32(primary.GlyphIndex('A'))}}}
+	primary.Cmap = fallbackFixtureCmap{'A': primary.GlyphIndex('A')}
 	source := &fallbackSource{font: SystemFont{Path: fallbackFixture}}
 	set := &fallbackSet{sources: []*fallbackSource{source}, glyphs: make(map[rune]resolvedGlyph)}
 	set.once.Do(func() {})
 	primary.fallback = set
 	t.Cleanup(func() {
-		if source.face != nil {
-			_ = source.face.Close()
+		if face := source.face.Value(); face != nil {
+			_ = face.Close()
 		}
 	})
 	return primary, source
@@ -32,10 +36,10 @@ func fallbackFixtureFace(t *testing.T) (*Face, *fallbackSource) {
 
 func TestGlyphFallbackKeepsIDsLocalAndSharesOwnership(t *testing.T) {
 	primary, source := fallbackFixtureFace(t)
-	if source.face != nil || source.coverage != nil {
+	if source.face.Value() != nil || source.coverage != nil {
 		t.Fatal("fallback loaded before a missing glyph was requested")
 	}
-	if face, id := primary.ResolveGlyph('A'); face != primary || id != primary.GlyphIndex('A') || source.face != nil {
+	if face, id := primary.ResolveGlyph('A'); face != primary || id != primary.GlyphIndex('A') || source.face.Value() != nil {
 		t.Fatal("Latin glyph stopped using the primary face")
 	}
 	face, id := primary.ResolveGlyph('中')
@@ -64,12 +68,12 @@ func TestExplicitGlyphFallbackPrecedesSystemFallback(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = explicit.Close() })
 	id := explicit.GlyphIndex('文')
-	explicit.Cmap = &cmapFormat12{Groups: []cmapFormat12Group{{StartCharCode: '文', EndCharCode: '文', StartGlyphID: uint32(id)}}}
+	explicit.Cmap = fallbackFixtureCmap{'文': id}
 	primary.UseFallback(explicit)
 	if owner, got := primary.ResolveGlyph('A'); owner != primary || got == 0 {
 		t.Fatal("explicit fallback replaced a primary glyph")
 	}
-	if owner, got := primary.ResolveGlyph('文'); owner != explicit || got != id || source.face != nil {
+	if owner, got := primary.ResolveGlyph('文'); owner != explicit || got != id || source.face.Value() != nil {
 		t.Fatal("explicit fallback did not precede lazy system fallback")
 	}
 	if owner, got := primary.ResolveGlyph('中'); owner == primary || owner == explicit || got == 0 {

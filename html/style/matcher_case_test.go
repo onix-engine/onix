@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestCompiledMatcherPreservesClassAndIDCase(t *testing.T) {
@@ -13,7 +13,7 @@ func TestCompiledMatcherPreservesClassAndIDCase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse css: %v", err)
 	}
-	doc, err := dom.Parse(`<div id="Card" class="Hero"></div>`)
+	doc, err := parse.Parse(`<div id="Card" class="Hero"></div>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}

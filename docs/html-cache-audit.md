@@ -165,7 +165,7 @@ the follow-up removes duplicate bookkeeping and bounds retained source memory.
 Passed:
 
 ```sh
-go test ./html/dom ./html/css ./html/style ./html/layout ./ui/html ./ui
+go test ./html/parse ./html/css ./html/style ./html/layout ./ui/html ./ui
 go test -race ./html/style -run '^TestInlineStyleCache' -count=1
 go test ./html/css ./html/style ./ui/html -run '^$' \
   -bench 'Benchmark(MatchContextStorage|ComputeFullStyles|ComputeHoverStylesIncrementalInPlace|HTMLFullRenderStylesheetReuse|CandidateCascade|HTMLRasterPopulation|StyleInternCompositeValues)$' \

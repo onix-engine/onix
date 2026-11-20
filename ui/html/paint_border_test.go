@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/render"
@@ -24,10 +23,6 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 	defer Dispose(world)
 	node := incrementalHTMLNode(t, world, owner, "box")
 	visual := htmlAnimationRole(t, world, owner, "box", htmlRoleSurface)
-	var edges [4]ecs.Entity
-	for i := range edges {
-		edges[i] = htmlAnimationRole(t, world, owner, "box", htmlRoleBorderTop+htmlRenderRole(i))
-	}
 	check := func(t *testing.T) {
 		t.Helper()
 		state := world.GetRef[htmlRenderState](owner)
@@ -39,13 +34,16 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 			{X: r.X, Y: r.Y + r.Height - box.Border.Bottom, Width: r.Width, Height: box.Border.Bottom},
 			{X: r.X, Y: r.Y, Width: box.Border.Left, Height: r.Height},
 		}
-		for i, entity := range edges {
-			if htmlAnimationRole(t, world, owner, "box", htmlRoleBorderTop+htmlRenderRole(i)) != entity {
-				t.Fatal("color transition replaced a border edge")
-			}
-			transform := world.GetRef[scene.UITransform](entity)
-			sprite := world.GetRef[scene.Sprite2D](entity)
-			got := layout.Rect{X: float64(transform.Translation.X.Value), Y: float64(transform.Translation.Y.Value), Width: float64(sprite.Width), Height: float64(sprite.Height)}
+		if htmlAnimationRole(t, world, owner, "box", htmlRoleSurface) != visual {
+			t.Fatal("color transition replaced the surface")
+		}
+		fragments := world.GetRef[scene.UIPaint2D](visual).Fragments()
+		if len(fragments) != len(want) {
+			t.Fatalf("border fragments = %d, want %d", len(fragments), len(want))
+		}
+		transform := world.GetRef[scene.UITransform](visual)
+		for i, fragment := range fragments {
+			got := layout.Rect{X: float64(transform.Translation.X.Value + fragment.X), Y: float64(transform.Translation.Y.Value + fragment.Y), Width: float64(fragment.Width), Height: float64(fragment.Height)}
 			if got != want[i] {
 				t.Errorf("border edge %d = %+v, want %+v", i, got, want[i])
 			}
@@ -60,6 +58,53 @@ func TestHTMLRectangularBorderEdgesAlignDuringColorTransition(t *testing.T) {
 	t.Run("reversing", check)
 	htmlAnimationStep(t, world, clock, 200*time.Millisecond)
 	t.Run("returned", check)
+}
+
+func TestHTMLBorderFragmentsRetireOnOpacityComposite(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div id="card" style="width:120px;height:40px;background:red;border-left:2px solid blue"><div style="width:10px;height:10px;background:white"></div></div>`)
+	defer Dispose(world)
+	node := incrementalHTMLNode(t, world, owner, "card")
+	surface := htmlAnimationRole(t, world, owner, "card", htmlRoleSurface)
+	if paint := world.GetRef[scene.UIPaint2D](surface); paint == nil || len(paint.Fragments()) == 0 {
+		t.Fatal("missing border fragments")
+	}
+	node.SetAttribute("style", "width:120px;height:40px;background:red;border-left:2px solid blue;opacity:.5")
+	incrementalSync(t, world)
+	if current := htmlAnimationRole(t, world, owner, "card", htmlRoleSurface); current != surface || !world.Has[htmlOpacitySurface](current) {
+		t.Fatal("expected the opacity group to reuse the surface")
+	}
+	if paint := world.GetRef[scene.UIPaint2D](surface); paint != nil && len(paint.Fragments()) != 0 {
+		t.Fatal("opacity group double paints old border fragments")
+	}
+}
+
+func TestHTMLBorderHoverPreservesAdditionalPaintFragments(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<style>
+	#box {width:100px;height:30px;background:white;border-bottom:2px solid red;border-left:3px solid green}
+	#trigger:hover + #box {border-bottom-color:blue}
+	</style><button id="trigger">Hover</button><div id="box"></div>`)
+	defer Dispose(world)
+	trigger := incrementalControl(t, world, owner, "trigger")
+	surface := htmlAnimationRole(t, world, owner, "box", htmlRoleSurface)
+	paint := world.GetRef[scene.UIPaint2D](surface)
+	if paint == nil || len(paint.Fragments()) != 4 {
+		t.Fatal("expected four slots for mixed border edges")
+	}
+	extra := scene.UIShapeFragment2D{Shape: scene.RoundedRectShape2D(graphics.White, 0), Width: 2, Height: 2}
+	fragments := append([]scene.UIShapeFragment2D(nil), paint.Fragments()...)
+	left := fragments[3]
+	scene.SetUIShapeFragments2D(world, surface, append(fragments, extra))
+
+	if !SetControlHover(world, trigger, true) {
+		t.Fatal("failed to apply hover state")
+	}
+	fragments = world.GetRef[scene.UIPaint2D](surface).Fragments()
+	if got := fragments[2].Shape.Fill; got != graphics.ColorFromRGB(0, 0, 255) {
+		t.Errorf("bottom border fill = %v, want blue", got)
+	}
+	if fragments[3] != left || fragments[4] != extra {
+		t.Error("hover changed paint outside the bottom border")
+	}
 }
 
 func TestHTMLTransparentRoundedElbowsCreatePaintSurface(t *testing.T) {

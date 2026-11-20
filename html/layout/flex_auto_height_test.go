@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
 func TestFlexAutoHeightIncludesBlocksAndWrappedLines(t *testing.T) {
-	doc, err := dom.Parse(`<html><body>
+	doc, err := parse.Parse(`<html><body>
 		<div id="overlay"><div id="dialog"><div class="block"></div><div class="block"></div></div></div>
 		<div id="column"><div id="actions"><div class="action"></div><div class="action"></div><div class="action"></div></div><div id="preview"></div></div>
 	</body></html>`)

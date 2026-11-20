@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLOverflowModesMatchFresh(t *testing.T) {
@@ -244,7 +244,7 @@ func TestHTMLOverflowModeSkipsUnrelatedControls(t *testing.T) {
 		target.SetAttribute("style", "height:40px;overflow:"+mode)
 		incrementalSync(t, world)
 		state, _ := world.Get[htmlRenderState](owner)
-		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips > 1 {
+		if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.UpdatedClips > 1 {
 			t.Fatalf("nonlocal mode transition: %+v", state.SyncStats)
 		}
 	}

@@ -166,8 +166,8 @@ func TestUnicodeSbixFontFallback(t *testing.T) {
 	source := &fallbackSource{font: SystemFont{Path: path}}
 	primary.fallback.sources = []*fallbackSource{source}
 	t.Cleanup(func() {
-		if source.face != nil {
-			_ = source.face.Close()
+		if face := source.face.Value(); face != nil {
+			_ = face.Close()
 		}
 	})
 	scaled, _ := NewFace(primary, &FaceOptions{Size: 16})

@@ -3,8 +3,8 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestTableMeasurementStylesShareOnlyEqualInputs(t *testing.T) {
@@ -32,7 +32,7 @@ func TestTableMeasurementStylesShareOnlyEqualInputs(t *testing.T) {
 	for _, height := range []float64{40, 60, 20} {
 		computed.Height = style.LengthPx(height)
 		computed.Color = style.ColorValue(style.Color{R: uint8(height), A: 255})
-		got := updateRetained(t, &cache, doc, styles, face, []*dom.Node{node}, false)
+		got := updateRetained(t, &cache, doc, styles, face, []*uinode.Node{node}, false)
 		if measured := measurement("first"); measured == measurement("peer") || measured.Height != computed.Height || measured.Color != computed.Color {
 			t.Fatal("changed cell kept a stale or shared measurement")
 		}
@@ -58,7 +58,7 @@ func TestTableMeasurementCacheReleasesChangedWidthsAndRemovedRows(t *testing.T) 
 	computed := styles.Exclusive(header)
 	for _, width := range []float64{80, 100, 70, 90, 60} {
 		computed.Width = style.LengthPx(width)
-		got := updateRetained(t, &cache, doc, styles, face, []*dom.Node{header}, false)
+		got := updateRetained(t, &cache, doc, styles, face, []*uinode.Node{header}, false)
 		if got := cache.nodes[boxes["body"].Node].BorderBox().Width; got != width {
 			t.Fatalf("changed column width = %g, want %g", got, width)
 		}
@@ -76,7 +76,7 @@ func TestTableMeasurementCacheReleasesChangedWidthsAndRemovedRows(t *testing.T) 
 	row := boxes["removed-row"].Node
 	parent := row.Parent
 	parent.RemoveChild(row)
-	got := updateRetained(t, &cache, doc, styles, face, []*dom.Node{parent}, true)
+	got := updateRetained(t, &cache, doc, styles, face, []*uinode.Node{parent}, true)
 	for key := range table.table.measured {
 		if key.source == removedStyle {
 			t.Fatal("measurement cache retained a removed row's style")

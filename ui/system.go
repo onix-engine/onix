@@ -2,9 +2,9 @@ package ui
 
 import (
 	"cmp"
-	"strings"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
@@ -12,7 +12,6 @@ import (
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/text/piecetree"
 	"github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type tabParentChild struct {
@@ -181,7 +180,7 @@ func update(context *ecs.SystemContext) error {
 			if progress, ok := sliderProgressOwner(world, event.Entity); ok {
 				updateSliderProgressValue(world, progress, event.X, event.Y)
 			}
-			if isSelectorPick(world, event.Entity) {
+			if isSelectorPick(world, event.Entity) && !isHTMLActivationTarget(world, event.Entity) {
 				activate(world, event.Entity)
 				state.ActivatedOnPress = event.Entity
 			}
@@ -228,7 +227,7 @@ func update(context *ecs.SystemContext) error {
 			state.ActivatedOnPress = 0
 			setSelecting(world, state.Focused, false)
 		}
-		if uiTarget {
+		if uiTarget && !((event.Kind == scene.InputEventTap || event.Kind == scene.InputEventPress && isSelectorPick(world, event.Entity)) && isHTMLActivationTarget(world, event.Entity)) {
 			event.Handled = true
 		}
 	}
@@ -336,6 +335,7 @@ func syncWidgets(context *ecs.SystemContext) error {
 	prepareScrollAreas(world)
 	syncNumberInputs(world)
 	syncMenuIndicators(world, skin)
+	ensureButtonIcons(world, theme)
 	labelWidths := syncText(world, theme)
 	metrics := collectSyncMetrics(world)
 	metrics.labelWidths = labelWidths
@@ -719,6 +719,9 @@ func activate(world *ecs.World, entity ecs.Entity) {
 		}
 		return
 	}
+	if isHTMLActivationTarget(world, entity) {
+		return
+	}
 	if item, ok := world.Get[SelectorItem](entity); ok && !item.Disabled {
 		if selector := world.GetMut[Selector](item.Owner); selector != nil {
 			selector.Open = false
@@ -746,15 +749,6 @@ func activate(world *ecs.World, entity ecs.Entity) {
 		return
 	}
 	if toggle := world.GetMut[Toggle[bool]](entity); toggle != nil {
-		// HTML checkboxes and radios are toggled by updateHTMLRuntime,
-		// which also updates their live DOM state. Letting the generic
-		// widget path toggle them again would immediately undo the click.
-		if control, isHTML := world.Get[html.Control](entity); isHTML && control.Tag == "input" {
-			typeName := strings.TrimSpace(control.Type)
-			if strings.EqualFold(typeName, "checkbox") || strings.EqualFold(typeName, "radio") {
-				return
-			}
-		}
 		if target := world.GetRef[scene.InputTarget2D](entity); target != nil && target.Disabled {
 			return
 		}
@@ -959,7 +953,7 @@ func syncTextContent(world *ecs.World, theme Theme) {
 				if !authored {
 					syncLabelText(world, visual.Owner, text, theme, selectorLabels)
 				} else if selector := world.GetRef[Selector](visual.Owner); selector != nil {
-					text.Value = selectorCurrentLabel(selectorLabels, visual.Owner, selector)
+					text.Value = selectorCurrentLabel(world, selectorLabels, visual.Owner, selector)
 				}
 			case world.Has[Part[ValuePart]](entity):
 				if authored {
@@ -1229,13 +1223,13 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 		}
 	}()
 	keepInsertionOrigin := false
-	if fieldOK && !field.Password && field.scrollInitialized &&
-		field.lastScrollValue != field.Text() && field.lastScrollComposition == "" && field.Composition == "" &&
-		field.Caret > field.lastScrollCaret {
-		oldCaretByte := field.lastScrollValue.ByteOffset(field.lastScrollCaret)
-		previousPrefix := field.lastScrollValue.Slice(0, oldCaretByte)
-		currentPrefix := field.Text().Slice(0, field.Text().ByteOffset(field.lastScrollCaret))
-		previousSuffix := field.lastScrollValue.Slice(oldCaretByte, field.lastScrollValue.Len())
+	if fieldOK && !field.Password && field.ScrollInitialized &&
+		field.LastScrollValue != field.Text() && field.LastScrollComposition == "" && field.Composition == "" &&
+		field.Caret > field.LastScrollCaret {
+		oldCaretByte := field.LastScrollValue.ByteOffset(field.LastScrollCaret)
+		previousPrefix := field.LastScrollValue.Slice(0, oldCaretByte)
+		currentPrefix := field.Text().Slice(0, field.Text().ByteOffset(field.LastScrollCaret))
+		previousSuffix := field.LastScrollValue.Slice(oldCaretByte, field.LastScrollValue.Len())
 		currentSuffix := field.Text().Slice(field.Text().ByteOffset(field.Caret), field.Text().Len())
 		keepInsertionOrigin = previousPrefix == currentPrefix && previousSuffix == currentSuffix
 	}
@@ -1243,12 +1237,12 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	if !measured {
 		if fieldOK {
 			field.ScrollX = 0
-			field.lastScrollValue = field.Text()
-			field.lastScrollComposition = field.Composition
-			field.lastScrollCaret = field.Caret
-			field.lastScrollFocused = field.Focused
-			field.lastScrollViewport = viewportWidth
-			field.scrollInitialized = true
+			field.LastScrollValue = field.Text()
+			field.LastScrollComposition = field.Composition
+			field.LastScrollCaret = field.Caret
+			field.LastScrollFocused = field.Focused
+			field.LastScrollViewport = viewportWidth
+			field.ScrollInitialized = true
 		}
 		if htmlLayout {
 			transform.Translation.X.Value = baseX
@@ -1265,9 +1259,9 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 	if fieldOK {
 		minScrollX := -max(contentWidth-viewportWidth, 0)
 		field.ScrollX = max(min(field.ScrollX, 0), minScrollX)
-		autoScroll := !field.scrollInitialized || field.lastScrollValue != field.Text() ||
-			field.lastScrollComposition != field.Composition || field.lastScrollCaret != field.Caret ||
-			field.lastScrollFocused != field.Focused || field.lastScrollViewport != viewportWidth
+		autoScroll := !field.ScrollInitialized || field.LastScrollValue != field.Text() ||
+			field.LastScrollComposition != field.Composition || field.LastScrollCaret != field.Caret ||
+			field.LastScrollFocused != field.Focused || field.LastScrollViewport != viewportWidth
 		if autoScroll && !keepInsertionOrigin {
 			caretValue, caretIndex := field.Text(), field.Caret
 			if field.Password {
@@ -1286,12 +1280,12 @@ func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, 
 			}
 		}
 		field.ScrollX = max(min(field.ScrollX, 0), minScrollX)
-		field.lastScrollValue = field.Text()
-		field.lastScrollComposition = field.Composition
-		field.lastScrollCaret = field.Caret
-		field.lastScrollFocused = field.Focused
-		field.lastScrollViewport = viewportWidth
-		field.scrollInitialized = true
+		field.LastScrollValue = field.Text()
+		field.LastScrollComposition = field.Composition
+		field.LastScrollCaret = field.Caret
+		field.LastScrollFocused = field.Focused
+		field.LastScrollViewport = viewportWidth
+		field.ScrollInitialized = true
 	}
 	if htmlLayout {
 		transform.Translation.X.Value = baseX
@@ -1451,7 +1445,7 @@ func syncLabelText(world *ecs.World, owner ecs.Entity, text *scene.Text2D, theme
 		return
 	}
 	if selector := world.GetRef[Selector](owner); selector != nil {
-		text.Value = selectorCurrentLabel(selectorLabels, owner, selector)
+		text.Value = selectorCurrentLabel(world, selectorLabels, owner, selector)
 	}
 }
 
@@ -1566,6 +1560,41 @@ func syncMenuIndicators(world *ecs.World, skin Skin) {
 	}
 }
 
+func ensureButtonIcons(world *ecs.World, theme Theme) {
+	_, scope := world.QueryScopeKey()
+	state := world.ScopeValue[pendingButtonIcon, [3]uint64]()
+	versions := [3]uint64{world.ComponentVersion[IconContent](), world.ComponentStructureVersion[pendingButtonIcon](), scope}
+	if *state == versions {
+		return
+	}
+	pending := world.FrameScratch[pendingButtonIcon, ecs.Entity]()
+	for entity, row := range world.Query2[pendingButtonIcon, IconContent]().All {
+		if !row.B.Ref().Value.Empty() {
+			pending.Values = append(pending.Values, entity)
+		}
+	}
+	for _, entity := range pending.Values {
+		control, ok := controlViewFor(world, entity)
+		if !ok {
+			continue
+		}
+		iconTheme := theme
+		iconTheme.StackIndex = control.StackIndex
+		if font := world.GetRef[Typography](entity); font != nil {
+			iconTheme.FontSize = sizeOr(font.FontSize, theme.FontSize)
+			iconTheme.DPI = sizeOr(font.DPI, theme.DPI)
+		}
+		spawnButtonIcon(world, entity, world.GetRef[IconContent](entity).Value, control.Height, iconTheme)
+		world.Remove[pendingButtonIcon](entity)
+	}
+	versions[1] = world.ComponentStructureVersion[pendingButtonIcon]()
+	*state = versions
+	if len(pending.Values) > 0 {
+		refreshUIChildren(world)
+	}
+	pending.ReleaseUnused()
+}
+
 func syncMenus(world *ecs.World, metrics syncMetrics) {
 	widths := world.FrameScratchMap[menuWidthsScratch, ecs.Entity, float32]()
 	for entity, access := range world.Query[Menu]().All {
@@ -1678,8 +1707,9 @@ func prepareSelectors(world *ecs.World, metrics syncMetrics) {
 			if scroll, ok := world.Get[scene.UIScroll](entity); ok {
 				scroll.ViewportSize = mgl32.Vec2{listWidth, listHeight}
 				scroll.ContentSize = mgl32.Vec2{listWidth, itemHeight * float32(count)}
+				scroll.Position[1] = min(max(scroll.Position[1], -max(scroll.ContentSize[1]-listHeight, 0)), 0)
 				scroll.WheelStep = itemHeight
-				scroll.DisableInput = !selector.Open
+				scroll.DisableInput = !selectorIsOpen(world, list.Selector, selector)
 				scroll.Vertical = true
 				world.SetIfChanged(entity, scroll)
 			}
@@ -1692,7 +1722,7 @@ func prepareSelectors(world *ecs.World, metrics syncMetrics) {
 			if upward {
 				transform.Translation.Y.Value = -listHeight - gap
 			}
-			visibility.Visible = selector.Open && hierarchyVisible(world, list.Selector)
+			visibility.Visible = selectorIsOpen(world, list.Selector, selector) && hierarchyVisible(world, list.Selector)
 			world.SetIfChanged(entity, scene.UIStackIndex(selectorPopupStackBase))
 			if clip, ok := world.Get[scene.ClipRect2D](entity); ok {
 				clip.Width, clip.Height = listWidth, listHeight
@@ -2154,6 +2184,10 @@ func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
 			case world.Has[Part[SelectionPart]](entity):
 				if valueTexts == nil {
 					valueTexts = partEntities[ValuePart, scene.Text2D](world)
+				}
+				if world.Has[scene.UIVisualRects2D](entity) {
+					syncNativeSelection(world, entity, visual.Owner, valueTexts[visual.Owner], skin)
+					return true
 				}
 				if selections == nil {
 					selections = world.FrameValue[textSelectionScratch, textSelectionScratch]()

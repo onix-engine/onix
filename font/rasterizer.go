@@ -31,8 +31,8 @@ type glyphBitmapCacheKey struct {
 // These CPU masks can be regenerated and are separate from live atlas glyphs.
 // Bound bytes and entries, including zero-area glyphs and old sizes/phases.
 const (
-	glyphBitmapCacheByteLimit  = 4 << 20
-	glyphBitmapCacheEntryLimit = 1024
+	glyphBitmapCacheByteLimit  = 1 << 20
+	glyphBitmapCacheEntryLimit = 256
 )
 
 // cacheBitmap runs under cacheMu. Eviction only drops the cache's reference;

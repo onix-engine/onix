@@ -12,8 +12,10 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func closeFloat(got, want float64) bool {
@@ -21,7 +23,7 @@ func closeFloat(got, want float64) bool {
 }
 
 func TestBuildBlockLayout(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="outer"><div id="inner"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="outer"><div id="inner"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -71,7 +73,7 @@ func TestBuildBlockLayout(t *testing.T) {
 }
 
 func TestListItemMarkersUseOrderedValuesAndListStyle(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><ul><li id="bullet">One</li></ul><ol start="3"><li id="three">Three</li><li id="seven" value="7">Seven</li></ol></body></html>`)
+	doc, err := parse.Parse(`<html><body><ul><li id="bullet">One</li></ul><ol start="3"><li id="three">Three</li><li id="seven" value="7">Seven</li></ol></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -87,7 +89,7 @@ func TestListItemMarkersUseOrderedValuesAndListStyle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build layout: %v", err)
 	}
-	find := func(node *dom.Node) *Box {
+	find := func(node *uinode.Node) *Box {
 		var visit func(*Box) *Box
 		visit = func(box *Box) *Box {
 			if box == nil {
@@ -105,10 +107,10 @@ func TestListItemMarkersUseOrderedValuesAndListStyle(t *testing.T) {
 		}
 		return visit(root)
 	}
-	byID := func(id string) *dom.Node {
-		var found *dom.Node
-		var visit func(*dom.Node)
-		visit = func(node *dom.Node) {
+	byID := func(id string) *uinode.Node {
+		var found *uinode.Node
+		var visit func(*uinode.Node)
+		visit = func(node *uinode.Node) {
 			if value, ok := node.Attr("id"); ok && value == id {
 				found = node
 				return
@@ -141,7 +143,7 @@ func TestListItemMarkersUseOrderedValuesAndListStyle(t *testing.T) {
 }
 
 func TestRelativePositionOffsetsVisualBoxWithoutChangingFlow(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="first"></div><div id="second"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="first"></div><div id="second"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -205,7 +207,7 @@ func TestRelativePositionMovesInlineImageFragments(t *testing.T) {
 		t.Fatalf("close image: %v", err)
 	}
 
-	doc, err := dom.Parse(`<html><body><p id="line"><img id="photo" src="` + imagePath + `"></p></body></html>`)
+	doc, err := parse.Parse(`<html><body><p id="line"><img id="photo" src="` + imagePath + `"></p></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -245,7 +247,7 @@ func TestRelativePositionMovesInlineImageFragments(t *testing.T) {
 }
 
 func TestInlineImageUsesExplicitSizeWithoutResourceSource(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><p id="line"><img id="icon" src="missing.svg"></p></body></html>`)
+	doc, err := parse.Parse(`<html><body><p id="line"><img id="icon" src="missing.svg"></p></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -272,7 +274,7 @@ func TestInlineImageUsesExplicitSizeWithoutResourceSource(t *testing.T) {
 }
 
 func TestAbsolutePositionUsesNearestPositionedAncestor(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="outer"><div id="abs"></div><div id="flow"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="outer"><div id="abs"></div><div id="flow"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -312,7 +314,7 @@ func TestAbsolutePositionUsesNearestPositionedAncestor(t *testing.T) {
 }
 
 func TestAbsoluteInlineElementIsBlockified(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div style="position:relative;width:200px;height:120px"><span id="label" style="position:absolute;left:24px;top:16px;width:80px;height:20px">Label</span></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div style="position:relative;width:200px;height:120px"><span id="label" style="position:absolute;left:24px;top:16px;width:80px;height:20px">Label</span></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +345,7 @@ func TestAbsoluteInlineElementIsBlockified(t *testing.T) {
 }
 
 func TestAbsoluteBottomPositionUsesAutoHeight(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="box"><div id="label">label</div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="box"><div id="label">label</div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +372,7 @@ func TestAbsoluteBottomPositionUsesAutoHeight(t *testing.T) {
 }
 
 func TestColumnFlexCentersIntrinsicItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="column"><span id="item">center</span></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="column"><span id="item">center</span></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +399,7 @@ func TestColumnFlexCentersIntrinsicItems(t *testing.T) {
 }
 
 func TestColumnFlexAutoItemMeasuresFlowChildren(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="column"><div id="item"><div id="child"></div></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="column"><div id="item"><div id="child"></div></div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +429,7 @@ func TestColumnFlexAutoItemMeasuresFlowChildren(t *testing.T) {
 }
 
 func TestFlexLayoutPlacesChildrenInRow(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row"><div id="left"></div><div id="right"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="row"><div id="left"></div><div id="right"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -476,7 +478,7 @@ func TestFlexLayoutPlacesChildrenInRow(t *testing.T) {
 }
 
 func TestFlexBasisUsesBorderBoxForBorderBoxItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row"><div id="item"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="row"><div id="item"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -505,7 +507,7 @@ func TestFlexBasisUsesBorderBoxForBorderBoxItems(t *testing.T) {
 }
 
 func TestColumnFlexBasisUsesBorderBoxForBorderBoxItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="column"><div id="item"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="column"><div id="item"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -534,7 +536,7 @@ func TestColumnFlexBasisUsesBorderBoxForBorderBoxItems(t *testing.T) {
 }
 
 func TestFlexLayoutIgnoresCollapsedWhitespaceItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row">
+	doc, err := parse.Parse(`<html><body><div id="row">
   <div id="left"></div>
   <div id="right"></div>
 </div></body></html>`)
@@ -563,7 +565,7 @@ func TestFlexLayoutIgnoresCollapsedWhitespaceItems(t *testing.T) {
 }
 
 func TestFlexLayoutOmitsDisplayNoneItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row"><div id="hidden"></div><div id="visible"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="row"><div id="hidden"></div><div id="visible"></div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,7 +592,7 @@ func TestFlexLayoutOmitsDisplayNoneItems(t *testing.T) {
 }
 
 func TestInlineBlockInputAndButtonProduceAtomicBoxes(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="line"><input id="query" type="text" value="Go"><input id="submit" type="submit" value="Search"><button id="lucky">Lucky</button></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="line"><input id="query" type="text" value="Go"><input id="submit" type="submit" value="Search"><button id="lucky">Lucky</button></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -640,7 +642,7 @@ func TestInlineBlockInputAndButtonProduceAtomicBoxes(t *testing.T) {
 }
 
 func TestInlineControlTextAlignUsesContentBox(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="line"><input id="right" value="Go"><button id="center">OK</button></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="line"><input id="right" value="Go"><button id="center">OK</button></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -692,7 +694,7 @@ func TestInlineControlTextAlignUsesContentBox(t *testing.T) {
 }
 
 func TestLongTextInputMiddleCaretKeepsFollowingTextVisible(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field" value="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz" data-caret="30"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field" value="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz" data-caret="30"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -731,7 +733,7 @@ func TestLongTextInputMiddleCaretKeepsFollowingTextVisible(t *testing.T) {
 }
 
 func TestInlineControlSideLonghandsAffectBoxGeometry(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="line"><input id="field" value="x"><input id="next" value="y"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="line"><input id="field" value="x"><input id="next" value="y"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -786,7 +788,7 @@ func TestInlineControlSideLonghandsAffectBoxGeometry(t *testing.T) {
 }
 
 func TestFlexGrowAndJustifyContent(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="row"><div id="a"></div><div id="b"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="row"><div id="a"></div><div id="b"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -826,7 +828,7 @@ func TestFlexGrowAndJustifyContent(t *testing.T) {
 }
 
 func TestFlexColumnAndAlignItems(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="col"><div id="a"></div><div id="b"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="col"><div id="a"></div><div id="b"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -866,7 +868,7 @@ func TestFlexColumnAndAlignItems(t *testing.T) {
 }
 
 func TestBuildIncludesFormControls(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><button id="btn">Save</button><input id="name" value="Alice"><input id="agree" type="checkbox" checked><select id="kind"><option>One</option><option selected>Two</option></select></body></html>`)
+	doc, err := parse.Parse(`<html><body><button id="btn">Save</button><input id="name" value="Alice"><input id="agree" type="checkbox" checked><select id="kind"><option>One</option><option selected>Two</option></select></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -917,7 +919,7 @@ func TestBuildIncludesFormControls(t *testing.T) {
 }
 
 func TestSelectDisplayTextFollowsLiveSelection(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><select id="kind"><option>One</option><option selected>Two</option><option>Three</option></select></body></html>`)
+	doc, err := parse.Parse(`<html><body><select id="kind"><option>One</option><option selected>Two</option><option>Three</option></select></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -939,7 +941,7 @@ func TestSelectDisplayTextFollowsLiveSelection(t *testing.T) {
 
 	// A popup selection dirties live selectedness without rewriting the
 	// authored selected attribute; the collapsed label must follow it.
-	dom.SetSelectedIndex(kind.Node, 2)
+	element.SetSelectedIndex(kind.Node, 2)
 	root, err = Build(doc, styles, loadLayoutTestFace(t), 320, 240)
 	if err != nil {
 		t.Fatalf("rebuild layout: %v", err)
@@ -954,7 +956,7 @@ func TestSelectDisplayTextFollowsLiveSelection(t *testing.T) {
 }
 
 func TestAutoFormControlDimensionsIncludePaddingOnce(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="field" style="font:12px ui; padding:5px 7px; border:1px solid #334252"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="field" style="font:12px ui; padding:5px 7px; border:1px solid #334252"></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -976,7 +978,7 @@ func TestAutoFormControlDimensionsIncludePaddingOnce(t *testing.T) {
 }
 
 func TestFlexControlIntrinsicWidthIncludesInlineImageAndGap(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="toolbar"><button id="save"><img src="icons/save.svg" width="16" height="16"><span>Save</span></button></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="toolbar"><button id="save"><img src="icons/save.svg" width="16" height="16"><span>Save</span></button></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1005,7 +1007,7 @@ func TestFlexControlIntrinsicWidthIncludesInlineImageAndGap(t *testing.T) {
 }
 
 func TestFlexButtonIntrinsicWidthIncludesNestedFlexContent(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="tabs"><div id="tab"><button id="select"><span id="dot"></span><span id="name">README.md</span></button><button id="close"></button></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="tabs"><div id="tab"><button id="select"><span id="dot"></span><span id="name">README.md</span></button><button id="close"></button></div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1047,7 +1049,7 @@ func TestFlexButtonIntrinsicWidthIncludesNestedFlexContent(t *testing.T) {
 }
 
 func TestBuildIncludesRadioInput(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="pick" type="radio" checked></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="pick" type="radio" checked></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1072,7 +1074,7 @@ func TestBuildIncludesRadioInput(t *testing.T) {
 }
 
 func TestBuildIncludesTextarea(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><textarea id="notes" rows="3" cols="10">Hello world</textarea></body></html>`)
+	doc, err := parse.Parse(`<html><body><textarea id="notes" rows="3" cols="10">Hello world</textarea></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1097,7 +1099,7 @@ func TestBuildIncludesTextarea(t *testing.T) {
 }
 
 func TestBuildButtonLikeAndHiddenInputs(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><input id="submit" type="submit"><input id="hidden" type="hidden"><input id="button" type="button" value="Run"></body></html>`)
+	doc, err := parse.Parse(`<html><body><input id="submit" type="submit"><input id="hidden" type="hidden"><input id="button" type="button" value="Run"></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1128,7 +1130,7 @@ func TestBuildButtonLikeAndHiddenInputs(t *testing.T) {
 }
 
 func TestBuildHiddenInputAttribute(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="wrapper"><input id="hidden" hidden value="secret"><span>visible</span></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="wrapper"><input id="hidden" hidden value="secret"><span>visible</span></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1153,7 +1155,7 @@ func TestBuildHiddenInputAttribute(t *testing.T) {
 }
 
 func TestFlexContainerKeepsExplicitButtonSizeAndText(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="toolbar"><button id="save" style="display:flex;align-items:center;justify-content:center;width:46px;height:44px">保存</button></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="toolbar"><button id="save" style="display:flex;align-items:center;justify-content:center;width:46px;height:44px">保存</button></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1190,7 +1192,7 @@ func TestFlexContainerKeepsExplicitButtonSizeAndText(t *testing.T) {
 }
 
 func TestBlockLayoutAppliesMinimumDimensions(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="panel" style="width:20px;height:20px;min-width:80px;min-height:40px"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="panel" style="width:20px;height:20px;min-width:80px;min-height:40px"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1209,7 +1211,7 @@ func TestBlockLayoutAppliesMinimumDimensions(t *testing.T) {
 }
 
 func TestFlexWrapAlignContentAndOrder(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="wrap"><div id="first"></div><div id="second"></div><div id="third"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="wrap"><div id="first"></div><div id="second"></div><div id="third"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1248,7 +1250,7 @@ func TestFlexWrapAlignContentAndOrder(t *testing.T) {
 }
 
 func TestBuildResolvesViewportAndPercentLengths(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="card"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1290,7 +1292,7 @@ func TestBuildResolvesViewportAndPercentLengths(t *testing.T) {
 }
 
 func TestBuildHonorsBorderBoxDimensions(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="parent"><div id="child"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="parent"><div id="child"></div></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1321,7 +1323,7 @@ func TestAbsoluteRightIgnoresSiblingOverflow(t *testing.T) {
 	// the visual overflow of siblings. This also covers an open titlebar menu.
 	for _, display := range []string{"block", "flex"} {
 		t.Run(display, func(t *testing.T) {
-			doc, err := dom.Parse(`<div id="bar"><div id="overflow"></div><div id="controls"></div></div>`)
+			doc, err := parse.Parse(`<div id="bar"><div id="overflow"></div><div id="controls"></div></div>`)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1352,7 +1354,7 @@ func TestFlexIntrinsicWidthExcludesPositionedChildrenAndTheirGaps(t *testing.T) 
 	face := loadLayoutTestFace(t)
 	for _, direction := range []string{"row", "row-reverse", "column", "column-reverse"} {
 		t.Run(direction, func(t *testing.T) {
-			doc, err := dom.Parse(`<div id="outer"><div id="host"><div class="popup">Popup text</div><div id="first"></div><div class="popup"></div><div id="second"></div><div class="popup"></div></div><div id="empty"><div class="popup">Only positioned text</div></div></div>`)
+			doc, err := parse.Parse(`<div id="outer"><div id="host"><div class="popup">Popup text</div><div id="first"></div><div class="popup"></div><div id="second"></div><div class="popup"></div></div><div id="empty"><div class="popup">Only positioned text</div></div></div>`)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1387,7 +1389,7 @@ func TestFlexIntrinsicWidthExcludesPositionedChildrenAndTheirGaps(t *testing.T) 
 }
 
 func TestInlineBlockElementFormsAtomicInlineBox(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><p>before<span id="chip">chip</span>after</p></body></html>`)
+	doc, err := parse.Parse(`<html><body><p>before<span id="chip">chip</span>after</p></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1451,7 +1453,7 @@ func TestInlineBlockElementFormsAtomicInlineBox(t *testing.T) {
 }
 
 func TestInlineFlowPreservesBlockOrderAndStopsMarginCollapse(t *testing.T) {
-	doc, err := dom.Parse(`<div id="host"><div id="before"></div><span id="inline"></span><div id="after"></div></div>`)
+	doc, err := parse.Parse(`<div id="host"><div id="before"></div><span id="inline"></span><div id="after"></div></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1491,7 +1493,7 @@ func TestInlineFlowPreservesBlockOrderAndStopsMarginCollapse(t *testing.T) {
 }
 
 func TestLetterSpacingWidensTextFragments(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><p id="a">Hello</p><p id="b">Hello</p></body></html>`)
+	doc, err := parse.Parse(`<html><body><p id="a">Hello</p><p id="b">Hello</p></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1539,7 +1541,7 @@ func TestLetterSpacingWidensTextFragments(t *testing.T) {
 }
 
 func TestWordBreakBreakAllWrapsInsideWord(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="a">abcdefghijkl</div><div id="b">abcdefghijkl</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="a">abcdefghijkl</div><div id="b">abcdefghijkl</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1582,7 +1584,7 @@ func TestWordBreakBreakAllWrapsInsideWord(t *testing.T) {
 }
 
 func TestOverflowWrapBreakWordSplitsOnlyOverflowingWord(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="a">hi abcdefghijklmnopqrstuvwxyz</div><div id="b">hi abcdefghijklmnopqrstuvwxyz</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="a">hi abcdefghijklmnopqrstuvwxyz</div><div id="b">hi abcdefghijklmnopqrstuvwxyz</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}
@@ -1634,7 +1636,7 @@ func TestOverflowWrapBreakWordSplitsOnlyOverflowingWord(t *testing.T) {
 }
 
 func TestTextOverflowEllipsisTruncatesNowrapLine(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="a">abcdefghijklmnopqrstuvwxyz</div><div id="b">abcdefghijklmnopqrstuvwxyz</div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="a">abcdefghijklmnopqrstuvwxyz</div><div id="b">abcdefghijklmnopqrstuvwxyz</div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}

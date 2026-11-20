@@ -136,7 +136,7 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 	scratch := cache.scratchForBlur(format)
 	effect := cache.gpuBlur[key]
 	if effect == nil || effect.target.Descriptor().Width != w || effect.target.Descriptor().Height != h || effect.target.Descriptor().ColorFormat != format {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h, ColorFormat: format})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{SingleSample: true, Width: w, Height: h, ColorFormat: format})
 		if err != nil {
 			return nil
 		}
@@ -167,7 +167,7 @@ func (cache *htmlTextureCache) blurTexture(canvas *graphics.Canvas2D, key htmlTe
 	// Effects share one intermediate per format. Only final results are retained
 	// per effect; changing between color filters and shadows keeps both warm.
 	if scratch.target == nil {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: w, Height: h, ColorFormat: format})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{SingleSample: true, Width: w, Height: h, ColorFormat: format})
 		if err != nil {
 			return nil
 		}

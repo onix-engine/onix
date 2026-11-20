@@ -470,8 +470,10 @@ func (a *ModuleEditor) syncWorkspaceComponent(world *ecs.World) error {
 	}
 	props := workspaceComponentProps{Editor: a}
 	if a.shell == 0 {
-		a.shell = spawnWorkspaceSurface(world, editorresources.WorkspaceHTML, editorresources.WorkspaceCSS, a.font, rect{W: a.width, H: a.height}, 0)
-		a.shellComponent, err = definition.HydrateComponent(world, a.shell, props, workspaceComponentState{}, 1)
+		surface := newEditorComponentSurface()
+		surface.CSS = editorresources.WorkspaceCSS
+		a.shell = spawnWorkspaceSurface(world, surface, a.font, rect{W: a.width, H: a.height}, 0)
+		a.shellComponent, err = definition.MountComponent(world, a.shell, props, workspaceComponentState{}, 1)
 		if err != nil {
 			return err
 		}

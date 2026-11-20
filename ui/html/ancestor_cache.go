@@ -1,16 +1,16 @@
 package html
 
 import (
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/internal/reuse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func htmlNodeParent(node *dom.Node) *dom.Node   { return node.Parent }
-func htmlBoxParent(box *layout.Box) *layout.Box { return box.Parent }
+func htmlNodeParent(node *uinode.Node) *uinode.Node { return node.Parent }
+func htmlBoxParent(box *layout.Box) *layout.Box     { return box.Parent }
 
-func htmlNearestBox(state *htmlRenderState, node *dom.Node) *layout.Box {
-	ancestor := state.NodeAncestors.resolve(node, htmlNodeParent, func(node, inherited *dom.Node) *dom.Node {
+func htmlNearestBox(state *htmlRenderState, node *uinode.Node) *layout.Box {
+	ancestor := state.NodeAncestors.resolve(node, htmlNodeParent, func(node, inherited *uinode.Node) *uinode.Node {
 		if state.boxForNode(node) != nil {
 			return node
 		}

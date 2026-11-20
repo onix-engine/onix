@@ -10,7 +10,7 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	onixfont "github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
@@ -76,9 +76,9 @@ func TestHTMLNodePointerAndClickCallbacks(t *testing.T) {
 	}
 	callbackEvent := scene.InputEvent{Entity: target, Kind: scene.InputEventTap, X: 10, Y: 12}
 	callbackContext := scene.InputEventContext{Event: &callbackEvent, Target: target, Current: target}
-	dispatchHTMLNodePointer(world, owner, node.node, &callbackContext)
+	routeHTMLNodePointer(world, &callbackContext)
 	allocations := testing.AllocsPerRun(100, func() {
-		dispatchHTMLNodePointer(world, owner, node.node, &callbackContext)
+		routeHTMLNodePointer(world, &callbackContext)
 	})
 	if allocations != 0 {
 		t.Fatalf("HTML node callback dispatch allocated %.0f objects, want 0", allocations)
@@ -908,50 +908,25 @@ func TestHTMLRendersLineThroughDecoration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var textTransform scene.UITransform
-	var textSize scene.Size2D
-	textFound := false
-	for entity, access := range world.Query[htmlChild]().All {
-		child := access.Get()
-
-		if child.Owner != owner {
+	found := false
+	for entity, access := range world.Query2[htmlChild, scene.Text2D]().All {
+		if access.A.Ref().Owner != owner || access.B.Ref().Value != "deleted" {
 			continue
 		}
-		text, ok := world.Get[scene.Text2D](entity)
-		if !ok || text.Value != "deleted" {
-			continue
+		paint := world.GetRef[scene.UIPaint2D](entity)
+		if paint == nil || len(paint.Fragments()) != 1 {
+			t.Fatal("text did not retain its decoration fragment")
 		}
-		textTransform, _ = world.Get[scene.UITransform](entity)
-		textSize, _ = world.Get[scene.Size2D](entity)
-		textFound = true
-		break
+		line := paint.Fragments()[0]
+		size := world.GetRef[scene.Size2D](entity)
+		if line.Shape.Fill != graphics.ColorFromRGB(0x12, 0x34, 0x56) ||
+			line.Width != size.Width || line.Height <= 0 || line.Y <= 0 || line.Y+line.Height >= size.Height {
+			t.Fatalf("line-through geometry = %+v, text size = %+v", line, size)
+		}
+		found = true
 	}
-	if !textFound {
+	if !found {
 		t.Fatal("deleted text was not rendered")
-	}
-
-	lineFound := false
-	for entity, access := range world.Query[htmlChild]().All {
-		child := access.Get()
-
-		if child.Owner != owner {
-			continue
-		}
-		sprite, spriteOK := world.Get[scene.Sprite2D](entity)
-		lineTransform, transformOK := world.Get[scene.UITransform](entity)
-		lineSize, sizeOK := world.Get[scene.Size2D](entity)
-		if !spriteOK || !transformOK || !sizeOK || sprite.Shape.Fill != graphics.ColorFromRGB(0x12, 0x34, 0x56) {
-			continue
-		}
-		textTop := textTransform.Translation.Y.Value
-		lineTop := lineTransform.Translation.Y.Value
-		lineFound = lineSize.Width == textSize.Width && lineSize.Height > 0 && lineSize.Height < textSize.Height && lineTop > textTop && lineTop+lineSize.Height < textTop+textSize.Height
-		if !(!lineFound) {
-			break
-		}
-	}
-	if !lineFound {
-		t.Fatal("line-through decoration was not rendered across the text fragment")
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		if err := Sync(world); err != nil {
@@ -1086,11 +1061,11 @@ func TestHTMLLiveFormStateDoesNotRewriteAuthoredAttributes(t *testing.T) {
 	check := findHTMLNodeByID(state.Root, "check")
 	first := findHTMLNodeByID(state.Root, "first")
 	second := findHTMLNodeByID(state.Root, "second")
-	if _, authored := check.Attr("checked"); !authored || dom.IsChecked(check) {
-		t.Fatalf("checkbox authored/live state = attr:%v checked:%v", authored, dom.IsChecked(check))
+	if _, authored := check.Attr("checked"); !authored || element.IsChecked(check) {
+		t.Fatalf("checkbox authored/live state = attr:%v checked:%v", authored, element.IsChecked(check))
 	}
-	if _, authored := first.Attr("selected"); !authored || dom.IsChecked(first) || !dom.IsChecked(second) {
-		t.Fatalf("option authored/live state = authored:%v first:%v second:%v", authored, dom.IsChecked(first), dom.IsChecked(second))
+	if _, authored := first.Attr("selected"); !authored || element.IsChecked(first) || !element.IsChecked(second) {
+		t.Fatalf("option authored/live state = authored:%v first:%v second:%v", authored, element.IsChecked(first), element.IsChecked(second))
 	}
 }
 
@@ -1144,19 +1119,19 @@ func TestHTMLDirtyFormStateSurvivesDefaultAttributeChanges(t *testing.T) {
 	}
 
 	fieldControl, _ := world.Get[Control](controlByID("field"))
-	if fieldControl.Value != "user" || fieldControl.DefaultValue != "new default" || !fieldControl.DirtyValue {
+	if ControlValue(world, controlByID("field")) != "user" || fieldControl.DefaultValue != "new default" || !ControlValueDirty(world, controlByID("field")) {
 		t.Fatalf("dirty input state = %#v", fieldControl)
 	}
 	pristineControl, _ := world.Get[Control](controlByID("pristine"))
-	if pristineControl.Value != "B" || pristineControl.DefaultValue != "B" || pristineControl.DirtyValue {
+	if ControlValue(world, controlByID("pristine")) != "B" || pristineControl.DefaultValue != "B" || ControlValueDirty(world, controlByID("pristine")) {
 		t.Fatalf("pristine input state = %#v", pristineControl)
 	}
 	notesControl, _ := world.Get[Control](controlByID("notes"))
-	if notesControl.Value != "edited" || notesControl.DefaultValue != "new textarea default" || !notesControl.DirtyValue {
+	if ControlValue(world, controlByID("notes")) != "edited" || notesControl.DefaultValue != "new textarea default" || !ControlValueDirty(world, controlByID("notes")) {
 		t.Fatalf("dirty textarea state = %#v", notesControl)
 	}
 	checkControl, _ := world.Get[Control](controlByID("check"))
-	if checkControl.Checked || checkControl.DefaultChecked || !checkControl.DirtyChecked {
+	if checkControl.Checked() || checkControl.DefaultChecked || !checkControl.DirtyChecked() {
 		t.Fatalf("dirty checked state = %#v", checkControl)
 	}
 	modeControl, _ := world.Get[Control](controlByID("mode"))
@@ -1176,7 +1151,7 @@ func TestHTMLDirtyFormStateSurvivesDefaultAttributeChanges(t *testing.T) {
 		t.Fatalf("dirty option attribute replaced live selection: %#v", modeControl)
 	}
 	fieldDOM, _ := NodeByID(world, owner, "field")
-	dirtyValue, _ := fieldDOM.node.States.Get(dom.StateDirtyValue)
+	dirtyValue, _ := fieldDOM.node.States.Get(element.StateDirtyValue)
 	if !dirtyValue {
 		t.Fatal("dirty value state was not retained on the DOM node")
 	}
@@ -1214,7 +1189,7 @@ func TestHTMLMultipleSelectionAndFormReset(t *testing.T) {
 	}
 	control, _ := world.Get[Control](mode)
 	if !control.Multiple || control.Selected != 0 || control.SelectedCount != 2 ||
-		!control.Options[0].Selected || !control.Options[1].Selected || control.Options[2].Selected {
+		!control.Options[0].Selected() || !control.Options[1].Selected() || control.Options[2].Selected() {
 		t.Fatalf("multiple selected state = %#v", control)
 	}
 
@@ -1224,11 +1199,11 @@ func TestHTMLMultipleSelectionAndFormReset(t *testing.T) {
 	fieldState, _ := world.Get[Control](field)
 	checkState, _ := world.Get[Control](check)
 	control, _ = world.Get[Control](mode)
-	if fieldState.Value != "default" || fieldState.DirtyValue || !checkState.Checked || checkState.DirtyChecked {
+	if ControlValue(world, field) != "default" || ControlValueDirty(world, field) || !checkState.Checked() || checkState.DirtyChecked() {
 		t.Fatalf("reset input state = field:%#v check:%#v", fieldState, checkState)
 	}
 	if control.Selected != 0 || control.SelectedCount != 2 || control.DirtySelected ||
-		!control.Options[0].Selected || control.Options[1].Selected || !control.Options[2].Selected {
+		!control.Options[0].Selected() || control.Options[1].Selected() || !control.Options[2].Selected() {
 		t.Fatalf("reset multiple state = %#v", control)
 	}
 	if !SetControlOptionSelected(world, mode, 1, true) || !SetControlOptionSelected(world, mode, 1, false) {
@@ -1277,7 +1252,7 @@ func TestHTMLMultipleSelectionRangeUpdatesOnceWithoutAllocation(t *testing.T) {
 		t.Fatal("set HTML selection range failed")
 	}
 	control, _ := world.Get[Control](mode)
-	if control.SelectionAnchor != 0 || control.SelectionFocus != 3 || control.SelectedCount != 3 || control.Options[2].Selected {
+	if control.SelectionAnchor != 0 || control.SelectionFocus != 3 || control.SelectedCount != 3 || control.Options[2].Selected() {
 		t.Fatalf("range selection = %#v", control)
 	}
 	if !SetControlSelectionRange(world, mode, 0, 1) || !SetControlSelectionRange(world, mode, 3, 0) {

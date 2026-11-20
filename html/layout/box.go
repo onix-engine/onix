@@ -4,8 +4,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 type Rect struct {
@@ -25,17 +25,15 @@ type Edges struct {
 type Box struct {
 	marker            *listMarkerCache
 	viewport          *Rect
-	gridMeasureStyle  *style.ComputedStyle
 	flex              *flexScratch
 	grid              *gridScratch
 	table             *tableScratch
 	flow              *flowScratch
-	flexMeasureStyle  *style.ComputedStyle
 	inlinePaintIndex  map[inlineBackgroundKey]int
 	intrinsicScratch  *layoutContext
 	Style             *style.ComputedStyle
 	Parent            *Box
-	Node              *dom.Node
+	Node              *uinode.Node
 	floats            *floatContext
 	ControlFragments  []ControlFragment
 	InlineBackgrounds []InlineBackground
@@ -95,30 +93,39 @@ func (box *Box) setViewport(viewport Rect) {
 
 type flowScratch struct {
 	inlineBoxes        []*Box
-	inlineBoxIndex     map[*dom.Node]*Box
+	inlineBoxIndex     map[*uinode.Node]*Box
 	inlineBoxFragments []inlineBoxFragment
 }
 
 type TextFragment struct {
-	Node   *dom.Node
-	Style  *style.ComputedStyle
-	Text   string
-	Glyphs []GlyphFragment
-	Rect   Rect
-	Line   int
+	Node          *uinode.Node
+	Style         *style.ComputedStyle
+	Text          string
+	Glyphs        []GlyphFragment
+	Rect          Rect
+	Line          int
+	IsPlaceholder bool
+}
+
+// Color resolves the text paint from the current style, including after a restyle.
+func (f *TextFragment) Color() style.Value {
+	if f.IsPlaceholder {
+		return f.Style.PlaceholderColor
+	}
+	return f.Style.Color
 }
 
 type GlyphFragment = font.PositionedGlyph
 
 type ImageFragment struct {
-	Node  *dom.Node
+	Node  *uinode.Node
 	Style *style.ComputedStyle
 	Rect  Rect
 	Line  int
 }
 
 type ControlFragment struct {
-	Node           *dom.Node
+	Node           *uinode.Node
 	Style          *style.ComputedStyle
 	TextFragments  []TextFragment
 	ImageFragments []ImageFragment

@@ -11,10 +11,10 @@ import (
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 	"github.com/onix-engine/onix/window"
 )
@@ -64,7 +64,7 @@ func TestNativeHTMLGPUBlurAndShadow(t *testing.T) {
 			}
 			texture = graphics.CreateTextureR8(size, size, mask.Pix, false, graphics.ResourceUsageDefault)
 		}
-		key := htmlTextureKey{node: &dom.Node{}}
+		key := htmlTextureKey{node: &uinode.Node{}}
 		cache.add(key, texture)
 		parameters := [4][4]float32{{0, 0, 2, 1}}
 		if shadow {
@@ -239,7 +239,7 @@ func TestNativeHTMLGPUBlurCacheInvalidationAndOrientation(t *testing.T) {
 		}
 	}
 	texture := graphics.CreateTextureBySharedImage(source, false, graphics.ResourceUsageDefault)
-	key := htmlTextureKey{node: &dom.Node{}}
+	key := htmlTextureKey{node: &uinode.Node{}}
 	cache.add(key, texture)
 	parameters := [4][4]float32{{0, 0, 1, 1}}
 	blurred := cache.blurTexture(canvas, key, texture, 1, parameters)
@@ -296,7 +296,7 @@ func TestNativeHTMLGPUBlurCacheInvalidationAndOrientation(t *testing.T) {
 		t.Fatal("asymmetric shadow knockout was flipped or not invalidated")
 	}
 	scratch := cache.blurScratch.target
-	smallKey := htmlTextureKey{node: &dom.Node{}}
+	smallKey := htmlTextureKey{node: &uinode.Node{}}
 	small := graphics.CreateTextureBySharedImage(image.NewRGBA(image.Rect(0, 0, 17, 19)), false, graphics.ResourceUsageDefault)
 	cache.add(smallKey, small)
 	if cache.blurTexture(canvas, smallKey, small, 1, [4][4]float32{{0, 0, 1, 1}}) == nil || cache.blurScratch.target != scratch {

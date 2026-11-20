@@ -3,9 +3,9 @@ package html
 import (
 	"math"
 
-	"github.com/onix-engine/onix/html/dom"
-	"github.com/onix-engine/onix/html/style"
 	"github.com/go-gl/mathgl/mgl32"
+	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Compose in page coordinates, then shift the result into each visual's local
@@ -45,7 +45,7 @@ type htmlAnimationVisualValue struct {
 }
 
 type htmlAnimationTransformRoute struct {
-	Node, Stop *dom.Node
+	Node, Stop *uinode.Node
 }
 
 type htmlAnimationTransformValue struct {
@@ -56,7 +56,7 @@ type htmlAnimationTransformValue struct {
 // Retain storage, but never retain results across operations: style, boxes and
 // generated ECS parents can all change without advancing the animation clock.
 type htmlAnimationComposition struct {
-	Values     htmlAncestorCache[*dom.Node, htmlAnimationVisualValue]
+	Values     htmlAncestorCache[*uinode.Node, htmlAnimationVisualValue]
 	Transforms htmlAncestorCache[htmlAnimationTransformRoute, htmlAnimationTransformValue]
 	Batch      bool
 }
@@ -66,26 +66,28 @@ func (cache *htmlAnimationComposition) clear() {
 	cache.Transforms.clear()
 }
 
-func (state *htmlRenderState) animationVisualValue(node *dom.Node) htmlAnimationVisualValue {
-	return state.AnimationComposition.Values.resolve(node, htmlNodeParent, func(current *dom.Node, inherited htmlAnimationVisualValue) htmlAnimationVisualValue {
+func (state *htmlRenderState) animationVisualValue(node *uinode.Node) htmlAnimationVisualValue {
+	return state.AnimationComposition.Values.resolve(node, htmlNodeParent, func(current *uinode.Node, inherited htmlAnimationVisualValue) htmlAnimationVisualValue {
 		if current.Parent == nil {
 			inherited.Opacity = 1
 			inherited.Foreground = style.AnimationColor{A: 1}
 		}
 		result := htmlAnimationVisualValue{Opacity: inherited.Opacity, Foreground: inherited.Foreground, Transform: inherited.Transform}
 		computed := state.Styles[current]
-		if computed == nil || current.Type != dom.ElementNode {
+		if computed == nil || current.Type != uinode.ElementNode {
 			return result
 		}
-		var value style.AnimationValue
-		if animation := state.Animations[current]; animation != nil {
-			value = animation.Current
+		animation := state.Animations[current]
+		if animation != nil {
+			result.Opacity *= animation.Current.Opacity
+			result.Foreground = animation.Current.Colors[style.AnimationForeground].Resolve(inherited.Foreground)
 		} else {
-			value = style.BaseAnimationValue(computed)
+			result.Opacity *= computed.Opacity.Number
+			if !computed.ColorInherited {
+				result.Foreground = style.ColorForAnimation(computed.Color).Resolve(inherited.Foreground)
+			}
 		}
-		result.Opacity *= value.Opacity
-		result.Foreground = value.Colors[style.AnimationForeground].Resolve(inherited.Foreground)
-		local, transformed := state.animationLocalTransform(current, computed, value)
+		local, transformed := state.animationLocalTransform(current, computed, animation)
 		result.Transformed = transformed
 		if transformed {
 			result.Transform.append(local)
@@ -94,22 +96,37 @@ func (state *htmlRenderState) animationVisualValue(node *dom.Node) htmlAnimation
 	})
 }
 
-func (state *htmlRenderState) animationLocalTransform(node *dom.Node, computed *style.ComputedStyle, value style.AnimationValue) (htmlAnimationAffine, bool) {
+func (state *htmlRenderState) animationLocalTransform(node *uinode.Node, computed *style.ComputedStyle, animation *htmlNodeAnimation) (htmlAnimationAffine, bool) {
+	rotation, skew := computed.TransformRotation, computed.TransformSkewX
+	sx, sy := computed.TransformScaleX, computed.TransformScaleY
+	xOffset, yOffset := computed.TransformTranslateX, computed.TransformTranslateY
+	xCross, yCross := computed.TransformTranslateCrossX, computed.TransformTranslateCrossY
+	if animation != nil {
+		value := &animation.Current
+		rotation, skew = value.Rotation, value.SkewX
+		sx, sy = value.ScaleX, value.ScaleY
+		xOffset, yOffset = value.TranslateX, value.TranslateY
+		xCross, yCross = value.TranslateCrossX, value.TranslateCrossY
+	}
+	if rotation == 0 && skew == 0 && sx == 1 && sy == 1 && xOffset == style.LengthPx(0) && yOffset == style.LengthPx(0) && xCross == 0 && yCross == 0 {
+		return htmlAnimationAffine{}, false
+	}
 	box := state.boxForNode(node)
 	if box == nil {
 		return htmlAnimationAffine{}, false
 	}
 	rect := box.BorderBox()
-	tx, ty := style.ResolveAnimatedTranslation(value, rect.Width, rect.Height)
-	if value.Rotation == 0 && value.SkewX == 0 && value.ScaleX == 1 && value.ScaleY == 1 && tx == 0 && ty == 0 {
+	tx := style.ResolveLength(xOffset, rect.Width) + xCross*rect.Height
+	ty := style.ResolveLength(yOffset, rect.Height) + yCross*rect.Width
+	if rotation == 0 && skew == 0 && sx == 1 && sy == 1 && tx == 0 && ty == 0 {
 		return htmlAnimationAffine{}, false
 	}
-	sin, cos := math.Sincos(value.Rotation * math.Pi / 180)
-	skew := math.Tan(value.SkewX * math.Pi / 180)
+	sin, cos := math.Sincos(rotation * math.Pi / 180)
+	skew = math.Tan(skew * math.Pi / 180)
 	x := rect.X + style.ResolveLength(computed.TransformOriginX, rect.Width)
 	y := rect.Y + style.ResolveLength(computed.TransformOriginY, rect.Height)
-	local := htmlAnimationAffine{a: cos * value.ScaleX, b: sin * value.ScaleX,
-		c: (cos*skew - sin) * value.ScaleY, d: (sin*skew + cos) * value.ScaleY}
+	local := htmlAnimationAffine{a: cos * sx, b: sin * sx,
+		c: (cos*skew - sin) * sy, d: (sin*skew + cos) * sy}
 	local.x, local.y = x+tx-local.a*x-local.c*y, y+ty-local.b*x-local.d*y
 	return local, true
 }
@@ -123,7 +140,7 @@ func (value *htmlAnimationTransformValue) append(local htmlAnimationAffine) {
 	value.Count++
 }
 
-func (state *htmlRenderState) animationTransformValue(node, stop *dom.Node, full htmlAnimationTransformValue) htmlAnimationTransformValue {
+func (state *htmlRenderState) animationTransformValue(node, stop *uinode.Node, full htmlAnimationTransformValue) htmlAnimationTransformValue {
 	if node == nil || node == stop {
 		return htmlAnimationTransformValue{}
 	}
@@ -143,13 +160,7 @@ func (state *htmlRenderState) animationTransformValue(node, stop *dom.Node, full
 			return inherited
 		}
 		computed := state.Styles[route.Node]
-		var value style.AnimationValue
-		if animation := state.Animations[route.Node]; animation != nil {
-			value = animation.Current
-		} else {
-			value = style.BaseAnimationValue(computed)
-		}
-		local, _ := state.animationLocalTransform(route.Node, computed, value)
+		local, _ := state.animationLocalTransform(route.Node, computed, state.Animations[route.Node])
 		inherited.append(local)
 		return inherited
 	})

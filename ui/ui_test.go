@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	graphicssvg "github.com/onix-engine/onix/graphics/codec/svg"
@@ -14,7 +15,6 @@ import (
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestAllBoxUIComponentsSupportCornerRadius(t *testing.T) {
@@ -1008,18 +1008,9 @@ func TestDoubleClickingNumberInputSelectsCopiesAndDeletesText(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync number input selection: %v", err)
 	}
-	selected := false
-	for entity, access := range world.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]]().All {
-		visual := access.A.Mut()
-		access.B.Mut()
-
-		if visual.Owner == field {
-			if surface := uiSurfaceSnapshot(world, entity); surface != nil && surface.Width > 0 {
-				selected = true
-			}
-		}
-	}
-	if !selected {
+	selection := world.GetRef[nativeFieldVisuals](field).selection
+	rects := world.GetRef[scene.UIVisualRects2D](selection)
+	if rects == nil || len(*rects) != 1 || (*rects)[0].Width <= 0 {
 		t.Fatal("number input selection was not rendered")
 	}
 	state.EndFrame()
@@ -1066,18 +1057,9 @@ func TestDraggingNumberInputSelectsText(t *testing.T) {
 	if err := SyncSystem("").Run(world); err != nil {
 		t.Fatalf("sync number input selection: %v", err)
 	}
-	selected := false
-	for entity, access := range world.Query2[Relation[SurfaceStyle], Indexed[SelectionPart]]().All {
-		visual := access.A.Mut()
-		access.B.Mut()
-
-		if visual.Owner == field {
-			if surface := uiSurfaceSnapshot(world, entity); surface != nil && surface.Width > 0 {
-				selected = true
-			}
-		}
-	}
-	if !selected {
+	selection := world.GetRef[nativeFieldVisuals](field).selection
+	rects := world.GetRef[scene.UIVisualRects2D](selection)
+	if rects == nil || len(*rects) != 1 || (*rects)[0].Width <= 0 {
 		t.Fatal("dragged number input selection was not rendered")
 	}
 }
@@ -3747,5 +3729,71 @@ func syncTransforms(t *testing.T, world *ecs.World) {
 	t.Helper()
 	if err := scene.SyncUIGlobalTransformSystem("").Run(world); err != nil {
 		t.Fatalf("sync transform: %v", err)
+	}
+}
+
+func TestNativeFieldDecorationsCreatedOnDemand(t *testing.T) {
+	world := newUIWorld(t)
+	value := strings.Repeat("Line\n", 23) + "End"
+	field := SpawnTextarea(world, TextOptions{Width: 240, Height: 1000, Value: value})
+	initial := world.EntityCount()
+	syncUI := func() {
+		if err := SyncSystem("").Run(world); err != nil {
+			t.Fatal(err)
+		}
+	}
+	syncUI()
+	if p := world.GetRef[nativeFieldVisuals](field); p.caret != 0 || p.selection != 0 {
+		t.Fatalf("unfocused decorations %+v", p)
+	}
+	f := world.GetMut[TextField](field)
+	f.Focused, f.Anchor, f.Caret = true, 0, 0
+	syncUI()
+	parts := *world.GetRef[nativeFieldVisuals](field)
+	if !world.IsAlive(parts.caret) || parts.selection != 0 || world.EntityCount() != initial+1 {
+		t.Fatalf("caret decorations %+v", parts)
+	}
+	world.GetMut[TextField](field).Caret = len(value)
+	syncUI()
+	parts = *world.GetRef[nativeFieldVisuals](field)
+	rows := world.GetRef[scene.UIVisualRects2D](parts.selection)
+	if rows == nil || len(*rows) != 24 || world.EntityCount() != initial+2 {
+		t.Fatalf("selected rows %v, entities %d", rows, world.EntityCount())
+	}
+	if allocations := testing.AllocsPerRun(20, syncUI); allocations != 0 {
+		t.Fatalf("warm selection allocated %g times", allocations)
+	}
+	world.GetMut[TextField](field).Focused = false
+	syncUI()
+	if len(*world.GetRef[scene.UIVisualRects2D](parts.selection)) != 0 || world.GetRef[scene.Visibility](parts.caret).Visible {
+		t.Fatal("blur kept selection or caret visible")
+	}
+	world.GetMut[TextField](field).Focused = true
+	syncUI()
+	if *world.GetRef[nativeFieldVisuals](field) != parts || len(*world.GetRef[scene.UIVisualRects2D](parts.selection)) != 24 {
+		t.Fatal("refocused field did not reuse decoration storage")
+	}
+}
+
+func TestButtonAddsFirstIconAfterMount(t *testing.T) {
+	world := newUIWorld(t)
+	baseline := world.EntityCount()
+	button := SpawnButton(world, ButtonOptions{Width: 100, Height: 32, Label: "Run"})
+	if findSurfacePart[IconPart](world, button) != 0 || world.EntityCount() != baseline+3 {
+		t.Fatal("iconless button allocated icon parts")
+	}
+	world.GetMut[IconContent](button).Value = TextIcon(">")
+	if err := SyncSystem("").Run(world); err != nil {
+		t.Fatal(err)
+	}
+	if iconTextValue(world, button) != ">" || world.EntityCount() != baseline+5 {
+		t.Fatal("first runtime icon did not appear")
+	}
+	world.GetMut[IconContent](button).Value = IconStyle{}
+	if err := SyncSystem("").Run(world); err != nil {
+		t.Fatal(err)
+	}
+	if iconTextValue(world, button) != "" || world.EntityCount() != baseline+5 {
+		t.Fatal("cleared icon was not hidden")
 	}
 }

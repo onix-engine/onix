@@ -123,6 +123,7 @@ OnixGPUDriver *onix_gpu_create(
 void onix_gpu_destroy(OnixGPUDriver *driver);
 int onix_gpu_resize(OnixGPUDriver *driver, uint32_t width, uint32_t height);
 
+int onix_gpu_trim_idle(OnixGPUDriver *driver);
 int onix_gpu_begin_frame(OnixGPUDriver *driver, const float clear_color[4]);
 void onix_gpu_set_sprite_blend(OnixGPUDriver *driver, int mode, float red, float green, float blue, float alpha);
 void onix_gpu_set_viewport(OnixGPUDriver *driver, int32_t x, int32_t y, int32_t width, int32_t height);

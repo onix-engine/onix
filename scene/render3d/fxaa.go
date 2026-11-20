@@ -31,7 +31,7 @@ func setupViewFXAA3D(view *renderView3D, enabled bool) error {
 	}
 	width, height := max(1, int(view.frame.Viewport.Width)), max(1, int(view.frame.Viewport.Height))
 	if view.fxaa == nil {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, Depth: true})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{SingleSample: true, Width: width, Height: height, Depth: true})
 		if err != nil {
 			return err
 		}

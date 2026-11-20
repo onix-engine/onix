@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
 )
 
@@ -47,7 +47,7 @@ func TestGeometryHashChangesWhenViewportChangesLayout(t *testing.T) {
 
 func buildHashTestLayout(t *testing.T, width, height float64) *Box {
 	t.Helper()
-	doc, err := dom.Parse(`<html><body><div id="card"><div id="child"></div></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="card"><div id="child"></div></div></body></html>`)
 	if err != nil {
 		t.Fatalf("parse dom: %v", err)
 	}

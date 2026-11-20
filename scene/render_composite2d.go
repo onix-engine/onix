@@ -464,7 +464,7 @@ func (view *compositor2D) draw(c *graphics.Canvas2D, world *ecs.World, state *Re
 	if dirty != 0 {
 		if view.target == nil {
 			var err error
-			view.target, err = render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height})
+			view.target, err = render.NewRenderTarget(render.RenderTargetDescriptor{SingleSample: true, Width: width, Height: height})
 			if err != nil {
 				return true, err
 			}

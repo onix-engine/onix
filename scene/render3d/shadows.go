@@ -115,7 +115,7 @@ func setupShadowAtlas3D(view *renderView3D, settings [render.MaxMeshLights]extra
 	}
 	tiles, width, height := packShadowAtlas3D(sizes, count)
 	if view.shadow == nil {
-		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, Depth: true})
+		target, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, ColorFormat: render.RenderTargetDepth, Depth: true})
 		if err != nil {
 			return err
 		}

@@ -50,6 +50,29 @@ func TestHTMLSyncStateDiagnostics(t *testing.T) {
 		t.Fatalf("diagnostics allocated %v", n)
 	}
 }
+
+func TestHTMLResizeReusesStylesUntilViewportDependencyChanges(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<style>@media (min-width: 400px) { #target { width: 80px } }</style><div id="target" style="height:10vh;background:red"></div>`)
+	defer Dispose(world)
+	target := incrementalHTMLNode(t, world, owner, "target")
+	state := world.GetRef[htmlRenderState](owner)
+	initialStyle := state.Styles[target.node]
+	entity := state.RenderNodes[target.node].Entities[0]
+	world.GetMut[Surface](owner).Width = 330
+	incrementalSync(t, world)
+	state = world.GetRef[htmlRenderState](owner)
+	if state.SyncStats.Styled != 0 || state.Styles[target.node] != initialStyle || state.RenderNodes[target.node].Entities[0] != entity {
+		t.Fatal("resize within one media-query range discarded style or entity identity")
+	}
+
+	world.GetMut[Surface](owner).Width = 420
+	world.GetMut[Surface](owner).Height = 300
+	incrementalSync(t, world)
+	rect, ok := target.Bounds()
+	if !ok || rect.Width != 80 || rect.Height != 30 {
+		t.Fatalf("resize missed viewport-dependent geometry: %+v", rect)
+	}
+}
 func TestHTMLPartialFallbackDiagnostics(t *testing.T) {
 	w, e := incrementalHTMLFixture(t, `<div id="a" style="background:red;width:10px;height:10px"></div>`)
 	defer Dispose(w)

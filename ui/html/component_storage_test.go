@@ -39,7 +39,7 @@ func TestHTMLComponentBindingsActivateAfterStaticRenders(t *testing.T) {
 		render()
 	}
 	instance := world.GetRef[htmlComponentInstance](entity)
-	if instance.Handlers != nil || instance.EventNodes != nil || instance.Keyed != nil || instance.ComponentChildren != nil || instance.Current.Texts != nil || instance.Next.Attrs != nil {
+	if instance.EventNodes != nil || instance.Keyed != nil || instance.ComponentChildren != nil || instance.Current.Texts != nil || instance.Next.Attrs != nil {
 		t.Fatal("static renders allocated unused binding maps")
 	}
 	component := world.GetMut[Component[struct{}, state]](entity)

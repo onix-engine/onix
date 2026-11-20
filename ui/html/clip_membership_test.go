@@ -181,7 +181,7 @@ func TestHTMLClipMembershipSkipsUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "overflow:auto;height:0px")
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.SnapshottedControls != 1 || state.SyncStats.UpdatedClips != 0 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls != 1 || state.SyncStats.UpdatedClips != 0 {
 		t.Fatalf("unrelated controls or clips rebuilt: %+v", state.SyncStats)
 	}
 }

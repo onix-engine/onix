@@ -126,7 +126,7 @@ func registerEditorHTMLDialogTexture(world *ecs.World, source string, texture *g
 
 func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBounds, top rect) error {
 	*t = editorTitlebar{world: world, nodes: make(map[string]htmlui.Node)}
-	html := htmlui.New(editorresources.TitlebarHTML)
+	html := newEditorComponentSurface()
 	html.Font, html.FontSize = font, 14
 	html.Width, html.Height = top.W, rootBounds.H
 	bundle := ecs.NewBundle(7)
@@ -138,6 +138,14 @@ func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBou
 	bundle.Put(html)
 	t.entity = world.Spawn(bundle)
 	installEditorHTMLImages(world)
+	definition, err := editorTitlebarDefinition()
+	if err != nil {
+		return err
+	}
+	t.component, err = definition.MountComponent(world, t.entity, editorTitlebarView{}, titlebarComponentState{}, 1)
+	if err != nil {
+		return err
+	}
 	root, err := htmlui.Root(world, t.entity)
 	if err != nil {
 		return err
@@ -175,15 +183,6 @@ func (t *editorTitlebar) initView(world *ecs.World, font *onixtext.Font, rootBou
 			}
 		}
 	}
-	definition, err := editorTitlebarDefinition()
-	if err != nil {
-		return err
-	}
-	t.component, err = definition.HydrateComponent(world, t.entity, editorTitlebarView{}, titlebarComponentState{}, 1)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

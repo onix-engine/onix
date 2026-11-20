@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLComponentDocumentTemplateSharesCompilationAndClonesInstances(t *testing.T) {
-	root, err := dom.Parse(`<style>p { color: red; }</style><p data-ref="label">original</p>`)
+	root, err := parse.Parse(`<style>p { color: red; }</style><p data-ref="label">original</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func TestHTMLComponentDocumentTemplateSharesCompilationAndClonesInstances(t *tes
 func TestHTMLComponentDocumentTemplateScopeAndValidation(t *testing.T) {
 	compile := func(source string) Template {
 		t.Helper()
-		root, err := dom.Parse(source)
+		root, err := parse.Parse(source)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,12 +86,12 @@ func TestHTMLComponentDocumentTemplateScopeAndValidation(t *testing.T) {
 	if htmlComponentScopeClass(a, "") != htmlComponentScopeClass(b, "") || htmlComponentScopeClass(a, "") == htmlComponentScopeClass(c, "") || htmlComponentScopeClass(a, "") == htmlComponentScopeClass(a, "p{color:red}") {
 		t.Fatal("document scope must be stable across map order and distinguish content and CSS")
 	}
-	for _, root := range []*dom.Node{nil, dom.NewElement("p")} {
+	for _, root := range []*uinode.Node{nil, uinode.NewElement("p")} {
 		if _, err := NewDocumentTemplate(root); err == nil {
 			t.Fatal("accepted an invalid document root")
 		}
 	}
-	root, err := dom.Parse(`<p data-ref="same"></p><p data-ref="same"></p>`)
+	root, err := parse.Parse(`<p data-ref="same"></p><p data-ref="same"></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestInlineBlockWidthConstraintsUseContainingBlock(t *testing.T) {
@@ -28,7 +28,7 @@ func TestInlineBlockPaddedReflowDoesNotAllocate(t *testing.T) {
 	t.Cleanup(func() { _ = face.Close() })
 	var cache Cache
 	code := retainedNode(root, "code")
-	dirty := []*dom.Node{code}
+	dirty := []*uinode.Node{code}
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	mutable := styles.Exclusive(code)
 	if allocations := testing.AllocsPerRun(50, func() {

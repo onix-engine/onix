@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestInlineImageMiddleAlignsParentFontAndMarginBox(t *testing.T) {
@@ -46,7 +46,7 @@ Tail</p>`,
 		t.Fatal("missing link label or following line")
 	}
 	var cache Cache
-	dirty := []*dom.Node{line.Node}
+	dirty := []*uinode.Node{line.Node}
 	if n := testing.AllocsPerRun(20, func() {
 		if _, err := cache.Update(root, styles, face, face, 320, 200, dirty, nil, false, false); err != nil {
 			panic(err)

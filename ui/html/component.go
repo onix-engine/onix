@@ -3,13 +3,15 @@ package html
 import (
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Template is the immutable source of a component view. Its compiled DOM is
@@ -28,15 +30,11 @@ func NewTemplate(source string) Template {
 // or parsing it again. The caller may retain read-only node references but must
 // not mutate the document after this call. Embedded styles are extracted just
 // as they are for source templates.
-func NewDocumentTemplate(document *dom.Node) (Template, error) {
+func NewDocumentTemplate(document *uinode.Node) (Template, error) {
 	if document == nil {
 		return Template{}, fmt.Errorf("ecs: HTML component document is nil")
 	}
-	root, embeddedCSS, err := prepareHTMLDocument(Surface{Document: document})
-	if err != nil {
-		return Template{}, err
-	}
-	compiled, err := compileHTMLComponentDocument(root, embeddedCSS)
+	compiled, err := compileHTMLComponentDocument(Surface{Document: document})
 	if err != nil {
 		return Template{}, err
 	}
@@ -186,7 +184,7 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		}
 		reconcileHTMLComponentView(world, entity, instance, view)
 	}
-	definition.runtime.event = func(world *ecs.World, entity ecs.Entity, ref string, event Event, pointer *PointerEvent, emit bool) (Event, bool) {
+	definition.runtime.event = func(world *ecs.World, entity ecs.Entity, ref string, event Event, pointer *PointerEvent) (Event, bool) {
 		component := world.GetMut[Component[P, S]](entity)
 		if component == nil {
 			return event, false
@@ -214,9 +212,6 @@ func Define[P, S any](template Template, cssText string, behavior Behavior[P, S]
 		markHTMLComponentDirty(world, entity)
 		if context.defaultPrevented && pointer != nil {
 			pointer.Consume()
-		}
-		if emit {
-			world.WriteMessage(context.Event)
 		}
 		return context.Event, context.stopPropagation
 	}
@@ -293,8 +288,8 @@ func htmlComponentScopeClass(template Template, cssText string) string {
 		_, _ = hash.Write([]byte(template.Source))
 	} else {
 		// Attributes already iterate in name order, keeping document scopes stable.
-		var visit func(*dom.Node)
-		visit = func(node *dom.Node) {
+		var visit func(*uinode.Node)
+		visit = func(node *uinode.Node) {
 			_, _ = hash.Write([]byte{byte(node.Type)})
 			_, _ = hash.Write([]byte(node.Data))
 			_, _ = hash.Write([]byte{0})
@@ -536,7 +531,7 @@ type htmlDefinitionRuntime struct {
 	clearChild  func(any)
 	template    *htmlComponentTemplate
 	render      func(*ecs.World, ecs.Entity, *htmlComponentInstance)
-	event       func(*ecs.World, ecs.Entity, string, Event, *PointerEvent, bool) (Event, bool)
+	event       func(*ecs.World, ecs.Entity, string, Event, *PointerEvent) (Event, bool)
 	mount       func(*ecs.World, ecs.Entity)
 	update      func(*ecs.World, ecs.Entity)
 	unmount     func(*ecs.World, ecs.Entity)
@@ -549,11 +544,10 @@ type htmlComponentInstance struct {
 	Keyed             htmlComponentMap[string, *htmlComponentKeyedList]
 	ComponentChildren map[string]*htmlComponentChildList
 	Definition        *htmlDefinitionRuntime
-	Refs              map[string]*dom.Node
-	Handlers          map[string]ClickHandler
-	EventNodes        htmlComponentMap[htmlComponentEventKey, *dom.Node]
+	Refs              map[string]*uinode.Node
+	EventNodes        htmlComponentMap[htmlComponentEventKey, *uinode.Node]
 	renderView        View
-	Roots             []*dom.Node
+	Roots             []*uinode.Node
 	Children          []ecs.Entity
 	Key               uint64
 	Parent            ecs.Entity
@@ -615,14 +609,14 @@ type htmlComponentEventBinding struct {
 }
 
 type htmlComponentKeyedItem struct {
-	Node *dom.Node
+	Node *uinode.Node
 	Key  uint64
 }
 
 type htmlComponentKeyedList struct {
-	Children map[*dom.Node]*htmlComponentVNodeChildren
-	Nodes    map[*dom.Node]bool
-	Anchor   *dom.Node
+	Children map[*uinode.Node]*htmlComponentVNodeChildren
+	Nodes    map[*uinode.Node]bool
+	Anchor   *uinode.Node
 	htmlComponentVNodeChildren
 	Pending htmlComponentVNodeList[VNode]
 }
@@ -635,14 +629,14 @@ type htmlComponentChildItem struct {
 
 type htmlComponentChildList struct {
 	Index   htmlComponentDiffIndex
-	Nodes   map[*dom.Node]bool
+	Nodes   map[*uinode.Node]bool
 	Items   []htmlComponentChildItem
 	Scratch []htmlComponentChildItem
 }
 
 type htmlComponentVNodeChildren struct {
 	Index   htmlComponentDiffIndex
-	Removed map[*dom.Node]struct{}
+	Removed map[*uinode.Node]struct{}
 	Items   []htmlComponentKeyedItem
 	Scratch []htmlComponentKeyedItem
 }
@@ -676,42 +670,34 @@ func (index *htmlComponentDiffIndex) reset() {
 }
 
 type htmlComponentTemplate struct {
-	Root        *dom.Node
+	Root        *uinode.Node
 	Refs        map[string]struct{}
 	EmbeddedCSS string
 }
 
 func compileHTMLComponentTemplate(source string) (*htmlComponentTemplate, error) {
-	root, embeddedCSS, err := parseHTMLDocument(source)
-	if err != nil {
-		return nil, fmt.Errorf("ecs: parse HTML component template: %w", err)
-	}
-	return compileHTMLComponentDocument(root, embeddedCSS)
+	return compileHTMLComponentDocument(Surface{Value: source})
 }
 
-func compileHTMLComponentDocument(root *dom.Node, embeddedCSS string) (*htmlComponentTemplate, error) {
-	result := &htmlComponentTemplate{Root: root, EmbeddedCSS: embeddedCSS, Refs: make(map[string]struct{})}
+func compileHTMLComponentDocument(value Surface) (*htmlComponentTemplate, error) {
+	result := &htmlComponentTemplate{Refs: make(map[string]struct{})}
 	var duplicate string
-	var visit func(*dom.Node)
-	visit = func(node *dom.Node) {
-		if node == nil || duplicate != "" {
-			return
-		}
-		if ref, ok := node.Attr("data-ref"); ok && ref != "" {
+	root, embeddedCSS, err := prepareHTMLDocument(value, func(node *uinode.Node) {
+		if ref, ok := node.Attr("data-ref"); ok && ref != "" && duplicate == "" {
 			if _, exists := result.Refs[ref]; exists {
 				duplicate = ref
 			} else {
 				result.Refs[ref] = struct{}{}
 			}
 		}
-		for _, child := range node.Children {
-			visit(child)
-		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ecs: parse HTML component template: %w", err)
 	}
-	visit(root)
 	if duplicate != "" {
 		return nil, fmt.Errorf("ecs: duplicate HTML component data-ref %q", duplicate)
 	}
+	result.Root, result.EmbeddedCSS = root, strings.Join(embeddedCSS, "\n")
 	return result, nil
 }
 
@@ -758,7 +744,7 @@ func (definition *Definition[P, S]) MountComponentInto(world *ecs.World, parent 
 		return 0, fmt.Errorf("ecs: entity %d is not an HTML component", parent)
 	}
 	slotNode := parentInstance.Refs[slot]
-	if slotNode == nil || slotNode.Type != dom.ElementNode {
+	if slotNode == nil || slotNode.Type != uinode.ElementNode {
 		return 0, fmt.Errorf("ecs: HTML component slot %q is missing", slot)
 	}
 	return definition.mountHTMLComponentAt(world, parentInstance.Page, parent, slotNode, props, state, key, nil)
@@ -775,13 +761,13 @@ func (definition *Definition[P, S]) HydrateComponentInto(world *ecs.World, paren
 		return 0, fmt.Errorf("ecs: entity %d is not an HTML component", parent)
 	}
 	slotNode := parentInstance.Refs[slot]
-	if slotNode == nil || slotNode.Type != dom.ElementNode {
+	if slotNode == nil || slotNode.Type != uinode.ElementNode {
 		return 0, fmt.Errorf("ecs: HTML component slot %q is missing", slot)
 	}
 	return definition.hydrateHTMLComponentAt(world, parentInstance.Page, parent, slotNode, props, state, key)
 }
 
-func (definition *Definition[P, S]) hydrateHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, props P, state S, key uint64) (ecs.Entity, error) {
+func (definition *Definition[P, S]) hydrateHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *uinode.Node, props P, state S, key uint64) (ecs.Entity, error) {
 	if world == nil {
 		return 0, fmt.Errorf("ecs: HTML component world is nil")
 	}
@@ -797,7 +783,7 @@ func (definition *Definition[P, S]) hydrateHTMLComponentAt(world *ecs.World, pag
 	}
 	container := root.node
 	if parent != 0 {
-		if slotNode == nil || !htmlNodeWithin(slotNode, root.node) {
+		if slotNode == nil || !slotNode.Within(root.node) {
 			return 0, fmt.Errorf("ecs: HTML component slot is detached")
 		}
 		container = slotNode
@@ -809,7 +795,7 @@ func (definition *Definition[P, S]) hydrateHTMLComponentAt(world *ecs.World, pag
 	return definition.mountHTMLComponentAt(world, page, parent, container, props, state, key, roots)
 }
 
-func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *dom.Node, props P, state S, key uint64, adoptedRoots []*dom.Node) (ecs.Entity, error) {
+func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page, parent ecs.Entity, slotNode *uinode.Node, props P, state S, key uint64, adoptedRoots []*uinode.Node) (ecs.Entity, error) {
 	if world == nil {
 		return 0, fmt.Errorf("ecs: HTML component world is nil")
 	}
@@ -825,7 +811,7 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 	}
 	mountParent := root.node
 	if parent != 0 {
-		if slotNode == nil || !htmlNodeWithin(slotNode, root.node) {
+		if slotNode == nil || !slotNode.Within(root.node) {
 			return 0, fmt.Errorf("ecs: HTML component slot is detached")
 		}
 		mountParent = slotNode
@@ -834,7 +820,7 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 		Page: page, Parent: parent, Key: key, Definition: definition.runtime,
 	}
 	if len(definition.runtime.template.Refs) != 0 {
-		instance.Refs = make(map[string]*dom.Node, len(definition.runtime.template.Refs))
+		instance.Refs = make(map[string]*uinode.Node, len(definition.runtime.template.Refs))
 	}
 	if adoptedRoots != nil {
 		for _, root := range adoptedRoots {
@@ -842,8 +828,9 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 			prepareHTMLComponentSubtree(root, definition.runtime.scopeClass, instance.Refs)
 		}
 	} else {
+		var nodes uinode.Arena
 		for _, child := range definition.runtime.template.Root.Children {
-			clone := cloneHTMLNode(child, nil)
+			clone := nodes.Clone(child)
 			mountParent.AppendChild(clone)
 			instance.Roots = append(instance.Roots, clone)
 			prepareHTMLComponentSubtree(clone, definition.runtime.scopeClass, instance.Refs)
@@ -876,8 +863,8 @@ func (definition *Definition[P, S]) mountHTMLComponentAt(world *ecs.World, page,
 	return entity, nil
 }
 
-func findHTMLComponentHydrationRoots(container *dom.Node, templates []*dom.Node) ([]*dom.Node, error) {
-	if container == nil || container.Type != dom.ElementNode && container.Type != dom.DocumentNode {
+func findHTMLComponentHydrationRoots(container *uinode.Node, templates []*uinode.Node) ([]*uinode.Node, error) {
+	if container == nil || container.Type != uinode.ElementNode && container.Type != uinode.DocumentNode {
 		return nil, fmt.Errorf("ecs: HTML hydration container is invalid")
 	}
 	if len(templates) == 0 {
@@ -906,11 +893,11 @@ func findHTMLComponentHydrationRoots(container *dom.Node, templates []*dom.Node)
 	return container.Children[matchStart : matchStart+len(templates)], nil
 }
 
-func htmlComponentHydrationRootMatches(actual, template *dom.Node) bool {
+func htmlComponentHydrationRootMatches(actual, template *uinode.Node) bool {
 	if actual == nil || template == nil || actual.Type != template.Type {
 		return false
 	}
-	if actual.Type != dom.ElementNode {
+	if actual.Type != uinode.ElementNode {
 		return actual.Data == template.Data
 	}
 	if !strings.EqualFold(actual.Data, template.Data) {
@@ -994,11 +981,6 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 		instance.Children = instance.Children[:index]
 		UnmountComponent(world, child)
 	}
-	for ref, _ := range instance.Handlers {
-		if node := instance.Refs[ref]; node != nil {
-			Node{world: world, owner: instance.Page, node: node}.OnClick(nil)
-		}
-	}
 	for key := range instance.Current.Events {
 		removeHTMLComponentEventBinding(world, instance.Page, instance.EventNodes[key], key, entity)
 	}
@@ -1022,9 +1004,9 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 
 // Root removal follows lifecycle callbacks. Filter each affected sibling list
 // once and synchronize its text and resource mutations after all removals.
-func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*dom.Node) {
-	removed := world.FrameScratchMap[htmlComponentRemovedRootsScratch, *dom.Node, struct{}]()
-	parents := world.FrameScratchMap[htmlComponentRemovedParentsScratch, *dom.Node, struct{}]()
+func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*uinode.Node) {
+	removed := world.FrameScratchMap[htmlComponentRemovedRootsScratch, *uinode.Node, struct{}]()
+	parents := world.FrameScratchMap[htmlComponentRemovedParentsScratch, *uinode.Node, struct{}]()
 	defer clear(removed)
 	defer clear(parents)
 	for _, node := range roots {
@@ -1036,27 +1018,24 @@ func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*dom.N
 	for parent := range parents {
 		parentNode := Node{world: world, owner: owner, node: parent}
 		kind := parentNode.structureMutationKind(nil)
-		children := parent.Children[:0]
-		for _, child := range parent.Children {
+		count := len(parent.Children)
+		parent.KeepChildren(func(child *uinode.Node) bool {
 			if _, remove := removed[child]; !remove {
-				children = append(children, child)
-				continue
+				return true
 			}
 			if kind&htmlMutationDefinitions == 0 && htmlSubtreeDefinesFilter(child) {
 				kind |= htmlMutationDefinitions
 			}
-			child.Parent = nil
-		}
-		if len(children) != len(parent.Children) {
-			clear(parent.Children[len(children):])
-			parent.Children = children
-			dom.SynchronizeTextContent(parent)
+			return false
+		})
+		if len(parent.Children) != count {
+			element.SynchronizeTextContent(parent)
 			parentNode.markMutation(kind)
 		}
 	}
 }
 
-func addHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, binding htmlComponentEventBinding, node *dom.Node) {
+func addHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, binding htmlComponentEventBinding, node *uinode.Node) {
 	if world == nil || page == 0 || node == nil {
 		return
 	}
@@ -1064,13 +1043,12 @@ func addHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, binding htm
 	if state == nil {
 		return
 	}
-	if state.ComponentEvents == nil {
-		state.ComponentEvents = make(map[*dom.Node][]htmlComponentEventBinding)
-	}
-	state.ComponentEvents[node] = append(state.ComponentEvents[node], binding)
+	entry := state.NodeEvents[node]
+	entry.Components = append(entry.Components, binding)
+	setHTMLNodeEventBinding(world, page, state, node, entry, binding.Kind == EventClick)
 }
 
-func removeHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, node *dom.Node, key htmlComponentEventKey, component ecs.Entity) {
+func removeHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, node *uinode.Node, key htmlComponentEventKey, component ecs.Entity) {
 	if world == nil || page == 0 || node == nil {
 		return
 	}
@@ -1078,19 +1056,16 @@ func removeHTMLComponentEventBinding(world *ecs.World, page ecs.Entity, node *do
 	if state == nil {
 		return
 	}
-	bindings := state.ComponentEvents[node]
-	for index, binding := range bindings {
+	entry := state.NodeEvents[node]
+	for index, binding := range entry.Components {
 		if binding.Component != component || binding.Ref != key.Ref || binding.Kind != key.Kind {
 			continue
 		}
-		copy(bindings[index:], bindings[index+1:])
-		bindings[len(bindings)-1] = htmlComponentEventBinding{}
-		bindings = bindings[:len(bindings)-1]
-		if len(bindings) == 0 {
-			delete(state.ComponentEvents, node)
-		} else {
-			state.ComponentEvents[node] = bindings
+		if *world.FrameValue[htmlComponentDispatchTag, int]() != 0 {
+			entry.Components = slices.Clone(entry.Components)
 		}
+		entry.Components = slices.Delete(entry.Components, index, index+1)
+		setHTMLNodeEventBinding(world, page, state, node, entry, binding.Kind == EventClick)
 		return
 	}
 }
@@ -1120,7 +1095,9 @@ func syncHTMLComponents(context *ecs.SystemContext) error {
 	world := context.World
 	reader := context.Local[htmlComponentEventReaderTag, ecs.MessageReader[Event]]()
 	for event := range reader.All(world) {
-		dispatchHTMLComponentEvent(world, event)
+		if htmlComponentMessageEvent(event.Kind) {
+			*event = dispatchHTMLComponentAction(world, *event)
+		}
 	}
 	pending := context.Local[htmlComponentPendingTag, htmlComponentPending]()
 	queue := world.FrameValue[htmlComponentDirtyTag, htmlComponentPending]()
@@ -1190,41 +1167,6 @@ func renderHTMLComponent(world *ecs.World, entity ecs.Entity, instance *htmlComp
 	}
 }
 
-func dispatchHTMLComponentEvent(world *ecs.World, event *Event) {
-	if world == nil || event == nil || event.Entity == 0 || !scene.IsActive(world, event.Entity) || !htmlComponentMessageEvent(event.Kind) {
-		return
-	}
-	node := htmlComponentEventNode(world, event)
-	if node == nil {
-		return
-	}
-	state, ok := world.Get[htmlRenderState](event.Entity)
-	if !ok || state.ComponentEvents == nil {
-		return
-	}
-	for current := node; current != nil; current = current.Parent {
-		stopped := false
-		for _, binding := range state.ComponentEvents[current] {
-			if binding.Kind != event.Kind || !world.IsAlive(binding.Component) {
-				continue
-			}
-			instance, instanceOK := world.Get[htmlComponentInstance](binding.Component)
-			if !instanceOK || instance.Definition == nil || instance.Definition.event == nil {
-				continue
-			}
-			updated, stop := instance.Definition.event(world, binding.Component, binding.Ref, *event, nil, false)
-			*event = updated
-			stopped = stop
-			if stopped {
-				break
-			}
-		}
-		if stopped || !event.Bubbles {
-			return
-		}
-	}
-}
-
 func htmlComponentMessageEvent(kind EventKind) bool {
 	switch kind {
 	case EventClick, EventBeforeInput, EventSubmit, EventReset:
@@ -1242,26 +1184,9 @@ func dispatchHTMLComponentAction(world *ecs.World, event Event) Event {
 	if node == nil {
 		return event
 	}
-	state, ok := world.Get[htmlRenderState](event.Entity)
-	if !ok || state.ComponentEvents == nil {
-		return event
-	}
 	for current := node; current != nil; current = current.Parent {
-		stopped := false
-		for _, binding := range state.ComponentEvents[current] {
-			if binding.Kind != event.Kind || !world.IsAlive(binding.Component) {
-				continue
-			}
-			instance, instanceOK := world.Get[htmlComponentInstance](binding.Component)
-			if !instanceOK || instance.Definition == nil || instance.Definition.event == nil {
-				continue
-			}
-			updated, stop := instance.Definition.event(world, binding.Component, binding.Ref, event, nil, false)
-			event, stopped = updated, stop
-			if stopped {
-				break
-			}
-		}
+		var stopped bool
+		event, stopped = dispatchHTMLNodeComponentEvents(world, event.Entity, current, event, nil)
 		if stopped || !event.Bubbles {
 			break
 		}
@@ -1269,8 +1194,39 @@ func dispatchHTMLComponentAction(world *ecs.World, event Event) Event {
 	return event
 }
 
-func htmlComponentEventNode(world *ecs.World, event *Event) *dom.Node {
-	var node *dom.Node
+type htmlComponentDispatchTag struct{}
+
+func dispatchHTMLNodeComponentEvents(world *ecs.World, owner ecs.Entity, node *uinode.Node, event Event, pointer *PointerEvent) (Event, bool) {
+	state := world.GetRef[htmlRenderState](owner)
+	if state == nil || !node.Within(state.Root) {
+		return event, true
+	}
+	bindings := state.NodeEvents[node].Components
+	if len(bindings) == 0 {
+		return event, false
+	}
+	depth := world.FrameValue[htmlComponentDispatchTag, int]()
+	*depth++
+	defer func() { *depth-- }()
+	for _, binding := range bindings {
+		if binding.Kind != event.Kind {
+			continue
+		}
+		instance := world.GetRef[htmlComponentInstance](binding.Component)
+		if instance == nil || instance.Definition == nil || instance.Definition.event == nil || instance.Unmounting {
+			continue
+		}
+		var stopped bool
+		event, stopped = instance.Definition.event(world, binding.Component, binding.Ref, event, pointer)
+		if stopped || pointer != nil && pointer.Handled || !world.IsAlive(owner) {
+			return event, true
+		}
+	}
+	return event, false
+}
+
+func htmlComponentEventNode(world *ecs.World, event *Event) *uinode.Node {
+	var node *uinode.Node
 	if event.Target != 0 {
 		if child, ok := world.Get[htmlChild](event.Target); ok {
 			node = child.Node
@@ -1283,7 +1239,7 @@ func htmlComponentEventNode(world *ecs.World, event *Event) *dom.Node {
 	}
 	// Submit is dispatched on the form owner, including external submitters.
 	if node != nil && event.Kind == EventSubmit && node.Data != "form" {
-		return dom.FormOwner(node)
+		return element.FormOwner(node)
 	}
 	return node
 }
@@ -1412,11 +1368,6 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 		if _, present := instance.Next.Events[key]; present {
 			continue
 		}
-		if key.Kind == EventClick {
-			if node := instance.Refs[key.Ref]; node != nil {
-				Node{world: world, owner: instance.Page, node: node}.OnClick(nil)
-			}
-		}
 		removeHTMLComponentEventBinding(world, instance.Page, instance.EventNodes[key], key, entity)
 		delete(instance.EventNodes, key)
 		delete(instance.Current.Events, key)
@@ -1424,11 +1375,6 @@ func reconcileHTMLComponentView(world *ecs.World, entity ecs.Entity, instance *h
 	for key := range instance.Next.Events {
 		if _, present := instance.Current.Events[key]; present {
 			continue
-		}
-		if key.Kind == EventClick {
-			if node := instance.Refs[key.Ref]; node != nil {
-				bindHTMLComponentClick(world, entity, instance, key.Ref, node)
-			}
 		}
 		instance.EventNodes.set(key, instance.Refs[key.Ref])
 		addHTMLComponentEventBinding(world, instance.Page, htmlComponentEventBinding{Component: entity, Ref: key.Ref, Kind: key.Kind}, instance.Refs[key.Ref])
@@ -1470,13 +1416,13 @@ func reconcileHTMLComponentChildrenVNodes(world *ecs.World, parentEntity ecs.Ent
 	}
 }
 
-func reconcileHTMLComponentChildList(world *ecs.World, parentEntity, page ecs.Entity, slot string, slotNode *dom.Node, list *htmlComponentChildList, next []ComponentVNode) {
-	if list == nil || slotNode == nil || slotNode.Type != dom.ElementNode {
+func reconcileHTMLComponentChildList(world *ecs.World, parentEntity, page ecs.Entity, slot string, slotNode *uinode.Node, list *htmlComponentChildList, next []ComponentVNode) {
+	if list == nil || slotNode == nil || slotNode.Type != uinode.ElementNode {
 		return
 	}
 	list.Index.reset()
 	if list.Nodes == nil {
-		list.Nodes = make(map[*dom.Node]bool)
+		list.Nodes = make(map[*uinode.Node]bool)
 	}
 	old := list.Items
 	for index, item := range old {
@@ -1541,12 +1487,12 @@ func renderMountedHTMLComponent(world *ecs.World, entity ecs.Entity) {
 	renderHTMLComponent(world, entity, instance)
 }
 
-func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode *dom.Node, list *htmlComponentChildList, items []htmlComponentChildItem) {
+func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode *uinode.Node, list *htmlComponentChildList, items []htmlComponentChildItem) {
 	if slotNode == nil || list == nil {
 		return
 	}
 	if list.Nodes == nil {
-		list.Nodes = make(map[*dom.Node]bool)
+		list.Nodes = make(map[*uinode.Node]bool)
 	}
 	clear(list.Nodes)
 	for _, item := range list.Items {
@@ -1587,7 +1533,7 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 	}
 	needed := baseLength + rootCount
 	if cap(remaining) < needed {
-		grown := make([]*dom.Node, baseLength, needed)
+		grown := make([]*uinode.Node, baseLength, needed)
 		copy(grown, remaining)
 		remaining = grown
 	}
@@ -1611,14 +1557,14 @@ func reorderHTMLComponentChildRoots(world *ecs.World, owner ecs.Entity, slotNode
 	}
 	clear(remaining[write:cap(remaining)])
 	slotNode.Children = remaining[:write]
-	dom.SynchronizeTextContent(slotNode)
+	element.SynchronizeTextContent(slotNode)
 	Node{world: world, owner: owner, node: slotNode}.markMutation(htmlMutationStructure)
 }
 
 func reconcileHTMLComponentKeyed(world *ecs.World, instance *htmlComponentInstance) {
 	for ref, list := range instance.Keyed {
 		container := instance.Refs[ref]
-		if container == nil || container.Type != dom.ElementNode || list == nil {
+		if container == nil || container.Type != uinode.ElementNode || list == nil {
 			if list != nil {
 				list.resetPending()
 			}
@@ -1633,12 +1579,12 @@ func reconcileHTMLComponentKeyed(world *ecs.World, instance *htmlComponentInstan
 	}
 }
 
-func reconcileHTMLComponentKeyedList(world *ecs.World, owner ecs.Entity, parent *dom.Node, list *htmlComponentKeyedList, next []VNode, scopeClass string) {
+func reconcileHTMLComponentKeyedList(world *ecs.World, owner ecs.Entity, parent *uinode.Node, list *htmlComponentKeyedList, next []VNode, scopeClass string) {
 	if list.Children == nil {
-		list.Children = make(map[*dom.Node]*htmlComponentVNodeChildren)
+		list.Children = make(map[*uinode.Node]*htmlComponentVNodeChildren)
 	}
 	if list.Nodes == nil {
-		list.Nodes = make(map[*dom.Node]bool)
+		list.Nodes = make(map[*uinode.Node]bool)
 	}
 	// Nodes already contains the managed nodes from the previous commit.
 	if list.Anchor == nil {
@@ -1657,13 +1603,13 @@ func reconcileHTMLComponentKeyedList(world *ecs.World, owner ecs.Entity, parent 
 	clear(old)
 	list.Items, list.Scratch = items, old[:0]
 	if changed {
-		dom.SynchronizeTextContent(parent)
+		element.SynchronizeTextContent(parent)
 		Node{world: world, owner: owner, node: parent}.markMutation(htmlMutationStructure)
 	}
 }
 
 // reconcileHTMLComponentVNodeList shares key matching, node reuse and removal.
-func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent *dom.Node, list *htmlComponentVNodeChildren, next []VNode, children map[*dom.Node]*htmlComponentVNodeChildren, scopeClass string) ([]htmlComponentKeyedItem, bool) {
+func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent *uinode.Node, list *htmlComponentVNodeChildren, next []VNode, children map[*uinode.Node]*htmlComponentVNodeChildren, scopeClass string) ([]htmlComponentKeyedItem, bool) {
 	list.Index.reset()
 	for index, item := range list.Items {
 		list.Index.values[item.Key] = uint64(index+1) << 2
@@ -1678,7 +1624,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 			continue
 		}
 		entry |= htmlComponentKeySeen
-		var node *dom.Node
+		var node *uinode.Node
 		if position := entry >> 2; position != 0 {
 			candidate := list.Items[position-1].Node
 			if candidate != nil && candidate.Data == tag {
@@ -1688,7 +1634,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 		}
 		list.Index.values[vnode.Key] = entry
 		if node == nil {
-			node = dom.NewElement(tag)
+			node = uinode.NewElement(tag)
 		}
 		syncHTMLComponentVNodeNode(world, owner, node, vnode, children, scopeClass)
 		items = append(items, htmlComponentKeyedItem{Key: vnode.Key, Node: node})
@@ -1699,7 +1645,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 		if list.Index.values[item.Key]&htmlComponentKeyUsed == 0 {
 			if item.Node != nil && item.Node.Parent == parent {
 				if list.Removed == nil {
-					list.Removed = make(map[*dom.Node]struct{})
+					list.Removed = make(map[*uinode.Node]struct{})
 				}
 				list.Removed[item.Node] = struct{}{}
 			}
@@ -1712,22 +1658,16 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 		}
 	}
 	if len(list.Removed) != 0 {
-		remaining := parent.Children[:0]
-		for _, node := range parent.Children {
-			if _, removed := list.Removed[node]; removed {
-				node.Parent = nil
-			} else {
-				remaining = append(remaining, node)
-			}
-		}
-		clear(parent.Children[len(remaining):])
-		parent.Children = remaining
+		parent.KeepChildren(func(node *uinode.Node) bool {
+			_, removed := list.Removed[node]
+			return !removed
+		})
 		clear(list.Removed)
 	}
 	return items, changed
 }
 
-func syncHTMLComponentVNodeNode(world *ecs.World, owner ecs.Entity, node *dom.Node, vnode VNode, children map[*dom.Node]*htmlComponentVNodeChildren, scopeClass string) {
+func syncHTMLComponentVNodeNode(world *ecs.World, owner ecs.Entity, node *uinode.Node, vnode VNode, children map[*uinode.Node]*htmlComponentVNodeChildren, scopeClass string) {
 	if node == nil {
 		return
 	}
@@ -1758,7 +1698,7 @@ func syncHTMLComponentVNodeNode(world *ecs.World, owner ecs.Entity, node *dom.No
 	reconcileHTMLComponentVNodeChildren(world, owner, node, children[node], vnode.Children, children, scopeClass)
 }
 
-func reconcileHTMLComponentVNodeChildren(world *ecs.World, owner ecs.Entity, parent *dom.Node, list *htmlComponentVNodeChildren, next []VNode, children map[*dom.Node]*htmlComponentVNodeChildren, scopeClass string) {
+func reconcileHTMLComponentVNodeChildren(world *ecs.World, owner ecs.Entity, parent *uinode.Node, list *htmlComponentVNodeChildren, next []VNode, children map[*uinode.Node]*htmlComponentVNodeChildren, scopeClass string) {
 	if parent == nil || list == nil {
 		return
 	}
@@ -1774,14 +1714,11 @@ func reconcileHTMLComponentVNodeChildren(world *ecs.World, owner ecs.Entity, par
 		}
 	}
 	if changed {
-		children := parent.Children
-		clear(children[:cap(children)])
-		parent.Children = children[:0]
+		parent.ClearChildren()
 		for _, item := range items {
-			item.Node.Parent = parent
-			parent.Children = append(parent.Children, item.Node)
+			parent.AppendChild(item.Node)
 		}
-		dom.SynchronizeTextContent(parent)
+		element.SynchronizeTextContent(parent)
 		Node{world: world, owner: owner, node: parent}.markMutation(htmlMutationStructure)
 	}
 	old := list.Items
@@ -1789,7 +1726,7 @@ func reconcileHTMLComponentVNodeChildren(world *ecs.World, owner ecs.Entity, par
 	list.Items, list.Scratch = items, old[:0]
 }
 
-func clearHTMLComponentVNodeChildren(children map[*dom.Node]*htmlComponentVNodeChildren, node *dom.Node) {
+func clearHTMLComponentVNodeChildren(children map[*uinode.Node]*htmlComponentVNodeChildren, node *uinode.Node) {
 	if node == nil || children == nil {
 		return
 	}
@@ -1808,7 +1745,7 @@ func htmlComponentVoidTag(tag string) bool {
 	}
 }
 
-func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *dom.Node, attributes []VNodeAttribute, scopeClass string) {
+func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *uinode.Node, attributes []VNodeAttribute, scopeClass string) {
 	if node == nil || node.AttrCount() == 0 {
 		return
 	}
@@ -1829,19 +1766,19 @@ func clearHTMLComponentAttributes(world *ecs.World, owner ecs.Entity, node *dom.
 	}
 }
 
-func addHTMLComponentScopeClass(node *dom.Node, scopeClass string) {
+func addHTMLComponentScopeClass(node *uinode.Node, scopeClass string) {
 	prepareHTMLComponentSubtree(node, scopeClass, nil)
 }
 
-func prepareHTMLComponentSubtree(node *dom.Node, scopeClass string, refs map[string]*dom.Node) {
+func prepareHTMLComponentSubtree(node *uinode.Node, scopeClass string, refs map[string]*uinode.Node) {
 	// Empty elements share the common scope attribute; edits detach its storage.
-	var scopeAttributes dom.Node
-	var visit func(*dom.Node)
-	visit = func(node *dom.Node) {
+	var scopeAttributes uinode.Node
+	var visit func(*uinode.Node)
+	visit = func(node *uinode.Node) {
 		if node == nil {
 			return
 		}
-		if node.Type == dom.ElementNode && scopeClass != "" {
+		if node.Type == uinode.ElementNode && scopeClass != "" {
 			classValue := node.AttrValue("class")
 			if node.AttrCount() == 0 {
 				if scopeAttributes.AttrCount() == 0 {
@@ -1869,7 +1806,7 @@ func prepareHTMLComponentSubtree(node *dom.Node, scopeClass string, refs map[str
 	visit(node)
 }
 
-func setHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInstance, node *dom.Node, name, value string) {
+func setHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInstance, node *uinode.Node, name, value string) {
 	if instance == nil {
 		return
 	}
@@ -1880,11 +1817,11 @@ func setHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInstance
 	setHTMLComponentAttributeWithScope(world, instance.Page, node, name, value, scopeClass)
 }
 
-func setHTMLComponentVNodeAttribute(world *ecs.World, owner ecs.Entity, node *dom.Node, name, value, scopeClass string) {
+func setHTMLComponentVNodeAttribute(world *ecs.World, owner ecs.Entity, node *uinode.Node, name, value, scopeClass string) {
 	setHTMLComponentAttributeWithScope(world, owner, node, name, value, scopeClass)
 }
 
-func setHTMLComponentAttributeWithScope(world *ecs.World, owner ecs.Entity, node *dom.Node, name, value, scopeClass string) {
+func setHTMLComponentAttributeWithScope(world *ecs.World, owner ecs.Entity, node *uinode.Node, name, value, scopeClass string) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "class" && scopeClass != "" && !htmlClassContains(value, scopeClass) {
 		if value == "" {
@@ -1896,7 +1833,7 @@ func setHTMLComponentAttributeWithScope(world *ecs.World, owner ecs.Entity, node
 	Node{world: world, owner: owner, node: node}.SetAttribute(name, value)
 }
 
-func removeHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInstance, node *dom.Node, name string) {
+func removeHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInstance, node *uinode.Node, name string) {
 	if instance == nil {
 		return
 	}
@@ -1907,7 +1844,7 @@ func removeHTMLComponentAttribute(world *ecs.World, instance *htmlComponentInsta
 	removeHTMLComponentAttributeWithScope(world, instance.Page, node, name, scopeClass)
 }
 
-func removeHTMLComponentAttributeWithScope(world *ecs.World, owner ecs.Entity, node *dom.Node, name, scopeClass string) {
+func removeHTMLComponentAttributeWithScope(world *ecs.World, owner ecs.Entity, node *uinode.Node, name, scopeClass string) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "class" && scopeClass != "" {
 		Node{world: world, owner: owner, node: node}.SetAttribute("class", scopeClass)
@@ -1933,7 +1870,7 @@ func htmlClassContains(value, target string) bool {
 	return false
 }
 
-func reconcileHTMLComponentChildren(parent *dom.Node, list *htmlComponentKeyedList, items []htmlComponentKeyedItem) bool {
+func reconcileHTMLComponentChildren(parent *uinode.Node, list *htmlComponentKeyedList, items []htmlComponentKeyedItem) bool {
 	if parent == nil {
 		return false
 	}
@@ -1956,7 +1893,7 @@ func reconcileHTMLComponentChildren(parent *dom.Node, list *htmlComponentKeyedLi
 	baseLength := len(remaining)
 	needed := baseLength + len(items)
 	if cap(remaining) < needed {
-		grown := make([]*dom.Node, baseLength, needed)
+		grown := make([]*uinode.Node, baseLength, needed)
 		copy(grown, remaining)
 		remaining = grown
 	}
@@ -1979,27 +1916,6 @@ func reconcileHTMLComponentChildren(parent *dom.Node, list *htmlComponentKeyedLi
 	}
 	parent.Children = remaining
 	return changed
-}
-
-func bindHTMLComponentClick(world *ecs.World, entity ecs.Entity, instance *htmlComponentInstance, ref string, node *dom.Node) {
-	if instance.Handlers == nil {
-		instance.Handlers = make(map[string]ClickHandler)
-	}
-	handler := instance.Handlers[ref]
-	if handler == nil {
-		handler = func(event *PointerEvent) {
-			runtime, ok := world.Get[htmlComponentInstance](entity)
-			if !ok || runtime.Definition == nil || runtime.Definition.event == nil {
-				return
-			}
-			runtime.Definition.event(world, entity, ref, Event{
-				Entity: runtime.Page, Target: entity, ID: ref, Kind: EventClick,
-				Bubbles: true, Cancelable: true,
-			}, event, true)
-		}
-		instance.Handlers[ref] = handler
-	}
-	Node{world: world, owner: instance.Page, node: node}.OnClick(handler)
 }
 
 type htmlComponentPageCSS struct {

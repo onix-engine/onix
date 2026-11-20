@@ -120,11 +120,6 @@ func NewWidget() Widget {
 	return Widget{Enabled: true}
 }
 
-type uiLayoutChild struct {
-	child ecs.Entity
-	order int
-}
-
 type uiLayoutNode struct {
 	entity ecs.Entity
 	depth  int
@@ -133,11 +128,10 @@ type uiLayoutNode struct {
 type uiLayoutScratch struct {
 	runtime            map[ecs.Entity]*uiLayoutRuntimeState
 	scope              *ecs.QueryScope
-	children           []uiLayoutChild
 	nodes              []uiLayoutNode
 	layoutChildren     []ecs.Entity
 	mapRetention       reuse.MapRetention
-	retention          [3]reuse.Retention
+	retention          [2]reuse.Retention
 	versions           [10]uint64
 	hierarchyVersions  [4]uint64
 	generation         uint64
@@ -153,8 +147,7 @@ type uiLayoutScratch struct {
 func (scratch *uiLayoutScratch) MaintainCache() {
 	scratch.runtime = scratch.mapRetention.Trim(scratch.runtime, 64)
 	scratch.nodes = scratch.retention[0].Trim(scratch.nodes, 64)
-	scratch.children = scratch.retention[1].Trim(scratch.children[:0], 16)
-	scratch.layoutChildren = scratch.retention[2].Trim(scratch.layoutChildren[:0], 16)
+	scratch.layoutChildren = scratch.retention[1].Trim(scratch.layoutChildren[:0], 16)
 }
 
 type uiLayoutSizeInput struct {
@@ -338,30 +331,14 @@ func (scratch *uiLayoutScratch) collectChildren(world *ecs.World, entity ecs.Ent
 		}
 	} else {
 		hierarchy := scene.HierarchyFor(world)
-		scratch.children = scratch.children[:0]
 		for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
-			if !world.InQueryScope(child) {
-				continue
+			if world.InQueryScope(child) {
+				scratch.layoutChildren = append(scratch.layoutChildren, child)
 			}
-			order := int(child)
-			if authored, ok := world.Get[scene.SiblingOrder](child); ok {
-				order = int(authored)
-			}
-			scratch.children = append(scratch.children, uiLayoutChild{child: child, order: order})
 		}
-		slices.SortFunc(scratch.children, func(a, b uiLayoutChild) int {
-			if order := cmp.Compare(a.order, b.order); order != 0 {
-				return order
-			}
-			return cmp.Compare(a.child, b.child)
-		})
-		for _, child := range scratch.children {
-			scratch.layoutChildren = append(scratch.layoutChildren, child.child)
-		}
-		scratch.retention[1].Record(len(scratch.children))
 		state.hierarchy = scratch.generation
 	}
-	scratch.retention[2].Record(len(scratch.layoutChildren))
+	scratch.retention[1].Record(len(scratch.layoutChildren))
 }
 
 func applyUILayout(world *ecs.World, entity ecs.Entity, layout Layout, children []ecs.Entity) {

@@ -260,6 +260,40 @@ func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, t
 
 type selectionRect struct{ X, Y, W, H float32 }
 
+func syncNativeSelection(world *ecs.World, entity, owner, valueEntity ecs.Entity, skin Skin) {
+	rects := *world.GetRef[scene.UIVisualRects2D](entity)
+	count := 0
+	changed := false
+	field := world.GetRef[TextField](owner)
+	text := world.GetRef[scene.Text2D](valueEntity)
+	transform := world.GetRef[scene.UITransform](valueEntity)
+	if field != nil && field.Focused && field.Anchor != field.Caret && text != nil && text.Font != nil && transform != nil {
+		value := field.Text()
+		if field.Password {
+			value = piecetree.FromString(maskedTextFieldValue(world, owner, *field))
+		}
+		start, end := orderedSelection(field.Anchor, field.Caret)
+		for r := range textSelectionRects(text, *transform, value, start, end, textFieldViewportHeight(world, owner)) {
+			rect := scene.TextRangeRect2D{X: r.X, Y: r.Y, Width: r.W, Height: r.H}
+			if count == len(rects) {
+				rects = append(rects, rect)
+				changed = true
+			} else if rects[count] != rect {
+				rects[count] = rect
+				changed = true
+			}
+			count++
+		}
+	}
+	if changed || len(rects) != count {
+		*world.GetMut[scene.UIVisualRects2D](entity) = rects[:count]
+	}
+	if control, ok := controlViewFor(world, owner); ok {
+		setUIStackIndex(world, entity, control.StackIndex+1)
+	}
+	applySurface(world, entity, 0, 0, textFieldStyleFor(world, owner, skin).Selection)
+}
+
 func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin Skin, scratch *textSelectionScratch) {
 	value, _, _, _ := textFieldState(world, owner)
 	start, end, _ := textFieldSelection(world, owner)
@@ -368,11 +402,17 @@ type textFieldDisplayMissingScratch struct{}
 func ensureTextFieldCaches(world *ecs.World) {
 	masks := world.FrameScratch[textFieldMaskMissingScratch, ecs.Entity]()
 	displays := world.FrameScratch[textFieldDisplayMissingScratch, ecs.Entity]()
+	visuals := world.FrameScratch[nativeFieldVisuals, ecs.Entity]()
+	defer visuals.ReleaseUnused()
 	defer masks.ReleaseUnused()
 	defer displays.ReleaseUnused()
 	for entity, access := range world.Query[TextField]().All {
 		field := access.Ref()
-
+		if field.Focused {
+			if parts := world.GetRef[nativeFieldVisuals](entity); parts != nil && (!world.IsAlive(parts.caret) || field.Anchor != field.Caret && !world.IsAlive(parts.selection)) {
+				visuals.Values = append(visuals.Values, entity)
+			}
+		}
 		if field.Password {
 			if !world.Has[textFieldMaskCache](entity) {
 				masks.Values = append(masks.Values, entity)
@@ -382,6 +422,24 @@ func ensureTextFieldCaches(world *ecs.World) {
 		}
 	}
 	// Structural changes must happen after the query has closed.
+	for _, owner := range visuals.Values {
+		parts := world.GetRef[nativeFieldVisuals](owner)
+		next := *parts
+		stack, _ := world.Get[scene.UIStackIndex](owner)
+		if !world.IsAlive(next.caret) {
+			next.caret = spawnSurfacePart[CaretPart](world, owner, 0, 0, 0, 0, graphics.ColorRGBA{}, int(stack)+3)
+		}
+		field := world.GetRef[TextField](owner)
+		if field.Anchor != field.Caret && !world.IsAlive(next.selection) {
+			bundle := newSurfacePartBundle[SelectionPart](owner, 0, 0, 0, 0, scene.Shape2D{}, int(stack)+1, 1)
+			bundle.Put(scene.UIVisualRects2D(nil))
+			next.selection = world.Spawn(bundle)
+		}
+		world.SetIfChanged(owner, next)
+	}
+	if len(visuals.Values) > 0 {
+		refreshUIChildren(world)
+	}
 	for _, entity := range masks.Values {
 		_ = world.Insert(entity, textFieldMaskCache{})
 	}

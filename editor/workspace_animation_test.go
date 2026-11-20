@@ -7,15 +7,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func animationEditorFixture(t *testing.T) *ModuleEditor {
@@ -341,7 +342,7 @@ func TestWorkspaceAnimationCurveSelectorScrollsOutsideControlClip(t *testing.T) 
 			break
 		}
 	}
-	if list == 0 || !a.world.GetRef[engineui.Selector](control).Open {
+	if list == 0 || !a.world.GetRef[htmlui.Control](control).Open {
 		t.Fatal("curve preset dropdown did not open")
 	}
 	scroll := a.world.GetRef[scene.UIScroll](list)
@@ -1151,18 +1152,18 @@ func TestWorkspaceAnimationWheelZoomBoundsAndAllocations(t *testing.T) {
 	}
 }
 
-func animationTestNode(t *testing.T, a *ModuleEditor, id string) *dom.Node {
+func animationTestNode(t *testing.T, a *ModuleEditor, id string) *uinode.Node {
 	t.Helper()
 	source, err := htmlui.Serialize(a.world, a.shell)
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := dom.Parse(source)
+	root, err := parse.Parse(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var find func(*dom.Node) *dom.Node
-	find = func(node *dom.Node) *dom.Node {
+	var find func(*uinode.Node) *uinode.Node
+	find = func(node *uinode.Node) *uinode.Node {
 		if value, _ := node.Attr("id"); value == id {
 			return node
 		}

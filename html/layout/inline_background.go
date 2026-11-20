@@ -1,21 +1,21 @@
 package layout
 
 import (
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // Inline backgrounds follow the fragments on each line, not the containing
 // block. One run includes nested syntax spans and intervening whitespace.
 type InlineBackground struct {
-	Node  *dom.Node
+	Node  *uinode.Node
 	Style *style.ComputedStyle
 	Rect  Rect
 	Line  int
 }
 
 type inlineBackgroundKey struct {
-	node *dom.Node
+	node *uinode.Node
 	line int
 }
 
@@ -25,7 +25,7 @@ func (b *Box) UpdateInlineBackgrounds(styles style.Map) {
 	clear(b.inlinePaintIndex)
 	for _, fragment := range b.TextFragments {
 		node := fragment.Node
-		if node != nil && node.Type == dom.TextNode {
+		if node != nil && node.Type == uinode.TextNode {
 			node = node.Parent
 		}
 		b.appendInlineBackground(node, fragment.Rect, fragment.Line, styles)
@@ -37,7 +37,7 @@ func (b *Box) UpdateInlineBackgrounds(styles style.Map) {
 	}
 }
 
-func (b *Box) appendInlineBackground(node *dom.Node, rect Rect, line int, styles style.Map) {
+func (b *Box) appendInlineBackground(node *uinode.Node, rect Rect, line int, styles style.Map) {
 	if node == nil || node == b.Node {
 		return
 	}

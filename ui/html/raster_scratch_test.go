@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/render"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLRasterScratchBudgetAndIndependentBorrowers(t *testing.T) {
@@ -33,7 +33,7 @@ func TestHTMLConcurrentRasterScratchDoesNotOverwriteResults(t *testing.T) {
 	paint := func(index int) *image.RGBA {
 		computed := &style.ComputedStyle{BackgroundColor: style.ColorValue(style.Color{R: byte(19 * index), G: 97, B: 231, A: 192}), Opacity: style.Number(.7)}
 		computed.Filters = []style.Filter{{Kind: style.FilterBlur, Amount: float64(index%3 + 1)}}
-		box := &layout.Box{Node: &dom.Node{}, Style: computed, Content: layout.Rect{Width: float64(11 + index), Height: float64(8 + index)}}
+		box := &layout.Box{Node: &uinode.Node{}, Style: computed, Content: layout.Rect{Width: float64(11 + index), Height: float64(8 + index)}}
 		cache := htmlTextureCache{}
 		return &updateHTMLOpacityRaster(&cache, box, true, false, false).image
 	}
@@ -78,7 +78,7 @@ func TestHTMLRasterTextureSharesPixelsAndDetachesOnResize(t *testing.T) {
 	state := htmlRenderState{}
 	defer state.Textures.dispose()
 	computed := &style.ComputedStyle{BackgroundColor: style.ColorValue(style.Color{R: 231, A: 255}), Opacity: style.Number(.5)}
-	box := &layout.Box{Node: &dom.Node{}, Style: computed, Content: layout.Rect{Width: 32, Height: 24}}
+	box := &layout.Box{Node: &uinode.Node{}, Style: computed, Content: layout.Rect{Width: 32, Height: 24}}
 	first := htmlOpacityTextureMode(&state, box, false)
 	if !first.RenderHandle().Valid() || driver.source != &state.Textures.rasters[box.Node].image.Pix[0] {
 		t.Fatal("opacity texture copied its retained raster")
@@ -134,7 +134,7 @@ func BenchmarkHTMLRasterPopulation(b *testing.B) {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			computed := &style.ComputedStyle{BackgroundColor: style.ColorValue(style.Color{R: 97, A: 255})}
 			computed.BoxShadow = []style.Shadow{{BlurRadius: style.LengthPx(16), Color: style.Color{A: 128}}}
-			nodes := make([]dom.Node, count)
+			nodes := make([]uinode.Node, count)
 			b.ReportAllocs()
 			for b.Loop() {
 				state := htmlRenderState{}

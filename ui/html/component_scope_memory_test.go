@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLComponentScopeSharedAttributesMutationIsolation(t *testing.T) {
@@ -42,7 +42,7 @@ func TestHTMLComponentScopeSharedAttributesMutationIsolation(t *testing.T) {
 	if left.node.AttrValue("class") != "edited "+scope {
 		t.Fatal("removing a sibling class changed the edited node")
 	}
-	for _, node := range []*dom.Node{a, b, b.Children[0], b.Children[1]} {
+	for _, node := range []*uinode.Node{a, b, b.Children[0], b.Children[1]} {
 		if class, _ := node.Attr("class"); class != scope {
 			t.Fatal("scope attribute mutation escaped its node or component instance")
 		}
@@ -62,9 +62,9 @@ func TestHTMLComponentScopeSharedAttributesMutationIsolation(t *testing.T) {
 }
 
 func TestHTMLComponentScopePopulationAllocations(t *testing.T) {
-	root := dom.NewDocument()
+	root := uinode.NewDocument()
 	for range 1000 {
-		root.AppendChild(dom.NewElement("td"))
+		root.AppendChild(uinode.NewElement("td"))
 	}
 	if allocations := testing.AllocsPerRun(100, func() {
 		for _, node := range root.Children {

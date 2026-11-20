@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license in LICENSE.go-html.
 // Adapted for Onix: source views, direct DOM construction and reusable storage.
 
-package dom
+package parse
 
 import (
 	"io"

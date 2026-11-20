@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	notosanssc "github.com/onix-engine/onix/testdata/fonts/Noto_Sans_SC"
 )
 
@@ -784,7 +784,7 @@ func TestHTMLComponentRendersAndPatchesDynamicValues(t *testing.T) {
 		Event:  &scene.InputEvent{Entity: state.EventTargets[button], Kind: scene.InputEventTap},
 		Target: state.EventTargets[button], Current: state.EventTargets[button],
 	}
-	dispatchHTMLNodePointer(world, owner, button, &context)
+	routeHTMLNodePointer(world, &context)
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
@@ -936,7 +936,7 @@ func TestHTMLComponentKeyedNodesReuseDOMIdentity(t *testing.T) {
 	if container == nil || len(container.Children) != 3 {
 		t.Fatalf("initial list children = %d", len(container.Children))
 	}
-	first := append([]*dom.Node(nil), container.Children...)
+	first := append([]*uinode.Node(nil), container.Children...)
 	if got := htmlNodeText(first[1]); got != "two" {
 		t.Fatalf("initial second item = %q", got)
 	}
@@ -996,8 +996,8 @@ func TestHTMLComponentKeyedVNodeChildrenReuseDOMIdentity(t *testing.T) {
 	}
 	instance, _ := world.Get[htmlComponentInstance](component)
 	container := instance.Refs["list"]
-	first := append([]*dom.Node(nil), container.Children...)
-	spans := append([]*dom.Node(nil), first[0].Children...)
+	first := append([]*uinode.Node(nil), container.Children...)
+	spans := append([]*uinode.Node(nil), first[0].Children...)
 	if len(first) != 2 || len(spans) != 1 || htmlNodeText(spans[0]) != "one" {
 		t.Fatalf("initial nested VNodes = %#v", container.Children)
 	}
@@ -1181,7 +1181,7 @@ func TestHTMLComponentEventsBubbleThroughDOMAncestors(t *testing.T) {
 		t.Fatal("child event target is missing")
 	}
 	context := scene.InputEventContext{Event: &scene.InputEvent{Entity: target, Kind: scene.InputEventTap}, Target: target, Current: target}
-	dispatchHTMLNodePointer(world, owner, instance.Refs["child"], &context)
+	routeHTMLNodePointer(world, &context)
 	if len(calls) != 2 || calls[0] != "child" || calls[1] != "parent" {
 		t.Fatalf("bubbled calls = %#v", calls)
 	}
@@ -1417,7 +1417,7 @@ func TestHTMLComponentUnmountManyRootsRetainsStaticDOMAndInvalidatesFilters(t *t
 		t.Fatal(err)
 	}
 	instance, _ := world.Get[htmlComponentInstance](component)
-	roots := append([]*dom.Node(nil), instance.Roots...)
+	roots := append([]*uinode.Node(nil), instance.Roots...)
 	root, err := Root(world, owner)
 	if err != nil {
 		t.Fatal(err)

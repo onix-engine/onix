@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
-	editorresources "github.com/onix-engine/onix/editor/resources"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
 	htmlui "github.com/onix-engine/onix/ui/html"
@@ -101,7 +100,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
 	surface, _ := world.Get[htmlui.Surface](a.titlebar.entity)
-	if surface.Value != editorresources.TitlebarHTML {
+	if surface.Document == nil || surface.Value != "" {
 		t.Fatal("titlebar did not reuse the original template")
 	}
 	for _, menu := range titlebarMenuDefinitions {
@@ -153,7 +152,7 @@ func TestWorkspaceTitlebarRestoresAllAuthoredMenusAndRecentProjects(t *testing.T
 		t.Fatal("titlebar events were ignored")
 	}
 	dialog, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs["about"])
-	if dialog.Value != editorresources.DialogHTML("about") {
+	if dialog.Document == nil || dialog.Value != "" {
 		t.Fatal("about did not use dialog resources")
 	}
 	about, err := htmlui.Serialize(world, a.dialogUI.htmlDialogs["about"])
@@ -262,7 +261,7 @@ func TestWorkspaceMenuReloadAndCloseUseResourceConfirmationWithoutLosingEdits(t 
 	syncWorkspaceTest(t, a, world)
 	owner := a.dialogUI.htmlDialogs["close-confirm"]
 	surface, _ := world.Get[htmlui.Surface](owner)
-	if surface.Value != editorresources.DialogHTML("close-confirm") {
+	if surface.Document == nil || surface.Value != "" {
 		t.Fatal("confirmation template not used")
 	}
 	for id, icon := range map[string]string{"close-confirm-save": "save.svg", "close-confirm-discard": "trash-2.svg#danger", "close-confirm-cancel": "close.svg"} {
@@ -335,8 +334,8 @@ func TestWorkspaceBuildOptionsAndResultDialogsUseResources(t *testing.T) {
 		a.showWorkspaceDialog(name)
 		syncWorkspaceTest(t, a, world)
 		surface, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs[name])
-		if surface.Value != editorresources.DialogHTML(name) {
-			t.Fatal("template not used", name)
+		if _, ok := htmlui.NodeByID(world, a.dialogUI.htmlDialogs[name], name+"-title"); !ok || surface.Document == nil || surface.Value != "" {
+			t.Fatal("missing mounted dialog template", name)
 		}
 		a.closeWorkspaceDialog()
 	}
@@ -409,7 +408,7 @@ func TestWorkspaceWelcomeOpenUsesNativeDirectorySelection(t *testing.T) {
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
 	surface, _ := world.Get[htmlui.Surface](a.dialogUI.htmlDialogs["welcome"])
-	if surface.Value != editorresources.DialogHTML("welcome") {
+	if surface.Document == nil || surface.Value != "" {
 		t.Fatal("welcome template not used")
 	}
 	selections := 0

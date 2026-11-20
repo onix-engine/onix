@@ -304,7 +304,7 @@ float3 pbr_environment(float3 direction_1, float level_2)
     return (lerp((_e18.xyz * _e18.w), (_e20.xyz * _e20.w), frac(level_2)) * 16.0);
 }
 
-float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
+float pbr_shadow_map(uint index_1, float3 position_2, float3 normal, float4x3 receiver)
 {
     float2 gradient = (0.0).xx;
     bool local_11 = (bool)0;
@@ -315,8 +315,8 @@ float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
     int x = (int)0;
 
     float4 params = pbr.shadowParams[index_1];
-    float4x4 _e10 = pbr.shadowMatrices[index_1];
-    float4 clip_ = mul(float4((position_2 + (normal * params.y)), 1.0), _e10);
+    float4x4 _e11 = pbr.shadowMatrices[index_1];
+    float4 clip_ = mul(float4((position_2 + (normal * params.y)), 1.0), _e11);
     if ((clip_.w <= 0.0)) {
         return 1.0;
     }
@@ -331,8 +331,13 @@ float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
     float2 texel = ((uv_3 * float2(dims_1)) - (0.5).xx);
     float2 base_2 = floor(texel);
     float2 fraction = (texel - base_2);
-    float3 dx = ddx(float3(texel, ndc.z));
-    float3 dy = ddy(float3(texel, ndc.z));
+    float4x4 _e87 = pbr.shadowMatrices[index_1];
+    float4 cx = mul(float4((receiver[0] + (params.y * receiver[2])), 0.0), _e87);
+    float4x4 _e99 = pbr.shadowMatrices[index_1];
+    float4 cy = mul(float4((receiver[1] + (params.y * receiver[3])), 0.0), _e99);
+    float3 scale_1 = float3(((float2(dims_1) * rect.zw) * float2(0.5, -0.5)), 1.0);
+    float3 dx = ((cx.xyz - (ndc * cx.w)) * scale_1);
+    float3 dy = ((cy.xyz - (ndc * cy.w)) * scale_1);
     float determinant_ = ((dx.x * dy.y) - (dx.y * dy.x));
     if ((abs(determinant_) > 1e-08)) {
         gradient = (float2(((dy.y * dx.z) - (dx.y * dy.z)), ((dx.x * dy.z) - (dy.x * dx.z))) / (determinant_).xx);
@@ -342,20 +347,20 @@ float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
     } else {
         local_11 = true;
     }
-    bool _e131 = local_11;
-    if (!(_e131)) {
+    bool _e169 = local_11;
+    if (!(_e169)) {
         local_12 = (ndc.z < 0.0);
     } else {
         local_12 = true;
     }
-    bool _e139 = local_12;
-    if (!(_e139)) {
+    bool _e177 = local_12;
+    if (!(_e177)) {
         local_13 = (ndc.z > 1.0);
     } else {
         local_13 = true;
     }
-    bool _e147 = local_13;
-    if (_e147) {
+    bool _e185 = local_13;
+    if (_e185) {
         return 1.0;
     }
     float4 weightsX = float4((1.0 - fraction.x), 1.0, 1.0, fraction.x);
@@ -366,12 +371,12 @@ float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
         if (all(loop_bound == uint2(0u, 0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            int _e222 = y;
-            y = asint(asuint(_e222) + asuint(int(1)));
+            int _e251 = y;
+            y = asint(asuint(_e251) + asuint(int(1)));
         }
         loop_init = false;
-        int _e167 = y;
-        if ((_e167 < int(4))) {
+        int _e205 = y;
+        if ((_e205 < int(4))) {
         } else {
             break;
         }
@@ -383,41 +388,40 @@ float pbr_shadow_map(uint index_1, float3 position_2, float3 normal)
                 if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
                 loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
                 if (!loop_init_1) {
-                    int _e219 = x;
-                    x = asint(asuint(_e219) + asuint(int(1)));
+                    int _e248 = x;
+                    x = asint(asuint(_e248) + asuint(int(1)));
                 }
                 loop_init_1 = false;
-                int _e172 = x;
-                if ((_e172 < int(4))) {
+                int _e210 = x;
+                if ((_e210 < int(4))) {
                 } else {
                     break;
                 }
                 {
-                    int _e176 = x;
-                    int _e179 = y;
-                    int2 pixel = clamp(asint(asuint(naga_f2i32(base_2)) + asuint(int2(asint(asuint(_e176) - asuint(int(1))), asint(asuint(_e179) - asuint(int(1)))))), tileMin, tileMax);
-                    float4 _e187 = shadowTex.Load(int3(pixel, int(0)));
-                    float3 packed = _e187.xyz;
-                    float depth = ((dot(packed, float3(65536.0, 256.0, 1.0)) * 255.0) / 1.6777215e07);
-                    float2 _e199 = gradient;
-                    float receiverDepth = ((ndc.z + dot(_e199, (float2(pixel) - texel))) + params.x);
-                    float _e206 = visibility;
-                    int _e207 = x;
-                    int _e209 = y;
-                    visibility = (_e206 + ((weightsX[min(uint(_e207), 3u)] * weightsY[min(uint(_e209), 3u)]) * ((receiverDepth >= depth) ? 1.0 : 0.0)));
+                    int _e214 = x;
+                    int _e217 = y;
+                    int2 pixel = clamp(asint(asuint(naga_f2i32(base_2)) + asuint(int2(asint(asuint(_e214) - asuint(int(1))), asint(asuint(_e217) - asuint(int(1)))))), tileMin, tileMax);
+                    float4 _e225 = shadowTex.Load(int3(pixel, int(0)));
+                    float depth = _e225.x;
+                    float2 _e228 = gradient;
+                    float receiverDepth = ((ndc.z + dot(_e228, (float2(pixel) - texel))) + params.x);
+                    float _e235 = visibility;
+                    int _e236 = x;
+                    int _e238 = y;
+                    visibility = (_e235 + ((weightsX[min(uint(_e236), 3u)] * weightsY[min(uint(_e238), 3u)]) * ((receiverDepth >= depth) ? 1.0 : 0.0)));
                 }
             }
         }
     }
-    float _e224 = visibility;
-    return (_e224 / 9.0);
+    float _e253 = visibility;
+    return (_e253 / 9.0);
 }
 
 uint naga_f2u32(float value) {
     return uint(clamp(value, 0.0, 4294967000.0));
 }
 
-float pbr_light_shadow(uint light, float3 position_3, float3 normal_1)
+float pbr_light_shadow(uint light, float3 position_3, float3 normal_1, float4x3 receiver_1)
 {
     uint face = (uint)0;
     bool local_14 = (bool)0;
@@ -433,13 +437,13 @@ float pbr_light_shadow(uint light, float3 position_3, float3 normal_1)
     uint first_1 = (naga_f2u32(mapping.x) - 1u);
     uint count = naga_f2u32(mapping.y);
     if ((count == 1u)) {
-        const float _e19 = pbr_shadow_map(first_1, position_3, normal_1);
-        return _e19;
+        const float _e20 = pbr_shadow_map(first_1, position_3, normal_1, receiver_1);
+        return _e20;
     }
-    float _e24 = pbr.lightDirections[light].w;
-    if ((_e24 == 2.0)) {
-        float4 _e30 = pbr.lightPosition[light];
-        float3 delta_1 = (position_3 - _e30.xyz);
+    float _e25 = pbr.lightDirections[light].w;
+    if ((_e25 == 2.0)) {
+        float4 _e31 = pbr.lightPosition[light];
+        float3 delta_1 = (position_3 - _e31.xyz);
         float3 axis = abs(delta_1);
         face = ((delta_1.x >= 0.0) ? 0u : 1u);
         if ((axis.y > axis.x)) {
@@ -447,8 +451,8 @@ float pbr_light_shadow(uint light, float3 position_3, float3 normal_1)
         } else {
             local_14 = false;
         }
-        bool _e50 = local_14;
-        if (_e50) {
+        bool _e51 = local_14;
+        if (_e51) {
             face = ((delta_1.y >= 0.0) ? 2u : 3u);
         } else {
             if ((axis.z > axis.x)) {
@@ -456,20 +460,20 @@ float pbr_light_shadow(uint light, float3 position_3, float3 normal_1)
             } else {
                 local_15 = false;
             }
-            bool _e66 = local_15;
-            if (_e66) {
+            bool _e67 = local_15;
+            if (_e67) {
                 face = ((delta_1.z >= 0.0) ? 4u : 5u);
             }
         }
-        uint _e73 = face;
-        const float _e75 = pbr_shadow_map((first_1 + _e73), position_3, normal_1);
-        return _e75;
+        uint _e74 = face;
+        const float _e76 = pbr_shadow_map((first_1 + _e74), position_3, normal_1, receiver_1);
+        return _e76;
     }
-    float4 _e78 = pbr.cameraPosition;
-    float4 _e83 = pbr.cameraForward;
-    float distance_1 = dot((position_3 - _e78.xyz), _e83.xyz);
-    float _e90 = pbr.shadowParams[first_1].z;
-    if ((distance_1 < _e90)) {
+    float4 _e79 = pbr.cameraPosition;
+    float4 _e84 = pbr.cameraForward;
+    float distance_1 = dot((position_3 - _e79.xyz), _e84.xyz);
+    float _e91 = pbr.shadowParams[first_1].z;
+    if ((distance_1 < _e91)) {
         return 1.0;
     }
     uint2 loop_bound_2 = uint2(4294967295u, 4294967295u);
@@ -478,44 +482,44 @@ float pbr_light_shadow(uint light, float3 position_3, float3 normal_1)
         if (all(loop_bound_2 == uint2(0u, 0u))) { break; }
         loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
-            uint _e138 = cascade;
-            cascade = (_e138 + 1u);
+            uint _e139 = cascade;
+            cascade = (_e139 + 1u);
         }
         loop_init_2 = false;
-        uint _e95 = cascade;
-        if ((_e95 < 4u)) {
+        uint _e96 = cascade;
+        if ((_e96 < 4u)) {
         } else {
             break;
         }
         {
-            uint _e98 = cascade;
-            if ((_e98 >= count)) {
+            uint _e99 = cascade;
+            if ((_e99 >= count)) {
                 break;
             }
-            uint _e100 = cascade;
-            uint index_3 = (first_1 + _e100);
+            uint _e101 = cascade;
+            uint index_3 = (first_1 + _e101);
             float4 params_1 = pbr.shadowParams[index_3];
             if ((distance_1 <= params_1.w)) {
-                const float _e108 = pbr_shadow_map(index_3, position_3, normal_1);
+                const float _e109 = pbr_shadow_map(index_3, position_3, normal_1, receiver_1);
                 float blendWidth = ((params_1.w - params_1.z) * mapping.z);
                 if ((blendWidth <= 0.0)) {
-                    return _e108;
+                    return _e109;
                 }
                 float blend = smoothstep((params_1.w - blendWidth), params_1.w, distance_1);
                 next = 1.0;
-                uint _e122 = cascade;
-                if (((_e122 + 1u) < count)) {
+                uint _e123 = cascade;
+                if (((_e123 + 1u) < count)) {
                     local_16 = (blend > 0.0);
                 } else {
                     local_16 = false;
                 }
-                bool _e131 = local_16;
-                if (_e131) {
-                    const float _e134 = pbr_shadow_map((index_3 + 1u), position_3, normal_1);
-                    next = _e134;
+                bool _e132 = local_16;
+                if (_e132) {
+                    const float _e135 = pbr_shadow_map((index_3 + 1u), position_3, normal_1, receiver_1);
+                    next = _e135;
                 }
-                float _e135 = next;
-                return lerp(_e108, _e135, blend);
+                float _e136 = next;
+                return lerp(_e109, _e136, blend);
             }
         }
     }
@@ -568,8 +572,8 @@ float pbr_screen_occlusion(float3 position_5, float3 normal_2)
         if (all(loop_bound_3 == uint2(0u, 0u))) { break; }
         loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
         if (!loop_init_3) {
-            uint _e193 = sampleIndex;
-            sampleIndex = (_e193 + 1u);
+            uint _e183 = sampleIndex;
+            sampleIndex = (_e183 + 1u);
         }
         loop_init_3 = false;
         uint _e95 = sampleIndex;
@@ -594,11 +598,11 @@ float pbr_screen_occlusion(float3 position_5, float3 normal_2)
                 continue;
             }
             int2 pixel_1 = naga_f2i32((sampleUV * dims_2));
-            float4 packed_1 = screenDepthTex.Load(int3(pixel_1, int(0)));
-            if ((packed_1.w < 0.5)) {
+            float4 _e123 = screenDepthTex.Load(int3(pixel_1, int(0)));
+            float depth_1 = _e123.x;
+            if ((depth_1 <= 0.0)) {
                 continue;
             }
-            float depth_1 = ((dot(packed_1.xyz, float3(65536.0, 256.0, 1.0)) * 255.0) / 1.6777215e07);
             float2 center = ((float2(pixel_1) + (0.5).xx) / dims_2);
             float3 ndc_1 = float3(((center.x * 2.0) - 1.0), (SHADOW_FLIP_Y ? (1.0 - (center.y * 2.0)) : ((center.y * 2.0) - 1.0)), depth_1);
             float4 world = mul(float4(ndc_1, 1.0), m_1);
@@ -607,14 +611,14 @@ float pbr_screen_occlusion(float3 position_5, float3 normal_2)
             }
             float3 delta_2 = ((world.xyz / (world.w).xxx) - position_5);
             float distance_2 = length(delta_2);
-            float _e177 = pbr.lightMeta.w;
-            float horizon = (max((dot(normal_2, delta_2) - _e177), 0.0) / max(distance_2, 1e-06));
-            float _e184 = blocked;
-            blocked = (_e184 + (horizon * (1.0 - smoothstep((radius_1 * 0.5), radius_1, distance_2))));
+            float _e167 = pbr.lightMeta.w;
+            float horizon = (max((dot(normal_2, delta_2) - _e167), 0.0) / max(distance_2, 1e-06));
+            float _e174 = blocked;
+            blocked = (_e174 + (horizon * (1.0 - smoothstep((radius_1 * 0.5), radius_1, distance_2))));
         }
     }
-    float _e197 = blocked;
-    return clamp((1.0 - (((strength * 2.0) * _e197) / float(count_1))), 0.0, 1.0);
+    float _e187 = blocked;
+    return clamp((1.0 - (((strength * 2.0) * _e187) / float(count_1))), 0.0, 1.0);
 }
 
 float3 pbr_fresnel(float cosine, float3 f0_, float f90_)
@@ -944,135 +948,142 @@ float4 mesh_fragment(FragmentInput_mesh_fragment fragmentinput_mesh_fragment) : 
         n = -(_e123);
     }
     float3 shadowNormal = n;
+    float3 _e127 = ddx(input.worldPosition);
+    float3 _e129 = ddy(input.worldPosition);
+    float3 _e130 = n;
+    float3 _e131 = ddx(_e130);
+    float3 _e132 = n;
+    float3 _e133 = ddy(_e132);
+    float4x3 receiver_2 = float4x3(_e127, _e129, _e131, _e133);
     if (((flags & 16u) != 0u)) {
-        float4 _e135 = occlusionTex.Sample(occlusionSampler, input.uv);
-        ao = lerp(1.0, _e135.x, input.custom0_.y);
+        float4 _e144 = occlusionTex.Sample(occlusionSampler, input.uv);
+        ao = lerp(1.0, _e144.x, input.custom0_.y);
     }
-    float _e144 = pbr.renderParams.y;
-    if ((_e144 != 4.0)) {
+    float _e153 = pbr.renderParams.y;
+    if ((_e153 != 4.0)) {
         local_4 = ((flags & 32768u) == 0u);
     } else {
         local_4 = false;
     }
-    bool _e154 = local_4;
-    if (_e154) {
+    bool _e163 = local_4;
+    if (_e163) {
         local_5 = ((flags & 3u) != 2u);
     } else {
         local_5 = false;
     }
-    bool _e162 = local_5;
-    if (_e162) {
-        float _e163 = ao;
-        const float _e165 = pbr_screen_occlusion(input.worldPosition, shadowNormal);
-        ao = (_e163 * _e165);
+    bool _e171 = local_5;
+    if (_e171) {
+        float _e172 = ao;
+        const float _e174 = pbr_screen_occlusion(input.worldPosition, shadowNormal);
+        ao = (_e172 * _e174);
     }
-    float _e170 = pbr.renderParams.y;
-    if ((_e170 == 6.0)) {
-        float _e173 = ao;
-        return float4(_e173, 0.0, 0.0, 1.0);
+    float _e179 = pbr.renderParams.y;
+    if ((_e179 == 6.0)) {
+        float _e182 = ao;
+        return float4(_e182, 0.0, 0.0, 1.0);
     }
     if (((flags & 4u) != 0u)) {
-        float3 _e182 = n;
-        const float3x3 _e183 = pbr_basis(input, _e182);
-        float4 _e187 = normalTex.Sample(normalSampler, input.uv);
-        const float3 _e196 = pbr_mapped_normal(_e183, ((_e187.xyz * 2.0) - (1.0).xxx), input.custom0_.x);
-        n = _e196;
+        float3 _e191 = n;
+        const float3x3 _e192 = pbr_basis(input, _e191);
+        float4 _e196 = normalTex.Sample(normalSampler, input.uv);
+        const float3 _e205 = pbr_mapped_normal(_e192, ((_e196.xyz * 2.0) - (1.0).xxx), input.custom0_.x);
+        n = _e205;
     }
-    float4 _e199 = pbr.cameraPosition;
-    float4 _e206 = pbr.cameraForward;
-    float _e212 = pbr.cameraPosition.w;
-    float3 v_3 = ((_e212 < 0.0) ? -(_e206.xyz) : normalize((_e199.xyz - input.worldPosition)));
+    float4 _e208 = pbr.cameraPosition;
+    float4 _e215 = pbr.cameraForward;
+    float _e221 = pbr.cameraPosition.w;
+    float3 v_3 = ((_e221 < 0.0) ? -(_e215.xyz) : normalize((_e208.xyz - input.worldPosition)));
     specular = input.custom0_.z;
     specColor = input.custom1_.xyz;
     if (((flags & 64u) != 0u)) {
-        float _e226 = specular;
-        float4 _e230 = specularTex.Sample(specularSampler, input.uv);
-        specular = (_e226 * _e230.w);
+        float _e235 = specular;
+        float4 _e239 = specularTex.Sample(specularSampler, input.uv);
+        specular = (_e235 * _e239.w);
     }
     if (((flags & 128u) != 0u)) {
-        float3 _e237 = specColor;
-        float4 _e241 = specularColorTex.Sample(specularColorSampler, input.uv);
-        specColor = (_e237 * _e241.xyz);
+        float3 _e246 = specColor;
+        float4 _e250 = specularColorTex.Sample(specularColorSampler, input.uv);
+        specColor = (_e246 * _e250.xyz);
     }
     float iorRatio = ((input.material.y == 0.0) ? 1.0 : (1.0 - (2.0 / (max(input.material.y, 1.0) + 1.0))));
-    float3 _e262 = specColor;
-    float _e267 = specular;
-    float3 dielectricF0_ = (min((((iorRatio * iorRatio)).xxx * _e262), (1.0).xxx) * _e267);
+    float3 _e271 = specColor;
+    float _e276 = specular;
+    float3 dielectricF0_ = (min((((iorRatio * iorRatio)).xxx * _e271), (1.0).xxx) * _e276);
     float diffuseF0_ = max(max(dielectricF0_.x, dielectricF0_.y), dielectricF0_.z);
-    float4 _e274 = base;
-    float _e276 = metallic;
-    float3 f0_2 = lerp(dielectricF0_, _e274.xyz, _e276);
-    float _e278 = specular;
-    float _e279 = metallic;
-    float f90_2 = lerp(_e278, 1.0, _e279);
+    float4 _e283 = base;
+    float _e285 = metallic;
+    float3 f0_2 = lerp(dielectricF0_, _e283.xyz, _e285);
+    float _e287 = specular;
+    float _e288 = metallic;
+    float f90_2 = lerp(_e287, 1.0, _e288);
     emission = input.emissiveMetallic.xyz;
     if (((flags & 32u) != 0u)) {
-        float3 _e289 = emission;
-        float4 _e293 = emissiveTex.Sample(emissiveSampler, input.uv);
-        emission = (_e289 * _e293.xyz);
+        float3 _e298 = emission;
+        float4 _e302 = emissiveTex.Sample(emissiveSampler, input.uv);
+        emission = (_e298 * _e302.xyz);
     }
-    float3 _e296 = n;
-    float nv_2 = max(dot(_e296, v_3), 0.0001);
-    float3 _e302 = n;
-    float3 _e303 = n;
-    float4 _e308 = base;
-    float _e310 = metallic;
-    float _e311 = roughness;
-    float _e312 = specular;
-    PBRSurface surface = ConstructPBRSurface(_e302, _e303, (0.0).xxx, (0.0).xxx, _e308.xyz, _e310, _e311, f0_2, f90_2, diffuseF0_, _e312, 0.0, 1.0, 0.0, (0.0).xxx, 1.0, 0.0, 1.0, 0.0, 0.0);
-    float _e324 = specular;
-    float ambientF = (diffuseF0_ + ((_e324 - diffuseF0_) * pow((1.0 - clamp(nv_2, 0.0, 1.0)), 5.0)));
-    float _e337 = metallic;
-    float diffuseWeight = ((1.0 - ambientF) * (1.0 - _e337));
-    float4 _e341 = base;
-    float4 _e345 = pbr.ambientLight;
-    float _e350 = ao;
-    float3 _e352 = emission;
-    lit_ = ((((((_e341.xyz * _e345.xyz) * diffuseWeight) * 1.0) * _e350) + _e352) * (1.0 - 0.0));
-    float _e361 = pbr.environment.x;
-    if ((_e361 > 0.0)) {
-        float3 _e364 = n;
-        const float3 _e366 = pbr_environment(_e364, 6.0);
+    float3 _e305 = n;
+    float nv_2 = max(dot(_e305, v_3), 0.0001);
+    float3 _e311 = n;
+    float3 _e312 = n;
+    float4 _e317 = base;
+    float _e319 = metallic;
+    float _e320 = roughness;
+    float _e321 = specular;
+    PBRSurface surface = ConstructPBRSurface(_e311, _e312, (0.0).xxx, (0.0).xxx, _e317.xyz, _e319, _e320, f0_2, f90_2, diffuseF0_, _e321, 0.0, 1.0, 0.0, (0.0).xxx, 1.0, 0.0, 1.0, 0.0, 0.0);
+    float _e333 = specular;
+    float ambientF = (diffuseF0_ + ((_e333 - diffuseF0_) * pow((1.0 - clamp(nv_2, 0.0, 1.0)), 5.0)));
+    float _e346 = metallic;
+    float diffuseWeight = ((1.0 - ambientF) * (1.0 - _e346));
+    float4 _e350 = base;
+    float4 _e354 = pbr.ambientLight;
+    float _e359 = ao;
+    float3 _e361 = emission;
+    lit_ = ((((((_e350.xyz * _e354.xyz) * diffuseWeight) * 1.0) * _e359) + _e361) * (1.0 - 0.0));
+    float _e370 = pbr.environment.x;
+    if ((_e370 > 0.0)) {
+        float3 _e373 = n;
+        const float3 _e375 = pbr_environment(_e373, 6.0);
         float3 reflectionNormal = n;
-        float _e368 = roughness;
-        const float3 _e369 = pbr_environment_reflection(reflectionNormal, v_3, _e368);
-        float _e370 = roughness;
-        const float4 _e373 = pbr_atlas(float2(nv_2, _e370), 7.0);
-        float2 brdf_1 = _e373.xy;
+        float _e377 = roughness;
+        const float3 _e378 = pbr_environment_reflection(reflectionNormal, v_3, _e377);
+        float _e379 = roughness;
+        const float4 _e382 = pbr_atlas(float2(nv_2, _e379), 7.0);
+        float2 brdf_1 = _e382.xy;
         float3 dielectricSingle = ((dielectricF0_ * brdf_1.x) + ((f90_2 * brdf_1.y)).xxx);
-        float4 _e381 = base;
-        float3 metallicSingle = ((_e381.xyz * brdf_1.x) + ((f90_2 * brdf_1.y)).xxx);
-        const float3 _e389 = pbr_multiscattering(dielectricF0_, f90_2, brdf_1);
         float4 _e390 = base;
-        const float3 _e392 = pbr_multiscattering(_e390.xyz, f90_2, brdf_1);
-        float _e393 = metallic;
-        float3 single_1 = lerp(dielectricSingle, metallicSingle, _e393);
-        float _e395 = metallic;
-        float3 multiple = lerp(_e389, _e392, _e395);
-        float4 _e397 = base;
-        float _e399 = metallic;
-        float3 diffuse_1 = ((_e397.xyz * (1.0 - _e399)) * max((0.0).xxx, (((1.0).xxx - dielectricSingle) - _e389)));
-        indirect = (((_e369 * single_1) + (_e366 * (multiple + diffuse_1))) * 1.0);
-        float3 _e417 = indirect;
-        indirect = (_e417 * (1.0 - 0.0));
-        float3 _e421 = lit_;
-        float3 _e422 = indirect;
-        float _e426 = pbr.environment.x;
-        float _e428 = ao;
-        lit_ = (_e421 + ((_e422 * _e426) * _e428));
+        float3 metallicSingle = ((_e390.xyz * brdf_1.x) + ((f90_2 * brdf_1.y)).xxx);
+        const float3 _e398 = pbr_multiscattering(dielectricF0_, f90_2, brdf_1);
+        float4 _e399 = base;
+        const float3 _e401 = pbr_multiscattering(_e399.xyz, f90_2, brdf_1);
+        float _e402 = metallic;
+        float3 single_1 = lerp(dielectricSingle, metallicSingle, _e402);
+        float _e404 = metallic;
+        float3 multiple = lerp(_e398, _e401, _e404);
+        float4 _e406 = base;
+        float _e408 = metallic;
+        float3 diffuse_1 = ((_e406.xyz * (1.0 - _e408)) * max((0.0).xxx, (((1.0).xxx - dielectricSingle) - _e398)));
+        indirect = (((_e378 * single_1) + (_e375 * (multiple + diffuse_1))) * 1.0);
+        float3 _e426 = indirect;
+        indirect = (_e426 * (1.0 - 0.0));
+        float3 _e430 = lit_;
+        float3 _e431 = indirect;
+        float _e435 = pbr.environment.x;
+        float _e437 = ao;
+        lit_ = (_e430 + ((_e431 * _e435) * _e437));
     }
-    float _e434 = pbr.lightMeta.x;
-    if ((_e434 == 0.0)) {
+    float _e443 = pbr.lightMeta.x;
+    if ((_e443 == 0.0)) {
         if (((flags & 4096u) == 0u)) {
-            const float _e445 = pbr_light_shadow(0u, input.worldPosition, shadowNormal);
-            shadow = _e445;
+            const float _e454 = pbr_light_shadow(0u, input.worldPosition, shadowNormal, receiver_2);
+            shadow = _e454;
         }
-        float3 _e446 = lit_;
-        float4 _e449 = pbr.lightDirection;
-        const float3 _e453 = pbr_brdf(surface, v_3, normalize(-(_e449.xyz)));
-        float4 _e456 = pbr.directionalLight;
-        float _e459 = shadow;
-        lit_ = (_e446 + ((_e453 * _e456.xyz) * _e459));
+        float3 _e455 = lit_;
+        float4 _e458 = pbr.lightDirection;
+        const float3 _e462 = pbr_brdf(surface, v_3, normalize(-(_e458.xyz)));
+        float4 _e465 = pbr.directionalLight;
+        float _e468 = shadow;
+        lit_ = (_e455 + ((_e462 * _e465.xyz) * _e468));
     }
     uint2 loop_bound_5 = uint2(4294967295u, 4294967295u);
     bool loop_init_5 = true;
@@ -1080,51 +1091,51 @@ float4 mesh_fragment(FragmentInput_mesh_fragment fragmentinput_mesh_fragment) : 
         if (all(loop_bound_5 == uint2(0u, 0u))) { break; }
         loop_bound_5 -= uint2(loop_bound_5.y == 0u, 1u);
         if (!loop_init_5) {
-            uint _e688 = index;
-            index = (_e688 + 1u);
+            uint _e697 = index;
+            index = (_e697 + 1u);
         }
         loop_init_5 = false;
-        uint _e464 = index;
-        if ((_e464 < 16u)) {
+        uint _e473 = index;
+        if ((_e473 < 16u)) {
         } else {
             break;
         }
         {
-            uint _e467 = index;
-            float _e472 = pbr.lightMeta.x;
-            if ((float(_e467) >= _e472)) {
+            uint _e476 = index;
+            float _e481 = pbr.lightMeta.x;
+            if ((float(_e476) >= _e481)) {
                 break;
             }
-            uint _e476 = index;
-            float kind_1 = pbr.lightDirections[_e476].w;
+            uint _e485 = index;
+            float kind_1 = pbr.lightDirections[_e485].w;
             if ((kind_1 == 0.0)) {
                 continue;
             }
             if ((kind_1 >= 6.0)) {
-                float3 _e484 = lit_;
-                uint _e485 = index;
-                const float3 _e487 = area_lighting(_e485, input.worldPosition, surface, v_3);
-                lit_ = (_e484 + _e487);
+                float3 _e493 = lit_;
+                uint _e494 = index;
+                const float3 _e496 = area_lighting(_e494, input.worldPosition, surface, v_3);
+                lit_ = (_e493 + _e496);
                 continue;
             }
-            uint _e491 = index;
-            float4 _e493 = pbr.lightDirections[_e491];
-            l = -(_e493.xyz);
+            uint _e500 = index;
+            float4 _e502 = pbr.lightDirections[_e500];
+            l = -(_e502.xyz);
             attenuation = 1.0;
             if ((kind_1 >= 2.0)) {
-                uint _e503 = index;
-                float4 _e505 = pbr.lightPosition[_e503];
-                float3 delta_4 = (_e505.xyz - input.worldPosition);
-                float distanceSquared_3 = dot(delta_4, delta_4);
                 uint _e512 = index;
-                float range_2 = pbr.lightParams[_e512].x;
-                uint _e518 = index;
-                float4 _e520 = pbr.lightDirections[_e518];
-                float3 forward_1 = _e520.xyz;
-                uint _e524 = index;
-                float4 right_1 = pbr.lightRight[_e524];
-                uint _e529 = index;
-                float4 up_1 = pbr.lightUp[_e529];
+                float4 _e514 = pbr.lightPosition[_e512];
+                float3 delta_4 = (_e514.xyz - input.worldPosition);
+                float distanceSquared_3 = dot(delta_4, delta_4);
+                uint _e521 = index;
+                float range_2 = pbr.lightParams[_e521].x;
+                uint _e527 = index;
+                float4 _e529 = pbr.lightDirections[_e527];
+                float3 forward_1 = _e529.xyz;
+                uint _e533 = index;
+                float4 right_1 = pbr.lightRight[_e533];
+                uint _e538 = index;
+                float4 up_1 = pbr.lightUp[_e538];
                 if ((kind_1 == 5.0)) {
                     float depth_2 = dot(-(delta_4), forward_1);
                     if (!((depth_2 < 0.0))) {
@@ -1132,59 +1143,59 @@ float4 mesh_fragment(FragmentInput_mesh_fragment fragmentinput_mesh_fragment) : 
                     } else {
                         local_6 = true;
                     }
-                    bool _e543 = local_6;
-                    if (!(_e543)) {
+                    bool _e552 = local_6;
+                    if (!(_e552)) {
                         local_7 = (abs(dot(delta_4, right_1.xyz)) > right_1.w);
                     } else {
                         local_7 = true;
                     }
-                    bool _e553 = local_7;
-                    if (!(_e553)) {
+                    bool _e562 = local_7;
+                    if (!(_e562)) {
                         local_8 = (abs(dot(delta_4, up_1.xyz)) > up_1.w);
                     } else {
                         local_8 = true;
                     }
-                    bool _e563 = local_8;
-                    if (_e563) {
+                    bool _e572 = local_8;
+                    if (_e572) {
                         continue;
                     }
                     l = -(forward_1);
-                    uint _e567 = index;
-                    float _e570 = pbr.lightParams[_e567].y;
-                    attenuation = _e570;
-                    uint _e573 = index;
-                    float _e576 = pbr.lightParams[_e573].z;
-                    if ((_e576 > 0.5)) {
-                        float _e579 = attenuation;
-                        const float _e581 = light_range_window((depth_2 * depth_2), range_2);
-                        attenuation = (_e579 * _e581);
+                    uint _e576 = index;
+                    float _e579 = pbr.lightParams[_e576].y;
+                    attenuation = _e579;
+                    uint _e582 = index;
+                    float _e585 = pbr.lightParams[_e582].z;
+                    if ((_e585 > 0.5)) {
+                        float _e588 = attenuation;
+                        const float _e590 = light_range_window((depth_2 * depth_2), range_2);
+                        attenuation = (_e588 * _e590);
                     }
                 } else {
                     if ((distanceSquared_3 >= (range_2 * range_2))) {
                         continue;
                     }
                     l = (delta_4 * rsqrt(max(distanceSquared_3, 1e-08)));
-                    uint _e591 = index;
-                    float _e594 = pbr.lightColors[_e591].w;
-                    const float _e595 = light_distance_attenuation(distanceSquared_3, range_2, _e594);
-                    uint _e598 = index;
-                    float _e601 = pbr.lightParams[_e598].y;
-                    attenuation = (_e595 * _e601);
+                    uint _e600 = index;
+                    float _e603 = pbr.lightColors[_e600].w;
+                    const float _e604 = light_distance_attenuation(distanceSquared_3, range_2, _e603);
+                    uint _e607 = index;
+                    float _e610 = pbr.lightParams[_e607].y;
+                    attenuation = (_e604 * _e610);
                     if ((kind_1 == 3.0)) {
-                        float3 _e605 = l;
-                        float cone = dot(forward_1, -(_e605));
-                        uint _e610 = index;
-                        float inner = pbr.lightParams[_e610].z;
-                        uint _e616 = index;
-                        float outer = pbr.lightParams[_e616].w;
+                        float3 _e614 = l;
+                        float cone = dot(forward_1, -(_e614));
+                        uint _e619 = index;
+                        float inner = pbr.lightParams[_e619].z;
+                        uint _e625 = index;
+                        float outer = pbr.lightParams[_e625].w;
                         angle = ((cone >= outer) ? 1.0 : 0.0);
                         if ((inner > outer)) {
                             angle = clamp(((cone - outer) / (inner - outer)), 0.0, 1.0);
                         }
-                        float _e632 = attenuation;
-                        float _e633 = angle;
-                        float _e634 = angle;
-                        attenuation = (_e632 * (_e633 * _e634));
+                        float _e641 = attenuation;
+                        float _e642 = angle;
+                        float _e643 = angle;
+                        attenuation = (_e641 * (_e642 * _e643));
                     } else {
                         if ((kind_1 == 4.0)) {
                             float depth_3 = dot(-(delta_4), forward_1);
@@ -1193,14 +1204,14 @@ float4 mesh_fragment(FragmentInput_mesh_fragment fragmentinput_mesh_fragment) : 
                             } else {
                                 local_9 = true;
                             }
-                            bool _e653 = local_9;
-                            if (!(_e653)) {
+                            bool _e662 = local_9;
+                            if (!(_e662)) {
                                 local_10 = (abs(dot(delta_4, up_1.xyz)) > (depth_3 * up_1.w));
                             } else {
                                 local_10 = true;
                             }
-                            bool _e664 = local_10;
-                            if (_e664) {
+                            bool _e673 = local_10;
+                            if (_e673) {
                                 continue;
                             }
                         }
@@ -1208,22 +1219,22 @@ float4 mesh_fragment(FragmentInput_mesh_fragment fragmentinput_mesh_fragment) : 
                 }
             }
             if (((flags & 4096u) == 0u)) {
-                float _e669 = attenuation;
-                uint _e670 = index;
-                const float _e672 = pbr_light_shadow(_e670, input.worldPosition, shadowNormal);
-                attenuation = (_e669 * _e672);
+                float _e678 = attenuation;
+                uint _e679 = index;
+                const float _e681 = pbr_light_shadow(_e679, input.worldPosition, shadowNormal, receiver_2);
+                attenuation = (_e678 * _e681);
             }
-            float3 _e674 = lit_;
-            float3 _e675 = l;
-            const float3 _e676 = pbr_brdf(surface, v_3, _e675);
-            uint _e679 = index;
-            float4 _e681 = pbr.lightColors[_e679];
-            float _e684 = attenuation;
-            lit_ = (_e674 + ((_e676 * _e681.xyz) * _e684));
+            float3 _e683 = lit_;
+            float3 _e684 = l;
+            const float3 _e685 = pbr_brdf(surface, v_3, _e684);
+            uint _e688 = index;
+            float4 _e690 = pbr.lightColors[_e688];
+            float _e693 = attenuation;
+            lit_ = (_e683 + ((_e685 * _e690.xyz) * _e693));
         }
     }
-    float3 _e690 = lit_;
-    float _e692 = base.w;
-    const float4 _e694 = pbr_surface_output(_e690, _e692, input.worldPosition);
-    return _e694;
+    float3 _e699 = lit_;
+    float _e701 = base.w;
+    const float4 _e703 = pbr_surface_output(_e699, _e701, input.worldPosition);
+    return _e703;
 }

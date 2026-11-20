@@ -31,12 +31,13 @@ type removalColumn struct {
 
 // moveColumns transfers one source row into the prepared targets, dropping the
 // storage of columns whose target is nil.
-func moveColumns(columns []removalColumn, row int) {
+func moveColumns(world *World, columns []removalColumn, row int) {
 	for _, entry := range columns {
 		if entry.overwritten {
 			entry.source.removeRow(row)
 		} else if entry.target == nil {
 			entry.source.swapRemove(row)
+			world.componentInfos[entry.id].detached++
 		} else {
 			entry.source.moveTo(entry.target, row)
 		}
@@ -115,7 +116,7 @@ func (r PreparedRemoval) Apply(entity Entity) bool {
 		}
 	}
 	targetRow := transition.target.appendEntity(entity)
-	moveColumns(transition.columns, row)
+	moveColumns(w, transition.columns, row)
 	w.removeArchetypeEntity(transition.source, row)
 	w.commitMigration(index, transition.target, targetRow)
 	return true

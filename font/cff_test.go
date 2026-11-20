@@ -53,11 +53,11 @@ func TestParseCFFIndexBorrowsSourceData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects[0][0] = 'F'
+	objects.At(0)[0] = 'F'
 	if !bytes.Contains(data, []byte("First")) {
 		t.Fatal("CFF INDEX object did not share the source buffer")
 	}
-	if cap(objects[0]) != len(objects[0]) {
+	if cap(objects.At(0)) != len(objects.At(0)) {
 		t.Fatal("CFF INDEX object can append into the next object")
 	}
 }
@@ -82,7 +82,7 @@ func TestCFFType2AdditionalOperators(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			charstring := append([]byte{139, 139, 21}, tt.charstring...)
-			font := &cffFont{CharStrings: [][]byte{charstring}}
+			font := &cffFont{CharStrings: testCFFIndex(t, [][]byte{charstring})}
 			outline, err := font.outline(0)
 			if err != nil {
 				t.Fatalf("outline: %v", err)
@@ -101,8 +101,8 @@ func TestCFFType2ReturnPreservesStack(t *testing.T) {
 	localSubrs := make([][]byte, 108)
 	localSubrs[107] = []byte{159, 139, 11}
 	font := &cffFont{
-		CharStrings: [][]byte{{139, 139, 21, 139, 10, 5, 14}},
-		LocalSubrs:  localSubrs,
+		CharStrings: testCFFIndex(t, [][]byte{{139, 139, 21, 139, 10, 5, 14}}),
+		LocalSubrs:  testCFFIndex(t, localSubrs),
 	}
 
 	outline, err := font.outline(0)
@@ -179,7 +179,7 @@ func TestCFFType2MoveWidthAndCurvetoOptionalArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			font := &cffFont{CharStrings: [][]byte{tt.charstring}}
+			font := &cffFont{CharStrings: testCFFIndex(t, [][]byte{tt.charstring})}
 			outline, err := font.outline(0)
 			if err != nil {
 				t.Fatalf("outline: %v", err)
@@ -354,4 +354,13 @@ func buildTestTopDict(charsetOffset, charStringsOffset int) []byte {
 		28, byte(charsetOffset >> 8), byte(charsetOffset), 15,
 		28, byte(charStringsOffset >> 8), byte(charStringsOffset), 17,
 	}
+}
+
+func testCFFIndex(t *testing.T, objects [][]byte) cffIndex {
+	t.Helper()
+	index, _, err := parseCFFIndex(buildCFFIndex(objects), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return index
 }

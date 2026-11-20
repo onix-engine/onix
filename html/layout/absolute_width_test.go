@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestAbsoluteAutoWidthShrinksToContent(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRetainedAbsoluteTabbedWidthDoesNotAllocate(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div style="position:relative;width:1000px"><div id="popup" style="position:absolute;left:16px;max-width:80%"><pre style="margin:0;white-space:pre-wrap"><span>APIKey</span>&#9;<span>string</span>&#9;<span>json:&quot;api_key,omitempty&quot;</span></pre></div></div>`)
 	var cache Cache
 	popup := retainedNode(root, "popup")
-	dirty := []*dom.Node{popup}
+	dirty := []*uinode.Node{popup}
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	mutable := styles.Exclusive(popup)
 	allocations := testing.AllocsPerRun(100, func() {
@@ -116,7 +116,7 @@ func TestRetainedAbsoluteFlexIntrinsicWidthDoesNotAllocate(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<header style="position:relative;width:300px"><nav id="menus" style="position:absolute;left:16px;display:flex;gap:4px"><div style="display:flex"><button style="display:flex;padding:0 8px;white-space:nowrap">File</button></div><div style="display:flex"><button style="display:flex;padding:0 8px;white-space:nowrap">Edit</button></div></nav></header>`)
 	var cache Cache
 	menus := retainedNode(root, "menus")
-	dirty := []*dom.Node{menus}
+	dirty := []*uinode.Node{menus}
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	mutable := styles.Exclusive(menus)
 	allocations := testing.AllocsPerRun(100, func() {

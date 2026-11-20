@@ -201,7 +201,11 @@ func (f *Face) GlyphIndex(r rune) uint16 {
 	if uint32(r) < uint32(len(f.asciiGlyphs)) {
 		return f.asciiGlyphs[r]
 	}
-	return f.Cmap.GlyphIndex(r)
+	id := f.Cmap.GlyphIndex(r)
+	// Borrowed cmap bytes must remain mapped until the lookup completes, even
+	// if a weak fallback source is the only other reference to this face.
+	runtime.KeepAlive(f)
+	return id
 }
 
 func (f *Face) ensureCachesLocked() {
@@ -272,6 +276,7 @@ func (f *Face) textEdgeHeight(height int16, character rune) int16 {
 }
 
 func (f *Face) Glyph(glyphID uint16) (*Glyph, error) {
+	defer runtime.KeepAlive(f)
 	if f.CFF != nil {
 		return nil, fmt.Errorf("glyph extraction is only available for glyf-based fonts")
 	}
@@ -288,6 +293,7 @@ func (f *Face) Glyph(glyphID uint16) (*Glyph, error) {
 
 // GlyphBounds reads TrueType ink bounds without decoding or retaining contours.
 func (f *Face) GlyphBounds(glyphID uint16) (Bounds, error) {
+	defer runtime.KeepAlive(f)
 	if f.italicSource != nil {
 		bounds, err := f.italicSource.GlyphBounds(glyphID)
 		return italicBounds(bounds), err
@@ -319,4 +325,21 @@ func (f *Face) GlyphBounds(glyphID uint16) (Bounds, error) {
 		XMax: int16(binary.BigEndian.Uint16(data[6:8])),
 		YMax: int16(binary.BigEndian.Uint16(data[8:10])),
 	}, nil
+}
+
+// TrimCaches releases regenerable CPU glyph data without invalidating faces,
+// outlines or bitmap masks already held by a renderer.
+func (f *Face) TrimCaches() {
+	if f == nil {
+		return
+	}
+	f.cacheMu.Lock()
+	f.outlineCache = nil
+	f.glyphBitmapCache = nil
+	f.bitmapOrder, f.bitmapHead, f.bitmapBytes = nil, 0, 0
+	italic := f.italicVariant
+	f.cacheMu.Unlock()
+	if italic != nil {
+		italic.TrimCaches()
+	}
 }

@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestLocalFlexOrderRestoresDOMTiesAndDeduplicatesParents(t *testing.T) {
@@ -18,7 +18,7 @@ func TestLocalFlexOrderRestoresDOMTiesAndDeduplicatesParents(t *testing.T) {
 	for _, orders := range [][2]float64{{2, 1}, {0, 0}, {-1, -2}, {0, 0}, {2, 2}, {1, 1}} {
 		styles.Exclusive(a).Order = style.Number(orders[0])
 		styles.Exclusive(b).Order = style.Number(orders[1])
-		nodes := []*dom.Node{a, b, a}
+		nodes := []*uinode.Node{a, b, a}
 		got, err := cache.Update(root, styles, face, face, 320, 200, nodes, nodes, false, false)
 		if err != nil {
 			t.Fatal(err)
@@ -38,7 +38,7 @@ func TestLocalFlexOrderRestoresDOMTiesAndDeduplicatesParents(t *testing.T) {
 	// Changing order values without changing relative order needs no owner reorder.
 	styles.Exclusive(a).Order = style.Number(3)
 	styles.Exclusive(b).Order = style.Number(3)
-	nodes := []*dom.Node{a, b}
+	nodes := []*uinode.Node{a, b}
 	if _, err := cache.Update(root, styles, face, face, 320, 200, nodes, nodes, false, false); err != nil {
 		t.Fatal(err)
 	}

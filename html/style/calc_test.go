@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestParseCalcLength(t *testing.T) {
@@ -38,7 +38,7 @@ func TestResolveCalcLength(t *testing.T) {
 }
 
 func TestComputeCalcLengthWithViewport(t *testing.T) {
-	doc, err := dom.Parse(`<html><body><div id="box"></div></body></html>`)
+	doc, err := parse.Parse(`<html><body><div id="box"></div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}

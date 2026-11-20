@@ -9,44 +9,28 @@ import (
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
-	"github.com/onix-engine/onix/text/piecetree"
 	htmlui "github.com/onix-engine/onix/ui/html"
 )
 
 type htmlControlState struct {
-	CommittedValue string
 	RenderRevision uint64
 	SpacePressed   bool
 	FocusVisible   bool
 }
 
-type htmlEditableState struct {
-	InputType      string
-	Data           string
-	RenderRevision uint64
-}
-
 type htmlEventReaders struct {
-	Events    ecs.MessageReader[scene.InputEvent]
-	Inputs    ecs.MessageReader[InputEvent[string]]
-	Documents ecs.MessageReader[InputEvent[piecetree.Snapshot]]
-	Submits   ecs.MessageReader[SubmittedEvent[string]]
-	Focus     ecs.MessageReader[FocusChangedEvent]
+	Events          ecs.MessageReader[scene.InputEvent]
+	Focus           ecs.MessageReader[FocusChangedEvent]
+	PressedSelector ecs.Entity
 }
 
 type htmlEventReadersTag struct{}
 type htmlControlsScratch struct{}
-type htmlControlTextsScratch struct{}
-type htmlControlVisualsScratch struct{}
-type htmlEditablesScratch struct{}
-type htmlEditableTextsScratch struct{}
-type htmlEditableVisualsScratch struct{}
-type htmlSelectorElementsScratch struct{}
 type htmlFocusRebuildState struct {
 	Field        TextField
-	ControlState htmlControlState
 	Focusable    htmlui.Focusable
 	Textarea     Textarea
+	ControlState htmlControlState
 	Entity       ecs.Entity
 	Ordinal      int
 	HasField     bool
@@ -62,6 +46,10 @@ type htmlSelectorRuntime struct {
 	Shape         scene.Shape2D
 	Width, Height float32
 }
+type htmlSelectorRetirements struct {
+	entities []ecs.Entity
+	bound    bool
+}
 type htmlSelectorElement struct {
 	Owner ecs.Entity
 }
@@ -71,28 +59,12 @@ type htmlSelectorPopup struct {
 type htmlAutofocusApplied struct{}
 
 func SetHTMLControlValue(world *ecs.World, control ecs.Entity, value string) bool {
-	if !htmlui.SetControlValue(world, control, value) {
-		return false
-	}
-	if field := world.GetMut[TextField](control); field != nil {
-		field.Value = value
-		field.Composition = ""
-		length := runeCount(value)
-		field.Caret = max(0, min(field.Caret, length))
-		field.Anchor = max(0, min(field.Anchor, length))
-	}
-	if state := world.GetMut[htmlControlState](control); state != nil {
-		state.CommittedValue = value
-	}
-	return true
+	return htmlui.SetControlValue(world, control, value)
 }
 
 func SetHTMLControlChecked(world *ecs.World, control ecs.Entity, checked bool) bool {
 	if !htmlui.SetControlChecked(world, control, checked) {
 		return false
-	}
-	if toggle := world.GetMut[Toggle[bool]](control); toggle != nil {
-		toggle.Value = checked
 	}
 	if current, ok := world.Get[htmlui.Control](control); ok {
 		refreshHTMLControlText(world, control, current)
@@ -125,34 +97,18 @@ func SetHTMLControlSelectionRange(world *ecs.World, control ecs.Entity, anchor, 
 }
 
 func SetHTMLEditableValue(world *ecs.World, editable ecs.Entity, value string) bool {
-	if !htmlui.SetEditableValue(world, editable, value) {
-		return false
-	}
-	if field := world.GetMut[TextField](editable); field != nil {
-		field.Value = value
-		length := runeCount(value)
-		field.Anchor = max(0, min(field.Anchor, length))
-		field.Caret = max(0, min(field.Caret, length))
-	}
-	return true
+	return htmlui.SetEditableValue(world, editable, value)
 }
 
 func SetHTMLEditableSelection(world *ecs.World, editable ecs.Entity, anchor, focus int) bool {
-	if !htmlui.SetEditableSelection(world, editable, anchor, focus) {
-		return false
-	}
-	if field := world.GetMut[TextField](editable); field != nil {
-		field.Anchor, field.Caret = anchor, focus
-	}
-	return true
+	return htmlui.SetEditableSelection(world, editable, anchor, focus)
 }
 
 func ResetHTMLForm(world *ecs.World, owner ecs.Entity, formID string) bool {
 	if !htmlui.HasForm(world, owner, formID) {
 		return false
 	}
-	event := htmlui.DispatchAction(world, htmlui.Event{Entity: owner, ID: formID, FormID: formID, Kind: htmlui.EventReset, Bubbles: true, Cancelable: true})
-	world.WriteMessage(event)
+	event := htmlui.PublishEvent(world, htmlui.Event{Entity: owner, ID: formID, FormID: formID, Kind: htmlui.EventReset, Bubbles: true, Cancelable: true})
 	if event.DefaultPrevented || !htmlui.ResetForm(world, owner, formID) {
 		return false
 	}
@@ -171,6 +127,15 @@ func SyncHTML(world *ecs.World) error {
 	return SyncHTMLSystem("").Run(world)
 }
 
+// RefreshHTMLScope includes newly created UI children in the current scene query scope.
+type RefreshHTMLScope func()
+
+func refreshUIChildren(world *ecs.World) {
+	if refresh, ok := world.GetResource[RefreshHTMLScope](); ok {
+		refresh()
+	}
+}
+
 func syncHTMLRuntime(context *ecs.SystemContext) error {
 	if context == nil || context.World == nil {
 		return nil
@@ -184,8 +149,13 @@ func syncHTMLRuntime(context *ecs.SystemContext) error {
 	if needsFrame {
 		request.Request()
 	}
+	replacedFocus := preserve && (!context.World.IsAlive(state.Entity) || !context.World.Has[htmlui.Focusable](state.Entity))
+	if replacedFocus {
+		// Enrich the replacement before restoring native focus and composition.
+		refreshUIChildren(context.World)
+	}
 	enrichHTMLControls(context.World)
-	if preserve && (!context.World.IsAlive(state.Entity) || !context.World.Has[htmlui.Focusable](state.Entity)) {
+	if replacedFocus {
 		restoreHTMLFocusRebuildState(context.World, state)
 	}
 	if inputState, ok := context.World.GetResource[*uiEventState](); ok && inputState != nil && inputState.Focused != 0 && !scene.IsInteractive(context.World, inputState.Focused) {
@@ -259,16 +229,17 @@ func restoreHTMLFocusRebuildState(world *ecs.World, state htmlFocusRebuildState)
 		return
 	}
 	if state.HasField {
-		value, placeholder, password, maxRunes, fontSize, dpi := field.Value, field.Placeholder, field.Password, field.MaxRunes, field.FontSize, field.DPI
+		authored := *field
 		*field = state.Field
-		field.Value, field.Placeholder, field.Password = value, placeholder, password
-		field.MaxRunes, field.FontSize, field.DPI = maxRunes, fontSize, dpi
+		field.Placeholder, field.Password, field.MaxRunes = authored.Placeholder, authored.Password, authored.MaxRunes
+		field.FontSize, field.DPI = authored.FontSize, authored.DPI
+		if field.Buffer == nil {
+			field.Value, field.CommittedValue = authored.Value, authored.CommittedValue
+		}
 		length := field.Text().Runes()
 		field.Caret = max(0, min(field.Caret, length))
 		field.Anchor = max(0, min(field.Anchor, length))
-		if editable := world.GetMut[htmlui.Editable](entity); editable != nil {
-			editable.Value, editable.Anchor, editable.Focus = field.Value, field.Anchor, field.Caret
-		}
+
 	}
 	if state.HasTextarea {
 		if textarea := world.GetMut[Textarea](entity); textarea != nil {
@@ -340,61 +311,29 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 	readers := context.Local[htmlEventReadersTag, htmlEventReaders]()
 	for event := range readers.Events.All(world) {
 		syncHTMLInputState(world, event)
-		if event.Kind == scene.InputEventPress {
-			if selector, selectorOK := world.Get[Selector](event.Entity); selectorOK {
-				if current := world.GetMut[htmlui.Control](event.Entity); current != nil {
-					current.Open = selector.Open
-				}
-				setHTMLSelectorVisibility(world, event.Entity, selector.Open)
-			}
+		if event.Kind == scene.InputEventCancel {
+			readers.PressedSelector = 0
 		}
-		if event.Kind != scene.InputEventTap {
+		if event.Handled || !isHTMLActivationTarget(world, event.Entity) || !scene.IsInteractive(world, event.Entity) {
 			continue
 		}
+		switch event.Kind {
+		case scene.InputEventPress:
+			if control := world.GetRef[htmlui.Control](event.Entity); control != nil && control.Tag == "select" && !control.Disabled {
+				readers.PressedSelector = event.Entity
+				SetHTMLSelectOpen(world, event.Entity, !control.Open)
+				event.Handled = true
+			}
+			continue
+		case scene.InputEventTap:
+			event.Handled = true
+		default:
+			continue
+		}
+		pressed := readers.PressedSelector
+		readers.PressedSelector = 0
 		if item, ok := world.Get[SelectorItem](event.Entity); ok {
-			controlEntity, control, exists := htmlSelectControlFor(world, item.Owner)
-			if !exists || control.Disabled || item.Disabled {
-				continue
-			}
-			selector, selectorOK := world.Get[Selector](item.Owner)
-			if !selectorOK {
-				continue
-			}
-			if control.Multiple {
-				shift, shortcut := htmlSelectionModifiers(world)
-				if updateHTMLMultipleSelection(world, controlEntity, control, item.Index, shift, shortcut, false) {
-					control, _ = world.Get[htmlui.Control](controlEntity)
-					refreshHTMLControlText(world, controlEntity, control)
-					if current := world.GetMut[Selector](item.Owner); current != nil {
-						current.Selected = control.Selected
-						current.Open = true
-					}
-					if current := world.GetMut[htmlui.Control](controlEntity); current != nil {
-						current.Open = true
-					}
-					setHTMLSelectorVisibility(world, item.Owner, true)
-					writeHTMLEvent(world, controlEntity, control, htmlui.EventInput)
-					writeHTMLEvent(world, controlEntity, control, htmlui.EventChange)
-				}
-				continue
-			}
-			if selector.Selected == control.Selected {
-				if current := world.GetMut[htmlui.Control](controlEntity); current != nil {
-					current.Open = false
-				}
-				setHTMLSelectorVisibility(world, item.Owner, false)
-				continue
-			}
-			if htmlui.SetControlSelected(world, controlEntity, selector.Selected) {
-				control, _ = world.Get[htmlui.Control](controlEntity)
-				refreshHTMLControlText(world, controlEntity, control)
-				control.Open = selector.Open
-				if current := world.GetMut[htmlui.Control](controlEntity); current != nil {
-					current.Open = selector.Open
-				}
-				setHTMLSelectorVisibility(world, item.Owner, false)
-				writeHTMLEvent(world, controlEntity, control, htmlui.EventChange)
-			}
+			handleHTMLSelectTap(world, item)
 			continue
 		}
 		control, ok := world.Get[htmlui.Control](event.Entity)
@@ -403,16 +342,10 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 		}
 		controlType := htmlControlType(control)
 		if controlType == "checkbox" || controlType == "radio" {
-			checked := control.Checked
-			if controlType == "radio" {
-				checked = true
-			} else if toggle, toggleOK := world.Get[Toggle[bool]](event.Entity); toggleOK {
-				// A click toggles the current live state. Toggle.Value mirrors
-				// the current state, so using it directly would make the
-				// checkbox appear permanently checked (or unchecked).
-				checked = !toggle.Value
-			} else {
-				checked = !checked
+			checked := controlType == "radio" || !control.Checked()
+			if checked == control.Checked() {
+				writeHTMLEvent(world, event.Entity, control, htmlui.EventClick)
+				continue
 			}
 			if SetHTMLControlChecked(world, event.Entity, checked) {
 				control, _ = world.Get[htmlui.Control](event.Entity)
@@ -422,12 +355,8 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 			}
 			continue
 		}
-		if selector, selectorOK := world.Get[Selector](event.Entity); selectorOK {
-			if current := world.GetMut[htmlui.Control](event.Entity); current != nil {
-				current.Open = selector.Open
-				control = *current
-			}
-			setHTMLSelectorVisibility(world, event.Entity, selector.Open)
+		if control.Tag == "select" && pressed != event.Entity {
+			SetHTMLSelectOpen(world, event.Entity, !control.Open)
 		}
 		writeHTMLEvent(world, event.Entity, control, htmlui.EventClick)
 		switch htmlControlType(control) {
@@ -435,54 +364,16 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 			if !htmlui.HasControlForm(world, event.Entity) {
 				break
 			}
-			reset := htmlui.DispatchAction(world, htmlui.Event{
+			reset := htmlui.PublishEvent(world, htmlui.Event{
 				Entity: control.Owner, ID: control.FormID, FormID: control.FormID, Kind: htmlui.EventReset,
 				Bubbles: true, Cancelable: true,
 			})
-			world.WriteMessage(reset)
 			if !reset.DefaultPrevented && htmlui.ResetControlForm(world, event.Entity) {
 				syncHTMLControlsAfterReset(world, control.Owner)
 			}
 		case "submit":
 			writeHTMLEvent(world, event.Entity, control, htmlui.EventSubmit)
 		}
-	}
-	syncHTMLControlStates(world)
-	for event := range readers.Documents.All(world) {
-		if control, ok := world.Get[htmlui.Control](event.Entity); ok {
-			world.WriteMessage(htmlui.Event{Entity: control.Owner, Target: event.Entity, ID: control.ID, FormID: control.FormID, Name: control.Name, Kind: htmlui.EventInput, Snapshot: event.Value, Document: true, Bubbles: true})
-		}
-	}
-	for event := range readers.Inputs.All(world) {
-		if editable, ok := world.Get[htmlui.Editable](event.Entity); ok {
-			if !htmlui.SetEditableValue(world, event.Entity, event.Value) {
-				continue
-			}
-			if field, exists := world.Get[TextField](event.Entity); exists {
-				htmlui.SetEditableSelection(world, event.Entity, field.Anchor, field.Caret)
-				editable.Value, editable.Anchor, editable.Focus = event.Value, field.Anchor, field.Caret
-			}
-			inputType, data := "", ""
-			if state := world.GetMut[htmlEditableState](event.Entity); state != nil {
-				inputType, data = state.InputType, state.Data
-				state.InputType, state.Data = "", ""
-			}
-			writeHTMLEditableEvent(world, event.Entity, editable, htmlui.EventInput, inputType, data)
-			continue
-		}
-		if !htmlui.SetControlValue(world, event.Entity, event.Value) {
-			continue
-		}
-		control, _ := world.Get[htmlui.Control](event.Entity)
-		writeHTMLEvent(world, event.Entity, control, htmlui.EventInput)
-	}
-	for event := range readers.Submits.All(world) {
-		if !htmlui.SetControlValue(world, event.Entity, event.Value) {
-			continue
-		}
-		control, _ := world.Get[htmlui.Control](event.Entity)
-		commitHTMLControl(world, event.Entity, control)
-		writeHTMLEvent(world, event.Entity, control, htmlui.EventSubmit)
 	}
 	for event := range readers.Focus.All(world) {
 		focusable, focusableOK := world.Get[htmlui.Focusable](event.Entity)
@@ -500,13 +391,7 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 			continue
 		}
 		if !event.Focused && control.Tag == "select" {
-			if selector := world.GetMut[Selector](event.Entity); selector != nil {
-				selector.Open = false
-			}
-			if current := world.GetMut[htmlui.Control](event.Entity); current != nil {
-				current.Open = false
-			}
-			setHTMLSelectorVisibility(world, event.Entity, false)
+			SetHTMLSelectOpen(world, event.Entity, false)
 		}
 		if event.Focused {
 			if state := world.GetMut[htmlControlState](event.Entity); state != nil {
@@ -523,7 +408,6 @@ func updateHTMLRuntime(context *ecs.SystemContext) error {
 		htmlui.SetControlFocus(world, event.Entity, false)
 		writeHTMLEvent(world, event.Entity, control, htmlui.EventBlur)
 	}
-	syncHTMLEditableStates(world)
 	return nil
 }
 
@@ -537,24 +421,8 @@ func syncHTMLControlsAfterReset(world *ecs.World, owner ecs.Entity) {
 		if control.Owner != owner {
 			continue
 		}
-		if field := world.GetMut[TextField](entity); field != nil {
-			field.Value = control.Value
-			field.Composition = ""
-			field.Caret = runeCount(control.Value)
-			field.Anchor = field.Caret
-		}
-		if toggle := world.GetMut[Toggle[bool]](entity); toggle != nil {
-			toggle.Value = control.Checked
-			toggle.Changed = false
-		}
-		if selector := world.GetMut[Selector](entity); selector != nil {
-			selector.Selected = control.Selected
-			selector.Open = false
+		if control.Tag == "select" && !control.Open {
 			setHTMLSelectorVisibility(world, entity, false)
-			syncHTMLSelectorOptions(world, entity, control)
-		}
-		if state := world.GetMut[htmlControlState](entity); state != nil {
-			state.CommittedValue = control.Value
 		}
 	}
 	for _, access := range world.Query2[htmlui.ControlText, scene.Text2D]().All {
@@ -565,17 +433,6 @@ func syncHTMLControlsAfterReset(world *ecs.World, owner ecs.Entity) {
 	}
 	if state, ok := world.GetResource[*uiEventState](); ok && state != nil && state.Focused != 0 {
 		syncTextInputFocus(world, state.Focused)
-	}
-}
-
-func syncHTMLEditableStates(world *ecs.World) {
-	for _, access := range world.Query2[htmlui.Editable, TextField]().All {
-		editable := access.A.Mut()
-		field := access.B.Mut()
-
-		if editable != nil && field != nil {
-			editable.Value, editable.Anchor, editable.Focus = field.Value, field.Anchor, field.Caret
-		}
 	}
 }
 
@@ -614,6 +471,41 @@ func syncHTMLInputState(world *ecs.World, event *scene.InputEvent) {
 	}
 }
 
+func isHTMLActivationTarget(world *ecs.World, entity ecs.Entity) bool {
+	if world.Has[htmlui.Control](entity) {
+		return true
+	}
+	item := world.GetRef[SelectorItem](entity)
+	return item != nil && world.Has[htmlui.Control](item.Owner)
+}
+
+// SetHTMLSelectOpen opens or closes the picker for an HTML select.
+func SetHTMLSelectOpen(world *ecs.World, entity ecs.Entity, open bool) {
+	control := world.GetRef[htmlui.Control](entity)
+	if control != nil && control.Tag == "select" && control.Open != open {
+		world.GetMut[htmlui.Control](entity).Open = open
+		setHTMLSelectorVisibility(world, entity, open)
+	}
+}
+
+func handleHTMLSelectTap(world *ecs.World, item SelectorItem) {
+	entity, control, exists := htmlSelectControlFor(world, item.Owner)
+	if !exists || control.Disabled || item.Disabled {
+		return
+	}
+	if control.Multiple {
+		shift, shortcut := htmlSelectionModifiers(world)
+		if updateHTMLMultipleSelection(world, entity, control, item.Index, shift, shortcut, false) {
+			publishHTMLSelectChange(world, entity)
+		}
+		return
+	}
+	SetHTMLSelectOpen(world, entity, false)
+	if item.Index != control.Selected && htmlui.SetControlSelected(world, entity, item.Index) {
+		publishHTMLSelectChange(world, entity)
+	}
+}
+
 func handleHTMLSelectInput(context *scene.FocusedInputContext) {
 	if context == nil || context.World == nil || context.Event.Kind != input.EventKeyDown {
 		return
@@ -649,7 +541,7 @@ func handleHTMLSelectInput(context *scene.FocusedInputContext) {
 		if current < 0 {
 			return
 		}
-		changed := htmlui.SetControlOptionSelected(world, entity, current, !control.Options[current].Selected)
+		changed := htmlui.SetControlOptionSelected(world, entity, current, !control.Options[current].Selected())
 		anchor := control.SelectionAnchor
 		if anchor < 0 {
 			anchor = current
@@ -715,12 +607,12 @@ func updateHTMLMultipleSelection(world *ecs.World, entity ecs.Entity, control ht
 		return false
 	}
 	if shortcut && !extend {
-		changed := htmlui.SetControlOptionSelected(world, entity, target, !control.Options[target].Selected)
+		changed := htmlui.SetControlOptionSelected(world, entity, target, !control.Options[target].Selected())
 		htmlui.SetControlSelectionFocus(world, entity, target, target)
 		return changed
 	}
 	if !extend {
-		changed := control.SelectedCount != 1 || !control.Options[target].Selected
+		changed := control.SelectedCount != 1 || !control.Options[target].Selected()
 		if !changed {
 			htmlui.SetControlSelectionFocus(world, entity, target, target)
 			return false
@@ -750,7 +642,7 @@ func updateHTMLMultipleSelection(world *ecs.World, entity ecs.Entity, control ht
 		if option.Disabled {
 			continue
 		}
-		if option.Selected != (index >= start && index <= end) {
+		if option.Selected() != (index >= start && index <= end) {
 			changed = true
 			break
 		}
@@ -771,20 +663,7 @@ func syncHTMLSelectorState(world *ecs.World, entity ecs.Entity) {
 	if !ok {
 		return
 	}
-	if selector := world.GetMut[Selector](entity); selector != nil {
-		selector.Selected = control.Selected
-	}
-	syncHTMLSelectorOptions(world, entity, control)
 	refreshHTMLControlText(world, entity, control)
-}
-
-func syncHTMLSelectorOptions(world *ecs.World, entity ecs.Entity, control htmlui.Control) {
-	if runtime, exists := world.Get[htmlSelectorRuntime](entity); exists {
-		for index, item := range runtime.Items {
-			selected := index < len(control.Options) && control.Options[index].Selected
-			SetControlSelected(world, item, selected)
-		}
-	}
 }
 
 func publishHTMLSelectChange(world *ecs.World, entity ecs.Entity) {
@@ -799,12 +678,8 @@ func publishHTMLSelectChange(world *ecs.World, entity ecs.Entity) {
 
 func enrichHTMLControls(world *ecs.World) {
 	enrichHTMLControlStates(world)
-	enrichHTMLEditables(world)
 	cleanupHTMLSelectorElements(world)
-	enrichHTMLControlTexts(world)
-	enrichHTMLEditableTexts(world)
-	enrichHTMLControlVisuals(world)
-	enrichHTMLEditableVisuals(world)
+	enrichHTMLParts(world)
 }
 
 func enrichHTMLControlStates(world *ecs.World) {
@@ -848,15 +723,9 @@ func enrichHTMLControlStates(world *ecs.World) {
 			refreshRetainedHTMLControl(world, entity, control)
 			continue
 		}
-		_ = world.Insert(entity, Control{})
-		_ = world.Insert(entity, htmlControlState{RenderRevision: control.RenderRevision, CommittedValue: control.Value})
+		runtime := htmlControlState{RenderRevision: control.RenderRevision}
 		switch {
 		case isHTMLTextControl(control):
-			field := TextField{
-				Value: control.Value, Placeholder: control.Placeholder, Password: htmlControlType(control) == "password",
-				Caret: runeCount(control.Value), Anchor: runeCount(control.Value), MaxRunes: control.MaxLength,
-			}
-			_ = world.Insert(entity, field)
 			if control.Tag == "textarea" {
 				textarea := Textarea{Wrap: control.Wrap}
 				if computed, exists := htmlui.ControlScrollStyle(world, entity); exists {
@@ -882,186 +751,24 @@ func enrichHTMLControlStates(world *ecs.World) {
 						_ = world.Insert(entity, StyleOverride[ScrollStyle]{Value: scrollStyle})
 					}
 				}
-				_ = world.Insert(entity, textarea)
+				_ = world.Insert3(entity, Control{}, runtime, textarea)
 			} else {
-				_ = world.Insert(entity, Input{})
+				_ = world.Insert3(entity, Control{}, runtime, Input{})
 			}
-		case control.Tag == "input" && htmlControlType(control) == "checkbox":
-			_ = world.Insert(entity, Toggle[bool]{Value: control.Checked, On: true})
 		case control.Tag == "button" || control.Tag == "input":
-			_ = world.Insert(entity, Button{})
+			_ = world.Insert3(entity, Control{}, runtime, Button{})
 		case control.Tag == "select":
-			_ = world.Insert(entity, Selector{Selected: control.Selected, Open: control.Open, ItemHeight: selectorHTMLItemHeight(control), ListHeight: selectorHTMLListHeight(control), StackIndex: htmlControlStackIndex(world, entity)})
-			_ = world.Insert(entity, scene.FocusedInputHandler{Handle: handleHTMLSelectInput})
-			bindHTMLSelector(world, entity, control)
+			selector := Selector{ItemHeight: selectorHTMLItemHeight(control), ListHeight: selectorHTMLListHeight(control), StackIndex: htmlControlStackIndex(world, entity)}
+			_ = world.Insert4(entity, Control{}, runtime, selector, scene.FocusedInputHandler{Handle: handleHTMLSelectInput})
+			bindHTMLSelector(world, entity, control, mgl32.Vec2{})
 			syncHTMLSelectorState(world, entity)
 			setHTMLSelectorVisibility(world, entity, control.Open)
+		default:
+			_ = world.Insert2(entity, Control{}, runtime)
 		}
 	}
 
 	state.capture(world, htmlControlBridgeVersions(world))
-}
-
-func enrichHTMLEditables(world *ecs.World) {
-	state, changed, full := prepareHTMLBridge[htmlEditablesScratch](world, htmlEditableBridgeVersions(world))
-	if !changed {
-		return
-	}
-	editables := world.FrameScratch[htmlEditablesScratch, ecs.Entity]()
-	defer editables.ReleaseUnused()
-	query := world.Query[htmlui.Editable]()
-	changes := state.changes(world)
-	if !full {
-		query = world.Query[htmlui.Editable](changes.Changed[htmlui.Editable]())
-	}
-	for entity, access := range query.All {
-		editable := access.Get()
-
-		state, exists := world.Get[htmlEditableState](entity)
-		if !exists || state.RenderRevision != editable.RenderRevision {
-			editables.Values = append(editables.Values, entity)
-		}
-	}
-	for _, entity := range editables.Values {
-		editable, ok := world.Get[htmlui.Editable](entity)
-		if !ok {
-			continue
-		}
-		if runtime := world.GetMut[htmlEditableState](entity); runtime != nil {
-			runtime.RenderRevision = editable.RenderRevision
-			if field := world.GetMut[TextField](entity); field != nil {
-				field.Value = editable.Value
-				field.Anchor, field.Caret = editable.Anchor, editable.Focus
-			}
-			continue
-		}
-		_ = world.Insert(entity, Control{})
-		_ = world.Insert(entity, TextField{
-			Value: editable.Value, Caret: editable.Focus, Anchor: editable.Anchor,
-		})
-		_ = world.Insert(entity, htmlEditableState{RenderRevision: editable.RenderRevision})
-	}
-	state.capture(world, htmlEditableBridgeVersions(world))
-}
-
-func enrichHTMLControlTexts(world *ecs.World) {
-	state, changed, _ := prepareHTMLBridge[htmlControlTextsScratch](world, htmlRelationBridgeVersions[htmlui.ControlText, Relation[scene.Text2D], htmlui.Control](world))
-	if !changed {
-		return
-	}
-	texts := world.FrameScratch[htmlControlTextsScratch, ecs.Entity]()
-	defer texts.ReleaseUnused()
-	for entity := range world.Query[htmlui.ControlText](ecs.Without[Relation[scene.Text2D]]()).All {
-		texts.Values = append(texts.Values, entity)
-	}
-	for _, entity := range texts.Values {
-		link, ok := world.Get[htmlui.ControlText](entity)
-		if !ok || !world.IsAlive(link.Control) {
-			continue
-		}
-		control, ok := world.Get[htmlui.Control](link.Control)
-		if !ok {
-			continue
-		}
-		_ = world.Insert(entity, Relation[scene.Text2D]{Owner: link.Control})
-		_ = world.Insert(entity, Relation[Control]{Owner: link.Control})
-		if isHTMLTextControl(control) {
-			_ = world.Insert(entity, Part[ValuePart]{})
-		} else {
-			_ = world.Insert(entity, Part[LabelPart]{})
-		}
-	}
-
-	state.capture(world, htmlRelationBridgeVersions[htmlui.ControlText, Relation[scene.Text2D], htmlui.Control](world))
-}
-
-func enrichHTMLEditableTexts(world *ecs.World) {
-	state, changed, _ := prepareHTMLBridge[htmlEditableTextsScratch](world, htmlRelationBridgeVersions[htmlui.EditableText, Relation[scene.Text2D], htmlui.Editable](world))
-	if !changed {
-		return
-	}
-	editableTexts := world.FrameScratch[htmlEditableTextsScratch, ecs.Entity]()
-	defer editableTexts.ReleaseUnused()
-	for entity := range world.Query[htmlui.EditableText](ecs.Without[Relation[scene.Text2D]]()).All {
-		editableTexts.Values = append(editableTexts.Values, entity)
-	}
-	for _, entity := range editableTexts.Values {
-		link, ok := world.Get[htmlui.EditableText](entity)
-		if !ok || !world.IsAlive(link.Editable) {
-			continue
-		}
-		_ = world.Insert(entity, Relation[scene.Text2D]{Owner: link.Editable})
-		_ = world.Insert(entity, Relation[Control]{Owner: link.Editable})
-		_ = world.Insert(entity, Part[ValuePart]{})
-	}
-
-	state.capture(world, htmlRelationBridgeVersions[htmlui.EditableText, Relation[scene.Text2D], htmlui.Editable](world))
-}
-
-func enrichHTMLControlVisuals(world *ecs.World) {
-	state, changed, _ := prepareHTMLBridge[htmlControlVisualsScratch](world, htmlRelationBridgeVersions[htmlui.ControlVisual, Relation[SurfaceStyle], htmlui.Control](world))
-	if !changed {
-		return
-	}
-	visuals := world.FrameScratch[htmlControlVisualsScratch, ecs.Entity]()
-	defer visuals.ReleaseUnused()
-	for entity := range world.Query[htmlui.ControlVisual](ecs.Without[Relation[SurfaceStyle]]()).All {
-		visuals.Values = append(visuals.Values, entity)
-	}
-	for _, entity := range visuals.Values {
-		visual, ok := world.Get[htmlui.ControlVisual](entity)
-		if !ok || !world.IsAlive(visual.Control) {
-			continue
-		}
-		_ = world.Insert(entity, Relation[SurfaceStyle]{Owner: visual.Control})
-		// Scrollbars lie inside the control's border box and must retain
-		// ancestor overflow clips, including rounded editor containers.
-		switch visual.Kind {
-		case htmlui.ControlVisualScrollTrackHorizontal:
-			_ = world.Insert(entity, Part[ScrollTrackHorizontalPart]{})
-		case htmlui.ControlVisualScrollTrackVertical:
-			_ = world.Insert(entity, Part[ScrollTrackVerticalPart]{})
-		case htmlui.ControlVisualScrollThumbHorizontal:
-			_ = world.Insert(entity, Part[ScrollThumbHorizontalPart]{})
-		case htmlui.ControlVisualScrollThumbVertical:
-			_ = world.Insert(entity, Part[ScrollThumbVerticalPart]{})
-		case htmlui.ControlVisualCaret:
-			if visual.Selection {
-				_ = world.Insert(entity, Part[SelectionPart]{})
-				_ = world.Insert(entity, Indexed[SelectionPart]{Value: visual.Index})
-				break
-			}
-			_ = world.Insert(entity, Part[CaretPart]{})
-		}
-	}
-
-	state.capture(world, htmlRelationBridgeVersions[htmlui.ControlVisual, Relation[SurfaceStyle], htmlui.Control](world))
-}
-
-func enrichHTMLEditableVisuals(world *ecs.World) {
-	state, changed, _ := prepareHTMLBridge[htmlEditableVisualsScratch](world, htmlRelationBridgeVersions[htmlui.EditableVisual, Relation[SurfaceStyle], htmlui.Editable](world))
-	if !changed {
-		return
-	}
-	editableVisuals := world.FrameScratch[htmlEditableVisualsScratch, ecs.Entity]()
-	defer editableVisuals.ReleaseUnused()
-	for entity := range world.Query[htmlui.EditableVisual](ecs.Without[Relation[SurfaceStyle]]()).All {
-		editableVisuals.Values = append(editableVisuals.Values, entity)
-	}
-	for _, entity := range editableVisuals.Values {
-		visual, ok := world.Get[htmlui.EditableVisual](entity)
-		if !ok || !world.IsAlive(visual.Editable) {
-			continue
-		}
-		_ = world.Insert(entity, Relation[SurfaceStyle]{Owner: visual.Editable})
-		if visual.Selection {
-			_ = world.Insert(entity, Part[SelectionPart]{})
-			_ = world.Insert(entity, Indexed[SelectionPart]{Value: visual.Index})
-		} else {
-			_ = world.Insert(entity, Part[CaretPart]{})
-		}
-	}
-	state.capture(world, htmlRelationBridgeVersions[htmlui.EditableVisual, Relation[SurfaceStyle], htmlui.Editable](world))
 }
 
 const (
@@ -1104,9 +811,14 @@ func htmlControlStackIndex(world *ecs.World, entity ecs.Entity) int {
 	return 0
 }
 
-func bindHTMLSelector(world *ecs.World, owner ecs.Entity, control htmlui.Control) {
+func bindHTMLSelector(world *ecs.World, owner ecs.Entity, control htmlui.Control, position mgl32.Vec2) {
 	if world == nil || owner == 0 || !world.IsAlive(owner) || world.Has[htmlSelectorRuntime](owner) {
 		return
+	}
+	retirements := world.FrameValue[htmlSelectorRetirements, htmlSelectorRetirements]()
+	if !retirements.bound {
+		world.OnComponentRemove[htmlSelectorRuntime](retireHTMLSelector)
+		retirements.bound = true
 	}
 	controlView, ok := world.Get[scene.InputTarget2D](owner)
 	if !ok {
@@ -1152,7 +864,7 @@ func bindHTMLSelector(world *ecs.World, owner ecs.Entity, control htmlui.Control
 	_ = world.Insert(list, scene.Size2D{Width: controlView.Width, Height: listHeight})
 	_ = world.Insert(list, scene.ClipRect2D{Width: controlView.Width, Height: listHeight})
 	_ = world.Insert(list, scene.RoundedClip2D{Width: controlView.Width, Height: listHeight, Radius: popupRadius})
-	_ = world.Insert(list, scene.UIScroll{ViewportSize: mgl32.Vec2{controlView.Width, listHeight}, ContentSize: mgl32.Vec2{controlView.Width, itemHeight * float32(len(control.Options))}, WheelStep: itemHeight, Vertical: true, ConsumeWheel: true, DisableInput: true})
+	_ = world.Insert(list, scene.UIScroll{Position: position, ViewportSize: mgl32.Vec2{controlView.Width, listHeight}, ContentSize: mgl32.Vec2{controlView.Width, itemHeight * float32(len(control.Options))}, WheelStep: itemHeight, Vertical: true, ConsumeWheel: true, DisableInput: true})
 	setUIStackIndex(world, list, selectorPopupStackBase)
 	setVisible(world, list, false)
 	// HTML controls are styled by the authored page, so keep the generated
@@ -1198,6 +910,7 @@ func bindHTMLSelector(world *ecs.World, owner ecs.Entity, control htmlui.Control
 		elements = append(elements, item, body)
 		_ = world.Insert(body, htmlSelectorElement{Owner: owner})
 		_ = world.Insert(item, scene.Parent{Entity: list})
+		_ = world.Insert(item, htmlui.FocusOwner{Entity: owner})
 		_ = world.Insert(item, SelectorItem{Owner: owner, Index: index, Label: option.Label, Disabled: option.Disabled})
 		_ = world.Insert(item, htmlSelectorElement{Owner: owner})
 		text := spawnText[ItemPart](world, item, 12, 0, option.Label, theme)
@@ -1241,26 +954,17 @@ func setHTMLSelectorVisibility(world *ecs.World, selector ecs.Entity, visible bo
 	}
 }
 
-func cleanupHTMLSelectorElements(world *ecs.World) {
-	versions := [5]uint64{htmlBridgeMembership[htmlui.Control](world), htmlBridgeMembership[htmlSelectorElement](world)}
-	state, changed, _ := prepareHTMLBridge[htmlSelectorElementsScratch](world, versions)
-	if !changed {
-		return
-	}
-	stale := world.FrameScratch[htmlSelectorElementsScratch, ecs.Entity]()
-	defer stale.ReleaseUnused()
-	for entity, access := range world.Query[htmlSelectorElement]().All {
-		marker := access.Get()
+func retireHTMLSelector(world *ecs.World, _ ecs.Entity, runtime *htmlSelectorRuntime) {
+	retirements := world.FrameValue[htmlSelectorRetirements, htmlSelectorRetirements]()
+	retirements.entities = append(retirements.entities, runtime.Elements...)
+}
 
-		if !world.IsAlive(marker.Owner) || !world.Has[htmlui.Control](marker.Owner) {
-			stale.Values = append(stale.Values, entity)
-		}
-	}
-	for _, entity := range stale.Values {
+func cleanupHTMLSelectorElements(world *ecs.World) {
+	retirements := world.FrameValue[htmlSelectorRetirements, htmlSelectorRetirements]()
+	for _, entity := range retirements.entities {
 		world.Despawn(entity)
 	}
-	versions[1] = htmlBridgeMembership[htmlSelectorElement](world)
-	state.capture(world, versions)
+	retirements.entities = retirements.entities[:0]
 }
 
 func refreshHTMLControlText(world *ecs.World, controlEntity ecs.Entity, control htmlui.Control) {
@@ -1273,7 +977,7 @@ func refreshHTMLControlText(world *ecs.World, controlEntity ecs.Entity, control 
 
 func syncHTMLControlText(text ecs.ComponentAccess[scene.Text2D], control *htmlui.Control) {
 	value := ""
-	if control.Tag == "input" && htmlControlType(*control) == "checkbox" && control.Checked {
+	if control.Tag == "input" && htmlControlType(*control) == "checkbox" && control.Checked() {
 		value = "✓"
 	}
 	if control.Tag == "select" && control.Selected >= 0 && control.Selected < len(control.Options) {
@@ -1281,35 +985,6 @@ func syncHTMLControlText(text ecs.ComponentAccess[scene.Text2D], control *htmlui
 	}
 	if text.Ref().Value != value {
 		text.Mut().Value = value
-	}
-}
-
-func syncHTMLControlStates(world *ecs.World) {
-	for entity, access := range world.Query[htmlui.Control]().All {
-		control := access.Get()
-
-		switch {
-		case control.Tag == "input" && htmlControlType(control) == "checkbox":
-			if toggle, ok := world.Get[Toggle[bool]](entity); ok && toggle.Value != control.Checked {
-				if htmlui.SetControlChecked(world, entity, toggle.Value) {
-					if current, exists := world.Get[htmlui.Control](entity); exists {
-						refreshHTMLControlText(world, entity, current)
-					}
-				}
-			}
-		case control.Tag == "select":
-			if selector, ok := world.Get[Selector](entity); ok {
-				if selector.Selected != control.Selected && selector.Selected >= 0 {
-					if htmlui.SetControlSelected(world, entity, selector.Selected) {
-						syncHTMLSelectorState(world, entity)
-					}
-				}
-				if current := world.GetMut[htmlui.Control](entity); current != nil {
-					current.Open = selector.Open
-				}
-				setHTMLSelectorVisibility(world, entity, selector.Open)
-			}
-		}
 	}
 }
 
@@ -1342,14 +1017,11 @@ func htmlControlType(control htmlui.Control) string {
 func writeHTMLEvent(world *ecs.World, target ecs.Entity, control htmlui.Control, kind htmlui.EventKind) {
 	bubbles := kind != htmlui.EventFocus && kind != htmlui.EventBlur
 	event := htmlui.Event{
-		Entity: control.Owner, Target: target, ID: control.ID, FormID: control.FormID, Name: control.Name, Kind: kind, Value: control.Value,
-		Checked: control.Checked, Selected: control.Selected, SelectedCount: control.SelectedCount, Bubbles: bubbles,
+		Entity: control.Owner, Target: target, ID: control.ID, FormID: control.FormID, Name: control.Name, Kind: kind, Value: htmlui.ControlValue(world, target),
+		Checked: control.Checked(), Selected: control.Selected, SelectedCount: control.SelectedCount, Bubbles: bubbles,
 	}
-	if kind == htmlui.EventSubmit {
-		event.Cancelable = true
-		event = htmlui.DispatchAction(world, event)
-	}
-	world.WriteMessage(event)
+	event.Cancelable = kind == htmlui.EventSubmit
+	htmlui.PublishEvent(world, event)
 }
 
 func dispatchHTMLEditableBeforeInput(world *ecs.World, target ecs.Entity, inputType, data string) bool {
@@ -1357,28 +1029,43 @@ func dispatchHTMLEditableBeforeInput(world *ecs.World, target ecs.Entity, inputT
 	if !ok {
 		return false
 	}
-	event := htmlui.DispatchAction(world, htmlui.Event{
+	field := world.GetRef[TextField](target)
+	if field == nil {
+		return false
+	}
+	event := htmlui.PublishEvent(world, htmlui.Event{
 		Entity: editable.Owner, Target: target, ID: editable.ID, Kind: htmlui.EventBeforeInput,
-		Value: editable.Value, InputType: inputType, Data: data, Anchor: editable.Anchor, Focus: editable.Focus,
+		Value: field.Text().String(), InputType: inputType, Data: data, Anchor: field.Anchor, Focus: field.Caret,
 		Bubbles: true, Cancelable: true,
 	})
-	world.WriteMessage(event)
 	return event.DefaultPrevented
 }
 
-func writeHTMLEditableEvent(world *ecs.World, target ecs.Entity, editable htmlui.Editable, kind htmlui.EventKind, inputType, data string) {
-	world.WriteMessage(htmlui.Event{
-		Entity: editable.Owner, Target: target, ID: editable.ID, Kind: kind, Value: editable.Value,
-		InputType: inputType, Data: data, Anchor: editable.Anchor, Focus: editable.Focus, Bubbles: true,
-	})
+func publishHTMLTextInput(world *ecs.World, target ecs.Entity, inputType, data string) {
+	field := world.GetRef[TextField](target)
+	if field == nil {
+		return
+	}
+	if editable, ok := world.Get[htmlui.Editable](target); ok {
+		htmlui.PublishEvent(world, htmlui.Event{
+			Entity: editable.Owner, Target: target, ID: editable.ID, Kind: htmlui.EventInput, Value: field.Text().String(),
+			InputType: inputType, Data: data, Anchor: field.Anchor, Focus: field.Caret, Bubbles: true,
+		})
+	} else if control, ok := world.Get[htmlui.Control](target); ok {
+		if field.Buffer != nil {
+			htmlui.PublishEvent(world, htmlui.Event{Entity: control.Owner, Target: target, ID: control.ID, FormID: control.FormID, Name: control.Name, Kind: htmlui.EventInput, Snapshot: field.Source, Document: true, Bubbles: true})
+		} else {
+			writeHTMLEvent(world, target, control, htmlui.EventInput)
+		}
+	}
 }
 
 func commitHTMLControl(world *ecs.World, target ecs.Entity, control htmlui.Control) {
-	state := world.GetMut[htmlControlState](target)
-	if state == nil || state.CommittedValue == control.Value {
+	field := world.GetRef[TextField](target)
+	if field == nil || field.CommittedValue == field.Text().String() {
 		return
 	}
-	state.CommittedValue = control.Value
+	world.GetMut[TextField](target).CommittedValue = field.Text().String()
 	writeHTMLEvent(world, target, control, htmlui.EventChange)
 }
 
@@ -1413,15 +1100,9 @@ func updateHTMLKeyboard(world *ecs.World, entity ecs.Entity, inputState *input.S
 		case inputState.KeyPressed(input.KeyEnd):
 			index = enabledHTMLOption(c.Options, len(c.Options), -1)
 		case inputState.KeyPressed(input.KeyEscape):
-			if selector := world.GetMut[Selector](entity); selector != nil {
-				selector.Open = false
-			}
-			if control := world.GetMut[htmlui.Control](entity); control != nil {
-				control.Open = false
-			}
-			setHTMLSelectorVisibility(world, entity, false)
+			SetHTMLSelectOpen(world, entity, false)
 		case inputState.KeyPressed(input.KeyEnter), inputState.KeyPressed(input.KeySpace):
-			world.WriteMessage(scene.InputEvent{Entity: entity, Kind: scene.InputEventTap})
+			scene.DispatchInputEvent(world, scene.InputEvent{Entity: entity, Kind: scene.InputEventTap})
 		}
 		if index >= 0 && index != c.Selected && htmlui.SetControlSelected(world, entity, index) {
 			publishHTMLSelectChange(world, entity)
@@ -1444,7 +1125,7 @@ func updateHTMLKeyboard(world *ecs.World, entity ecs.Entity, inputState *input.S
 		state.SpacePressed = false
 	}
 	if space || button && inputState.KeyPressed(input.KeyEnter) {
-		world.WriteMessage(scene.InputEvent{Entity: entity, Kind: scene.InputEventTap})
+		scene.DispatchInputEvent(world, scene.InputEvent{Entity: entity, Kind: scene.InputEventTap})
 	}
 }
 
@@ -1452,17 +1133,6 @@ func updateHTMLKeyboard(world *ecs.World, entity ecs.Entity, inputState *input.S
 // retained control. A select popup is regenerated only when its content or
 // geometry changes; the select itself keeps its identity and keyboard state.
 func refreshRetainedHTMLControl(world *ecs.World, entity ecs.Entity, control htmlui.Control) {
-	if field := world.GetMut[TextField](entity); field != nil {
-		if field.Buffer == nil {
-			field.Value = control.Value
-		}
-		field.Placeholder, field.MaxRunes = control.Placeholder, control.MaxLength
-		length := field.Text().Runes()
-		field.Caret, field.Anchor = max(0, min(field.Caret, length)), max(0, min(field.Anchor, length))
-	}
-	if toggle := world.GetMut[Toggle[bool]](entity); toggle != nil {
-		toggle.Value = control.Checked
-	}
 	if textarea := world.GetMut[Textarea](entity); textarea != nil {
 		textarea.Wrap = control.Wrap
 		if computed, exists := htmlui.ControlScrollStyle(world, entity); exists {
@@ -1492,18 +1162,18 @@ func refreshRetainedHTMLControl(world *ecs.World, entity ecs.Entity, control htm
 	}
 	target, _ := world.Get[scene.InputTarget2D](entity)
 	sprite, _ := world.Get[scene.Sprite2D](entity)
+	var scrollPosition mgl32.Vec2
 	if runtime, exists := world.Get[htmlSelectorRuntime](entity); exists && (runtime.Width != target.Width || runtime.Height != target.Height || runtime.Shape != sprite.Shape || !slices.Equal(runtime.Options, control.Options)) {
-		for _, child := range runtime.Elements {
-			world.Despawn(child)
+		if scroll := world.GetRef[scene.UIScroll](runtime.List); scroll != nil {
+			scrollPosition = scroll.Position
 		}
 		world.Remove[htmlSelectorRuntime](entity)
 	}
 	if selector := world.GetMut[Selector](entity); selector != nil {
-		selector.Selected, selector.Open = control.Selected, control.Open
 		selector.ItemHeight, selector.ListHeight = selectorHTMLItemHeight(control), selectorHTMLListHeight(control)
 		selector.StackIndex = htmlControlStackIndex(world, entity)
 	}
-	bindHTMLSelector(world, entity, control)
+	bindHTMLSelector(world, entity, control, scrollPosition)
 	syncHTMLSelectorState(world, entity)
 	setHTMLSelectorVisibility(world, entity, control.Open)
 }

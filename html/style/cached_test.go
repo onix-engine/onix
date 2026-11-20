@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestComputeWithCacheMatchesFreshCascade(t *testing.T) {
-	root, err := dom.Parse(`<html><body><section id="panel"><span id="target">Text</span></section><div id="removed">Old</div></body></html>`)
+	root, err := parse.Parse(`<html><body><section id="panel"><span id="target">Text</span></section><div id="removed">Old</div></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,9 +48,9 @@ func TestComputeWithCacheMatchesFreshCascade(t *testing.T) {
 	check()
 	input.Focused = nil
 	viewport.Width = 640
-	cache.ContainerMetrics = map[*dom.Node]ContainerMetrics{panel: {Width: 240, Height: 80}}
+	cache.ContainerMetrics = map[*uinode.Node]ContainerMetrics{panel: {Width: 240, Height: 80}}
 	check()
-	root.Children[0].SetAttributes(dom.Attribute{Name: "style", Value: "font-size:24px"})
+	root.Children[0].SetAttributes(uinode.Attribute{Name: "style", Value: "font-size:24px"})
 	check()
 	removed.Parent.Children = removed.Parent.Children[:1]
 	removed.Parent = nil
@@ -58,7 +59,7 @@ func TestComputeWithCacheMatchesFreshCascade(t *testing.T) {
 		t.Fatal("full cascade retained a removed node")
 	}
 	oldRoot := root
-	root, err = dom.Parse(`<html><body><span id="target">Replacement</span></body></html>`)
+	root, err = parse.Parse(`<html><body><span id="target">Replacement</span></body></html>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestComputeWithCacheMatchesFreshCascade(t *testing.T) {
 }
 
 func TestComputeWithCacheWarmAllocations(t *testing.T) {
-	root, err := dom.Parse(`<section><span>Text</span></section>`)
+	root, err := parse.Parse(`<section><span>Text</span></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,9 +96,9 @@ func TestComputeWithCacheWarmAllocations(t *testing.T) {
 }
 
 func TestComputeWithCacheReusesStylesBeyondInternLimit(t *testing.T) {
-	root := dom.NewElement("section")
+	root := uinode.NewElement("section")
 	for i := range maxDocumentStyleInterned + 256 {
-		node := dom.NewElement("div", dom.Attribute{Name: "style", Value: fmt.Sprintf("left:%dpx", i)})
+		node := uinode.NewElement("div", uinode.Attribute{Name: "style", Value: fmt.Sprintf("left:%dpx", i)})
 		node.Parent = root
 		root.Children = append(root.Children, node)
 	}
@@ -136,7 +137,7 @@ func TestComputeWithCacheReusesStylesBeyondInternLimit(t *testing.T) {
 	}
 }
 
-func cachedStyleNode(node *dom.Node, id string) *dom.Node {
+func cachedStyleNode(node *uinode.Node, id string) *uinode.Node {
 	if value, _ := node.Attr("id"); value == id {
 		return node
 	}
@@ -151,7 +152,7 @@ func cachedStyleNode(node *dom.Node, id string) *dom.Node {
 func TestPersistentStyleIndexBound(t *testing.T) {
 	var cache MutationCache
 	cache.prepareStyleIndex()
-	computed := defaultStyle(dom.NewElement("div"))
+	computed := defaultStyle(uinode.NewElement("div"))
 	for i := range maxDocumentStyleInterned + 20 {
 		computed.Width = LengthPx(float64(i))
 		cache.styles.commit(&computed, nil)
@@ -171,7 +172,7 @@ func TestPersistentStyleIndexBound(t *testing.T) {
 }
 
 func BenchmarkComputeFullStyles(b *testing.B) {
-	root, err := dom.Parse(`<section>` + strings.Repeat(`<div class="item"><span>Text</span></div>`, 100) + `</section>`)
+	root, err := parse.Parse(`<section>` + strings.Repeat(`<div class="item"><span>Text</span></div>`, 100) + `</section>`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -214,7 +215,7 @@ func BenchmarkComputeFullStylesUnique(b *testing.B) {
 		fmt.Fprintf(&source, `<div style="left:%dpx"></div>`, i)
 	}
 	source.WriteString(`</section>`)
-	root, err := dom.Parse(source.String())
+	root, err := parse.Parse(source.String())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -236,7 +237,7 @@ func BenchmarkComputeFullStylesUnique(b *testing.B) {
 }
 
 func TestInputStateWithCacheMatchesFreshCascade(t *testing.T) {
-	root, err := dom.Parse(`<section id="panel"><button id="first"><span>First</span></button><button id="second">Second</button></section>`)
+	root, err := parse.Parse(`<section id="panel"><button id="first"><span>First</span></button><button id="second">Second</button></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +247,7 @@ func TestInputStateWithCacheMatchesFreshCascade(t *testing.T) {
 	}
 	first, second := cachedStyleNode(root, "first"), cachedStyleNode(root, "second")
 	var cache MutationCache
-	cache.ContainerMetrics = map[*dom.Node]ContainerMetrics{cachedStyleNode(root, "panel"): {Width: 250, Height: 100}}
+	cache.ContainerMetrics = map[*uinode.Node]ContainerMetrics{cachedStyleNode(root, "panel"): {Width: 250, Height: 100}}
 	states := []css.State{{}, {Hovered: first}, {Hovered: second}, {Focused: first, FocusVisible: true}, {Focused: second}, {Active: first}, {}}
 	var styles Map
 	viewport := Viewport{Width: 800, Height: 600}
@@ -273,7 +274,7 @@ func TestInputStateWithCacheMatchesFreshCascade(t *testing.T) {
 }
 
 func TestInputStateWithCacheWarmAllocations(t *testing.T) {
-	root, err := dom.Parse(`<button>Hover</button>`)
+	root, err := parse.Parse(`<button>Hover</button>`)
 	if err != nil {
 		t.Fatal(err)
 	}

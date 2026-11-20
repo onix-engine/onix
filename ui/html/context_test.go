@@ -9,6 +9,7 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/scene"
+	"github.com/onix-engine/onix/ui/internal/textfield"
 )
 
 func assertHTMLContextMatchesFresh(t *testing.T, world *ecs.World, owner ecs.Entity, source string) {
@@ -284,20 +285,21 @@ func TestHTMLContextPreservesControlWhenMoved(t *testing.T) {
 	}
 	SetControlValue(world, control, "typed")
 	live := world.GetMut[Control](control)
-	live.SelectionAnchor, live.SelectionFocus = 1, 3
+	fieldState := world.GetMut[textfield.Field](control)
+	fieldState.Anchor, fieldState.Caret = 1, 3
 	revision := live.RenderRevision
 	target.SetText("After")
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
 	live = world.GetMut[Control](control)
-	if state.SyncStats.PartialReconciles != 1 || live.RenderRevision != revision || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
+	if state.SyncStats.PartialReconciles != 1 || live.RenderRevision != revision || world.GetRef[textfield.Field](control).Value != "typed" || world.GetRef[textfield.Field](control).Anchor != 1 || world.GetRef[textfield.Field](control).Caret != 3 {
 		t.Fatal("local scroll text update rewrote unrelated control")
 	}
 	scroller.SetAttribute("style", "height:40px;overflow:auto;margin-left:10px")
 	incrementalSync(t, world)
 	state, _ = world.Get[htmlRenderState](owner)
 	live = world.GetMut[Control](control)
-	if state.SyncStats.PartialReconciles != 1 || live.Value != "typed" || live.SelectionAnchor != 1 || live.SelectionFocus != 3 {
+	if state.SyncStats.PartialReconciles != 1 || world.GetRef[textfield.Field](control).Value != "typed" || world.GetRef[textfield.Field](control).Anchor != 1 || world.GetRef[textfield.Field](control).Caret != 3 {
 		t.Fatal("moving control context did not preserve live control state locally")
 	}
 }

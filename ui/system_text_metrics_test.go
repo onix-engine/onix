@@ -75,12 +75,12 @@ func TestSelectorLabelMetricsRefreshSelectionAndRemoval(t *testing.T) {
 	selected := items.Spawn(SelectorItem{Owner: owner, Index: 1, Label: ""})
 	items.Spawn(SelectorItem{Owner: owner, Index: 1, Label: "duplicate"})
 	selector := world.GetRef[Selector](owner)
-	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "first" {
+	if label := selectorCurrentLabel(world, collectSelectorLabels(world), owner, selector); label != "first" {
 		t.Fatalf("label=%q, want first", label)
 	}
 	mutable := world.GetMut[Selector](owner)
 	mutable.Selected = 1
-	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "" {
+	if label := selectorCurrentLabel(world, collectSelectorLabels(world), owner, selector); label != "" {
 		t.Fatalf("empty first match lost to duplicate or fallback: %q", label)
 	}
 	if allocations := testing.AllocsPerRun(100, func() { collectSelectorLabels(world) }); allocations != 0 {
@@ -88,12 +88,12 @@ func TestSelectorLabelMetricsRefreshSelectionAndRemoval(t *testing.T) {
 	}
 	world.Despawn(selected)
 	selector = world.GetRef[Selector](owner)
-	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "duplicate" {
+	if label := selectorCurrentLabel(world, collectSelectorLabels(world), owner, selector); label != "duplicate" {
 		t.Fatalf("removed selected item was retained: %q", label)
 	}
 	mutable = world.GetMut[Selector](owner)
 	mutable.Selected = 99
-	if label := selectorCurrentLabel(collectSelectorLabels(world), owner, selector); label != "fallback" {
+	if label := selectorCurrentLabel(world, collectSelectorLabels(world), owner, selector); label != "fallback" {
 		t.Fatalf("missing selection label=%q, want fallback", label)
 	}
 }

@@ -70,7 +70,7 @@ func TestHTMLOrderSkipsUnrelatedControls(t *testing.T) {
 	incrementalHTMLNode(t, world, owner, "target").SetAttribute("style", "order:1")
 	incrementalSync(t, world)
 	state, _ := world.Get[htmlRenderState](owner)
-	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls > 2 || state.SyncStats.SnapshottedControls > 2 || state.SyncStats.LayoutWork.TopologyVisited != 0 || state.SyncStats.LayoutWork.OrderContainers != 1 || state.SyncStats.LayoutWork.LocalFlexReflows != 1 || state.SyncStats.LayoutWork.Visited > 10 {
+	if state.SyncStats.PartialReconciles != 1 || state.SyncStats.UpdatedControls > 2 || state.SyncStats.LayoutWork.TopologyVisited != 0 || state.SyncStats.LayoutWork.OrderContainers != 1 || state.SyncStats.LayoutWork.LocalFlexReflows != 1 || state.SyncStats.LayoutWork.Visited > 10 {
 		t.Fatalf("order updated unrelated inputs: %+v", state.SyncStats)
 	}
 	assertHTMLPartialMatchesFresh(t, world, owner, `<div style="height:100px;display:flex"><div id="target" style="order:1"><input value="Value"/></div><div><input value="Second"/></div></div>`+strings.Repeat(`<div><input value="Unchanged"/></div>`, 1000))
@@ -138,7 +138,7 @@ func TestHTMLOrderKeepsInputAndScrollState(t *testing.T) {
 		state, _ = world.Get[htmlRenderState](owner)
 		got, _ := world.Get[Control](field)
 		position, _ := world.Get[scene.UIScroll](clip)
-		if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || position.Position[1] != -10 || got.Value != "Typed" || got.SelectionAnchor != 1 || got.SelectionFocus != 3 {
+		if state.SyncStats.PartialReconciles != 1 || state.OverflowBindings[node.node].entity != clip || position.Position[1] != -10 || ControlValue(world, field) != "Typed" || got.SelectionAnchor != 1 || got.SelectionFocus != 3 {
 			t.Fatal("order change reset live state")
 		}
 	}

@@ -86,7 +86,7 @@ func setupViewSSR3D(view *renderView3D, settings SSRSettings) error {
 		colorWidth *= 2
 	}
 	if view.reflection == nil {
-		depth, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, Depth: true})
+		depth, err := render.NewRenderTarget(render.RenderTargetDescriptor{Width: width, Height: height, ColorFormat: render.RenderTargetDepth, Depth: true})
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func renderViewSSR3D(canvas *graphics.Canvas2D, state *World, view *renderView3D
 	if err != nil {
 		return err
 	}
-	depth, err := s.depth.frame.Target.ColorTextureFor(canvas.Device())
+	depth, err := s.depth.frame.Target.DepthTextureFor(canvas.Device())
 	if err != nil {
 		return err
 	}

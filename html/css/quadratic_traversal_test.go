@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestCachedTypeIndicesMatchFreshScansAfterReorder(t *testing.T) {
-	parent := dom.NewElement("div")
+	parent := uinode.NewElement("div")
 	for _, tag := range []string{"x-one", "span", "x-two", "x-one", "span", "x-three", "x-two"} {
-		parent.AppendChild(dom.NewText("ignored"))
-		parent.AppendChild(dom.NewElement(tag))
+		parent.AppendChild(uinode.NewText("ignored"))
+		parent.AppendChild(uinode.NewElement(tag))
 	}
 	ctx := NewMatchContext()
 	check := func() {
@@ -19,7 +19,7 @@ func TestCachedTypeIndicesMatchFreshScansAfterReorder(t *testing.T) {
 		for _, fromEnd := range []bool{true, false} {
 			for index := len(parent.Children) - 1; index >= 0; index-- {
 				node := parent.Children[index]
-				if node.Type != dom.ElementNode {
+				if node.Type != uinode.ElementNode {
 					continue
 				}
 				want := childIndex(node, true, fromEnd, nil)
@@ -34,9 +34,9 @@ func TestCachedTypeIndicesMatchFreshScansAfterReorder(t *testing.T) {
 	ctx.Reset()
 	check()
 	// A second parent must start its type counters at one.
-	other := dom.NewElement("div")
+	other := uinode.NewElement("div")
 	for _, tag := range []string{"span", "x-two", "span"} {
-		other.AppendChild(dom.NewElement(tag))
+		other.AppendChild(uinode.NewElement(tag))
 	}
 	for _, node := range other.Children {
 		if got, want := childIndex(node, true, false, ctx), childIndex(node, true, false, nil); got != want {
@@ -51,9 +51,9 @@ func TestCachedTypeIndicesMatchFreshScansAfterReorder(t *testing.T) {
 func BenchmarkTypeIndexTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			parent := dom.NewElement("div")
+			parent := uinode.NewElement("div")
 			for index := range count {
-				parent.AppendChild(dom.NewElement(fmt.Sprintf("x-tag-%d", index)))
+				parent.AppendChild(uinode.NewElement(fmt.Sprintf("x-tag-%d", index)))
 			}
 			ctx := NewMatchContext()
 			run := func() {

@@ -99,7 +99,8 @@ struct OnixGPUDriver {
     UINT readback_width, readback_height;
     DXGI_FORMAT readback_format;
     UINT width, height;
-    int vsync;
+    int vsync, frame_active;
+    UINT surface_depth_age;
     D3D11_VIEWPORT viewport;
     D3D11_RECT scissor;
     int scissor_enabled, blend_mode;
@@ -110,7 +111,7 @@ static DxTexture *dx_get_texture(OnixGPUDriver *d, uint32_t id) {
     return id && id <= d->texture_slots.count && d->textures[id - 1].value ? &d->textures[id - 1] : NULL;
 }
 static DxTarget *dx_get_target(OnixGPUDriver *d, uint32_t id) {
-    return id && id <= d->target_slots.count && d->targets[id - 1].color ? &d->targets[id - 1] : NULL;
+    return id && id <= d->target_slots.count && d->targets[id - 1].texture ? &d->targets[id - 1] : NULL;
 }
 static DxMesh *dx_get_mesh(OnixGPUDriver *d, uint32_t id) {
     return id && id <= d->mesh_slots.count && d->meshes[id - 1].vertices ? &d->meshes[id - 1] : NULL;
@@ -335,7 +336,7 @@ static void dx_blend(OnixGPUDriver *d, int mode) {
     ID3D11DeviceContext_OMSetBlendState(d->context, d->blends[mode], d->blend_color, UINT_MAX);
 }
 static int dx_depth(OnixGPUDriver *d, DxTarget *target) {
-    if (!target->depth) {
+    if (!target->depth_view) {
         D3D11_TEXTURE2D_DESC desc = {.Width = target->width,
                                      .Height = target->height,
                                      .MipLevels = 1,
@@ -555,7 +556,42 @@ int onix_gpu_resize(OnixGPUDriver *d, uint32_t width, uint32_t height) {
     onix_dx_clip_composition(d->composition, width, height, d->corner_radius);
     return dx_surface(d);
 }
+static void dx_release_surface_depth(OnixGPUDriver *d) {
+    ID3D11DeviceContext_OMSetRenderTargets(d->context, 1, &d->surface.color, NULL);
+    RELEASE(d->surface.depth_view);
+    RELEASE(d->surface.depth);
+    d->surface_depth_age = 0;
+}
+
+int onix_gpu_trim_idle(OnixGPUDriver *d) {
+    if (d->frame_active || d->active_target) return dx_fail("cannot trim inside a frame", E_INVALIDARG);
+    ID3D11Buffer *empty[2] = {0};
+    UINT zero[2] = {0};
+    ID3D11DeviceContext_IASetVertexBuffers(d->context, 0, 2, empty, zero, zero);
+    ID3D11DeviceContext_IASetIndexBuffer(d->context, NULL, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11ShaderResourceView *views[2] = {0};
+    ID3D11DeviceContext_VSSetShaderResources(d->context, 16, 2, views);
+    DxBuffer *buffers[] = {&d->vertices, &d->indices, &d->instances, &d->deformation};
+    RELEASE(d->deformation_view);
+    for (UINT i = 0; i < 4; i++) {
+        RELEASE(buffers[i]->value);
+        *buffers[i] = (DxBuffer){0};
+    }
+    RELEASE(d->readback);
+    d->readback_width = d->readback_height = 0;
+    if (!d->update_count) {
+        free(d->update_data); d->update_data = NULL; d->update_capacity = d->update_size = 0;
+        free(d->updates); d->updates = NULL; d->update_slots = 0;
+    }
+    dx_release_surface_depth(d);
+    // The immediate context defers final resource release until queued draws finish.
+    ID3D11DeviceContext_Flush(d->context);
+    return 1;
+}
+
 int onix_gpu_begin_frame(OnixGPUDriver *d, const float clear[4]) {
+    d->frame_active = 1;
+    if (d->surface.depth && d->surface_depth_age++ >= ONIX_BUFFER_TRIM_DELAY) dx_release_surface_depth(d);
     dx_begin_uploads(d, &d->vertices);
     dx_begin_uploads(d, &d->indices);
     dx_begin_uploads(d, &d->instances);
@@ -597,6 +633,7 @@ void onix_gpu_set_corner_radius(OnixGPUDriver *d, int radius) {
 int onix_gpu_present(OnixGPUDriver *d) {
     if (d->active_target)
         return dx_fail("cannot present during a target pass", E_INVALIDARG);
+    d->frame_active = 0;
     return dx_ok(IDXGISwapChain1_Present(d->swapchain, d->vsync ? 1 : 0, 0), "present");
 }
 
@@ -628,13 +665,13 @@ uint64_t onix_gpu_texture_chain_size(uint32_t format, uint32_t width, uint32_t h
     }
     return bytes;
 }
-static int dx_texture_view(OnixGPUDriver *d, DxTexture *texture, int mipmap, uint32_t wrap_u, uint32_t wrap_v) {
-    if (!dx_ok(ID3D11Device_CreateShaderResourceView(d->device, (ID3D11Resource *)texture->value, NULL, &texture->view),
+static int dx_texture_view(OnixGPUDriver *d, DxTexture *texture, int mipmap, uint32_t wrap_u, uint32_t wrap_v, const D3D11_SHADER_RESOURCE_VIEW_DESC *srv) {
+    if (!dx_ok(ID3D11Device_CreateShaderResourceView(d->device, (ID3D11Resource *)texture->value, srv, &texture->view),
                "create texture view"))
         return 0;
     static const D3D11_TEXTURE_ADDRESS_MODE modes[] = {D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_WRAP,
                                                        D3D11_TEXTURE_ADDRESS_MIRROR};
-    D3D11_SAMPLER_DESC sampler = {.Filter =
+    D3D11_SAMPLER_DESC sampler = {.Filter = srv ? D3D11_FILTER_MIN_MAG_MIP_POINT :
                                       mipmap ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
                                   .AddressU = modes[wrap_u],
                                   .AddressV = modes[wrap_v],
@@ -683,7 +720,7 @@ uint32_t onix_gpu_create_texture_with_format(OnixGPUDriver *d, uint32_t width, u
     }
     if (!dx_ok(ID3D11Device_CreateTexture2D(d->device, &desc, pixels && !generate ? data : NULL, &texture.value),
                "create texture") ||
-        !dx_texture_view(d, &texture, mipmap, wrap_u, wrap_v)) {
+        !dx_texture_view(d, &texture, mipmap, wrap_u, wrap_v, NULL)) {
         dx_release_texture(&texture);
         return 0;
     }
@@ -782,7 +819,7 @@ uint32_t onix_gpu_create_external_d3d11_texture(OnixGPUDriver *d, uintptr_t hand
     DxTexture texture = {.width = width, .height = height};
     if (SUCCEEDED(result))
         result = ID3D11Device_OpenSharedResource(d->device, shared, &IID_ID3D11Texture2D, (void **)&texture.value);
-    if (!dx_ok(result, "open shared D3D11 texture") || !dx_texture_view(d, &texture, 0, 0, 0)) {
+    if (!dx_ok(result, "open shared D3D11 texture") || !dx_texture_view(d, &texture, 0, 0, 0, NULL)) {
         dx_release_texture(&texture);
         return 0;
     }
@@ -803,7 +840,7 @@ uint32_t onix_gpu_create_external_dmabuf_texture(OnixGPUDriver *d, int fd, uint3
 int onix_gpu_refresh_external_texture(OnixGPUDriver *d, uint32_t texture) { return dx_get_texture(d, texture) != NULL; }
 static int dx_create_target(OnixGPUDriver *d, DxTarget *target, uint32_t width, uint32_t height, uint32_t format,
                             int depth) {
-    if (!width || !height || format > 2 || (format == 2 && depth))
+    if (!width || !height || format > ONIX_TARGET_DEPTH || (format == ONIX_TARGET_DEPTH && !depth) || (format == 2 && depth))
         return dx_fail("invalid target descriptor", E_INVALIDARG);
     DxTexture texture = {.width = width, .height = height, .format = format == 2 ? ONIX_TEXTURE_FORMAT_R8 : ONIX_TEXTURE_FORMAT_RGBA8};
     D3D11_TEXTURE2D_DESC desc = {.Width = width,
@@ -813,8 +850,13 @@ static int dx_create_target(OnixGPUDriver *d, DxTarget *target, uint32_t width, 
                                  .Format = format == 2 ? DXGI_FORMAT_R8_UNORM : format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM,
                                  .SampleDesc = {1, 0},
                                  .BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET};
-    if (!dx_ok(ID3D11Device_CreateTexture2D(d->device, &desc, NULL, &texture.value), "create target texture") ||
-        !dx_texture_view(d, &texture, 0, 0, 0)) {
+    if (format == ONIX_TARGET_DEPTH) {
+        desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+    }
+    if (!dx_ok(ID3D11Device_CreateTexture2D(d->device, &desc, NULL, &texture.value), "create target texture")) return 0;
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv = {.Format = DXGI_FORMAT_R32_FLOAT, .ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D, .Texture2D = {.MipLevels = 1}};
+    if (!dx_texture_view(d, &texture, 0, 0, 0, format == ONIX_TARGET_DEPTH ? &srv : NULL)) {
         dx_release_texture(&texture);
         return 0;
     }
@@ -824,7 +866,13 @@ static int dx_create_target(OnixGPUDriver *d, DxTarget *target, uint32_t width, 
         return 0;
     }
     *target = (DxTarget){.texture = slot + 1, .width = width, .height = height, .format = format};
-    if (!dx_ok(ID3D11Device_CreateRenderTargetView(d->device, (ID3D11Resource *)texture.value, NULL, &target->color),
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv = {.Format = DXGI_FORMAT_D32_FLOAT, .ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D};
+    if (format == ONIX_TARGET_DEPTH) {
+        if (!dx_ok(ID3D11Device_CreateDepthStencilView(d->device, (ID3D11Resource *)texture.value, &dsv, &target->depth_view), "create sampleable depth view")) {
+            dx_release_texture(&texture);
+            return 0;
+        }
+    } else if (!dx_ok(ID3D11Device_CreateRenderTargetView(d->device, (ID3D11Resource *)texture.value, NULL, &target->color),
                "create target view") ||
         (depth && !dx_depth(d, target))) {
         dx_release_target(target);
@@ -876,7 +924,7 @@ int onix_gpu_begin_render_target(OnixGPUDriver *d, uint32_t id, const float clea
         return dx_fail("invalid target pass", E_INVALIDARG);
     d->active_target = id;
     dx_bind_target(d, target);
-    if (clear_color)
+    if (clear_color && target->color)
         ID3D11DeviceContext_ClearRenderTargetView(d->context, target->color, clear);
     if (clear_depth && target->depth_view)
         ID3D11DeviceContext_ClearDepthStencilView(d->context, target->depth_view, D3D11_CLEAR_DEPTH, depth, 0);
@@ -892,7 +940,7 @@ int onix_gpu_end_render_target(OnixGPUDriver *d) {
 int onix_gpu_read_render_target(OnixGPUDriver *d, uint32_t id, int32_t x, int32_t y, uint32_t width, uint32_t height,
                                 uint8_t *destination, size_t length) {
     DxTarget *target = dx_get_target(d, id);
-    if (!target || d->active_target || x < 0 || y < 0 || (uint64_t)x + width > target->width ||
+    if (!target || target->format == ONIX_TARGET_DEPTH || d->active_target || x < 0 || y < 0 || (uint64_t)x + width > target->width ||
         (uint64_t)y + height > target->height || length < (uint64_t)width * height * (target->format == 2 ? 1 : 4))
         return dx_fail("invalid target readback", E_INVALIDARG);
     DXGI_FORMAT format = target->format == 2 ? DXGI_FORMAT_R8_UNORM : target->format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1004,6 +1052,8 @@ int onix_gpu_destroy_mesh_shader(OnixGPUDriver *d, uint32_t id) {
 int onix_gpu_destroy_material2d_shader(OnixGPUDriver *d, uint32_t id) { return onix_gpu_destroy_mesh_shader(d, id); }
 int onix_gpu_draw_sprites(OnixGPUDriver *d, const OnixGPUSpritePush *push, const OnixGPUInstance *instances,
                           uint32_t instance_count, const OnixNativeSpriteDraw *draws, uint32_t draw_count) {
+    if (d->active_target && d->targets[d->active_target - 1].format == ONIX_TARGET_DEPTH)
+        return dx_fail("2D drawing requires a color attachment", E_INVALIDARG);
     if (!dx_upload(d, &d->instances, instances, (size_t)instance_count * sizeof(*instances), D3D11_BIND_VERTEX_BUFFER))
         return 0;
     ID3D11DeviceContext_OMSetDepthStencilState(d->context, d->depth_states[0], 0);
@@ -1062,6 +1112,8 @@ int onix_gpu_draw_sprites(OnixGPUDriver *d, const OnixGPUSpritePush *push, const
 }
 int onix_gpu_draw_shapes(OnixGPUDriver *d, const OnixGPUSpritePush *push, const OnixGPUShapeInstance *instances,
                          uint32_t instance_count) {
+    if (d->active_target && d->targets[d->active_target - 1].format == ONIX_TARGET_DEPTH)
+        return dx_fail("2D drawing requires a color attachment", E_INVALIDARG);
     if (!dx_upload(d, &d->instances, instances, (size_t)instance_count * sizeof(*instances),
                    D3D11_BIND_VERTEX_BUFFER) ||
         !dx_uniforms(d, push->projection, 64))
@@ -1085,6 +1137,9 @@ static int dx_draw_meshes(OnixGPUDriver *d, const OnixGPUMeshPush *push, const O
          !dx_upload(d, &d->indices, indices, (size_t)index_count * 4, D3D11_BIND_INDEX_BUFFER)))
         return 0;
     DxTarget *target = d->active_target ? dx_get_target(d, d->active_target) : &d->surface;
+    if (picking && (!target || target->format != 1 || !target->depth_view))
+        return dx_fail("mesh picking requires an R32Uint target with depth", E_INVALIDARG);
+    if (!d->active_target) d->surface_depth_age = 0;
     if (!target || !dx_depth(d, target))
         return 0;
     ID3D11DeviceContext_OMSetRenderTargets(d->context, 1, &target->color, target->depth_view);

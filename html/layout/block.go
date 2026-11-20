@@ -7,11 +7,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/onix-engine/onix/font"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutBlockContents(box *Box, width, height style.Value, containing Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if ctx != nil && establishesFloatContext(box) {
 		previous := ctx.floatContext
 		if box.floats == nil {
@@ -30,11 +30,11 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 	box.Border = resolveBorderEdges(box.Style.BorderWidth, box.Style.BorderStyle, layoutContaining.Width)
 
 	intrinsicWidth, intrinsicHeight := intrinsicImageSize(box, ctx)
-	intrinsicWidth, intrinsicHeight = resolveImageSize(box.Node, box.Style, intrinsicWidth, intrinsicHeight, layoutContaining.Width, layoutContaining.Height)
+	intrinsicWidth, intrinsicHeight = resolveImageSize(box.Node, width, height, intrinsicWidth, intrinsicHeight, layoutContaining.Width, layoutContaining.Height)
 	hasIntrinsicRatio := intrinsicWidth > 0 && intrinsicHeight > 0
 	controlWidth, controlHeight := intrinsicControlSize(box, face, ctx, styles)
 	if controlWidth > 0 {
-		if box.Style.Width.Kind == style.ValueAuto && !isBorderBox(box.Style) {
+		if width.Kind == style.ValueAuto && !isBorderBox(box.Style) {
 			controlWidth -= horizontalBoxExtras(box.Padding, box.Border)
 			if controlWidth <= 0 {
 				controlWidth = 1
@@ -43,17 +43,17 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 		intrinsicWidth = controlWidth
 	}
 	if controlHeight > 0 {
-		if box.Style.Height.Kind == style.ValueAuto && !isBorderBox(box.Style) {
+		if height.Kind == style.ValueAuto && !isBorderBox(box.Style) {
 			controlHeight -= verticalBoxExtras(box.Padding, box.Border)
 		}
 		intrinsicHeight = controlHeight
 	}
 
-	contentWidth := resolveLength(box.Style.Width, layoutContaining.Width)
-	if style.IsLength(box.Style.Width) && isBorderBox(box.Style) {
+	contentWidth := resolveLength(width, layoutContaining.Width)
+	if style.IsLength(width) && isBorderBox(box.Style) {
 		contentWidth -= horizontalBoxExtras(box.Padding, box.Border)
 	}
-	if box.Style.Width.Kind == style.ValueAuto {
+	if width.Kind == style.ValueAuto {
 		if intrinsicWidth > 0 {
 			contentWidth = intrinsicWidth
 			if isBorderBox(box.Style) {
@@ -66,22 +66,22 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			}
 		}
 	}
-	if box.Style.Width.Kind == style.ValueAuto && style.IsLength(box.Style.Height) && hasIntrinsicRatio {
-		contentHeight := resolveLength(box.Style.Height, layoutContaining.Height)
+	if width.Kind == style.ValueAuto && style.IsLength(height) && hasIntrinsicRatio {
+		contentHeight := resolveLength(height, layoutContaining.Height)
 		if isBorderBox(box.Style) {
 			contentHeight -= verticalBoxExtras(box.Padding, box.Border)
 		}
 		contentWidth = maxFloat(contentHeight, 0) * intrinsicWidth / intrinsicHeight
 	}
 	contentHeight := 0.0
-	if isAbsolutePositioned(box) && box.Style.Height.Kind == style.ValueAuto && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom) {
+	if isAbsolutePositioned(box) && height.Kind == style.ValueAuto && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom) {
 		contentHeight = layoutContaining.Height - resolveLength(box.Style.Top, layoutContaining.Height) - resolveLength(box.Style.Bottom, layoutContaining.Height) - verticalBoxExtras(box.Padding, box.Border) - box.Margin.Top - box.Margin.Bottom
 		contentHeight = maxFloat(contentHeight, 0)
 	}
-	if isAbsolutePositioned(box) && box.Style.Width.Kind == style.ValueAuto && style.IsLength(box.Style.Left) && style.IsLength(box.Style.Right) {
+	if isAbsolutePositioned(box) && width.Kind == style.ValueAuto && style.IsLength(box.Style.Left) && style.IsLength(box.Style.Right) {
 		contentWidth = layoutContaining.Width - resolveLength(box.Style.Left, layoutContaining.Width) - resolveLength(box.Style.Right, layoutContaining.Width) - horizontalBoxExtras(box.Padding, box.Border) - box.Margin.Left - box.Margin.Right
 		contentWidth = maxFloat(contentWidth, 0)
-	} else if (isAbsolutePositioned(box) || box.Style.Display.Keyword == "inline-block") && box.Style.Width.Kind == style.ValueAuto && intrinsicWidth == 0 {
+	} else if (isAbsolutePositioned(box) || box.Style.Display.Keyword == "inline-block") && width.Kind == style.ValueAuto && intrinsicWidth == 0 {
 		// CSS 2.1 10.3.7/10.3.9: absolute and inline-block auto widths use
 		// shrink-to-fit sizing against the actual containing block.
 		extras := horizontalBoxExtras(box.Padding, box.Border)
@@ -98,8 +98,8 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 	contentWidth = clampContentDimension(contentWidth, box.Style.MinWidth, box.Style.MaxWidth, layoutContaining.Width, horizontalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
 
 	// Resolve definite height before descendants use this box as their containing block.
-	if style.IsLength(box.Style.Height) {
-		contentHeight = contentDimension(box.Style.Height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+	if style.IsLength(height) {
+		contentHeight = contentDimension(height, layoutContaining.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
 	}
 	if !isAbsolutePositioned(box) && !isFloated(box) && !isFlexContainer(box.Parent) && box.Style.Display.Keyword != "inline-block" && box.Style.Display.Keyword != "inline-flex" {
 		free := maxFloat(layoutContaining.Width-contentWidth-horizontalBoxExtras(box.Padding, box.Border)-box.Margin.Left-box.Margin.Right, 0)
@@ -116,16 +116,16 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 	contentY := layoutContaining.Y + box.Margin.Top + box.Border.Top + box.Padding.Top
 	if isAbsolutePositioned(box) {
 		contentX = resolveAbsoluteX(box, layoutContaining, contentWidth)
-		contentY = resolveAbsoluteY(box, layoutContaining)
+		contentY = resolveAbsoluteY(box, layoutContaining, height)
 	}
 
 	box.ScrollbarGutter.Right = min(box.ScrollbarGutter.Right, max(contentWidth, 0))
-	if hasDefiniteScrollHeight(box) {
+	if hasDefiniteScrollHeight(box, height) {
 		box.ScrollbarGutter.Bottom = min(box.ScrollbarGutter.Bottom, max(contentHeight, 0))
 	}
 	box.Content = Rect{X: contentX, Y: contentY, Width: max(contentWidth-box.ScrollbarGutter.Right, 0), Height: max(contentHeight-box.ScrollbarGutter.Bottom, 0)}
 	if box.Style.Display.Kind == style.ValueKeyword && box.Style.Display.Keyword == "table" {
-		layoutTableContainer(box, layoutContaining, absoluteContaining, face, styles, ctx)
+		layoutTableContainer(box, width, height, layoutContaining, absoluteContaining, face, styles, ctx)
 		return
 	}
 
@@ -137,7 +137,7 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 		clear(box.ControlFragments)
 		box.ControlFragments = box.ControlFragments[:0]
 		box.TextHeight = 0
-		layoutFlexContainer(box, layoutContaining, absoluteContaining, face, styles, ctx)
+		layoutFlexContainer(box, height, layoutContaining, absoluteContaining, face, styles, ctx)
 		return
 	}
 	if isGridContainer(box) {
@@ -148,7 +148,7 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 		clear(box.ControlFragments)
 		box.ControlFragments = box.ControlFragments[:0]
 		box.TextHeight = 0
-		layoutGridContainer(box, layoutContaining, absoluteContaining, face, styles, ctx)
+		layoutGridContainer(box, height, layoutContaining, absoluteContaining, face, styles, ctx)
 		return
 	}
 
@@ -183,7 +183,7 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			return 0
 		}(),
 		FlowHeight: func() float64 {
-			if style.IsLength(box.Style.Height) || contentHeight > 0 {
+			if style.IsLength(height) || contentHeight > 0 {
 				return box.Content.Height
 			}
 			return layoutContaining.Height
@@ -233,8 +233,8 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 		}
 	}
 
-	if style.IsLength(box.Style.Height) {
-		box.Content.Height = resolveLength(box.Style.Height, layoutContaining.Height)
+	if style.IsLength(height) {
+		box.Content.Height = resolveLength(height, layoutContaining.Height)
 		if isBorderBox(box.Style) {
 			box.Content.Height -= verticalBoxExtras(box.Padding, box.Border)
 		}
@@ -261,7 +261,7 @@ func layoutBlockContents(box *Box, containing Rect, absoluteContaining Rect, fac
 			box.Content.Height = cursorY - box.Content.Y
 		}
 	}
-	if style.IsLength(box.Style.Height) || contentHeight > 0 || intrinsicHeight > 0 {
+	if style.IsLength(height) || contentHeight > 0 || intrinsicHeight > 0 {
 		box.Content.Height = max(box.Content.Height-box.ScrollbarGutter.Bottom, 0)
 	}
 	box.Content.Height = clampScrollContentHeight(box, layoutContaining.Height)
@@ -420,7 +420,7 @@ func romanMarker(value int, upper bool) string {
 	return text
 }
 
-func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) ([]*Box, map[*dom.Node]*Box) {
+func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) ([]*Box, map[*uinode.Node]*Box) {
 	flow := box.flow
 	if flow != nil {
 		clear(flow.inlineBoxes)
@@ -433,7 +433,7 @@ func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Re
 		if reversed {
 			step, ordinal = -1, 0
 			for _, child := range box.Node.Children {
-				if child.Type == dom.ElementNode && child.Data == "li" {
+				if child.Type == uinode.ElementNode && child.Data == "li" {
 					ordinal++
 				}
 			}
@@ -469,7 +469,7 @@ func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Re
 			continue
 		}
 		if flow == nil {
-			flow = &flowScratch{inlineBoxIndex: make(map[*dom.Node]*Box)}
+			flow = &flowScratch{inlineBoxIndex: make(map[*uinode.Node]*Box)}
 			box.flow = flow
 		}
 		containing := Rect{X: box.Content.X, Y: box.Content.Y, Width: box.Content.Width, Height: layoutContaining.Height}
@@ -507,7 +507,7 @@ func alignBottomPositionedChildren(box *Box, absoluteContaining Rect, ctx *layou
 		if !isBottomAnchoredAbsolutePositioned(child) {
 			continue
 		}
-		targetY := resolveAbsoluteY(child, containing)
+		targetY := resolveAbsoluteY(child, containing, child.Style.Height)
 		translateBox(child, 0, targetY-child.Content.Y, ctx)
 	}
 }
@@ -577,17 +577,17 @@ func resolveAbsoluteX(box *Box, containing Rect, contentWidth float64) float64 {
 	return baseLeft
 }
 
-func resolveAbsoluteY(box *Box, containing Rect) float64 {
+func resolveAbsoluteY(box *Box, containing Rect, usedHeight style.Value) float64 {
 	baseTop := containing.Y + box.Margin.Top + box.Border.Top + box.Padding.Top
 	if style.IsLength(box.Style.Top) {
 		return containing.Y + resolveLength(box.Style.Top, containing.Height) + box.Margin.Top + box.Border.Top + box.Padding.Top
 	}
 	if style.IsLength(box.Style.Bottom) {
 		height := box.Content.Height
-		if style.IsLength(box.Style.Height) {
-			height = clampContentDimension(contentDimension(box.Style.Height, containing.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style)), box.Style.MinHeight, box.Style.MaxHeight, containing.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
+		if style.IsLength(usedHeight) {
+			height = clampContentDimension(contentDimension(usedHeight, containing.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style)), box.Style.MinHeight, box.Style.MaxHeight, containing.Height, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))
 		}
-		if height > 0 || style.IsLength(box.Style.Height) {
+		if height > 0 || style.IsLength(usedHeight) {
 			return containing.Y + containing.Height - resolveLength(box.Style.Bottom, containing.Height) - box.Margin.Bottom - box.Border.Bottom - box.Padding.Bottom - height
 		}
 	}
@@ -757,7 +757,7 @@ func isPaintedBorderStyle(value style.Value) bool {
 }
 
 func intrinsicImageSize(box *Box, ctx *layoutContext) (float64, float64) {
-	if box == nil || box.Node == nil || box.Node.Type != dom.ElementNode || box.Node.Data != "img" {
+	if box == nil || box.Node == nil || box.Node.Type != uinode.ElementNode || box.Node.Data != "img" {
 		return 0, 0
 	}
 	src, ok := box.Node.Attr("src")
@@ -776,7 +776,7 @@ const (
 )
 
 func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles style.Map) (float64, float64) {
-	if box == nil || box.Node == nil || box.Node.Type != dom.ElementNode {
+	if box == nil || box.Node == nil || box.Node.Type != uinode.ElementNode {
 		return 0, 0
 	}
 	face = fontForStyle(face, box.Style, ctx)
@@ -834,10 +834,10 @@ func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles 
 	}
 }
 
-func intrinsicSelectTextWidth(node *dom.Node, face *font.Face, fontSize, letterSpacing float64, ctx *layoutContext) float64 {
+func intrinsicSelectTextWidth(node *uinode.Node, face *font.Face, fontSize, letterSpacing float64, ctx *layoutContext) float64 {
 	width := 0.0
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		if child.Data == "option" {
@@ -849,12 +849,12 @@ func intrinsicSelectTextWidth(node *dom.Node, face *font.Face, fontSize, letterS
 	return width
 }
 
-func intrinsicControlImageMetrics(node *dom.Node, styles style.Map, ctx *layoutContext) (width, height float64, count int) {
+func intrinsicControlImageMetrics(node *uinode.Node, styles style.Map, ctx *layoutContext) (width, height float64, count int) {
 	if node == nil {
 		return 0, 0, 0
 	}
 	for _, child := range node.Children {
-		if child == nil || child.Type != dom.ElementNode {
+		if child == nil || child.Type != uinode.ElementNode {
 			continue
 		}
 		computed, ok := styles.Get(child)
@@ -890,7 +890,7 @@ func intrinsicControlImageMetrics(node *dom.Node, styles style.Map, ctx *layoutC
 	return width, height, count
 }
 
-func controlIntAttr(node *dom.Node, name string, fallback int) int {
+func controlIntAttr(node *uinode.Node, name string, fallback int) int {
 	if node == nil {
 		return fallback
 	}
@@ -912,7 +912,7 @@ func scrollTextInputFragmentsIntoView(box *Box) {
 	box.TextFragments = scrollTextInputTextFragmentsIntoView(box.Node, box.Content, box.TextFragments)
 }
 
-func scrollTextInputTextFragmentsIntoView(node *dom.Node, content Rect, fragments []TextFragment) []TextFragment {
+func scrollTextInputTextFragmentsIntoView(node *uinode.Node, content Rect, fragments []TextFragment) []TextFragment {
 	if !isTextInputNode(node) || len(fragments) == 0 || content.Width <= 0 || !inputHasValue(node) {
 		return fragments
 	}
@@ -946,7 +946,7 @@ func scrollTextInputTextFragmentsIntoView(node *dom.Node, content Rect, fragment
 	return fragments
 }
 
-func inputHasValue(node *dom.Node) bool {
+func inputHasValue(node *uinode.Node) bool {
 	if node == nil {
 		return false
 	}
@@ -954,7 +954,7 @@ func inputHasValue(node *dom.Node) bool {
 	return ok && value != ""
 }
 
-func inputCaretIndex(node *dom.Node, fallback int) int {
+func inputCaretIndex(node *uinode.Node, fallback int) int {
 	if node == nil {
 		return fallback
 	}

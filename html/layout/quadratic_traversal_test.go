@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestGridTrackPositionsAcrossGapsSpansAndResize(t *testing.T) {
@@ -16,7 +16,7 @@ func TestGridTrackPositionsAcrossGapsSpansAndResize(t *testing.T) {
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	for _, width := range []float64{200, 220, 180, 200} {
 		styles.Exclusive(grid).Width = style.LengthPx(width)
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{grid}, false)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{grid}, false)
 		full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)
@@ -37,7 +37,7 @@ func TestDirtyLayoutReparentMatchesFreshLayout(t *testing.T) {
 	for range 3 {
 		left.Children = nil
 		right.AppendChild(moving)
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{leaf, moving, right}, true)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{leaf, moving, right}, true)
 		full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)
@@ -56,7 +56,7 @@ func BenchmarkGridTrackTraversal(b *testing.B) {
 			var cache Cache
 			updateRetained(b, &cache, root, styles, face, nil, true)
 			mutable := styles.Exclusive(grid)
-			dirty := []*dom.Node{grid}
+			dirty := []*uinode.Node{grid}
 			b.ReportAllocs()
 			for b.Loop() {
 				if mutable.Width.LengthPx == float64(count) {
@@ -73,10 +73,10 @@ func BenchmarkGridTrackTraversal(b *testing.B) {
 func BenchmarkDirtyLayoutTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			root := dom.NewDocument()
+			root := uinode.NewDocument()
 			parent := root
 			for range count {
-				node := dom.NewElement("div", dom.Attribute{Name: "style", Value: "height:1px"})
+				node := uinode.NewElement("div", uinode.Attribute{Name: "style", Value: "height:1px"})
 				parent.AppendChild(node)
 				parent = node
 			}
@@ -87,7 +87,7 @@ func BenchmarkDirtyLayoutTraversal(b *testing.B) {
 			face := benchFace(b)
 			var cache Cache
 			updateRetained(b, &cache, root, styles, face, nil, true)
-			dirty := make([]*dom.Node, 0, count)
+			dirty := make([]*uinode.Node, 0, count)
 			for node := root; len(node.Children) != 0; {
 				node = node.Children[0]
 				dirty = append(dirty, node)

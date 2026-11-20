@@ -7,7 +7,7 @@ import (
 func TestHTMLControlByIDUsesDocumentOrderAndSurface(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<input id="field" value="first"><input id="field" value="second"><div id="blocked">first</div><input id="blocked"><textarea id="notes">text</textarea><input id="typed" type="checkbox">`)
 	entity, ok := ControlByID(world, owner, "field")
-	if !ok || world.GetRef[Control](entity).Value != "first" {
+	if !ok || ControlValue(world, entity) != "first" {
 		t.Fatal("duplicate id did not resolve to first element")
 	}
 	if _, ok := ControlByID(world, owner, "blocked"); ok {

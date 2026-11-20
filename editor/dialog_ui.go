@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
-	editorresources "github.com/onix-engine/onix/editor/resources"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
 	onixtext "github.com/onix-engine/onix/text"
@@ -50,7 +49,7 @@ func editorHTMLDialogStack(stackIndex int) int {
 func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, stackIndex int) ecs.Entity {
 	entity, ok := u.htmlDialogs[name]
 	if !ok || !world.IsAlive(entity) {
-		html := htmlui.New(editorresources.DialogHTML(name))
+		html := newEditorComponentSurface()
 		html.Font, html.FontSize = u.font, 14
 		html.Width, html.Height = u.rootRect.W, u.rootRect.H
 		html.StackIndex = editorHTMLDialogStack(stackIndex)
@@ -84,13 +83,11 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 		}
 		u.htmlDialogs[name] = entity
 		if name == "welcome" {
-			// The welcome resource is the component template itself; hydrate it
-			// so the retained page DOM remains addressable by the dialog code.
 			definition, err := editorWelcomeDefinitions()
 			if err != nil {
 				panic(err)
 			}
-			component, err := definition.HydrateComponent(world, entity, welcomeComponentProps{}, welcomeComponentState{}, 1)
+			component, err := definition.MountComponent(world, entity, welcomeComponentProps{}, welcomeComponentState{}, 1)
 			if err != nil {
 				panic(err)
 			}
@@ -102,7 +99,7 @@ func (u *editorDialogUI) htmlDialog(world *ecs.World, name string, panel rect, s
 			if err != nil {
 				panic(err)
 			}
-			component, err := definition.HydrateComponent(world, entity, editorDialogComponentProps{Frame: frame}, editorDialogComponentState{}, 1)
+			component, err := definition.MountComponent(world, entity, editorDialogComponentProps{Frame: frame}, editorDialogComponentState{}, 1)
 			if err != nil {
 				panic(err)
 			}

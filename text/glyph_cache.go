@@ -18,7 +18,7 @@ const (
 	defaultGlyphAtlasSize = 512
 	glyphBitmapPadding    = 2
 	glyphAtlasPadding     = 2
-	glyphAtlasByteLimit   = 8 << 20
+	glyphAtlasByteLimit   = 2 << 20
 	glyphCacheEntryLimit  = 4096
 )
 

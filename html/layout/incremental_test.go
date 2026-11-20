@@ -9,13 +9,14 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func retainedFixture(tb testing.TB, source string) (*dom.Node, style.Map, *font.Face) {
+func retainedFixture(tb testing.TB, source string) (*uinode.Node, style.Map, *font.Face) {
 	tb.Helper()
-	root, err := dom.Parse(source)
+	root, err := parse.Parse(source)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -30,7 +31,7 @@ func retainedFixture(tb testing.TB, source string) (*dom.Node, style.Map, *font.
 	return root, styles, face
 }
 
-func retainedNode(root *dom.Node, id string) *dom.Node {
+func retainedNode(root *uinode.Node, id string) *uinode.Node {
 	if value, _ := root.Attr("id"); value == id {
 		return root
 	}
@@ -42,7 +43,7 @@ func retainedNode(root *dom.Node, id string) *dom.Node {
 	return nil
 }
 
-func updateRetained(tb testing.TB, cache *Cache, root *dom.Node, styles style.Map, face *font.Face, dirty []*dom.Node, topology bool) *Box {
+func updateRetained(tb testing.TB, cache *Cache, root *uinode.Node, styles style.Map, face *font.Face, dirty []*uinode.Node, topology bool) *Box {
 	tb.Helper()
 	box, err := cache.Update(root, styles, face, face, 320, 200, dirty, nil, topology, false)
 	if err != nil {
@@ -143,7 +144,7 @@ func TestRetainedLayoutMatchesFullAcrossRepeatedChanges(t *testing.T) {
 				} else {
 					styles.Exclusive(target).Width = original
 				}
-				got := updateRetained(t, &cache, root, styles, face, []*dom.Node{target}, false)
+				got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{target}, false)
 				if got != initial {
 					t.Fatal("root box replaced")
 				}
@@ -174,7 +175,7 @@ func TestRetainedLayoutTopologyAndText(t *testing.T) {
 	}
 	for i, step := range steps {
 		step()
-		got := updateRetained(t, &cache, root, styles, face, []*dom.Node{target, parent, destination, sibling}, true)
+		got := updateRetained(t, &cache, root, styles, face, []*uinode.Node{target, parent, destination, sibling}, true)
 		full, err := BuildWithFonts(root, styles, face, face, 320, 200)
 		if err != nil {
 			t.Fatal(err)
@@ -194,7 +195,7 @@ func TestRetainedLayoutSkipsAndTranslatesUnaffectedSubtrees(t *testing.T) {
 	textBox := cache.nodes[text]
 	glyph := &textBox.TextFragments[0].Glyphs[0]
 	styles.Exclusive(target).Height = style.LengthPx(50)
-	updateRetained(t, &cache, root, styles, face, []*dom.Node{target}, false)
+	updateRetained(t, &cache, root, styles, face, []*uinode.Node{target}, false)
 	if cache.Work.Reflowed != 2 || cache.Work.Translated != 1 || cache.Work.Created != 0 {
 		t.Fatalf("unexpected work: %+v", cache.Work)
 	}
@@ -222,7 +223,7 @@ func BenchmarkRetainedBlockLayout(b *testing.B) {
 			b.Run(fmt.Sprintf("nodes=%d/retained=%t", count, retained), func(b *testing.B) {
 				root, styles, face := retainedFixture(b, `<div id="target" style="width:100px;height:30px">One</div>`+strings.Repeat(`<div>Unchanged text</div>`, count))
 				target := retainedNode(root, "target")
-				dirty := []*dom.Node{target}
+				dirty := []*uinode.Node{target}
 				var cache Cache
 				updateRetained(b, &cache, root, styles, face, nil, true)
 				for range 2 {
@@ -256,7 +257,7 @@ func TestRetainedLayoutCascadeTopologySignal(t *testing.T) {
 	target.SetAttr("style", "display:flex")
 	var cache style.MutationCache
 	var changes []style.NodeChange
-	_, _, err := style.RecomputeSubtreesWithChanges(root, &css.Stylesheet{}, style.Viewport{Width: 320, Height: 200}, nil, styles, []*dom.Node{target}, &changes, &cache)
+	_, _, err := style.RecomputeSubtreesWithChanges(root, &css.Stylesheet{}, style.Viewport{Width: 320, Height: 200}, nil, styles, []*uinode.Node{target}, &changes, &cache)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestRetainedLayoutWarmResizeDoesNotAllocate(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div id="target" style="width:100px;height:30px">One</div><div><div>Unaffected</div></div>`)
 	var cache Cache
 	target := retainedNode(root, "target")
-	dirty := []*dom.Node{target}
+	dirty := []*uinode.Node{target}
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	mutable := styles.Exclusive(target)
 	allocations := testing.AllocsPerRun(100, func() {
@@ -299,7 +300,7 @@ func TestRetainedLayoutViewportAndPositionChanges(t *testing.T) {
 			styles.Exclusive(target).Position = style.Keyword("static")
 			styles.Exclusive(target).Height = style.Auto()
 		}
-		got, err := cache.Update(root, styles, face, face, width, 200, []*dom.Node{target}, nil, true, false)
+		got, err := cache.Update(root, styles, face, face, width, 200, []*uinode.Node{target}, nil, true, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -313,7 +314,7 @@ func TestRetainedLayoutViewportAndPositionChanges(t *testing.T) {
 
 func TestRetainedLayoutMixedMutationSequence(t *testing.T) {
 	root, styles, face := retainedFixture(t, `<div id="container" style="width:280px;position:relative"><div id="first"><span>Wrapping words of text</span></div><div id="flex" style="display:flex;flex-wrap:wrap"><div id="item">One</div><div style="width:70px">Two</div></div><div id="last"><div style="position:absolute;bottom:0;right:0">Absolute</div>Last</div></div>`)
-	nodes := []*dom.Node{retainedNode(root, "container"), retainedNode(root, "first"), retainedNode(root, "flex"), retainedNode(root, "item"), retainedNode(root, "last")}
+	nodes := []*uinode.Node{retainedNode(root, "container"), retainedNode(root, "first"), retainedNode(root, "flex"), retainedNode(root, "item"), retainedNode(root, "last")}
 	declarations := []string{
 		"display:block;width:90px", "display:block;width:80%;padding:3px", "display:flex;flex-wrap:wrap;width:180px;gap:5px", "display:block;position:relative;left:5px;top:3px", "display:block;position:absolute;bottom:4px;right:2px;width:100px", "display:none", "display:inline-block;width:120px", "display:flex;flex-direction:column;height:100px", "display:block;width:250px;font-size:20px", "display:block;min-height:40px;max-width:140px",
 	}
@@ -321,13 +322,13 @@ func TestRetainedLayoutMixedMutationSequence(t *testing.T) {
 	updateRetained(t, &cache, root, styles, face, nil, true)
 	var styleCache style.MutationCache
 	var changes []style.NodeChange
-	var dirty []*dom.Node
+	var dirty []*uinode.Node
 	for i := 0; i < 100; i++ {
 		node := nodes[(i*7+i/5)%len(nodes)]
 		node.SetAttr("style", declarations[(i*3+i/10)%len(declarations)])
 		changes = changes[:0]
 		dirty = dirty[:0]
-		_, _, err := style.RecomputeSubtreesWithChanges(root, nil, style.Viewport{Width: 320, Height: 200}, nil, styles, []*dom.Node{root}, &changes, &styleCache)
+		_, _, err := style.RecomputeSubtreesWithChanges(root, nil, style.Viewport{Width: 320, Height: 200}, nil, styles, []*uinode.Node{root}, &changes, &styleCache)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -356,7 +357,7 @@ func TestRetainedCacheReportsRetiredSubtreeOnce(t *testing.T) {
 	child.Parent = nil
 	clear(parent.Children)
 	parent.Children = parent.Children[:0]
-	updateRetained(t, cache, root, styles, face, []*dom.Node{parent}, true)
+	updateRetained(t, cache, root, styles, face, []*uinode.Node{parent}, true)
 	if len(cache.Removed) != 2 {
 		t.Fatalf("removed boxes=%d, want 2", len(cache.Removed))
 	}

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLAnimationComposesAcrossGeneratedContainers(t *testing.T) {
@@ -83,6 +83,17 @@ func TestHTMLAnimationCompositionRefreshesSameFrameStyles(t *testing.T) {
 					}
 					count++
 				}
+				if paint := world.GetRef[scene.UIPaint2D](entity); paint != nil {
+					for _, fragment := range paint.Fragments() {
+						if fragment.Shape.Kind == 0 {
+							continue
+						}
+						if fragment.Shape.Fill != want {
+							t.Fatalf("inherited fragment color = %v, want %v", fragment.Shape.Fill, want)
+						}
+						count++
+					}
+				}
 				if text := world.GetRef[scene.Text2D](entity); text != nil {
 					if text.Color != want {
 						t.Fatalf("inherited text color = %v, want %v", text.Color, want)
@@ -92,7 +103,7 @@ func TestHTMLAnimationCompositionRefreshesSameFrameStyles(t *testing.T) {
 			}
 		}
 		if count < minimum {
-			t.Fatalf("expected at least %d painted entities, got %d", minimum, count)
+			t.Fatalf("expected at least %d painted fragments, got %d", minimum, count)
 		}
 	}
 	checkColor(graphics.ColorRGBA{R: .75, G: .5, B: .75, A: 1}, 4)

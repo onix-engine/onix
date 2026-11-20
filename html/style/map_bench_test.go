@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 var cascadeMapScratchSink *cascadeScratch
@@ -14,7 +14,7 @@ func BenchmarkCascadeWorkspacePopulation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	node := dom.NewElement("div", dom.Attribute{Name: "class", Value: "item"})
+	node := uinode.NewElement("div", uinode.Attribute{Name: "class", Value: "item"})
 	compiled := compileStylesheet(sheet)
 	b.ReportAllocs()
 	for b.Loop() {

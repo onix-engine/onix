@@ -87,7 +87,7 @@ Linux amd64，Go 1.27.3，Intel Core i5-11500。通过 `GOMAXPROCS=1 taskset -c 
 
 ## 验证
 
-相关包完整测试通过：`input`、`ecs`、`html/dom`、`html/css`、`html/style`、`html/layout`、`ui`、`ui/html`、`scene`、`project`、`module` 和根包。最后的输入、临时 map 和转换边调整后，重新运行了所有直接相关包测试。
+相关包完整测试通过：`input`、`ecs`、`html/parse`、`html/css`、`html/style`、`html/layout`、`ui`、`ui/html`、`scene`、`project`、`module` 和根包。最后的输入、临时 map 和转换边调整后，重新运行了所有直接相关包测试。
 
 定向竞态测试通过，覆盖输入标志、临时 map 峰值／闲置回收、稀疏转换边、CSS 候选遍历及 inline cache、渲染层级。回归测试覆盖树循环及折叠、子节点槽位生命周期、CSS 继承与级联顺序、输入同帧重复转换和快照隔离、渲染缓存密集／稀疏切换及实体 generation。
 
@@ -103,7 +103,7 @@ GOMAXPROCS=1 taskset -c 2 go test -p 1 -run '^$' \
   -benchmem -benchtime=300ms -count=3 \
   ./input ./ecs ./ui ./ui/html ./html/style ./scene .
 
-go test -p 2 ./input ./ecs ./html/dom ./html/css ./html/style ./html/layout ./ui ./ui/html ./scene ./project ./module .
+go test -p 2 ./input ./ecs ./html/parse ./html/css ./html/style ./html/layout ./ui ./ui/html ./scene ./project ./module .
 go test -race ./input ./ecs ./html/style -run 'Test(FrameScratchMap|ArchetypeEdge|ButtonStorage|CandidateTraversal|InlineStyleCache)' -count=1
 go test -race ./scene -run '^TestRenderHierarchy' -count=1
 fieldalignment ./input ./ecs ./ui ./ui/html ./html/style ./scene .

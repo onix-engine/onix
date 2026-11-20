@@ -8,9 +8,9 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLAnimationTrackMatchingPreservesDuplicateTimes(t *testing.T) {
@@ -46,16 +46,16 @@ func TestHTMLAnimationTrackMatchingPreservesDuplicateTimes(t *testing.T) {
 }
 
 func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
-	root, left, right := dom.NewDocument(), dom.NewElement("div"), dom.NewElement("div")
-	child := dom.NewElement("span")
+	root, left, right := uinode.NewDocument(), uinode.NewElement("div"), uinode.NewElement("div")
+	child := uinode.NewElement("span")
 	root.AppendChild(left)
 	root.AppendChild(right)
 	left.AppendChild(child)
-	detached := dom.NewElement("div")
-	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: root, Mutations: map[*dom.Node]htmlMutation{
+	detached := uinode.NewElement("div")
+	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: root, Mutations: map[*uinode.Node]htmlMutation{
 		left: htmlMutationStyle, child: htmlMutationStyle, right: htmlMutationStyle, detached: htmlMutationStyle,
 	}}}
-	check := func(want ...*dom.Node) {
+	check := func(want ...*uinode.Node) {
 		t.Helper()
 		if prepareHTMLMutationRoots(&state) {
 			t.Fatal("style-only mutations forced layout")
@@ -85,20 +85,20 @@ func TestHTMLMutationRootsCoalesceAndRefreshAncestry(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.Stylesheet = stylesheet
-	state.Mutations = map[*dom.Node]htmlMutation{child: htmlMutationStyle, right: htmlMutationStyle}
+	state.Mutations = map[*uinode.Node]htmlMutation{child: htmlMutationStyle, right: htmlMutationStyle}
 	check(root)
 }
 
 func quadraticHTMLBindingFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entity) {
 	world := ecs.NewWorld()
-	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), NodeByID: make(map[string]*dom.Node)}}
+	state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: uinode.NewDocument(), NodeByID: make(map[string]*uinode.Node)}}
 	owners := world.NewSpawner1[htmlRenderState]()
 	owner := owners.Spawn(state)
-	state.RenderNodes = make(map[*dom.Node]*htmlNodeRendering)
+	state.RenderNodes = make(map[*uinode.Node]*htmlNodeRendering)
 	children := world.NewSpawner3[htmlChild, scene.UITransform, scene.Parent]()
 	for i := range count {
 		id := fmt.Sprint(i)
-		node := dom.NewElement("div", dom.Attribute{Name: "id", Value: id})
+		node := uinode.NewElement("div", uinode.Attribute{Name: "id", Value: id})
 		state.Root.AppendChild(node)
 		state.NodeByID[id] = node
 		state.NodeOffsets = append(state.NodeOffsets, htmlNodeOffset{ID: id, Offset: mgl32.Vec2{float32(i), 1}})
@@ -170,9 +170,9 @@ func BenchmarkHTMLNodeBindingTraversal(b *testing.B) {
 func BenchmarkHTMLMutationRootTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument(), Mutations: make(map[*dom.Node]htmlMutation)}}
+			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: uinode.NewDocument(), Mutations: make(map[*uinode.Node]htmlMutation)}}
 			for range count {
-				node := dom.NewElement("div")
+				node := uinode.NewElement("div")
 				state.Root.AppendChild(node)
 				state.Mutations[node] = htmlMutationStyle
 			}
@@ -204,12 +204,12 @@ func TestHTMLComponentAttributeIndexPreservesScopeAndNormalizedNames(t *testing.
 func BenchmarkHTMLAnimationVisibilityTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: dom.NewDocument()}, htmlStyleState: htmlStyleState{Styles: make(style.Map)}}
+			state := htmlRenderState{htmlDocumentState: htmlDocumentState{Root: uinode.NewDocument()}, htmlStyleState: htmlStyleState{Styles: make(style.Map)}}
 			parent := state.Root
 			visible := &style.ComputedStyle{}
 			visible.Display = style.Keyword("block")
 			for i := range count {
-				node := dom.NewElement("div")
+				node := uinode.NewElement("div")
 				parent.AppendChild(node)
 				state.Styles[node] = visible
 				if i == 0 {
@@ -235,7 +235,7 @@ func BenchmarkHTMLComponentAttributeTraversal(b *testing.B) {
 	for _, count := range []int{100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			world := ecs.NewWorld()
-			node := dom.NewElement("div")
+			node := uinode.NewElement("div")
 			attributes := make([]VNodeAttribute, count)
 			for i := range attributes {
 				name := fmt.Sprintf("data-%d", i)

@@ -4,26 +4,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestHTMLMetadataPassPreservesCSSSourceOrder(t *testing.T) {
-	root, css, err := parseHTMLDocument(`<html><head><title>discard</title><style>.x{color:red}</style><style>.x{color:green}</style></head><body><div id="keep">visible</div><style>.x{color:blue}</style><script>discard</script><p>end</p></body></html>`)
+	root, css, err := prepareHTMLDocument(Surface{Value: `<html><head><title>discard</title><style>.x{color:red}</style><style>.x{color:green}</style></head><body><div id="keep">visible</div><style>.x{color:blue}</style><script>discard</script><p>end</p></body></html>`}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if css != ".x{color:red}.x{color:green}.x{color:blue}" {
+	if strings.Join(css, "") != ".x{color:red}.x{color:green}.x{color:blue}" {
 		t.Fatalf("CSS order = %q", css)
 	}
 	var text strings.Builder
-	var visit func(*dom.Node)
-	visit = func(n *dom.Node) {
-		if n.Type == dom.ElementNode && isHTMLMetadataElement(n.Data) {
+	var visit func(*uinode.Node)
+	visit = func(n *uinode.Node) {
+		if n.Type == uinode.ElementNode && isHTMLMetadataElement(n.Data) {
 			t.Fatalf("metadata retained: %s", n.Data)
 		}
-		if n.Type == dom.TextNode {
+		if n.Type == uinode.TextNode {
 			text.WriteString(n.Data)
 		}
 		for _, child := range n.Children {

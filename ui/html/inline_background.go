@@ -48,49 +48,32 @@ func htmlInlineBackgroundListStyleEligible(computed *style.ComputedStyle) bool {
 		computed.AnimatedPaint == 0 && !computed.AnimatedOpacity && computed.Opacity.Kind == style.ValueNumber
 }
 
+type htmlInlinePaintScratch struct{}
+
 func spawnHTMLInlineBackgroundList(world *ecs.World, owner ecs.Entity, state *htmlRenderState, backgrounds []layout.InlineBackground, window htmlPaintWindow, stackIndex int, visible bool) {
 	first := backgrounds[0]
-	bounds := first.Rect
-	for _, background := range backgrounds[1:] {
-		if htmlPaintFragmentVisible(window, background.Rect, background.Style) {
-			bounds = htmlUnionPaintBounds(bounds, background.Rect)
-		}
-	}
-	bundle := beginHTMLEntity(world, owner, first.Node, htmlRoleInlineBackgroundList, "", 0, 10)
-	layers := scene.SpriteLayers2D{}
-	if bundle.entity != 0 {
-		if previous := world.GetRef[scene.SpriteLayers2D](bundle.entity); previous != nil {
-			layers = *previous
-			layers.Layers = layers.Layers[:0]
-		}
-	}
+	origin := first.Rect
+	bounds := origin
+	scratch := world.FrameScratch[htmlInlinePaintScratch, scene.UIShapeFragment2D]()
+	scratch.Values = scratch.Values[:0]
 	for _, background := range backgrounds {
 		if !htmlPaintFragmentVisible(window, background.Rect, background.Style) {
 			continue
 		}
 		r := background.Rect
-		sprite := scene.NewSprite2D()
-		sprite.Shape = scene.RoundedRectShape2D(htmlColor(background.Style.BackgroundColor), htmlOverflowClipRadius(background.Style, r.Width, r.Height))
-		sprite.Width, sprite.Height = float32(r.Width), float32(r.Height)
-		layers.Layers = append(layers.Layers, scene.SpriteLayer2D{
-			Sprite: sprite, Transform: scene.SpriteLayerTransform2D{X: float32(r.X - bounds.X), Y: float32(r.Y - bounds.Y)},
-			Anchor: scene.AnchorTopLeft, Visible: true,
+		bounds = htmlUnionPaintBounds(bounds, r)
+		scratch.Values = append(scratch.Values, scene.UIShapeFragment2D{
+			Shape: scene.RoundedRectShape2D(htmlColor(background.Style.BackgroundColor), htmlOverflowClipRadius(background.Style, r.Width, r.Height)),
+			X:     float32(r.X - origin.X), Y: float32(r.Y - origin.Y), Width: float32(r.Width), Height: float32(r.Height),
 		})
 	}
-	layers.InvalidateMatrices()
 	sprite := scene.NewSprite2D()
+	sprite.Width, sprite.Height = float32(bounds.Width), float32(bounds.Height)
 	sprite.Alpha = float32(first.Style.Opacity.Number)
-	(&bundle).putHTML(scene.UITransformFromXY(float32(bounds.X), float32(bounds.Y)))
-	(&bundle).putHTML(scene.UIGlobalTransform{})
-	(&bundle).putHTML(scene.Visibility{Visible: visible})
-	(&bundle).putHTML(scene.AnchorTopLeft)
-	(&bundle).putHTML(scene.UIStackIndex(stackIndex))
-	(&bundle).putHTML(scene.Parent{Entity: owner})
-	(&bundle).putHTML(sprite)
-	(&bundle).putHTML(layers)
-	(&bundle).putHTML(scene.Size2D{Width: float32(bounds.Width), Height: float32(bounds.Height)})
-	(&bundle).putHTML(htmlChild{Owner: owner, Node: first.Node})
+	bundle := beginHTMLEntity(world, owner, first.Node, htmlRoleInlineBackgroundList, "", 0, 8)
+	putHTMLSurface(&bundle, owner, float32(origin.X), float32(origin.Y), sprite, stackIndex, visible)
 	entity := bundle.finish()
-	markHTMLChildNode(world, entity, first.Node)
+	scene.SetUIShapeFragments2D(world, entity, scratch.Values)
+	scratch.ReleaseUnused()
 	state.Children = append(state.Children, entity)
 }

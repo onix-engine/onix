@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestCursorInheritanceAndOverrides(t *testing.T) {
-	doc, err := dom.Parse(`<div style="cursor:col-resize"><span id="inherited">text</span><textarea id="explicit" style="cursor:text"></textarea><button id="initial" style="cursor:initial">initial</button><button id="inherit" style="cursor:INHERIT">inherit</button><button id="unset" style="cursor:unset">unset</button><button id="invalid" style="cursor:bogus">invalid</button></div>`)
+	doc, err := parse.Parse(`<div style="cursor:col-resize"><span id="inherited">text</span><textarea id="explicit" style="cursor:text"></textarea><button id="initial" style="cursor:initial">initial</button><button id="inherit" style="cursor:INHERIT">inherit</button><button id="unset" style="cursor:unset">unset</button><button id="invalid" style="cursor:bogus">invalid</button></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

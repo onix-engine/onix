@@ -20,7 +20,7 @@ func BenchmarkHTMLControlBridge(b *testing.B) {
 				spawner := world.NewSpawner1[htmlui.Control]()
 				var entity ecs.Entity
 				for range count {
-					entity = spawner.Spawn(htmlui.Control{Tag: "input", Value: "value", RenderRevision: 1})
+					entity = spawner.Spawn(htmlui.Control{Tag: "input", RenderRevision: 1})
 				}
 				for range 2 {
 					enrichHTMLControls(world)

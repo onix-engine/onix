@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func htmlAnimationFixture(t *testing.T, source string) (*ecs.World, ecs.Entity, *scene.Time) {
@@ -81,6 +81,38 @@ func TestHTMLCSSKeyframesAdvanceRetainedVisualsWithoutAllocations(t *testing.T) 
 		}
 	}); allocations != 0 {
 		t.Fatalf("animation frame allocated %v objects", allocations)
+	}
+}
+
+func TestHTMLCSSRotationKeepsCenterAfterScrolling(t *testing.T) {
+	world, owner, clock := htmlAnimationFixture(t, `<style>
+ #list {position:absolute;left:20px;top:30px;width:150px;height:80px;overflow:auto}
+ .row {position:relative;height:30px}
+ #spinner {position:absolute;right:6px;top:8px;width:14px;height:14px;background:red;animation:spin 1s linear infinite}
+ @keyframes spin {from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+ </style><div id="list"><div class="row"></div><div class="row"></div><div class="row"><div id="spinner"></div></div>`+
+		strings.Repeat(`<div class="row"></div>`, 5)+`</div>`)
+	visual := htmlAnimationVisual(t, world, owner, "spinner")
+	bounds, _ := incrementalHTMLNode(t, world, owner, "spinner").Bounds()
+	area, ok := incrementalHTMLNode(t, world, owner, "list").ScrollContainer()
+	if !ok {
+		t.Fatal("missing scroll container")
+	}
+	globalSync := scene.SyncUIGlobalTransformSystem("")
+	for _, offset := range []float32{0, -24, -52, 0} {
+		world.GetMut[scene.UIScroll](area).Position[1] = offset
+		SyncScrollContent(world)
+		htmlAnimationStep(t, world, clock, 125*time.Millisecond)
+		SyncScrollContent(world)
+		if err := globalSync.Run(world); err != nil {
+			t.Fatal(err)
+		}
+		transform, _ := world.Get[scene.UIGlobalTransform](visual)
+		center := transform.Matrix.Mul4x1(mgl32.Vec4{7, 7, 0, 1})
+		want := mgl32.Vec4{bounds.X + 7, bounds.Y + 7 + offset, 0, 1}
+		if center.Sub(want).Len() > .001 {
+			t.Fatalf("scroll offset %v: spinner center = %v, want %v", offset, center, want)
+		}
 	}
 }
 

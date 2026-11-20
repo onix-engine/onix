@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license in LICENSE.go-html.
 // Adapted for Onix: source views, direct DOM construction and reusable storage.
 
-package dom
+package parse
 
-import "strings"
+import (
+	"strings"
+
+	uinode "github.com/onix-engine/onix/scene/node"
+)
 
 func adjustAttributeNames(aa []htmlAttribute, nameMap map[string]string) {
 	for i := range aa {
@@ -14,17 +18,17 @@ func adjustAttributeNames(aa []htmlAttribute, nameMap map[string]string) {
 	}
 }
 
-func htmlIntegrationPoint(n *Node) bool {
-	if n.Type != ElementNode {
+func htmlIntegrationPoint(n *uinode.Node) bool {
+	if n.Type != uinode.ElementNode {
 		return false
 	}
-	switch n.namespace {
-	case "math":
+	switch n.Namespace {
+	case uinode.MathML:
 		if n.Data == "annotation-xml" {
 			value := n.AttrValue("encoding")
 			return strings.EqualFold(value, "text/html") || strings.EqualFold(value, "application/xhtml+xml")
 		}
-	case "svg":
+	case uinode.SVG:
 		switch n.Data {
 		case "desc", "foreignObject", "title":
 			return true
@@ -33,8 +37,8 @@ func htmlIntegrationPoint(n *Node) bool {
 	return false
 }
 
-func mathMLTextIntegrationPoint(n *Node) bool {
-	if n.namespace != "math" {
+func mathMLTextIntegrationPoint(n *uinode.Node) bool {
+	if n.Namespace != uinode.MathML {
 		return false
 	}
 	switch n.Data {
@@ -283,16 +287,16 @@ var isSpecialElementMap = map[string]bool{
 	"xmp":        true,
 }
 
-func isSpecialElement(element *Node) bool {
-	switch element.namespace {
-	case "", "html":
+func isSpecialElement(element *uinode.Node) bool {
+	switch element.Namespace {
+	case uinode.HTML:
 		return isSpecialElementMap[element.Data]
-	case "math":
+	case uinode.MathML:
 		switch element.Data {
 		case "mi", "mo", "mn", "ms", "mtext", "annotation-xml":
 			return true
 		}
-	case "svg":
+	case uinode.SVG:
 		switch element.Data {
 		case "foreignObject", "desc", "title":
 			return true

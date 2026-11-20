@@ -3,18 +3,18 @@ package layout
 import (
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestDescendantTextOwnership(t *testing.T) {
-	root := dom.NewElement("div")
-	root.AppendChild(dom.NewText(""))
-	root.AppendChild(dom.NewElement("img"))
-	wrapper := dom.NewElement("span")
+	root := uinode.NewElement("div")
+	root.AppendChild(uinode.NewText(""))
+	root.AppendChild(uinode.NewElement("img"))
+	wrapper := uinode.NewElement("span")
 	root.AppendChild(wrapper)
-	text := dom.NewText(" 中文\tGo ")
+	text := uinode.NewText(" 中文\tGo ")
 	wrapper.AppendChild(text)
-	wrapper.AppendChild(dom.NewText(""))
+	wrapper.AppendChild(uinode.NewText(""))
 	if descendantText(nil) != "" || descendantText(root) != text.Data {
 		t.Fatal("lost nested text or whitespace")
 	}
@@ -23,7 +23,7 @@ func TestDescendantTextOwnership(t *testing.T) {
 	if first != " 中文\tGo " || descendantText(root) != "updated" {
 		t.Fatal("text was stale after mutation")
 	}
-	second := dom.NewText("尾")
+	second := uinode.NewText("尾")
 	root.AppendChild(second)
 	joined := descendantText(root)
 	if joined != "updated尾" {
@@ -40,12 +40,12 @@ func TestDescendantTextOwnership(t *testing.T) {
 }
 
 func BenchmarkDescendantText(b *testing.B) {
-	root := dom.NewElement("div")
-	root.AppendChild(dom.NewElement("img"))
-	wrapper := dom.NewElement("span")
+	root := uinode.NewElement("div")
+	root.AppendChild(uinode.NewElement("img"))
+	wrapper := uinode.NewElement("span")
 	root.AppendChild(wrapper)
-	wrapper.AppendChild(dom.NewText("nested label"))
-	wrapper.AppendChild(dom.NewText(""))
+	wrapper.AppendChild(uinode.NewText("nested label"))
+	wrapper.AppendChild(uinode.NewText(""))
 	b.ReportAllocs()
 	for b.Loop() {
 		if descendantText(root) != "nested label" {
@@ -55,11 +55,11 @@ func BenchmarkDescendantText(b *testing.B) {
 }
 
 func TestDescendantTextSingleValueAllocations(t *testing.T) {
-	root := dom.NewElement("div")
-	wrapper := dom.NewElement("span")
+	root := uinode.NewElement("div")
+	wrapper := uinode.NewElement("span")
 	root.AppendChild(wrapper)
-	wrapper.AppendChild(dom.NewText("nested label"))
-	root.AppendChild(dom.NewText(""))
+	wrapper.AppendChild(uinode.NewText("nested label"))
+	root.AppendChild(uinode.NewText(""))
 	if allocs := testing.AllocsPerRun(100, func() {
 		if descendantText(root) != "nested label" {
 			panic("lost label")

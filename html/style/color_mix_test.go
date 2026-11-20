@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 )
 
 func TestColorMixSRGB(t *testing.T) {
@@ -83,7 +83,7 @@ func TestColorMixInvalid(t *testing.T) {
 }
 
 func TestColorMixCascadeAndCurrentColor(t *testing.T) {
-	document, err := dom.Parse(`<div id="parent" style="color:red"><div id="mixed"><span id="child"></span></div></div>`)
+	document, err := parse.Parse(`<div id="parent" style="color:red"><div id="mixed"><span id="child"></span></div></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}

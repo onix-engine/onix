@@ -60,7 +60,8 @@ func htmlBlurShadowCoverage(dst *image.Alpha, sigma float64, scratch *htmlFilter
 		return
 	}
 	scratch.mask = slices.Grow(scratch.mask[:0], w*h)[:w*h]
-	scratch.maskLine = slices.Grow(scratch.maskLine[:0], max(w, h))[:max(w, h)]
+	lineSize := max(w, min(w, htmlShadowBlurColumns)*h)
+	scratch.maskLine = slices.Grow(scratch.maskLine[:0], lineSize)[:lineSize]
 	for y := range h {
 		for x := range w {
 			scratch.mask[y*w+x] = float64(dst.Pix[y*dst.Stride+x])
@@ -78,11 +79,47 @@ func htmlBlurShadowCoverage(dst *image.Alpha, sigma float64, scratch *htmlFilter
 			radius++
 		}
 		htmlBoxBlurMask(scratch.mask, scratch.maskLine, w, h, radius, false)
-		htmlBoxBlurMask(scratch.mask, scratch.maskLine, w, h, radius, true)
+		htmlBoxBlurColumns(scratch.mask, scratch.maskLine, w, h, radius)
 	}
 	for y := range h {
 		for x := range w {
 			dst.Pix[y*dst.Stride+x] = uint8(math.Round(min(255, max(0, scratch.mask[y*w+x]))))
+		}
+	}
+}
+
+const htmlShadowBlurColumns = 16
+
+// Process adjacent columns together so each pass reads and writes contiguous
+// pixels. Preserve the addition and subtraction order within each column.
+func htmlBoxBlurColumns(mask, buffer []float64, width, height, radius int) {
+	weight := 1 / float64(2*radius+1)
+	for left := 0; left < width; left += htmlShadowBlurColumns {
+		columns := min(htmlShadowBlurColumns, width-left)
+		var sums [htmlShadowBlurColumns]float64
+		for y := range height {
+			copy(buffer[y*columns:][:columns], mask[y*width+left:][:columns])
+		}
+		for y := 0; y <= min(radius, height-1); y++ {
+			for x, value := range buffer[y*columns:][:columns] {
+				sums[x] += value
+			}
+		}
+		for y := range height {
+			row := mask[y*width+left:][:columns]
+			for x := range row {
+				row[x] = sums[x] * weight
+			}
+			if leaving := y - radius; leaving >= 0 {
+				for x, value := range buffer[leaving*columns:][:columns] {
+					sums[x] -= value
+				}
+			}
+			if entering := y + radius + 1; entering < height {
+				for x, value := range buffer[entering*columns:][:columns] {
+					sums[x] += value
+				}
+			}
 		}
 	}
 }

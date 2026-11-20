@@ -4,10 +4,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLScrollbarHoverAndCapturedDragUsePaintedTrack(t *testing.T) {

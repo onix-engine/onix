@@ -35,11 +35,11 @@ func clampScrollContentHeight(box *Box, base float64) float64 {
 	return max(clampContentDimension(box.Content.Height+gutter, box.Style.MinHeight, box.Style.MaxHeight, base, verticalBoxExtras(box.Padding, box.Border), isBorderBox(box.Style))-gutter, 0)
 }
 
-func hasDefiniteScrollHeight(box *Box) bool {
-	return style.IsLength(box.Style.Height) || isAbsolutePositioned(box) && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom)
+func hasDefiniteScrollHeight(box *Box, height style.Value) bool {
+	return style.IsLength(height) || isAbsolutePositioned(box) && style.IsLength(box.Style.Top) && style.IsLength(box.Style.Bottom)
 }
 
-func layoutBlockScrollbars(box *Box, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
+func layoutBlockScrollbars(box *Box, width, height style.Value, containing, absolute Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	box.ScrollbarGutter = Edges{}
 	box.ScrollWidth, box.ScrollHeight = 0, 0
 	classic := ctx != nil && ctx.reserveScrollbarSpace
@@ -54,7 +54,7 @@ func layoutBlockScrollbars(box *Box, containing, absolute Rect, face *font.Face,
 		}
 	}
 	for {
-		layoutBlockContents(box, containing, absolute, face, styles, ctx)
+		layoutBlockContents(box, width, height, containing, absolute, face, styles, ctx)
 		if !classic {
 			return
 		}
@@ -63,7 +63,7 @@ func layoutBlockScrollbars(box *Box, containing, absolute Rect, face *font.Face,
 		next := box.ScrollbarGutter
 		if bar > 0 && box.ScrollWidth > r.Width && scrollsOverflow(box.Style.OverflowX) {
 			next.Bottom = bar
-			if hasDefiniteScrollHeight(box) {
+			if hasDefiniteScrollHeight(box, height) {
 				next.Bottom = min(bar, box.Content.Height+box.ScrollbarGutter.Bottom)
 			}
 		}

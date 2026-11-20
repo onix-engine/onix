@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/html/css"
-	"github.com/onix-engine/onix/html/dom"
+	"github.com/onix-engine/onix/html/parse"
 	"github.com/onix-engine/onix/html/style"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
-func tableFixture(t *testing.T, source, cssSource string) (*dom.Node, style.Map, *Box, map[string]*Box) {
+func tableFixture(t *testing.T, source, cssSource string) (*uinode.Node, style.Map, *Box, map[string]*Box) {
 	t.Helper()
-	doc, err := dom.Parse(source)
+	doc, err := parse.Parse(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func TestTableIncrementalLayoutMatchesFreshAcrossCellChanges(t *testing.T) {
 	var cache Cache
 	updateRetained(t, &cache, doc, styles, face, nil, true)
 	target := boxes["target"].Node
-	dirty := []*dom.Node{target}
+	dirty := []*uinode.Node{target}
 	computed := styles.Exclusive(target)
 	for _, height := range []float64{60, 20, 40, 0} {
 		computed.Height = style.LengthPx(height)

@@ -2,23 +2,25 @@
 // Use of this source code is governed by a BSD-style license in LICENSE.go-html.
 // Adapted for Onix: source views, direct DOM construction and reusable storage.
 
-package dom
+package parse
 
 import (
 	"fmt"
 	"strings"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 // A treeBuilder implements the HTML5 parsing algorithm:
 type treeBuilder struct {
 	tokenizer             *htmlScanner
-	context               *Node
+	context               *uinode.Node
 	originalIM            insertionMode
-	doc                   *Node
+	doc                   *uinode.Node
 	im                    insertionMode
 	arena                 *Parser
-	head                  *Node
-	form                  *Node
+	head                  *uinode.Node
+	form                  *uinode.Node
 	oe                    nodeStack
 	templateStack         insertionModeStack
 	afe                   nodeStack
@@ -31,7 +33,7 @@ type treeBuilder struct {
 	hasSelfClosingToken   bool
 }
 
-func (p *treeBuilder) top() *Node {
+func (p *treeBuilder) top() *uinode.Node {
 	if n := p.oe.top(); n != nil {
 		return n
 	}
@@ -39,10 +41,10 @@ func (p *treeBuilder) top() *Node {
 }
 
 var (
-	defaultScopeStopTags = map[string][]string{
-		"":     {"applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "select"},
-		"math": {"annotation-xml", "mi", "mn", "mo", "ms", "mtext"},
-		"svg":  {"desc", "foreignObject", "title"},
+	defaultScopeStopTags = map[uinode.Namespace][]string{
+		uinode.HTML:   {"applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "select"},
+		uinode.MathML: {"annotation-xml", "mi", "mn", "mo", "ms", "mtext"},
+		uinode.SVG:    {"desc", "foreignObject", "title"},
 	}
 )
 
@@ -68,7 +70,7 @@ func (p *treeBuilder) popUntil(s scope, matchTags ...string) bool {
 func (p *treeBuilder) indexOfElementInScope(s scope, matchTags ...string) int {
 	for i := len(p.oe) - 1; i >= 0; i-- {
 		tagName := p.oe[i].Data
-		if p.oe[i].namespace == "" {
+		if p.oe[i].Namespace == uinode.HTML {
 			for _, t := range matchTags {
 				if t == tagName {
 					return i
@@ -94,7 +96,7 @@ func (p *treeBuilder) indexOfElementInScope(s scope, matchTags ...string) int {
 		}
 		switch s {
 		case defaultScope, listItemScope, buttonScope:
-			for _, t := range defaultScopeStopTags[p.oe[i].namespace] {
+			for _, t := range defaultScopeStopTags[p.oe[i].Namespace] {
 				if t == tagName {
 					return -1
 				}
@@ -144,7 +146,7 @@ func (p *treeBuilder) generateImpliedEndTags(exceptions ...string) {
 loop:
 	for i = len(p.oe) - 1; i >= 0; i-- {
 		n := p.oe[i]
-		if n.Type != ElementNode {
+		if n.Type != uinode.ElementNode {
 			break
 		}
 		switch n.Data {
@@ -162,19 +164,19 @@ loop:
 	p.oe = p.oe[:i+1]
 }
 
-func (p *treeBuilder) addChild(n *Node) {
+func (p *treeBuilder) addChild(n *uinode.Node) {
 	if p.shouldFosterParent() {
 		p.fosterParent(n)
 	} else {
 		p.top().AppendChild(n)
 	}
 
-	if n.Type == ElementNode {
+	if n.Type == uinode.ElementNode {
 		p.insertOpenElement(n)
 	}
 }
 
-func (p *treeBuilder) insertOpenElement(n *Node) {
+func (p *treeBuilder) insertOpenElement(n *uinode.Node) {
 	p.oe = append(p.oe, n)
 	if len(p.oe) > 512 {
 		panic(ErrNestingDepth)
@@ -191,8 +193,8 @@ func (p *treeBuilder) shouldFosterParent() bool {
 	return false
 }
 
-func (p *treeBuilder) fosterParent(n *Node) {
-	var table, parent, prev, template *Node
+func (p *treeBuilder) fosterParent(n *uinode.Node) {
+	var table, parent, prev, template *uinode.Node
 	var i int
 	for i = len(p.oe) - 1; i >= 0; i-- {
 		if p.oe[i].Data == "table" {
@@ -224,11 +226,11 @@ func (p *treeBuilder) fosterParent(n *Node) {
 	}
 
 	if table != nil {
-		prev = previousSibling(table)
+		prev = table.PreviousSibling()
 	} else {
-		prev = lastChild(parent)
+		prev = parent.LastChild()
 	}
-	if prev != nil && prev.Type == TextNode && n.Type == TextNode {
+	if prev != nil && prev.Type == uinode.TextNode && n.Type == uinode.TextNode {
 		p.arena.appendText(prev, n.Data)
 		return
 	}
@@ -242,20 +244,20 @@ func (p *treeBuilder) addText(text string) {
 	}
 
 	if p.shouldFosterParent() {
-		p.fosterParent(p.arena.newNode(TextNode, text))
+		p.fosterParent(p.arena.newNode(uinode.TextNode, text))
 		return
 	}
 
 	t := p.top()
-	if n := lastChild(t); n != nil && n.Type == TextNode {
+	if n := t.LastChild(); n != nil && n.Type == uinode.TextNode {
 		p.arena.appendText(n, text)
 		return
 	}
-	p.addChild(p.arena.newNode(TextNode, text))
+	p.addChild(p.arena.newNode(uinode.TextNode, text))
 }
 
 func (p *treeBuilder) addElement() {
-	n := p.arena.newNode(ElementNode, p.tok.Data)
+	n := p.arena.newNode(uinode.ElementNode, p.tok.Data)
 	copyTokenAttributes(n, p.tok)
 	p.addChild(n)
 }
@@ -270,16 +272,16 @@ func (p *treeBuilder) addFormattingElement() {
 		if n.Type == scopeMarkerNode {
 			break
 		}
-		if n.Type != ElementNode {
+		if n.Type != uinode.ElementNode {
 			continue
 		}
-		if n.namespace != "" {
+		if n.Namespace != uinode.HTML {
 			continue
 		}
 		if n.Data != tagName {
 			continue
 		}
-		if !n.attributeList.equal(&p.top().attributeList) {
+		if !n.EqualAttributes(p.top()) {
 			continue
 		}
 
@@ -365,7 +367,7 @@ func (p *treeBuilder) resetInsertionMode() {
 		case "table":
 			p.im = inTableIM
 		case "template":
-			if n.namespace != "" {
+			if n.Namespace != uinode.HTML {
 				continue
 			}
 			p.im = p.templateStack.top()
@@ -540,7 +542,7 @@ func inHeadIM(p *treeBuilder) bool {
 			}
 			p.generateImpliedEndTags()
 			for i := len(p.oe) - 1; i >= 0; i-- {
-				if n := p.oe[i]; n.namespace == "" && n.Data == "template" {
+				if n := p.oe[i]; n.Namespace == uinode.HTML && n.Data == "template" {
 					p.oe = p.oe[:i]
 					break
 				}
@@ -697,7 +699,7 @@ func inBodyIM(p *treeBuilder) bool {
 			}
 			if len(p.oe) >= 2 {
 				body := p.oe[1]
-				if body.Type == ElementNode && body.Data == "body" {
+				if body.Type == uinode.ElementNode && body.Data == "body" {
 					p.framesetOK = false
 					copyTokenAttributes(body, p.tok)
 				}
@@ -786,7 +788,7 @@ func inBodyIM(p *treeBuilder) bool {
 			p.framesetOK = false
 		case "a":
 			for i := len(p.afe) - 1; i >= 0 && p.afe[i].Type != scopeMarkerNode; i-- {
-				if n := p.afe[i]; n.Type == ElementNode && n.Data == "a" {
+				if n := p.afe[i]; n.Type == uinode.ElementNode && n.Data == "a" {
 					p.inBodyEndTagFormatting("a")
 					p.oe.remove(n)
 					p.afe.remove(n)
@@ -930,7 +932,11 @@ func inBodyIM(p *treeBuilder) bool {
 			}
 
 			p.addElement()
-			p.top().namespace = p.tok.Data
+			if p.tok.Data == "math" {
+				p.top().Namespace = uinode.MathML
+			} else {
+				p.top().Namespace = uinode.SVG
+			}
 			if p.hasSelfClosingToken {
 				p.oe.pop()
 				p.acknowledgeSelfClosingTag()
@@ -1032,7 +1038,7 @@ func (p *treeBuilder) inBodyEndTagFormatting(tagName string) {
 	}
 
 	for i := 0; i < 8; i++ {
-		var formattingElement *Node
+		var formattingElement *uinode.Node
 		for j := len(p.afe) - 1; j >= 0; j-- {
 			if p.afe[j].Type == scopeMarkerNode {
 				break
@@ -1056,7 +1062,7 @@ func (p *treeBuilder) inBodyEndTagFormatting(tagName string) {
 			return
 		}
 
-		var furthestBlock *Node
+		var furthestBlock *uinode.Node
 		for _, e := range p.oe[feIndex:] {
 			if isSpecialElement(e) {
 				furthestBlock = e
@@ -1122,7 +1128,7 @@ func (p *treeBuilder) inBodyEndTagFormatting(tagName string) {
 		}
 
 		clone := p.arena.cloneNode(formattingElement)
-		reparentChildren(clone, furthestBlock)
+		clone.AdoptChildren(furthestBlock)
 		furthestBlock.AppendChild(clone)
 
 		if oldLoc := p.afe.index(formattingElement); oldLoc != -1 && oldLoc < bookmark {
@@ -1138,7 +1144,7 @@ func (p *treeBuilder) inBodyEndTagFormatting(tagName string) {
 
 func (p *treeBuilder) inBodyEndTagOther(tagName string) {
 	for i := len(p.oe) - 1; i >= 0; i-- {
-		if p.oe[i].namespace == "" && p.oe[i].Data == tagName {
+		if p.oe[i].Namespace == uinode.HTML && p.oe[i].Data == tagName {
 			p.oe = p.oe[:i]
 			break
 		}
@@ -1526,7 +1532,7 @@ func inTemplateIM(p *treeBuilder) bool {
 		}
 		p.generateImpliedEndTags()
 		for i := len(p.oe) - 1; i >= 0; i-- {
-			if n := p.oe[i]; n.namespace == "" && n.Data == "template" {
+			if n := p.oe[i]; n.Namespace == uinode.HTML && n.Data == "template" {
 				p.oe = p.oe[:i]
 				break
 			}
@@ -1721,7 +1727,7 @@ func parseForeignContent(p *treeBuilder) bool {
 		if b {
 			for i := len(p.oe) - 1; i >= 0; i-- {
 				n := p.oe[i]
-				if n.namespace == "" || htmlIntegrationPoint(n) || mathMLTextIntegrationPoint(n) {
+				if n.Namespace == uinode.HTML || htmlIntegrationPoint(n) || mathMLTextIntegrationPoint(n) {
 					p.oe = p.oe[:i+1]
 					break
 				}
@@ -1729,10 +1735,10 @@ func parseForeignContent(p *treeBuilder) bool {
 			return p.im(p)
 		}
 		current := p.adjustedCurrentNode()
-		switch current.namespace {
-		case "math":
+		switch current.Namespace {
+		case uinode.MathML:
 			adjustAttributeNames(p.tok.Attr, mathMLAttributeAdjustments)
-		case "svg":
+		case uinode.SVG:
 			if x := svgTagNameAdjustments[p.tok.Data]; x != "" {
 				p.tok.Data = x
 			}
@@ -1741,10 +1747,10 @@ func parseForeignContent(p *treeBuilder) bool {
 			panic("html: bad treeBuilder state: unexpected namespace")
 		}
 
-		namespace := current.namespace
+		namespace := current.Namespace
 		p.addElement()
-		p.top().namespace = namespace
-		if namespace != "" {
+		p.top().Namespace = namespace
+		if namespace != uinode.HTML {
 			p.tokenizer.NextIsNotRawText()
 		}
 		if p.hasSelfClosingToken {
@@ -1761,7 +1767,7 @@ func parseForeignContent(p *treeBuilder) bool {
 				p.oe = p.oe[:i]
 				return true
 			}
-			if i > 0 && p.oe[i-1].namespace == "" {
+			if i > 0 && p.oe[i-1].Namespace == uinode.HTML {
 				break
 			}
 		}
@@ -1771,7 +1777,7 @@ func parseForeignContent(p *treeBuilder) bool {
 	return true
 }
 
-func (p *treeBuilder) adjustedCurrentNode() *Node {
+func (p *treeBuilder) adjustedCurrentNode() *uinode.Node {
 	if len(p.oe) == 1 && p.fragment && p.context != nil {
 		return p.context
 	}
@@ -1783,7 +1789,7 @@ func (p *treeBuilder) inForeignContent() bool {
 		return false
 	}
 	n := p.adjustedCurrentNode()
-	if n.namespace == "" {
+	if n.Namespace == uinode.HTML {
 		return false
 	}
 	if mathMLTextIntegrationPoint(n) {
@@ -1794,7 +1800,7 @@ func (p *treeBuilder) inForeignContent() bool {
 			return false
 		}
 	}
-	if n.namespace == "math" && n.Data == "annotation-xml" && p.tok.Type == TokenStartTag && p.tok.Data == "svg" {
+	if n.Namespace == uinode.MathML && n.Data == "annotation-xml" && p.tok.Type == TokenStartTag && p.tok.Data == "svg" {
 		return false
 	}
 	if htmlIntegrationPoint(n) && (p.tok.Type == TokenStartTag || p.tok.Type == TokenText) {

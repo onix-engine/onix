@@ -2,13 +2,15 @@ package html
 
 import (
 	"math"
+	"slices"
+	"sort"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
-	"github.com/onix-engine/onix/html/dom"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
+	uinode "github.com/onix-engine/onix/scene/node"
 	onixtext "github.com/onix-engine/onix/text"
 )
 
@@ -20,6 +22,41 @@ type htmlPaintWindow struct {
 	shiftX, shiftY           float64
 	clipX, clipY             bool
 	unbounded                bool
+	noPaintList              bool
+}
+
+// Most boxes paint into an unrestricted window. Keep the snapshot only when
+// culling or isolation needs one, and reuse it across subsequent scrolls.
+type htmlBoxPaintClip struct {
+	outer, contents htmlPaintWindow
+	scrollport      layout.Rect
+	clipped         bool
+}
+
+var unrestrictedHTMLClip htmlBoxPaintClip
+
+func (r *htmlBoxRendering) paintClip() *htmlBoxPaintClip {
+	if r.clipWindow == nil {
+		return &unrestrictedHTMLClip
+	}
+	return r.clipWindow
+}
+
+func (r *htmlBoxRendering) setPaintClip(clip htmlBoxPaintClip) {
+	if r.clipWindow == nil {
+		if clip == (htmlBoxPaintClip{}) {
+			return
+		}
+		r.clipWindow = &htmlBoxPaintClip{}
+	}
+	*r.clipWindow = clip
+}
+
+func htmlPaintScrollport(state *htmlRenderState, box *layout.Box) (layout.Rect, bool) {
+	if htmlBoxNeedsOverflowClip(state, box) {
+		return box.ScrollportBox(), true
+	}
+	return layout.Rect{}, false
 }
 
 func (window htmlPaintWindow) contains(rect layout.Rect) bool {
@@ -32,6 +69,7 @@ func (window htmlPaintWindow) contains(rect layout.Rect) bool {
 }
 
 const htmlPaintCullMinOverscan = 256
+const htmlPaintBandMinRows = 128
 
 func htmlPaintOverscan(size float64) float64 { return max(size, htmlPaintCullMinOverscan) }
 
@@ -45,6 +83,7 @@ func htmlPaintStyleMoves(value *style.ComputedStyle) bool {
 }
 
 func htmlPaintWindowForBox(state *htmlRenderState, box *layout.Box, window htmlPaintWindow) htmlPaintWindow {
+	window.noPaintList = window.noPaintList || htmlPaintListIsolated(box.Style)
 	if box.Style.Position == style.Keyword("sticky") || htmlPaintStyleMoves(box.Style) || len(state.NodeOffsets) != 0 || len(state.NodeScrolls) != 0 {
 		window.unbounded = true
 	}
@@ -56,33 +95,34 @@ func htmlPaintFragmentVisible(window htmlPaintWindow, rect layout.Rect, value *s
 }
 
 func htmlPaintWindowChanged(state *htmlRenderState, rendered *htmlBoxRendering) bool {
-	clipped := htmlBoxNeedsOverflowClip(state, rendered.Box)
-	if clipped && rendered.CullRect != rendered.Box.ScrollportBox() {
+	clip := rendered.paintClip()
+	rect, clipped := htmlPaintScrollport(state, rendered.Box)
+	if clipped != clip.clipped || rect != clip.scrollport {
 		return true
 	}
-	if !clipped && !rendered.Window.clipX && !rendered.Window.clipY && !rendered.OuterWindow.clipX && !rendered.OuterWindow.clipY {
+	if state.PaintList == nil && !clip.contents.unbounded && !clip.contents.noPaintList &&
+		!clipped && !clip.contents.clipX && !clip.contents.clipY && !clip.outer.clipX && !clip.outer.clipY {
 		return false
 	}
 	window := htmlPaintWindow{}
 	if parent := rendered.Box.Parent; parent != nil {
-		window = state.BoxRenderings[parent.Node].Window
+		window = state.BoxRenderings[parent.Node].paintClip().contents
 	}
 	window = htmlPaintWindowForBox(state, rendered.Box, window)
-	return window.unbounded != rendered.OuterWindow.unbounded ||
-		(window.unbounded || len(rendered.Box.Style.Filters) != 0) != rendered.Window.unbounded
+	return window.noPaintList != clip.contents.noPaintList || window.unbounded != clip.outer.unbounded ||
+		(state.PaintCullDisabled || window.unbounded || len(rendered.Box.Style.Filters) != 0) != clip.contents.unbounded
 }
 
 // Bands share a coordinate space through nested clips. The buffer is rebuilt
 // only after scrolling uses half its margin, so small wheel steps reuse paint.
-func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layout.Box, window htmlPaintWindow) htmlPaintWindow {
+func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layout.Box, window htmlPaintWindow, rect layout.Rect, clipped bool) htmlPaintWindow {
 	if state.PaintCullDisabled || len(box.Style.Filters) != 0 {
 		window.unbounded = true
 	}
-	if window.unbounded || !htmlBoxNeedsOverflowClip(state, box) {
+	if window.unbounded || !clipped {
 		delete(state.PaintCullOffsets, box.Node)
 		return window
 	}
-	rect := box.ScrollportBox()
 	offset := mgl32.Vec2{}
 	if binding, ok := state.OverflowBindings[box.Node]; ok && htmlOverflowBindingIs(world, box.Node, binding.entity) {
 		if scroll, exists := world.Get[scene.UIScroll](binding.entity); exists {
@@ -109,13 +149,13 @@ func htmlPaintWindowForClip(world *ecs.World, state *htmlRenderState, box *layou
 	window.shiftX += float64(offset.X())
 	window.shiftY += float64(offset.Y())
 	if state.PaintCullOffsets == nil {
-		state.PaintCullOffsets = make(map[*dom.Node]mgl32.Vec2)
+		state.PaintCullOffsets = make(map[*uinode.Node]mgl32.Vec2)
 	}
 	state.PaintCullOffsets[box.Node] = offset
 	return window
 }
 
-func htmlOverflowBindingIs(world *ecs.World, node *dom.Node, entity ecs.Entity) bool {
+func htmlOverflowBindingIs(world *ecs.World, node *uinode.Node, entity ecs.Entity) bool {
 	child, ok := world.Get[htmlChild](entity)
 	return ok && child.Node == node
 }
@@ -146,7 +186,7 @@ func htmlPaintCullPending(world *ecs.World, state *htmlRenderState) bool {
 	return false
 }
 
-func htmlPaintCullChangedRoot(world *ecs.World, state *htmlRenderState, node *dom.Node, recorded mgl32.Vec2) *htmlBoxRendering {
+func htmlPaintCullChangedRoot(world *ecs.World, state *htmlRenderState, node *uinode.Node, recorded mgl32.Vec2) *htmlBoxRendering {
 	binding, ok := state.OverflowBindings[node]
 	rendered := state.BoxRenderings[node]
 	if !ok || rendered == nil {
@@ -162,23 +202,24 @@ func htmlPaintCullChangedRoot(world *ecs.World, state *htmlRenderState, node *do
 }
 
 func htmlPaintCullDirty(rendered *htmlBoxRendering, outer, window htmlPaintWindow) bool {
+	clip := rendered.paintClip()
 	if rendered.CompositeRoot {
-		return rendered.OuterWindow.contains(rendered.Effects.Composite) != outer.contains(rendered.Effects.Composite)
+		return clip.outer.contains(rendered.Effects.Composite) != outer.contains(rendered.Effects.Composite)
 	}
-	if rendered.OuterWindow.contains(rendered.Box.BorderBox()) != outer.contains(rendered.Box.BorderBox()) ||
-		rendered.OuterWindow.contains(rendered.paintBounds()) != outer.contains(rendered.paintBounds()) {
+	if clip.outer.contains(rendered.Box.BorderBox()) != outer.contains(rendered.Box.BorderBox()) ||
+		clip.outer.contains(rendered.paintBounds()) != outer.contains(rendered.paintBounds()) {
 		return true
 	}
-	if rendered.Window == window {
+	if clip.contents == window {
 		return false
 	}
 	for _, fragment := range rendered.Box.TextFragments {
-		if htmlPaintFragmentVisible(rendered.Window, fragment.Rect, fragment.Style) != htmlPaintFragmentVisible(window, fragment.Rect, fragment.Style) {
+		if htmlPaintFragmentVisible(clip.contents, fragment.Rect, fragment.Style) != htmlPaintFragmentVisible(window, fragment.Rect, fragment.Style) {
 			return true
 		}
 	}
 	for _, fragment := range rendered.Box.ImageFragments {
-		if htmlPaintFragmentVisible(rendered.Window, fragment.Rect, fragment.Style) != htmlPaintFragmentVisible(window, fragment.Rect, fragment.Style) {
+		if htmlPaintFragmentVisible(clip.contents, fragment.Rect, fragment.Style) != htmlPaintFragmentVisible(window, fragment.Rect, fragment.Style) {
 			return true
 		}
 	}
@@ -193,6 +234,7 @@ func reconcileHTMLPaintCull(world *ecs.World, owner ecs.Entity, state *htmlRende
 	}
 	state.RenderGeneration++
 	state.Reconciling, state.LocalReconcile = true, true
+	state.PaintCullSync = true
 	children := state.Children
 	mounted, blocked := false, false
 	prepareHTMLNodeBindings(world, state)
@@ -211,13 +253,14 @@ func reconcileHTMLPaintCull(world *ecs.World, owner ecs.Entity, state *htmlRende
 		if state.BoxFlags.resolve(root.Box.Parent, htmlBoxParent, changedAncestor) {
 			continue
 		}
-		htmlPaintCullBoxes(world, owner, state, root.Box, root.OuterWindow, fontValue, boldFont, dpi, stackIndex, passThrough, visible, &mounted, &blocked)
+		htmlPaintCullBoxes(world, owner, state, root.Box, root.paintClip().outer, fontValue, boldFont, dpi, stackIndex, passThrough, visible, &mounted, &blocked)
 		if blocked {
 			break
 		}
 	}
 	state.Children = children
 	state.Reconciling, state.LocalReconcile = false, false
+	state.PaintCullSync = false
 	state.EmittingBox = nil
 	state.Textures.sweep()
 	if blocked {
@@ -246,9 +289,11 @@ func htmlPaintCullBoxes(world *ecs.World, owner ecs.Entity, state *htmlRenderSta
 		return
 	}
 	outer := htmlPaintWindowForBox(state, box, window)
-	window = htmlPaintWindowForClip(world, state, box, outer)
+	rect, clipped := htmlPaintScrollport(state, box)
+	window = htmlPaintWindowForClip(world, state, box, outer, rect, clipped)
 	dirty := htmlPaintCullDirty(rendered, outer, window)
-	rendered.OuterWindow, rendered.Window = outer, window
+	previous := rendered.paintClip().contents
+	rendered.setPaintClip(htmlBoxPaintClip{outer: outer, contents: window, scrollport: rect, clipped: clipped})
 	if dirty {
 		if rendered.SharedRendering || rendered.Box != box {
 			*blocked = true
@@ -260,6 +305,17 @@ func htmlPaintCullBoxes(world *ecs.World, owner ecs.Entity, state *htmlRenderSta
 	if rendered.CompositeRoot {
 		return
 	}
+	if len(box.Children) >= htmlPaintBandMinRows && previous.clipY && window.clipY && !previous.unbounded && !window.unbounded {
+		if band := htmlScrollPaintBand(state, rendered); len(band) != 0 {
+			// Compare each entering or leaving row with the last clip window.
+			// Rows outside both windows do not need to store the new bounds.
+			walkHTMLScrollPaintBand(band, box.Children, state, previous, window, func(child *layout.Box) bool {
+				htmlPaintCullBoxes(world, owner, state, child, window, fontValue, boldFont, dpi, stackIndex, passThrough, visible, mounted, blocked)
+				return !*blocked
+			})
+			return
+		}
+	}
 	for _, child := range box.Children {
 		htmlPaintCullBoxes(world, owner, state, child, window, fontValue, boldFont, dpi, stackIndex, passThrough, visible, mounted, blocked)
 		if *blocked {
@@ -268,10 +324,98 @@ func htmlPaintCullBoxes(world *ecs.World, owner ecs.Entity, state *htmlRenderSta
 	}
 }
 
+type htmlPaintBand struct {
+	rows  []htmlPaintRow
+	epoch uint64
+}
+
+type htmlPaintRow struct {
+	top, bottom float64
+}
+
+func walkHTMLScrollPaintBand(rows []htmlPaintRow, children []*layout.Box, state *htmlRenderState, before, after htmlPaintWindow, visit func(*layout.Box) bool) {
+	rangeForWindow := func(window htmlPaintWindow) (int, int) {
+		top, bottom := window.top-window.shiftY, window.bottom-window.shiftY
+		first := sort.Search(len(rows), func(i int) bool { return rows[i].bottom > top })
+		last := sort.Search(len(rows), func(i int) bool { return rows[i].top >= bottom })
+		return first, max(first, last)
+	}
+	start, end := rangeForWindow(before)
+	nextStart, nextEnd := rangeForWindow(after)
+	if nextStart < start {
+		start, end, nextStart, nextEnd = nextStart, nextEnd, start, end
+	}
+	if nextStart <= end {
+		end = max(end, nextEnd)
+		nextStart, nextEnd = end, end
+	}
+	for _, interval := range [2][2]int{{start, end}, {nextStart, nextEnd}} {
+		for _, child := range children[interval[0]:interval[1]] {
+			row := state.BoxRenderings[child.Node]
+			row.setPaintClip(htmlBoxPaintClip{outer: before, contents: before})
+			if !visit(child) {
+				return
+			}
+		}
+	}
+}
+
+// Index leaf rows only when their paint bounds are monotonic and their clip is
+// inherited unchanged. General CSS trees continue through the recursive walk.
+func htmlScrollPaintBand(state *htmlRenderState, parent *htmlBoxRendering) []htmlPaintRow {
+	band := parent.PaintBand
+	if band != nil && band.epoch == state.PaintCullEpoch {
+		return band.rows
+	}
+	if band == nil {
+		band = &htmlPaintBand{}
+		parent.PaintBand = band
+	}
+	if cap(band.rows) > 2*len(parent.Box.Children) {
+		band.rows = nil
+	}
+	band.rows = band.rows[:0]
+	band.epoch = state.PaintCullEpoch
+	for _, box := range parent.Box.Children {
+		row := state.BoxRenderings[box.Node]
+		if row == nil || len(box.Children) != 0 || row.SharedRendering || row.Composite || row.Clip != 0 ||
+			htmlPaintWindowForBox(state, box, htmlPaintWindow{}).unbounded || len(box.Style.Filters) != 0 {
+			band.rows = band.rows[:0]
+			return nil
+		}
+		// A moving inline fragment can paint outside the row regardless of its
+		// stored geometry. Leave the whole scroller on the general path.
+		bounds := row.paintBounds()
+		for _, fragment := range box.TextFragments {
+			if htmlPaintStyleMoves(fragment.Style) {
+				band.rows = band.rows[:0]
+				return nil
+			}
+			bounds = htmlUnionPaintBounds(bounds, fragment.Rect)
+		}
+		for _, fragment := range box.ImageFragments {
+			if htmlPaintStyleMoves(fragment.Style) {
+				band.rows = band.rows[:0]
+				return nil
+			}
+			bounds = htmlUnionPaintBounds(bounds, fragment.Rect)
+		}
+		next := htmlPaintRow{top: bounds.Y, bottom: bounds.Y + bounds.Height}
+		if n := len(band.rows); n != 0 && (band.rows[n-1].top > next.top || band.rows[n-1].bottom > next.bottom) {
+			band.rows = band.rows[:0]
+			return nil
+		}
+		if len(band.rows) == 0 {
+			band.rows = slices.Grow(band.rows, len(parent.Box.Children))
+		}
+		band.rows = append(band.rows, next)
+	}
+	return band.rows
+}
+
 // Local emission retires the box's own primitives, then re-routes the freshly
 // mounted ones through its clip and any app scroll binding.
 func reconcileHTMLPaintCullBox(world *ecs.World, owner ecs.Entity, state *htmlRenderState, box *layout.Box, rendered *htmlBoxRendering, fontValue, boldFont *onixtext.Font, dpi float64, stackIndex int, passThrough, visible bool) {
-	updateHTMLControlSnapshots(world, state, rendered.Entities)
 	delete(state.EventTargets, box.Node)
 	var control, focusOwner ecs.Entity
 	var controlRect layout.Rect
@@ -284,7 +428,6 @@ func reconcileHTMLPaintCullBox(world *ecs.World, owner ecs.Entity, state *htmlRe
 	state.Children = rendered.Entities[:0]
 	htmlSpawnBoxes(world, owner, state, box, fontValue, boldFont, dpi, stackIndex, passThrough, visible, control, focusOwner, controlRect)
 	rendered.Entities = state.Children
-	state.ControlStylesChanged = restoreHTMLControlEntities(world, state, rendered.Entities) || state.ControlStylesChanged
 	refreshHTMLBoxOverflow(world, owner, state, rendered, stackIndex, visible)
 	finishHTMLBoxReconcile(world, state, rendered)
 	applyHTMLNodeBindings(world, state, rendered.Entities)

@@ -3,9 +3,9 @@ package html
 import (
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestHTMLReservedScrollbarLayoutAndPainting(t *testing.T) {

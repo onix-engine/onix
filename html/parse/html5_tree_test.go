@@ -1,9 +1,11 @@
-package dom
+package parse
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestParseHTML5TreeConstruction(t *testing.T) {
@@ -47,12 +49,12 @@ func TestParseHTML5TreeConstruction(t *testing.T) {
 	}
 }
 
-func htmlTreeShape(root *Node) string {
+func htmlTreeShape(root *uinode.Node) string {
 	var b strings.Builder
-	var visit func(*Node)
-	visit = func(n *Node) {
+	var visit func(*uinode.Node)
+	visit = func(n *uinode.Node) {
 		switch n.Type {
-		case ElementNode:
+		case uinode.ElementNode:
 			fmt.Fprintf(&b, "(%s", n.Data)
 			for name, value := range n.SortedAttributes() {
 				fmt.Fprintf(&b, " %s=%q", name, value)
@@ -62,7 +64,7 @@ func htmlTreeShape(root *Node) string {
 				visit(c)
 			}
 			b.WriteString("(/)")
-		case TextNode:
+		case uinode.TextNode:
 			fmt.Fprintf(&b, "%q", n.Data)
 		}
 	}

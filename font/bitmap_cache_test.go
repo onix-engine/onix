@@ -21,7 +21,8 @@ func TestGlyphBitmapCacheBudgets(t *testing.T) {
 		t.Fatal("eviction retained oldest bitmap or modified a returned image")
 	}
 	large := &GlyphBitmap{Image: image.NewAlpha(image.Rect(0, 0, glyphBitmapCacheByteLimit+1, 1))}
-	if face.cacheBitmap(glyphBitmapCacheKey{glyphID: 99}, large) != large || len(face.glyphBitmapCache) != 4 {
+	entries := len(face.glyphBitmapCache)
+	if face.cacheBitmap(glyphBitmapCacheKey{glyphID: 99}, large) != large || len(face.glyphBitmapCache) != entries {
 		t.Fatal("oversized bitmap was cached or not returned")
 	}
 	empty := &GlyphBitmap{Image: image.NewAlpha(image.Rectangle{})}

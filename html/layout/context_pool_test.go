@@ -6,11 +6,11 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/onix-engine/onix/html/dom"
+	uinode "github.com/onix-engine/onix/scene/node"
 )
 
 func TestLayoutContextResetReleasesDocument(t *testing.T) {
-	node := dom.NewElement("div")
+	node := uinode.NewElement("div")
 	ctx := newLayoutContext()
 	ctx.inlineSegments = []inlineSegment{{Node: node}}
 	ctx.controlTokens = []controlToken{{text: "document"}}

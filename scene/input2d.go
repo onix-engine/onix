@@ -53,6 +53,11 @@ type InputHandler2D struct {
 	Handle func(*InputEventContext)
 }
 
+// InputRoute2D routes input to a retained owner associated with an entity.
+type InputRoute2D struct {
+	Handle func(*ecs.World, *InputEventContext)
+}
+
 type inputTracker2D struct {
 	cursorTarget    ecs.Entity
 	active          ecs.Entity
@@ -441,6 +446,12 @@ func dispatchInputHandler2D(world *ecs.World, context *InputEventContext, entity
 		if handler := world.GetRef[InputHandler2D](entity); handler != nil && handler.Handle != nil {
 			context.Current = entity
 			handler.Handle(context)
+		}
+		if !context.Handled && world.IsAlive(entity) {
+			if route := world.GetRef[InputRoute2D](entity); route != nil && route.Handle != nil {
+				context.Current = entity
+				route.Handle(world, context)
+			}
 		}
 	}
 	return context.Handled || filter == InputFilterStop
