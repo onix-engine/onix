@@ -150,6 +150,9 @@ func TestComposite2DRetargetRemovesAndRestoresTreePart(t *testing.T) {
 
 func TestComposite2DSwitchesTreesWithEqualGenerations(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 2, false)
+	for _, entity := range entities {
+		world.GetMut[Sprite2D](entity).Width = 2 * compositeTileSize2D
+	}
 	state := RenderWorldFor(world)
 	var scopes [2]ecs.QueryScope
 	for i := range scopes {

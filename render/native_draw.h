@@ -26,6 +26,21 @@ static void onix_sprite_copy(void *destination, const void *source, uint32_t cou
 	}
 }
 
+static inline unsigned onix_index_stride(const uint32_t *indices, uint32_t count, uint32_t max_index) {
+	for (uint32_t i = 0; i < count; i++)
+		if (indices[i] > max_index) return 4;
+	return 2;
+}
+
+static inline void onix_copy_indices(void *dst, const uint32_t *indices, uint32_t count, unsigned stride) {
+	if (stride == 4) {
+		memcpy(dst, indices, (size_t)count * 4);
+	} else {
+		uint16_t *out = dst;
+		for (uint32_t i = 0; i < count; i++) out[i] = (uint16_t)indices[i];
+	}
+}
+
 typedef struct {
 	float model[16];
 	float base_color[4];

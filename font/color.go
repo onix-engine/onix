@@ -7,9 +7,10 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"image/png"
 	"math"
 	"runtime"
+
+	"github.com/onix-engine/onix/images/png"
 )
 
 // Borrow table storage from the face. Glyph lookup and measurement do not

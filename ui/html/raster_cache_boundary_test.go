@@ -149,10 +149,10 @@ func TestHTMLOrdinaryWrappersDoNotChangePainting(t *testing.T) {
 }
 
 func TestHTMLShadowWorkingSetBudget(t *testing.T) {
-	dst := image.NewRGBA(image.Rect(0, 0, 1024, 1024))
+	dst := image.NewAlpha(image.Rect(0, 0, 1024, 1024))
 	var scratch htmlFilterScratch
-	htmlBlurShadowMask(dst, 8, &scratch)
-	if bytes := (cap(scratch.mask) + cap(scratch.maskLine)) * 8; bytes > 9<<20 {
-		t.Fatalf("shadow working buffers retain %d bytes, budget is 9 MiB", bytes)
+	htmlBlurShadowCoverage(dst, 8, &scratch)
+	if bytes := (cap(scratch.mask) + cap(scratch.maskLine)) * 8; bytes > 512<<10 {
+		t.Fatalf("shadow working buffers retain %d bytes, budget is 512 KiB", bytes)
 	}
 }

@@ -28,7 +28,7 @@ func TestBrowserMeshBatchesAndStaticDeformationPixels(t *testing.T) {
 	}
 	defer targets.DestroyRenderTarget(target)
 	vertices := []Vertex3D{{Position: [3]float32{-.3, -.3, .5}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{.3, -.3, .5}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{.3, .3, .5}, Normal: [3]float32{0, 0, 1}}, {Position: [3]float32{-.3, .3, .5}, Normal: [3]float32{0, 0, 1}}}
-	mesh, err := meshes.CreateMesh(vertices, []uint32{0, 1, 2, 0, 2, 3})
+	mesh, err := meshes.CreateMesh(vertices, []uint32{3, 0, 1, 2, 0, 2, 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestBrowserMeshBatchesAndStaticDeformationPixels(t *testing.T) {
 	}
 	defer driver.(MeshShaderDriver).DestroyMeshShader(shader)
 	identity := [16]float32{0: 1, 5: 1, 10: 1, 15: 1}
-	batch := MeshBatch3D{ViewProjection: identity, Instances: make([]Instance3D, 2), Draws: []MeshDraw3D{{Mesh: mesh, Texture: textures[0], IndexCount: 6, InstanceCount: 1, AlphaMode: 2}, {Mesh: mesh, Texture: textures[1], IndexCount: 6, FirstInstance: 1, InstanceCount: 1, AlphaMode: 2}}}
+	batch := MeshBatch3D{ViewProjection: identity, Instances: make([]Instance3D, 2), Draws: []MeshDraw3D{{Mesh: mesh, FirstIndex: 1, Texture: textures[0], IndexCount: 6, InstanceCount: 1, AlphaMode: 2}, {Mesh: mesh, FirstIndex: 1, Texture: textures[1], IndexCount: 6, FirstInstance: 1, InstanceCount: 1, AlphaMode: 2}}}
 	gpu, gpuEnabled := driver.(MeshGPUDeformationDriver)
 	if gpuEnabled {
 		skin := make([]MeshSkinVertex, 4)

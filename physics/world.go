@@ -31,6 +31,7 @@ type bodyState struct {
 	linearDamping   float64
 	angularDamping  float64
 	generation      uint32
+	firstCollider   uint32 // slot index plus one, with zero as the end of the list
 	fixedRotation   bool
 	managed         bool
 	alive           bool
@@ -68,6 +69,8 @@ type colliderState struct {
 	bodyIndex     uint32
 	generation    uint32
 	collisionType uint32
+	prevCollider  uint32
+	nextCollider  uint32
 	kind          shapeKind
 	sensor        bool
 	alive         bool
@@ -121,8 +124,9 @@ type activeCollision struct {
 }
 
 type World struct {
-	staticSensors    []int
-	pairs            []colliderPair
+	broadphaseIndex
+	writes physicsWriteback
+
 	events           []CollisionEvent
 	nextActive       []activeCollision
 	active           []activeCollision
@@ -134,16 +138,13 @@ type World struct {
 	colliders     []colliderState
 	freeColliders []uint32
 
-	aabbs         []aabb
-	proxies       []broadphaseProxy
-	large         []int
-	dynamicGrid   spatialGrid
-	staticGrid    spatialGrid
-	sleep         sleepState
-	stats         StepStatistics
-	Sleep         SleepConfig
-	Gravity       Vector
-	gridCellSize  float64
+	aabbs []aabb
+
+	sleep   sleepState
+	stats   StepStatistics
+	Sleep   SleepConfig
+	Gravity Vector
+
 	contactDelta  float64
 	Iterations    int
 	CellSize      float64
@@ -167,16 +168,12 @@ func (world *World) Reserve(bodyCount, colliderCount int) {
 	world.colliders = growCapacity(world.colliders, colliderCount)
 	world.freeColliders = growCapacity(world.freeColliders, colliderCount)
 	world.aabbs = growCapacity(world.aabbs, colliderCount)
-	world.proxies = growCapacity(world.proxies, colliderCount)
-	world.large = growCapacity(world.large, max(colliderCount/8, 8))
-	world.pairs = growCapacity(world.pairs, colliderCount*8)
+	world.broadphaseIndex.reserve(colliderCount)
 	world.contacts = growCapacity(world.contacts, colliderCount*4)
 	world.velocityContacts = growCapacity(world.velocityContacts, colliderCount*4)
 	world.active = growCapacity(world.active, colliderCount*4)
 	world.nextActive = growCapacity(world.nextActive, colliderCount*4)
 	world.events = growCapacity(world.events, colliderCount*4)
-	world.staticGrid.reserve(colliderCount)
-	world.dynamicGrid.reserve(colliderCount)
 }
 
 func growCapacity[T any](values []T, capacity int) []T {
@@ -229,11 +226,8 @@ func (world *World) RemoveBody(body Body) bool {
 	if state == nil {
 		return false
 	}
-	for colliderIndex := range world.colliders {
-		collider := &world.colliders[colliderIndex]
-		if collider.alive && collider.bodyIndex == index {
-			world.removeColliderIndex(uint32(colliderIndex))
-		}
+	for state.firstCollider != 0 {
+		world.removeColliderIndex(state.firstCollider - 1)
 	}
 	state.alive = false
 	state.generation++
@@ -259,6 +253,8 @@ func (world *World) AddCollider[S Shape2D](body Body, def ColliderDef[S]) Collid
 	} else {
 		index = uint32(len(world.colliders))
 		world.colliders = append(world.colliders, colliderState{})
+		world.proxies = append(world.proxies, broadphaseProxy{})
+		world.aabbs = append(world.aabbs, aabb{})
 	}
 	state := &world.colliders[index]
 	generation := state.generation
@@ -267,10 +263,16 @@ func (world *World) AddCollider[S Shape2D](body Body, def ColliderDef[S]) Collid
 	}
 	*state = colliderState{
 		generation: generation, alive: true, bodyIndex: bodyIndex,
-		friction: max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
+		nextCollider: bodyState.firstCollider,
+		friction:     max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
 		sensor: def.Sensor, filter: def.Filter.normalized(), collisionType: def.CollisionType,
 	}
 	state.setColliderShape(def.Shape)
+	world.markProxy(index, true)
+	if state.nextCollider != 0 {
+		world.colliders[state.nextCollider-1].prevCollider = index + 1
+	}
+	bodyState.firstCollider = index + 1
 	if bodyState.inertia <= 0 {
 		bodyState.inertia = shapeInertia(*state, bodyState.mass)
 		bodyState.updateInverseMass()
@@ -291,9 +293,18 @@ func (world *World) RemoveCollider[S Shape2D](collider ColliderHandle[S]) bool {
 }
 
 func (world *World) removeColliderIndex(index uint32) {
+	world.markProxy(index, false)
 	state := &world.colliders[index]
 	body := &world.bodies[state.bodyIndex]
 	Body{world: world, id: makeBodyID(state.bodyIndex, body.generation)}.Wake()
+	if state.prevCollider == 0 {
+		body.firstCollider = state.nextCollider
+	} else {
+		world.colliders[state.prevCollider-1].nextCollider = state.nextCollider
+	}
+	if state.nextCollider != 0 {
+		world.colliders[state.nextCollider-1].prevCollider = state.prevCollider
+	}
 	state.alive = false
 	state.generation++
 	if state.generation == 0 {
@@ -325,6 +336,7 @@ func (world *World) Step(delta float64) {
 	world.integrateVelocities(delta)
 	world.buildContacts()
 	world.solveContacts(delta)
+	world.stats.CandidatePairs = len(world.pairs)
 	world.finishSleep(delta)
 	world.buildEvents()
 }
@@ -343,12 +355,13 @@ func (world *World) integrateVelocities(delta float64) {
 		switch body.bodyType {
 		case BodyDynamic:
 			acceleration := world.Gravity.Mul(body.gravityScale).Add(body.force.Mul(body.inverseMass))
-			body.velocity = body.velocity.Add(acceleration.Mul(delta))
-			body.angularVelocity += body.torque * body.inverseInertia * delta
+			velocity := body.velocity.Add(acceleration.Mul(delta))
+			angular := body.angularVelocity + body.torque*body.inverseInertia*delta
 			linearDamping := stepDamping / (1 + body.linearDamping*delta)
 			angularDamping := stepDamping / (1 + body.angularDamping*delta)
-			body.velocity = body.velocity.Mul(linearDamping)
-			body.angularVelocity *= angularDamping
+			velocity = velocity.Mul(linearDamping)
+			angular *= angularDamping
+			world.setMotion(body, velocity, angular)
 			body.force, body.torque = Vector{}, 0
 		}
 	}
@@ -360,10 +373,11 @@ func (world *World) integratePositions(delta float64) {
 		if !body.alive || body.sleeping || body.bodyType == BodyStatic {
 			continue
 		}
-		body.position = body.position.Add(body.velocity.Mul(delta))
+		rotation := body.rotation
 		if !body.fixedRotation {
-			body.rotation += body.angularVelocity * delta
+			rotation += body.angularVelocity * delta
 		}
+		world.setPose(body, body.position.Add(body.velocity.Mul(delta)), rotation)
 	}
 }
 
@@ -474,7 +488,7 @@ func (world *World) restoreContactImpulses(delta float64, warmStart bool) {
 			point.normalImpulse, point.tangentImpulse = scale*old.normalImpulse, scale*old.tangentImpulse
 			if warmStart {
 				impulse := contact.normal.Mul(point.normalImpulse).Add(contact.normal.Perpendicular().Mul(point.tangentImpulse))
-				applyPairImpulse(bodyA, bodyB, point.position.Sub(bodyA.position), point.position.Sub(bodyB.position), impulse)
+				world.applyPairImpulse(bodyA, bodyB, point.position.Sub(bodyA.position), point.position.Sub(bodyB.position), impulse)
 			} else {
 				point.bounceVelocity = max(point.bounceVelocity, old.bounceVelocity)
 			}
@@ -496,11 +510,11 @@ func (world *World) solveVelocity(contact *manifold) {
 		speed := bodyB.velocityAt(rb).Sub(bodyA.velocityAt(ra)).Dot(tangent)
 		limit := contact.friction * point.normalImpulse
 		impulse := clamp(point.tangentImpulse-speed/mass, -limit, limit)
-		applyPairImpulse(bodyA, bodyB, ra, rb, tangent.Mul(impulse-point.tangentImpulse))
+		world.applyPairImpulse(bodyA, bodyB, ra, rb, tangent.Mul(impulse-point.tangentImpulse))
 		point.tangentImpulse = impulse
 	}
 	// Finish with support constraints so friction cannot leave residual rocking.
-	if contact.pointCount == 2 && solveNormalPair(bodyA, bodyB, contact) {
+	if contact.pointCount == 2 && world.solveNormalPair(bodyA, bodyB, contact) {
 		return
 	}
 	for index := range contact.pointCount {
@@ -510,7 +524,7 @@ func (world *World) solveVelocity(contact *manifold) {
 		if mass > 1e-12 {
 			speed := bodyB.velocityAt(rb).Sub(bodyA.velocityAt(ra)).Dot(contact.normal)
 			impulse := max(point.normalImpulse+(point.bounceVelocity-speed)/mass, 0)
-			applyPairImpulse(bodyA, bodyB, ra, rb, contact.normal.Mul(impulse-point.normalImpulse))
+			world.applyPairImpulse(bodyA, bodyB, ra, rb, contact.normal.Mul(impulse-point.normalImpulse))
 			point.normalImpulse = impulse
 		}
 	}
@@ -523,7 +537,7 @@ func contactInverseMass(a, b *bodyState, ra, rb, axis Vector) float64 {
 
 // Solve both normal constraints together so a face supports the body without
 // alternately applying torque at its two ends. Impulses may push, never pull.
-func solveNormalPair(a, b *bodyState, contact *manifold) bool {
+func (world *World) solveNormalPair(a, b *bodyState, contact *manifold) bool {
 	p, q := &contact.points[0], &contact.points[1]
 	ra, rb := p.position.Sub(a.position), p.position.Sub(b.position)
 	sa, sb := q.position.Sub(a.position), q.position.Sub(b.position)
@@ -537,8 +551,8 @@ func solveNormalPair(a, b *bodyState, contact *manifold) bool {
 	if !ok {
 		return false
 	}
-	applyPairImpulse(a, b, ra, rb, n.Mul(impulses.X-p.normalImpulse))
-	applyPairImpulse(a, b, sa, sb, n.Mul(impulses.Y-q.normalImpulse))
+	world.applyPairImpulse(a, b, ra, rb, n.Mul(impulses.X-p.normalImpulse))
+	world.applyPairImpulse(a, b, sa, sb, n.Mul(impulses.Y-q.normalImpulse))
 	p.normalImpulse, q.normalImpulse = impulses.X, impulses.Y
 	return true
 }
@@ -563,11 +577,9 @@ func solveContactPair(k11, k12, k22, b1, b2 float64) (Vector, bool) {
 	return V(x, y), true
 }
 
-func applyPairImpulse(bodyA, bodyB *bodyState, ra, rb, impulse Vector) {
-	bodyA.velocity = bodyA.velocity.Sub(impulse.Mul(bodyA.inverseMass))
-	bodyA.angularVelocity -= cross(ra, impulse) * bodyA.inverseInertia
-	bodyB.velocity = bodyB.velocity.Add(impulse.Mul(bodyB.inverseMass))
-	bodyB.angularVelocity += cross(rb, impulse) * bodyB.inverseInertia
+func (world *World) applyPairImpulse(bodyA, bodyB *bodyState, ra, rb, impulse Vector) {
+	world.setMotion(bodyA, bodyA.velocity.Sub(impulse.Mul(bodyA.inverseMass)), bodyA.angularVelocity-cross(ra, impulse)*bodyA.inverseInertia)
+	world.setMotion(bodyB, bodyB.velocity.Add(impulse.Mul(bodyB.inverseMass)), bodyB.angularVelocity+cross(rb, impulse)*bodyB.inverseInertia)
 }
 
 func (body *bodyState) velocityAt(offset Vector) Vector {
@@ -632,10 +644,8 @@ func (world *World) solvePosition(contact *manifold) bool {
 	if angle := max(math.Abs(angleA), math.Abs(angleB)); angle > .2 {
 		scale = .2 / angle
 	}
-	bodyA.position = bodyA.position.Sub(correction.Mul(scale * bodyA.inverseMass))
-	bodyB.position = bodyB.position.Add(correction.Mul(scale * bodyB.inverseMass))
-	bodyA.rotation -= scale * angleA
-	bodyB.rotation += scale * angleB
+	world.setPose(bodyA, bodyA.position.Sub(correction.Mul(scale*bodyA.inverseMass)), bodyA.rotation-scale*angleA)
+	world.setPose(bodyB, bodyB.position.Add(correction.Mul(scale*bodyB.inverseMass)), bodyB.rotation+scale*angleB)
 	return true
 }
 
@@ -701,7 +711,7 @@ func (world *World) bodyState(id BodyID) *bodyState {
 
 func (world *World) resolveBody(id BodyID) (uint32, *bodyState) {
 	index, generation := splitID(uint64(id))
-	if int(index) >= len(world.bodies) {
+	if uint(index) >= uint(len(world.bodies)) {
 		return 0, nil
 	}
 	state := &world.bodies[index]
@@ -718,7 +728,7 @@ func (world *World) colliderState(id ColliderID) *colliderState {
 
 func (world *World) resolveCollider(id ColliderID) (uint32, *colliderState) {
 	index, generation := splitID(uint64(id))
-	if int(index) >= len(world.colliders) {
+	if uint(index) >= uint(len(world.colliders)) {
 		return 0, nil
 	}
 	state := &world.colliders[index]
@@ -751,7 +761,8 @@ func pairKey(a, b int) uint64 {
 	return uint64(uint32(a))<<32 | uint64(uint32(b))
 }
 
-func (state *colliderState) setColliderShape[S Shape2D](shape S) {
+func (state *colliderState) setColliderShape[S Shape2D](shape S) bool {
+	kind, a, b, radius, rotation := state.kind, state.a, state.b, state.radius, state.rotation
 	switch value := any(shape).(type) {
 	case Circle:
 		state.kind, state.a, state.radius = shapeCircle, value.Center, max(value.Radius, 0)
@@ -766,6 +777,7 @@ func (state *colliderState) setColliderShape[S Shape2D](shape S) {
 	default:
 		panic("physics: unsupported collider shape")
 	}
+	return kind != state.kind || a != state.a || b != state.b || radius != state.radius || rotation != state.rotation
 }
 
 func (state colliderState) shapeFromState[S Shape2D]() S {
@@ -795,4 +807,11 @@ func shapeInertia(shape colliderState, mass float64) float64 {
 	default:
 		return math.Inf(1)
 	}
+}
+
+func (world *World) setMotion(body *bodyState, velocity Vector, angular float64) {
+	if body.managed && (velocity != body.velocity || angular != body.angularVelocity) {
+		world.writes.record(body.userData, false)
+	}
+	body.velocity, body.angularVelocity = velocity, angular
 }

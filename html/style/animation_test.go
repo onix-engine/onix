@@ -107,7 +107,7 @@ func TestCSSAnimationLonghandsAndTransitionLists(t *testing.T) {
 		{Property: "animation", Value: `"spin name" 2s linear paused`},
 		{Property: "animation-play-state", Value: "running"},
 	} {
-		if err := applyProperty(&value, d.Property, d.Value, nil, ctx); err != nil {
+		if err := applyProperty(&value, cascadePropertyIndex[d.Property].id, d.Value, nil, ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -212,7 +212,7 @@ func TestCSSAnimationStepsPhaseBoundaries(t *testing.T) {
 
 func TestCSSAnimationColorTransitionShorthandMatching(t *testing.T) {
 	computed := defaultStyle(nil)
-	if err := applyTransitionProperty(&computed, "transition", "all 1s linear, border 2s ease-in, border-left-color 3s steps(2), background 4s"); err != nil {
+	if err := applyTransitionProperty(&computed, propertyTransition, "all 1s linear, border 2s ease-in, border-left-color 3s steps(2), background 4s"); err != nil {
 		t.Fatal(err)
 	}
 	resolveMotion(computed.mutableMotion())
@@ -221,7 +221,7 @@ func TestCSSAnimationColorTransitionShorthandMatching(t *testing.T) {
 			t.Fatalf("transition %s = %+v; want duration %v", animatedColorNames[i], transition, want)
 		}
 	}
-	if err := applyTransitionProperty(&computed, "transition-property", "none"); err != nil {
+	if err := applyTransitionProperty(&computed, propertyTransitionProperty, "none"); err != nil {
 		t.Fatal(err)
 	}
 	resolveMotion(computed.mutableMotion())
@@ -240,7 +240,7 @@ func TestTransitionListCyclingAndLastMatchingEntry(t *testing.T) {
 		{Property: "transition-delay", Value: "-100ms, 200ms"},
 		{Property: "transition-timing-function", Value: "linear, cubic-bezier(.25, .1, .25, 1)"},
 	} {
-		if err := applyTransitionProperty(&computed, declaration.Property, declaration.Value); err != nil {
+		if err := applyTransitionProperty(&computed, cascadePropertyIndex[declaration.Property].id, declaration.Value); err != nil {
 			t.Fatal(err)
 		}
 	}

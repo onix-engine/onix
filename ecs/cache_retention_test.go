@@ -123,7 +123,7 @@ func TestTableCompactionPreservesPreparedPlansAndTicks(t *testing.T) {
 		entities[i] = spawn.Spawn(scopeNumber(i))
 	}
 	source := spawn.plan.archetype
-	column := source.column(w.registerComponent[scopeNumber]()).(*typedColumn[scopeNumber])
+	column := source.column(w.registerComponent[scopeNumber]()).typed[scopeNumber]()
 	since := w.ChangeTick()
 	*w.GetMut[scopeNumber](entities[0]) = 9999
 	added, changed := slices.Clone(column.added[:32]), slices.Clone(column.changed[:32])
@@ -174,7 +174,7 @@ func TestTableCompactionPreservesPreparedPlansAndTicks(t *testing.T) {
 		t.Fatal("prepared removal failed after compaction")
 	}
 	spawn.Spawn(99)
-	if source != spawn.plan.archetype || source.column(column.id) != column || *w.GetRef[scopeNumber](entities[0]) != 9999 {
+	if source != spawn.plan.archetype || source.column(column.id) != &column.columnState || *w.GetRef[scopeNumber](entities[0]) != 9999 {
 		t.Fatal("compaction invalidated prepared table/column identities")
 	}
 	changes := w.ChangesSince(0)

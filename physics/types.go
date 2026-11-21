@@ -157,7 +157,7 @@ func (body Body) SetType(value BodyType) {
 		if state.bodyType != value {
 			body.Wake()
 		}
-		state.bodyType = value
+		body.world.setBodyType(state, value)
 		state.updateInverseMass()
 	}
 }
@@ -174,7 +174,7 @@ func (body Body) SetPosition(value Vector) {
 		if state.position != value {
 			body.Wake()
 		}
-		state.position = value
+		body.world.setPose(state, value, state.rotation)
 	}
 }
 
@@ -190,7 +190,7 @@ func (body Body) SetRotation(value float64) {
 		if state.rotation != value {
 			body.Wake()
 		}
-		state.rotation = value
+		body.world.setPose(state, state.position, value)
 	}
 }
 
@@ -206,7 +206,7 @@ func (body Body) SetVelocity(value Vector) {
 		if state.velocity != value {
 			body.Wake()
 		}
-		state.velocity = value
+		body.world.setMotion(state, value, state.angularVelocity)
 	}
 }
 
@@ -223,7 +223,7 @@ func (body Body) SetAngularVelocity(value float64) {
 			if state.angularVelocity != value {
 				body.Wake()
 			}
-			state.angularVelocity = value
+			body.world.setMotion(state, state.velocity, value)
 		}
 	}
 }
@@ -266,10 +266,11 @@ func (body Body) ApplyImpulse(impulse, worldPoint Vector) {
 	if impulse != (Vector{}) {
 		body.Wake()
 	}
-	state.velocity = state.velocity.Add(impulse.Mul(state.inverseMass))
+	angular := state.angularVelocity
 	if state.inverseInertia != 0 {
-		state.angularVelocity += cross(worldPoint.Sub(state.position), impulse) * state.inverseInertia
+		angular += cross(worldPoint.Sub(state.position), impulse) * state.inverseInertia
 	}
+	body.world.setMotion(state, state.velocity.Add(impulse.Mul(state.inverseMass)), angular)
 }
 
 func (body Body) SetGravityScale(value float64) {
@@ -318,12 +319,10 @@ func (collider ColliderHandle[S]) Shape() S {
 }
 
 func (collider ColliderHandle[S]) SetShape(shape S) {
-	if collider.world == nil {
-		return
-	}
-	state := collider.world.colliderState(collider.id)
-	if state != nil {
-		state.setColliderShape(shape)
+	if collider.world != nil {
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.setColliderShape(shape) {
+			collider.world.markProxy(index, true)
+		}
 	}
 }
 
@@ -338,16 +337,19 @@ func (collider ColliderHandle[S]) Filter() Filter {
 
 func (collider ColliderHandle[S]) SetFilter(value Filter) {
 	if collider.world != nil {
-		if state := collider.world.colliderState(collider.id); state != nil {
-			state.filter = value.normalized()
+		value = value.normalized()
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.filter != value {
+			state.filter = value
+			collider.world.markProxy(index, false)
 		}
 	}
 }
 
 func (collider ColliderHandle[S]) SetSensor(value bool) {
 	if collider.world != nil {
-		if state := collider.world.colliderState(collider.id); state != nil {
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.sensor != value {
 			state.sensor = value
+			collider.world.markProxy(index, false)
 		}
 	}
 }

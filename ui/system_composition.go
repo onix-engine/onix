@@ -72,7 +72,7 @@ func syncAuthoredCaret(world *ecs.World, entity, owner ecs.Entity, transform *sc
 		sprite.Width, sprite.Height = 1, r.H
 	}
 	if visibility, exists := world.Get[scene.Visibility](entity); exists {
-		visibility.Visible = visibility.Visible && ok && caretVisible(world)
+		visibility.Visible = visibility.Visible && ok && CaretVisible(world)
 		world.SetIfChanged(entity, visibility)
 	}
 }

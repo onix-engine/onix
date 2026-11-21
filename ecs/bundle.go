@@ -5,7 +5,7 @@ type bundleEntry interface {
 }
 
 type bundleValue interface {
-	appendTo(column, Tick)
+	appendTo(*columnState, Tick)
 }
 
 type entityBundleEntry interface {
@@ -21,8 +21,8 @@ func (v componentValue[T]) componentID(world *World) componentID {
 	return world.registerComponent[T]()
 }
 
-func (v componentValue[T]) appendTo(target column, tick Tick) {
-	target.(*typedColumn[T]).append(v.value, tick)
+func (v componentValue[T]) appendTo(target *columnState, tick Tick) {
+	target.typed[T]().append(v.value, tick)
 }
 
 type entityComponentValue[T any] struct {

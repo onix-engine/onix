@@ -218,8 +218,7 @@ func (world *World) finishSleep(delta float64) {
 		body := &world.bodies[i]
 		if body.alive && body.bodyType == BodyDynamic && !world.sleep.flags[world.islandRoot(i)] {
 			body.sleeping = true
-			body.velocity = Vector{}
-			body.angularVelocity = 0
+			world.setMotion(body, Vector{}, 0)
 		}
 		if body.alive && body.sleeping {
 			world.stats.SleepingBodies++

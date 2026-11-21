@@ -22,7 +22,9 @@ type inlineBackgroundKey struct {
 func (b *Box) UpdateInlineBackgrounds(styles style.Map) {
 	clear(b.InlineBackgrounds)
 	b.InlineBackgrounds = b.InlineBackgrounds[:0]
-	clear(b.inlinePaintIndex)
+	if b.scratch != nil {
+		clear(b.scratch.inlinePaint)
+	}
 	for _, fragment := range b.TextFragments {
 		node := fragment.Node
 		if node != nil && node.Type == uinode.TextNode {
@@ -50,16 +52,17 @@ func (b *Box) appendInlineBackground(node *uinode.Node, rect Rect, line int, sty
 		return
 	}
 	key := inlineBackgroundKey{node, line}
-	if index, ok := b.inlinePaintIndex[key]; ok {
+	scratch := b.ensureScratch()
+	if index, ok := scratch.inlinePaint[key]; ok {
 		previous := &b.InlineBackgrounds[index].Rect
 		right, bottom := max(previous.X+previous.Width, rect.X+rect.Width), max(previous.Y+previous.Height, rect.Y+rect.Height)
 		previous.X, previous.Y = min(previous.X, rect.X), min(previous.Y, rect.Y)
 		previous.Width, previous.Height = right-previous.X, bottom-previous.Y
 		return
 	}
-	if b.inlinePaintIndex == nil {
-		b.inlinePaintIndex = make(map[inlineBackgroundKey]int)
+	if scratch.inlinePaint == nil {
+		scratch.inlinePaint = make(map[inlineBackgroundKey]int)
 	}
-	b.inlinePaintIndex[key] = len(b.InlineBackgrounds)
+	scratch.inlinePaint[key] = len(b.InlineBackgrounds)
 	b.InlineBackgrounds = append(b.InlineBackgrounds, InlineBackground{Node: node, Style: computed, Rect: rect, Line: line})
 }

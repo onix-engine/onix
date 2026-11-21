@@ -41,6 +41,32 @@ func TestHTMLShadowR8MatchesRGBAAndReusesColor(t *testing.T) {
 	}
 }
 
+func TestStreamingShadowBlurMatchesFullImage(t *testing.T) {
+	for _, width := range []int{1, 7, 71} {
+		for _, sigma := range []float64{4, 5.5, 8, 15.5} {
+			bounds := image.Rect(3, 4, 3+width, 261)
+			got := image.NewAlpha(bounds.Inset(-3)).SubImage(bounds).(*image.Alpha)
+			want := image.NewRGBA(bounds)
+			for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+				for x := bounds.Min.X; x < bounds.Max.X; x++ {
+					alpha := uint8(x*31 + y*17 + x*y)
+					got.SetAlpha(x, y, color.Alpha{A: alpha})
+					want.SetRGBA(x, y, color.RGBA{A: alpha})
+				}
+			}
+			htmlBlurShadowCoverage(got, sigma, &htmlFilterScratch{})
+			htmlBlurShadowMask(want, sigma, &htmlFilterScratch{})
+			for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+				for x := bounds.Min.X; x < bounds.Max.X; x++ {
+					if got.AlphaAt(x, y).A != want.RGBAAt(x, y).A {
+						t.Fatalf("width %d sigma %g at (%d,%d): alpha %d, want %d", width, sigma, x, y, got.AlphaAt(x, y).A, want.RGBAAt(x, y).A)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestHTMLShadowCoverageBlurReusesBuffers(t *testing.T) {
 	for _, sigma := range []float64{1, 3, 4, 12} {
 		dst := image.NewAlpha(image.Rect(0, 0, 80, 72))

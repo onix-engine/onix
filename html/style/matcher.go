@@ -47,15 +47,9 @@ func prepareDeclarations(declarations []css.Declaration) []preparedDeclaration {
 	for _, declaration := range declarations {
 		property := strings.ToLower(strings.TrimSpace(declaration.Property))
 		value := strings.TrimSpace(declaration.Value)
-		if !validateDeclaration(property, value) {
-			continue
+		if entry, ok := prepareDeclaration(property, value, declaration.Important); ok {
+			prepared = append(prepared, entry)
 		}
-		prepared = append(prepared, preparedDeclaration{
-			value:     value,
-			important: declaration.Important,
-			order:     cascadePropertyIndex[property],
-			parsed:    preparePropertyValue(property, value),
-		})
 	}
 	return prepared
 }
@@ -65,49 +59,6 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
-}
-
-// validateDeclaration parses a property against a context-free default. Values
-// whose grammar depends on layout or font metrics remain deferred to cascade.
-func validateDeclaration(property, value string) bool {
-	if property == "" || value == "" || strings.HasPrefix(property, "--") {
-		return false
-	}
-	if isCSSWideKeyword(value) {
-		return true
-	}
-	if property == "line-height" {
-		_, err := parseLineHeight(value, LengthPx(16), parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16})
-		return err == nil
-	}
-	if property == "font" {
-		ctx := parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16}
-		parts, err := parseFontShorthandParts(value, ctx)
-		size, line := parts.size, parts.line
-		if err != nil {
-			return false
-		}
-		if line != "" {
-			_, err = parseLineHeight(line, size, ctx)
-		}
-		return err == nil
-	}
-	if _, known := cascadePropertyIndex[property]; !known {
-		return true
-	}
-	if property == "font-size" {
-		_, err := parseFontSize(value, parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16})
-		return err == nil
-	}
-	if property == "font-family" || property == "grid-template-columns" || property == "grid-template-rows" || property == "container-name" {
-		return true
-	}
-	if property == "filter" {
-		_, err := parseFilter(value, nil, parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16})
-		return err == nil || strings.Contains(strings.ToLower(value), "url(")
-	}
-	computed := defaultStyle(nil)
-	return applyProperty(&computed, property, value, nil, parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16}) == nil
 }
 
 type compiledSelectorRef struct {

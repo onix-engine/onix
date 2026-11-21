@@ -189,8 +189,8 @@ type keyframe struct {
 	curveKind uint8
 }
 
-func (f keyframe) timelineTime() float32              { return f.time }
-func (f keyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
+func (f *keyframe) timelineTime() float32              { return f.time }
+func (f *keyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type boneTimeline struct {
 	kind   string
@@ -213,8 +213,8 @@ type deformFrame struct {
 	curveKind uint8
 }
 
-func (f deformFrame) timelineTime() float32              { return f.time }
-func (f deformFrame) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
+func (f *deformFrame) timelineTime() float32              { return f.time }
+func (f *deformFrame) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type deformTimeline struct {
 	attachment *attachment
@@ -230,8 +230,8 @@ type ikKeyframe struct {
 	curveKind         uint8
 }
 
-func (f ikKeyframe) timelineTime() float32              { return f.time }
-func (f ikKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
+func (f *ikKeyframe) timelineTime() float32              { return f.time }
+func (f *ikKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type ikTimeline struct {
 	frames     []ikKeyframe
@@ -244,8 +244,8 @@ type transformKeyframe struct {
 	curveKind                                   uint8
 }
 
-func (f transformKeyframe) timelineTime() float32              { return f.time }
-func (f transformKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
+func (f *transformKeyframe) timelineTime() float32              { return f.time }
+func (f *transformKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type transformTimeline struct {
 	frames     []transformKeyframe
@@ -257,8 +257,8 @@ type pathKeyframe struct {
 	curveKind                            uint8
 }
 
-func (f pathKeyframe) timelineTime() float32              { return f.time }
-func (f pathKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
+func (f *pathKeyframe) timelineTime() float32              { return f.time }
+func (f *pathKeyframe) timelineCurve() (uint8, [4]float32) { return f.curveKind, f.curve }
 
 type pathTimeline struct {
 	kind       string
@@ -2164,9 +2164,9 @@ func animationSampleTimes(animation animation) []float32 {
 	return mapKeys(times)
 }
 
-func addTimelineTimes[T interface{ timelineTime() float32 }](times map[float32]struct{}, duration float32, frames []T) {
-	for _, frame := range frames {
-		times[min(max(frame.timelineTime(), 0), duration)] = struct{}{}
+func addTimelineTimes[T any, P timelineFrame[T]](times map[float32]struct{}, duration float32, frames []T) {
+	for i := range frames {
+		times[min(max(P(&frames[i]).timelineTime(), 0), duration)] = struct{}{}
 	}
 }
 
@@ -2635,18 +2635,19 @@ func parseBlendMode(value string) render.MeshBlendMode {
 	}
 }
 
-type timelineFrame interface {
+type timelineFrame[T any] interface {
+	*T
 	timelineTime() float32
 	timelineCurve() (uint8, [4]float32)
 }
 
-func locateFrame[T timelineFrame](frames []T, time float32) (int, float32, bool) {
-	if len(frames) == 0 || time < frames[0].timelineTime() {
+func locateFrame[T any, P timelineFrame[T]](frames []T, time float32) (int, float32, bool) {
+	if len(frames) == 0 || time < P(&frames[0]).timelineTime() {
 		return 0, 0, false
 	}
 	index := len(frames) - 1
 	for i := 1; i < len(frames); i++ {
-		if time < frames[i].timelineTime() {
+		if time < P(&frames[i]).timelineTime() {
 			index = i - 1
 			break
 		}
@@ -2654,7 +2655,7 @@ func locateFrame[T timelineFrame](frames []T, time float32) (int, float32, bool)
 	if index == len(frames)-1 {
 		return index, 0, true
 	}
-	a, b := frames[index], frames[index+1]
+	a, b := P(&frames[index]), P(&frames[index+1])
 	mix := (time - a.timelineTime()) / (b.timelineTime() - a.timelineTime())
 	curveKind, curve := a.timelineCurve()
 	if curveKind == 1 {
@@ -3080,11 +3081,11 @@ func lastTime(frames []keyframe) float32 {
 	}
 	return frames[len(frames)-1].time
 }
-func lastTimelineTime[T timelineFrame](frames []T) float32 {
+func lastTimelineTime[T any, P timelineFrame[T]](frames []T) float32 {
 	if len(frames) == 0 {
 		return 0
 	}
-	return frames[len(frames)-1].timelineTime()
+	return P(&frames[len(frames)-1]).timelineTime()
 }
 func abs(v float32) float32 {
 	if v < 0 {

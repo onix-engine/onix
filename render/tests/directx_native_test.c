@@ -59,6 +59,20 @@ static void check_mipmap_updates(OnixGPUDriver *d) {
     RELEASE(staging);
     require(onix_gpu_destroy_texture(d, id), "destroy mipmapped texture");
 }
+static void check_readback_retention(OnixGPUDriver *d) {
+    uint32_t color, target = onix_gpu_create_render_target(d, 256, 257, 2, 0, &color);
+    uint8_t pixels[256 * 257];
+    require(target && onix_gpu_read_render_target(d, target, 0, 0, 256, 257, pixels, sizeof(pixels)), "large R8 readback");
+    ID3D11Texture2D *buffer = d->readback;
+    float clear[4] = {0};
+    for (int frame = 0; frame < ONIX_BUFFER_TRIM_DELAY; frame++) {
+        require(onix_gpu_begin_frame(d, clear), "begin low demand frame");
+        require(onix_gpu_read_render_target(d, target, 0, 0, 1, 1, pixels, 1), "read a small region");
+        require(d->readback == buffer && dx_readback_bytes(d) == sizeof(pixels), "reuse R8 staging storage");
+    }
+    require(onix_gpu_begin_frame(d, clear) && !d->readback, "release historical readback peak");
+    require(onix_gpu_destroy_render_target(d, target), "destroy readback target");
+}
 static void check_sprites(OnixGPUDriver *d) {
     const uint8_t white[] = {255, 255, 255, 255};
     uint32_t texture = onix_gpu_create_texture_with_format(d, 1, 1, 1, 0, 0, white, 4, 0, 0), color;
@@ -90,6 +104,7 @@ static void check_sprites(OnixGPUDriver *d) {
                 "begin sprite target");
         onix_gpu_set_viewport(d, 0, 0, 16, 16);
         require(onix_gpu_draw_sprites(d, &push, instances, 4, draws, 3), "draw sprites");
+        require(d->instances.used - d->instances.offset == 3 * 100 + 132, "mixed sprite upload size");
         require(onix_gpu_end_render_target(d), "end sprite target");
         for (int i = 0; i < 4; i++) {
             uint8_t pixel[4];
@@ -162,7 +177,11 @@ static void check_picking(OnixGPUDriver *d) {
     instance.base_color[0] = instance.base_color[3] = 1;
     instance.uv_transform[0] = instance.uv_transform[1] = 1;
     require(onix_gpu_begin_frame(d, clear) && onix_gpu_begin_render_target(d, target, clear, 0, 1, 1), "begin mesh target");
-    require(onix_gpu_draw_meshes(d, &push, vertices, 3, indices, 3, &instance, 1, NULL, 0, &draw, 1, NULL), "draw unlit mesh");
+    draw.mesh = onix_gpu_create_mesh(d, vertices, 3, (uint32_t[]){2, 0, 1, 2}, 4);
+    draw.first_index = 1;
+    require(draw.mesh && dx_get_mesh(d, draw.mesh)->index_format == DXGI_FORMAT_R16_UINT, "compact resident mesh");
+    require(onix_gpu_draw_meshes(d, &push, NULL, 0, NULL, 0, &instance, 1, NULL, 0, &draw, 1, NULL), "draw unlit mesh");
+    require(onix_gpu_destroy_mesh(d, draw.mesh), "destroy resident mesh");
     uint8_t mesh_pixel[4];
     require(onix_gpu_end_render_target(d) && onix_gpu_read_render_target(d, target, 8, 8, 1, 1, mesh_pixel, 4), "read mesh");
     if (mesh_pixel[0] != 255 || mesh_pixel[1] != 0 || mesh_pixel[3] != 255) {
@@ -199,6 +218,7 @@ int main(void) {
     require(onix_gpu_read_render_target(d, target, 0, 0, 16, 16, pixels, sizeof(pixels)), "read target");
     require(pixels[0] == 255 && pixels[1] == 0 && pixels[3] == 255, "red pixel");
     require(onix_gpu_destroy_render_target(d, target), "destroy clear target");
+    check_readback_retention(d);
     check_sprites(d);
     check_streams(d);
     check_mipmap_updates(d);

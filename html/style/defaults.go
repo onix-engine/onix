@@ -158,74 +158,58 @@ func isBlockTag(tag string) bool {
 }
 
 func applyFormControlDefaults(node *uinode.Node, computed *ComputedStyle) {
-	if node == nil || computed == nil || node.Type != uinode.ElementNode {
+	if computed == nil || !element.IsWidgetControl(node) {
 		return
 	}
+	computed.Display = Keyword("inline-block")
+	computed.Padding = Edges{Top: LengthPx(2), Right: LengthPx(6), Bottom: LengthPx(2), Left: LengthPx(6)}
+	computed.BorderWidth = uniformEdges(LengthPx(1))
+	computed.BorderStyle = uniformEdges(Keyword("solid"))
+	computed.BorderColor = uniformEdges(ColorValue(Color{R: 118, G: 118, B: 118, A: 255}))
+	computed.BackgroundColor = ColorValue(Color{R: 255, G: 255, B: 255, A: 255})
 
 	switch node.Data {
 	case "button":
-		computed.Display = Keyword("inline-block")
-		computed.TextAlign = Keyword("center")
-		computed.Padding = Edges{Top: LengthPx(2), Right: LengthPx(6), Bottom: LengthPx(2), Left: LengthPx(6)}
-		computed.BorderWidth = uniformEdges(LengthPx(1))
-		computed.BorderStyle = uniformEdges(Keyword("solid"))
-		computed.BorderColor = uniformEdges(ColorValue(Color{R: 118, G: 118, B: 118, A: 255}))
-		computed.BorderRadius = uniformCorners(LengthPx(4))
-		computed.BackgroundColor = ColorValue(Color{R: 239, G: 239, B: 239, A: 255})
+		applyButtonAppearance(computed)
 	case "input":
-		computed.Display = Keyword("inline-block")
 		computed.WhiteSpace = Keyword("nowrap")
-		computed.Padding = Edges{Top: LengthPx(2), Right: LengthPx(6), Bottom: LengthPx(2), Left: LengthPx(6)}
-		computed.BorderWidth = uniformEdges(LengthPx(1))
-		computed.BorderStyle = uniformEdges(Keyword("solid"))
-		computed.BorderColor = uniformEdges(ColorValue(Color{R: 118, G: 118, B: 118, A: 255}))
-		computed.BackgroundColor = ColorValue(Color{R: 255, G: 255, B: 255, A: 255})
-		if isHiddenInput(node) {
+		switch {
+		case isHiddenInput(node):
 			computed.Display = Keyword("none")
 			computed.Padding = uniformEdges(LengthPx(0))
 			computed.BorderWidth = uniformEdges(LengthPx(0))
 			computed.BorderStyle = uniformEdges(Keyword("none"))
 			computed.BackgroundColor = ColorValue(Color{A: 0})
-			break
-		}
-		if isButtonInput(node) {
-			computed.TextAlign = Keyword("center")
-			computed.BorderRadius = uniformCorners(LengthPx(4))
-			computed.BackgroundColor = ColorValue(Color{R: 239, G: 239, B: 239, A: 255})
-		}
-		if isChoiceInput(node) {
+		case isButtonInput(node):
+			applyButtonAppearance(computed)
+		case isChoiceInput(node):
 			computed.Padding = uniformEdges(LengthPx(0))
 			computed.Width = LengthPx(13)
 			computed.Height = LengthPx(13)
 			if isRadioInput(node) {
 				computed.BorderRadius = uniformCorners(LengthPx(999))
 			}
-		} else if !isButtonInput(node) {
+		default:
 			computed.Width = LengthPx(defaultTextInputWidthPx)
 		}
 	case "select":
-		computed.Display = Keyword("inline-block")
 		computed.WhiteSpace = Keyword("nowrap")
-		computed.Padding = Edges{Top: LengthPx(2), Right: LengthPx(20), Bottom: LengthPx(2), Left: LengthPx(6)}
-		computed.BorderWidth = uniformEdges(LengthPx(1))
-		computed.BorderStyle = uniformEdges(Keyword("solid"))
-		computed.BorderColor = uniformEdges(ColorValue(Color{R: 118, G: 118, B: 118, A: 255}))
-		computed.BackgroundColor = ColorValue(Color{R: 255, G: 255, B: 255, A: 255})
+		computed.Padding.Right = LengthPx(20)
 	case "textarea":
-		computed.Display = Keyword("inline-block")
 		computed.WhiteSpace = Keyword("pre-wrap")
-		computed.Padding = Edges{Top: LengthPx(2), Right: LengthPx(6), Bottom: LengthPx(2), Left: LengthPx(6)}
-		computed.BorderWidth = uniformEdges(LengthPx(1))
-		computed.BorderStyle = uniformEdges(Keyword("solid"))
-		computed.BorderColor = uniformEdges(ColorValue(Color{R: 118, G: 118, B: 118, A: 255}))
-		computed.BackgroundColor = ColorValue(Color{R: 255, G: 255, B: 255, A: 255})
 	}
 
-	if isDisabledControl(node) {
+	if _, disabled := node.Attr("disabled"); disabled {
 		computed.Color = ColorValue(Color{R: 106, G: 106, B: 106, A: 255})
 		computed.BorderColor = uniformEdges(ColorValue(Color{R: 180, G: 180, B: 180, A: 255}))
 		computed.BackgroundColor = ColorValue(Color{R: 240, G: 240, B: 240, A: 255})
 	}
+}
+
+func applyButtonAppearance(computed *ComputedStyle) {
+	computed.TextAlign = Keyword("center")
+	computed.BorderRadius = uniformCorners(LengthPx(4))
+	computed.BackgroundColor = ColorValue(Color{R: 239, G: 239, B: 239, A: 255})
 }
 
 func isCheckboxInput(node *uinode.Node) bool {
@@ -253,16 +237,9 @@ func isInputType(node *uinode.Node, inputType string) bool {
 }
 
 func isDisabledControl(node *uinode.Node) bool {
-	if node == nil || node.Type != uinode.ElementNode {
+	if !element.IsWidgetControl(node) {
 		return false
 	}
-	if _, ok := node.Attr("disabled"); !ok {
-		return false
-	}
-	switch node.Data {
-	case "button", "input", "select", "textarea":
-		return true
-	default:
-		return false
-	}
+	_, disabled := node.Attr("disabled")
+	return disabled
 }

@@ -31,6 +31,8 @@ const (
 	// FlagPremultipliedAlpha marks colour channels already scaled by alpha.
 	// Compressed payloads bake this in, so the runtime cannot infer it.
 	FlagPremultipliedAlpha = 1 << 0
+	// FlagASTCVariant appends a matching ASTC 4x4 mip chain after the BC chain.
+	FlagASTCVariant = 1 << 1
 )
 
 var magic = texcontainer.Magic
@@ -38,11 +40,12 @@ var magic = texcontainer.Magic
 // Image is a container payload. Data holds every mip level concatenated from the
 // largest down to 1x1, which is the order the device uploads them in.
 type Image struct {
-	Data          []byte
-	Width, Height int
-	Levels        int
-	Format        render.TextureFormat
-	Premultiplied bool
+	Data           []byte
+	Width, Height  int
+	Levels         int
+	Format         render.TextureFormat
+	Premultiplied  bool
+	HasASTCVariant bool
 }
 
 // Marshal encodes a container. It rejects payloads whose length does not match
@@ -52,11 +55,17 @@ func Marshal(image Image) ([]byte, error) {
 	if err := image.validate(); err != nil {
 		return nil, err
 	}
+	if err := image.validatePayload(); err != nil {
+		return nil, err
+	}
 	data := make([]byte, headerSize+len(image.Data))
 	copy(data, magic[:])
 	data[8] = byte(image.Format)
 	if image.Premultiplied {
 		data[9] = FlagPremultipliedAlpha
+	}
+	if image.HasASTCVariant {
+		data[9] |= FlagASTCVariant
 	}
 	data[10] = byte(image.Levels)
 	binary.LittleEndian.PutUint32(data[12:], uint32(image.Width))
@@ -75,11 +84,12 @@ func Unmarshal(data []byte) (Image, error) {
 		return Image{}, errors.New("ontex: not an ONIXTEX1 container")
 	}
 	image := Image{
-		Format:        render.TextureFormat(data[8]),
-		Premultiplied: data[9]&FlagPremultipliedAlpha != 0,
-		Levels:        int(data[10]),
-		Width:         int(binary.LittleEndian.Uint32(data[12:])),
-		Height:        int(binary.LittleEndian.Uint32(data[16:])),
+		Format:         render.TextureFormat(data[8]),
+		Premultiplied:  data[9]&FlagPremultipliedAlpha != 0,
+		HasASTCVariant: data[9]&FlagASTCVariant != 0,
+		Levels:         int(data[10]),
+		Width:          int(binary.LittleEndian.Uint32(data[12:])),
+		Height:         int(binary.LittleEndian.Uint32(data[16:])),
 	}
 	if data[11] != 0 {
 		return Image{}, fmt.Errorf("ontex: unsupported header flags 0x%02x", data[11])
@@ -111,6 +121,12 @@ func (image Image) validate() error {
 
 func (image Image) validatePayload() error {
 	expected := image.Format.ChainSize(image.Width, image.Height, image.Levels)
+	if image.HasASTCVariant {
+		if !image.Format.WebVariantBase() {
+			return fmt.Errorf("ontex: invalid Web texture variant %s", image.Format.Name())
+		}
+		expected += render.TextureFormatASTC4x4.ChainSize(image.Width, image.Height, image.Levels)
+	}
 	if len(image.Data) != expected {
 		return fmt.Errorf("ontex: %s %dx%d with %d levels needs %d bytes, got %d",
 			image.Format.Name(), image.Width, image.Height, image.Levels, expected, len(image.Data))

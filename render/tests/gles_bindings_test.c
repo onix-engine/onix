@@ -88,7 +88,7 @@ static GLuint run(const OnixGLESMeshDraw *draws, size_t count, GLuint bound_text
 int main(void) {
 	OnixGLESMeshDraw repeated[4097];
 	OnixGLESMeshDraw first = {.texture = 1, .normal_texture = 2, .metallic_roughness_texture = 3,
-		.index_count = 6, .instances = 1};
+		.index_type = GL_UNSIGNED_INT, .index_count = 6, .instances = 1};
 	for (size_t slot = 0; slot < 13; slot++) first.extra_textures[slot] = (GLuint)(slot + 4);
 	for (size_t index = 0; index < 4097; index++) {
 		repeated[index] = first;

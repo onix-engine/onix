@@ -155,6 +155,14 @@ const (
 	propertyCount
 )
 
+func (id propertyID) isTransition() bool {
+	return id >= propertyTransition && id <= propertyTransitionDelay
+}
+
+func (id propertyID) isAnimation() bool {
+	return id >= propertyAnimation && id <= propertyAnimationPlayState
+}
+
 var cascadePropertyNames = [...]string{
 	"",
 	"font",

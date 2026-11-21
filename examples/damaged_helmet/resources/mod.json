@@ -1,0 +1,34 @@
+{
+  "name": "three.js glTF comparison",
+  "space": "world",
+  "behavior": "Mod",
+  "components": {"input": {"keyboard": true}},
+  "elements": [
+    {
+      "id": "disable-default-ambient",
+      "components": {"ambientLight": {"color": "#ffffff", "brightness": 0}}
+    },
+    {
+      "id": "camera",
+      "components": {
+        "camera": {
+          "fov": 0.7853981633974483,
+          "near": 0.03,
+          "clearColor": "#202020",
+          "toneMapping": "aces",
+          "exposure": {"mode": "fixed", "ev100": -0.2630344058337938},
+          "environment": {
+            "path": "environment/royal_esplanade_2k.hdr.jpg",
+            "intensity": 1,
+            "exposure": 1,
+            "background": true
+          }
+        }
+      }
+    },
+    {
+      "id": "helmet",
+      "components": {"model": {"id": "helmet", "path": "models/DamagedHelmet.glb"}}
+    }
+  ]
+}

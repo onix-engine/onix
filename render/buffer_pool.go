@@ -4,12 +4,12 @@ import "sync"
 
 // bufferPool holds pointer-free upload scratch, never GPU resources or data
 // retained by a caller. Pool entries may be discarded by the garbage collector.
-type bufferPool[T ~byte | ~uint32 | ~float32] struct {
+type bufferPool[T ~byte | ~uint16 | ~uint32 | ~float32] struct {
 	pool        sync.Pool
 	maxCapacity int
 }
 
-type pooledBuffer[T ~byte | ~uint32 | ~float32] struct {
+type pooledBuffer[T ~byte | ~uint16 | ~uint32 | ~float32] struct {
 	data []T
 }
 

@@ -3,8 +3,10 @@ package style
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"weak"
 
 	"github.com/onix-engine/onix/html/css"
 	"github.com/onix-engine/onix/html/parse"
@@ -153,10 +155,12 @@ func TestPersistentStyleIndexBound(t *testing.T) {
 	var cache MutationCache
 	cache.prepareStyleIndex()
 	computed := defaultStyle(uinode.NewElement("div"))
-	for i := range maxDocumentStyleInterned + 20 {
+	live := make([]*ComputedStyle, maxDocumentStyleInterned+20)
+	for i := range live {
 		computed.Width = LengthPx(float64(i))
-		cache.styles.commit(&computed, nil)
+		live[i] = cache.styles.commit(&computed, nil)
 	}
+	runtime.KeepAlive(live)
 	if cache.styles.used != maxDocumentStyleInterned {
 		t.Fatalf("persistent index retained %d styles", cache.styles.used)
 	}
@@ -165,9 +169,37 @@ func TestPersistentStyleIndexBound(t *testing.T) {
 		t.Fatal("full index was not retired at the next pass")
 	}
 	for _, slot := range cache.styles.slots {
-		if slot.value != nil {
+		if slot != (valueSlot[ComputedStyle]{}) {
 			t.Fatal("retired index retained a style")
 		}
+	}
+}
+
+func TestDocumentStyleIndexReleasesUnusedStyles(t *testing.T) {
+	var cache MutationCache
+	cache.prepareStyleIndex()
+	live := cache.styles.commit(&ComputedStyle{}, nil)
+	abandoned := func() weak.Pointer[ComputedStyle] {
+		computed := defaultStyle(nil)
+		computed.Left = LengthPx(42)
+		return weak.Make(cache.styles.commit(&computed, nil))
+	}()
+	for range 10 {
+		runtime.GC()
+		if abandoned.Value() == nil {
+			break
+		}
+	}
+	if abandoned.Value() != nil {
+		t.Fatal("document index kept an unused style alive")
+	}
+	if cache.styles.commit(&ComputedStyle{}, nil) != live {
+		t.Fatal("document index lost a live style")
+	}
+	computed := defaultStyle(nil)
+	computed.Left = LengthPx(42)
+	if stored := cache.styles.commit(&computed, nil); !styleEqual(stored, &computed) || cache.styles.used != 2 {
+		t.Fatal("recreating the collected style did not reuse its slot")
 	}
 }
 

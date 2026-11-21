@@ -320,13 +320,14 @@ func tableCellIntrinsicWidths(box *Box, face *font.Face, styles style.Map, ctx *
 	if isFlexContainer(box) {
 		return flexIntrinsicWidths(box, face, styles, ctx)
 	}
-	if box.intrinsicScratch == nil {
-		box.intrinsicScratch = newLayoutContext()
+	scratch := box.ensureScratch()
+	if scratch.layout == nil {
+		scratch.layout = newLayoutContext()
 	}
 	if ctx != nil {
-		box.intrinsicScratch.boldFace = ctx.boldFace
+		scratch.layout.boldFace = ctx.boldFace
 	}
-	ctx = box.intrinsicScratch
+	ctx = scratch.layout
 	minimum, preferred, line := 0.0, 0.0, 0.0
 	for _, segment := range collectInlineSegmentsWithIndex(box.Node, styles, ctx, nil) {
 		if segment.Kind == inlineSegmentImage {

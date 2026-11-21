@@ -1,8 +1,10 @@
 package physics
 
 import (
+	"cmp"
 	"fmt"
 	"math"
+	"math/bits"
 	"slices"
 	"strings"
 
@@ -235,21 +237,53 @@ func buildTriangleMeshNode(mesh *TriangleMesh, refs []triangleMeshRef) int32 {
 	} else if size.Z > size.X && size.Z > size.Y {
 		axis = 2
 	}
-	slices.SortFunc(refs, func(a, b triangleMeshRef) int {
-		left, right := a.bounds.Min.component(axis), b.bounds.Min.component(axis)
-		if left < right {
-			return -1
-		}
-		if left > right {
-			return 1
-		}
-		return 0
-	})
 	middle := len(refs) / 2
+	partitionTriangleRefs(refs, middle, axis)
 	left := buildTriangleMeshNode(mesh, refs[:middle])
 	right := buildTriangleMeshNode(mesh, refs[middle:])
 	mesh.BVH[nodeIndex] = TriangleMeshNode{Bounds: bounds, Left: left, Right: right}
 	return nodeIndex
+}
+
+// Split at the median without ordering either child. Equal coordinates form
+// one band, common in coplanar meshes. Bound the work on poor pivot sequences.
+func partitionTriangleRefs(refs []triangleMeshRef, middle, axis int) {
+	budget := 2 * bits.Len(uint(len(refs)))
+	for len(refs) > 1 {
+		if budget == 0 {
+			slices.SortFunc(refs, func(a, b triangleMeshRef) int {
+				return cmp.Compare(a.bounds.Min.component(axis), b.bounds.Min.component(axis))
+			})
+			return
+		}
+		budget--
+		a, b, c := refs[0].bounds.Min.component(axis), refs[len(refs)/2].bounds.Min.component(axis), refs[len(refs)-1].bounds.Min.component(axis)
+		pivot := max(min(a, b), min(max(a, b), c))
+		lo, hi := 0, len(refs)
+		for i := 0; i < hi; {
+			key := refs[i].bounds.Min.component(axis)
+			switch {
+			case key < pivot:
+				refs[lo], refs[i] = refs[i], refs[lo]
+				lo++
+				i++
+			case key > pivot:
+				hi--
+				refs[i], refs[hi] = refs[hi], refs[i]
+			default:
+				i++
+			}
+		}
+		switch {
+		case middle < lo:
+			refs = refs[:lo]
+		case middle > hi:
+			refs = refs[hi:]
+			middle -= hi
+		default:
+			return
+		}
+	}
 }
 
 // ConvexFace is one outward-oriented triangle of a cooked convex hull.

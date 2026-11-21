@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <QuartzCore/CATransaction.h>
 #import <CoreVideo/CoreVideo.h>
 #import <TargetConditionals.h>
 
@@ -18,7 +19,6 @@
 #include <string.h>
 
 #define ONIX_METAL_FRAMES_IN_FLIGHT 2
-#define ONIX_METAL_INSTANCE_BUFFER_MINIMUM (64u * 1024u)
 #define ONIX_MESH_BLEND_MODE_COUNT 4
 
 typedef struct {
@@ -58,7 +58,7 @@ typedef struct {
 	id<MTLBuffer> indices;
 	id<MTLBuffer> deformation;
 	uint32_t vertex_count;
-	uint32_t index_count;
+	uint32_t index_count, index_stride;
 	uint32_t free_next;
 } OnixMetalMesh;
 
@@ -83,6 +83,7 @@ typedef struct {
 
 struct OnixMetalDriver {
     CAMetalLayer *layer;
+	CAMetalLayer *caret_layer;
     id<MTLDevice> device;
 	id<MTLSamplerState> samplers[18];
 	id<MTLCommandQueue> queue;
@@ -127,6 +128,7 @@ struct OnixMetalDriver {
     MTLScissorRect scissor;
 	int scissor_enabled;
 	int sprite_blend;
+	bool caret_base_valid, caret_base_visible, caret_layer_pending;
 	float blend_constant[4];
 
 	OnixMetalTexture *textures;
@@ -611,7 +613,11 @@ static int onix_metal_create_depth_texture(OnixMetalDriver *driver, uint32_t wid
 static int onix_metal_resume_surface(OnixMetalDriver *driver, MTLLoadAction depth_load) {
 	@autoreleasepool {
 		if (driver->drawable == nil) {
-			driver->drawable = [[driver->layer nextDrawable] retain];
+			if (driver->caret_layer_pending) {
+				driver->drawable = [[driver->caret_layer nextDrawable] retain];
+				if (driver->drawable == nil) onix_metal_discard_caret_frames(driver);
+			}
+			if (driver->drawable == nil) driver->drawable = [[driver->layer nextDrawable] retain];
 			if (driver->drawable == nil) {
 				onix_metal_set_error("CAMetalLayer returned no drawable");
 				return 0;
@@ -818,8 +824,65 @@ const char *onix_metal_device_name(OnixMetalDriver *driver) {
 	return driver == NULL || driver->device == nil ? "" : driver->device.name.UTF8String;
 }
 
+void onix_metal_discard_caret_frames(OnixMetalDriver *driver) {
+	if (driver == NULL) return;
+	if (driver->caret_layer != nil) @autoreleasepool {
+		[CATransaction begin];
+		[CATransaction setDisableActions:YES];
+		[driver->caret_layer removeFromSuperlayer];
+		[CATransaction commit];
+		[driver->caret_layer release];
+		driver->caret_layer = nil;
+	}
+	driver->caret_base_valid = false;
+	driver->caret_layer_pending = false;
+}
+
+// The window keeps the first idle phase. Render the other phase once into an
+// opaque child layer. Switching visibility then needs no Metal command buffer.
+int onix_metal_prepare_caret_frame(OnixMetalDriver *driver, int visible) {
+#if TARGET_OS_OSX
+	if (driver == NULL || !driver->layer.opaque || CGRectIsEmpty(driver->layer.bounds)) return 0;
+	if (!driver->caret_base_valid) {
+		driver->caret_base_visible = visible;
+		driver->caret_base_valid = true;
+		return 0;
+	}
+	bool show_base = driver->caret_base_visible == (bool)visible;
+	if (driver->caret_layer == nil && show_base) return 0;
+	@autoreleasepool {
+		[CATransaction begin];
+		[CATransaction setDisableActions:YES];
+		if (driver->caret_layer == nil) {
+			CAMetalLayer *base = driver->layer;
+			CAMetalLayer *layer = [CAMetalLayer new];
+			layer.frame = base.bounds;
+			layer.opaque = YES;
+			layer.contentsScale = base.contentsScale;
+			layer.device = base.device;
+			layer.pixelFormat = base.pixelFormat;
+			layer.colorspace = base.colorspace;
+			layer.framebufferOnly = base.framebufferOnly;
+			layer.displaySyncEnabled = base.displaySyncEnabled;
+			layer.maximumDrawableCount = base.maximumDrawableCount;
+			layer.drawableSize = base.drawableSize;
+			[base insertSublayer:layer atIndex:0];
+			driver->caret_layer = layer;
+			driver->caret_layer_pending = true;
+		} else {
+			driver->caret_layer.hidden = show_base;
+		}
+		[CATransaction commit];
+	}
+	return !driver->caret_layer_pending;
+#else
+	return 0;
+#endif
+}
+
 void onix_metal_destroy(OnixMetalDriver *driver) {
     if (driver == NULL) return;
+	onix_metal_discard_caret_frames(driver);
 	if (driver->encoder != nil) {
 		[driver->encoder endEncoding];
 		[driver->encoder release];
@@ -932,6 +995,7 @@ int onix_metal_trim_idle(OnixMetalDriver *driver) {
 
 int onix_metal_resize(OnixMetalDriver *driver, uint32_t width, uint32_t height) {
     if (driver == NULL || width == 0 || height == 0) return driver != NULL;
+	onix_metal_discard_caret_frames(driver);
 	for (uint32_t index = 0; index < ONIX_METAL_FRAMES_IN_FLIGHT; index++) {
 		if (driver->inflight_commands[index] != nil) [driver->inflight_commands[index] waitUntilCompleted];
 	}
@@ -1075,6 +1139,7 @@ int onix_metal_present(OnixMetalDriver *driver) {
 	[driver->encoder endEncoding];
 	[driver->command_buffer presentDrawable:driver->drawable];
 	[driver->command_buffer commit];
+	driver->caret_layer_pending = false;
 	driver->inflight_commands[driver->frame_index] = driver->command_buffer;
 	[driver->encoder release];
 	[driver->drawable release];
@@ -1547,11 +1612,14 @@ uint32_t onix_metal_create_mesh(
 		onix_metal_set_error("failed to acquire Metal mesh slot");
 		return 0;
 	}
+	// Metal reserves the largest index for primitive restart.
+	unsigned stride = onix_index_stride(indices, index_count, UINT16_MAX - 1);
 	OnixMetalMesh mesh = {
 		.vertices = [driver->device newBufferWithBytes:vertices length:(NSUInteger)vertex_count * sizeof(OnixMetalVertex3D) options:MTLResourceStorageModeShared],
-		.indices = [driver->device newBufferWithBytes:indices length:(NSUInteger)index_count * sizeof(uint32_t) options:MTLResourceStorageModeShared],
+		.indices = [driver->device newBufferWithLength:(NSUInteger)index_count * stride options:MTLResourceStorageModeShared],
 		.vertex_count = vertex_count,
 		.index_count = index_count,
+		.index_stride = stride,
 	};
 	if (mesh.vertices == nil || mesh.indices == nil) {
 		[mesh.vertices release];
@@ -1559,6 +1627,7 @@ uint32_t onix_metal_create_mesh(
 		onix_metal_set_error("Metal mesh allocation failed");
 		return 0;
 	}
+	onix_copy_indices(mesh.indices.contents, indices, index_count, stride);
 	onix_metal_meshes_insert(driver->meshes, &driver->mesh_slots, slot, mesh);
 	return slot + 1;
 }
@@ -1878,12 +1947,13 @@ int onix_metal_draw_meshes(
 		[driver->encoder setFragmentSamplerState:driver->samplers[driver->textures[(draw->metallic_roughness_texture ? draw->metallic_roughness_texture : draw->texture)-1].sampler] atIndex:2];
 		[driver->encoder setVertexTexture:base_texture atIndex:0];
 		id<MTLBuffer> index_buffer = draw->mesh == 0 ? (id<MTLBuffer>)(uintptr_t)index_upload.resource : driver->meshes[draw->mesh - 1].indices;
+		unsigned stride = draw->mesh ? driver->meshes[draw->mesh - 1].index_stride : 4;
 		NSUInteger draw_index_offset = draw->mesh == 0 ? index_offset : 0;
 		[driver->encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
 			indexCount:draw->index_count
-			indexType:MTLIndexTypeUInt32
+			indexType:(stride == 2 ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32)
 			indexBuffer:index_buffer
-			indexBufferOffset:draw_index_offset + (NSUInteger)draw->first_index * sizeof(uint32_t)
+			indexBufferOffset:draw_index_offset + (NSUInteger)draw->first_index * stride
 			instanceCount:draw->instance_count];
 	}
 	[driver->encoder setCullMode:MTLCullModeNone];
@@ -1961,10 +2031,11 @@ int onix_metal_draw_mesh_picking(
 		}
 		[driver->encoder setVertexBuffer:buffer offset:instance_offset + (NSUInteger)draw->first_instance * sizeof(OnixMetalInstance3D) atIndex:1];
 		id<MTLBuffer> index_buffer = draw->mesh == 0 ? (id<MTLBuffer>)(uintptr_t)index_upload.resource : driver->meshes[draw->mesh - 1].indices;
+		unsigned stride = draw->mesh ? driver->meshes[draw->mesh - 1].index_stride : 4;
 		NSUInteger draw_index_offset = draw->mesh == 0 ? index_offset : 0;
 		[driver->encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-			indexCount:draw->index_count indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer
-			indexBufferOffset:draw_index_offset + (NSUInteger)draw->first_index * sizeof(uint32_t)
+			indexCount:draw->index_count indexType:(stride == 2 ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32) indexBuffer:index_buffer
+			indexBufferOffset:draw_index_offset + (NSUInteger)draw->first_index * stride
 			instanceCount:draw->instance_count];
 	}
 	return 1;

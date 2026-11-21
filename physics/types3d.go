@@ -103,7 +103,7 @@ func (body Body3D) Type() BodyType {
 
 func (body Body3D) SetType(value BodyType) {
 	if state := body.state(); state != nil {
-		state.bodyType = value
+		body.world.setBodyType(state, value)
 		state.updateInverseMass()
 	}
 }
@@ -117,7 +117,7 @@ func (body Body3D) Position() Vector3D {
 
 func (body Body3D) SetPosition(value Vector3D) {
 	if state := body.state(); state != nil {
-		state.position = value
+		body.world.setPose(state, value, state.rotation)
 	}
 }
 
@@ -130,7 +130,7 @@ func (body Body3D) Rotation() Quaternion {
 
 func (body Body3D) SetRotation(value Quaternion) {
 	if state := body.state(); state != nil {
-		state.rotation = value.Normalize()
+		body.world.setPose(state, state.position, value.Normalize())
 	}
 }
 
@@ -143,7 +143,7 @@ func (body Body3D) Velocity() Vector3D {
 
 func (body Body3D) SetVelocity(value Vector3D) {
 	if state := body.state(); state != nil {
-		state.velocity = value
+		body.world.setMotion(state, value, state.angularVelocity)
 	}
 }
 
@@ -159,7 +159,7 @@ func (body Body3D) SetAngularVelocity(value Vector3D) {
 		if state.fixedRotation {
 			value = Vector3D{}
 		}
-		state.angularVelocity = value
+		body.world.setMotion(state, state.velocity, value)
 	}
 }
 
@@ -180,10 +180,7 @@ func (body Body3D) ApplyImpulse(impulse, worldPoint Vector3D) {
 	if state == nil || state.bodyType != BodyDynamic {
 		return
 	}
-	state.velocity = state.velocity.Add(impulse.Mul(state.inverseMass))
-	state.angularVelocity = state.angularVelocity.Add(
-		worldPoint.Sub(state.position).Cross(impulse).Mul(state.inverseInertia),
-	)
+	body.world.setMotion(state, state.velocity.Add(impulse.Mul(state.inverseMass)), state.angularVelocity.Add(worldPoint.Sub(state.position).Cross(impulse).Mul(state.inverseInertia)))
 }
 
 func (body Body3D) ClearForces() {
@@ -237,8 +234,8 @@ func (collider ColliderHandle3D[S]) Shape() S {
 
 func (collider ColliderHandle3D[S]) SetShape(shape S) {
 	if collider.world != nil {
-		if state := collider.world.colliderState3D(collider.id); state != nil {
-			state.setColliderShape3D(shape)
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.setColliderShape3D(shape) {
+			collider.world.markProxy(index, true)
 		}
 	}
 }
@@ -254,8 +251,10 @@ func (collider ColliderHandle3D[S]) Filter() Filter {
 
 func (collider ColliderHandle3D[S]) SetFilter(value Filter) {
 	if collider.world != nil {
-		if state := collider.world.colliderState3D(collider.id); state != nil {
-			state.filter = value.normalized()
+		value = value.normalized()
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.filter != value {
+			state.filter = value
+			collider.world.markProxy(index, false)
 		}
 	}
 }
@@ -271,8 +270,9 @@ func (collider ColliderHandle3D[S]) Sensor() bool {
 
 func (collider ColliderHandle3D[S]) SetSensor(value bool) {
 	if collider.world != nil {
-		if state := collider.world.colliderState3D(collider.id); state != nil {
+		if index, state := collider.world.resolveCollider(collider.id); state != nil && state.sensor != value {
 			state.sensor = value
+			collider.world.markProxy(index, false)
 		}
 	}
 }

@@ -8,7 +8,7 @@ type ComponentBinding[T any] struct {
 }
 
 func (w *World) BindComponent[T any]() ComponentBinding[T] {
-	return ComponentBinding[T]{world: w, id: w.registerComponent[T]()}
+	return ComponentBinding[T]{world: w, id: w.componentIDFor[T]()}
 }
 
 // EntityRow borrows one entity's location until the next structural mutation.
@@ -42,7 +42,7 @@ func (b ComponentBinding[T]) Access(row EntityRow) ComponentAccess[T] {
 	if row.structure != b.world.structureVersion {
 		panic("ecs: entity row expired after structural mutation")
 	}
-	column, _ := row.table.column(b.id).(*typedColumn[T])
+	column := row.table.column(b.id).typed[T]()
 	if column == nil {
 		return ComponentAccess[T]{}
 	}

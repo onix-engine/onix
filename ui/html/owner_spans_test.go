@@ -26,8 +26,8 @@ func assertHTMLOwnerSpans(t *testing.T, state htmlRenderState) {
 			}
 			cursor++
 		}
-		if rendered.Clip != 0 {
-			if cursor >= len(state.Children) || state.Children[cursor] != rendered.Clip {
+		if binding := rendered.Overflow; binding != nil {
+			if cursor >= len(state.Children) || state.Children[cursor] != binding.entity {
 				t.Fatal("missing clip in owner span")
 			}
 			cursor++

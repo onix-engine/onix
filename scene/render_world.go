@@ -61,6 +61,7 @@ type RenderWorld struct {
 	camera2DLayer         registeredCameraRenderer
 	registeredMaterials2D map[reflect.Type]struct{}
 	compositors2D         map[compositeViewKey2D]*compositor2D
+	inputs2D              []renderInput2D
 	materials2D           []material2DReader
 	Cameras               []ExtractedCamera
 	Items2D               []renderItem2D

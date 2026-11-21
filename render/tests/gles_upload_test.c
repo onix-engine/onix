@@ -156,14 +156,29 @@ static void test_draw_bindings(void) {
 		}
 		else require(vertex_buffer == first_vertex && index_buffer == first_index, "normal and picking passes share geometry uploads");
 		if (pass == 2) {
-			OnixGLESPickingDraw draw = {.base = instance_offset, .index_count = 3, .instances = 1};
+			OnixGLESPickingDraw draw = {.base = instance_offset, .index_type = GL_UNSIGNED_INT, .index_count = 3, .instances = 1};
 			onix_gl_draw_mesh_picking_run(&draw, 1, instance_buffer, vertex_buffer, index_buffer, 48, 192);
 		} else {
-			OnixGLESMeshDraw draw = {.base = instance_offset, .index_count = 3, .instances = 1};
+			OnixGLESMeshDraw draw = {.base = instance_offset, .index_type = GL_UNSIGNED_INT, .index_count = 3, .instances = 1};
 			onix_gl_draw_mesh_run(&draw, 1, instance_buffer, vertex_buffer, index_buffer, -1, -1, 48, 192, 0);
 		}
 		check_draw_color(pass % 2);
 	}
+	// A leading unused 16-bit index exercises offsets on resident draws.
+	const uint16_t compact[] = {2, 0, 1, 2};
+	GLuint resident;
+	glGenBuffers(1, &resident);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resident);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(compact), compact, GL_STATIC_DRAW);
+	OnixGLESMeshDraw normal = {.base = instance_offset, .index_type = GL_UNSIGNED_SHORT, .index_offset = 2, .index_count = 3, .instances = 1};
+	OnixGLESPickingDraw picking = {.base = instance_offset, .index_type = GL_UNSIGNED_SHORT, .index_offset = 2, .index_count = 3, .instances = 1};
+	glClear(GL_COLOR_BUFFER_BIT);
+	onix_gl_draw_mesh_run(&normal, 1, instance_buffer, vertex_buffer, resident, -1, -1, 48, 192, 0);
+	check_draw_color(0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	onix_gl_draw_mesh_picking_run(&picking, 1, instance_buffer, vertex_buffer, resident, 48, 192);
+	check_draw_color(0);
+	glDeleteBuffers(1, &resident);
 	glDeleteProgram(program);
 	program = test_program("#version 300 es\nlayout(location=0) in vec3 p; layout(location=6) in vec4 c; out vec4 color; void main(){gl_Position=vec4(p,1);color=c;}");
 	glUseProgram(program);

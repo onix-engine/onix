@@ -3,6 +3,7 @@ package element
 import (
 	"strconv"
 	"strings"
+	"sync"
 
 	uinode "github.com/onix-engine/onix/scene/node"
 )
@@ -26,8 +27,14 @@ func InitializeElementStates(root *uinode.Node) {
 // subtree is initialized. Removed metadata can be consumed by Keep.
 func InitializeDocument(root *uinode.Node, visit func(*uinode.Node), keep func(*uinode.Node) bool) {
 	var order uint32
-	if initializeElementStates(root, &order, visit, keep) {
-		initializeRadioStates(root, root)
+	var radios *radioDefaults
+	var parentForm *uinode.Node
+	if root != nil {
+		parentForm = ancestorTag(root, "form")
+	}
+	initializeElementStates(root, &order, visit, keep, parentForm, &radios)
+	if radios != nil {
+		radios.finish(root)
 	}
 }
 
@@ -42,20 +49,80 @@ func HasInputType(node *uinode.Node, inputType string) bool {
 	return strings.EqualFold(strings.TrimSpace(typeValue), inputType)
 }
 
-func initializeRadioStates(root, node *uinode.Node) {
+type checkedRadio struct {
+	form *uinode.Node
+	node *uinode.Node
+	name string
+}
+
+type radioGroup struct {
+	form *uinode.Node
+	name string
+}
+
+type radioDefaults struct {
+	forms   map[string]*uinode.Node
+	winners map[radioGroup]*uinode.Node
+	checked []checkedRadio
+}
+
+var radioDefaultsPool = sync.Pool{New: func() any { return new(radioDefaults) }}
+
+func (r *radioDefaults) finish(root *uinode.Node) {
+	if len(r.checked) > 1 {
+		r.normalize(root)
+	}
+	// Drop oversized scratch rather than retaining a whole imported document's peak.
+	if max(cap(r.checked), len(r.forms)) > 4096 {
+		return
+	}
+	clear(r.checked)
+	r.checked = r.checked[:0]
+	clear(r.forms)
+	clear(r.winners)
+	radioDefaultsPool.Put(r)
+}
+
+func (r *radioDefaults) normalize(root *uinode.Node) {
+	if r.winners == nil {
+		r.winners = make(map[radioGroup]*uinode.Node)
+	}
+	indexed := false
+	for _, radio := range r.checked {
+		owner := radio.form
+		if id, explicit := radio.node.Attr("form"); explicit {
+			if !indexed {
+				if r.forms == nil {
+					r.forms = make(map[string]*uinode.Node)
+				}
+				indexForms(treeRoot(root), r.forms)
+				indexed = true
+			}
+			owner = r.forms[id]
+		}
+		key := radioGroup{form: owner, name: radio.name}
+		if previous := r.winners[key]; previous != nil {
+			previous.States.Set(StateChecked, false)
+			previous.States.Set(StateDirtyChecked, true)
+			// Each originally checked member was unchecked by another group member
+			// during normalization, including the final winner.
+			radio.node.States.Set(StateDirtyChecked, true)
+		}
+		r.winners[key] = radio.node
+	}
+}
+
+func indexForms(node *uinode.Node, forms map[string]*uinode.Node) {
 	if node == nil {
 		return
 	}
-	if node.Type == uinode.ElementNode && HasInputType(node, "radio") {
-		name, _ := node.Attr("name")
-		_, authoredChecked := node.Attr("checked")
-		if authoredChecked && name != "" {
-			clearCheckedRadio(root, node, name)
-			node.States.Set(StateChecked, true)
+	if node.Type == uinode.ElementNode && node.Data == "form" {
+		if id, _ := node.Attr("id"); id != "" && forms[id] == nil {
+			forms[id] = node
 		}
 	}
 	for _, child := range node.Children {
-		initializeRadioStates(root, child)
+		indexForms(child, forms)
 	}
 }
 
@@ -176,9 +243,9 @@ func IsEditingHost(node *uinode.Node) bool {
 	return !IsContentEditable(parent)
 }
 
-func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinode.Node), keep func(*uinode.Node) bool) (hasRadio bool) {
+func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinode.Node), keep func(*uinode.Node) bool, form *uinode.Node, radios **radioDefaults) {
 	if node == nil {
-		return false
+		return
 	}
 	node.Order = *order
 	*order++
@@ -187,11 +254,22 @@ func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinod
 	}
 	if node.Type == uinode.ElementNode {
 		switch node.Data {
+		case "form":
+			form = node
 		case "input":
-			hasRadio = HasInputType(node, "radio")
+			hasRadio := HasInputType(node, "radio")
 			if hasRadio || HasInputType(node, "checkbox") {
 				_, checked := node.Attr("checked")
 				node.States.Set(StateChecked, checked)
+				if hasRadio && checked {
+					if name, _ := node.Attr("name"); name != "" {
+						if *radios == nil {
+							*radios = radioDefaultsPool.Get().(*radioDefaults)
+						}
+						r := *radios
+						r.checked = append(r.checked, checkedRadio{form: form, node: node, name: name})
+					}
+				}
 			}
 			value, _ := node.Attr("value")
 			SetLiveValue(node, value, false)
@@ -202,14 +280,14 @@ func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinod
 	}
 	if keep == nil {
 		for _, child := range node.Children {
-			hasRadio = initializeElementStates(child, order, visit, nil) || hasRadio
+			initializeElementStates(child, order, visit, nil, form, radios)
 		}
 	} else {
 		node.KeepChildren(func(child *uinode.Node) bool {
 			if !keep(child) {
 				return false
 			}
-			hasRadio = initializeElementStates(child, order, visit, keep) || hasRadio
+			initializeElementStates(child, order, visit, keep, form, radios)
 			return true
 		})
 	}
@@ -221,7 +299,6 @@ func initializeElementStates(node *uinode.Node, order *uint32, visit func(*uinod
 			setLiveValueEmpty(node, !hasTextContent(node), false)
 		}
 	}
-	return hasRadio
 }
 
 type selectResetState struct {
@@ -762,6 +839,19 @@ func SynchronizeCheckedAttribute(node *uinode.Node, present bool) {
 		}
 	}
 	node.States.Set(StateChecked, present)
+}
+
+// IsWidgetControl identifies elements rendered by the native HTML widget path.
+func IsWidgetControl(node *uinode.Node) bool {
+	if node == nil || node.Type != uinode.ElementNode {
+		return false
+	}
+	switch node.Data {
+	case "button", "input", "select", "textarea":
+		return true
+	default:
+		return false
+	}
 }
 
 func SupportsDisabled(node *uinode.Node) bool {

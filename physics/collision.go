@@ -47,7 +47,7 @@ func (world *World) buildContacts() {
 }
 
 func (world *World) appendPair(a, b int) {
-	if a == b || !overlapAABB(world.aabbs[a], world.aabbs[b]) {
+	if a == b || a > b && world.proxies[b].queued || !overlapAABB(world.aabbs[a], world.aabbs[b]) {
 		return
 	}
 	colliderA, colliderB := &world.colliders[a], &world.colliders[b]
@@ -73,10 +73,6 @@ func floorCell(value, cellSize float64) int32 {
 		return math.MaxInt32
 	}
 	return int32(result)
-}
-
-func gridHash(x, y int32) int {
-	return int(uint32(x)*0x8da6b343 ^ uint32(y)*0xd8163841)
 }
 
 func overlapAABB(a, b aabb) bool {
@@ -399,42 +395,45 @@ func projectedBoxRadius(box worldBox, axis Vector) float64 {
 	return box.half.X*math.Abs(box.xAxis.Dot(axis)) + box.half.Y*math.Abs(box.yAxis.Dot(axis))
 }
 
+// Closest-point parameters depend only on dot products. Keep vector operations
+// in the typed callers so they inline on the collision hot path.
+func segmentParameters(a, e, b, c, f float64) (s, t float64) {
+	if a <= 1e-12 {
+		if e > 1e-12 {
+			t = clamp(f/e, 0, 1)
+		}
+		return
+	}
+	if e <= 1e-12 {
+		return clamp(-c/a, 0, 1), 0
+	}
+	if denominator := a*e - b*b; denominator != 0 {
+		s = clamp((b*f-c*e)/denominator, 0, 1)
+	}
+	t = (b*s + f) / e
+	if t < 0 {
+		return clamp(-c/a, 0, 1), 0
+	}
+	if t > 1 {
+		return clamp((b-c)/a, 0, 1), 1
+	}
+	return
+}
+
+func segmentProjection(dot, lengthSquared float64) float64 {
+	if lengthSquared <= 1e-12 {
+		return 0
+	}
+	return clamp(dot/lengthSquared, 0, 1)
+}
+
 func closestPointOnSegment(point, start, end Vector) Vector {
 	delta := end.Sub(start)
-	lengthSquared := delta.LengthSquared()
-	if lengthSquared <= 1e-12 {
-		return start
-	}
-	t := clamp(point.Sub(start).Dot(delta)/lengthSquared, 0, 1)
-	return start.Add(delta.Mul(t))
+	return start.Add(delta.Mul(segmentProjection(point.Sub(start).Dot(delta), delta.LengthSquared())))
 }
 
 func closestPointsOnSegments(a0, a1, b0, b1 Vector) (Vector, Vector) {
 	d1, d2, offset := a1.Sub(a0), b1.Sub(b0), a0.Sub(b0)
-	a, e := d1.LengthSquared(), d2.LengthSquared()
-	if a <= 1e-12 && e <= 1e-12 {
-		return a0, b0
-	}
-	var s, t float64
-	if a <= 1e-12 {
-		t = clamp(d2.Dot(offset)/e, 0, 1)
-	} else {
-		c := d1.Dot(offset)
-		if e <= 1e-12 {
-			s = clamp(-c/a, 0, 1)
-		} else {
-			b := d1.Dot(d2)
-			denominator := a*e - b*b
-			if denominator != 0 {
-				s = clamp((b*d2.Dot(offset)-c*e)/denominator, 0, 1)
-			}
-			t = (b*s + d2.Dot(offset)) / e
-			if t < 0 {
-				t, s = 0, clamp(-c/a, 0, 1)
-			} else if t > 1 {
-				t, s = 1, clamp((b-c)/a, 0, 1)
-			}
-		}
-	}
+	s, t := segmentParameters(d1.LengthSquared(), d2.LengthSquared(), d1.Dot(d2), d1.Dot(offset), d2.Dot(offset))
 	return a0.Add(d1.Mul(s)), b0.Add(d2.Mul(t))
 }

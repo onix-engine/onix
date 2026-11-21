@@ -48,9 +48,10 @@ bundle.Put(physics.NewCollider2D(physics.Circle{Radius: 1}))
 entity := app.World.Spawn(bundle)
 ```
 
-The fixed update system synchronizes components and writes the resulting pose
-back to `scene.Transform`. Dynamic simulation retains float64 precision between
-float32 transform writes. Editing the transform explicitly teleports the body.
+The fixed update system writes changed poses and velocities back to ECS. When a
+simulated parent moves, it refreshes the local transforms of dependent rigid
+bodies. Dynamic simulation retains float64 precision between float32 transform
+writes. Editing the transform explicitly teleports the body.
 Removing the rigid body or its transform releases the managed physics objects.
 Submit forces, torques, and center impulses through a mutable `RigidBody2D`.
 

@@ -460,7 +460,9 @@ func dynamicRetainedInput2D[T any](kind renderCollector2DKind, drawable func(*T,
 
 // Inherited metadata changes invalidate the shared property cache. Geometry
 // and paint changes can instead extract only the affected entity set.
-var retainedInputs2D = [...]renderInput2D{
+const baseRenderInputCount2D = 22
+
+var baseRetainedInputs2D = [baseRenderInputCount2D]renderInput2D{
 	inheritedRetainedInput2D[PainterGroup2D](), inheritedRetainedInput2D[Parent](), inheritedRetainedInput2D[SceneLayer](),
 	inheritedRetainedInput2D[RenderLayers](), inheritedRetainedInput2D[UITargetCamera](),
 	inheritedRetainedInput2D[UIStackIndex](), localRetainedInput2D[RenderOrder2D](),
@@ -473,29 +475,27 @@ var retainedInputs2D = [...]renderInput2D{
 	retainedInput2D[UIPaint2D](renderNodeDirtyContent2D),
 	retainedInput2D[UIVisualRects2D](renderNodeDirtyContent2D),
 	retainedInput2D[*UIPaintList2D](renderNodeDirtyPaintList2D),
-	dynamicRetainedInput2D(renderCollectorSpriteTrail2D, func(t *SpriteTrail2D, device *render.Device) bool { return len(t.samples) != 0 }),
-	dynamicRetainedInput2D(renderCollectorSpriteLayers2D, func(l *SpriteLayers2D, device *render.Device) bool {
-		for i := range l.Layers {
-			layer := &l.Layers[i]
-			width, height := layer.Sprite.Size()
-			if layer.Visible && spriteDrawable2D(&layer.Sprite, device) && width > 0 && height > 0 {
-				return true
-			}
-		}
-		return false
-	}),
-	dynamicRetainedInput2D(renderCollectorParticle2D, func(e *ParticleEmitter2D, device *render.Device) bool { return len(e.particles) != 0 }),
-	dynamicRetainedInput2D(renderCollectorTilemap2D, func(t *Tilemap2D, device *render.Device) bool { return t.Alpha > 0 && t.ValidFor(device) }),
-	dynamicRetainedInput2D(renderCollectorSpine2D, func(s *Spine2D, device *render.Device) bool {
-		return s.Player != nil && s.Player.Resource != nil && s.Player.Alpha > 0
-	}),
 }
 
-var dynamicCollectors2D = [...]renderCollector2DKind{renderCollectorSpriteTrail2D, renderCollectorSpriteLayers2D, renderCollectorParticle2D, renderCollectorTilemap2D, renderCollectorSpine2D}
-
-const retainedRenderInputCount2D = 27
 const inheritedRenderInputs2D = 6
-const dynamicRenderInputs2D = retainedRenderInputCount2D - len(dynamicCollectors2D)
+
+// Each collector can register at most one additional input.
+const retainedRenderInputCount2D = baseRenderInputCount2D + int(renderCollector2DCount)
+
+func (state *RenderWorld) retainedInputs() []renderInput2D {
+	if state.inputs2D == nil {
+		return baseRetainedInputs2D[:]
+	}
+	return state.inputs2D
+}
+
+func (state *RenderWorld) pollDynamicInputs(world *ecs.World, cache *renderTree2D) int {
+	active := 0
+	for _, input := range state.retainedInputs()[len(baseRetainedInputs2D):] {
+		active += input.poll(world, cache)
+	}
+	return active
+}
 
 // renderTree2D owns the render topology, snapshots in paint order, and the
 // changes consumed by each camera's compositor.
@@ -672,8 +672,8 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 	return true
 }
 
-func (cache *renderTree2D) revisions(world *ecs.World) (versions, structures [retainedRenderInputCount2D]uint64) {
-	for i, input := range retainedInputs2D {
+func (state *RenderWorld) revisions2D(world *ecs.World) (versions, structures [retainedRenderInputCount2D]uint64) {
+	for i, input := range state.retainedInputs() {
 		versions[i], structures[i] = input.revision(world)
 	}
 	return
@@ -687,7 +687,8 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 	cache.damageRetention.Record(len(cache.damage))
 	cache.damage, cache.damageValid = cache.damage[:0], false
 	cache.trim(world)
-	versions, structures := cache.revisions(world)
+	inputs := state.retainedInputs()
+	versions, structures := state.revisions2D(world)
 	width, height := c.Size()
 	scope, scopeVersion := world.QueryScopeKey()
 	full := !cache.initialized || cache.structures != structures || cache.registry != state.registry2D || cache.width != width || cache.height != height || cache.rasterScale != c.RasterScale() || cache.device != c.Device() || cache.queryScope != scope || cache.scopeVersion != scopeVersion || cache.outputRevision != renderOutputRevision2D
@@ -699,12 +700,12 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 	writes := uint64(0)
 	propertiesOnly := true
 	if cache.initialized && cache.structures == structures {
-		for i := inheritedRenderInputs2D; i < len(versions); i++ {
+		for i := inheritedRenderInputs2D; i < len(inputs); i++ {
 			writes += versions[i] - cache.versions[i]
 		}
 	}
-	for i := range versions {
-		if retainedInputs2D[i].dirty != renderNodeDirtyGeometry2D && versions[i] != cache.versions[i] {
+	for i, input := range inputs {
+		if input.dirty != renderNodeDirtyGeometry2D && versions[i] != cache.versions[i] {
 			propertiesOnly = false
 		}
 	}
@@ -718,12 +719,7 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 		return cache.extractDirect(c, world, state)
 	}
 	if cache.direct && cache.nodes == nil && !full {
-		active := 0
-		for i, kind := range dynamicCollectors2D {
-			if state.collectors2D[kind] != nil {
-				active += retainedInputs2D[dynamicRenderInputs2D+i].poll(world, cache)
-			}
-		}
+		active := state.pollDynamicInputs(world, cache)
 		if active > max(16, cache.retiredNodes/4) {
 			return cache.extractDirect(c, world, state)
 		}
@@ -740,11 +736,7 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 		if !cache.direct {
 			cache.refreshTextures()
 		}
-		for i, kind := range dynamicCollectors2D {
-			if state.collectors2D[kind] != nil {
-				retainedInputs2D[dynamicRenderInputs2D+i].poll(world, cache)
-			}
-		}
+		state.pollDynamicInputs(world, cache)
 		if cache.dirtyNodes > len(cache.nodes)/4 {
 			return cache.extractDirect(c, world, state)
 		}
@@ -767,14 +759,14 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 		}
 		cache.changes = world.ChangesSince(since)
 		hierarchyChanged, paintListsChanged := false, false
-		for i := range retainedInputs2D {
+		for i, input := range inputs {
 			if cache.versions[i] != versions[i] {
 				if i < inheritedRenderInputs2D && !hierarchyChanged {
 					cache.beginHierarchyChanges(world)
 					hierarchyChanged = true
 				}
-				paintListsChanged = paintListsChanged || retainedInputs2D[i].dirty == renderNodeDirtyPaintList2D
-				retainedInputs2D[i].changed(world, &cache.changes, cache)
+				paintListsChanged = paintListsChanged || input.dirty == renderNodeDirtyPaintList2D
+				input.changed(world, &cache.changes, cache)
 			}
 		}
 		if hierarchyChanged {
@@ -916,11 +908,7 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 		}
 		cache.dirty = cache.dirty[:0]
 		cache.dirtyNodes = 0
-		for i, kind := range dynamicCollectors2D {
-			if state.collectors2D[kind] != nil {
-				retainedInputs2D[dynamicRenderInputs2D+i].poll(world, cache)
-			}
-		}
+		state.pollDynamicInputs(world, cache)
 		cache.partPositions = reuse.Resize(cache.partPositions, len(items))
 		part := renderPart2D(0)
 		for entity, node := range cache.nodes {
@@ -1023,7 +1011,7 @@ func (cache *renderTree2D) trim(world *ecs.World) {
 }
 
 func (cache *renderTree2D) capture(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld) {
-	cache.versions, cache.structures = cache.revisions(world)
+	cache.versions, cache.structures = state.revisions2D(world)
 	cache.width, cache.height = c.Size()
 	cache.rasterScale, cache.device = c.RasterScale(), c.Device()
 	cache.registry, cache.textureRevision = state.registry2D, graphics.TextureRevision()

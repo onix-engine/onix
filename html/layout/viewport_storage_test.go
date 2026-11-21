@@ -20,7 +20,7 @@ func TestRootViewportStorageAcrossRetainedResize(t *testing.T) {
 		}
 		assertRetainedMatchesFull(t, box, fresh)
 		for node, child := range cache.nodes {
-			if node != root && (child.viewport != nil || child.Viewport() != (Rect{})) {
+			if node != root && (child.scratch != nil && child.scratch.viewport != nil || child.Viewport() != (Rect{})) {
 				t.Fatal("descendant retained document viewport storage")
 			}
 		}

@@ -30,10 +30,8 @@ func TestInlineStyleCacheOwnsSource(t *testing.T) {
 		check(key)
 	}
 	for _, declaration := range values {
-		check(declaration.property)
 		check(declaration.value)
 		if parsed := declaration.parsed; parsed != nil {
-			check(parsed.property)
 			check(parsed.value.Keyword)
 			if motion := parsed.motion; motion != nil {
 				for _, value := range motion.transition {

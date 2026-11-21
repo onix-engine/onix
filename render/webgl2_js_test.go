@@ -65,6 +65,7 @@ func TestWebGLMeshHelperBindsChangedSlotsAndPreservesInstanceOffsets(t *testing.
 		d.meshCommand[slot] = texture.ID()
 	}
 	d.meshCommand[16], d.meshCommand[17], d.meshCommand[18], d.meshCommand[19] = 4, 2, 3, 2
+	d.meshCommand[20] = 4
 	for repeat := range 3 {
 		if repeat == 2 {
 			d.meshCommand[7] = other.ID()

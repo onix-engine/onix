@@ -11,20 +11,30 @@ import (
 func assertBroadphase(t *testing.T, w *World) {
 	t.Helper()
 	w.buildBroadphase()
-	got := slices.Clone(w.pairs)
-	w.pairs = w.pairs[:0]
+	var want []colliderPair
 	for i, a := range w.colliders {
 		if !a.alive {
 			continue
 		}
+		bounds := colliderBounds(a, w.bodies[a.bodyIndex])
+		if bounds != w.aabbs[i] {
+			t.Fatalf("stale bounds for collider %d", i)
+		}
 		for j := i + 1; j < len(w.colliders); j++ {
-			if w.colliders[j].alive {
-				w.appendPair(i, j)
+			b := w.colliders[j]
+			if !b.alive || a.bodyIndex == b.bodyIndex || a.filter.Reject(b.filter) {
+				continue
+			}
+			if !a.sensor && !b.sensor && w.bodies[a.bodyIndex].bodyType != BodyDynamic && w.bodies[b.bodyIndex].bodyType != BodyDynamic {
+				continue
+			}
+			if overlapAABB(bounds, colliderBounds(b, w.bodies[b.bodyIndex])) {
+				want = append(want, colliderPair{i, j})
 			}
 		}
 	}
-	if !slices.Equal(got, w.pairs) {
-		t.Fatalf("incremental pairs differ from brute force: got %v want %v", got, w.pairs)
+	if !slices.Equal(w.pairs, want) {
+		t.Fatalf("incremental pairs differ from brute force: got %v want %v", w.pairs, want)
 	}
 }
 func TestBroadphaseIncrementalMutationsMatchBruteForce(t *testing.T) {

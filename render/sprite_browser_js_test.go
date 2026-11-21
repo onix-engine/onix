@@ -47,7 +47,15 @@ func TestBrowserSpriteMultiTexturePixels(t *testing.T) {
 		for offset := 0; offset < len(pixels); offset += texelBytes {
 			copy(pixels[offset:offset+texelBytes], colors[index][:])
 		}
-		textures[index], err = driver.CreateTexture(TextureDescriptor{Width: width, Height: width, Format: format, Filter: TextureFilter(index % 2)}, pixels)
+		levels := 1
+		if index == 0 && driver.(CompressedTextureSupport).SupportsCompressedTexture(TextureFormatBC1, 8, 8) {
+			format, width, levels = TextureFormatBC1, 8, 4
+			pixels = make([]byte, format.ChainSize(width, width, levels))
+			for i := 0; i < len(pixels); i += 8 {
+				pixels[i+1] = 0xf8
+			} // Red endpoint, selector zero.
+		}
+		textures[index], err = driver.CreateTexture(TextureDescriptor{Width: width, Height: width, Format: format, Levels: levels, Filter: TextureFilter(index % 2)}, pixels)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -106,4 +114,28 @@ func TestBrowserSpriteMultiTexturePixels(t *testing.T) {
 		check()
 	}
 	t.Log("RGBA/R8, four rotating texture slots, painter order and custom fallback passed")
+}
+
+func TestBrowserCompressedTextureMips(t *testing.T) {
+	if !js.Global().Get("document").Truthy() {
+		t.Skip("requires a browser")
+	}
+	canvas := js.Global().Get("document").Call("createElement", "canvas")
+	driver, _, check := newSpriteBrowserDriver(t, canvas)
+	defer driver.Destroy()
+	support := driver.(CompressedTextureSupport)
+	for f := TextureFormatBC1; f <= TextureFormatASTC4x4SRGB; f++ {
+		if !support.SupportsCompressedTexture(f, 12, 8) {
+			continue
+		}
+		tex, err := driver.CreateTexture(TextureDescriptor{Format: f, Width: 12, Height: 8, Levels: 4}, make([]byte, f.ChainSize(12, 8, 4)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		check()
+		if err := driver.DestroyTexture(tex); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("uploaded %s mip chain", f.Name())
+	}
 }

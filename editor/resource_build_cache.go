@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	resourceBuildPipelineVersion = 11
+	resourceBuildPipelineVersion = 12
 	resourceBuildReportVersion   = 2
 	resourceBuildCacheFile       = "cache.json"
 )

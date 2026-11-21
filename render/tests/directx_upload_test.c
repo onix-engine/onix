@@ -59,6 +59,7 @@ static void mock_indices(void *context, ID3D11Buffer *buffer, UINT format, UINT 
 #define ID3D11DeviceContext_IASetVertexBuffers mock_vertices
 #define ID3D11DeviceContext_IASetIndexBuffer mock_indices
 #define ID3D11DeviceContext_IASetPrimitiveTopology(context, topology) ((void)0)
+typedef UINT DXGI_FORMAT;
 #include "directx_upload.inc"
 
 int main(void) {
@@ -87,10 +88,10 @@ int main(void) {
     require(dx_upload(&driver, &driver.vertices, source, 33, D3D11_BIND_VERTEX_BUFFER), "append vertices");
     require(dx_upload(&driver, &driver.indices, source, 12, D3D11_BIND_INDEX_BUFFER), "first indices");
     require(dx_upload(&driver, &driver.indices, source, 12, D3D11_BIND_INDEX_BUFFER), "append indices");
-    dx_bind_geometry(&driver, driver.vertices.value, driver.indices.value, 33, 128, 128);
+    dx_bind_geometry(&driver, driver.vertices.value, driver.indices.value, DXGI_FORMAT_R32_UINT, 33, 128, 128);
     require(bound_vertex[0] == 48 && bound_vertex[1] == driver.instances.offset + 128 && bound_index == 16, "dynamic vertex, index and FirstInstance offsets");
     ID3D11Buffer immutable = {0};
-    dx_bind_geometry(&driver, &immutable, &immutable, 33, 128, 0);
+    dx_bind_geometry(&driver, &immutable, &immutable, DXGI_FORMAT_R32_UINT, 33, 128, 0);
     require(bound_vertex[0] == 0 && bound_index == 0 && bound_vertex[1] == driver.instances.offset, "resident geometry stays at zero");
     for (unsigned frame = 0; frame < ONIX_BUFFER_TRIM_DELAY + 1; frame++) {
         dx_begin_uploads(&driver, &driver.instances);

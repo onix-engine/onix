@@ -2,6 +2,7 @@ package html
 
 import (
 	"cmp"
+	"github.com/onix-engine/onix/html/element"
 	"slices"
 
 	"github.com/onix-engine/onix/ecs"
@@ -25,9 +26,8 @@ type htmlBoxRendering struct {
 	ContextParent        *htmlBoxRendering
 	Groups               []htmlRenderIdentity
 	Entities             []ecs.Entity
-	ZIndex               htmlZIndex
+	ZIndex               float64
 	ExtentRect           layout.Rect
-	Clip                 ecs.Entity
 	Generation           uint64
 	OwnerEnd             int
 	OwnerStart           int
@@ -55,15 +55,7 @@ type htmlBoxRendering struct {
 	StackChanged         bool
 	Composite            bool
 	Expanded             bool
-}
-
-type htmlZIndex struct {
-	number    float64
-	specified bool
-}
-
-func htmlStackIndexValue(v style.Value) htmlZIndex {
-	return htmlZIndex{number: v.Number, specified: v.Kind == style.ValueNumber}
+	ZIndexSpecified      bool
 }
 
 // Descendants share their inherited input context. Only boxes that change the
@@ -145,9 +137,10 @@ func beginHTMLBoxRendering(state *htmlRenderState, box *layout.Box, inheritedCon
 	if !state.LocalReconcile {
 		clear(rendered.Groups)
 		rendered.Groups = rendered.Groups[:0]
-		rendered.Box, rendered.Parent, rendered.ZIndex = box, box.Parent, htmlStackIndexValue(box.Style.ZIndex)
+		rendered.Box, rendered.Parent = box, box.Parent
+		rendered.ZIndex, rendered.ZIndexSpecified = box.Style.ZIndex.Number, box.Style.ZIndex.Kind == style.ValueNumber
 		rendered.OverflowX, rendered.OverflowY = htmlOverflowModeFor(box.Style.OverflowX), htmlOverflowModeFor(box.Style.OverflowY)
-		rendered.Clip, rendered.Depth = 0, 0
+		rendered.Depth = 0
 		rendered.ExtentRect, rendered.ExtentDirty = box.BorderBox(), false
 		if box.Parent != nil {
 			rendered.Depth = state.BoxRenderings[box.Parent.Node].Depth + 1
@@ -184,7 +177,7 @@ func queueHTMLBox(state *htmlRenderState, box *layout.Box) bool {
 	previous, exists := state.OverflowBindings[box.Node]
 	rect := box.PaddingBox()
 	rendered.Queued = true
-	rendered.StackChanged = rendered.ZIndex != htmlStackIndexValue(box.Style.ZIndex)
+	rendered.StackChanged = rendered.ZIndex != box.Style.ZIndex.Number || rendered.ZIndexSpecified != (box.Style.ZIndex.Kind == style.ValueNumber)
 	// Mode and parent changes invalidate routes even when descendant geometry stays equal.
 	rendered.ClipChanged = rendered.Parent != box.Parent || exists != htmlBoxNeedsOverflowClip(state, box) || rendered.OverflowX != htmlOverflowModeFor(box.Style.OverflowX) || rendered.OverflowY != htmlOverflowModeFor(box.Style.OverflowY)
 	rendered.ClipMoved = exists && (previous.rect.X != rect.X || previous.rect.Y != rect.Y)
@@ -306,7 +299,7 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			return state.fallback(FallbackContext)
 		}
 		_, focusable := htmlFocusableFromNode(owner, rendered.Box.Node)
-		if rendered.OwnsContext || isHTMLControlNode(rendered.Box.Node) || focusable || rendered.ClipMoved || rendered.ClipChanged || htmlPaintWindowChanged(state, rendered) {
+		if rendered.OwnsContext || element.IsWidgetControl(rendered.Box.Node) || focusable || rendered.ClipMoved || rendered.ClipChanged || htmlPaintWindowChanged(state, rendered) {
 			if !queueHTMLContextDescendants(state, rendered) {
 				return state.fallback(FallbackContext)
 			}
@@ -370,8 +363,8 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		}
 		finishHTMLBoxReconcile(world, state, rendered)
 		applyHTMLNodeBindings(world, state, rendered.Entities)
-		if rendered.Clip != 0 {
-			applyHTMLNodeBindings(world, state, []ecs.Entity{rendered.Clip})
+		if binding := rendered.Overflow; binding != nil {
+			applyHTMLNodeBindings(world, state, []ecs.Entity{binding.entity})
 		}
 	}
 	if structure {
@@ -383,7 +376,9 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 			delete(state.OverflowExtents, removed.Box)
 			delete(state.OverflowBindings, removed.Box.Node)
 			delete(state.PaintCullOffsets, removed.Box.Node)
-			delete(state.OverflowEntities, removed.Clip)
+			if binding := removed.Overflow; binding != nil {
+				delete(state.OverflowEntities, binding.entity)
+			}
 		}
 	}
 	state.Children = children
@@ -439,7 +434,8 @@ func finishHTMLBoxReconcile(world *ecs.World, state *htmlRenderState, rendered *
 		delete(state.Textures.rasters, rendered.Box.Node)
 	}
 	rendered.Parent = rendered.Box.Parent
-	rendered.ZIndex = htmlStackIndexValue(rendered.Box.Style.ZIndex)
+	zIndex := rendered.Box.Style.ZIndex
+	rendered.ZIndex, rendered.ZIndexSpecified = zIndex.Number, zIndex.Kind == style.ValueNumber
 	rendered.OverflowX, rendered.OverflowY = htmlOverflowModeFor(rendered.Box.Style.OverflowX), htmlOverflowModeFor(rendered.Box.Style.OverflowY)
 	live := rendered.Groups[:0]
 	for _, key := range rendered.Groups {
@@ -469,10 +465,8 @@ func appendHTMLBoxEntities(state *htmlRenderState, box *layout.Box) {
 	rendered := state.BoxRenderings[box.Node]
 	beginHTMLOwnerSpan(state, rendered)
 	state.Children = append(state.Children, rendered.Entities...)
-	if rendered.Clip != 0 {
-		state.Children = append(state.Children, rendered.Clip)
-	}
-	if binding, ok := state.OverflowBindings[box.Node]; ok {
+	if binding := rendered.Overflow; binding != nil {
+		state.Children = append(state.Children, binding.entity)
 		state.Children = append(state.Children, binding.parts...)
 	}
 	for _, child := range box.Children {
@@ -520,16 +514,14 @@ func refreshHTMLBoxOverflow(world *ecs.World, owner ecs.Entity, state *htmlRende
 	if htmlBoxNeedsOverflowClip(state, box) {
 		state.EmittingBox = rendered
 		current = emitHTMLOverflowClip(world, owner, state, box, parent, stackIndex, visible)
-		rendered.Clip = current.entity
 		state.EmittingBox = nil
-	} else if rendered.Clip != 0 {
+	} else if binding := rendered.Overflow; binding != nil {
 		delete(state.OverflowBindings, box.Node)
-		delete(state.OverflowEntities, rendered.Clip)
-		rendered.Clip = 0
+		delete(state.OverflowEntities, binding.entity)
 		rendered.Overflow = nil
 		// The old overflow group is retired by finishHTMLBoxReconcile.
 	}
-	if isHTMLControlNode(box.Node) {
+	if element.IsWidgetControl(box.Node) {
 		setHTMLOverflowRoute(state, box.Node, current)
 	}
 	for _, background := range box.InlineBackgrounds {
@@ -545,10 +537,10 @@ func refreshHTMLBoxOverflow(world *ecs.World, owner ecs.Entity, state *htmlRende
 		setHTMLOverflowRoute(state, fragment.Node, current)
 	}
 	routeHTMLOverflowEntities(world, owner, state, rendered.Entities)
-	if rendered.Clip != 0 {
+	if binding := rendered.Overflow; binding != nil {
 		// The clip is stored separately from the box's paint entities. Re-emitting
 		// it also clears ScrollContent, so restore its enclosing scroll route.
-		routeHTMLOverflowEntities(world, owner, state, []ecs.Entity{rendered.Clip})
+		routeHTMLOverflowEntities(world, owner, state, []ecs.Entity{binding.entity})
 	}
 }
 

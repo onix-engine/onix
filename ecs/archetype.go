@@ -96,7 +96,7 @@ type archetype struct {
 	// a short linear scan; bulk bindings can merge the sorted IDs directly.
 	mask       componentMask
 	ids        []componentID
-	columns    []column
+	columns    []*columnState
 	entities   []Entity
 	retention  reuse.Retention
 	rowVersion uint64 // world structure version of the last removal
@@ -154,7 +154,7 @@ func (a *archetype) has(id componentID) bool {
 
 // column returns the storage for one component, or nil when this table does
 // not own it. Callers rely on nil to detect a missing column.
-func (a *archetype) column(id componentID) column {
+func (a *archetype) column(id componentID) *columnState {
 	index := a.columnIndex(id)
 	if index < 0 {
 		return nil

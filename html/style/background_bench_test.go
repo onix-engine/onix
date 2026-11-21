@@ -12,7 +12,7 @@ func BenchmarkBackgroundShorthand(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				computed := defaultStyle(nil)
-				if err := applyProperty(&computed, "background", test.value, nil, parseContext{}); err != nil {
+				if err := applyProperty(&computed, propertyBackground, test.value, nil, parseContext{}); err != nil {
 					b.Fatal(err)
 				}
 			}

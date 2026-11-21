@@ -8,7 +8,7 @@ import (
 
 type patchPlan struct {
 	world       *World
-	transitions map[uint32]*patchTransition
+	transitions transitionCache[patchTransition]
 	writes      []patchWrite // sorted IDs with their caller argument positions
 	removed     componentMask
 }
@@ -26,7 +26,7 @@ type patchTransition struct {
 }
 
 type patchColumn struct {
-	source, target column
+	source, target *columnState
 }
 
 type patchRow struct {
@@ -54,7 +54,7 @@ func newPatchPlan(world *World, writes []componentID, removed []ComponentType) *
 	for _, entry := range entries {
 		mask = mask.without(entry.id)
 	}
-	return &patchPlan{world: world, writes: entries, removed: mask, transitions: make(map[uint32]*patchTransition)}
+	return &patchPlan{world: world, writes: entries, removed: mask}
 }
 
 func (p *patchPlan) reserve(capacity int) {
@@ -107,7 +107,7 @@ func (p *patchPlan) begin(entity Entity) (patchRow, error) {
 func (row patchRow) writePatchColumn[T any](index int, value T) {
 	t := row.transition
 	entry := t.writes[index]
-	target := entry.target.(*typedColumn[T])
+	target := entry.target.typed[T]()
 	if t.source == t.target {
 		target.replace(row.targetRow, value, row.tick)
 		return
@@ -135,7 +135,7 @@ func (p *patchPlan) finish(row patchRow) {
 }
 
 func (p *patchPlan) transition(source *archetype) *patchTransition {
-	if t := p.transitions[source.id]; t != nil {
+	if t := p.transitions.get(source.id); t != nil {
 		return t
 	}
 	ids := make([]componentID, 0, len(source.ids)+len(p.writes))
@@ -180,7 +180,7 @@ func (p *patchPlan) transition(source *archetype) *patchTransition {
 		t.columns[sourceIndex].target = t.target.columns[i]
 		sourceIndex++
 	}
-	p.transitions[source.id] = t
+	p.transitions.put(source.id, t)
 	return t
 }
 

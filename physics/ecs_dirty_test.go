@@ -1,6 +1,7 @@
 package physics
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
@@ -207,4 +208,76 @@ func TestPhysics3DBodyEditSynchronizesOnlyChangedEntity(t *testing.T) {
 	if old.Valid() || !firstBody.Handle().Valid() || secondBody.body.state().touched != runtime.frame {
 		t.Fatal("body replacement did not run the full ownership sweep")
 	}
+}
+
+// Replacing a body and copying a live collider component both require checking
+// the owner even when the component still holds a valid collider handle.
+func checkColliderOwnership[B, C any, ID comparable](t *testing.T, body B, collider C, system ecs.SystemConfig, id func(*C) ID, events func(*ecs.World, ID) []CollisionPhase) {
+	t.Helper()
+	w := ecs.NewWorld()
+	bundle := ecs.NewBundle(3)
+	bundle.Put(scene.NewTransform())
+	bundle.Put(body)
+	bundle.Put(collider)
+	first, other := w.Spawn(bundle), w.Spawn(bundle)
+	step := func() {
+		t.Helper()
+		if err := system.Run(w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	step()
+	original := id(w.GetRef[C](first))
+	if phases := events(w, original); !slices.Equal(phases, []CollisionPhase{CollisionBegin}) {
+		t.Fatalf("initial contact: %v", phases)
+	}
+	*w.GetMut[B](first) = body
+	step()
+	replacement := id(w.GetRef[C](first))
+	if replacement == original || !slices.Equal(events(w, original), []CollisionPhase{CollisionEnd}) ||
+		!slices.Equal(events(w, replacement), []CollisionPhase{CollisionBegin}) {
+		t.Fatal("replacing the rigid body must end the old contact and begin the new one in the same step")
+	}
+	*w.GetMut[C](other) = *w.GetRef[C](first)
+	step()
+	copyID := id(w.GetRef[C](other))
+	if copyID == replacement || !slices.Equal(events(w, copyID), []CollisionPhase{CollisionBegin}) {
+		t.Fatal("copied collider must contact its source with an independent handle")
+	}
+	step()
+	if !slices.Equal(events(w, replacement), []CollisionPhase{CollisionStay}) {
+		t.Fatal("replacement collider lost its contact")
+	}
+}
+
+func TestPhysics2DColliderOwnership(t *testing.T) {
+	collider := NewCollider2D(Circle{Radius: 1})
+	collider.Sensor = true
+	checkColliderOwnership(t, NewRigidBody2D(BodyStatic), collider, StepSystem2D(""),
+		func(c *CircleCollider2D) ColliderID { return c.Handle().ID() },
+		func(w *ecs.World, id ColliderID) (phases []CollisionPhase) {
+			r, _ := w.GetResource[*Runtime2D]()
+			for _, e := range r.Simulation.Events() {
+				if e.ColliderA == id || e.ColliderB == id {
+					phases = append(phases, e.Phase)
+				}
+			}
+			return phases
+		})
+}
+
+func TestPhysics3DColliderOwnership(t *testing.T) {
+	collider := NewCollider3D(Sphere{Radius: 1})
+	collider.Sensor = true
+	checkColliderOwnership(t, NewRigidBody3D(BodyStatic), collider, StepSystem3D(""),
+		func(c *SphereCollider3D) ColliderID3D { return c.Handle().ID() },
+		func(w *ecs.World, id ColliderID3D) (phases []CollisionPhase) {
+			r, _ := w.GetResource[*Runtime3D]()
+			for _, e := range r.Simulation.Events() {
+				if e.ColliderA == id || e.ColliderB == id {
+					phases = append(phases, e.Phase)
+				}
+			}
+			return phases
+		})
 }

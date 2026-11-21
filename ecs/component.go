@@ -22,8 +22,8 @@ type componentID uint32
 
 type componentInfo struct {
 	typ       reflect.Type
-	newColumn func() column
-	onRemove  func(*World, Entity, column, int)
+	newColumn func(*World, componentID) *columnState
+	onRemove  func(*World, Entity, *columnState, int)
 	version   uint64
 	structure uint64
 	values    uint64
@@ -31,15 +31,12 @@ type componentInfo struct {
 	detached  uint64
 }
 
-type column interface {
-	reserve(int)
-	compact(int)
-	moveTo(column, int)
-	swapRemove(int)
-	removeRow(int)
-	ticks(filterKind) []Tick
-	ranges(filterKind) []tickRange
-	markChanged(int, Tick)
+// columnValues only dispatches operations that copy or allocate values of T.
+type columnValues interface {
+	reserveValues(int)
+	compactValues(int)
+	moveValueTo(columnValues, int)
+	removeValue(int)
 }
 
 type typedColumn[T any] struct {
@@ -50,6 +47,7 @@ type typedColumn[T any] struct {
 // columnState keeps change tracking independent of the component value type.
 // Query access can hold this metadata and an already resolved value pointer.
 type columnState struct {
+	storage       columnValues
 	world         *World
 	added         []Tick
 	changed       []Tick
@@ -141,15 +139,19 @@ func (c *columnState) touch() {
 	c.world.mutationVersion++
 }
 
-func (c *typedColumn[T]) reserve(additional int) {
+func (c *typedColumn[T]) reserveValues(additional int) {
+	c.values = slices.Grow(c.values, additional)
+}
+
+func (c *columnState) reserve(additional int) {
 	if additional <= 0 {
 		return
 	}
-	c.values = slices.Grow(c.values, additional)
+	c.storage.reserveValues(additional)
 	c.added = slices.Grow(c.added, additional)
 	c.changed = slices.Grow(c.changed, additional)
-	c.addedRanges = growTickRanges(c.addedRanges, len(c.values), len(c.values)+additional)
-	c.changedRanges = growTickRanges(c.changedRanges, len(c.values), len(c.values)+additional)
+	c.addedRanges = growTickRanges(c.addedRanges, len(c.added), len(c.added)+additional)
+	c.changedRanges = growTickRanges(c.changedRanges, len(c.changed), len(c.changed)+additional)
 }
 
 func (c *typedColumn[T]) append(value T, tick Tick) {
@@ -160,12 +162,16 @@ func (c *typedColumn[T]) append(value T, tick Tick) {
 
 func (c *typedColumn[T]) appendWithTicks(value T, added, changed Tick) {
 	c.values = append(c.values, value)
+	c.appendTicks(added, changed)
+}
+
+func (c *columnState) appendTicks(added, changed Tick) {
 	c.added = append(c.added, added)
 	c.changed = append(c.changed, changed)
-	row := len(c.values) - 1
-	if tickRangeCount(len(c.values)) > len(c.addedRanges) {
-		c.addedRanges = growTickRanges(c.addedRanges, row, len(c.values))
-		c.changedRanges = growTickRanges(c.changedRanges, row, len(c.values))
+	row := len(c.added) - 1
+	if tickRangeCount(len(c.added)) > len(c.addedRanges) {
+		c.addedRanges = growTickRanges(c.addedRanges, row, len(c.added))
+		c.changedRanges = growTickRanges(c.changedRanges, row, len(c.added))
 	}
 	if row%queryTickBlockSize == 0 {
 		c.addedRanges[row/queryTickBlockSize] = tickRange{}
@@ -184,30 +190,47 @@ func (c *typedColumn[T]) replace(row int, value T, tick Tick) {
 
 // moveTo transfers one row into target and drops it from the source. Change
 // ticks are preserved; both tables record the migration.
-func (c *typedColumn[T]) moveTo(target column, row int) {
-	dst := target.(*typedColumn[T])
-	dst.appendWithTicks(c.values[row], c.added[row], c.changed[row])
-	c.removeRow(row)
+func (c *columnState) moveTo(target *columnState, row int) {
+	c.storage.moveValueTo(target.storage, row)
+	target.appendTicks(c.added[row], c.changed[row])
+	c.removeTicks(row)
 }
 
-func (c *typedColumn[T]) swapRemove(row int) {
+func (c *typedColumn[T]) moveValueTo(target columnValues, row int) {
+	dst := target.(*typedColumn[T])
+	dst.values = append(dst.values, c.values[row])
+	c.removeValue(row)
+}
+
+func (c *columnState) swapRemove(row int) {
 	c.removeRow(row)
 	c.world.componentInfos[c.id].values++
 	c.world.componentInfos[c.id].members++
 }
 
-func (c *typedColumn[T]) removeRow(row int) {
+func (c *columnState) removeRow(row int) {
+	c.storage.removeValue(row)
+	c.removeTicks(row)
+}
+
+func (c *typedColumn[T]) removeValue(row int) {
 	last := len(c.values) - 1
 	if row != last {
 		c.values[row] = c.values[last]
+	}
+	var zero T
+	c.values[last] = zero
+	c.values = c.values[:last]
+}
+
+func (c *columnState) removeTicks(row int) {
+	last := len(c.added) - 1
+	if row != last {
 		c.added[row] = c.added[last]
 		c.changed[row] = c.changed[last]
 		includeTick(c.addedRanges, row, c.added[row])
 		includeTick(c.changedRanges, row, c.changed[row])
 	}
-	var zero T
-	c.values[last] = zero
-	c.values = c.values[:last]
 	c.added = c.added[:last]
 	c.changed = c.changed[:last]
 	c.touch()
@@ -236,21 +259,34 @@ func (c *columnState) ranges(kind filterKind) []tickRange {
 }
 
 func (world *World) registerComponent[T any]() componentID {
-	if world == nil {
-		panic("ecs: world is nil")
+	id := world.componentIDFor[T]()
+	if world.componentInfos[id].newColumn == nil {
+		world.componentInfos[id].newColumn = newTypedColumn[T]
 	}
-	typ := reflect.TypeFor[T]()
+	return id
+}
+
+// Queries and filters need a stable ID before the first insertion. Only
+// writers install a column factory, so observing a type can omit its storage code.
+func (world *World) componentIDFor[T any]() componentID {
+	return world.identifyComponent(reflect.TypeFor[T]())
+}
+
+func newTypedColumn[T any](world *World, id componentID) *columnState {
+	c := &typedColumn[T]{columnState: columnState{world: world, id: id}}
+	// A table keeps the header, while typed queries borrow values from the same allocation.
+	c.storage = c
+	return &c.columnState
+}
+
+func (world *World) identifyComponent(typ reflect.Type) componentID {
+	requireWorld(world)
 	if id, ok := world.componentTypes[typ]; ok {
 		return id
 	}
 	id := componentID(len(world.componentInfos))
 	world.componentTypes[typ] = id
-	world.componentInfos = append(world.componentInfos, componentInfo{
-		typ: typ,
-		newColumn: func() column {
-			return &typedColumn[T]{columnState: columnState{world: world, id: id}}
-		},
-	})
+	world.componentInfos = append(world.componentInfos, componentInfo{typ: typ})
 	return id
 }
 
@@ -300,19 +336,27 @@ func (world *World) ComponentStructureVersion[T any]() uint64 {
 }
 
 func (archetype *archetype) componentColumn[T any](id componentID) *typedColumn[T] {
-	return archetype.column(id).(*typedColumn[T])
+	return archetype.column(id).typed[T]()
+}
+
+// A missing column is a normal result for an unbound component lookup.
+func (c *columnState) typed[T any]() *typedColumn[T] {
+	if c == nil {
+		return nil
+	}
+	return c.storage.(*typedColumn[T])
 }
 
 // OnComponentRemove installs a cleanup hook for removal and despawn. Hooks
 // must not change entity structure; archetype migration does not invoke them.
 func (world *World) OnComponentRemove[T any](cleanup func(*World, Entity, *T)) {
-	id := world.registerComponent[T]()
+	id := world.componentIDFor[T]()
 	if cleanup == nil {
 		world.componentInfos[id].onRemove = nil
 		return
 	}
-	world.componentInfos[id].onRemove = func(world *World, entity Entity, storage column, row int) {
-		cleanup(world, entity, &storage.(*typedColumn[T]).values[row])
+	world.componentInfos[id].onRemove = func(world *World, entity Entity, storage *columnState, row int) {
+		cleanup(world, entity, &storage.typed[T]().values[row])
 	}
 	for _, archetype := range world.archetypes {
 		if archetype.has(id) {
@@ -321,7 +365,7 @@ func (world *World) OnComponentRemove[T any](cleanup func(*World, Entity, *T)) {
 	}
 }
 
-func (w *World) cleanupComponent(id componentID, entity Entity, storage column, row int) {
+func (w *World) cleanupComponent(id componentID, entity Entity, storage *columnState, row int) {
 	cleanup := w.componentInfos[id].onRemove
 	if cleanup == nil {
 		return

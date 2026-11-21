@@ -46,7 +46,7 @@ func TestWebGPUStaticUploadsReuseSourceAndPreserveExactPayloads(t *testing.T) {
 	if calls.Length() != 4 {
 		t.Fatalf("got %d uploads, want 4", calls.Length())
 	}
-	for i, expected := range [][]byte{sliceBytes(vertices), sliceBytes(indices), sliceBytes(words), {9, 8, 7, 6}} {
+	for i, expected := range [][]byte{sliceBytes(vertices), sliceBytes([]uint16{0, 1, 2, 0}), sliceBytes(words), {9, 8, 7, 6}} {
 		call := calls.Index(i)
 		if !call.Get("source").Equal(calls.Index(0).Get("source")) {
 			t.Fatalf("upload %d allocated another JS source buffer", i)

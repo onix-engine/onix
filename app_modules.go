@@ -12,6 +12,14 @@ import (
 	"github.com/onix-engine/onix/window"
 )
 
+// The frame loop only needs these hooks when a module project has been loaded.
+type moduleLoop interface {
+	SyncScopes()
+	RenderScope() *ecs.QueryScope
+	NeedsTick() bool
+	Close() error
+}
+
 // OpenModuleWindow applies project window metadata. LoadModules stays usable
 // without a native window for simulation, build validation and server hosts.
 func (app *App) OpenModuleWindow(spec project.ProjectSpec, source fs.FS, decoder window.IconDecoder) error {
@@ -129,7 +137,10 @@ func (app *App) LoadModules[P module.ContentProfile](plan *project.ProjectPlan, 
 	return entry, nil
 }
 
-func (app *App) Modules() *module.Runtime { return app.moduleRuntime }
+func (app *App) Modules() *module.Runtime {
+	runtime, _ := app.moduleRuntime.(*module.Runtime)
+	return runtime
+}
 
 func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 	if app.moduleSystemsInstalled {
@@ -190,22 +201,24 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 		return err
 	}
 	if err := app.AddSystem(StageModuleEvents, ecs.SystemConfig{Name: "dispatch_module_events", System: func(*ecs.SystemContext) error {
-		if app.moduleRuntime == nil {
+		runtime := app.Modules()
+		if runtime == nil {
 			return nil
 		}
-		return app.moduleRuntime.Dispatch()
+		return runtime.Dispatch()
 	}}); err != nil {
 		return err
 	}
 	if err := app.AddSystem(StageFixedUpdate, ecs.SystemConfig{Name: "update_modules", System: func(context *ecs.SystemContext) error {
-		if app.moduleRuntime == nil {
+		runtime := app.Modules()
+		if runtime == nil {
 			return nil
 		}
 		clock, ok := context.World.GetResource[*scene.Time]()
 		if !ok {
 			return nil
 		}
-		return app.moduleRuntime.Update(clock.DeltaSeconds())
+		return runtime.Update(clock.DeltaSeconds())
 	}}); err != nil {
 		return err
 	}
@@ -213,19 +226,21 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 		return err
 	}
 	if err := app.AddSystem(StageAfterFixedUpdateLoop, ecs.SystemConfig{Name: "update_module_frame", System: func(context *ecs.SystemContext) error {
-		if app.moduleRuntime == nil {
+		runtime := app.Modules()
+		if runtime == nil {
 			return nil
 		}
 		clock, _ := context.World.GetResource[*scene.Time]()
-		return app.moduleRuntime.UpdateFrame(clock.DeltaSeconds())
+		return runtime.UpdateFrame(clock.DeltaSeconds())
 	}}); err != nil {
 		return err
 	}
 	if err := app.AddSystem(StageFixedPostUpdate, ecs.SystemConfig{Name: "publish_module_collisions", System: func(*ecs.SystemContext) error {
-		if app.moduleRuntime == nil {
+		runtime := app.Modules()
+		if runtime == nil {
 			return nil
 		}
-		return app.moduleRuntime.PublishCollisions()
+		return runtime.PublishCollisions()
 	}}); err != nil {
 		return err
 	}
@@ -234,7 +249,8 @@ func (app *App) installModuleSystems(plan *project.ProjectPlan) error {
 }
 
 func (app *App) dispatchModuleInput(context *ecs.SystemContext) error {
-	if app.moduleRuntime == nil {
+	runtime := app.Modules()
+	if runtime == nil {
 		app.moduleInputEvents.Discard(context.World)
 		if app.moduleHTMLInput != nil {
 			return app.moduleHTMLInput(context)
@@ -242,7 +258,7 @@ func (app *App) dispatchModuleInput(context *ecs.SystemContext) error {
 		return nil
 	}
 	for event := range app.moduleInputEvents.All(context.World) {
-		if err := app.moduleRuntime.HandleInput(*event); err != nil {
+		if err := runtime.HandleInput(*event); err != nil {
 			return err
 		}
 	}
@@ -253,12 +269,13 @@ func (app *App) dispatchModuleInput(context *ecs.SystemContext) error {
 }
 
 func (app *App) dispatchModuleHTMLInput(context *ecs.SystemContext) error {
-	if app.moduleRuntime == nil {
+	runtime := app.Modules()
+	if runtime == nil {
 		app.moduleHTMLEvents.Discard(context.World)
 		return nil
 	}
 	for event := range app.moduleHTMLEvents.All(context.World) {
-		if err := app.moduleRuntime.HandleHTMLEvent(*event); err != nil {
+		if err := runtime.HandleHTMLEvent(*event); err != nil {
 			return err
 		}
 	}

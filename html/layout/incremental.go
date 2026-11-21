@@ -3,6 +3,7 @@ package layout
 import (
 	"cmp"
 	"fmt"
+	"github.com/onix-engine/onix/html/element"
 	"slices"
 
 	"github.com/onix-engine/onix/font"
@@ -300,7 +301,7 @@ func (cache *Cache) reconcile(node *uinode.Node, parent *Box, index int, styles 
 	if isFlexContainer(box) {
 		slices.SortStableFunc(box.Children, compareFlexOrder)
 	}
-	box.reflow.plainFlow = len(children) >= 8 && len(children) == len(node.Children) && (node.Type == uinode.DocumentNode || box.Style.Display == style.Keyword("block") && !isControlElementNode(node))
+	box.reflow.plainFlow = len(children) >= 8 && len(children) == len(node.Children) && (node.Type == uinode.DocumentNode || box.Style.Display == style.Keyword("block") && !element.IsWidgetControl(node))
 	if box.reflow.plainFlow {
 		for i, child := range children {
 			if child.Node != node.Children[i] || child.Style.Display != style.Keyword("block") || isAbsolutePositioned(child) {

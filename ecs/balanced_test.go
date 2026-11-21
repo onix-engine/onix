@@ -167,8 +167,8 @@ func assertChangedRowsMatchTicks(t *testing.T, world *World, window *SystemConte
 		}
 		expected := make(map[Entity]bool)
 		for _, archetype := range world.archetypes {
-			position, _ := archetype.column(world.registerComponent[testPosition]()).(*typedColumn[testPosition])
-			velocity, _ := archetype.column(world.registerComponent[testVelocity]()).(*typedColumn[testVelocity])
+			position := archetype.column(world.registerComponent[testPosition]()).typed[testPosition]()
+			velocity := archetype.column(world.registerComponent[testVelocity]()).typed[testVelocity]()
 			if position == nil || velocity == nil {
 				continue
 			}

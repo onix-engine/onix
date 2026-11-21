@@ -23,18 +23,13 @@ type Edges struct {
 }
 
 type Box struct {
-	marker            *listMarkerCache
-	viewport          *Rect
+	scratch           *boxScratch
 	flex              *flexScratch
 	grid              *gridScratch
 	table             *tableScratch
-	flow              *flowScratch
-	inlinePaintIndex  map[inlineBackgroundKey]int
-	intrinsicScratch  *layoutContext
 	Style             *style.ComputedStyle
 	Parent            *Box
 	Node              *uinode.Node
-	floats            *floatContext
 	ControlFragments  []ControlFragment
 	InlineBackgrounds []InlineBackground
 	ImageFragments    []ImageFragment
@@ -59,6 +54,24 @@ type Box struct {
 	ownPaintHashValid bool
 }
 
+// Ordinary text rows do not need float, inline-box, or intrinsic measurement
+// workspace. Allocate these together only for boxes that use them.
+type boxScratch struct {
+	marker      *listMarkerCache
+	layout      *layoutContext
+	inlinePaint map[inlineBackgroundKey]int
+	flow        *flowScratch
+	viewport    *Rect
+	floats      floatContext
+}
+
+func (box *Box) ensureScratch() *boxScratch {
+	if box.scratch == nil {
+		box.scratch = &boxScratch{}
+	}
+	return box.scratch
+}
+
 // Only list items retain numbering and formatted marker text. Ordinary boxes
 // (including every table cell) need no marker payload.
 type listMarkerCache struct {
@@ -69,26 +82,28 @@ type listMarkerCache struct {
 }
 
 func (box *Box) listMarker() *listMarkerCache {
-	if box.marker == nil {
-		box.marker = &listMarkerCache{}
+	scratch := box.ensureScratch()
+	if scratch.marker == nil {
+		scratch.marker = &listMarkerCache{}
 	}
-	return box.marker
+	return scratch.marker
 }
 
 // Viewport returns the document viewport on the root box. Descendant boxes
 // have no viewport payload and return a zero rectangle.
 func (box *Box) Viewport() Rect {
-	if box.viewport != nil {
-		return *box.viewport
+	if box.scratch != nil && box.scratch.viewport != nil {
+		return *box.scratch.viewport
 	}
 	return Rect{}
 }
 
 func (box *Box) setViewport(viewport Rect) {
-	if box.viewport == nil {
-		box.viewport = &Rect{}
+	scratch := box.ensureScratch()
+	if scratch.viewport == nil {
+		scratch.viewport = &Rect{}
 	}
-	*box.viewport = viewport
+	*scratch.viewport = viewport
 }
 
 type flowScratch struct {

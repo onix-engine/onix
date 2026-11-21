@@ -39,7 +39,11 @@ func (inputs physicsInputs) bodyTopologyChanged(previous physicsInputs) bool {
 }
 
 type physicsBodyChanges struct {
-	context         ecs.SystemContext
+	context ecs.SystemContext
+	physicsEntitySet
+}
+
+type physicsEntitySet struct {
 	entities, queue []ecs.Entity
 	marks           []uint64
 	epoch           uint64
@@ -47,38 +51,109 @@ type physicsBodyChanges struct {
 
 func (dirty *physicsBodyChanges) collect[T any](world *ecs.World, since ecs.Tick, current, previous physicsInputs) []ecs.Entity {
 	dirty.context = world.ChangesSince(since)
-	dirty.entities, dirty.queue = dirty.entities[:0], dirty.queue[:0]
-	dirty.epoch += 4
-	if dirty.epoch == 0 {
-		clear(dirty.marks)
-		dirty.epoch = 4
-	}
-	if slots := world.EntitySlots(); len(dirty.marks) < slots {
-		dirty.marks = append(dirty.marks, make([]uint64, slots-len(dirty.marks))...)
-	}
+	dirty.reset()
 	if current.versions[0] != previous.versions[0] {
 		for entity := range world.Query2[T, scene.Transform](dirty.context.Changed[T]()).All {
 			dirty.addBody[T](world, entity)
 		}
 	}
 	if current.versions[1] != previous.versions[1] {
-		hierarchy := scene.HierarchyFor(world)
 		for entity := range world.Query[scene.Transform](ecs.Unscoped(), dirty.context.Changed[scene.Transform]()).All {
 			dirty.enqueue(entity)
 		}
-		for index := 0; index < len(dirty.queue); index++ {
-			entity := dirty.queue[index]
-			dirty.addBody[T](world, entity)
-			for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
-				dirty.enqueue(child)
-			}
-		}
+		dirty.collectSubtrees[T](world)
 	}
 	return dirty.entities
 }
 
-func (dirty *physicsBodyChanges) mark(entity ecs.Entity, bit uint64) bool {
+func (dirty *physicsEntitySet) collectSubtrees[T any](world *ecs.World) {
+	if len(dirty.queue) == 0 {
+		return
+	}
+	hierarchy := scene.HierarchyFor(world)
+	for index := 0; index < len(dirty.queue); index++ {
+		entity := dirty.queue[index]
+		dirty.addBody[T](world, entity)
+		for child := hierarchy.FirstChild(entity); child != 0; child = hierarchy.NextSibling(child) {
+			dirty.enqueue(child)
+		}
+	}
+}
+
+func (dirty *physicsEntitySet) reset() {
+	dirty.entities, dirty.queue = dirty.entities[:0], dirty.queue[:0]
+	dirty.epoch += 4
+	if dirty.epoch == 0 {
+		clear(dirty.marks)
+		dirty.epoch = 4
+	}
+}
+
+// Each managed body needs its local pose refreshed when its nearest simulated
+// ancestor moves. Non-body transform nodes can sit between the two.
+type bodyDependents struct {
+	firstChild, nextSibling ecs.Entity
+}
+
+type physicsWriteback struct {
+	links []bodyDependents
+	physicsEntitySet
+}
+
+func (dirty *physicsWriteback) resetTopology() {
+	dirty.reset()
+	clear(dirty.links)
+	dirty.links = dirty.links[:0]
+}
+
+func (dirty *physicsWriteback) link[T any](world *ecs.World, entity ecs.Entity) {
+	for link := world.GetRef[scene.Parent](entity); link != nil; link = world.GetRef[scene.Parent](link.Entity) {
+		parent := link.Entity
+		if !world.Has[scene.Transform](parent) {
+			return
+		}
+		if world.Has[T](parent) && world.InQueryScope(parent) && scene.IsActive(world, parent) {
+			childIndex, _ := entity.Index()
+			parentIndex, _ := parent.Index()
+			if slots := int(max(childIndex, parentIndex)) + 1; slots > len(dirty.links) {
+				dirty.links = growCapacity(dirty.links, slots)[:slots]
+			}
+			dirty.links[childIndex].nextSibling = dirty.links[parentIndex].firstChild
+			dirty.links[parentIndex].firstChild = entity
+			return
+		}
+	}
+}
+
+func (dirty *physicsWriteback) includeDependents() {
+	for _, parent := range dirty.queue {
+		index, _ := parent.Index()
+		if int(index) >= len(dirty.links) {
+			continue
+		}
+		for child := dirty.links[index].firstChild; child != 0; {
+			dirty.record(uint64(child), false)
+			childIndex, _ := child.Index()
+			child = dirty.links[childIndex].nextSibling
+		}
+	}
+}
+
+func (dirty *physicsWriteback) record(userData uint64, poseChanged bool) {
+	entity := ecs.Entity(userData)
+	if dirty.mark(entity, 1) {
+		dirty.entities = append(dirty.entities, entity)
+	}
+	if poseChanged {
+		dirty.enqueue(entity)
+	}
+}
+
+func (dirty *physicsEntitySet) mark(entity ecs.Entity, bit uint64) bool {
 	index, _ := entity.Index()
+	if int(index) >= len(dirty.marks) {
+		dirty.marks = growCapacity(dirty.marks, int(index)+1)[:index+1]
+	}
 	mark := &dirty.marks[index]
 	if *mark&^3 != dirty.epoch {
 		*mark = dirty.epoch
@@ -90,13 +165,13 @@ func (dirty *physicsBodyChanges) mark(entity ecs.Entity, bit uint64) bool {
 	return true
 }
 
-func (dirty *physicsBodyChanges) addBody[T any](world *ecs.World, entity ecs.Entity) {
+func (dirty *physicsEntitySet) addBody[T any](world *ecs.World, entity ecs.Entity) {
 	if world.Has[T](entity) && world.Has[scene.Transform](entity) && world.InQueryScope(entity) && scene.IsActive(world, entity) && dirty.mark(entity, 1) {
 		dirty.entities = append(dirty.entities, entity)
 	}
 }
 
-func (dirty *physicsBodyChanges) enqueue(entity ecs.Entity) {
+func (dirty *physicsEntitySet) enqueue(entity ecs.Entity) {
 	if dirty.mark(entity, 2) {
 		dirty.queue = append(dirty.queue, entity)
 	}

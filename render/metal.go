@@ -53,13 +53,7 @@ type metalDriver struct {
 	textureUpload  nativeTextureUpload
 	width          int
 	height         int
-	viewport       Rect
-	viewportSet    bool
-	blend          BlendState
-	blendSet       bool
-	scissor        Rect
-	scissorEnabled bool
-	scissorSet     bool
+	nativeRasterState
 
 	updateRetention scratchRetention
 }
@@ -77,12 +71,11 @@ func NewMetalDriver(surface MetalSurface) (Driver, error) {
 		return nil, metalError("create driver")
 	}
 	return &metalDriver{
-		native:      native,
-		deviceName:  C.GoString(C.onix_metal_device_name(native)),
-		width:       surface.Width,
-		height:      surface.Height,
-		viewport:    Rect{Width: int32(surface.Width), Height: int32(surface.Height)},
-		viewportSet: true,
+		native:            native,
+		deviceName:        C.GoString(C.onix_metal_device_name(native)),
+		width:             surface.Width,
+		height:            surface.Height,
+		nativeRasterState: nativeRasterState{viewport: Rect{Width: int32(surface.Width), Height: int32(surface.Height)}, viewportSet: true},
 	}, nil
 }
 
@@ -131,11 +124,9 @@ func (d *metalDriver) BeginFrame(clear Color) error {
 }
 
 func (d *metalDriver) SetViewport(viewport Rect) {
-	if d.viewportSet && d.viewport == viewport {
+	if !d.changeViewport(viewport) {
 		return
 	}
-	d.viewport = viewport
-	d.viewportSet = true
 	C.onix_metal_set_viewport(
 		d.native,
 		C.int32_t(viewport.X),
@@ -145,46 +136,24 @@ func (d *metalDriver) SetViewport(viewport Rect) {
 	)
 }
 
-func (d *metalDriver) Viewport() Rect { return d.viewport }
-
 func (d *metalDriver) SetBlend(blend BlendState) error {
 	mode, ok := spriteBlendMode(blend)
 	if !ok {
 		return fmt.Errorf("render: Metal blend state is not compiled: %+v", blend)
 	}
-	if d.blendSet && d.blend == blend {
+	if !d.changeBlend(blend) {
 		return nil
 	}
-	d.blend = blend
-	d.blendSet = true
 	C.onix_metal_set_sprite_blend(d.native, C.int(mode), C.float(blend.Constant.R), C.float(blend.Constant.G), C.float(blend.Constant.B), C.float(blend.Constant.A))
 	return nil
 }
 
 func (d *metalDriver) SetScissor(scissor *Rect) {
-	if scissor == nil {
-		if d.scissorSet && !d.scissorEnabled {
-			return
-		}
-		d.scissorSet = true
-		d.scissorEnabled = false
-		C.onix_metal_set_scissor(d.native, 0, 0, 0, 0, 0)
+	if !d.changeScissor(scissor) {
 		return
 	}
-	if d.scissorSet && d.scissorEnabled && d.scissor == *scissor {
-		return
-	}
-	d.scissor = *scissor
-	d.scissorSet = true
-	d.scissorEnabled = true
-	C.onix_metal_set_scissor(
-		d.native,
-		1,
-		C.int32_t(scissor.X),
-		C.int32_t(scissor.Y),
-		C.int32_t(scissor.Width),
-		C.int32_t(scissor.Height),
-	)
+	rect := d.scissor
+	C.onix_metal_set_scissor(d.native, C.int(boolInt(d.scissorEnabled)), C.int32_t(rect.X), C.int32_t(rect.Y), C.int32_t(rect.Width), C.int32_t(rect.Height))
 }
 
 func (d *metalDriver) CreateTexture(descriptor TextureDescriptor, pixels []byte) (TextureHandle, error) {
@@ -607,6 +576,14 @@ func (d *metalDriver) Present() error {
 		return metalError("present")
 	}
 	return nil
+}
+
+func (d *metalDriver) PrepareCaretFrame(visible bool) bool {
+	return C.onix_metal_prepare_caret_frame(d.native, C.int(boolInt(visible))) != 0
+}
+
+func (d *metalDriver) DiscardCaretFrames() {
+	C.onix_metal_discard_caret_frames(d.native)
 }
 
 func (d *metalDriver) ResizeSurface(width, height int) error {

@@ -56,25 +56,32 @@ func (w *World) Maintain() {
 	w.storageCandidates = kept
 }
 
-func (c *typedColumn[T]) compact(capacity int) {
+func (c *typedColumn[T]) compactValues(capacity int) {
 	if capacity == 0 {
 		c.values = nil
+	} else {
+		values := make([]T, len(c.values), capacity)
+		copy(values, c.values)
+		c.values = values
+	}
+}
+
+func (c *columnState) compact(capacity int) {
+	c.storage.compactValues(capacity)
+	if capacity == 0 {
 		c.added = nil
 		c.changed = nil
 		c.addedRanges = nil
 		c.changedRanges = nil
 		return
 	}
-	values := make([]T, len(c.values), capacity)
-	copy(values, c.values)
-	c.values = values
 	added, changed := make([]Tick, len(c.added), capacity), make([]Tick, len(c.changed), capacity)
 	copy(added, c.added)
 	copy(changed, c.changed)
 	c.added, c.changed = added, changed
 	c.addedRanges = make([]tickRange, tickRangeCount(capacity))
 	c.changedRanges = make([]tickRange, tickRangeCount(capacity))
-	for row := range c.values {
+	for row := range c.added {
 		includeTick(c.addedRanges, row, c.added[row])
 		includeTick(c.changedRanges, row, c.changed[row])
 	}

@@ -7,12 +7,12 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	sceneapi "github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/scene/render3d"
 	onixtext "github.com/onix-engine/onix/text"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestInstantiateSceneSpawnsSpriteTrailFromJSON(t *testing.T) {
@@ -1099,7 +1099,7 @@ func TestRemoveNodesDespawnsSubtrees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate ecs: %v", err)
 	}
-	if removed := scene.RemoveNodes("group"); removed != 2 {
+	if removed := scene.RemoveNodes("child", "group", "group"); removed != 2 {
 		t.Fatalf("removed %d game objects, want 2", removed)
 	}
 	for _, id := range []string{"group", "child"} {
@@ -1112,5 +1112,22 @@ func TestRemoveNodesDespawnsSubtrees(t *testing.T) {
 	}
 	if len(scene.Roots) != 1 || scene.ID(scene.Roots[0]) != "sibling" {
 		t.Fatalf("unexpected remaining roots: %v", scene.Roots)
+	}
+}
+
+func TestRemoveNodesFollowsScopedChildrenOfRetiredRoot(t *testing.T) {
+	world := ecs.NewWorld()
+	root := world.Spawn(ecs.NewBundle(0))
+	spawn := world.NewSpawner1[sceneapi.Parent]()
+	child := spawn.Spawn(sceneapi.Parent{Entity: root})
+	outside := spawn.Spawn(sceneapi.Parent{Entity: root})
+	s := SceneInstance{World: world, Entities: map[string]ecs.Entity{"root": root, "child": child, "outside": outside}, EntityIDs: map[ecs.Entity]string{root: "root", child: "child", outside: "outside"}}
+	sceneapi.HierarchyFor(world)
+	world.Despawn(root)
+	var scope ecs.QueryScope
+	scope.Reset([]ecs.Entity{child})
+	world.SetQueryScope(&scope)
+	if count := s.removeNodes(false, "root"); count != 2 || world.IsAlive(child) || !world.IsAlive(outside) {
+		t.Fatalf("removed %d named entities, child alive=%t, outside alive=%t", count, world.IsAlive(child), world.IsAlive(outside))
 	}
 }

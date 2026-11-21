@@ -14,6 +14,7 @@ import (
 	onixpng "github.com/onix-engine/onix/images/png"
 	onixsvg "github.com/onix-engine/onix/images/svg"
 	"github.com/onix-engine/onix/images/webp"
+	"github.com/onix-engine/onix/internal/texcompress"
 	"github.com/onix-engine/onix/render"
 )
 
@@ -35,6 +36,8 @@ const (
 	TextureTargetBC
 	// TextureTargetASTC targets mobile GPUs that expose ASTC.
 	TextureTargetASTC
+	// TextureTargetWeb ships BC and ASTC for selection on the active GPU.
+	TextureTargetWeb
 )
 
 func (target TextureTarget) String() string {
@@ -45,6 +48,8 @@ func (target TextureTarget) String() string {
 		return "BC"
 	case TextureTargetASTC:
 		return "ASTC"
+	case TextureTargetWeb:
+		return "BC+ASTC"
 	default:
 		return fmt.Sprintf("TextureTarget(%d)", target)
 	}
@@ -52,7 +57,7 @@ func (target TextureTarget) String() string {
 
 // Encodable reports whether this build can actually encode the target.
 func (target TextureTarget) Encodable() bool {
-	return target == TextureTargetBC || target == TextureTargetASTC
+	return target == TextureTargetBC || target == TextureTargetASTC || target == TextureTargetWeb
 }
 
 // textureTargetForBuildPlatform maps a build platform to the block format its
@@ -63,7 +68,9 @@ func textureTargetForBuildPlatform(platform BuildPlatform) TextureTarget {
 		return TextureTargetBC
 	case BuildPlatformAndroid, BuildPlatformIOS:
 		return TextureTargetASTC
-	case BuildPlatformWeb, BuildPlatformWeChat:
+	case BuildPlatformWeb:
+		return TextureTargetWeb
+	case BuildPlatformWeChat:
 		return TextureTargetASTC
 	default:
 		return TextureTargetSource
@@ -94,21 +101,28 @@ func packTextureSource(data []byte, name string, target TextureTarget, mode Buil
 	if err != nil {
 		return nil, err
 	}
-	if target == TextureTargetASTC {
-		payload, levels, err := encodeASTCTexture(source.Pix, source.Rect.Dx(), source.Rect.Dy(), mode, srgb)
+	width, height := source.Rect.Dx(), source.Rect.Dy()
+	if target == TextureTargetBC {
+		return ontex.Encode(source.Pix, width, height, ontex.EncodeOptions{Mipmaps: true, SRGB: srgb})
+	}
+	astc, levels, err := encodeASTCTexture(source.Pix, width, height, mode, srgb)
+	if err != nil {
+		return nil, err
+	}
+	image := ontex.Image{Format: render.TextureFormatASTC4x4.SRGBVariant(srgb), Width: width, Height: height, Levels: levels, Data: astc}
+	if target == TextureTargetWeb {
+		image.Format = ontex.SelectFormat(source.Pix, srgb)
+		bc, bcLevels, err := texcompress.EncodeChain(image.Format, source.Pix, width, height)
 		if err != nil {
 			return nil, err
 		}
-		format := render.TextureFormatASTC4x4
-		if srgb {
-			format = render.TextureFormatASTC4x4SRGB
+		if bcLevels != levels {
+			return nil, fmt.Errorf("texture variant mip depths differ: %d and %d", bcLevels, levels)
 		}
-		return ontex.Marshal(ontex.Image{
-			Format: format,
-			Width:  source.Rect.Dx(), Height: source.Rect.Dy(), Levels: levels, Data: payload,
-		})
+		image.HasASTCVariant = true
+		image.Data = append(bc, astc...)
 	}
-	return ontex.Encode(source.Pix, source.Rect.Dx(), source.Rect.Dy(), ontex.EncodeOptions{Mipmaps: true, SRGB: srgb})
+	return ontex.Marshal(image)
 }
 
 func packEmbeddedTextureSource(data []byte, mime string, target TextureTarget, mode BuildMode, options graphics.TextureOptions) ([]byte, error) {
@@ -146,22 +160,7 @@ func packEmbeddedTextureSource(data []byte, mime string, target TextureTarget, m
 			return nil, fmt.Errorf("unsupported embedded texture MIME %q", mime)
 		}
 	}
-	if target != TextureTargetASTC {
-		return packTextureSource(data, "embedded"+extension, target, mode, options.SRGB)
-	}
-	source, err := decodeTextureSource(data, "embedded"+extension)
-	if err != nil {
-		return nil, err
-	}
-	payload, levels, err := encodeASTCTexture(source.Pix, source.Rect.Dx(), source.Rect.Dy(), mode, options.SRGB)
-	if err != nil {
-		return nil, err
-	}
-	format := render.TextureFormatASTC4x4
-	if options.SRGB {
-		format = render.TextureFormatASTC4x4SRGB
-	}
-	return ontex.Marshal(ontex.Image{Format: format, Width: source.Rect.Dx(), Height: source.Rect.Dy(), Levels: levels, Data: payload})
+	return packTextureSource(data, "embedded"+extension, target, mode, options.SRGB)
 }
 
 // decodeTextureSource decodes a source image into straight-alpha RGBA8 for the

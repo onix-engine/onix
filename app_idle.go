@@ -11,6 +11,7 @@ import (
 )
 
 type appIdleState struct {
+	caretFrames    idleCaretPresenter
 	deadline       time.Time
 	caretDeadline  time.Time
 	bufferDeadline time.Time
@@ -18,6 +19,13 @@ type appIdleState struct {
 	sync.Mutex
 	enabled bool
 	started bool
+}
+
+// An on-demand renderer can keep both caret phases in the window compositor.
+// PrepareCaretFrame requests a regular render until the requested phase exists.
+type idleCaretPresenter interface {
+	PrepareCaretFrame(visible bool) bool
+	DiscardCaretFrames()
 }
 
 // SetIdleEnabled allows an on-demand app to suspend its schedules between
@@ -96,14 +104,37 @@ func (app *App) pendingFrame() bool {
 		(app.Context != nil && app.Context.FrameRequested()) || app.World.MutationVersion() != app.idle.version
 }
 
-func (app *App) shouldIdle(now time.Time) bool {
+func (app *App) idleWake(now time.Time) (sleep, caretOnly bool) {
 	if !app.idleEligible() || !app.idle.started || app.pendingFrame() {
-		return false
+		return false, false
 	}
 	app.idle.Lock()
-	deadline := app.nextIdleDeadline()
-	app.idle.Unlock()
-	return deadline.IsZero() || now.Before(deadline)
+	defer app.idle.Unlock()
+	if deadline := app.nextIdleDeadline(); deadline.IsZero() || now.Before(deadline) {
+		return true, false
+	}
+	caretDue := !app.idle.caretDeadline.IsZero() && !now.Before(app.idle.caretDeadline)
+	return false, caretDue && (app.idle.deadline.IsZero() || now.Before(app.idle.deadline))
+}
+
+func (app *App) discardCaretFrames() {
+	if presenter := app.idle.caretFrames; presenter != nil {
+		presenter.DiscardCaretFrames()
+		app.idle.caretFrames = nil
+	}
+}
+
+func (app *App) presentIdleCaret() bool {
+	presenter, ok := graphics.DeviceFor(app.World).Driver().(idleCaretPresenter)
+	if ok && app.idleEligible() {
+		// An update may move focus or start an animation on the blink deadline.
+		if _, blinking := app.uiCaretBlinkDelay(app.World); blinking {
+			app.idle.caretFrames = presenter
+			return presenter.PrepareCaretFrame(app.uiCaretVisible(app.World))
+		}
+	}
+	app.discardCaretFrames()
+	return false
 }
 
 func (app *App) takeWakeDeadline(now time.Time) {

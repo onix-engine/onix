@@ -1,9 +1,9 @@
 package physics
 
 import (
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type Runtime3D struct {
@@ -63,6 +63,7 @@ func stepECS3D(context *ecs.SystemContext) error {
 		}
 	}
 	if fullSync {
+		runtime.Simulation.writes.resetTopology()
 		if err := runtime.syncBodies(world, nil); err != nil {
 			return err
 		}
@@ -105,6 +106,7 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World, entities []ecs.Entity) er
 		}
 		if entities == nil {
 			runtime.managedBodies++
+			runtime.Simulation.writes.link[RigidBody3D](world, entity)
 		}
 		bodyAccess := access.A
 		transformAccess := access.B
@@ -118,7 +120,8 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World, entities []ecs.Entity) er
 		}
 		position := vectorFromMGL(pose.Translation)
 		rotation := quaternionFromMGL(pose.Rotation)
-		if !component.body.Valid() || component.body.world != runtime.Simulation || component.body.state().userData != uint64(entity) {
+		created := !component.body.Valid() || component.body.world != runtime.Simulation || component.body.state().userData != uint64(entity)
+		if created {
 			def := NewBodyDef3D(component.Type)
 			def.Position, def.Rotation = position, rotation
 			def.Velocity, def.AngularVelocity = component.Velocity, component.AngularVelocity
@@ -130,9 +133,10 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World, entities []ecs.Entity) er
 		} else {
 			state := component.body.state()
 			if component.Type != BodyDynamic || position != component.lastPosition || rotation != component.lastRotation {
-				state.position, state.rotation = position, rotation
+				runtime.Simulation.setPose(state, position, rotation)
 			}
-			state.bodyType, state.mass = component.Type, component.Mass
+			runtime.Simulation.setBodyType(state, component.Type)
+			state.mass = component.Mass
 			state.gravityScale = component.GravityScale
 			state.linearDamping, state.angularDamping = component.LinearDamping, component.AngularDamping
 			state.fixedRotation = component.FixedRotation
@@ -150,6 +154,12 @@ func (runtime *Runtime3D) syncBodies(world *ecs.World, entities []ecs.Entity) er
 			state.velocity = state.velocity.Add(component.Impulse.Mul(state.inverseMass))
 		}
 		component.Force, component.Torque, component.Impulse = Vector3D{}, Vector3D{}, Vector3D{}
+		poseChanged := state.position != position || state.rotation != rotation
+		if created || poseChanged || position != component.lastPosition || rotation != component.lastRotation ||
+			state.velocity != component.Velocity || state.angularVelocity != component.AngularVelocity ||
+			transform.Rotation.Len() == 0 || !world.Has[scene.Parent](entity) && transform.Rotation != quaternionToMGL(state.rotation) {
+			runtime.Simulation.writes.record(uint64(entity), poseChanged)
+		}
 		component.lastPosition, component.lastRotation = state.position, state.rotation
 		if value != bodyAccess.Get() {
 			*bodyAccess.Mut() = value
@@ -167,10 +177,12 @@ func (runtime *Runtime3D) syncECSColliders3D[S Shape3D](world *ecs.World) {
 		colliderAccess := access.B
 
 		body, collider := bodyAccess.Ref(), colliderAccess.Ref()
-		if !body.body.Valid() {
+		bodyIndex, owner := runtime.Simulation.resolveBody(body.body.id)
+		if body.body.world != runtime.Simulation || owner == nil || owner.userData != uint64(entity) {
 			continue
 		}
-		if !collider.handle.Valid() || collider.handle.world != runtime.Simulation {
+		index, state := runtime.Simulation.resolveCollider(collider.handle.id)
+		if collider.handle.world != runtime.Simulation || state == nil || state.bodyIndex != bodyIndex {
 			definition := ColliderDef[S]{
 				Shape: collider.Shape, Friction: max(collider.Friction, 0),
 				Restitution: clamp(collider.Restitution, 0, 1), Sensor: collider.Sensor,
@@ -178,14 +190,18 @@ func (runtime *Runtime3D) syncECSColliders3D[S Shape3D](world *ecs.World) {
 			}
 			collider = colliderAccess.Mut()
 			collider.handle = runtime.Simulation.AddCollider(body.body, definition)
-			runtime.Simulation.colliderState3D(collider.handle.id).managed = true
+			state = runtime.Simulation.colliderState3D(collider.handle.id)
+			state.managed = true
 		} else {
-			state := runtime.Simulation.colliderState3D(collider.handle.id)
-			state.setColliderShape3D(collider.Shape)
+			boundsChanged := state.setColliderShape3D(collider.Shape)
+			filter := collider.Filter.normalized()
+			if boundsChanged || state.sensor != collider.Sensor || state.filter != filter {
+				runtime.Simulation.markProxy(index, boundsChanged)
+			}
 			state.friction, state.restitution = max(collider.Friction, 0), clamp(collider.Restitution, 0, 1)
-			state.sensor, state.filter, state.collisionType = collider.Sensor, collider.Filter.normalized(), collider.CollisionType
+			state.sensor, state.filter, state.collisionType = collider.Sensor, filter, collider.CollisionType
 		}
-		runtime.Simulation.colliderState3D(collider.handle.id).touched = runtime.frame
+		state.touched = runtime.frame
 	}
 }
 
@@ -209,7 +225,13 @@ func (runtime *Runtime3D) sweepManagedBodies() {
 }
 
 func (runtime *Runtime3D) writeBodies(world *ecs.World) {
-	for entity, access := range world.Query2[RigidBody3D, scene.Transform]().All {
+	writes := &runtime.Simulation.writes
+	if len(writes.entities) == 0 {
+		return
+	}
+	writes.includeDependents()
+	for entity, access := range world.Query2[RigidBody3D, scene.Transform]().In(writes.entities).All {
+		runtime.Simulation.stats.WritebackBodies++
 		if !scene.IsActive(world, entity) {
 			continue
 		}
@@ -243,6 +265,7 @@ func (runtime *Runtime3D) writeBodies(world *ecs.World) {
 			*transformAccess.Mut() = pose
 		}
 	}
+	writes.reset()
 }
 
 func (runtime *Runtime3D) writeEvents(world *ecs.World) {

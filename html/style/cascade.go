@@ -2,6 +2,7 @@ package style
 
 import (
 	"fmt"
+	"github.com/onix-engine/onix/html/element"
 	"iter"
 	"maps"
 	"math"
@@ -444,12 +445,12 @@ func computedStyleChangeForNode(node *uinode.Node, previous, current *ComputedSt
 		((previous.TextInOpacityGroup || current.TextInOpacityGroup) && (previous.Color != current.Color || previous.BackgroundColor != current.BackgroundColor || previous.BorderRadius != current.BorderRadius || previous.BorderColor != current.BorderColor)) ||
 		(previous.BorderColor != current.BorderColor && (!uniformBorderColor(previous.BorderColor) || !uniformBorderColor(current.BorderColor))) ||
 		(previous.TextDecorationLine == Keyword("line-through") && transparentColor(previous.Color) != transparentColor(current.Color)) ||
-		(!isPaintedHTMLControl(node) && previous.BorderColor != current.BorderColor && (transparentColor(previous.BorderColor.Top) != transparentColor(current.BorderColor.Top) || transparentColor(previous.BorderColor.Right) != transparentColor(current.BorderColor.Right) || transparentColor(previous.BorderColor.Bottom) != transparentColor(current.BorderColor.Bottom) || transparentColor(previous.BorderColor.Left) != transparentColor(current.BorderColor.Left))) ||
+		(!element.IsWidgetControl(node) && previous.BorderColor != current.BorderColor && (transparentColor(previous.BorderColor.Top) != transparentColor(current.BorderColor.Top) || transparentColor(previous.BorderColor.Right) != transparentColor(current.BorderColor.Right) || transparentColor(previous.BorderColor.Bottom) != transparentColor(current.BorderColor.Bottom) || transparentColor(previous.BorderColor.Left) != transparentColor(current.BorderColor.Left))) ||
 		previous.ObjectFit != current.ObjectFit || previous.ObjectPosX != current.ObjectPosX ||
 		previous.ObjectPosY != current.ObjectPosY || previous.ObjectPosXOrigin != current.ObjectPosXOrigin ||
 		previous.ObjectPosYOrigin != current.ObjectPosYOrigin ||
 		backgroundLayersRequireRebuild(previous, current) ||
-		(paintedBackground(previous) != paintedBackground(current) && !isPaintedHTMLControl(node)) ||
+		(paintedBackground(previous) != paintedBackground(current) && !element.IsWidgetControl(node)) ||
 		!slices.Equal(previous.BoxShadow, current.BoxShadow) || !slices.Equal(previous.Filters, current.Filters) {
 		return ChangeVisual
 	}
@@ -471,21 +472,6 @@ func computedStyleChangeForNode(node *uinode.Node, previous, current *ComputedSt
 		return ChangePaint
 	}
 	return ChangeNone
-}
-
-// Controls keep a Sprite2D surface even with a transparent background, so a
-// hover fill only changes paint. Other elements need a rebuild to add or
-// remove their surface when their background becomes visible or transparent.
-func isPaintedHTMLControl(node *uinode.Node) bool {
-	if node == nil || node.Type != uinode.ElementNode {
-		return false
-	}
-	switch node.Data {
-	case "button", "input", "select", "textarea":
-		return true
-	default:
-		return false
-	}
 }
 
 func transparentColor(value Value) bool { return value.Kind != ValueColor || value.Color.A == 0 }
@@ -750,18 +736,9 @@ func compareWeights(left, right cascadeWeight) int {
 	}
 }
 
-type inlineDeclaration struct {
-	parsed        *preparedValue
-	property      string
-	value         string
-	order         int
-	propertyOrder cascadePropertyOrder
-	important     bool
-}
-
 type cachedInlineStyle struct {
 	err          error
-	declarations []inlineDeclaration
+	declarations []preparedDeclaration
 }
 
 // Parsed inline styles own their source and share immutable declarations.
@@ -787,12 +764,12 @@ func applyInlineDeclarations(values *cascadedValues, input string) error {
 	}
 	for i := range declarations {
 		declaration := &declarations[i]
-		updateCascadedValue(values, declaration.value, declaration.propertyOrder, declaration.parsed, cascadeWeight{important: boolInt(declaration.important), inline: 1, order: declaration.order})
+		updateCascadedValue(values, declaration.value, declaration.order, declaration.parsed, cascadeWeight{important: boolInt(declaration.important), inline: 1, order: i})
 	}
 	return nil
 }
 
-func (cache *inlineDeclarationCache) parse(input string) ([]inlineDeclaration, error) {
+func (cache *inlineDeclarationCache) parse(input string) ([]preparedDeclaration, error) {
 	if len(input) > inlineStyleCacheSourceLimit {
 		declarations, _, err := parseInlineDeclarations(input)
 		return declarations, err
@@ -829,12 +806,12 @@ func (cache *inlineDeclarationCache) parse(input string) ([]inlineDeclaration, e
 }
 
 // Count backing storage conservatively: borrowed strings can be counted more
-// than once, but normalized names, stripped comments and prepared motion values
+// than once, but stripped comments and prepared motion values
 // must not disappear from the budget merely because they are separately owned.
-func inlineDeclarationBytes(declaration inlineDeclaration) int {
-	bytes := len(declaration.property) + len(declaration.value)
+func inlineDeclarationBytes(declaration preparedDeclaration) int {
+	bytes := len(declaration.value)
 	if parsed := declaration.parsed; parsed != nil {
-		bytes += int(unsafe.Sizeof(*parsed)) + len(parsed.property) + len(parsed.value.Keyword)
+		bytes += int(unsafe.Sizeof(*parsed)) + len(parsed.value.Keyword)
 		if motion := parsed.motion; motion != nil {
 			bytes += int(unsafe.Sizeof(*motion))
 			for _, value := range motion.transition {
@@ -848,11 +825,10 @@ func inlineDeclarationBytes(declaration inlineDeclaration) int {
 	return bytes
 }
 
-func parseInlineDeclarations(input string) ([]inlineDeclaration, int, error) {
+func parseInlineDeclarations(input string) ([]preparedDeclaration, int, error) {
 	bytes := len(input)
-	var declarations []inlineDeclaration
+	var declarations []preparedDeclaration
 	start := 0
-	declarationOrder := 0
 	parenDepth := 0
 	bracketDepth := 0
 	var quote byte
@@ -873,16 +849,9 @@ func parseInlineDeclarations(input string) ([]inlineDeclaration, int, error) {
 		}
 		property := strings.ToLower(strings.TrimSpace(before))
 		value, important := css.SplitImportant(after)
-		if !validateDeclaration(property, value) {
+		declaration, ok := prepareDeclaration(property, value, important)
+		if !ok {
 			return nil
-		}
-		declaration := inlineDeclaration{
-			property:      property,
-			value:         value,
-			important:     important,
-			order:         declarationOrder,
-			propertyOrder: cascadePropertyIndex[property],
-			parsed:        preparePropertyValue(property, value),
 		}
 		declarations = append(declarations, declaration)
 		bytes += inlineDeclarationBytes(declaration)
@@ -935,7 +904,6 @@ func parseInlineDeclarations(input string) ([]inlineDeclaration, int, error) {
 				if err := flush(index); err != nil {
 					return nil, 0, err
 				}
-				declarationOrder++
 				start = index + 1
 			}
 		}
@@ -945,7 +913,7 @@ func parseInlineDeclarations(input string) ([]inlineDeclaration, int, error) {
 			return nil, 0, err
 		}
 	}
-	return declarations, bytes + cap(declarations)*int(unsafe.Sizeof(inlineDeclaration{})), nil
+	return declarations, bytes + cap(declarations)*int(unsafe.Sizeof(preparedDeclaration{})), nil
 }
 
 // cascadePropertyIndex maps each known property to its group and position
@@ -992,26 +960,26 @@ func applySpecifiedValues(node *uinode.Node, computed, parent *ComputedStyle, sp
 		if !entry.order.known {
 			continue
 		}
-		name := cascadePropertyNames[entry.order.id]
+		id := entry.order.id
 		ctx.FontSize = computed.FontSize.LengthPx
 		if isCSSWideKeyword(entry.value) {
-			applyCSSWideKeyword(computed, parent, node, name, entry.value)
+			applyCSSWideKeyword(computed, parent, node, id, entry.value)
 			markAnimationImportance(computed, entry)
 			continue
 		}
 		if parsed := entry.parsed; parsed != nil {
 			if parsed.motion != nil {
-				applyPreparedMotion(computed, parsed)
+				applyPreparedMotion(computed, id, parsed.motion)
 			} else {
-				*compiledValueField(computed, parsed.property) = parsed.value
+				*compiledValueField(computed, id) = parsed.value
 			}
 			markAnimationImportance(computed, entry)
 			continue
 		}
-		if err := applyProperty(computed, name, entry.value, definitions, ctx); err != nil {
+		if err := applyProperty(computed, id, entry.value, definitions, ctx); err != nil {
 			// Invalid declarations are ignored at property level, including the
 			// properties with a narrower implementation-specific value grammar.
-			if name == "opacity" || name == "scrollbar-width" || name == "transform" || name == "transform-origin" || strings.HasPrefix(name, "transition") || strings.HasPrefix(name, "animation") {
+			if id == propertyOpacity || id == propertyScrollbarWidth || id == propertyTransform || id == propertyTransformOrigin || id.isTransition() || id.isAnimation() {
 				continue
 			}
 			return err
@@ -1068,7 +1036,7 @@ func applyCascadedLineHeight(node *uinode.Node, computed, parent *ComputedStyle,
 			}
 			return nil
 		}
-		resetCSSProperty(computed, node, "line-height")
+		resetCSSProperty(computed, node, propertyLineHeight)
 		return nil
 	}
 	value, err := parseLineHeight(lineHeight.value, computed.FontSize, ctx)
@@ -1080,41 +1048,24 @@ func applyCascadedLineHeight(node *uinode.Node, computed, parent *ComputedStyle,
 	return nil
 }
 
-func applyProperty(style *ComputedStyle, property, raw string, definitions filterDefinitions, ctx parseContext) error {
-	if property == "transition" || strings.HasPrefix(property, "transition-") {
+func applyProperty(style *ComputedStyle, property propertyID, raw string, definitions filterDefinitions, ctx parseContext) error {
+	if allowed := propertyKeywords[property]; allowed != nil {
+		value, err := parseKeyword(raw, allowed...)
+		if err == nil {
+			*compiledValueField(style, property) = value
+		}
+		return err
+	}
+	if property.isTransition() {
 		return applyTransitionProperty(style, property, raw)
 	}
-	if property == "animation" || strings.HasPrefix(property, "animation-") {
+	if property.isAnimation() {
 		return applyAnimationProperty(style, property, raw)
 	}
 	switch property {
-	case "font":
+	case propertyFont:
 		return applyFontShorthand(style, raw, ctx)
-	case "display":
-		value, err := parseKeyword(raw, "none", "contents", "block", "inline", "inline-block", "flow-root", "flex", "inline-flex", "grid", "inline-grid", "list-item", "table", "inline-table", "table-caption", "table-column", "table-column-group", "table-row", "table-row-group", "table-header-group", "table-footer-group", "table-cell")
-		if err != nil {
-			return err
-		}
-		style.Display = value
-	case "float":
-		value, err := parseKeyword(raw, "none", "left", "right")
-		if err != nil {
-			return err
-		}
-		style.Float = value
-	case "clear":
-		value, err := parseKeyword(raw, "none", "left", "right", "both")
-		if err != nil {
-			return err
-		}
-		style.Clear = value
-	case "table-layout":
-		value, err := parseKeyword(raw, "auto", "fixed")
-		if err != nil {
-			return err
-		}
-		style.TableLayout = value
-	case "border-spacing":
+	case propertyBorderSpacing:
 		parts := splitCSSFields(raw)
 		if len(parts) < 1 || len(parts) > 2 {
 			return fmt.Errorf("invalid border-spacing %q", raw)
@@ -1131,71 +1082,53 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			}
 		}
 		style.BorderSpacingX, style.BorderSpacingY = x, y
-	case "vertical-align":
-		value, err := parseKeyword(raw, "baseline", "top", "middle", "bottom")
-		if err != nil {
-			return err
-		}
-		style.VerticalAlign = value
-	case "list-style-type":
-		value, err := parseKeyword(raw, "disc", "circle", "square", "decimal", "decimal-leading-zero", "lower-alpha", "upper-alpha", "lower-latin", "upper-latin", "lower-roman", "upper-roman", "none")
-		if err != nil {
-			return err
-		}
-		style.ListStyleType = value
-	case "grid-template-columns":
+	case propertyGridTemplateColumns:
 		style.GridTemplateColumns = strings.TrimSpace(raw)
-	case "grid-template-rows":
+	case propertyGridTemplateRows:
 		style.GridTemplateRows = strings.TrimSpace(raw)
-	case "grid-column":
+	case propertyGridColumn:
 		start, end, err := parseGridLineShorthand(raw)
 		if err != nil {
 			return err
 		}
 		style.GridColumnStart, style.GridColumnEnd = start, end
-	case "grid-row":
+	case propertyGridRow:
 		start, end, err := parseGridLineShorthand(raw)
 		if err != nil {
 			return err
 		}
 		style.GridRowStart, style.GridRowEnd = start, end
-	case "grid-column-start":
+	case propertyGridColumnStart:
 		value, err := parseGridLine(raw)
 		if err != nil {
 			return err
 		}
 		style.GridColumnStart = value
-	case "grid-column-end":
+	case propertyGridColumnEnd:
 		value, err := parseGridLine(raw)
 		if err != nil {
 			return err
 		}
 		style.GridColumnEnd = value
-	case "grid-row-start":
+	case propertyGridRowStart:
 		value, err := parseGridLine(raw)
 		if err != nil {
 			return err
 		}
 		style.GridRowStart = value
-	case "grid-row-end":
+	case propertyGridRowEnd:
 		value, err := parseGridLine(raw)
 		if err != nil {
 			return err
 		}
 		style.GridRowEnd = value
-	case "visibility":
-		value, err := parseKeyword(raw, "visible", "hidden", "collapse")
-		if err != nil {
-			return err
-		}
-		style.Visibility = value
-	case "cursor":
+	case propertyCursor:
 		cursor, ok := parseCursor(raw)
 		if !ok {
 			return fmt.Errorf("invalid cursor %q", raw)
 		}
 		style.Cursor = cursor
-	case "pointer-events":
+	case propertyPointerEvents:
 		value, err := parseKeyword(raw, "auto", "none", "inherit", "initial", "unset")
 		if err != nil {
 			return err
@@ -1207,19 +1140,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		default:
 			style.PointerEvents = value
 		}
-	case "appearance":
-		value, err := parseKeyword(raw, "auto", "none")
-		if err != nil {
-			return err
-		}
-		style.Appearance = value
-	case "box-sizing":
-		value, err := parseKeyword(raw, "content-box", "border-box")
-		if err != nil {
-			return err
-		}
-		style.BoxSizing = value
-	case "flex":
+	case propertyFlex:
 		grow, shrink, basis, err := parseFlex(raw, ctx)
 		if err != nil {
 			return err
@@ -1227,128 +1148,57 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		style.FlexGrow = grow
 		style.FlexShrink = shrink
 		style.FlexBasis = basis
-	case "flex-flow":
+	case propertyFlexFlow:
 		direction, wrap, err := parseFlexFlow(raw)
 		if err != nil {
 			return err
 		}
 		style.FlexDirection = direction
 		style.FlexWrap = wrap
-	case "flex-direction":
-		value, err := parseKeyword(raw, "row", "row-reverse", "column", "column-reverse")
-		if err != nil {
-			return err
-		}
-		style.FlexDirection = value
-	case "flex-wrap":
-		value, err := parseKeyword(raw, "nowrap", "wrap", "wrap-reverse")
-		if err != nil {
-			return err
-		}
-		style.FlexWrap = value
-	case "justify-content":
-		value, err := parseKeyword(raw, "flex-start", "flex-end", "start", "end", "center", "space-between", "space-around", "space-evenly")
-		if err != nil {
-			return err
-		}
-		style.JustifyContent = value
-	case "justify-items":
-		value, err := parseKeyword(raw, "stretch", "start", "end", "center")
-		if err != nil {
-			return err
-		}
-		style.JustifyItems = value
-	case "justify-self":
-		value, err := parseKeyword(raw, "auto", "stretch", "start", "end", "center")
-		if err != nil {
-			return err
-		}
-		style.JustifySelf = value
-	case "align-items":
-		value, err := parseKeyword(raw, "stretch", "flex-start", "flex-end", "start", "end", "center", "baseline")
-		if err != nil {
-			return err
-		}
-		style.AlignItems = value
-	case "align-self":
-		value, err := parseKeyword(raw, "auto", "stretch", "flex-start", "flex-end", "start", "end", "center", "baseline")
-		if err != nil {
-			return err
-		}
-		style.AlignSelf = value
-	case "align-content":
-		value, err := parseKeyword(raw, "stretch", "flex-start", "flex-end", "start", "end", "center", "space-between", "space-around", "space-evenly")
-		if err != nil {
-			return err
-		}
-		style.AlignContent = value
-	case "flex-grow":
+	case propertyFlexGrow, propertyFlexShrink, propertyOrder:
 		value, err := parseNumber(raw)
-		if err != nil {
-			return err
+		if err == nil {
+			*compiledValueField(style, property) = value
 		}
-		style.FlexGrow = value
-	case "flex-shrink":
-		value, err := parseNumber(raw)
-		if err != nil {
-			return err
-		}
-		style.FlexShrink = value
-	case "flex-basis":
+		return err
+	case propertyFlexBasis, propertyWidth, propertyHeight, propertyMinWidth, propertyMinHeight, propertyMaxWidth,
+		propertyMaxHeight, propertyTop, propertyRight, propertyBottom, propertyLeft:
 		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
+		if err == nil {
+			*compiledValueField(style, property) = value
 		}
-		style.FlexBasis = value
-	case "order":
-		value, err := parseNumber(raw)
-		if err != nil {
-			return err
-		}
-		style.Order = value
-	case "gap":
+		return err
+	case propertyGap:
 		rowGap, columnGap, err := parseGap(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.RowGap = rowGap
 		style.ColumnGap = columnGap
-	case "row-gap":
+	case propertyRowGap, propertyColumnGap, propertyTextIndent:
 		value, err := parseLength(raw, ctx)
-		if err != nil {
-			return err
+		if err == nil {
+			*compiledValueField(style, property) = value
 		}
-		style.RowGap = value
-	case "column-gap":
-		value, err := parseLength(raw, ctx)
-		if err != nil {
-			return err
-		}
-		style.ColumnGap = value
-	case "container":
+		return err
+	case propertyContainer:
 		name, containerType, err := parseContainerShorthand(raw)
 		if err != nil {
 			return err
 		}
 		style.ContainerName = name
 		style.ContainerType = containerType
-	case "container-type":
-		value, err := parseKeyword(raw, "normal", "inline-size", "size")
-		if err != nil {
-			return err
-		}
-		style.ContainerType = value
-	case "container-name":
+	case propertyContainerName:
 		style.ContainerName = normalizeContainerName(raw)
-	case "position":
+	case propertyPosition:
 		style.Position = Keyword(strings.ToLower(strings.TrimSpace(raw)))
-	case "inset":
+	case propertyInset:
 		edges, err := parseBoxValues(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Top, style.Right, style.Bottom, style.Left = edges.Top, edges.Right, edges.Bottom, edges.Left
-	case "opacity":
+	case propertyOpacity:
 		number, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(raw), "%"), 64)
 		if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
 			return fmt.Errorf("invalid opacity %q", raw)
@@ -1357,7 +1207,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			number /= 100
 		}
 		style.Opacity = Number(max(0, min(1, number)))
-	case "transform":
+	case propertyTransform:
 		transform, err := parseTransform(raw, ctx)
 		if err != nil {
 			return err
@@ -1368,165 +1218,117 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		style.TransformScaleX, style.TransformScaleY = transform.ScaleX, transform.ScaleY
 		style.TransformSkewX = transform.SkewX
 		style.TransformTranslateCrossX, style.TransformTranslateCrossY = transform.TranslateCrossX, transform.TranslateCrossY
-	case "transform-origin":
+	case propertyTransformOrigin:
 		x, y, err := parseTransformOrigin(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.TransformOriginX, style.TransformOriginY = x, y
 
-	case "z-index":
+	case propertyZIndex:
 		value, err := parseZIndex(raw)
 		if err != nil {
 			return err
 		}
 		style.ZIndex = value
-	case "overflow":
+	case propertyOverflow:
 		overflowX, overflowY, err := parseOverflow(raw)
 		if err != nil {
 			return err
 		}
 		style.OverflowX = overflowX
 		style.OverflowY = overflowY
-	case "overflow-x":
-		value, err := parseKeyword(raw, "visible", "hidden", "clip", "auto", "scroll")
-		if err != nil {
-			return err
-		}
-		style.OverflowX = value
-	case "overflow-y":
-		value, err := parseKeyword(raw, "visible", "hidden", "clip", "auto", "scroll")
-		if err != nil {
-			return err
-		}
-		style.OverflowY = value
-	case "scrollbar-width":
+	case propertyScrollbarWidth:
 		value, err := parseScrollbarWidth(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.ScrollbarWidth = value
-	case "scrollbar-color":
+	case propertyScrollbarColor:
 		thumb, track, err := parseScrollbarColors(raw)
 		if err != nil {
 			return err
 		}
 		style.ScrollbarThumbColor, style.ScrollbarTrackColor = thumb, track
-	case "scrollbar-track-color":
+	case propertyScrollbarTrackColor:
 		value, err := parseColor(raw)
 		if err != nil {
 			return err
 		}
 		style.ScrollbarTrackColor = ColorValue(value)
-	case "scrollbar-thumb-color":
+	case propertyScrollbarThumbColor:
 		value, err := parseColor(raw)
 		if err != nil {
 			return err
 		}
 		style.ScrollbarThumbColor = ColorValue(value)
-	case "scrollbar-thumb-hover-color":
+	case propertyScrollbarThumbHoverColor:
 		value, err := parseColor(raw)
 		if err != nil {
 			return err
 		}
 		style.ScrollbarThumbHoverColor = ColorValue(value)
-	case "width":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Width = value
-	case "height":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Height = value
-	case "min-width":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.MinWidth = value
-	case "min-height":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.MinHeight = value
-	case "max-width":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.MaxWidth = value
-	case "max-height":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.MaxHeight = value
-	case "margin":
+	case propertyMargin:
 		edges, err := parseBoxValues(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Margin = edges
-	case "margin-top":
+	case propertyMarginTop:
 		value, err := parseLengthOrAuto(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Margin.Top = value
-	case "margin-right":
+	case propertyMarginRight:
 		value, err := parseLengthOrAuto(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Margin.Right = value
-	case "margin-bottom":
+	case propertyMarginBottom:
 		value, err := parseLengthOrAuto(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Margin.Bottom = value
-	case "margin-left":
+	case propertyMarginLeft:
 		value, err := parseLengthOrAuto(raw, true, ctx)
 		if err != nil {
 			return err
 		}
 		style.Margin.Left = value
-	case "padding":
+	case propertyPadding:
 		edges, err := parseBoxValues(raw, false, ctx)
 		if err != nil {
 			return err
 		}
 		style.Padding = edges
-	case "padding-top":
+	case propertyPaddingTop:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.Padding.Top = value
-	case "padding-right":
+	case propertyPaddingRight:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.Padding.Right = value
-	case "padding-bottom":
+	case propertyPaddingBottom:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.Padding.Bottom = value
-	case "padding-left":
+	case propertyPaddingLeft:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.Padding.Left = value
-	case "border":
+	case propertyBorder:
 		widths, borderStyle, colors, err := parseBorder(raw, ctx)
 		if err != nil {
 			return err
@@ -1534,145 +1336,145 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		style.BorderWidth = widths
 		style.BorderStyle = borderStyle
 		style.BorderColor = colors
-	case "border-top", "border-right", "border-bottom", "border-left":
+	case propertyBorderTop, propertyBorderRight, propertyBorderBottom, propertyBorderLeft:
 		widths, borderStyle, colors, err := parseBorder(raw, ctx)
 		if err != nil {
 			return err
 		}
 		switch property {
-		case "border-top":
+		case propertyBorderTop:
 			style.BorderWidth.Top, style.BorderStyle.Top, style.BorderColor.Top = widths.Top, borderStyle.Top, colors.Top
-		case "border-right":
+		case propertyBorderRight:
 			style.BorderWidth.Right, style.BorderStyle.Right, style.BorderColor.Right = widths.Right, borderStyle.Right, colors.Right
-		case "border-bottom":
+		case propertyBorderBottom:
 			style.BorderWidth.Bottom, style.BorderStyle.Bottom, style.BorderColor.Bottom = widths.Bottom, borderStyle.Bottom, colors.Bottom
-		case "border-left":
+		case propertyBorderLeft:
 			style.BorderWidth.Left, style.BorderStyle.Left, style.BorderColor.Left = widths.Left, borderStyle.Left, colors.Left
 		}
-	case "border-width":
+	case propertyBorderWidth:
 		edges, err := parseBoxValues(raw, false, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderWidth = edges
-	case "border-style":
+	case propertyBorderStyle:
 		borderStyle, err := parseBorderStyle(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderStyle = borderStyle
-	case "border-color":
+	case propertyBorderColor:
 		colors, err := parseColorEdges(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderColor = colors
-	case "border-top-style", "border-right-style", "border-bottom-style", "border-left-style":
+	case propertyBorderTopStyle, propertyBorderRightStyle, propertyBorderBottomStyle, propertyBorderLeftStyle:
 		value, err := parseKeyword(raw, "none", "solid")
 		if err != nil {
 			return err
 		}
 		switch property {
-		case "border-top-style":
+		case propertyBorderTopStyle:
 			style.BorderStyle.Top = value
-		case "border-right-style":
+		case propertyBorderRightStyle:
 			style.BorderStyle.Right = value
-		case "border-bottom-style":
+		case propertyBorderBottomStyle:
 			style.BorderStyle.Bottom = value
-		case "border-left-style":
+		case propertyBorderLeftStyle:
 			style.BorderStyle.Left = value
 		}
-	case "border-top-width":
+	case propertyBorderTopWidth:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderWidth.Top = value
-	case "border-right-width":
+	case propertyBorderRightWidth:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderWidth.Right = value
-	case "border-bottom-width":
+	case propertyBorderBottomWidth:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderWidth.Bottom = value
-	case "border-left-width":
+	case propertyBorderLeftWidth:
 		value, err := parseLength(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderWidth.Left = value
-	case "border-top-color":
+	case propertyBorderTopColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderColor.Top = color
-	case "border-right-color":
+	case propertyBorderRightColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderColor.Right = color
-	case "border-bottom-color":
+	case propertyBorderBottomColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderColor.Bottom = color
-	case "border-left-color":
+	case propertyBorderLeftColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.BorderColor.Left = color
-	case "border-radius":
+	case propertyBorderRadius:
 		corners, err := parseCornerValues(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderRadius = corners
-	case "border-top-left-radius":
+	case propertyBorderTopLeftRadius:
 		radius, err := parseCornerRadius(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderRadius.TopLeft = radius
-	case "border-top-right-radius":
+	case propertyBorderTopRightRadius:
 		radius, err := parseCornerRadius(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderRadius.TopRight = radius
-	case "border-bottom-right-radius":
+	case propertyBorderBottomRightRadius:
 		radius, err := parseCornerRadius(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderRadius.BottomRight = radius
-	case "border-bottom-left-radius":
+	case propertyBorderBottomLeftRadius:
 		radius, err := parseCornerRadius(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BorderRadius.BottomLeft = radius
-	case "box-shadow":
+	case propertyBoxShadow:
 		shadow, err := parseBoxShadow(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.BoxShadow = shadow
-	case "filter":
+	case propertyFilter:
 		filters, err := parseFilter(raw, definitions, ctx)
 		if err != nil {
 			return err
 		}
 		style.Filters = filters
-	case "background":
+	case propertyBackground:
 		first, extra, color, hasColor, err := parseBackgroundLayers(raw, ctx)
 		if err != nil {
 			return err
@@ -1681,13 +1483,13 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			style.BackgroundColor = color
 		}
 		style.Background, style.ExtraBackgroundLayers = first, extra
-	case "background-color":
+	case propertyBackgroundColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.BackgroundColor = color
-	case "background-image":
+	case propertyBackgroundImage:
 		images, err := parseBackgroundImageList(raw)
 		if err != nil {
 			return err
@@ -1696,7 +1498,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		for i, imageURL := range images {
 			style.BackgroundLayer(i).Image = imageURL
 		}
-	case "background-position":
+	case propertyBackgroundPosition:
 		positions, err := parseBackgroundPositionList(raw, ctx)
 		if err != nil {
 			return err
@@ -1708,7 +1510,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			style.BackgroundLayer(i).PosXOrigin = position.XOrigin
 			style.BackgroundLayer(i).PosYOrigin = position.YOrigin
 		}
-	case "background-repeat":
+	case propertyBackgroundRepeat:
 		repeats, err := parseBackgroundRepeatList(raw)
 		if err != nil {
 			return err
@@ -1718,7 +1520,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			style.BackgroundLayer(i).RepeatX = repeat.X
 			style.BackgroundLayer(i).RepeatY = repeat.Y
 		}
-	case "background-size":
+	case propertyBackgroundSize:
 		sizes, err := parseBackgroundSizeList(raw, ctx)
 		if err != nil {
 			return err
@@ -1728,7 +1530,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			style.BackgroundLayer(i).SizeX = size.X
 			style.BackgroundLayer(i).SizeY = size.Y
 		}
-	case "background-origin":
+	case propertyBackgroundOrigin:
 		origins, err := parseBackgroundBoxList(raw)
 		if err != nil {
 			return err
@@ -1737,7 +1539,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		for i, origin := range origins {
 			style.BackgroundLayer(i).Origin = origin
 		}
-	case "background-clip":
+	case propertyBackgroundClip:
 		clips, err := parseBackgroundBoxList(raw)
 		if err != nil {
 			return err
@@ -1746,7 +1548,7 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		for i, clip := range clips {
 			style.BackgroundLayer(i).Clip = clip
 		}
-	case "background-attachment":
+	case propertyBackgroundAttachment:
 		attachments, err := parseBackgroundAttachmentList(raw)
 		if err != nil {
 			return err
@@ -1755,55 +1557,19 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 		for i, attachment := range attachments {
 			style.BackgroundLayer(i).Attachment = attachment
 		}
-	case "color":
+	case propertyColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.Color = color
-	case "placeholder-color":
+	case propertyPlaceholderColor:
 		color, err := parseColorValue(raw)
 		if err != nil {
 			return err
 		}
 		style.PlaceholderColor = color
-	case "text-align":
-		value, err := parseKeyword(raw, "left", "right", "center")
-		if err != nil {
-			return err
-		}
-		style.TextAlign = value
-	case "text-decoration-line":
-		value, err := parseKeyword(raw, "none", "line-through")
-		if err != nil {
-			return err
-		}
-		style.TextDecorationLine = value
-	case "text-indent":
-		value, err := parseLength(raw, ctx)
-		if err != nil {
-			return err
-		}
-		style.TextIndent = value
-	case "word-break":
-		value, err := parseKeyword(raw, "normal", "break-all", "keep-all")
-		if err != nil {
-			return err
-		}
-		style.WordBreak = value
-	case "overflow-wrap", "word-wrap":
-		value, err := parseKeyword(raw, "normal", "break-word", "anywhere")
-		if err != nil {
-			return err
-		}
-		style.OverflowWrap = value
-	case "text-overflow":
-		value, err := parseKeyword(raw, "clip", "ellipsis")
-		if err != nil {
-			return err
-		}
-		style.TextOverflow = value
-	case "letter-spacing":
+	case propertyLetterSpacing:
 		if strings.EqualFold(strings.TrimSpace(raw), "normal") {
 			style.LetterSpacing = LengthPx(0)
 			return nil
@@ -1813,19 +1579,13 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			return err
 		}
 		style.LetterSpacing = value
-	case "text-box-trim":
-		value, err := parseKeyword(raw, "none", "trim-start", "trim-end", "trim-both")
-		if err != nil {
-			return err
-		}
-		style.TextBoxTrim = value
-	case "text-box-edge":
+	case propertyTextBoxEdge:
 		value, err := parseTextBoxEdge(raw)
 		if err != nil {
 			return err
 		}
 		style.TextBoxEdge = value
-	case "tab-size":
+	case propertyTabSize:
 		value, err := parseNumber(raw)
 		if err == nil {
 			if value.Number < 0 || math.IsNaN(value.Number) || math.IsInf(value.Number, 0) {
@@ -1839,70 +1599,34 @@ func applyProperty(style *ComputedStyle, property, raw string, definitions filte
 			return fmt.Errorf("invalid tab-size %q", raw)
 		}
 		style.TabSize = value
-	case "font-size":
+	case propertyFontSize:
 		value, err := parseFontSize(raw, ctx)
 		if err != nil {
 			return err
 		}
 		style.FontSize = value
-	case "line-height":
+	case propertyLineHeight:
 		value, err := parseLineHeight(raw, style.FontSize, ctx)
 		if err != nil {
 			return err
 		}
 		style.LineHeight = value
 		style.LineHeightNormal = strings.EqualFold(strings.TrimSpace(raw), "normal")
-	case "font-family":
+	case propertyFontFamily:
 		style.FontFamily = Keyword(strings.Trim(strings.TrimSpace(raw), `"'`))
-	case "font-style":
+	case propertyFontStyle:
 		value, err := parseKeyword(raw, "normal", "italic", "oblique")
 		if err != nil {
 			return err
 		}
 		style.FontStyle = fontStyleKeyword(value.Keyword)
-	case "font-weight":
+	case propertyFontWeight:
 		value, err := parseFontWeight(raw)
 		if err != nil {
 			return err
 		}
 		style.FontWeight = value
-	case "white-space":
-		value, err := parseKeyword(raw, "normal", "nowrap", "pre", "pre-wrap", "pre-line")
-		if err != nil {
-			return err
-		}
-		style.WhiteSpace = value
-	case "top":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Top = value
-	case "right":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Right = value
-	case "bottom":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Bottom = value
-	case "left":
-		value, err := parseLengthOrAuto(raw, true, ctx)
-		if err != nil {
-			return err
-		}
-		style.Left = value
-	case "object-fit":
-		value, err := parseKeyword(raw, "fill", "contain", "cover", "none", "scale-down")
-		if err != nil {
-			return err
-		}
-		style.ObjectFit = value
-	case "object-position":
+	case propertyObjectPosition:
 		x, y, xOrigin, yOrigin, err := parseBackgroundPosition(raw, ctx)
 		if err != nil {
 			return err

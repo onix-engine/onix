@@ -102,11 +102,11 @@ func (unscopedOption) resolve(*World) rowFilter { return rowFilter{kind: filterU
 func Unscoped() QueryOption { return unscopedOption{} }
 
 func (withOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: world.registerComponent[T](), kind: filterWith}
+	return rowFilter{component: world.componentIDFor[T](), kind: filterWith}
 }
 
 func (withoutOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: world.registerComponent[T](), kind: filterWithout}
+	return rowFilter{component: world.componentIDFor[T](), kind: filterWithout}
 }
 
 func (option addedOption[T]) resolve(world *World) rowFilter {
@@ -140,7 +140,7 @@ func (world *World) resolveChangeFilter[T any](context *SystemContext, kind filt
 	if context.World != world {
 		panic("ecs: change filter context belongs to a different world")
 	}
-	return rowFilter{component: world.registerComponent[T](), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
+	return rowFilter{component: world.componentIDFor[T](), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
 }
 
 type queryView struct {

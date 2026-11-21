@@ -386,15 +386,21 @@ func (world *World) Insert[T any](entity Entity, value T) error {
 		return nil
 	}
 
-	newArchetype := world.archetypeWithAdded(oldArchetype, id)
-	newRow := newArchetype.appendEntity(entity)
-	oldRow := int(meta.row)
-	addedIndex := newArchetype.columnIndex(id)
-	newArchetype.columns[addedIndex].(*typedColumn[T]).append(value, tick)
-	moveSharedRow(oldArchetype, newArchetype, oldRow, addedIndex)
-	world.removeArchetypeEntity(oldArchetype, oldRow)
-	world.commitMigration(index, newArchetype, newRow)
+	target := world.migrateAdding(entity, index, oldArchetype, int(meta.row), id)
+	target.typed[T]().append(value, tick)
 	return nil
+}
+
+// migrateAdding transfers the shared columns and returns the one empty slot
+// in the destination table. The caller immediately appends its typed value.
+func (world *World) migrateAdding(entity Entity, index uint32, source *archetype, row int, id componentID) *columnState {
+	target := world.archetypeWithAdded(source, id)
+	targetRow := target.appendEntity(entity)
+	added := target.columnIndex(id)
+	moveSharedRow(source, target, row, added)
+	world.removeArchetypeEntity(source, row)
+	world.commitMigration(index, target, targetRow)
+	return target.columns[added]
 }
 
 // commitMigration binds one metadata slot to its destination row and records
@@ -409,7 +415,7 @@ func (w *World) commitMigration(index uint32, target *archetype, row int) {
 }
 
 // moveSharedRow transfers one row of every column both tables own. skip is the
-// target column that has no source counterpart (-1 for none). Both tables keep
+// target *columnState that has no source counterpart (-1 for none). Both tables keep
 // ids sorted, so a single merge walk pairs the columns without any lookup.
 func moveSharedRow(source, target *archetype, row, skip int) {
 	sourceIndex := 0
@@ -440,18 +446,23 @@ func (world *World) Remove[T any](entity Entity) (T, bool) {
 	}
 	oldRow := int(meta.row)
 	removedIndex := oldArchetype.columnIndex(id)
-	removed := oldArchetype.columns[removedIndex].(*typedColumn[T]).values[oldRow]
-	if world.componentInfos[id].onRemove != nil {
-		world.cleanupComponent(id, entity, oldArchetype.columns[removedIndex], oldRow)
-	}
-	newArchetype := world.archetypeWithRemoved(oldArchetype, id)
-	newRow := newArchetype.appendEntity(entity)
-	moveSharedRow(oldArchetype, newArchetype, oldRow, -1)
-	oldArchetype.columns[removedIndex].swapRemove(oldRow)
-	world.componentInfos[id].detached++
-	world.removeArchetypeEntity(oldArchetype, oldRow)
-	world.commitMigration(index, newArchetype, newRow)
+	removed := oldArchetype.columns[removedIndex].typed[T]().values[oldRow]
+	world.migrateRemoving(entity, index, oldArchetype, oldRow, removedIndex, id)
 	return removed, true
+}
+
+func (world *World) migrateRemoving(entity Entity, index uint32, source *archetype, row, removed int, id componentID) {
+	column := source.columns[removed]
+	if world.componentInfos[id].onRemove != nil {
+		world.cleanupComponent(id, entity, column, row)
+	}
+	target := world.archetypeWithRemoved(source, id)
+	targetRow := target.appendEntity(entity)
+	moveSharedRow(source, target, row, -1)
+	column.swapRemove(row)
+	world.componentInfos[id].detached++
+	world.removeArchetypeEntity(source, row)
+	world.commitMigration(index, target, targetRow)
 }
 
 func (world *World) Has[T any](entity Entity) bool {
@@ -485,22 +496,21 @@ func (world *World) GetRef[T any](entity Entity) *T {
 // componentRow locates one component row without marking it changed. A nil
 // column reports that the entity is stale or its table lacks the component.
 func (world *World) componentRow[T any](entity Entity) (*typedColumn[T], int) {
+	column, row := world.lookupComponent(entity, reflect.TypeFor[T]())
+	return column.typed[T](), row
+}
+
+func (world *World) lookupComponent(entity Entity, typ reflect.Type) (*columnState, int) {
 	requireWorld(world)
 	_, meta, ok := world.entityMeta(entity)
 	if !ok {
 		return nil, 0
 	}
-	id, registered := world.componentTypes[reflect.TypeFor[T]()]
+	id, registered := world.componentTypes[typ]
 	if !registered {
 		return nil, 0
 	}
-	// A nil column means this table does not own the component, so one type
-	// assertion replaces a separate mask test plus column lookup.
-	column, _ := world.archetypes[meta.archetypeID].column(id).(*typedColumn[T])
-	if column == nil {
-		return nil, 0
-	}
-	return column, int(meta.row)
+	return world.archetypes[meta.archetypeID].column(id), int(meta.row)
 }
 
 func (world *World) GetMut[T any](entity Entity) *T {
@@ -684,11 +694,11 @@ func (w *World) createArchetype(hash uint64, ids []componentID) *archetype {
 	if len(ids) > 0 {
 		archetype.mask = make(componentMask, int(ids[len(ids)-1])/64+1)
 	}
-	archetype.columns = make([]column, len(ids))
+	archetype.columns = make([]*columnState, len(ids))
 	for index, id := range ids {
 		info := &w.componentInfos[id]
 		archetype.mask[int(id)/64] |= uint64(1) << (uint(id) % 64)
-		archetype.columns[index] = info.newColumn()
+		archetype.columns[index] = info.newColumn(w, id)
 		archetype.hasCleanup = archetype.hasCleanup || info.onRemove != nil
 	}
 	w.archetypes = append(w.archetypes, archetype)

@@ -1,0 +1,30 @@
+{
+  "captured": "2026-10-12",
+  "threeRevision": "186",
+  "assets": [
+    {
+      "path": "models/DamagedHelmet.glb",
+      "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+      "bytes": 3773916,
+      "sha256": "a1e3b04de97b11de564ce6e53b95f02954a297f0008183ac63a4f5974f6b32d8"
+    },
+    {
+      "path": "environment/royal_esplanade_2k.hdr.jpg",
+      "source": "https://threejs.org/examples/textures/equirectangular/royal_esplanade_2k.hdr.jpg",
+      "bytes": 552463,
+      "sha256": "b05a664c5fb022ddc6104f253a6684570e99876d30b41a220c8dea4482df6d64"
+    },
+    {
+      "path": "reference/webgl_loader_gltf.html",
+      "source": "https://threejs.org/examples/webgl_loader_gltf.html",
+      "bytes": 6353,
+      "sha256": "46564bbb6dc5abbfee13d3718c9853a11ba734087760d89174963e43bf0d5695"
+    },
+    {
+      "path": "reference/UltraHDRLoader.js",
+      "source": "https://threejs.org/examples/jsm/loaders/UltraHDRLoader.js",
+      "bytes": 19696,
+      "sha256": "fd67cf0e861d9f4eeb02e3b5acc62896658edafb6410eb4fc4c178352c0a6971"
+    }
+  ]
+}

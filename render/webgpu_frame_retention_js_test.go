@@ -3,6 +3,7 @@
 package render
 
 import (
+	"runtime"
 	"syscall/js"
 	"testing"
 )
@@ -139,4 +140,89 @@ func TestBrowserWebGPUFrameRetentionPixels(t *testing.T) {
 		}
 	}
 	t.Logf("real WebGPU frame capacities %v -> %d bytes per slot; pixels and validation scopes passed", peak, d.frames[0].buffer.capacity)
+}
+
+func TestBrowserWebGPUSharedReadback(t *testing.T) {
+	if !js.Global().Get("document").Truthy() {
+		t.Skip("requires a browser")
+	}
+	canvas := js.Global().Get("document").Call("createElement", "canvas")
+	driver, _, check := newSpriteBrowserDriver(t, canvas)
+	defer driver.Destroy()
+	d := driver.(*webGPUDriver)
+	const width, height = 65, 257
+	var first js.Value
+	pixels := make([]byte, width*height*4)
+	for i := range 2 {
+		h, _, err := d.CreateRenderTarget(RenderTargetDescriptor{Width: width, Height: height})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.ReadRenderTarget(h, RenderTargetRegion{Width: width, Height: height}, pixels); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			first = d.readback.value
+		}
+		if !d.readback.value.Equal(first) || first.Get("size").Int() != 512*height {
+			t.Fatal("readback capacity or device-level reuse changed")
+		}
+		defer d.DestroyRenderTarget(h)
+	}
+	for range bufferTrimDelay + 1 {
+		if err := d.BeginFrame(Color{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Present(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d.readback.value.Truthy() {
+		t.Fatal("oversized cache retained after sustained low demand")
+	}
+	check()
+	t.Logf("two %dx%d RGBA targets reused a %d-byte readback buffer, then released it", width, height, 512*height)
+}
+
+func TestWebGPUPendingReadbacksSurviveTrimAndDestroy(t *testing.T) {
+	mock := js.Global().Get("Function").New(`
+		const buffers = [];
+		const device = { createCommandEncoder() {return {copyTextureToBuffer(){},finish(){}};},
+			createBuffer(d) {
+				const buffer = {dead:false, mapAsync() {return new Promise(resolve => {this.resolve=resolve;});},
+					getMappedRange(){if(this.dead) throw Error("destroyed while mapped");return new ArrayBuffer(d.size);},
+					unmap(){},destroy(){this.dead=true;}};
+				buffers.push(buffer);
+				return buffer;
+			}, destroy(){this.dead=true;}
+		};
+		return {device,buffers,queue:{submit(){}},texture:{destroy(){}}};
+	`).Invoke()
+	d := webGPUDriver{device: mock.Get("device"), queue: mock.Get("queue")}
+	color := d.textures.Insert(&webGPUTexture{value: mock.Get("texture")})
+	h := d.targets.Insert(&webGPURenderTarget{color: color, descriptor: RenderTargetDescriptor{Width: 1, Height: 1}})
+	done := make(chan error, 2)
+	for range 2 {
+		go func() { done <- d.ReadRenderTarget(h, RenderTargetRegion{Width: 1, Height: 1}, make([]byte, 4)) }()
+	}
+	for d.readbacksInFlight < 2 {
+		runtime.Gosched()
+	}
+	if err := d.TrimIdleBuffers(); err != nil {
+		t.Fatal(err)
+	}
+	d.Destroy()
+	bufs := mock.Get("buffers")
+	if bufs.Length() != 2 || d.device.Get("dead").Truthy() {
+		t.Fatal("pending maps lost ownership")
+	}
+	for i := range 2 {
+		bufs.Index(i).Call("resolve")
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if !bufs.Index(i).Get("dead").Bool() || d.device.Get("dead").Truthy() != (i == 1) {
+			t.Fatal("incorrect retirement order")
+		}
+	}
 }

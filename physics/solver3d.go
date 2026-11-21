@@ -28,7 +28,7 @@ func (world *World3D) solveContacts(delta float64) {
 			}
 		}
 		if !corrected {
-			break
+			return
 		}
 	}
 	world.buildContacts()
@@ -100,7 +100,7 @@ func (world *World3D) restoreContactImpulses(delta float64, warmStart bool) {
 			point.tangentImpulse = old.tangentImpulse.Sub(contact.normal.Mul(old.tangentImpulse.Dot(contact.normal))).Mul(scale)
 			if warmStart {
 				impulse := contact.normal.Mul(point.normalImpulse).Add(point.tangentImpulse)
-				applyPairImpulse3D(a, b, point.position.Sub(a.position), point.position.Sub(b.position), impulse)
+				world.applyPairImpulse3D(a, b, point.position.Sub(a.position), point.position.Sub(b.position), impulse)
 			} else {
 				point.bounceVelocity = max(point.bounceVelocity, old.bounceVelocity)
 			}
@@ -135,7 +135,7 @@ func (world *World3D) solveVelocity(contact *manifold3D) {
 		if length, limit := impulse.Length(), contact.friction*point.normalImpulse; length > limit {
 			impulse = impulse.Mul(limit / length)
 		}
-		applyPairImpulse3D(a, b, ra, rb, impulse.Sub(point.tangentImpulse))
+		world.applyPairImpulse3D(a, b, ra, rb, impulse.Sub(point.tangentImpulse))
 		point.tangentImpulse = impulse
 	}
 	matrix := normalContactMass3D(a, b, contact)
@@ -150,7 +150,7 @@ func (world *World3D) solveVelocity(contact *manifold3D) {
 	if impulses, ok := solveContactBlock3D(matrix, rhs, contact.pointCount); ok {
 		for index := range contact.pointCount {
 			point := &contact.points[index]
-			applyPairImpulse3D(a, b, point.position.Sub(a.position), point.position.Sub(b.position), contact.normal.Mul(impulses[index]-point.normalImpulse))
+			world.applyPairImpulse3D(a, b, point.position.Sub(a.position), point.position.Sub(b.position), contact.normal.Mul(impulses[index]-point.normalImpulse))
 			point.normalImpulse = impulses[index]
 		}
 		return
@@ -161,7 +161,7 @@ func (world *World3D) solveVelocity(contact *manifold3D) {
 		if mass := matrix[index][index]; mass > 1e-12 {
 			speed := b.velocityAt(rb).Sub(a.velocityAt(ra)).Dot(contact.normal)
 			impulse := max(point.normalImpulse+(point.bounceVelocity-speed)/mass, 0)
-			applyPairImpulse3D(a, b, ra, rb, contact.normal.Mul(impulse-point.normalImpulse))
+			world.applyPairImpulse3D(a, b, ra, rb, contact.normal.Mul(impulse-point.normalImpulse))
 			point.normalImpulse = impulse
 		}
 	}
@@ -251,11 +251,9 @@ func solveContactBlock3D(matrix [4][4]float64, rhs [4]float64, count int) ([4]fl
 	return [4]float64{}, false
 }
 
-func applyPairImpulse3D(a, b *bodyState3D, ra, rb, impulse Vector3D) {
-	a.velocity = a.velocity.Sub(impulse.Mul(a.inverseMass))
-	a.angularVelocity = a.angularVelocity.Sub(ra.Cross(impulse).Mul(a.inverseInertia))
-	b.velocity = b.velocity.Add(impulse.Mul(b.inverseMass))
-	b.angularVelocity = b.angularVelocity.Add(rb.Cross(impulse).Mul(b.inverseInertia))
+func (world *World3D) applyPairImpulse3D(a, b *bodyState3D, ra, rb, impulse Vector3D) {
+	world.setMotion(a, a.velocity.Sub(impulse.Mul(a.inverseMass)), a.angularVelocity.Sub(ra.Cross(impulse).Mul(a.inverseInertia)))
+	world.setMotion(b, b.velocity.Add(impulse.Mul(b.inverseMass)), b.angularVelocity.Add(rb.Cross(impulse).Mul(b.inverseInertia)))
 }
 
 func (world *World3D) solvePosition(contact *manifold3D) bool {
@@ -293,9 +291,7 @@ func (world *World3D) solvePosition(contact *manifold3D) bool {
 	if angle := max(angleA.Length(), angleB.Length()); angle > .2 {
 		scale = .2 / angle
 	}
-	a.position = a.position.Sub(correction.Mul(scale * a.inverseMass))
-	b.position = b.position.Add(correction.Mul(scale * b.inverseMass))
-	a.rotation = integrateRotation(a.rotation, angleA, -scale)
-	b.rotation = integrateRotation(b.rotation, angleB, scale)
+	world.setPose(a, a.position.Sub(correction.Mul(scale*a.inverseMass)), integrateRotation(a.rotation, angleA, -scale))
+	world.setPose(b, b.position.Add(correction.Mul(scale*b.inverseMass)), integrateRotation(b.rotation, angleB, scale))
 	return true
 }

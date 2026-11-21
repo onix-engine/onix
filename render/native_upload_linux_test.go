@@ -94,6 +94,7 @@ func TestMetalUploadPool(t *testing.T) {
 	sections := map[string]string{
 		"metal_resource_types.inc": section("typedef struct {\n    id<MTLTexture> texture;", "ONIX_NATIVE_SLOTS(onix_metal_textures"),
 		"metal_driver.inc":         section("struct OnixMetalDriver {", "\nvoid onix_metal_buffer_memory"),
+		"metal_create_mesh.inc":    section("uint32_t onix_metal_create_mesh(", "\nint onix_metal_set_mesh_deformation"),
 		"metal_mesh_draws.inc":     section("int onix_metal_draw_meshes(", "\n_Static_assert"),
 		"metal_upload_types.inc":   section("typedef struct {\n\tid<MTLBuffer> buffer;", "struct OnixMetalDriver {"),
 		"metal_upload_reset.inc":   section("static void onix_metal_reset_uploads(", "\nint onix_metal_begin_frame"),

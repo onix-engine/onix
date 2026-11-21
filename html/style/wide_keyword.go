@@ -13,31 +13,31 @@ var cssWideKeywords = [...]string{"inherit", "initial", "unset", "revert", "reve
 
 // inheritedProperties lists the properties whose unset value inherits from the
 // parent. The list mirrors the properties copied by inherit().
-var inheritedProperties = map[string]struct{}{
-	"font":                 {},
-	"font-size":            {},
-	"font-family":          {},
-	"font-weight":          {},
-	"font-style":           {},
-	"visibility":           {},
-	"pointer-events":       {},
-	"cursor":               {},
-	"color":                {},
-	"placeholder-color":    {},
-	"text-align":           {},
-	"text-box-edge":        {},
-	"text-decoration-line": {},
-	"text-indent":          {},
-	"letter-spacing":       {},
-	"tab-size":             {},
-	"line-height":          {},
-	"white-space":          {},
-	"word-break":           {},
-	"overflow-wrap":        {},
-	"word-wrap":            {},
-	"text-overflow":        {},
-	"list-style-type":      {},
-	"border-spacing":       {},
+var inheritedProperties = [propertyCount]bool{
+	propertyFont:               true,
+	propertyFontSize:           true,
+	propertyFontFamily:         true,
+	propertyFontWeight:         true,
+	propertyFontStyle:          true,
+	propertyVisibility:         true,
+	propertyPointerEvents:      true,
+	propertyCursor:             true,
+	propertyColor:              true,
+	propertyPlaceholderColor:   true,
+	propertyTextAlign:          true,
+	propertyTextBoxEdge:        true,
+	propertyTextDecorationLine: true,
+	propertyTextIndent:         true,
+	propertyLetterSpacing:      true,
+	propertyTabSize:            true,
+	propertyLineHeight:         true,
+	propertyWhiteSpace:         true,
+	propertyWordBreak:          true,
+	propertyOverflowWrap:       true,
+	propertyWordWrap:           true,
+	propertyTextOverflow:       true,
+	propertyListStyleType:      true,
+	propertyBorderSpacing:      true,
 }
 
 func isCSSWideKeyword(value string) bool {
@@ -54,15 +54,14 @@ func isWideKeywordOf(value, keyword string) bool {
 	return strings.EqualFold(strings.TrimSpace(value), keyword)
 }
 
-func isInheritedProperty(property string) bool {
-	_, inherited := inheritedProperties[property]
-	return inherited
+func isInheritedProperty(property propertyID) bool {
+	return inheritedProperties[property]
 }
 
 // applyCSSWideKeyword resolves one winning CSS-wide declaration. Inherit is
 // valid for every property, not only inherited properties; unset inherits only
 // where the property is inherited and resets all other properties.
-func applyCSSWideKeyword(style, parent *ComputedStyle, node *uinode.Node, property, raw string) {
+func applyCSSWideKeyword(style, parent *ComputedStyle, node *uinode.Node, property propertyID, raw string) {
 	inherits := isWideKeywordOf(raw, "inherit") || isInheritedProperty(property) && (isWideKeywordOf(raw, "unset") || isWideKeywordOf(raw, "revert") || isWideKeywordOf(raw, "revert-layer"))
 	if inherits && parent != nil {
 		copyCSSProperty(style, parent, property)
@@ -71,7 +70,7 @@ func applyCSSWideKeyword(style, parent *ComputedStyle, node *uinode.Node, proper
 	resetCSSProperty(style, node, property)
 }
 
-func resetCSSProperty(style *ComputedStyle, node *uinode.Node, property string) {
+func resetCSSProperty(style *ComputedStyle, node *uinode.Node, property propertyID) {
 	if style == nil {
 		return
 	}
@@ -82,255 +81,147 @@ func resetCSSProperty(style *ComputedStyle, node *uinode.Node, property string) 
 // copyCSSProperty copies the computed value represented by one declaration.
 // Keeping this as a switch avoids reflection in the cascade hot path and also
 // makes shorthand behavior explicit.
-func copyCSSProperty(style, parent *ComputedStyle, property string) {
+func copyCSSProperty(style, parent *ComputedStyle, property propertyID) {
 	if style == nil || parent == nil {
 		return
 	}
+	if field := compiledValueField(style, property); field != nil {
+		*field = *compiledValueField(parent, property)
+		return
+	}
 	switch property {
-	case "font":
+	case propertyFont:
 		style.FontSize, style.FontFamily, style.FontWeight = parent.FontSize, parent.FontFamily, parent.FontWeight
 		style.FontStyle = parent.FontStyle
 		style.LineHeight, style.LineHeightNormal = parent.LineHeight, parent.LineHeightNormal
-	case "display":
-		style.Display = parent.Display
-	case "table-layout":
-		style.TableLayout = parent.TableLayout
-	case "border-spacing":
+	case propertyBorderSpacing:
 		style.BorderSpacingX, style.BorderSpacingY = parent.BorderSpacingX, parent.BorderSpacingY
-	case "vertical-align":
-		style.VerticalAlign = parent.VerticalAlign
-	case "grid-template-columns":
+	case propertyGridTemplateColumns:
 		style.GridTemplateColumns = parent.GridTemplateColumns
-	case "grid-template-rows":
+	case propertyGridTemplateRows:
 		style.GridTemplateRows = parent.GridTemplateRows
-	case "grid-column":
+	case propertyGridColumn:
 		style.GridColumnStart, style.GridColumnEnd = parent.GridColumnStart, parent.GridColumnEnd
-	case "grid-row":
+	case propertyGridRow:
 		style.GridRowStart, style.GridRowEnd = parent.GridRowStart, parent.GridRowEnd
-	case "grid-column-start":
+	case propertyGridColumnStart:
 		style.GridColumnStart = parent.GridColumnStart
-	case "grid-column-end":
+	case propertyGridColumnEnd:
 		style.GridColumnEnd = parent.GridColumnEnd
-	case "grid-row-start":
+	case propertyGridRowStart:
 		style.GridRowStart = parent.GridRowStart
-	case "grid-row-end":
+	case propertyGridRowEnd:
 		style.GridRowEnd = parent.GridRowEnd
-	case "visibility":
-		style.Visibility = parent.Visibility
-	case "cursor":
+	case propertyCursor:
 		style.Cursor = parent.Cursor
-	case "pointer-events":
-		style.PointerEvents = parent.PointerEvents
-	case "appearance":
-		style.Appearance = parent.Appearance
-	case "box-sizing":
-		style.BoxSizing = parent.BoxSizing
-	case "flex":
+	case propertyFlex:
 		style.FlexGrow, style.FlexShrink, style.FlexBasis = parent.FlexGrow, parent.FlexShrink, parent.FlexBasis
-	case "flex-flow":
+	case propertyFlexFlow:
 		style.FlexDirection, style.FlexWrap = parent.FlexDirection, parent.FlexWrap
-	case "flex-direction":
-		style.FlexDirection = parent.FlexDirection
-	case "flex-wrap":
-		style.FlexWrap = parent.FlexWrap
-	case "flex-grow":
-		style.FlexGrow = parent.FlexGrow
-	case "flex-shrink":
-		style.FlexShrink = parent.FlexShrink
-	case "flex-basis":
-		style.FlexBasis = parent.FlexBasis
-	case "justify-content":
-		style.JustifyContent = parent.JustifyContent
-	case "justify-items":
-		style.JustifyItems = parent.JustifyItems
-	case "justify-self":
-		style.JustifySelf = parent.JustifySelf
-	case "align-items":
-		style.AlignItems = parent.AlignItems
-	case "align-self":
-		style.AlignSelf = parent.AlignSelf
-	case "align-content":
-		style.AlignContent = parent.AlignContent
-	case "order":
-		style.Order = parent.Order
-	case "gap":
+	case propertyGap:
 		style.RowGap, style.ColumnGap = parent.RowGap, parent.ColumnGap
-	case "row-gap":
-		style.RowGap = parent.RowGap
-	case "column-gap":
-		style.ColumnGap = parent.ColumnGap
-	case "container":
+	case propertyContainer:
 		style.ContainerName, style.ContainerType = parent.ContainerName, parent.ContainerType
-	case "container-type":
-		style.ContainerType = parent.ContainerType
-	case "container-name":
+	case propertyContainerName:
 		style.ContainerName = parent.ContainerName
-	case "position":
-		style.Position = parent.Position
-	case "float":
-		style.Float = parent.Float
-	case "clear":
-		style.Clear = parent.Clear
-	case "inset":
+	case propertyInset:
 		style.Top, style.Right, style.Bottom, style.Left = parent.Top, parent.Right, parent.Bottom, parent.Left
-	case "opacity":
-		style.Opacity = parent.Opacity
-	case "transform":
+	case propertyTransform:
 		style.TransformRotation = parent.TransformRotation
 		style.TransformTranslateX = parent.TransformTranslateX
 		style.TransformTranslateY = parent.TransformTranslateY
 		style.TransformScaleX, style.TransformScaleY = parent.TransformScaleX, parent.TransformScaleY
 		style.TransformSkewX = parent.TransformSkewX
 		style.TransformTranslateCrossX, style.TransformTranslateCrossY = parent.TransformTranslateCrossX, parent.TransformTranslateCrossY
-	case "transform-origin":
+	case propertyTransformOrigin:
 		style.TransformOriginX, style.TransformOriginY = parent.TransformOriginX, parent.TransformOriginY
-	case "transition":
+	case propertyTransition:
 		style.mutableMotion().transition = parent.transitionValues()
-	case "transition-property", "transition-duration", "transition-timing-function", "transition-delay":
-		index := slices.Index(transitionProperties[:], property)
+	case propertyTransitionProperty, propertyTransitionDuration, propertyTransitionTimingFunction, propertyTransitionDelay:
+		index := property - propertyTransitionProperty
 		style.mutableMotion().transition[index] = parent.transitionValues()[index]
-	case "animation":
+	case propertyAnimation:
 		style.mutableMotion().animation = parent.animationValues()
-	case "animation-name", "animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state":
-		index := slices.Index(animationProperties[:], property)
+	case propertyAnimationName, propertyAnimationDuration, propertyAnimationTimingFunction, propertyAnimationDelay, propertyAnimationIterationCount, propertyAnimationDirection, propertyAnimationFillMode, propertyAnimationPlayState:
+		index := property - propertyAnimationName
 		style.mutableMotion().animation[index] = parent.animationValues()[index]
-	case "z-index":
-		style.ZIndex = parent.ZIndex
-	case "overflow":
+	case propertyOverflow:
 		style.OverflowX, style.OverflowY = parent.OverflowX, parent.OverflowY
-	case "overflow-x":
-		style.OverflowX = parent.OverflowX
-	case "overflow-y":
-		style.OverflowY = parent.OverflowY
-	case "scrollbar-width":
-		style.ScrollbarWidth = parent.ScrollbarWidth
-	case "scrollbar-color":
+	case propertyScrollbarColor:
 		style.ScrollbarTrackColor, style.ScrollbarThumbColor = parent.ScrollbarTrackColor, parent.ScrollbarThumbColor
-	case "scrollbar-track-color":
+	case propertyScrollbarTrackColor:
 		style.ScrollbarTrackColor = parent.ScrollbarTrackColor
-	case "scrollbar-thumb-color":
+	case propertyScrollbarThumbColor:
 		style.ScrollbarThumbColor = parent.ScrollbarThumbColor
-	case "scrollbar-thumb-hover-color":
+	case propertyScrollbarThumbHoverColor:
 		style.ScrollbarThumbHoverColor = parent.ScrollbarThumbHoverColor
-	case "width":
-		style.Width = parent.Width
-	case "height":
-		style.Height = parent.Height
-	case "min-width":
-		style.MinWidth = parent.MinWidth
-	case "min-height":
-		style.MinHeight = parent.MinHeight
-	case "max-width":
-		style.MaxWidth = parent.MaxWidth
-	case "max-height":
-		style.MaxHeight = parent.MaxHeight
-	case "margin":
+	case propertyMargin:
 		style.Margin = parent.Margin
-	case "margin-top":
+	case propertyMarginTop:
 		style.Margin.Top = parent.Margin.Top
-	case "margin-right":
+	case propertyMarginRight:
 		style.Margin.Right = parent.Margin.Right
-	case "margin-bottom":
+	case propertyMarginBottom:
 		style.Margin.Bottom = parent.Margin.Bottom
-	case "margin-left":
+	case propertyMarginLeft:
 		style.Margin.Left = parent.Margin.Left
-	case "padding":
+	case propertyPadding:
 		style.Padding = parent.Padding
-	case "padding-top":
+	case propertyPaddingTop:
 		style.Padding.Top = parent.Padding.Top
-	case "padding-right":
+	case propertyPaddingRight:
 		style.Padding.Right = parent.Padding.Right
-	case "padding-bottom":
+	case propertyPaddingBottom:
 		style.Padding.Bottom = parent.Padding.Bottom
-	case "padding-left":
+	case propertyPaddingLeft:
 		style.Padding.Left = parent.Padding.Left
-	case "border":
+	case propertyBorder:
 		style.BorderWidth, style.BorderStyle, style.BorderColor = parent.BorderWidth, parent.BorderStyle, parent.BorderColor
-	case "border-top", "border-right", "border-bottom", "border-left":
+	case propertyBorderTop, propertyBorderRight, propertyBorderBottom, propertyBorderLeft:
 		copyBorderSide(style, parent, property)
-	case "border-width":
+	case propertyBorderWidth:
 		style.BorderWidth = parent.BorderWidth
-	case "border-style":
+	case propertyBorderStyle:
 		style.BorderStyle = parent.BorderStyle
-	case "border-color":
+	case propertyBorderColor:
 		style.BorderColor = parent.BorderColor
-	case "border-top-style", "border-right-style", "border-bottom-style", "border-left-style":
+	case propertyBorderTopStyle, propertyBorderRightStyle, propertyBorderBottomStyle, propertyBorderLeftStyle:
 		copyBorderStyleSide(style, parent, property)
-	case "border-top-width", "border-right-width", "border-bottom-width", "border-left-width":
+	case propertyBorderTopWidth, propertyBorderRightWidth, propertyBorderBottomWidth, propertyBorderLeftWidth:
 		copyBorderWidthSide(style, parent, property)
-	case "border-top-color", "border-right-color", "border-bottom-color", "border-left-color":
+	case propertyBorderTopColor, propertyBorderRightColor, propertyBorderBottomColor, propertyBorderLeftColor:
 		copyBorderColorSide(style, parent, property)
-	case "border-radius":
+	case propertyBorderRadius:
 		style.BorderRadius = parent.BorderRadius
-	case "border-top-left-radius":
+	case propertyBorderTopLeftRadius:
 		style.BorderRadius.TopLeft = parent.BorderRadius.TopLeft
-	case "border-top-right-radius":
+	case propertyBorderTopRightRadius:
 		style.BorderRadius.TopRight = parent.BorderRadius.TopRight
-	case "border-bottom-right-radius":
+	case propertyBorderBottomRightRadius:
 		style.BorderRadius.BottomRight = parent.BorderRadius.BottomRight
-	case "border-bottom-left-radius":
+	case propertyBorderBottomLeftRadius:
 		style.BorderRadius.BottomLeft = parent.BorderRadius.BottomLeft
-	case "box-shadow":
+	case propertyBoxShadow:
 		style.BoxShadow = slices.Clone(parent.BoxShadow)
-	case "filter":
+	case propertyFilter:
 		style.Filters = slices.Clone(parent.Filters)
-	case "background":
+	case propertyBackground:
 		copyBackground(style, parent)
-	case "background-color":
+	case propertyBackgroundColor:
 		style.BackgroundColor = parent.BackgroundColor
-	case "background-image":
+	case propertyBackgroundImage:
 		copyBackgroundImages(style, parent)
-	case "background-position", "background-repeat", "background-size", "background-origin", "background-clip", "background-attachment":
+	case propertyBackgroundPosition, propertyBackgroundRepeat, propertyBackgroundSize, propertyBackgroundOrigin, propertyBackgroundClip, propertyBackgroundAttachment:
 		copyBackgroundLayerField(style, parent, property)
-	case "color":
-		style.Color = parent.Color
-	case "placeholder-color":
-		style.PlaceholderColor = parent.PlaceholderColor
-	case "text-align":
-		style.TextAlign = parent.TextAlign
-	case "text-box-trim":
-		style.TextBoxTrim = parent.TextBoxTrim
-	case "text-box-edge":
-		style.TextBoxEdge = parent.TextBoxEdge
-	case "text-decoration-line":
-		style.TextDecorationLine = parent.TextDecorationLine
-	case "text-indent":
-		style.TextIndent = parent.TextIndent
-	case "letter-spacing":
-		style.LetterSpacing = parent.LetterSpacing
-	case "font-size":
+	case propertyFontSize:
 		style.FontSize = parent.FontSize
-	case "line-height":
+	case propertyLineHeight:
 		style.LineHeight, style.LineHeightNormal = parent.LineHeight, parent.LineHeightNormal
-	case "font-family":
-		style.FontFamily = parent.FontFamily
-	case "font-style":
+	case propertyFontStyle:
 		style.FontStyle = parent.FontStyle
-	case "font-weight":
+	case propertyFontWeight:
 		style.FontWeight = parent.FontWeight
-	case "white-space":
-		style.WhiteSpace = parent.WhiteSpace
-	case "tab-size":
-		style.TabSize = parent.TabSize
-	case "word-break":
-		style.WordBreak = parent.WordBreak
-	case "overflow-wrap", "word-wrap":
-		style.OverflowWrap = parent.OverflowWrap
-	case "text-overflow":
-		style.TextOverflow = parent.TextOverflow
-	case "list-style-type":
-		style.ListStyleType = parent.ListStyleType
-	case "top":
-		style.Top = parent.Top
-	case "right":
-		style.Right = parent.Right
-	case "bottom":
-		style.Bottom = parent.Bottom
-	case "left":
-		style.Left = parent.Left
-	case "object-fit":
-		style.ObjectFit = parent.ObjectFit
-	case "object-position":
+	case propertyObjectPosition:
 		style.ObjectPosX, style.ObjectPosY = parent.ObjectPosX, parent.ObjectPosY
 		style.ObjectPosXOrigin, style.ObjectPosYOrigin = parent.ObjectPosXOrigin, parent.ObjectPosYOrigin
 	}
@@ -355,77 +246,77 @@ func copyBackgroundImages(style, parent *ComputedStyle) {
 	}
 }
 
-func copyBackgroundLayerField(style, parent *ComputedStyle, property string) {
+func copyBackgroundLayerField(style, parent *ComputedStyle, property propertyID) {
 	ensureBackgroundLayerCount(style, parent.BackgroundLayerCount())
 	for index := range style.BackgroundLayerCount() {
 		source := parent.BackgroundLayer(min(index, parent.BackgroundLayerCount()-1))
 		target := style.BackgroundLayer(index)
 		switch property {
-		case "background-position":
+		case propertyBackgroundPosition:
 			target.PosX, target.PosY = source.PosX, source.PosY
 			target.PosXOrigin, target.PosYOrigin = source.PosXOrigin, source.PosYOrigin
-		case "background-repeat":
+		case propertyBackgroundRepeat:
 			target.RepeatX, target.RepeatY = source.RepeatX, source.RepeatY
-		case "background-size":
+		case propertyBackgroundSize:
 			target.SizeX, target.SizeY = source.SizeX, source.SizeY
-		case "background-origin":
+		case propertyBackgroundOrigin:
 			target.Origin = source.Origin
-		case "background-clip":
+		case propertyBackgroundClip:
 			target.Clip = source.Clip
-		case "background-attachment":
+		case propertyBackgroundAttachment:
 			target.Attachment = source.Attachment
 		}
 	}
 }
 
-func copyBorderSide(style, parent *ComputedStyle, property string) {
+func copyBorderSide(style, parent *ComputedStyle, property propertyID) {
 	switch property {
-	case "border-top":
+	case propertyBorderTop:
 		style.BorderWidth.Top, style.BorderStyle.Top, style.BorderColor.Top = parent.BorderWidth.Top, parent.BorderStyle.Top, parent.BorderColor.Top
-	case "border-right":
+	case propertyBorderRight:
 		style.BorderWidth.Right, style.BorderStyle.Right, style.BorderColor.Right = parent.BorderWidth.Right, parent.BorderStyle.Right, parent.BorderColor.Right
-	case "border-bottom":
+	case propertyBorderBottom:
 		style.BorderWidth.Bottom, style.BorderStyle.Bottom, style.BorderColor.Bottom = parent.BorderWidth.Bottom, parent.BorderStyle.Bottom, parent.BorderColor.Bottom
-	case "border-left":
+	case propertyBorderLeft:
 		style.BorderWidth.Left, style.BorderStyle.Left, style.BorderColor.Left = parent.BorderWidth.Left, parent.BorderStyle.Left, parent.BorderColor.Left
 	}
 }
 
-func copyBorderStyleSide(style, parent *ComputedStyle, property string) {
+func copyBorderStyleSide(style, parent *ComputedStyle, property propertyID) {
 	switch property {
-	case "border-top-style":
+	case propertyBorderTopStyle:
 		style.BorderStyle.Top = parent.BorderStyle.Top
-	case "border-right-style":
+	case propertyBorderRightStyle:
 		style.BorderStyle.Right = parent.BorderStyle.Right
-	case "border-bottom-style":
+	case propertyBorderBottomStyle:
 		style.BorderStyle.Bottom = parent.BorderStyle.Bottom
-	case "border-left-style":
+	case propertyBorderLeftStyle:
 		style.BorderStyle.Left = parent.BorderStyle.Left
 	}
 }
 
-func copyBorderWidthSide(style, parent *ComputedStyle, property string) {
+func copyBorderWidthSide(style, parent *ComputedStyle, property propertyID) {
 	switch property {
-	case "border-top-width":
+	case propertyBorderTopWidth:
 		style.BorderWidth.Top = parent.BorderWidth.Top
-	case "border-right-width":
+	case propertyBorderRightWidth:
 		style.BorderWidth.Right = parent.BorderWidth.Right
-	case "border-bottom-width":
+	case propertyBorderBottomWidth:
 		style.BorderWidth.Bottom = parent.BorderWidth.Bottom
-	case "border-left-width":
+	case propertyBorderLeftWidth:
 		style.BorderWidth.Left = parent.BorderWidth.Left
 	}
 }
 
-func copyBorderColorSide(style, parent *ComputedStyle, property string) {
+func copyBorderColorSide(style, parent *ComputedStyle, property propertyID) {
 	switch property {
-	case "border-top-color":
+	case propertyBorderTopColor:
 		style.BorderColor.Top = parent.BorderColor.Top
-	case "border-right-color":
+	case propertyBorderRightColor:
 		style.BorderColor.Right = parent.BorderColor.Right
-	case "border-bottom-color":
+	case propertyBorderBottomColor:
 		style.BorderColor.Bottom = parent.BorderColor.Bottom
-	case "border-left-color":
+	case propertyBorderLeftColor:
 		style.BorderColor.Left = parent.BorderColor.Left
 	}
 }

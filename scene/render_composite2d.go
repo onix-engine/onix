@@ -15,6 +15,20 @@ import (
 const compositeTileSize2D = 128
 const defaultCompositeBudget2D = 64 << 20
 
+// A single small item can be drawn directly for less work than copying a
+// full viewport texture. Larger pictures still benefit from cached pixels.
+func (tree *renderTree2D) shouldComposite() bool {
+	if len(tree.items) != 1 {
+		return len(tree.items) > 1
+	}
+	item := &tree.items[0]
+	if item.paint == nil || !item.paint.cacheable {
+		return false
+	}
+	bounds := item.paint.boundsRect(item)
+	return bounds.Dx() > compositeTileSize2D || bounds.Dy() > compositeTileSize2D
+}
+
 var paintSeed2D = maphash.MakeSeed()
 
 type paintItem2D struct {

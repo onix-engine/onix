@@ -7,7 +7,7 @@ type ComponentType struct {
 }
 
 func Type[T any]() ComponentType {
-	return ComponentType{register: (*World).registerComponent[T]}
+	return ComponentType{register: (*World).componentIDFor[T]}
 }
 
 // PreparedRemoval removes a component set in one archetype migration.
@@ -18,13 +18,13 @@ type PreparedRemoval struct {
 
 type removalPlan struct {
 	world       *World
-	transitions map[uint32]*removalTransition
+	transitions transitionCache[removalTransition]
 	mask        componentMask
 }
 
 type removalColumn struct {
-	source      column
-	target      column // nil for a removed component
+	source      *columnState
+	target      *columnState // nil for a removed component
 	id          componentID
 	overwritten bool
 }
@@ -56,9 +56,7 @@ type removalTransition struct {
 func (world *World) PrepareRemoval(types ...ComponentType) PreparedRemoval {
 	requireWorld(world)
 	world.assertStructuralMutationAllowed()
-	return PreparedRemoval{plan: &removalPlan{
-		world: world, mask: componentTypeMask(world, types), transitions: make(map[uint32]*removalTransition),
-	}}
+	return PreparedRemoval{plan: &removalPlan{world: world, mask: componentTypeMask(world, types)}}
 }
 
 func componentTypeMask(world *World, types []ComponentType) componentMask {
@@ -130,7 +128,7 @@ func (r PreparedRemoval) requirePlan() *removalPlan {
 }
 
 func (p *removalPlan) transition(source *archetype) *removalTransition {
-	if transition := p.transitions[source.id]; transition != nil {
+	if transition := p.transitions.get(source.id); transition != nil {
 		return transition
 	}
 	transition := &removalTransition{source: source, target: source}
@@ -158,6 +156,32 @@ func (p *removalPlan) transition(source *archetype) *removalTransition {
 			}
 		}
 	}
-	p.transitions[source.id] = transition
+	p.transitions.put(source.id, transition)
 	return transition
+}
+
+// A plan can handle one source archetype without allocating a map. Keep
+// additional sources keyed by ID because their IDs can be arbitrarily sparse.
+type transitionCache[T any] struct {
+	first   *T
+	rest    map[uint32]*T
+	firstID uint32
+}
+
+func (cache *transitionCache[T]) get(id uint32) *T {
+	if id == cache.firstID {
+		return cache.first
+	}
+	return cache.rest[id]
+}
+
+func (cache *transitionCache[T]) put(id uint32, transition *T) {
+	if cache.first == nil {
+		cache.first, cache.firstID = transition, id
+		return
+	}
+	if cache.rest == nil {
+		cache.rest = make(map[uint32]*T)
+	}
+	cache.rest[id] = transition
 }

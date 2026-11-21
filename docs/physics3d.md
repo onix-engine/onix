@@ -43,8 +43,9 @@ bundle.Put(physics.NewCollider3D(physics.NewBox3D(20, 2, 20)))
 app.World.Spawn(bundle)
 ```
 
-Dynamic bodies write position and quaternion orientation to Transform each fixed
-step. Static and kinematic bodies read Transform. Editing a dynamic Transform
+The fixed step writes changed positions, orientations and velocities back to ECS.
+Moving a simulated parent also refreshes the local poses of its dependent rigid
+bodies. Static and kinematic bodies read Transform. Editing a dynamic Transform
 teleports the body. Internal float64 state survives float32 writeback without
 mistaking rounding for a teleport. FixedRotation disables dynamic/kinematic
 rotation; static bodies do not push others through leftover velocities.
@@ -70,8 +71,10 @@ collider's pool slot produces an End for the old pair and Begin for the new pair
 Fixed contact/linear-solver arrays and reserved caches allow warm box/capsule/hull
 regression cases to run without heap allocation. Collision is discrete: fast
 objects and thin walls need small time steps. Inertia is a scalar approximation.
-Capsule/hull, some compound pairs and non-sphere/triangle-mesh pairs still use
-conservative AABB approximations. Compound/hull retains only the deepest child contact.
+Boxes use the cooked mesh BVH and test individual triangles, with up to four
+support points across a triangle seam. Spheres and capsules also test mesh triangles.
+Capsule/hull, hull/triangle-mesh and some compound pairs use conservative AABB
+approximations. Compound/hull retains only the deepest child contact.
 
 ## Models and collision resources
 

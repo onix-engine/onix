@@ -75,6 +75,34 @@ func (h *Hierarchy) Parent(entity ecs.Entity) ecs.Entity {
 	return 0
 }
 
+// WalkSubtree visits root and its descendants in sibling order. Returning
+// false skips that entity's descendants. The visitor may read the hierarchy;
+// collect entities before changing parentage or despawning them.
+func (h *Hierarchy) WalkSubtree(root ecs.Entity, visit func(ecs.Entity) bool) {
+	if root == 0 || !visit(root) {
+		return
+	}
+	if h.missingParents[root] != 0 && h.node(root) == nil {
+		// A removed or reserved root can still be referenced by live children.
+		for _, entity := range h.entities {
+			if h.Parent(entity) == root && visit(entity) {
+				h.walkChildren(entity, root, visit)
+			}
+		}
+		return
+	}
+	h.walkChildren(root, root, visit)
+}
+
+func (h *Hierarchy) walkChildren(entity, root ecs.Entity, visit func(ecs.Entity) bool) {
+	for child := h.FirstChild(entity); child != 0; child = h.NextSibling(child) {
+		// Each entity has one parent, so any reachable cycle closes at the root.
+		if child != root && visit(child) {
+			h.walkChildren(child, root, visit)
+		}
+	}
+}
+
 // FirstChild and NextSibling traverse ascending SiblingOrder with entity ties.
 func (h *Hierarchy) FirstChild(entity ecs.Entity) ecs.Entity {
 	if n := h.node(entity); n != nil {

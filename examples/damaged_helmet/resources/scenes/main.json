@@ -1,0 +1,4 @@
+{
+  "modules": [{"id": "viewer", "mod": "resources"}],
+  "behavior": "SceneMain"
+}

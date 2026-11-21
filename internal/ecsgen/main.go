@@ -36,7 +36,7 @@ func main() {
 		fmt.Fprintln(&source, "// Access values and component pointers must not outlive the iteration.")
 		fmt.Fprintf(&source, "func (world *World) %s[%s any](options ...QueryOption) QueryView%d[%s] {\nrequireWorld(world)\nids := [%d]componentID{", name, params, count, params, count)
 		for _, letter := range letters {
-			fmt.Fprintf(&source, "world.registerComponent[%s](),", letter)
+			fmt.Fprintf(&source, "world.componentIDFor[%s](),", letter)
 		}
 		fmt.Fprintf(&source, "}\nkey := simpleQueryKey{count: %d}\ncopy(key.ids[:], ids[:])\nreturn QueryView%d[%s]{view: buildQuery(world, key, options), ids: ids}\n}\n", count, count, params)
 		fmt.Fprintf(&source, "\n// QueryView%d retains a query plan and its filter snapshot. Range over All to iterate.\ntype QueryView%d[%s any] struct {\nview queryView\nids [%d]componentID\n}\n", count, count, params, count)

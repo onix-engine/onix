@@ -23,7 +23,6 @@ const (
 	animationPlay
 )
 
-var animationProperties = [...]string{"animation-name", "animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state"}
 var animationInitial = [...]string{"none", "0s", "ease", "0s", "1", "normal", "none", "running"}
 
 type CSSAnimation struct {
@@ -110,12 +109,9 @@ func parseAnimationField(index int, raw string, animation *CSSAnimation) error {
 	return nil
 }
 
-func applyAnimationProperty(computed *ComputedStyle, property, raw string) error {
-	if property != "animation" {
-		index := slices.Index(animationProperties[:], property)
-		if index < 0 {
-			return nil
-		}
+func applyAnimationProperty(computed *ComputedStyle, property propertyID, raw string) error {
+	if property != propertyAnimation {
+		index := int(property - propertyAnimationName)
 		entries := splitCSSList(raw)
 		if len(entries) == 0 {
 			return fmt.Errorf("empty animation value")
@@ -324,14 +320,14 @@ func CompileAnimationTracks(node *uinode.Node, computed *ComputedStyle, styleshe
 					point.Properties |= AnimatedTransform
 				case "opacity":
 					value := defaultStyle(nil)
-					if err := applyProperty(&value, "opacity", declaration.Value, nil, ctx); err != nil {
+					if err := applyProperty(&value, propertyOpacity, declaration.Value, nil, ctx); err != nil {
 						continue
 					}
 					point.Value.Opacity = value.Opacity.Number
 					point.Properties |= AnimatedOpacity
 				case "color", "background", "background-color", "border", "border-color", "border-top", "border-right", "border-bottom", "border-left", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color":
 					value := defaultStyle(nil)
-					if err := applyProperty(&value, declaration.Property, declaration.Value, nil, ctx); err != nil {
+					if err := applyProperty(&value, cascadePropertyIndex[declaration.Property].id, declaration.Value, nil, ctx); err != nil {
 						continue
 					}
 					properties := AnimatedProperty(declaration.Property)

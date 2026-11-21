@@ -109,8 +109,12 @@ func (app *App) Step() (bool, error) {
 	if err := app.trimIdleBuffers(now); err != nil {
 		return false, err
 	}
-	if app.shouldIdle(now) {
+	sleep, caretOnly := app.idleWake(now)
+	if sleep {
 		return false, nil
+	}
+	if !caretOnly {
+		app.discardCaretFrames()
 	}
 	if app.idleEnabled() {
 		app.renderRequested.Store(true)
@@ -132,7 +136,11 @@ func (app *App) Step() (bool, error) {
 		return false, nil
 	}
 	app.renderRequested.Swap(false)
+	if caretOnly && app.presentIdleCaret() {
+		return false, nil
+	}
 	if err := app.renderFrame(); err != nil {
+		app.discardCaretFrames()
 		app.renderRequested.Store(true)
 		return false, err
 	}

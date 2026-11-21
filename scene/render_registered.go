@@ -7,6 +7,7 @@ import (
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/internal/smallsort"
+	"github.com/onix-engine/onix/render"
 )
 
 type renderCollector2D func(*graphics.Canvas2D, *ecs.World, *renderSnapshots2D, *renderHierarchy2DCache, []renderItem2D, bool) []renderItem2D
@@ -52,34 +53,53 @@ func RegisterUIRenderer2D(world *ecs.World) {
 	RenderWorldFor(world).collectors2D[renderCollectorUIVisual2D] = appendUIVisualRenderItems2D
 }
 
+// Register the component change query with its collector so unused renderers
+// and their ECS query instantiations can be removed by the linker.
+func (state *RenderWorld) registerDynamicCollector[T any](kind renderCollector2DKind, collect renderCollector2D, drawable func(*T, *render.Device) bool) {
+	if state.collectors2D[kind] != nil {
+		return
+	}
+	state.collectors2D[kind] = collect
+	state.inputs2D = append(state.retainedInputs(), dynamicRetainedInput2D(kind, drawable))
+	state.registry2D++
+}
+
 func RegisterSpriteTrailRenderer2D(world *ecs.World) {
-	RenderWorldFor(world).registry2D++
-	RenderWorldFor(world).collectors2D[renderCollectorSpriteTrail2D] = collectSpriteTrails2D
+	state := RenderWorldFor(world)
+	state.registerDynamicCollector(renderCollectorSpriteTrail2D, collectSpriteTrails2D, func(t *SpriteTrail2D, device *render.Device) bool { return len(t.samples) != 0 })
 }
 
 func RegisterSpriteLayersRenderer2D(world *ecs.World) {
-	RenderWorldFor(world).registry2D++
-	RenderWorldFor(world).collectors2D[renderCollectorSpriteLayers2D] = collectSpriteLayers2D
+	state := RenderWorldFor(world)
+	state.registerDynamicCollector(renderCollectorSpriteLayers2D, collectSpriteLayers2D, func(l *SpriteLayers2D, device *render.Device) bool {
+		for i := range l.Layers {
+			layer := &l.Layers[i]
+			width, height := layer.Sprite.Size()
+			if layer.Visible && spriteDrawable2D(&layer.Sprite, device) && width > 0 && height > 0 {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func RegisterParticleRenderer2D(world *ecs.World) {
 	state := RenderWorldFor(world)
-	state.registry2D++
-	state.collectors2D[renderCollectorParticle2D] = collectParticles2D
+	state.registerDynamicCollector(renderCollectorParticle2D, collectParticles2D, func(e *ParticleEmitter2D, device *render.Device) bool { return len(e.particles) != 0 })
 	state.drawers2D[renderItemParticle2D] = drawParticleRenderItem2D
 }
 
 func RegisterTilemapRenderer2D(world *ecs.World) {
 	state := RenderWorldFor(world)
-	state.registry2D++
-	state.collectors2D[renderCollectorTilemap2D] = collectTilemaps2D
+	state.registerDynamicCollector(renderCollectorTilemap2D, collectTilemaps2D, func(t *Tilemap2D, device *render.Device) bool { return t.Alpha > 0 && t.ValidFor(device) })
 	state.drawers2D[renderItemTilemap2D] = drawTilemapRenderItem2D
 }
 
 func RegisterSpineRenderer2D(world *ecs.World) {
 	state := RenderWorldFor(world)
-	state.registry2D++
-	state.collectors2D[renderCollectorSpine2D] = collectSpines2D
+	state.registerDynamicCollector(renderCollectorSpine2D, collectSpines2D, func(s *Spine2D, device *render.Device) bool {
+		return s.Player != nil && s.Player.Resource != nil && s.Player.Alpha > 0
+	})
 	state.batchDrawers2D[renderItemSpine2D] = drawSpineRenderBatch2D
 }
 
@@ -239,7 +259,7 @@ func render2DLayer(c *graphics.Canvas2D, world *ecs.World, state *RenderWorld, c
 		state.activeCamera2DSet = true
 	}
 	cache := world.ScopeValue[renderTree2D, renderTree2D]()
-	if state.compositeAllowed2D && cache.initialized && !cache.direct && state.cameraRenderers[camera.Pipeline] == nil {
+	if state.compositeAllowed2D && cache.initialized && !cache.direct && state.cameraRenderers[camera.Pipeline] == nil && cache.shouldComposite() {
 		budget := int64(defaultCompositeBudget2D)
 		if settings, ok := world.GetResource[CompositeSettings2D](); ok && settings.MaxCacheBytes != 0 {
 			budget = settings.MaxCacheBytes

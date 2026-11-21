@@ -261,6 +261,7 @@ typedef struct {
 	GLint has_metallic_roughness_texture;
 	uintptr_t base;
 	GLsizei index_count;
+	GLenum index_type;
 	uintptr_t index_offset;
 	GLsizei instances;
 } OnixGLESMeshDraw;
@@ -303,7 +304,7 @@ static GLuint onix_gl_draw_mesh_run(const OnixGLESMeshDraw *draws, size_t count,
 			has_metallic_roughness = draw->has_metallic_roughness_texture;
 		}
 		onix_gl_mesh_instance_attributes(instance_stride, draw->base, 0);
-		glDrawElementsInstanced(GL_TRIANGLES, draw->index_count, GL_UNSIGNED_INT, (const void *)draw->index_offset, draw->instances);
+		glDrawElementsInstanced(GL_TRIANGLES, draw->index_count, draw->index_type, (const void *)draw->index_offset, draw->instances);
 	}
 	return bound_texture;
 }
@@ -311,6 +312,7 @@ static GLuint onix_gl_draw_mesh_run(const OnixGLESMeshDraw *draws, size_t count,
 typedef struct {
 	uintptr_t base;
 	GLsizei index_count;
+	GLenum index_type;
 	uintptr_t index_offset;
 	GLsizei instances;
 } OnixGLESPickingDraw;
@@ -322,7 +324,7 @@ static void onix_gl_draw_mesh_picking_run(const OnixGLESPickingDraw *draws, size
 	for (size_t index = 0; index < count; index++) {
 		const OnixGLESPickingDraw *draw = &draws[index];
 		onix_gl_mesh_instance_attributes(instance_stride, draw->base, 0);
-		glDrawElementsInstanced(GL_TRIANGLES, draw->index_count, GL_UNSIGNED_INT, (const void *)draw->index_offset, draw->instances);
+		glDrawElementsInstanced(GL_TRIANGLES, draw->index_count, draw->index_type, (const void *)draw->index_offset, draw->instances);
 	}
 }
 
@@ -572,6 +574,7 @@ type glesRenderTarget struct {
 }
 
 type glesMesh struct {
+	indexStride  uint32
 	vertexBuffer C.GLuint
 	indexBuffer  C.GLuint
 	indexCount   int
@@ -1248,7 +1251,7 @@ func (d *openGLESDriver) CreateMesh(vertices []Vertex3D, indices []uint32) (Mesh
 	if len(vertices) == 0 || len(indices) == 0 {
 		return MeshHandle{}, errors.New("render: OpenGL ES mesh data is empty")
 	}
-	mesh := glesMesh{indexCount: len(indices)}
+	mesh := glesMesh{indexCount: len(indices), indexStride: 4}
 	C.glGenBuffers(1, &mesh.vertexBuffer)
 	C.glGenBuffers(1, &mesh.indexBuffer)
 	if mesh.vertexBuffer == 0 || mesh.indexBuffer == 0 {
@@ -1259,7 +1262,12 @@ func (d *openGLESDriver) CreateMesh(vertices []Vertex3D, indices []uint32) (Mesh
 	d.bindArrayBuffer(mesh.vertexBuffer)
 	C.glBufferData(C.GL_ARRAY_BUFFER, C.GLsizeiptr(len(vertices)*int(unsafe.Sizeof(Vertex3D{}))), sliceData(vertices), C.GL_STATIC_DRAW)
 	C.glBindBuffer(C.GL_ELEMENT_ARRAY_BUFFER, mesh.indexBuffer)
-	C.glBufferData(C.GL_ELEMENT_ARRAY_BUFFER, C.GLsizeiptr(len(indices)*4), sliceData(indices), C.GL_STATIC_DRAW)
+	data := sliceData(indices)
+	if compact := compactMeshIndices(indices, 65535, false); compact != nil {
+		defer meshIndexBuffers.put(compact)
+		mesh.indexStride, data = 2, sliceData(compact.data)
+	}
+	C.glBufferData(C.GL_ELEMENT_ARRAY_BUFFER, C.GLsizeiptr(len(indices)*int(mesh.indexStride)), data, C.GL_STATIC_DRAW)
 	if err := glError("create mesh"); err != nil {
 		d.deleteMesh(mesh)
 		return MeshHandle{}, err
@@ -1304,6 +1312,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 	boundGeometry := false
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
+	var indexStride uint32
 	var counts meshDrawStatistics
 	d.meshDraws = (&d.meshDrawsRetention).resetScratch(d.meshDraws)
 	flush := func(program *glesProgram, vertexBuffer, indexBuffer C.GLuint) {
@@ -1320,9 +1329,11 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 		counts.add(draw)
 		if !boundGeometry || draw.Mesh != boundMesh {
 			flush(currentDrawProgram, currentVertexBuffer, currentIndexBuffer)
+			indexStride = 4
 			vertexBuffer, indexBuffer := d.meshGeometry.vertexBuffer, d.meshGeometry.indexBuffer
 			if draw.Mesh.Valid() {
 				mesh, _ := d.meshes.Get(draw.Mesh)
+				indexStride = mesh.indexStride
 				vertexBuffer, indexBuffer = mesh.vertexBuffer, mesh.indexBuffer
 			}
 			currentVertexBuffer, currentIndexBuffer = vertexBuffer, indexBuffer
@@ -1392,7 +1403,7 @@ func (d *openGLESDriver) DrawMeshes(batch MeshBatch3D) error {
 			texture: texture.value, normal_texture: normalTexture.value, metallic_roughness_texture: metallicRoughnessTexture.value,
 			has_normal_texture: hasNormal, has_metallic_roughness_texture: hasMetallicRoughness,
 			base: d.meshGeometry.instanceOffset + C.uintptr_t(uintptr(draw.FirstInstance)*unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
-			index_offset: C.uintptr_t(draw.FirstIndex * 4), instances: C.GLsizei(draw.InstanceCount),
+			index_type: C.GLenum(glIndexType(indexStride)), index_offset: C.uintptr_t(draw.FirstIndex) * C.uintptr_t(indexStride), instances: C.GLsizei(draw.InstanceCount),
 		}
 		copy(nativeDraw.extra_textures[:], extraTextures[:])
 		d.meshDraws = append(d.meshDraws, nativeDraw)
@@ -1436,6 +1447,7 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 	boundGeometry := false
 	boundMesh := MeshHandle{}
 	var currentVertexBuffer, currentIndexBuffer C.GLuint
+	var indexStride uint32
 	d.pickingDraws = (&d.pickingDrawsRetention).resetScratch(d.pickingDraws)
 	flush := func() {
 		if len(d.pickingDraws) == 0 {
@@ -1448,9 +1460,11 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 	for _, draw := range batch.Draws {
 		if !boundGeometry || draw.Mesh != boundMesh {
 			flush()
+			indexStride = 4
 			vertexBuffer, indexBuffer := d.meshGeometry.vertexBuffer, d.meshGeometry.indexBuffer
 			if draw.Mesh.Valid() {
 				mesh, _ := d.meshes.Get(draw.Mesh)
+				indexStride = mesh.indexStride
 				vertexBuffer, indexBuffer = mesh.vertexBuffer, mesh.indexBuffer
 			}
 			currentVertexBuffer, currentIndexBuffer = vertexBuffer, indexBuffer
@@ -1458,7 +1472,7 @@ func (d *openGLESDriver) DrawMeshPicking(batch MeshBatch3D) error {
 		}
 		d.pickingDraws = append(d.pickingDraws, C.OnixGLESPickingDraw{
 			base: d.meshGeometry.instanceOffset + C.uintptr_t(uintptr(draw.FirstInstance)*unsafe.Sizeof(Instance3D{})), index_count: C.GLsizei(draw.IndexCount),
-			index_offset: C.uintptr_t(draw.FirstIndex * 4), instances: C.GLsizei(draw.InstanceCount),
+			index_type: C.GLenum(glIndexType(indexStride)), index_offset: C.uintptr_t(draw.FirstIndex) * C.uintptr_t(indexStride), instances: C.GLsizei(draw.InstanceCount),
 		})
 	}
 	flush()

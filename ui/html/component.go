@@ -957,6 +957,10 @@ func UpdateComponentState[P, S any](world *ecs.World, entity ecs.Entity, update 
 
 // UnmountComponent removes the component roots, bindings, and ECS entity.
 func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
+	return unmountComponent(world, entity, false)
+}
+
+func unmountComponent(world *ecs.World, entity ecs.Entity, detached bool) bool {
 	if world == nil || entity == 0 {
 		return false
 	}
@@ -974,19 +978,28 @@ func UnmountComponent(world *ecs.World, entity ecs.Entity) bool {
 	instance.Unmounting = true
 	if instance.Definition != nil && instance.Definition.unmount != nil {
 		instance.Definition.unmount(world, entity)
+		instance = world.GetMut[htmlComponentInstance](entity)
+		if instance == nil {
+			return false
+		}
 	}
 	for len(instance.Children) > 0 {
 		index := len(instance.Children) - 1
 		child := instance.Children[index]
 		instance.Children = instance.Children[:index]
-		UnmountComponent(world, child)
+		unmountComponent(world, child, true)
+		// Callbacks and ECS row removal can move the parent instance.
+		instance = world.GetMut[htmlComponentInstance](entity)
+		if instance == nil {
+			return false
+		}
 	}
 	for key := range instance.Current.Events {
 		removeHTMLComponentEventBinding(world, instance.Page, instance.EventNodes[key], key, entity)
 	}
 	removeHTMLComponentRoots(world, instance.Page, instance.Roots)
 	_ = detachHTMLComponentCSS(world, instance.Page, instance.Definition)
-	if instance.Parent != 0 {
+	if !detached && instance.Parent != 0 {
 		if parent := world.GetMut[htmlComponentInstance](instance.Parent); parent != nil {
 			for index, child := range parent.Children {
 				if child != entity {

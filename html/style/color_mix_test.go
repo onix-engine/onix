@@ -136,7 +136,7 @@ func TestColorMixPropertyAllocations(t *testing.T) {
 			}
 			computed := defaultStyle(nil)
 			if allocs := testing.AllocsPerRun(100, func() {
-				if err := applyProperty(&computed, property, input, nil, parseContext{}); err != nil {
+				if err := applyProperty(&computed, cascadePropertyIndex[property].id, input, nil, parseContext{}); err != nil {
 					panic(err)
 				}
 			}); allocs != 0 {

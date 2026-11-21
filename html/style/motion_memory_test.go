@@ -2,6 +2,7 @@ package style
 
 import (
 	"fmt"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -48,7 +49,7 @@ func TestMotionExtensionsShareAndDetach(t *testing.T) {
 	}
 	// Explicit mutable copies must also detach from the immutable shared block.
 	copy := *styles[second]
-	if err := applyTransitionProperty(&copy, "transition-duration", "7s"); err != nil {
+	if err := applyTransitionProperty(&copy, propertyTransitionDuration, "7s"); err != nil {
 		t.Fatal(err)
 	}
 	resolveMotion(copy.mutableMotion())
@@ -167,12 +168,15 @@ func TestMotionCSSWideShorthandReset(t *testing.T) {
 func TestMotionInterningBoundAndReset(t *testing.T) {
 	index := styleIndex{}
 	index.limit = 4
-	for i := range 6 {
+	var live [6]*motionStyle
+	for i := range live {
 		motion := motionStyle{motionInputs: motionInputs{animation: [8]string{fmt.Sprintf("name%d", i)}}}
-		if index.resolveMotion(&motion) == nil {
+		live[i] = index.resolveMotion(&motion)
+		if live[i] == nil {
 			t.Fatal("motion extension was lost after reaching the index limit")
 		}
 	}
+	runtime.KeepAlive(live)
 	if index.motions.used != index.limit {
 		t.Fatalf("motion index retained %d entries; want %d", index.motions.used, index.limit)
 	}
@@ -181,7 +185,7 @@ func TestMotionInterningBoundAndReset(t *testing.T) {
 		t.Fatal("motion index was not reset")
 	}
 	for _, slot := range index.motions.slots {
-		if slot.value != nil {
+		if slot != (valueSlot[motionStyle]{}) {
 			t.Fatal("reset motion index retained an extension")
 		}
 	}

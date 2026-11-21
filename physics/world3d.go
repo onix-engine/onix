@@ -1,9 +1,6 @@
 package physics
 
-import (
-	"math"
-	"slices"
-)
+import "math"
 
 type shapeKind3D uint8
 
@@ -33,6 +30,7 @@ type bodyState3D struct {
 	gravityScale    float64
 	linearDamping   float64
 	generation      uint32
+	firstCollider   uint32 // slot index plus one, with zero as the end of the list
 	fixedRotation   bool
 	bodyType        BodyType
 	managed         bool
@@ -72,6 +70,8 @@ type colliderState3D struct {
 	generation    uint32
 	bodyIndex     uint32
 	collisionType uint32
+	prevCollider  uint32
+	nextCollider  uint32
 	kind          shapeKind3D
 	sensor        bool
 	alive         bool
@@ -126,16 +126,12 @@ type activeCollision3D struct {
 	penetration float64
 }
 
-type broadphaseEntry3D struct {
-	collider, next int
-}
-
 type World3D struct {
-	bucketHeads []int
-	pairs       []colliderPair
-	events      []CollisionEvent3D
-	nextActive  []activeCollision3D
-	active      []activeCollision3D
+	writes physicsWriteback
+
+	events     []CollisionEvent3D
+	nextActive []activeCollision3D
+	active     []activeCollision3D
 
 	bodies     []bodyState3D
 	freeBodies []uint32
@@ -143,16 +139,18 @@ type World3D struct {
 
 	aabbs            []aabb3D
 	velocityContacts []manifold3D
-	large            []int
-	gridEntries      []broadphaseEntry3D
-	contacts         []manifold3D
-	freeColliders    []uint32
-	Gravity          Vector3D
-	Iterations       int
-	contactDelta     float64
-	CellSize         float64
-	CollisionSlop    float64
-	Damping          float64
+
+	contacts      []manifold3D
+	freeColliders []uint32
+
+	broadphaseIndex
+	stats         StepStatistics
+	Gravity       Vector3D
+	Iterations    int
+	contactDelta  float64
+	CellSize      float64
+	CollisionSlop float64
+	Damping       float64
 }
 
 func NewWorld3D() *World3D {
@@ -169,15 +167,12 @@ func (world *World3D) Reserve(bodyCount, colliderCount int) {
 	world.colliders = growCapacity(world.colliders, colliderCount)
 	world.freeColliders = growCapacity(world.freeColliders, colliderCount)
 	world.aabbs = growCapacity(world.aabbs, colliderCount)
-	world.gridEntries = growCapacity(world.gridEntries, colliderCount*8)
-	world.large = growCapacity(world.large, max(colliderCount/8, 8))
-	world.pairs = growCapacity(world.pairs, colliderCount*8)
+	world.broadphaseIndex.reserve(colliderCount)
 	world.contacts = growCapacity(world.contacts, colliderCount*4)
 	world.velocityContacts = growCapacity(world.velocityContacts, colliderCount*4)
 	world.active = growCapacity(world.active, colliderCount*4)
 	world.nextActive = growCapacity(world.nextActive, colliderCount*4)
 	world.events = growCapacity(world.events, colliderCount*4)
-	world.ensureBuckets(colliderCount)
 }
 
 func (world *World3D) CreateBody(def BodyDef3D) Body3D {
@@ -223,11 +218,8 @@ func (world *World3D) RemoveBody(body Body3D) bool {
 	if state == nil {
 		return false
 	}
-	for colliderIndex := range world.colliders {
-		collider := &world.colliders[colliderIndex]
-		if collider.alive && collider.bodyIndex == index {
-			world.removeColliderIndex(uint32(colliderIndex))
-		}
+	for state.firstCollider != 0 {
+		world.removeColliderIndex(state.firstCollider - 1)
 	}
 	state.alive = false
 	state.generation++
@@ -253,6 +245,8 @@ func (world *World3D) AddCollider[S Shape3D](body Body3D, def ColliderDef[S]) Co
 	} else {
 		index = uint32(len(world.colliders))
 		world.colliders = append(world.colliders, colliderState3D{})
+		world.proxies = append(world.proxies, broadphaseProxy{})
+		world.aabbs = append(world.aabbs, aabb3D{})
 	}
 	state := &world.colliders[index]
 	generation := state.generation
@@ -261,10 +255,16 @@ func (world *World3D) AddCollider[S Shape3D](body Body3D, def ColliderDef[S]) Co
 	}
 	*state = colliderState3D{
 		generation: generation, alive: true, bodyIndex: bodyIndex,
-		friction: max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
+		nextCollider: bodyState3D.firstCollider,
+		friction:     max(def.Friction, 0), restitution: clamp(def.Restitution, 0, 1),
 		sensor: def.Sensor, filter: def.Filter.normalized(), collisionType: def.CollisionType,
 	}
 	state.setColliderShape3D(def.Shape)
+	world.markProxy(index, true)
+	if state.nextCollider != 0 {
+		world.colliders[state.nextCollider-1].prevCollider = index + 1
+	}
+	bodyState3D.firstCollider = index + 1
 	if bodyState3D.inertia <= 0 {
 		bodyState3D.inertia = shapeInertia3D(*state, bodyState3D.mass)
 		bodyState3D.updateInverseMass()
@@ -285,7 +285,16 @@ func (world *World3D) RemoveCollider[S Shape3D](collider ColliderHandle3D[S]) bo
 }
 
 func (world *World3D) removeColliderIndex(index uint32) {
+	world.markProxy(index, false)
 	state := &world.colliders[index]
+	if state.prevCollider == 0 {
+		world.bodies[state.bodyIndex].firstCollider = state.nextCollider
+	} else {
+		world.colliders[state.prevCollider-1].nextCollider = state.nextCollider
+	}
+	if state.nextCollider != 0 {
+		world.colliders[state.nextCollider-1].prevCollider = state.prevCollider
+	}
 	state.alive = false
 	state.generation++
 	if state.generation == 0 {
@@ -312,9 +321,11 @@ func (world *World3D) Step(delta float64) {
 	if world == nil || delta <= 0 || math.IsNaN(delta) || math.IsInf(delta, 0) {
 		return
 	}
+	world.stats = StepStatistics{}
 	world.integrateVelocities(delta)
 	world.buildContacts()
 	world.solveContacts(delta)
+	world.stats.CandidatePairs = len(world.pairs)
 	world.buildEvents()
 }
 
@@ -324,33 +335,38 @@ func (world *World3D) integrateVelocities(delta float64) {
 		worldDamping = 1
 	}
 	stepDamping := math.Pow(worldDamping, delta)
-	for index := range world.bodies {
-		body := &world.bodies[index]
+	bodies := world.bodies
+	for index := range bodies {
+		body := &bodies[index]
 		if !body.alive {
 			continue
 		}
 		switch body.bodyType {
 		case BodyDynamic:
 			acceleration := world.Gravity.Mul(body.gravityScale).Add(body.force.Mul(body.inverseMass))
-			body.velocity = body.velocity.Add(acceleration.Mul(delta))
-			body.angularVelocity = body.angularVelocity.Add(body.torque.Mul(body.inverseInertia * delta))
-			body.velocity = body.velocity.Mul(stepDamping / (1 + body.linearDamping*delta))
-			body.angularVelocity = body.angularVelocity.Mul(stepDamping / (1 + body.angularDamping*delta))
+			velocity := body.velocity.Add(acceleration.Mul(delta))
+			angular := body.angularVelocity.Add(body.torque.Mul(body.inverseInertia * delta))
+			velocity = velocity.Mul(stepDamping / (1 + body.linearDamping*delta))
+			angular = angular.Mul(stepDamping / (1 + body.angularDamping*delta))
+			world.setMotion(body, velocity, angular)
 			body.force, body.torque = Vector3D{}, Vector3D{}
 		}
 	}
 }
 
 func (world *World3D) integratePositions(delta float64) {
-	for index := range world.bodies {
-		body := &world.bodies[index]
+	bodies := world.bodies
+	for index := range bodies {
+		body := &bodies[index]
 		if !body.alive || body.bodyType == BodyStatic {
 			continue
 		}
-		body.position = body.position.Add(body.velocity.Mul(delta))
+		position := body.position.Add(body.velocity.Mul(delta))
+		rotation := body.rotation
 		if !body.fixedRotation {
-			body.rotation = integrateRotation(body.rotation, body.angularVelocity, delta)
+			rotation = integrateRotation(body.rotation, body.angularVelocity, delta)
 		}
+		world.setPose(body, position, rotation)
 	}
 }
 
@@ -374,9 +390,7 @@ func (world *World3D) buildEvents() {
 			normal: contact.normal, point: contact.point, penetration: contact.penetration,
 		})
 	}
-	slices.SortFunc(world.nextActive, func(a, b activeCollision3D) int {
-		return int64Compare(a.key, b.key)
-	})
+	// Contacts inherit the broadphase's unique, sorted pair order.
 	oldIndex, nextIndex := 0, 0
 	for oldIndex < len(world.active) || nextIndex < len(world.nextActive) {
 		switch {
@@ -401,16 +415,6 @@ func (world *World3D) buildEvents() {
 	world.active, world.nextActive = world.nextActive, world.active[:0]
 }
 
-func int64Compare(a, b uint64) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
-
 func (world *World3D) appendEvent(phase CollisionPhase, active activeCollision3D) {
 	world.events = append(world.events, CollisionEvent3D{
 		Phase: phase, BodyA: active.bodyA, BodyB: active.bodyB,
@@ -428,7 +432,7 @@ func (world *World3D) bodyState3D(id BodyID3D) *bodyState3D {
 
 func (world *World3D) resolveBody(id BodyID3D) (uint32, *bodyState3D) {
 	index, generation := splitID(uint64(id))
-	if int(index) >= len(world.bodies) {
+	if uint(index) >= uint(len(world.bodies)) {
 		return 0, nil
 	}
 	state := &world.bodies[index]
@@ -445,7 +449,7 @@ func (world *World3D) colliderState3D(id ColliderID3D) *colliderState3D {
 
 func (world *World3D) resolveCollider(id ColliderID3D) (uint32, *colliderState3D) {
 	index, generation := splitID(uint64(id))
-	if int(index) >= len(world.colliders) {
+	if uint(index) >= uint(len(world.colliders)) {
 		return 0, nil
 	}
 	state := &world.colliders[index]
@@ -463,7 +467,11 @@ func makeColliderID3D(index, generation uint32) ColliderID3D {
 	return ColliderID3D(uint64(generation)<<32 | uint64(index+1))
 }
 
-func (state *colliderState3D) setColliderShape3D[S Shape3D](shape S) {
+// setColliderShape3D returns whether any input to the broadphase bounds changed.
+func (state *colliderState3D) setColliderShape3D[S Shape3D](shape S) bool {
+	oldCenter, oldHalf, oldRotation := state.center, state.half, state.rotation
+	oldRadius, oldHeight, oldKind := state.radius, state.halfHeight, state.kind
+	oldBounds := state.cookedBounds()
 	state.mesh, state.hull, state.compound = TriangleMesh{}, ConvexHull{}, Compound{}
 	switch value := any(shape).(type) {
 	case Sphere:
@@ -508,6 +516,20 @@ func (state *colliderState3D) setColliderShape3D[S Shape3D](shape S) {
 	default:
 		panic("physics: unsupported 3D collider shape")
 	}
+	return oldCenter != state.center || oldHalf != state.half || oldRotation != state.rotation ||
+		oldRadius != state.radius || oldHeight != state.halfHeight || oldKind != state.kind || oldBounds != state.cookedBounds()
+}
+
+func (state *colliderState3D) cookedBounds() Bounds3D {
+	switch state.kind {
+	case shapeTriangleMesh3D:
+		return state.mesh.Bounds
+	case shapeConvexHull3D:
+		return state.hull.Bounds
+	case shapeCompound3D:
+		return state.compound.Bounds
+	}
+	return Bounds3D{}
 }
 
 func (state colliderState3D) shapeFromState3D[S Shape3D]() S {
@@ -563,4 +585,11 @@ func shapeInertia3D(shape colliderState3D, mass float64) float64 {
 	default:
 		return math.Inf(1)
 	}
+}
+
+func (world *World3D) setMotion(body *bodyState3D, velocity Vector3D, angular Vector3D) {
+	if body.managed && (velocity != body.velocity || angular != body.angularVelocity) {
+		world.writes.record(body.userData, false)
+	}
+	body.velocity, body.angularVelocity = velocity, angular
 }

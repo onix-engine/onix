@@ -564,51 +564,46 @@ func (s *SceneInstance) removeNodes(refresh bool, ids ...string) int {
 	if s == nil || s.World == nil || len(ids) == 0 {
 		return 0
 	}
-	roots := make(map[ecs.Entity]struct{}, len(ids))
+	var hierarchy *sceneapi.Hierarchy
+	removedEntities := make(map[ecs.Entity]struct{})
+	var entities []ecs.Entity
 	for _, id := range ids {
-		if entity, ok := s.Entities[strings.TrimSpace(id)]; ok {
-			roots[entity] = struct{}{}
+		root, ok := s.Entities[strings.TrimSpace(id)]
+		if !ok {
+			continue
 		}
+		if hierarchy == nil {
+			hierarchy = sceneapi.HierarchyFor(s.World)
+		}
+		hierarchy.WalkSubtree(root, func(entity ecs.Entity) bool {
+			if _, seen := removedEntities[entity]; seen {
+				return false
+			}
+			if entity != root && !s.World.InQueryScope(entity) {
+				return false
+			}
+			removedEntities[entity] = struct{}{}
+			entities = append(entities, entity)
+			return true
+		})
 	}
-	if len(roots) == 0 {
+	if len(entities) == 0 {
 		return 0
 	}
-
-	children := make(map[ecs.Entity][]ecs.Entity)
-	for entity, access := range s.World.Query[sceneapi.Parent]().All {
-		parent := access.Ref()
-
-		children[parent.Entity] = append(children[parent.Entity], entity)
-	}
-	removedEntities := make(map[ecs.Entity]struct{})
-	var collect func(ecs.Entity)
-	collect = func(entity ecs.Entity) {
-		if _, exists := removedEntities[entity]; exists {
-			return
-		}
-		removedEntities[entity] = struct{}{}
-		for _, child := range children[entity] {
-			collect(child)
-		}
-	}
-	for entity := range roots {
-		collect(entity)
-	}
-	for entity := range removedEntities {
+	for _, entity := range entities {
 		s.destroyScripts(entity)
 		s.unbindControlPart(entity)
 	}
 	s.rebuildScriptSystems()
 
 	removed := 0
-	for id, entity := range s.Entities {
-		if _, exists := removedEntities[entity]; !exists {
-			continue
-		}
-		delete(s.Entities, id)
-		delete(s.EntityIDs, entity)
+	for _, entity := range entities {
 		delete(s.nodes, entity)
-		removed++
+		if id, ok := s.EntityIDs[entity]; ok {
+			delete(s.Entities, id)
+			delete(s.EntityIDs, entity)
+			removed++
+		}
 	}
 	remainingRoots := s.Roots[:0]
 	for _, entity := range s.Roots {
@@ -618,10 +613,6 @@ func (s *SceneInstance) removeNodes(refresh bool, ids ...string) int {
 	}
 	s.Roots = remainingRoots
 
-	entities := make([]ecs.Entity, 0, len(removedEntities))
-	for entity := range removedEntities {
-		entities = append(entities, entity)
-	}
 	// Releasing highest entity slots first makes subsequent scene rebuilds reuse
 	// slots in authored spawn order rather than randomized map iteration order.
 	slices.SortFunc(entities, func(a, b ecs.Entity) int {
@@ -1440,7 +1431,7 @@ func (s *SceneInstance) recomposeAuthoredNode(entity ecs.Entity) error {
 		root = parent.Entity
 	}
 	if root != 0 {
-		return s.recomposeControlsUnder(map[ecs.Entity]struct{}{root: {}})
+		return s.recomposeControlsUnder(root)
 	}
 	return nil
 }
@@ -1642,14 +1633,15 @@ func indexSceneEntity(spec SceneNodeSpec, entity ecs.Entity, index map[string]ec
 	return nil
 }
 
-func (s *SceneInstance) recomposeControlsUnder(roots map[ecs.Entity]struct{}) error {
-	entities := make([]ecs.Entity, 0, len(s.nodes))
-	for entity := range s.nodes {
-		if sceneEntityUnder(s.World, entity, roots) {
+func (s *SceneInstance) recomposeControlsUnder(root ecs.Entity) error {
+	var entities []ecs.Entity
+	sceneapi.HierarchyFor(s.World).WalkSubtree(root, func(entity ecs.Entity) bool {
+		if _, ok := s.nodes[entity]; ok {
 			entities = append(entities, entity)
 		}
-	}
-	sort.Slice(entities, func(i, j int) bool { return entities[i] < entities[j] })
+		return true
+	})
+	slices.Sort(entities)
 	for _, entity := range entities {
 		s.unbindControlPart(entity)
 	}
@@ -1662,25 +1654,11 @@ func (s *SceneInstance) recomposeControlsUnder(roots map[ecs.Entity]struct{}) er
 		if !s.World.Has[engineui.Control](entity) {
 			continue
 		}
-		if err := s.bindControlComposition(entity); err != nil {
+		if err := s.bindControlComposition(entity, false); err != nil {
 			return err
 		}
 	}
 	return s.RefreshTransforms()
-}
-
-func sceneEntityUnder(world *ecs.World, entity ecs.Entity, roots map[ecs.Entity]struct{}) bool {
-	for remaining := world.EntityCount() + 1; entity != 0 && remaining > 0; remaining-- {
-		if _, ok := roots[entity]; ok {
-			return true
-		}
-		parent, ok := world.Get[sceneapi.Parent](entity)
-		if !ok {
-			return false
-		}
-		entity = parent.Entity
-	}
-	return false
 }
 
 // BindControl installs an explicitly selected runtime behavior on an authored
@@ -1757,19 +1735,19 @@ func (scene *SceneInstance) bindSceneControl[T any](entity ecs.Entity, component
 			return err
 		}
 	}
-	roots := map[ecs.Entity]struct{}{entity: {}}
-	scene.visitAuthoredComposition(entity, func(child ecs.Entity, _ sceneSpawnNode) {
-		if child != entity && sceneEntityUnder(scene.World, child, roots) {
-			engineui.UnbindControlCompositionPart(scene.World, child)
-		}
-	})
-	scene.World.Remove[engineui.Variants[engineui.ControlVariant]](entity)
-	return scene.bindControlComposition(entity)
+	return scene.bindControlComposition(entity, true)
 }
 
-func (s *SceneInstance) bindControlComposition(owner ecs.Entity) error {
-	composition := make(engineui.ControlComposition, s.authoredCompositionSize(owner))
-	s.visitAuthoredComposition(owner, func(entity ecs.Entity, node sceneSpawnNode) {
+func (s *SceneInstance) bindControlComposition(owner ecs.Entity, unbind bool) error {
+	composition := make(engineui.ControlComposition)
+	sceneapi.HierarchyFor(s.World).WalkSubtree(owner, func(entity ecs.Entity) bool {
+		node, ok := s.nodes[entity]
+		if !ok {
+			return true
+		}
+		if unbind && entity != owner {
+			engineui.UnbindControlCompositionPart(s.World, entity)
+		}
 		var kind engineui.CompositionNodeKind
 		switch {
 		case node.Spec.Control != nil:
@@ -1781,7 +1759,7 @@ func (s *SceneInstance) bindControlComposition(owner ecs.Entity) error {
 		case node.HasAnimation || (!node.HasParticle && !node.HasTilemap && !node.HasSpine):
 			kind = engineui.CompositionGroup
 		default:
-			return
+			return true
 		}
 		composition[entity] = engineui.CompositionNode{
 			Kind: kind,
@@ -1789,7 +1767,11 @@ func (s *SceneInstance) bindControlComposition(owner ecs.Entity) error {
 			Width: float32(node.Spec.Width), Height: float32(node.Spec.Height),
 			Text: sceneNodeControlText(node.Spec), Visible: node.Visible,
 		}
+		return true
 	})
+	if unbind {
+		s.World.Remove[engineui.Variants[engineui.ControlVariant]](owner)
+	}
 	return engineui.BindControlComposition(s.World, composition, owner, func(entity ecs.Entity) error {
 		return s.bindSceneControl(entity, engineui.Button{})
 	})
@@ -1798,48 +1780,6 @@ func (s *SceneInstance) bindControlComposition(owner ecs.Entity) error {
 func (s *SceneInstance) authoredNode(entity ecs.Entity) (sceneSpawnNode, bool) {
 	node, ok := s.nodes[entity]
 	return node, ok
-}
-
-func (s *SceneInstance) authoredCompositionSize(owner ecs.Entity) int {
-	if s == nil || s.World == nil {
-		return 0
-	}
-	count := 0
-	for entity := range s.nodes {
-		if s.authoredNodeUnder(owner, entity) {
-			count++
-		}
-	}
-	return count
-}
-
-func (s *SceneInstance) visitAuthoredComposition(owner ecs.Entity, visit func(ecs.Entity, sceneSpawnNode)) {
-	if s == nil || s.World == nil || visit == nil {
-		return
-	}
-	for entity, node := range s.nodes {
-		if !s.authoredNodeUnder(owner, entity) {
-			continue
-		}
-		visit(entity, node)
-	}
-}
-
-func (s *SceneInstance) authoredNodeUnder(owner, entity ecs.Entity) bool {
-	if owner == 0 || entity == 0 {
-		return false
-	}
-	for steps := s.World.EntityCount() + 1; entity != 0 && steps > 0; steps-- {
-		if entity == owner {
-			return true
-		}
-		parent, ok := s.World.Get[sceneapi.Parent](entity)
-		if !ok {
-			return false
-		}
-		entity = parent.Entity
-	}
-	return false
 }
 
 func (b *Bundle) uiThemeForSpec(world *ecs.World, spec SceneNodeSpec) (engineui.Theme, error) {

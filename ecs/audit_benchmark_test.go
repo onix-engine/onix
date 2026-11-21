@@ -57,11 +57,7 @@ func auditRegisterColumns(world *World, count int) []componentID {
 	for i := range ids {
 		id := componentID(len(world.componentInfos))
 		ids[i] = id
-		world.componentInfos = append(world.componentInfos, componentInfo{
-			newColumn: func() column {
-				return &typedColumn[int]{columnState: columnState{world: world, id: id}}
-			},
-		})
+		world.componentInfos = append(world.componentInfos, componentInfo{newColumn: newTypedColumn[int]})
 	}
 	return ids
 }
@@ -76,11 +72,11 @@ func BenchmarkAuditTransitionBinding(b *testing.B) {
 			source := world.archetypeFor(ids)
 			removed := maskFor(ids[len(ids)-1:])
 			b.Run("Removal", func(b *testing.B) {
-				plan := &removalPlan{world: world, mask: removed, transitions: make(map[uint32]*removalTransition)}
+				plan := &removalPlan{world: world, mask: removed}
 				plan.transition(source)
 				b.ReportAllocs()
 				for b.Loop() {
-					clear(plan.transitions)
+					plan.transitions = transitionCache[removalTransition]{}
 					plan.transition(source)
 				}
 			})
@@ -90,7 +86,7 @@ func BenchmarkAuditTransitionBinding(b *testing.B) {
 				plan.transition(source)
 				b.ReportAllocs()
 				for b.Loop() {
-					clear(plan.transitions)
+					plan.transitions = transitionCache[patchTransition]{}
 					plan.transition(source)
 				}
 			})

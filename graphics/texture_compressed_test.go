@@ -91,3 +91,57 @@ func TestTextureFromCompressedRejectsMismatchedPayload(t *testing.T) {
 		})
 	}
 }
+
+type variantTextureTestDriver struct {
+	canvasTestDriver
+	supported render.TextureFormat
+}
+
+func (d *variantTextureTestDriver) SupportsCompressedTexture(f render.TextureFormat, _, _ int) bool {
+	return f == d.supported
+}
+
+func TestWebTextureSelectsOneResidentMipChain(t *testing.T) {
+	const width, height, levels = 7, 5, 3
+	for _, f := range []render.TextureFormat{render.TextureFormatBC3SRGB, render.TextureFormatASTC4x4SRGB, render.TextureFormatSRGBA8} {
+		driver := &variantTextureTestDriver{supported: f}
+		installCanvasTestDriver(t, driver)
+		n := render.TextureFormatBC3.ChainSize(width, height, levels)
+		data := make([]byte, n+render.TextureFormatASTC4x4.ChainSize(width, height, levels))
+		for i := 0; i < n; i += 16 {
+			data[i] = 127    // alpha selector 0
+			data[i+9] = 0xf8 // red 565 endpoint
+		}
+		for i := n; i < len(data); i++ {
+			data[i] = 23
+		}
+		tex, err := TextureFromCompressed(CompressedTextureDescriptor{Width: width, Height: height, Levels: levels, Format: render.TextureFormatBC3SRGB, HasASTCVariant: true, Mipmap: true}, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		desc := render.TextureDescriptor{Format: tex.format, Levels: levels, Width: width, Height: height}
+		pixels := tex.selectTextureVariant(driver, &desc)
+		switch f {
+		case render.TextureFormatSRGBA8:
+			for i := 0; i < len(pixels); i += 4 {
+				if [4]byte(pixels[i:i+4]) != [4]byte{255, 0, 0, 127} {
+					t.Fatalf("pixel %d = %v", i/4, pixels[i:i+4])
+				}
+			}
+		case render.TextureFormatASTC4x4SRGB:
+			if &pixels[0] != &data[n] {
+				t.Fatal("wrong ASTC offset")
+			}
+		case render.TextureFormatBC3SRGB:
+			if &pixels[0] != &data[0] {
+				t.Fatal("wrong BC offset")
+			}
+		}
+		if !tex.RenderHandle().Valid() || tex.Format() != f || len(tex.pix) != 0 || driver.createdBytes[0] != f.ChainSize(width, height, levels) || driver.createdTextures[0].Levels != levels {
+			t.Fatalf("upload %s: descriptors %v, error %v", f.Name(), driver.createdTextures, tex.UploadError())
+		}
+		if err := tex.Dispose(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

@@ -65,6 +65,32 @@ func TestRetainedRender2DUnusedDynamicInputs(t *testing.T) {
 	}
 }
 
+func TestRetainedRender2DLateTilemapRegistration(t *testing.T) {
+	world, canvas, _, entities := incrementalRenderFixture(t, 10, false)
+	state := RenderWorldFor(world)
+	incrementalFrame(t, world, canvas)
+	texture := graphics.CreateTextureByImageNoMipmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))
+	t.Cleanup(func() { _ = texture.Dispose() })
+	tilemap := Tilemap2D{Texture: texture, Tiles: []int{0}, Width: 1, Height: 1, TileWidth: 2, TileHeight: 2, Columns: 1, Alpha: 1}
+	if err := world.Insert(entities[0], tilemap); err != nil {
+		t.Fatal(err)
+	}
+	incrementalFrame(t, world, canvas)
+	if state.Preparation2D.Extracted != 0 || len(state.Items2D) != len(entities) {
+		t.Fatalf("unregistered tilemap invalidated sprites: %+v", state.Preparation2D)
+	}
+	RegisterTilemapRenderer2D(world)
+	incrementalFrame(t, world, canvas)
+	if len(state.Items2D) != len(entities)+1 {
+		t.Fatalf("expected existing tilemap to appear after registration, got %d items", len(state.Items2D))
+	}
+	revision := state.registry2D
+	RegisterTilemapRenderer2D(world)
+	if state.registry2D != revision {
+		t.Fatal("registering the tilemap renderer twice invalidated the render cache")
+	}
+}
+
 func TestRetainedRender2DMixedTilemapSnapshots(t *testing.T) {
 	world, canvas, _, entities := incrementalRenderFixture(t, 100, false)
 	RegisterTilemapRenderer2D(world)

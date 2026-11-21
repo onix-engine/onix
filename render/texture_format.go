@@ -24,6 +24,12 @@ const (
 	TextureFormatASTC4x4SRGB // ASTC 4x4 sampled as sRGB
 )
 
+// CompressedTextureSupport reports whether a device can sample the format at
+// its logical base dimensions, including platform block-alignment restrictions.
+type CompressedTextureSupport interface {
+	SupportsCompressedTexture(format TextureFormat, width, height int) bool
+}
+
 // TextureBlock is the texel granularity of a format. Uncompressed formats use a
 // 1x1 block; block-compressed formats use 4x4.
 type TextureBlock struct {
@@ -70,6 +76,12 @@ func (f TextureFormat) Block() TextureBlock { return f.info().block }
 // cannot be updated in place, because a partial region does not cover whole
 // blocks.
 func (f TextureFormat) Compressed() bool { return f.info().block.Width > 1 }
+
+// WebVariantBase reports whether a BC payload can also be decoded to RGBA
+// when neither compressed representation of a Web texture can be sampled.
+func (f TextureFormat) WebVariantBase() bool {
+	return f >= TextureFormatBC1 && f <= TextureFormatBC3SRGB
+}
 
 // TexelBytes reports the encoded size of one texel. Compressed formats report 0
 // because their texels are not independently addressable; use LevelSize or

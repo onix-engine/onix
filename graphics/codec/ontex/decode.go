@@ -29,15 +29,14 @@ func Decode(data []byte, options graphics.TextureOptions) (*graphics.Texture, er
 	}
 	pixels := bytes.Clone(image.Data)
 	return graphics.TextureFromCompressed(graphics.CompressedTextureDescriptor{
-		// The build packs one payload per image, so a sampler that wants the
-		// other colour interpretation reuses the same blocks.
-		Format:        image.Format.SRGBVariant(options.SRGB),
-		Width:         image.Width,
-		Height:        image.Height,
-		Levels:        image.Levels,
-		Mipmap:        options.Mipmap,
-		Premultiplied: image.Premultiplied,
-		WrapU:         options.WrapU,
-		WrapV:         options.WrapV,
+		HasASTCVariant: image.HasASTCVariant,
+		Format:         image.Format.SRGBVariant(options.SRGB),
+		Width:          image.Width,
+		Height:         image.Height,
+		Levels:         image.Levels,
+		Mipmap:         options.Mipmap,
+		Premultiplied:  image.Premultiplied,
+		WrapU:          options.WrapU,
+		WrapV:          options.WrapV,
 	}, pixels)
 }

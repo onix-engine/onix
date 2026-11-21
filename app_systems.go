@@ -541,6 +541,7 @@ func (app *App) ensureUIRuntime() error {
 	}))
 	app.uiLayoutPending = engineui.LayoutPending
 	app.uiCaretBlinkDelay = engineui.CaretBlinkDelay
+	app.uiCaretVisible = engineui.CaretVisible
 	app.installedSystemSets |= systemSetUIRuntime
 	return nil
 }

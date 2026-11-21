@@ -357,6 +357,7 @@ typedef struct {
 	VkBuffer vertex_buffer, index_buffer, deformation_buffer;
 	VkDeviceSize vertex_offset, index_offset, deformation_offset, deformation_size;
 	OnixVkMeshLease geometry, deformation;
+	VkIndexType index_type;
 	uint32_t vertex_count, index_count;
 	int destroy_pending;
 	uint32_t retire_frame, retire_next, free_next;
@@ -3121,13 +3122,20 @@ static int onix_vk_acquire_texture_pool(
 	if (requirements->size > ONIX_VK_TEXTURE_POOL_MAX_IMAGE) return 0;
 	VkDeviceSize granularity = driver->physical_device_properties.limits.bufferImageGranularity;
 	if (granularity < requirements->alignment) granularity = requirements->alignment;
-	for (uint32_t block = 0; block < ONIX_VK_TEXTURE_POOL_BLOCKS; block++) {
+	uint32_t empty = ONIX_VK_TEXTURE_POOL_BLOCKS;
+	for (uint32_t i = 0; i <= ONIX_VK_TEXTURE_POOL_BLOCKS; i++) {
+		uint32_t block = i;
+		if (i == ONIX_VK_TEXTURE_POOL_BLOCKS) {
+			if (empty == ONIX_VK_TEXTURE_POOL_BLOCKS) break;
+			block = empty;
+			if (!onix_vk_create_texture_pool_block(driver, &driver->texture_pools[block], requirements)) break;
+		}
 		OnixVkTexturePool *pool = &driver->texture_pools[block];
 		if (pool->memory == VK_NULL_HANDLE) {
-			if (!onix_vk_create_texture_pool_block(driver, pool, requirements)) continue;
-		} else if ((requirements->memoryTypeBits & (1u << pool->memory_type)) == 0) {
+			if (empty == ONIX_VK_TEXTURE_POOL_BLOCKS) empty = block;
 			continue;
 		}
+		if (!(requirements->memoryTypeBits & (1u << pool->memory_type))) continue;
 		for (uint32_t index = 0; index < ONIX_VK_TEXTURE_POOL_RANGES; index++) {
 			OnixVkMemoryRange *hole = &pool->ranges[index];
 			if (hole->occupied || hole->size == 0) continue;
@@ -4625,7 +4633,9 @@ uint32_t onix_gpu_create_mesh(
 	if (!onix_vk_acquire_mesh_slot(driver, &slot)) return 0;
 	OnixVkMesh mesh = {.vertex_count = vertex_count, .index_count = index_count};
 	VkDeviceSize vertex_size = (VkDeviceSize)vertex_count * sizeof(OnixGPUVertex3D);
-	VkDeviceSize index_size = (VkDeviceSize)index_count * sizeof(uint32_t);
+	unsigned stride = onix_index_stride(indices, index_count, UINT16_MAX);
+	mesh.index_type = stride == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+	VkDeviceSize index_size = (VkDeviceSize)index_count * stride;
 	VkDeviceSize index_base = (vertex_size + 15u) & ~(VkDeviceSize)15u;
 	if (index_base + index_size > SIZE_MAX) { onix_vk_set_error("Vulkan mesh exceeds addressable memory"); return 0; }
 	void *mapping;
@@ -4633,7 +4643,7 @@ uint32_t onix_gpu_create_mesh(
 	mesh.index_buffer = mesh.vertex_buffer;
 	mesh.index_offset = mesh.vertex_offset + index_base;
 	memcpy(mapping, vertices, (size_t)vertex_size);
-	memcpy((uint8_t *)mapping + index_base, indices, (size_t)index_size);
+	onix_copy_indices((uint8_t *)mapping + index_base, indices, index_count, stride);
 
 	onix_vk_meshes_insert(driver->meshes, &driver->mesh_slots, slot, mesh);
 	return slot + 1;
@@ -4921,7 +4931,7 @@ int onix_gpu_draw_meshes(
 			VkBuffer vertex_buffers[] = {geometry_vertex, instance_handle};
 			VkDeviceSize offsets[] = {geometry_vertex_offset, instance_offset};
 			vkCmdBindVertexBuffers(command_buffer, 0, 2, vertex_buffers, offsets);
-			vkCmdBindIndexBuffer(command_buffer, geometry_index, geometry_index_offset, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(command_buffer, geometry_index, geometry_index_offset, draw->mesh ? driver->meshes[draw->mesh - 1].index_type : VK_INDEX_TYPE_UINT32);
 			bound_mesh = draw->mesh;
 		}
 		VkPipeline next_pipeline = onix_vk_mesh_pipeline(driver, draw, instances, (int)((const OnixNativeMeshUniforms *)lighting_dst)->lighting[5]);
@@ -5022,7 +5032,7 @@ int onix_gpu_draw_mesh_picking(
 			VkBuffer vertex_buffers[] = {geometry_vertex, instance_handle};
 			VkDeviceSize offsets[] = {geometry_vertex_offset, instance_offset};
 			vkCmdBindVertexBuffers(command_buffer, 0, 2, vertex_buffers, offsets);
-			vkCmdBindIndexBuffer(command_buffer, geometry_index, geometry_index_offset, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(command_buffer, geometry_index, geometry_index_offset, draw->mesh ? driver->meshes[draw->mesh - 1].index_type : VK_INDEX_TYPE_UINT32);
 			bound_mesh = draw->mesh;
 		}
 		vkCmdPushConstants(command_buffer, driver->mesh_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(*push), push);

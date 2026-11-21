@@ -50,6 +50,8 @@ func loadHTMLDocument(world *ecs.World, owner ecs.Entity, state *htmlRenderState
 	clear(state.EventTargets)
 	clear(state.DetachedFields)
 	state.PaintCullDisabled, state.PaintCullOffsets = false, nil
+	clear(state.InheritedClips[:])
+	state.NextInheritedClip = 0
 	state.Revision++
 	return nil
 }

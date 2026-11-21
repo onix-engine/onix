@@ -76,8 +76,10 @@ func TestListMarkerCacheOrdinalAndStyleChanges(t *testing.T) {
 				t.Fatalf("list marker = %v, want %q", fragments, item.text)
 			}
 		}
-		if cache.nodes[retainedNode(root, "plain")].marker != nil || cache.nodes[list].marker != nil {
-			t.Fatal("ordinary boxes retained list item caches")
+		for _, box := range []*Box{cache.nodes[retainedNode(root, "plain")], cache.nodes[list]} {
+			if box.scratch != nil && box.scratch.marker != nil {
+				t.Fatal("ordinary boxes retained list item caches")
+			}
 		}
 	}
 	updateRetained(t, &cache, root, styles, face, nil, true)

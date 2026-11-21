@@ -45,9 +45,11 @@ func (scratch *glyphRasterScratch) scaleOutline(contours []OutlineContour, scale
 	for index, contour := range contours {
 		mapped := scratch.points[offset : offset+len(contour)]
 		for i, point := range contour {
+			// Round before translating so fused multiply-add cannot change pixel coverage.
+			x, y := float64(point.X*scale), float64(point.Y*scale)
 			mapped[i] = OutlinePoint{
-				X: (point.X*scale + shiftX - float64(bounds.Min.X)) * scaleX,
-				Y: float64(bounds.Max.Y) - point.Y*scale + shiftY,
+				X: (x + shiftX - float64(bounds.Min.X)) * scaleX,
+				Y: float64(bounds.Max.Y) - y + shiftY,
 			}
 		}
 		scratch.contours[index] = mapped

@@ -59,6 +59,27 @@ func htmlBlurShadowCoverage(dst *image.Alpha, sigma float64, scratch *htmlFilter
 		}
 		return
 	}
+	lower := int(math.Floor(math.Sqrt(4*sigma*sigma + 1)))
+	if lower%2 == 0 {
+		lower--
+	}
+	lower = max(lower, 1)
+	count := int(math.Round((12*sigma*sigma - float64(3*lower*lower+12*lower+9)) / float64(-4*lower-4)))
+	var radii [3]int
+	for pass := range radii {
+		radii[pass] = (lower - 1) / 2
+		if pass >= count {
+			radii[pass]++
+		}
+	}
+	// Each pass needs one row of sums and a window of horizontally blurred rows.
+	// For very broad kernels a full image takes less space.
+	if h >= 7 && radii[2] <= (h-7)/6 {
+		rows := 2*(radii[0]+radii[1]+radii[2]) + 7
+		scratch.mask = slices.Grow(scratch.mask[:0], rows*w)[:rows*w]
+		streamShadowBlur(dst, radii, scratch.mask)
+		return
+	}
 	scratch.mask = slices.Grow(scratch.mask[:0], w*h)[:w*h]
 	lineSize := max(w, min(w, htmlShadowBlurColumns)*h)
 	scratch.maskLine = slices.Grow(scratch.maskLine[:0], lineSize)[:lineSize]
@@ -67,17 +88,7 @@ func htmlBlurShadowCoverage(dst *image.Alpha, sigma float64, scratch *htmlFilter
 			scratch.mask[y*w+x] = float64(dst.Pix[y*dst.Stride+x])
 		}
 	}
-	lower := int(math.Floor(math.Sqrt(4*sigma*sigma + 1)))
-	if lower%2 == 0 {
-		lower--
-	}
-	lower = max(lower, 1)
-	count := int(math.Round((12*sigma*sigma - float64(3*lower*lower+12*lower+9)) / float64(-4*lower-4)))
-	for pass := range 3 {
-		radius := (lower - 1) / 2
-		if pass >= count {
-			radius++
-		}
+	for _, radius := range radii {
 		htmlBoxBlurMask(scratch.mask, scratch.maskLine, w, h, radius, false)
 		htmlBoxBlurColumns(scratch.mask, scratch.maskLine, w, h, radius)
 	}
@@ -86,6 +97,81 @@ func htmlBlurShadowCoverage(dst *image.Alpha, sigma float64, scratch *htmlFilter
 			dst.Pix[y*dst.Stride+x] = uint8(math.Round(min(255, max(0, scratch.mask[y*w+x]))))
 		}
 	}
+}
+
+// A pass consumes one input row at a time. Its output is delayed by radius
+// rows so the running vertical sum includes both sides of the output pixel.
+type shadowBoxPass struct {
+	window []float64
+	sums   []float64
+	radius int
+	weight float64
+}
+
+func streamShadowBlur(dst *image.Alpha, radii [3]int, storage []float64) {
+	w, h := dst.Rect.Dx(), dst.Rect.Dy()
+	row, storage := storage[:w], storage[w:]
+	var passes [3]shadowBoxPass
+	for i, radius := range radii {
+		size := (2*radius + 1) * w
+		passes[i] = shadowBoxPass{window: storage[:size], sums: storage[size : size+w], radius: radius, weight: 1 / float64(2*radius+1)}
+		clear(passes[i].sums)
+		storage = storage[size+w:]
+	}
+	for input := 0; input < h+radii[0]+radii[1]+radii[2]; input++ {
+		if input < h {
+			for x, alpha := range dst.Pix[input*dst.Stride:][:w] {
+				row[x] = float64(alpha)
+			}
+		}
+		y := input
+		for i := range passes {
+			y = passes[i].push(row, y, h)
+			if y < 0 {
+				break
+			}
+		}
+		if y >= 0 && y < h {
+			for x, v := range row {
+				dst.Pix[y*dst.Stride+x] = uint8(math.Round(min(255, max(0, v))))
+			}
+		}
+	}
+}
+
+// Replace row with this pass's output. Negative output rows fill the window;
+// input rows beyond the bottom advance the remaining sums with zero padding.
+func (pass *shadowBoxPass) push(row []float64, y, height int) int {
+	width, diameter := len(row), 2*pass.radius+1
+	if y < height {
+		target := pass.window[(y%diameter)*width:][:width]
+		sum := 0.0
+		for _, v := range row[:min(pass.radius+1, width)] {
+			sum += v
+		}
+		for x := range row {
+			target[x] = sum * pass.weight
+			pass.sums[x] += target[x]
+			if x >= pass.radius {
+				sum -= row[x-pass.radius]
+			}
+			if next := x + pass.radius + 1; next < width {
+				sum += row[next]
+			}
+		}
+	}
+	output := y - pass.radius
+	if output >= 0 && output < height {
+		for x, sum := range pass.sums {
+			row[x] = sum * pass.weight
+		}
+		if leaving := output - pass.radius; leaving >= 0 {
+			for x, v := range pass.window[(leaving%diameter)*width:][:width] {
+				pass.sums[x] -= v
+			}
+		}
+	}
+	return output
 }
 
 const htmlShadowBlurColumns = 16

@@ -200,6 +200,7 @@ type renderView3D struct {
 	extractedRetention reuse.Retention
 	geometryRetention  reuse.MapRetention
 	scene              uint64
+	extraction         uint64
 	previousExtracted  int
 	lighting           render.MeshLighting
 	selectedLights     [render.MaxMeshLights]render.Light3D
@@ -274,12 +275,12 @@ type World struct {
 	previousSnapshots int
 	snapshotCount     int
 	preparation       uint64
+	extraction        uint64
 	ambient           [4]float32
 	lightDir          [4]float32
 	lightColor        [4]float32
 }
 
-type activeRenderViews3DScratch struct{}
 type extractedMeshes3DScratch struct{}
 type preparedMeshHandles3DScratch struct{}
 type preparedShaderHandles3DScratch struct{}
@@ -446,6 +447,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		}
 	}()
 	state.viewOrder = state.viewOrder[:0]
+	state.extraction++
 	state.previousSnapshots, state.snapshotCount = state.snapshotCount, 0
 	state.meshKeys = state.meshKeyRetention.Trim(state.meshKeys, 64)
 	clear(state.meshKeys)
@@ -453,7 +455,6 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 		state.meshKeys = make(map[*graphics.Mesh]uint32)
 	}
 	defer state.releaseSnapshots()
-	activeViews := world.FrameScratchMap[activeRenderViews3DScratch, ecs.Entity, bool]()
 	renderState, _ := world.GetResource[*scene.RenderWorld]()
 	if renderState == nil {
 		return fmt.Errorf("render3d: camera renderer has not been registered")
@@ -557,7 +558,7 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 			continue
 		}
 		view := state.viewFor(camera.Entity)
-		activeViews[camera.Entity] = true
+		view.extraction = state.extraction
 		view.resetExtracted()
 		viewport := camera.Camera.ResolvedViewport()
 		view.frame = render.NewRenderView(extractedView3D{
@@ -659,8 +660,8 @@ func extractRender3D(context *ecs.SystemContext) (err error) {
 	}
 	for entity, view := range state.views {
 		view.releaseUnusedExtracted()
-		if !activeViews[entity] {
-			if err := disposeViewTargets3D(state.views[entity]); err != nil {
+		if view.extraction != state.extraction {
+			if err := disposeViewTargets3D(view); err != nil {
 				return err
 			}
 			delete(state.views, entity)

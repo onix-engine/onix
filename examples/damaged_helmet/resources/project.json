@@ -1,0 +1,32 @@
+{
+  "entry": "main.json",
+  "scenes": [
+    "main.json"
+  ],
+  "clearColor": "#202020",
+  "window": {
+    "width": 1280,
+    "height": 800,
+    "title": "Onix / three.js — DamagedHelmet | Left drag: orbit · Q/E: zoom · R: reset",
+    "icon": "",
+    "vsync": true,
+    "fps": 60,
+    "tps": 60,
+    "antialias": true
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "engine": {
+    "features": [
+      "render3d"
+    ],
+    "resources": [
+      "models"
+    ],
+    "imageDecoders": [
+      "jpeg"
+    ]
+  }
+}

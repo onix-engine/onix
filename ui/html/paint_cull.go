@@ -31,6 +31,7 @@ type htmlBoxPaintClip struct {
 	outer, contents htmlPaintWindow
 	scrollport      layout.Rect
 	clipped         bool
+	owned           bool
 }
 
 var unrestrictedHTMLClip htmlBoxPaintClip
@@ -42,14 +43,43 @@ func (r *htmlBoxRendering) paintClip() *htmlBoxPaintClip {
 	return r.clipWindow
 }
 
-func (r *htmlBoxRendering) setPaintClip(clip htmlBoxPaintClip) {
-	if r.clipWindow == nil {
-		if clip == (htmlBoxPaintClip{}) {
-			return
-		}
-		r.clipWindow = &htmlBoxPaintClip{}
+func (state *htmlPaintState) setPaintClip(rendered *htmlBoxRendering, clip htmlBoxPaintClip) {
+	current := rendered.clipWindow
+	if current != nil && current.owned {
+		clip.owned = true
+		*current = clip
+		return
 	}
-	*r.clipWindow = clip
+	if clip == (htmlBoxPaintClip{}) {
+		rendered.clipWindow = nil
+		return
+	}
+	if clip.clipped || clip.outer != clip.contents {
+		clip.owned = true
+		rendered.clipWindow = new(htmlBoxPaintClip)
+		*rendered.clipWindow = clip
+		return
+	}
+	if current != nil && *current == clip {
+		return
+	}
+	rendered.clipWindow = state.inheritedPaintClip(clip)
+}
+
+// Shared snapshots stay immutable while a row references them. The short
+// cache covers repeated scroll offsets without pinning every historical window.
+func (state *htmlPaintState) inheritedPaintClip(clip htmlBoxPaintClip) *htmlBoxPaintClip {
+	for offset := range len(state.InheritedClips) {
+		index := (int(state.NextInheritedClip) + len(state.InheritedClips) - 1 - offset) % len(state.InheritedClips)
+		if candidate := state.InheritedClips[index]; candidate != nil && *candidate == clip {
+			return candidate
+		}
+	}
+	snapshot := new(htmlBoxPaintClip)
+	*snapshot = clip
+	state.InheritedClips[state.NextInheritedClip] = snapshot
+	state.NextInheritedClip = (state.NextInheritedClip + 1) % uint8(len(state.InheritedClips))
+	return snapshot
 }
 
 func htmlPaintScrollport(state *htmlRenderState, box *layout.Box) (layout.Rect, bool) {
@@ -293,7 +323,7 @@ func htmlPaintCullBoxes(world *ecs.World, owner ecs.Entity, state *htmlRenderSta
 	window = htmlPaintWindowForClip(world, state, box, outer, rect, clipped)
 	dirty := htmlPaintCullDirty(rendered, outer, window)
 	previous := rendered.paintClip().contents
-	rendered.setPaintClip(htmlBoxPaintClip{outer: outer, contents: window, scrollport: rect, clipped: clipped})
+	state.setPaintClip(rendered, htmlBoxPaintClip{outer: outer, contents: window, scrollport: rect, clipped: clipped})
 	if dirty {
 		if rendered.SharedRendering || rendered.Box != box {
 			*blocked = true
@@ -349,10 +379,13 @@ func walkHTMLScrollPaintBand(rows []htmlPaintRow, children []*layout.Box, state 
 		end = max(end, nextEnd)
 		nextStart, nextEnd = end, end
 	}
+	// Indexed rows inherit this window unchanged. Use the parent's previous
+	// window even if a row has not been visited since an earlier scroll.
+	clip := state.inheritedPaintClip(htmlBoxPaintClip{outer: before, contents: before})
 	for _, interval := range [2][2]int{{start, end}, {nextStart, nextEnd}} {
 		for _, child := range children[interval[0]:interval[1]] {
 			row := state.BoxRenderings[child.Node]
-			row.setPaintClip(htmlBoxPaintClip{outer: before, contents: before})
+			row.clipWindow = clip
 			if !visit(child) {
 				return
 			}
@@ -378,7 +411,7 @@ func htmlScrollPaintBand(state *htmlRenderState, parent *htmlBoxRendering) []htm
 	band.epoch = state.PaintCullEpoch
 	for _, box := range parent.Box.Children {
 		row := state.BoxRenderings[box.Node]
-		if row == nil || len(box.Children) != 0 || row.SharedRendering || row.Composite || row.Clip != 0 ||
+		if row == nil || len(box.Children) != 0 || row.SharedRendering || row.Composite || row.Overflow != nil ||
 			htmlPaintWindowForBox(state, box, htmlPaintWindow{}).unbounded || len(box.Style.Filters) != 0 {
 			band.rows = band.rows[:0]
 			return nil

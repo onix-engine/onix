@@ -186,7 +186,7 @@ func TestWebGLBufferUploadsKeepExactPayloadAndReuseArray(t *testing.T) {
 	if err := d.DestroyMesh(handle); err != nil {
 		t.Fatal(err)
 	}
-	expected := [][]byte{sliceBytes(shapes), sliceBytes(shapes[:1]), sliceBytes(vertices), sliceBytes(indices)}
+	expected := [][]byte{sliceBytes(shapes), sliceBytes(shapes[:1]), sliceBytes(vertices), sliceBytes([]uint16{0, 1, 2})}
 	if calls.Length() != len(expected) {
 		t.Fatalf("got %d uploads, want %d", calls.Length(), len(expected))
 	}
@@ -279,7 +279,7 @@ func TestWebGLDynamicMeshUniformsShareOneArrayWithCorrectRanges(t *testing.T) {
 func TestWebGLCompressedTextureRangesAndReadbackReuse(t *testing.T) {
 	d, _ := newWebGLUploadDriver()
 	calls := captureWebGLUploads(&d)
-	d.astcExtension = webGLObject()
+	d.compressedFormats[TextureFormatASTC4x4] = true
 	descriptor := TextureDescriptor{Width: 8, Height: 8, Levels: 4, Format: TextureFormatASTC4x4}
 	pixels := make([]byte, descriptor.Format.ChainSize(8, 8, 4))
 	for index := range pixels {
@@ -299,6 +299,7 @@ func TestWebGLCompressedTextureRangesAndReadbackReuse(t *testing.T) {
 		}
 	}
 	handle := d.targets.Insert(&webGLRenderTarget{framebuffer: webGLObject(), descriptor: RenderTargetDescriptor{Width: 2, Height: 2}})
+	d.gl.Set("pixelStorei", js.Global().Get("Function").New(""))
 	d.gl.Set("bindFramebuffer", js.Global().Get("Function").New(""))
 	destination := bytes.Repeat([]byte{0xee}, 20)
 	if err := d.ReadRenderTarget(handle, RenderTargetRegion{Width: 2, Height: 2}, destination[:16]); err != nil {

@@ -842,6 +842,20 @@ func TestHTMLComponentUnmountRemovesRootsAndBindings(t *testing.T) {
 	}
 }
 
+func TestHTMLComponentUnmountContinuesAfterParentRowMoves(t *testing.T) {
+	world := ecs.NewWorld()
+	spawner := world.NewSpawner1[htmlComponentInstance]()
+	first := spawner.Spawn(htmlComponentInstance{})
+	last := spawner.Spawn(htmlComponentInstance{})
+	// The last child occupies an earlier ECS row, so its removal moves the parent.
+	parent := spawner.Spawn(htmlComponentInstance{Children: []ecs.Entity{first, last}})
+	world.GetMut[htmlComponentInstance](first).Parent = parent
+	world.GetMut[htmlComponentInstance](last).Parent = parent
+	if !UnmountComponent(world, parent) || world.IsAlive(parent) || world.IsAlive(first) || world.IsAlive(last) {
+		t.Fatal("unmount left one or more component entities alive")
+	}
+}
+
 func TestHTMLComponentMountsIntoParentSlot(t *testing.T) {
 	parentDefinition, err := Define[struct{}, struct{}](
 		NewTemplate(`<section data-ref="content"></section>`),

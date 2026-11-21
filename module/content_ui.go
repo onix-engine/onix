@@ -4,12 +4,12 @@ import (
 	"iter"
 	"reflect"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/text"
 	ui "github.com/onix-engine/onix/ui"
 	html "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // ContentMessages filters engine control messages to their owning module.
@@ -265,21 +265,10 @@ func (c *Content) BindControl[T any](id string, v T) error {
 		return err
 	}
 	composition := ui.ControlComposition{}
-	for _, child := range c.context.entities {
-		inside := false
-		for ancestor := child; ancestor != 0; {
-			if ancestor == e {
-				inside = true
-				break
-			}
-			p, ok := c.context.runtime.world.Get[scene.Parent](ancestor)
-			if !ok {
-				break
-			}
-			ancestor = p.Entity
-		}
-		if !inside {
-			continue
+	world := c.context.runtime.world
+	scene.HierarchyFor(world).WalkSubtree(e, func(child ecs.Entity) bool {
+		if owner, ok := world.Get[entityOwner](child); !ok || owner.context != c.context {
+			return true
 		}
 		kind := ui.CompositionGroup
 		size, _ := c.Get[scene.Size2D](child)
@@ -294,8 +283,9 @@ func (c *Content) BindControl[T any](id string, v T) error {
 			label = value.Value
 		}
 		composition[child] = ui.CompositionNode{Kind: kind, X: t.Translation.X.Value, Y: t.Translation.Y.Value, Width: size.Width, Height: size.Height, Text: label, Visible: true}
-	}
-	return ui.BindControlComposition(c.context.runtime.world, composition, e, func(child ecs.Entity) error {
+		return true
+	})
+	return ui.BindControlComposition(world, composition, e, func(child ecs.Entity) error {
 		return ui.BindControl(c.context.runtime.world, child, o, ui.Button{})
 	})
 }

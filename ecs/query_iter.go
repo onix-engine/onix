@@ -6,7 +6,7 @@ package ecs
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query[A any](options ...QueryOption) QueryView1[A] {
 	requireWorld(world)
-	ids := [1]componentID{world.registerComponent[A]()}
+	ids := [1]componentID{world.componentIDFor[A]()}
 	key := simpleQueryKey{count: 1}
 	copy(key.ids[:], ids[:])
 	return QueryView1[A]{view: buildQuery(world, key, options), ids: ids}
@@ -87,7 +87,7 @@ type Components2[A, B any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query2[A, B any](options ...QueryOption) QueryView2[A, B] {
 	requireWorld(world)
-	ids := [2]componentID{world.registerComponent[A](), world.registerComponent[B]()}
+	ids := [2]componentID{world.componentIDFor[A](), world.componentIDFor[B]()}
 	key := simpleQueryKey{count: 2}
 	copy(key.ids[:], ids[:])
 	return QueryView2[A, B]{view: buildQuery(world, key, options), ids: ids}
@@ -182,7 +182,7 @@ type Components3[A, B, C any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query3[A, B, C any](options ...QueryOption) QueryView3[A, B, C] {
 	requireWorld(world)
-	ids := [3]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C]()}
+	ids := [3]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C]()}
 	key := simpleQueryKey{count: 3}
 	copy(key.ids[:], ids[:])
 	return QueryView3[A, B, C]{view: buildQuery(world, key, options), ids: ids}
@@ -285,7 +285,7 @@ type Components4[A, B, C, D any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query4[A, B, C, D any](options ...QueryOption) QueryView4[A, B, C, D] {
 	requireWorld(world)
-	ids := [4]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D]()}
+	ids := [4]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D]()}
 	key := simpleQueryKey{count: 4}
 	copy(key.ids[:], ids[:])
 	return QueryView4[A, B, C, D]{view: buildQuery(world, key, options), ids: ids}
@@ -396,7 +396,7 @@ type Components5[A, B, C, D, E any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query5[A, B, C, D, E any](options ...QueryOption) QueryView5[A, B, C, D, E] {
 	requireWorld(world)
-	ids := [5]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E]()}
+	ids := [5]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E]()}
 	key := simpleQueryKey{count: 5}
 	copy(key.ids[:], ids[:])
 	return QueryView5[A, B, C, D, E]{view: buildQuery(world, key, options), ids: ids}
@@ -515,7 +515,7 @@ type Components6[A, B, C, D, E, F any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query6[A, B, C, D, E, F any](options ...QueryOption) QueryView6[A, B, C, D, E, F] {
 	requireWorld(world)
-	ids := [6]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F]()}
+	ids := [6]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E](), world.componentIDFor[F]()}
 	key := simpleQueryKey{count: 6}
 	copy(key.ids[:], ids[:])
 	return QueryView6[A, B, C, D, E, F]{view: buildQuery(world, key, options), ids: ids}
@@ -642,7 +642,7 @@ type Components7[A, B, C, D, E, F, G any] struct {
 // Access values and component pointers must not outlive the iteration.
 func (world *World) Query7[A, B, C, D, E, F, G any](options ...QueryOption) QueryView7[A, B, C, D, E, F, G] {
 	requireWorld(world)
-	ids := [7]componentID{world.registerComponent[A](), world.registerComponent[B](), world.registerComponent[C](), world.registerComponent[D](), world.registerComponent[E](), world.registerComponent[F](), world.registerComponent[G]()}
+	ids := [7]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E](), world.componentIDFor[F](), world.componentIDFor[G]()}
 	key := simpleQueryKey{count: 7}
 	copy(key.ids[:], ids[:])
 	return QueryView7[A, B, C, D, E, F, G]{view: buildQuery(world, key, options), ids: ids}

@@ -3,155 +3,195 @@ package style
 import "strings"
 
 type preparedValue struct {
-	motion   *motionInputs
-	property string
-	value    Value
+	motion *motionInputs
+	value  Value
 }
 
-func preparePropertyValue(property, raw string) *preparedValue {
+// Validate each declaration once. Cache a computed value only when it is
+// independent of its element's font, viewport and filter definitions.
+func prepareDeclaration(name, raw string, important bool) (preparedDeclaration, bool) {
+	order := cascadePropertyIndex[name]
+	entry := preparedDeclaration{order: order, value: raw, important: important}
+	id := order.id
+	if id == propertyInvalid || raw == "" {
+		return entry, false
+	}
 	if isCSSWideKeyword(raw) {
-		return nil
+		return entry, true
 	}
+	ctx := parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16}
 	computed := defaultStyle(nil)
-	if strings.HasPrefix(property, "transition") || strings.HasPrefix(property, "animation") {
-		if err := applyProperty(&computed, property, raw, nil, parseContext{}); err != nil || computed.motion == nil {
-			return nil
-		}
+	err := applyProperty(&computed, id, raw, nil, ctx)
+	if err != nil {
+		// SVG filters resolve against the document at cascade time.
+		return entry, id == propertyFilter && strings.Contains(strings.ToLower(raw), "url(")
+	}
+	if id.isTransition() || id.isAnimation() {
 		inputs := computed.motion.motionInputs
-		return &preparedValue{property: property, motion: &inputs}
+		entry.parsed = &preparedValue{motion: &inputs}
+		return entry, true
 	}
-	field := compiledValueField(&computed, property)
-	if field == nil {
-		return nil
-	}
-	// Lengths in relative units and expressions keep their node/font/viewport
-	// context. Only literal px, percentage, zero and keywords are compiled.
-	switch property {
-	case "width", "height", "min-width", "min-height", "max-width", "max-height", "top", "right", "bottom", "left", "flex-basis", "row-gap", "column-gap", "text-indent", "letter-spacing", "tab-size":
+	switch id {
+	case propertyWidth, propertyHeight, propertyMinWidth, propertyMinHeight, propertyMaxWidth, propertyMaxHeight,
+		propertyTop, propertyRight, propertyBottom, propertyLeft, propertyFlexBasis, propertyRowGap, propertyColumnGap,
+		propertyTextIndent, propertyLetterSpacing, propertyTabSize:
 		value := strings.ToLower(raw)
 		if strings.Contains(value, "(") || strings.HasSuffix(value, "em") || strings.HasSuffix(value, "vw") || strings.HasSuffix(value, "vh") {
-			return nil
+			return entry, true
 		}
 	}
-	if err := applyProperty(&computed, property, raw, nil, parseContext{FontSize: 16, ParentFontSize: 16, RootFontSize: 16}); err != nil {
-		return nil
+	if field := compiledValueField(&computed, id); field != nil {
+		entry.parsed = &preparedValue{value: *field}
 	}
-	return &preparedValue{property: property, value: *field}
+	return entry, true
 }
 
-func compiledValueField(computed *ComputedStyle, property string) *Value {
+// These longhands each accept one keyword and write one computed Value.
+var propertyKeywords = [propertyCount][]string{
+	propertyDisplay:            {"none", "contents", "block", "inline", "inline-block", "flow-root", "flex", "inline-flex", "grid", "inline-grid", "list-item", "table", "inline-table", "table-caption", "table-column", "table-column-group", "table-row", "table-row-group", "table-header-group", "table-footer-group", "table-cell"},
+	propertyFloat:              {"none", "left", "right"},
+	propertyClear:              {"none", "left", "right", "both"},
+	propertyTableLayout:        {"auto", "fixed"},
+	propertyVerticalAlign:      {"baseline", "top", "middle", "bottom"},
+	propertyListStyleType:      {"disc", "circle", "square", "decimal", "decimal-leading-zero", "lower-alpha", "upper-alpha", "lower-latin", "upper-latin", "lower-roman", "upper-roman", "none"},
+	propertyVisibility:         {"visible", "hidden", "collapse"},
+	propertyAppearance:         {"auto", "none"},
+	propertyBoxSizing:          {"content-box", "border-box"},
+	propertyFlexDirection:      {"row", "row-reverse", "column", "column-reverse"},
+	propertyFlexWrap:           {"nowrap", "wrap", "wrap-reverse"},
+	propertyJustifyContent:     {"flex-start", "flex-end", "start", "end", "center", "space-between", "space-around", "space-evenly"},
+	propertyJustifyItems:       {"stretch", "start", "end", "center"},
+	propertyJustifySelf:        {"auto", "stretch", "start", "end", "center"},
+	propertyAlignItems:         {"stretch", "flex-start", "flex-end", "start", "end", "center", "baseline"},
+	propertyAlignSelf:          {"auto", "stretch", "flex-start", "flex-end", "start", "end", "center", "baseline"},
+	propertyAlignContent:       {"stretch", "flex-start", "flex-end", "start", "end", "center", "space-between", "space-around", "space-evenly"},
+	propertyContainerType:      {"normal", "inline-size", "size"},
+	propertyOverflowX:          {"visible", "hidden", "clip", "auto", "scroll"},
+	propertyOverflowY:          {"visible", "hidden", "clip", "auto", "scroll"},
+	propertyTextAlign:          {"left", "right", "center"},
+	propertyTextDecorationLine: {"none", "line-through"},
+	propertyWordBreak:          {"normal", "break-all", "keep-all"},
+	propertyOverflowWrap:       {"normal", "break-word", "anywhere"},
+	propertyWordWrap:           {"normal", "break-word", "anywhere"},
+	propertyTextOverflow:       {"clip", "ellipsis"},
+	propertyTextBoxTrim:        {"none", "trim-start", "trim-end", "trim-both"},
+	propertyWhiteSpace:         {"normal", "nowrap", "pre", "pre-wrap", "pre-line"},
+	propertyObjectFit:          {"fill", "contain", "cover", "none", "scale-down"},
+}
+
+func compiledValueField(computed *ComputedStyle, property propertyID) *Value {
 	switch property {
-	case "display":
+	case propertyDisplay:
 		return &computed.Display
-	case "table-layout":
+	case propertyTableLayout:
 		return &computed.TableLayout
-	case "vertical-align":
+	case propertyVerticalAlign:
 		return &computed.VerticalAlign
-	case "appearance":
+	case propertyAppearance:
 		return &computed.Appearance
-	case "visibility":
+	case propertyVisibility:
 		return &computed.Visibility
-	case "pointer-events":
+	case propertyPointerEvents:
 		return &computed.PointerEvents
-	case "box-sizing":
+	case propertyBoxSizing:
 		return &computed.BoxSizing
-	case "width":
+	case propertyWidth:
 		return &computed.Width
-	case "height":
+	case propertyHeight:
 		return &computed.Height
-	case "min-width":
+	case propertyMinWidth:
 		return &computed.MinWidth
-	case "min-height":
+	case propertyMinHeight:
 		return &computed.MinHeight
-	case "max-width":
+	case propertyMaxWidth:
 		return &computed.MaxWidth
-	case "max-height":
+	case propertyMaxHeight:
 		return &computed.MaxHeight
-	case "top":
+	case propertyTop:
 		return &computed.Top
-	case "right":
+	case propertyRight:
 		return &computed.Right
-	case "bottom":
+	case propertyBottom:
 		return &computed.Bottom
-	case "left":
+	case propertyLeft:
 		return &computed.Left
-	case "position":
+	case propertyPosition:
 		return &computed.Position
-	case "float":
+	case propertyFloat:
 		return &computed.Float
-	case "clear":
+	case propertyClear:
 		return &computed.Clear
-	case "z-index":
+	case propertyZIndex:
 		return &computed.ZIndex
-	case "opacity":
+	case propertyOpacity:
 		return &computed.Opacity
-	case "flex-direction":
+	case propertyFlexDirection:
 		return &computed.FlexDirection
-	case "flex-wrap":
+	case propertyFlexWrap:
 		return &computed.FlexWrap
-	case "flex-grow":
+	case propertyFlexGrow:
 		return &computed.FlexGrow
-	case "flex-shrink":
+	case propertyFlexShrink:
 		return &computed.FlexShrink
-	case "flex-basis":
+	case propertyFlexBasis:
 		return &computed.FlexBasis
-	case "row-gap":
+	case propertyRowGap:
 		return &computed.RowGap
-	case "column-gap":
+	case propertyColumnGap:
 		return &computed.ColumnGap
-	case "order":
+	case propertyOrder:
 		return &computed.Order
-	case "justify-content":
+	case propertyJustifyContent:
 		return &computed.JustifyContent
-	case "justify-items":
+	case propertyJustifyItems:
 		return &computed.JustifyItems
-	case "justify-self":
+	case propertyJustifySelf:
 		return &computed.JustifySelf
-	case "align-items":
+	case propertyAlignItems:
 		return &computed.AlignItems
-	case "align-self":
+	case propertyAlignSelf:
 		return &computed.AlignSelf
-	case "align-content":
+	case propertyAlignContent:
 		return &computed.AlignContent
-	case "color":
+	case propertyColor:
 		return &computed.Color
-	case "placeholder-color":
+	case propertyPlaceholderColor:
 		return &computed.PlaceholderColor
-	case "font-family":
+	case propertyFontFamily:
 		return &computed.FontFamily
-	case "text-align":
+	case propertyTextAlign:
 		return &computed.TextAlign
-	case "text-box-trim":
+	case propertyTextBoxTrim:
 		return &computed.TextBoxTrim
-	case "text-box-edge":
+	case propertyTextBoxEdge:
 		return &computed.TextBoxEdge
-	case "text-decoration-line":
+	case propertyTextDecorationLine:
 		return &computed.TextDecorationLine
-	case "text-indent":
+	case propertyTextIndent:
 		return &computed.TextIndent
-	case "letter-spacing":
+	case propertyLetterSpacing:
 		return &computed.LetterSpacing
-	case "tab-size":
+	case propertyTabSize:
 		return &computed.TabSize
-	case "white-space":
+	case propertyWhiteSpace:
 		return &computed.WhiteSpace
-	case "word-break":
+	case propertyWordBreak:
 		return &computed.WordBreak
-	case "overflow-wrap", "word-wrap":
+	case propertyOverflowWrap, propertyWordWrap:
 		return &computed.OverflowWrap
-	case "text-overflow":
+	case propertyTextOverflow:
 		return &computed.TextOverflow
-	case "list-style-type":
+	case propertyListStyleType:
 		return &computed.ListStyleType
-	case "overflow-x":
+	case propertyOverflowX:
 		return &computed.OverflowX
-	case "overflow-y":
+	case propertyOverflowY:
 		return &computed.OverflowY
-	case "scrollbar-width":
+	case propertyScrollbarWidth:
 		return &computed.ScrollbarWidth
-	case "container-type":
+	case propertyContainerType:
 		return &computed.ContainerType
-	case "object-fit":
+	case propertyObjectFit:
 		return &computed.ObjectFit
 	}
 	return nil

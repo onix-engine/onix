@@ -73,7 +73,7 @@ func spawnQueryDistributionEntity(world *World, table *archetype) Entity {
 	entity := world.reserveEntity()
 	row, tick := table.appendEntity(entity), world.mutationTick()
 	for _, storage := range table.columns {
-		storage.(*typedColumn[int]).append(1, tick)
+		storage.typed[int]().append(1, tick)
 	}
 	index, _ := entity.Index()
 	world.commitSpawn(index, table, row)

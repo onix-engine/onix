@@ -12,6 +12,44 @@ import (
 	"unsafe"
 )
 
+type nativeRasterState struct {
+	viewport, scissor          Rect
+	blend                      BlendState
+	viewportSet, blendSet      bool
+	scissorSet, scissorEnabled bool
+}
+
+func (s *nativeRasterState) Viewport() Rect { return s.viewport }
+
+func (s *nativeRasterState) changeViewport(viewport Rect) bool {
+	if s.viewportSet && s.viewport == viewport {
+		return false
+	}
+	s.viewport, s.viewportSet = viewport, true
+	return true
+}
+
+func (s *nativeRasterState) changeBlend(blend BlendState) bool {
+	if s.blendSet && s.blend == blend {
+		return false
+	}
+	s.blend, s.blendSet = blend, true
+	return true
+}
+
+func (s *nativeRasterState) changeScissor(value *Rect) bool {
+	enabled := value != nil
+	var rect Rect
+	if enabled {
+		rect = *value
+	}
+	if s.scissorSet && s.scissorEnabled == enabled && s.scissor == rect {
+		return false
+	}
+	s.scissor, s.scissorEnabled, s.scissorSet = rect, enabled, true
+	return true
+}
+
 type nativeBackend uint8
 
 const (

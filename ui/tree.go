@@ -237,21 +237,24 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		nodes[treeNodeKey[T]{tree: node.Tree, id: node.ID}] = i
 	}
 	visibleCountByTree := world.FrameScratchMap[treeVisibleCountsScratch[T], ecs.Entity, int]()
-	for i := range states.Values {
-		visible, err := treeNodeVisible(nodes, states.Values, i)
-		if err != nil {
-			return err
+	for i := 0; i < len(states.Values); {
+		entity := states.Values[i].node.Tree
+		tree, exists := world.Get[Tree[T]](entity)
+		inset := treeRowInset(tree.RowHeight)
+		visibleCount := 0
+		for ; i < len(states.Values) && states.Values[i].node.Tree == entity; i++ {
+			visible, err := treeNodeVisible(nodes, states.Values, i)
+			if err != nil {
+				return err
+			}
+			if visible && exists {
+				states.Values[i].offset = float32(visibleCount)*tree.RowHeight + inset
+				visibleCount++
+			}
 		}
-		if !visible {
-			continue
+		if visibleCount != 0 {
+			visibleCountByTree[entity] = visibleCount
 		}
-		state := &states.Values[i]
-		tree, ok := world.Get[Tree[T]](state.node.Tree)
-		if !ok {
-			continue
-		}
-		state.offset = float32(visibleCountByTree[state.node.Tree])*tree.RowHeight + treeRowInset(tree.RowHeight)
-		visibleCountByTree[state.node.Tree]++
 	}
 	for entity, access := range world.Query3[TreeNode[T], scene.Visibility, scene.Size2D]().All {
 		node := access.A.Mut()

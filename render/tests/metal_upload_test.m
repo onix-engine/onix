@@ -1,4 +1,5 @@
 #include <objc/runtime.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +9,6 @@ typedef size_t NSUInteger;
 #define NSUIntegerMax SIZE_MAX
 #define MTLResourceStorageModeShared 0
 #define ONIX_METAL_FRAMES_IN_FLIGHT 3
-#define ONIX_METAL_INSTANCE_BUFFER_MINIMUM (64u * 1024u)
 
 static size_t allocations, resources, live_buffers;
 static int fail_buffer, fail_reallocation;
@@ -34,6 +34,7 @@ static void *tracked_realloc(void *pointer, size_t size) {
 - (void)release;
 @end
 @protocol MTLDevice
+- (id<MTLBuffer>)newBufferWithBytes:(const void *)bytes length:(NSUInteger)length options:(NSUInteger)options;
 - (id<MTLBuffer>)newBufferWithLength:(NSUInteger)length options:(NSUInteger)options;
 @end
 
@@ -57,6 +58,11 @@ __attribute__((objc_root_class))
 @interface OnixTestDevice <MTLDevice> { Class isa; }
 @end
 @implementation OnixTestDevice
+- (id<MTLBuffer>)newBufferWithBytes:(const void *)bytes length:(NSUInteger)length options:(NSUInteger)options {
+	id<MTLBuffer> buffer = [self newBufferWithLength:length options:options];
+	if (buffer) memcpy(buffer.contents, bytes, length);
+	return buffer;
+}
 - (id<MTLBuffer>)newBufferWithLength:(NSUInteger)length options:(NSUInteger)options {
 	(void)options;
 	if (fail_buffer) { fail_buffer = 0; return nil; }
@@ -79,6 +85,7 @@ typedef struct { NSUInteger x, y, width, height; } MTLScissorRect;
 typedef enum { MTLCullModeNone, MTLCullModeFront, MTLCullModeBack } MTLCullMode;
 #define MTLWindingCounterClockwise 0
 #define MTLPrimitiveTypeTriangle 3
+#define MTLIndexTypeUInt16 0
 #define MTLIndexTypeUInt32 1
 @protocol MTLRenderCommandEncoder
 - (void)setVertexBuffer:(id<MTLBuffer>)buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index;
@@ -115,13 +122,15 @@ static id<MTLRenderPipelineState> onix_metal_pipeline(OnixMetalDriver *driver, i
 }
 #include "metal_upload_reset.inc"
 #include "metal_upload.inc"
+ONIX_NATIVE_SLOTS(onix_metal_meshes, OnixMetalMesh, 16, UINT32_MAX)
+#include "metal_create_mesh.inc"
 #include "metal_mesh_draws.inc"
 
 static const OnixNativeMeshUniforms *expected_uniform;
 static const OnixMetalVertex3D *expected_vertices;
 static const OnixMetalInstance3D *expected_instances;
 static const uint32_t *expected_indices;
-static int expected_picking;
+static int expected_picking, expected_compact;
 static size_t draw_calls;
 
 __attribute__((objc_root_class))
@@ -154,11 +163,15 @@ __attribute__((objc_root_class))
 - (void)setFragmentSamplerState:(id<MTLSamplerState>)sampler atIndex:(NSUInteger)index { (void)sampler; (void)index; }
 - (void)setVertexTexture:(id<MTLTexture>)texture atIndex:(NSUInteger)index { (void)texture; (void)index; }
 - (void)drawIndexedPrimitives:(NSUInteger)primitive indexCount:(NSUInteger)count indexType:(NSUInteger)type indexBuffer:(id<MTLBuffer>)buffer indexBufferOffset:(NSUInteger)offset instanceCount:(NSUInteger)instances {
-	require(primitive == MTLPrimitiveTypeTriangle && type == MTLIndexTypeUInt32 && count == 3 && instances == 1, "indexed mesh draw arguments");
+	require(primitive == MTLPrimitiveTypeTriangle && type == (expected_compact ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32) && count == 3 && instances == 1, "indexed mesh draw arguments");
 	require(vertex_offsets[2] % 256 == 0 && memcmp((uint8_t *)vertex_buffers[2].contents + vertex_offsets[2], expected_uniform, sizeof(*expected_uniform)) == 0, "vertex uniforms retain the complete aligned snapshot");
 	if (!expected_picking) require(vertex_buffers[2] == fragment_uniform && vertex_offsets[2] == fragment_offset, "vertex and fragment stages share exactly one uniform upload");
 	require(memcmp((uint8_t *)vertex_buffers[0].contents + vertex_offsets[0], expected_vertices, 3 * sizeof(*expected_vertices)) == 0, "dynamic vertex binding follows its own block and offset");
-	require(memcmp((uint8_t *)buffer.contents + offset, expected_indices, 3 * sizeof(*expected_indices)) == 0, "dynamic index binding follows its own block and offset");
+	if (expected_compact) {
+		require(offset == 2 && memcmp((uint8_t *)buffer.contents + offset, (uint16_t[]){2,1,0}, 6) == 0, "compact resident indices and FirstIndex");
+	} else {
+		require(memcmp((uint8_t *)buffer.contents + offset, expected_indices, 3 * sizeof(*expected_indices)) == 0, "dynamic index binding follows its own block and offset");
+	}
 	require(memcmp((uint8_t *)vertex_buffers[1].contents + vertex_offsets[1], expected_instances, sizeof(*expected_instances)) == 0, "instance binding follows its own block and offset");
 	draw_calls++;
 }
@@ -196,7 +209,22 @@ static void test_mesh_bindings(OnixMetalDriver *driver, const void *large) {
 		require(onix_metal_draw_mesh_picking(driver, &uniforms, vertices, 3, indices, 3, &instance, 1, &draw, 1), "submit production picking draw");
 		driver->active_render_target = 0;
 	}
-	require(draw_calls == 9, "all production draw bindings were checked");
+	draw.mesh = onix_metal_create_mesh(driver, vertices, 3, (uint32_t[]){0,2,1,0}, 4);
+	require(draw.mesh && driver->meshes[draw.mesh-1].index_stride == 2, "compact resident mesh");
+	draw.first_index = 1;
+	expected_compact = 1;
+	expected_picking = 0;
+	require(onix_metal_draw_meshes(driver, &uniforms, NULL, 0, NULL, 0, &instance, 1, deformation, 16, &draw, 1), "draw compact resident mesh");
+	expected_picking = 1;
+	driver->active_render_target = 1;
+	require(onix_metal_draw_mesh_picking(driver, &uniforms, NULL, 0, NULL, 0, &instance, 1, &draw, 1), "pick compact resident mesh");
+	driver->active_render_target = 0;
+	[driver->meshes[draw.mesh-1].vertices release];
+	[driver->meshes[draw.mesh-1].indices release];
+	free(driver->meshes);
+	driver->meshes = NULL;
+	driver->mesh_slots = (OnixNativeSlots){0};
+	require(draw_calls == 11, "all production draw bindings were checked");
 	object_dispose(driver->encoder);
 	driver->encoder = nil;
 }
@@ -305,10 +333,10 @@ int main(void) {
 		onix_metal_reset_uploads(frame);
 		OnixNativeUpload instances, a, b, changed, uniforms;
 		require(onix_metal_upload(&driver, large, ONIX_METAL_INSTANCE_BUFFER_MINIMUM - 16, 16, 0, &instances), "upload first block");
-		require(frame->blocks[0].capacity == 64u * 1024u, "small Metal upload starts with 64 KiB");
+		require(frame->blocks[0].capacity == 16u * 1024u, "small Metal upload starts with 16 KiB");
 		require(onix_metal_upload(&driver, snapshot, sizeof(snapshot), 16, 1, &a), "upload geometry to next block");
 		require(a.offset == 0 && a.resource != instances.resource && frame->count == 2, "new blocks start at zero without empty prefixes");
-		require(frame->blocks[1].capacity == 128u * 1024u, "additional Metal blocks grow geometrically");
+		require(frame->blocks[1].capacity == 2 * frame->blocks[0].capacity, "additional Metal blocks grow geometrically");
 		NSUInteger used = frame->used;
 		memcpy(geometry, snapshot, sizeof(snapshot));
 		require(onix_metal_upload(&driver, geometry, sizeof(geometry), 16, 1, &b), "reuse geometry across passes");

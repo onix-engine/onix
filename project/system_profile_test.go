@@ -45,6 +45,8 @@ func TestReadEngineConfigTextureCompressionDefaults(t *testing.T) {
 		data []byte
 		want bool
 	}{
+		{name: "engine null", data: []byte(`{"engine":null}`), want: false},
+		{name: "null compression", data: []byte(`{"engine":{"textureCompression":null}}`), want: true},
 		{name: "engine omitted", data: []byte(`{}`), want: false},
 		{name: "engine defaults on", data: []byte(`{"engine":{"features":["render2d"]}}`), want: true},
 		{name: "explicitly off", data: []byte(`{"engine":{"textureCompression":false}}`), want: false},

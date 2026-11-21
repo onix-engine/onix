@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"github.com/onix-engine/onix/html/element"
 	"math"
 	"strconv"
 	"strings"
@@ -14,11 +15,9 @@ import (
 func layoutBlockContents(box *Box, width, height style.Value, containing Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) {
 	if ctx != nil && establishesFloatContext(box) {
 		previous := ctx.floatContext
-		if box.floats == nil {
-			box.floats = &floatContext{}
-		}
-		box.floats.areas = box.floats.areas[:0]
-		ctx.floatContext = box.floats
+		floats := &box.ensureScratch().floats
+		floats.areas = floats.areas[:0]
+		ctx.floatContext = floats
 		defer func() { ctx.floatContext = previous }()
 	}
 	layoutContaining := containing
@@ -155,8 +154,8 @@ func layoutBlockContents(box *Box, width, height style.Value, containing Rect, a
 	cursorY := box.Content.Y
 	_, inlineBoxIndex := layoutInlineChildren(box, layoutContaining, absoluteContaining, face, styles, ctx)
 	var reusedInlineBoxFragments []inlineBoxFragment
-	if box.flow != nil {
-		reusedInlineBoxFragments = box.flow.inlineBoxFragments
+	if box.scratch != nil && box.scratch.flow != nil {
+		reusedInlineBoxFragments = box.scratch.flow.inlineBoxFragments
 	}
 	textFragments, imageFragments, controlFragments, inlineBoxFragments, textHeight, err := layoutText(TextLayoutOptions{
 		Reuse:    box,
@@ -174,7 +173,7 @@ func layoutBlockContents(box *Box, width, height style.Value, containing Rect, a
 			if box.Node.Data == "button" {
 				return 0
 			}
-			if isControlElementNode(box.Node) {
+			if element.IsWidgetControl(box.Node) {
 				if isBorderBox(box.Style) {
 					return maxFloat(intrinsicHeight-verticalBoxExtras(box.Padding, box.Border), 0)
 				}
@@ -220,8 +219,8 @@ func layoutBlockContents(box *Box, width, height style.Value, containing Rect, a
 		box.ImageFragments = imageFragments
 		box.ControlFragments = controlFragments
 		box.TextHeight = textHeight
-		if box.flow != nil {
-			box.flow.inlineBoxFragments = inlineBoxFragments
+		if box.scratch != nil && box.scratch.flow != nil {
+			box.scratch.flow.inlineBoxFragments = inlineBoxFragments
 		}
 		scrollTextInputFragmentsIntoView(box)
 		cursorY += textHeight
@@ -266,7 +265,7 @@ func layoutBlockContents(box *Box, width, height style.Value, containing Rect, a
 	}
 	box.Content.Height = clampScrollContentHeight(box, layoutContaining.Height)
 	alignBottomPositionedChildren(box, absoluteContaining, ctx)
-	if isControlElementNode(box.Node) {
+	if element.IsWidgetControl(box.Node) {
 		box.ImageFragments = layoutControlImageFragments(box.Node, box.Content, 0, styles, ctx, box.TextFragments)
 	}
 
@@ -421,7 +420,10 @@ func romanMarker(value int, upper bool) string {
 }
 
 func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Rect, face *font.Face, styles style.Map, ctx *layoutContext) ([]*Box, map[*uinode.Node]*Box) {
-	flow := box.flow
+	var flow *flowScratch
+	if box.scratch != nil {
+		flow = box.scratch.flow
+	}
 	if flow != nil {
 		clear(flow.inlineBoxes)
 		flow.inlineBoxes = flow.inlineBoxes[:0]
@@ -470,7 +472,7 @@ func layoutInlineChildren(box *Box, layoutContaining Rect, absoluteContaining Re
 		}
 		if flow == nil {
 			flow = &flowScratch{inlineBoxIndex: make(map[*uinode.Node]*Box)}
-			box.flow = flow
+			box.ensureScratch().flow = flow
 		}
 		containing := Rect{X: box.Content.X, Y: box.Content.Y, Width: box.Content.Width, Height: layoutContaining.Height}
 		if child.Style.Display.Keyword != "inline-block" {

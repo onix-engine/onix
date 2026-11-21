@@ -55,6 +55,7 @@ typedef struct {
     ID3D11Buffer *vertices, *indices, *deformation;
     ID3D11ShaderResourceView *deformation_view;
     UINT vertex_count, index_count;
+    DXGI_FORMAT index_format;
     uint32_t free_next;
 } DxMesh;
 typedef struct {
@@ -98,6 +99,8 @@ struct OnixGPUDriver {
     ID3D11Texture2D *readback;
     UINT readback_width, readback_height;
     DXGI_FORMAT readback_format;
+    uint64_t readback_demand;
+    OnixBufferRetention readback_retention;
     UINT width, height;
     int vsync, frame_active;
     UINT surface_depth_age;
@@ -212,10 +215,11 @@ static int dx_create_program(OnixGPUDriver *d, DxProgram *p, OnixGPUShader verte
             ATTR(8, 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 80);
             ATTR(9, 1, DXGI_FORMAT_R32_UINT, 96);
         } else {
-            for (UINT i = 7; i < 11; i++) {
-                ATTR(i, 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 64 + (i - 7) * 16);
+            UINT first = p == &d->sprite ? 9 : 7;
+            for (UINT i = first; i < 11; i++) {
+                ATTR(i, 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 64 + (i - first) * 16);
             }
-            ATTR(11, 1, DXGI_FORMAT_R32_FLOAT, 128);
+            ATTR(11, 1, DXGI_FORMAT_R32_FLOAT, 64 + (11 - first) * 16);
         }
     }
 #undef ATTR
@@ -230,7 +234,7 @@ static int dx_create_program(OnixGPUDriver *d, DxProgram *p, OnixGPUShader verte
     }
     return 1;
 }
-static int dx_upload(OnixGPUDriver *d, DxBuffer *buffer, const void *data, size_t bytes, UINT bind) {
+static int dx_map_upload(OnixGPUDriver *d, DxBuffer *buffer, size_t bytes, UINT bind, uint8_t **destination) {
     if (!bytes || bytes > UINT_MAX)
         return dx_fail("invalid upload size", E_INVALIDARG);
     uint64_t offset = ((uint64_t)buffer->used + 15) & ~UINT64_C(15);
@@ -260,11 +264,17 @@ static int dx_upload(OnixGPUDriver *d, DxBuffer *buffer, const void *data, size_
                                        &mapped),
                "map upload"))
         return 0;
-    memcpy((uint8_t *)mapped.pData + offset, data, bytes);
-    ID3D11DeviceContext_Unmap(d->context, (ID3D11Resource *)buffer->value, 0);
+    *destination = (uint8_t *)mapped.pData + offset;
     buffer->offset = (UINT)offset;
     buffer->used = (UINT)(offset + bytes);
     buffer->demand += (bytes + 15u) & ~(size_t)15u;
+    return 1;
+}
+static int dx_upload(OnixGPUDriver *d, DxBuffer *buffer, const void *data, size_t bytes, UINT bind) {
+    uint8_t *destination;
+    if (!dx_map_upload(d, buffer, bytes, bind, &destination)) return 0;
+    memcpy(destination, data, bytes);
+    ID3D11DeviceContext_Unmap(d->context, (ID3D11Resource *)buffer->value, 0);
     return 1;
 }
 static void dx_begin_uploads(OnixGPUDriver *d, DxBuffer *buffer) {
@@ -307,14 +317,14 @@ static void dx_bind_program(OnixGPUDriver *d, DxProgram *p) {
     ID3D11DeviceContext_VSSetShader(d->context, p->vertex, NULL, 0);
     ID3D11DeviceContext_PSSetShader(d->context, p->fragment, NULL, 0);
 }
-static void dx_bind_geometry(OnixGPUDriver *d, ID3D11Buffer *vertices, ID3D11Buffer *indices, UINT vertex_stride,
+static void dx_bind_geometry(OnixGPUDriver *d, ID3D11Buffer *vertices, ID3D11Buffer *indices, DXGI_FORMAT index_format, UINT vertex_stride,
                              UINT instance_stride, UINT instance_offset) {
     ID3D11Buffer *buffers[] = {vertices, d->instances.value};
     UINT vertex_offset = vertices == d->vertices.value ? d->vertices.offset : 0;
     UINT index_offset = indices == d->indices.value ? d->indices.offset : 0;
     UINT strides[] = {vertex_stride, instance_stride}, offsets[] = {vertex_offset, d->instances.offset + instance_offset};
     ID3D11DeviceContext_IASetVertexBuffers(d->context, 0, 2, buffers, strides, offsets);
-    ID3D11DeviceContext_IASetIndexBuffer(d->context, indices, DXGI_FORMAT_R32_UINT, index_offset);
+    ID3D11DeviceContext_IASetIndexBuffer(d->context, indices, index_format, index_offset);
     ID3D11DeviceContext_IASetPrimitiveTopology(d->context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 static void dx_bind_textures(OnixGPUDriver *d, const uint32_t *textures, UINT count) {
@@ -488,12 +498,22 @@ fail:
     onix_gpu_destroy(d);
     return NULL;
 }
+static uint64_t dx_readback_bytes(const OnixGPUDriver *d) {
+    return (uint64_t)d->readback_width * d->readback_height * (d->readback_format == DXGI_FORMAT_R8_UNORM ? 1 : 4);
+}
+static void dx_release_readback(OnixGPUDriver *d) {
+    RELEASE(d->readback);
+    d->readback_width = d->readback_height = 0;
+    d->readback_demand = 0;
+    d->readback_retention = (OnixBufferRetention){0};
+}
+
 void onix_gpu_buffer_memory(OnixGPUDriver *d, OnixBufferMemory *memory) {
     memset(memory, 0, sizeof(*memory));
     memory->instances = d->vertices.capacity + d->indices.capacity + d->instances.capacity + d->deformation.capacity;
     memory->staging = d->update_capacity;
     memory->scratch = (uint64_t)d->update_slots * sizeof(*d->updates);
-    memory->readback = (uint64_t)d->readback_width * d->readback_height * 4;
+    memory->readback = dx_readback_bytes(d);
 }
 void onix_gpu_destroy(OnixGPUDriver *d) {
     if (!d)
@@ -577,8 +597,7 @@ int onix_gpu_trim_idle(OnixGPUDriver *d) {
         RELEASE(buffers[i]->value);
         *buffers[i] = (DxBuffer){0};
     }
-    RELEASE(d->readback);
-    d->readback_width = d->readback_height = 0;
+    dx_release_readback(d);
     if (!d->update_count) {
         free(d->update_data); d->update_data = NULL; d->update_capacity = d->update_size = 0;
         free(d->updates); d->updates = NULL; d->update_slots = 0;
@@ -592,6 +611,9 @@ int onix_gpu_trim_idle(OnixGPUDriver *d) {
 int onix_gpu_begin_frame(OnixGPUDriver *d, const float clear[4]) {
     d->frame_active = 1;
     if (d->surface.depth && d->surface_depth_age++ >= ONIX_BUFFER_TRIM_DELAY) dx_release_surface_depth(d);
+    if (onix_buffer_trim_capacity(&d->readback_retention, dx_readback_bytes(d), d->readback_demand, 64u << 10))
+        dx_release_readback(d);
+    d->readback_demand = 0;
     dx_begin_uploads(d, &d->vertices);
     dx_begin_uploads(d, &d->indices);
     dx_begin_uploads(d, &d->instances);
@@ -945,8 +967,8 @@ int onix_gpu_read_render_target(OnixGPUDriver *d, uint32_t id, int32_t x, int32_
         return dx_fail("invalid target readback", E_INVALIDARG);
     DXGI_FORMAT format = target->format == 2 ? DXGI_FORMAT_R8_UNORM : target->format == 1 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R8G8B8A8_UNORM;
     size_t row_bytes = (size_t)width * (target->format == 2 ? 1 : 4);
-    if (!d->readback || d->readback_width != width || d->readback_height != height || d->readback_format != format) {
-        RELEASE(d->readback);
+    if (!d->readback || d->readback_width < width || d->readback_height < height || d->readback_format != format) {
+        dx_release_readback(d);
         D3D11_TEXTURE2D_DESC desc = {.Width = width,
                                      .Height = height,
                                      .MipLevels = 1,
@@ -961,6 +983,8 @@ int onix_gpu_read_render_target(OnixGPUDriver *d, uint32_t id, int32_t x, int32_
         d->readback_height = height;
         d->readback_format = format;
     }
+    uint64_t demand = (uint64_t)row_bytes * height;
+    if (demand > d->readback_demand) d->readback_demand = demand;
     DxTexture *texture = dx_get_texture(d, target->texture);
     D3D11_BOX box = {x, y, 0, x + width, y + height, 1};
     ID3D11DeviceContext_CopySubresourceRegion(d->context, (ID3D11Resource *)d->readback, 0, 0, 0, 0,
@@ -985,7 +1009,20 @@ uint32_t onix_gpu_create_mesh(OnixGPUDriver *d, const OnixGPUVertex3D *vertices,
         return 0;
     DxMesh mesh = {.vertex_count = vertex_count, .index_count = index_count};
     mesh.vertices = dx_static_buffer(d, vertices, vertex_count * sizeof(*vertices), D3D11_BIND_VERTEX_BUFFER);
-    mesh.indices = dx_static_buffer(d, indices, index_count * 4, D3D11_BIND_INDEX_BUFFER);
+    unsigned stride = onix_index_stride(indices, index_count, UINT16_MAX);
+    mesh.index_format = stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    uint16_t *compact = NULL;
+    if (stride == 2) {
+        compact = malloc((size_t)index_count * stride);
+        if (!compact) {
+            dx_release_mesh(&mesh);
+            dx_fail("allocate compact indices", E_OUTOFMEMORY);
+            return 0;
+        }
+        onix_copy_indices(compact, indices, index_count, stride);
+    }
+    mesh.indices = dx_static_buffer(d, compact ? (const void *)compact : indices, index_count * stride, D3D11_BIND_INDEX_BUFFER);
+    free(compact);
     if (!mesh.vertices || !mesh.indices) {
         dx_release_mesh(&mesh);
         return 0;
@@ -1054,14 +1091,29 @@ int onix_gpu_draw_sprites(OnixGPUDriver *d, const OnixGPUSpritePush *push, const
                           uint32_t instance_count, const OnixNativeSpriteDraw *draws, uint32_t draw_count) {
     if (d->active_target && d->targets[d->active_target - 1].format == ONIX_TARGET_DEPTH)
         return dx_fail("2D drawing requires a color attachment", E_INVALIDARG);
-    if (!dx_upload(d, &d->instances, instances, (size_t)instance_count * sizeof(*instances), D3D11_BIND_VERTEX_BUFFER))
-        return 0;
-    ID3D11DeviceContext_OMSetDepthStencilState(d->context, d->depth_states[0], 0);
-    dx_blend(d, d->blend_mode);
+    uint64_t bytes = 0;
     for (UINT i = 0; i < draw_count; i++) {
         const OnixNativeSpriteDraw *draw = &draws[i];
         if ((uint64_t)draw->first_instance + draw->instance_count > instance_count)
             return dx_fail("invalid sprite range", E_INVALIDARG);
+        bytes += (uint64_t)draw->instance_count * onix_sprite_stride(draw->shader);
+        if (bytes > UINT_MAX) return dx_fail("sprite upload too large", E_INVALIDARG);
+    }
+    if (!bytes) return 1;
+    uint8_t *destination;
+    if (!dx_map_upload(d, &d->instances, (size_t)bytes, D3D11_BIND_VERTEX_BUFFER, &destination)) return 0;
+    for (UINT i = 0; i < draw_count; i++) {
+        const OnixNativeSpriteDraw *draw = &draws[i];
+        onix_sprite_copy(destination, instances + draw->first_instance, draw->instance_count, draw->shader);
+        destination += draw->instance_count * onix_sprite_stride(draw->shader);
+    }
+    ID3D11DeviceContext_Unmap(d->context, (ID3D11Resource *)d->instances.value, 0);
+    UINT packed_offset = 0;
+    ID3D11DeviceContext_OMSetDepthStencilState(d->context, d->depth_states[0], 0);
+    dx_blend(d, d->blend_mode);
+    for (UINT i = 0; i < draw_count; i++) {
+        const OnixNativeSpriteDraw *draw = &draws[i];
+        UINT stride = (UINT)onix_sprite_stride(draw->shader);
         DxProgram *p = draw->shader ? dx_get_program(d, draw->shader) : &d->sprite;
         if (!p)
             return dx_fail("invalid sprite shader", E_INVALIDARG);
@@ -1098,8 +1150,8 @@ int onix_gpu_draw_sprites(OnixGPUDriver *d, const OnixGPUSpritePush *push, const
         if (ok) {
             dx_bind_program(d, p);
             dx_bind_textures(d, textures, 4);
-            dx_bind_geometry(d, d->quad_vertices, d->quad_indices, 20, sizeof(*instances),
-                             draw->first_instance * sizeof(*instances));
+            dx_bind_geometry(d, d->quad_vertices, d->quad_indices, DXGI_FORMAT_R32_UINT, 20, stride, packed_offset);
+            packed_offset += draw->instance_count * stride;
             ID3D11DeviceContext_DrawIndexedInstanced(d->context, 6, draw->instance_count, 0, 0, 0);
         }
         for (UINT t = 0; t < 4; t++)
@@ -1121,7 +1173,7 @@ int onix_gpu_draw_shapes(OnixGPUDriver *d, const OnixGPUSpritePush *push, const 
     ID3D11DeviceContext_OMSetDepthStencilState(d->context, d->depth_states[0], 0);
     dx_blend(d, d->blend_mode);
     dx_bind_program(d, &d->shape);
-    dx_bind_geometry(d, d->quad_vertices, d->quad_indices, 20, sizeof(*instances), 0);
+    dx_bind_geometry(d, d->quad_vertices, d->quad_indices, DXGI_FORMAT_R32_UINT, 20, sizeof(*instances), 0);
     ID3D11DeviceContext_DrawIndexedInstanced(d->context, 6, instance_count, 0, 0, 0);
     return 1;
 }
@@ -1193,7 +1245,7 @@ static int dx_draw_meshes(OnixGPUDriver *d, const OnixGPUMeshPush *push, const O
             dx_blend(d, draw->blend_mode ? draw->blend_mode + 1 : 0);
         dx_bind_program(d, p);
         dx_bind_geometry(d, mesh ? mesh->vertices : d->vertices.value, mesh ? mesh->indices : d->indices.value,
-                         sizeof(*vertices), sizeof(*instances), draw->first_instance * sizeof(*instances));
+                         mesh ? mesh->index_format : DXGI_FORMAT_R32_UINT, sizeof(*vertices), sizeof(*instances), draw->first_instance * sizeof(*instances));
         ID3D11DeviceContext_DrawIndexedInstanced(d->context, draw->index_count, draw->instance_count, draw->first_index,
                                                  draw->base_vertex, 0);
     }

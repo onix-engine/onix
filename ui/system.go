@@ -1462,7 +1462,8 @@ func syncValueText(world *ecs.World, owner ecs.Entity, text *scene.Text2D, theme
 	}
 }
 
-func caretVisible(world *ecs.World) bool {
+// CaretVisible reports the current phase used to paint focused text fields.
+func CaretVisible(world *ecs.World) bool {
 	clock, ok := world.GetResource[*scene.Time]()
 	return !ok || clock == nil || clock.Elapsed/(500*time.Millisecond)%2 == 0
 }
@@ -2107,7 +2108,7 @@ func syncSurfaceElementVisibility(world *ecs.World) {
 				}
 			case world.Has[Part[CaretPart]](entity):
 				_, _, _, focused := textFieldState(world, visual.Owner)
-				visibility.Visible = visibility.Visible && focused && caretVisible(world)
+				visibility.Visible = visibility.Visible && focused && CaretVisible(world)
 			case world.Has[Part[SelectionPart]](entity):
 				start, end, focused := textFieldSelection(world, visual.Owner)
 				visibility.Visible = visibility.Visible && focused && start != end

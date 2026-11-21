@@ -5,6 +5,30 @@ import (
 	"testing"
 )
 
+func TestRemoveBodyReleasesOnlyItsColliders(t *testing.T) {
+	world := NewWorld()
+	body := world.CreateBody(NewBodyDef(BodyDynamic))
+	other := world.CreateBody(NewBodyDef(BodyDynamic))
+	def := NewColliderDef(Circle{Radius: 1})
+	first := world.AddCollider(body, def)
+	middle := world.AddCollider(body, def)
+	last := world.AddCollider(body, def)
+	if !world.RemoveCollider(middle) {
+		t.Fatal("could not remove middle collider")
+	}
+	reused := world.AddCollider(other, def)
+	if !world.RemoveBody(body) || body.Valid() || first.Valid() || middle.Valid() || last.Valid() {
+		t.Fatal("removed body or one of its colliders remains valid")
+	}
+	if !other.Valid() || !reused.Valid() {
+		t.Fatal("body removal invalidated an unrelated collider")
+	}
+	newBody := world.CreateBody(NewBodyDef(BodyDynamic))
+	if !world.AddCollider(newBody, def).Valid() || !world.RemoveBody(newBody) || !reused.Valid() {
+		t.Fatal("recycled body or collider slot retained old links")
+	}
+}
+
 func TestDynamicCircleSettlesOnStaticBox(t *testing.T) {
 	world := NewWorld()
 	world.Gravity = V(0, -20)

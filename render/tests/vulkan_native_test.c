@@ -1483,9 +1483,25 @@ static void test_buffer_retention(OnixGPUDriver *driver) {
 	printf("Buffer retention: single-block peaks release, intermittent demand stays warm, pool compaction allocates nothing\n");
 }
 
+static void test_texture_pool_hole(OnixGPUDriver *driver) {
+	VkMemoryRequirements req = {.size = ONIX_VK_TEXTURE_POOL_BLOCK_SIZE, .alignment = 256, .memoryTypeBits = UINT32_MAX};
+	uint32_t full, tail, next;
+	VkDeviceMemory memory, tail_memory;
+	VkDeviceSize offset;
+	require(onix_vk_acquire_texture_pool(driver, &req, &full, &memory, &offset), "fill first texture block");
+	req.size = 4096;
+	require(onix_vk_acquire_texture_pool(driver, &req, &tail, &tail_memory, &offset), "start second texture block");
+	onix_vk_release_texture_pool(driver, full);
+	require(onix_vk_acquire_texture_pool(driver, &req, &next, &memory, &offset) && memory == tail_memory &&
+		!driver->texture_pools[full >> 16].memory, "reuse live texture block past empty slot");
+	onix_vk_release_texture_pool(driver, next);
+	onix_vk_release_texture_pool(driver, tail);
+}
+
 static void test_mesh_memory_reuse(OnixGPUDriver *driver) {
 	OnixGPUVertex3D vertices[3] = {{.position = {-.5f, -.5f, .5f}}, {.position = {.5f, -.5f, .5f}}, {.position = {0, .5f, .5f}}};
 	uint32_t indices[] = {0, 1, 2}, stream[64] = {1, 2, 3};
+	require(onix_index_stride((uint32_t[]){65535}, 1, UINT16_MAX) == 2 && onix_index_stride((uint32_t[]){65536}, 1, UINT16_MAX) == 4, "mesh index width boundary");
 	uint32_t first = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
 	uint32_t second = onix_gpu_create_mesh(driver, vertices, 3, indices, 3);
 	require(first && second && onix_gpu_set_mesh_deformation(driver, second, stream, 64, 3), "create pooled mesh geometry and deformation");
@@ -1496,7 +1512,7 @@ static void test_mesh_memory_reuse(OnixGPUDriver *driver) {
 		"resident mesh leases never overlap");
 	OnixVkMeshBlock *block = &driver->mesh_blocks[a.geometry.block];
 	require(memcmp((uint8_t *)block->mapping + b.vertex_offset, vertices, sizeof(vertices)) == 0 &&
-		memcmp((uint8_t *)block->mapping + b.index_offset, indices, sizeof(indices)) == 0 &&
+		b.index_type == VK_INDEX_TYPE_UINT16 && memcmp((uint8_t *)block->mapping + b.index_offset, (uint16_t[]){0, 1, 2}, 6) == 0 &&
 		memcmp((uint8_t *)block->mapping + b.deformation_offset, stream, sizeof(stream)) == 0,
 		"all resident streams honor their arena offsets");
 	const float clear[4] = {0};
@@ -2008,6 +2024,7 @@ int main(void) {
 	test_native_table_retention(driver);
 	test_buffer_retention(driver);
 	test_surface_2d_laziness(driver);
+	test_texture_pool_hole(driver);
 	test_mesh_memory_reuse(driver);
 	test_texture_addressing(driver);
 	test_texture_update_batch(driver);

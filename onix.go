@@ -8,7 +8,6 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
-	"github.com/onix-engine/onix/module"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
 	"github.com/onix-engine/onix/ui/html"
@@ -32,8 +31,9 @@ type App struct {
 	moduleHTMLInput     ecs.System
 	webViewAfterResize  func()
 	htmlDispose         func(*ecs.World)
-	moduleRuntime       *module.Runtime
+	moduleRuntime       moduleLoop
 	uiCaretBlinkDelay   func(*ecs.World) (time.Duration, bool)
+	uiCaretVisible      func(*ecs.World) bool
 	schedules           map[Stage]*ecs.Schedule
 	webViewBeforeResize func()
 	clipboardContext    *window.Context
@@ -326,6 +326,7 @@ func (app *App) Destroy() {
 		return
 	}
 	app.wakeContext.Store(nil)
+	app.discardCaretFrames()
 	if app.moduleRuntime != nil {
 		_ = app.moduleRuntime.Close()
 		app.moduleRuntime = nil

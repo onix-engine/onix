@@ -85,10 +85,12 @@ type htmlPaintState struct {
 	PaintCullRoots    []*htmlBoxRendering
 	PaintCullGroups   []*htmlEntityGroup
 	PaintCullNodes    []*htmlNodeRendering
+	InheritedClips    [8]*htmlBoxPaintClip
 	StickyRoutes      htmlAncestorCache[*layout.Box, htmlStickyRoute]
 	BoxFlags          htmlAncestorCache[*layout.Box, bool]
 	RenderGeneration  uint64
 	PaintCullEpoch    uint64
+	NextInheritedClip uint8
 	OwnerSpansValid   bool
 	PartialValid      bool
 	Reconciling       bool
@@ -126,6 +128,7 @@ type htmlUpdateState struct {
 	Diagnostics              SyncDiagnostics
 	Key                      htmlRenderKey
 	SyncStats                htmlSyncStats
+	DocumentRetention        [4]reuse.MapRetention
 	ImageProviderChanged     ecs.Tick
 	PendingLayout            bool
 	PendingVisual            bool

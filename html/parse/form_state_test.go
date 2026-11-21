@@ -303,7 +303,7 @@ func TestDirtyValueKeepsLivePlaceholderState(t *testing.T) {
 }
 
 func TestRadioGroupUsesExplicitFormOwnerAndDirtyCheckedness(t *testing.T) {
-	doc, err := Parse(`<form id="left"></form><form id="right"></form><input id="first" type="radio" name="group" form="left" checked><input id="second" type="radio" name="group" form="left" checked><input id="other" type="radio" name="group" form="right" checked>`)
+	doc, err := Parse(`<form id="right"></form><input id="first" type="radio" name="group" form="left" checked><input id="second" type="radio" name="group" form="left" checked><input id="other" type="radio" name="group" form="right" checked><form id="left"></form>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,6 +316,12 @@ func TestRadioGroupUsesExplicitFormOwnerAndDirtyCheckedness(t *testing.T) {
 	dirty, _ := first.States.Get(element.StateDirtyChecked)
 	if !dirty {
 		t.Fatal("radio unchecked by group normalization was not marked dirty")
+	}
+	if dirty, _ := second.States.Get(element.StateDirtyChecked); !dirty {
+		t.Fatal("last checked radio lost its dirty checkedness")
+	}
+	if dirty, _ := other.States.Get(element.StateDirtyChecked); dirty {
+		t.Fatal("single checked radio was marked dirty")
 	}
 	first.RemoveAttr("checked")
 	element.SynchronizeCheckedAttribute(first, false)

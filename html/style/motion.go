@@ -1,9 +1,6 @@
 package style
 
-import (
-	"hash/maphash"
-	"slices"
-)
+import "hash/maphash"
 
 type motionInputs struct {
 	transition [4]string
@@ -85,18 +82,18 @@ func resolveMotion(motion *motionStyle) {
 
 // Prepared motion declarations contain only the fields their property sets.
 // Merge raw longhands before resolving lists, preserving cascade and inherit.
-func applyPreparedMotion(computed *ComputedStyle, parsed *preparedValue) {
+func applyPreparedMotion(computed *ComputedStyle, property propertyID, inputs *motionInputs) {
 	motion := computed.mutableMotion()
-	switch parsed.property {
-	case "transition":
-		motion.transition = parsed.motion.transition
-	case "animation":
-		motion.animation = parsed.motion.animation
-	default:
-		if index := slices.Index(transitionProperties[:], parsed.property); index >= 0 {
-			motion.transition[index] = parsed.motion.transition[index]
-		} else if index := slices.Index(animationProperties[:], parsed.property); index >= 0 {
-			motion.animation[index] = parsed.motion.animation[index]
-		}
+	switch {
+	case property == propertyTransition:
+		motion.transition = inputs.transition
+	case property == propertyAnimation:
+		motion.animation = inputs.animation
+	case property.isTransition():
+		i := property - propertyTransitionProperty
+		motion.transition[i] = inputs.transition[i]
+	case property.isAnimation():
+		i := property - propertyAnimationName
+		motion.animation[i] = inputs.animation[i]
 	}
 }

@@ -250,6 +250,27 @@ func TestComposite2DConservativeOpaqueBounds(t *testing.T) {
 	}
 }
 
+func TestComposite2DReleasesViewportForSingleSmallItem(t *testing.T) {
+	world, canvas, driver, entities := incrementalRenderFixture(t, 2, false)
+	state := RenderWorldFor(world)
+	incrementalFrame(t, world, canvas)
+	view := state.compositors2D[compositeViewKey2D{Camera: 1}]
+	if view == nil || view.target == nil {
+		t.Fatal("expected a cached viewport for the initial scene")
+	}
+	world.Despawn(entities[1])
+	driver.shapes = 0
+	incrementalFrame(t, world, canvas)
+	if !state.Composite2D.Direct || len(state.compositors2D) != 0 || view.target != nil || driver.shapes != 1 {
+		t.Fatalf("expected one direct shape and a released viewport, got %+v, shapes=%d", state.Composite2D, driver.shapes)
+	}
+	world.GetMut[Sprite2D](entities[0]).Width = 2 * compositeTileSize2D
+	incrementalFrame(t, world, canvas)
+	if state.Composite2D.Direct || state.Composite2D.CacheBytes == 0 {
+		t.Fatal("larger content did not regain the viewport cache")
+	}
+}
+
 func TestComposite2DBudgetDenseChangesAndResize(t *testing.T) {
 	world, canvas, driver, entities := incrementalRenderFixture(t, 100, false)
 	incrementalFrame(t, world, canvas)

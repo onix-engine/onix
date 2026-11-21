@@ -992,18 +992,6 @@ func syntheticControlText(node *uinode.Node) (controlText, bool) {
 	}
 }
 
-func isControlElementNode(node *uinode.Node) bool {
-	if node == nil || node.Type != uinode.ElementNode {
-		return false
-	}
-	switch node.Data {
-	case "button", "input", "select", "textarea":
-		return true
-	default:
-		return false
-	}
-}
-
 func layoutControlImageFragments(node *uinode.Node, content Rect, line int, styles style.Map, ctx *layoutContext, textFragments []TextFragment) []ImageFragment {
 	if node == nil || content.Width <= 0 || content.Height <= 0 {
 		return nil
@@ -1119,17 +1107,7 @@ func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styl
 }
 
 func shouldInlineRenderControl(node *uinode.Node, computed *style.ComputedStyle) bool {
-	if node == nil || node.Type != uinode.ElementNode {
-		return false
-	}
-	switch node.Data {
-	case "button", "input", "select", "textarea":
-		// Block-level controls are boxes; inline-level ones render as atomic
-		// inline widgets (CSS 2.2 §9.2.2 inline-level content).
-		return !isBlockLevelDisplay(computed.Display.Keyword)
-	default:
-		return false
-	}
+	return element.IsWidgetControl(node) && !isBlockLevelDisplay(computed.Display.Keyword)
 }
 
 func isDisplayNone(computed *style.ComputedStyle) bool {

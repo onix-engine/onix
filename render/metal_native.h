@@ -6,6 +6,8 @@
 #include "native_buffer.h"
 #include "native_draw.h"
 
+#define ONIX_METAL_INSTANCE_BUFFER_MINIMUM (16u * 1024u)
+
 typedef struct OnixMetalDriver OnixMetalDriver;
 int onix_metal_trim_idle(OnixMetalDriver *driver);
 void onix_metal_buffer_memory(OnixMetalDriver *driver, OnixBufferMemory *memory);
@@ -81,6 +83,8 @@ void onix_metal_set_sprite_blend(OnixMetalDriver *driver, int mode, float red, f
 void onix_metal_set_viewport(OnixMetalDriver *driver, int32_t x, int32_t y, int32_t width, int32_t height);
 void onix_metal_set_scissor(OnixMetalDriver *driver, int enabled, int32_t x, int32_t y, int32_t width, int32_t height);
 int onix_metal_present(OnixMetalDriver *driver);
+int onix_metal_prepare_caret_frame(OnixMetalDriver *driver, int visible);
+void onix_metal_discard_caret_frames(OnixMetalDriver *driver);
 
 uint32_t onix_metal_create_texture_with_format(OnixMetalDriver *driver, uint32_t width, uint32_t height, uint32_t levels, uint32_t format, int mipmap, const uint8_t *pixels, size_t length, uint32_t wrap_u, uint32_t wrap_v);
 uint32_t onix_metal_create_external_cv_texture(OnixMetalDriver *driver, uintptr_t pixel_buffer, uint32_t width, uint32_t height);

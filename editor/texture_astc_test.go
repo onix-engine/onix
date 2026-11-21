@@ -63,11 +63,30 @@ func TestTextureTargetForBuildPlatform(t *testing.T) {
 		{BuildPlatformMacOS, TextureTargetBC},
 		{BuildPlatformAndroid, TextureTargetASTC},
 		{BuildPlatformIOS, TextureTargetASTC},
-		{BuildPlatformWeb, TextureTargetASTC},
+		{BuildPlatformWeb, TextureTargetWeb},
 		{BuildPlatformWeChat, TextureTargetASTC},
 	} {
 		if got := textureTargetForBuildPlatform(testCase.platform); got != testCase.want {
 			t.Errorf("texture target for %s = %s, want %s", testCase.platform, got, testCase.want)
 		}
+	}
+}
+
+func TestWebTexturePackageVariants(t *testing.T) {
+	data := textureSourcePNG(t, 7, 5)
+	ordinary, err := packTextureSource(data, "image.png", TextureTargetWeb, BuildModeDebug, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	embedded, err := packEmbeddedTextureSource(data, "image/png", TextureTargetWeb, BuildModeDebug, graphics.TextureOptions{SRGB: true})
+	if err != nil || !bytes.Equal(ordinary, embedded) {
+		t.Fatalf("embedded variants differ: %v", err)
+	}
+	image, err := ontex.Unmarshal(embedded)
+	if err != nil || !image.HasASTCVariant || image.Format != render.TextureFormatBC1SRGB || image.Levels != 3 {
+		t.Fatalf("invalid variants: %v, %v", image, err)
+	}
+	if _, err := ontex.Unmarshal(embedded[:len(embedded)-1]); err == nil {
+		t.Fatal("accepted truncated alternate mip chain")
 	}
 }

@@ -22,7 +22,7 @@ func TestDirectXUploadPool(t *testing.T) {
 	var sections strings.Builder
 	for _, bounds := range [][2]string{
 		{"typedef struct {\n    ID3D11Buffer *value;", "typedef struct {\n    ID3D11Texture2D"},
-		{"static int dx_upload(", "static ID3D11Buffer *dx_static_buffer("},
+		{"static int dx_map_upload(", "static ID3D11Buffer *dx_static_buffer("},
 		{"static void dx_bind_geometry(", "static void dx_bind_textures("},
 	} {
 		a := strings.Index(string(source), bounds[0])

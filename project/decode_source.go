@@ -12,16 +12,7 @@ import (
 
 func decodeJSON[T any](data []byte, path string) (T, error) {
 	var target T
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&target); err != nil {
-		return target, fmt.Errorf("decode %s: %w", pathpkg.Base(path), err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return target, fmt.Errorf("decode %s: multiple JSON values are not allowed", pathpkg.Base(path))
-		}
+	if err := decodeStrictJSONValue(data, &target); err != nil {
 		return target, fmt.Errorf("decode %s: %w", pathpkg.Base(path), err)
 	}
 	return target, nil
@@ -43,74 +34,69 @@ func decodeStrictJSONValue(data []byte, target any) error {
 	return nil
 }
 
-func (s *Camera3DSpec) UnmarshalJSON(data []byte) error {
-	type plain Camera3DSpec
-	value := plain(NewCamera3DSpec())
+// Decode into the default value so a malformed field cannot partially update dst.
+func decodeStrictInto[T any](data []byte, dst *T, value T) error {
 	if err := decodeStrictJSONValue(data, &value); err != nil {
 		return err
 	}
-	*s = Camera3DSpec(value)
+	*dst = value
 	return nil
+}
+
+func (m *gameManifest) UnmarshalJSON(data []byte) error {
+	type plain gameManifest
+	var fields struct {
+		Engine *struct {
+			TextureCompression *bool `json:"textureCompression"`
+			EngineConfig
+		} `json:"engine"`
+		plain
+	}
+	if err := decodeStrictJSONValue(data, &fields); err != nil {
+		return err
+	}
+	if fields.Engine != nil {
+		fields.plain.Engine = fields.Engine.EngineConfig
+		compression := fields.Engine.TextureCompression
+		fields.plain.Engine.TextureCompression = compression == nil || *compression
+	}
+	*m = gameManifest(fields.plain)
+	return nil
+}
+
+func (s *Camera3DSpec) UnmarshalJSON(data []byte) error {
+	type plain Camera3DSpec
+	return decodeStrictInto(data, (*plain)(s), plain(NewCamera3DSpec()))
 }
 
 func (s *DirectionalLightSpec) UnmarshalJSON(data []byte) error {
 	type plain DirectionalLightSpec
-	value := plain(NewDirectionalLightSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = DirectionalLightSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewDirectionalLightSpec()))
 }
 
 func (s *ShadowSpec) UnmarshalJSON(data []byte) error {
 	type plain ShadowSpec
-	value := plain(*NewShadowSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = ShadowSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(*NewShadowSpec()))
 }
 
 func (s *SSRSpec) UnmarshalJSON(data []byte) error {
 	type plain SSRSpec
-	value := plain(*NewSSRSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SSRSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(*NewSSRSpec()))
 }
 
 func (s *SSAOSpec) UnmarshalJSON(data []byte) error {
 	type plain SSAOSpec
-	value := plain(*NewSSAOSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SSAOSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(*NewSSAOSpec()))
 }
 
 func (s *FogSpec) UnmarshalJSON(data []byte) error {
 	type plain FogSpec
-	value := plain(*NewFogSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = FogSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(*NewFogSpec()))
 }
 
 func (s *PunctualShadowSpec) UnmarshalJSON(data []byte) error {
 	type plain PunctualShadowSpec
-	value := plain(*NewPunctualShadowSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = PunctualShadowSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(*NewPunctualShadowSpec()))
 }
 
 func (s *AmbientLightSpec) UnmarshalJSON(data []byte) error {
@@ -125,152 +111,77 @@ func (s *AmbientLightSpec) UnmarshalJSON(data []byte) error {
 
 func (s *PointLightSpec) UnmarshalJSON(data []byte) error {
 	type plain PointLightSpec
-	value := plain(NewPointLightSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = PointLightSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewPointLightSpec()))
 }
 
 func (s *SpotLightSpec) UnmarshalJSON(data []byte) error {
 	type plain SpotLightSpec
-	value := plain(NewSpotLightSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SpotLightSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewSpotLightSpec()))
 }
 
 func (s *SceneNodeSpec) UnmarshalJSON(data []byte) error {
 	type plain SceneNodeSpec
-	value := plain{ScaleX: 1, ScaleY: 1, ScaleZ: 1, Alpha: 1}
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SceneNodeSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain{ScaleX: 1, ScaleY: 1, ScaleZ: 1, Alpha: 1})
 }
 
 func (s *SpriteComponentSpec) UnmarshalJSON(data []byte) error {
 	type plain SpriteComponentSpec
-	var value plain
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SpriteComponentSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain{})
 }
 
 func (s *AnimationComponentSpec) UnmarshalJSON(data []byte) error {
 	type plain AnimationComponentSpec
-	value := plain{Speed: 1}
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = AnimationComponentSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain{Speed: 1})
 }
 
 func (s *SpineComponentSpec) UnmarshalJSON(data []byte) error {
 	type plain SpineComponentSpec
-	value := plain{Loop: true, Speed: 1}
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SpineComponentSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain{Loop: true, Speed: 1})
 }
 
 func (s *RigidBody2DSpec) UnmarshalJSON(data []byte) error {
 	type plain RigidBody2DSpec
-	value := plain(NewRigidBody2DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = RigidBody2DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewRigidBody2DSpec()))
 }
 
 func (s *CircleCollider2DSpec) UnmarshalJSON(data []byte) error {
 	type plain CircleCollider2DSpec
-	value := plain(NewCircleCollider2DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = CircleCollider2DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewCircleCollider2DSpec()))
 }
 
 func (s *BoxCollider2DSpec) UnmarshalJSON(data []byte) error {
 	type plain BoxCollider2DSpec
-	value := plain(NewBoxCollider2DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = BoxCollider2DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewBoxCollider2DSpec()))
 }
 
 func (s *SegmentCollider2DSpec) UnmarshalJSON(data []byte) error {
 	type plain SegmentCollider2DSpec
-	value := plain(NewSegmentCollider2DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = SegmentCollider2DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewSegmentCollider2DSpec()))
 }
 
 func (s *RigidBody3DSpec) UnmarshalJSON(data []byte) error {
 	type plain RigidBody3DSpec
-	value := plain(NewRigidBody3DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = RigidBody3DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewRigidBody3DSpec()))
 }
 
 func (s *TriangleMeshCollider3DSpec) UnmarshalJSON(data []byte) error {
 	type plain TriangleMeshCollider3DSpec
-	value := plain(NewTriangleMeshCollider3DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = TriangleMeshCollider3DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewTriangleMeshCollider3DSpec()))
 }
 
 func (s *ConvexHullCollider3DSpec) UnmarshalJSON(data []byte) error {
 	type plain ConvexHullCollider3DSpec
-	value := plain(NewConvexHullCollider3DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = ConvexHullCollider3DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewConvexHullCollider3DSpec()))
 }
 
 func (s *CompoundCollider3DSpec) UnmarshalJSON(data []byte) error {
 	type plain CompoundCollider3DSpec
-	value := plain(NewCompoundCollider3DSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = CompoundCollider3DSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewCompoundCollider3DSpec()))
 }
 
 func (s *AreaLightSpec) UnmarshalJSON(data []byte) error {
 	type plain AreaLightSpec
-	value := plain(NewAreaLightSpec())
-	if err := decodeStrictJSONValue(data, &value); err != nil {
-		return err
-	}
-	*s = AreaLightSpec(value)
-	return nil
+	return decodeStrictInto(data, (*plain)(s), plain(NewAreaLightSpec()))
 }
 
 func (s *ModelMaterialSpec) UnmarshalJSON(data []byte) error {

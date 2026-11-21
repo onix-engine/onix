@@ -11,7 +11,7 @@ func BenchmarkInlineStyleCache(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			run := func() {
-				var values []inlineDeclaration
+				var values []preparedDeclaration
 				var err error
 				if cached {
 					values, err = inlineStyleCache.parse(input)

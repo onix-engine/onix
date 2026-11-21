@@ -222,51 +222,62 @@ func (writer *htmlEntityWriter) putHTML[T any](value T) {
 		writer.bundle.Put(value)
 		return
 	}
-	world, entity := writer.world, writer.entity
-	switch next := any(value).(type) {
-	case scene.InputState2D:
-		if world.Has[scene.InputState2D](entity) {
-			return
-		}
-	case scene.UIGlobalTransform:
-		if world.Has[scene.UIGlobalTransform](entity) {
-			return
-		}
-	case scene.UIScroll:
-		if old, ok := world.Get[scene.UIScroll](entity); ok {
+	_ = writer.world.Insert(writer.entity, value)
+}
+
+// The layout engine authors every primitive's local placement. Input and global
+// transform systems own their live state after the primitive is first emitted.
+func (writer *htmlEntityWriter) putPlacement(parent ecs.Entity, x, y float32, stack int, visible bool) {
+	writer.putHTML(scene.UITransformFromXY(x, y))
+	writer.ensureComponent[scene.UIGlobalTransform]()
+	writer.putHTML(scene.Visibility{Visible: visible})
+	writer.putHTML(scene.AnchorTopLeft)
+	writer.putHTML(scene.UIStackIndex(stack))
+	writer.putHTML(scene.Parent{Entity: parent})
+}
+
+func (writer *htmlEntityWriter) ensureComponent[T any]() {
+	if writer.entity == 0 || !writer.world.Has[T](writer.entity) {
+		var value T
+		writer.putHTML(value)
+	}
+}
+
+func (writer *htmlEntityWriter) putScroll(next scene.UIScroll) {
+	if writer.entity != 0 {
+		if old, ok := writer.world.Get[scene.UIScroll](writer.entity); ok {
 			old.ViewportSize, old.ContentSize = next.ViewportSize, next.ContentSize
 			old.Horizontal, old.Vertical = next.Horizontal, next.Vertical
 			old.ScrollbarOverlay, old.ScrollbarSize = next.ScrollbarOverlay, next.ScrollbarSize
 			old.ScrollbarMinThumbSize, old.ScrollbarThin = next.ScrollbarMinThumbSize, next.ScrollbarThin
-			old.ConsumeWheel = next.ConsumeWheel
-			old.DisableInput = next.DisableInput
+			old.ConsumeWheel, old.DisableInput = next.ConsumeWheel, next.DisableInput
 			old.Position[0] = min(max(old.Position[0], -max(next.ContentSize[0]-next.ViewportSize[0], 0)), 0)
 			old.Position[1] = min(max(old.Position[1], -max(next.ContentSize[1]-next.ViewportSize[1], 0)), 0)
-			value = any(old).(T)
-		}
-	case htmlChild:
-		if old, ok := world.Get[htmlChild](entity); ok {
-			// The primitive is emitted at its authored layout position on every
-			// reconciliation. External offsets and scroll parents are replayed by
-			// applyHTMLNodeBindings after emission; only the CSS transform state
-			// remains valid across the retained entity update.
-			next.transformOffset = old.transformOffset
-			value = any(next).(T)
-		}
-	case scene.Text2D:
-		if old, ok := world.Get[scene.Text2D](entity); ok {
-			// The authored fragment never carries WrapWidth, so keeping its
-			// WrapMode would drop the wrap a widget computes for its own text.
-			next.WrapMode, next.WrapWidth = old.WrapMode, old.WrapWidth
-			old.Value, old.Font, old.FontSize, old.DPI = next.Value, next.Font, next.FontSize, next.DPI
-			old.WrapMode, old.MaxWidth, old.LineHeight, old.Color = next.WrapMode, next.MaxWidth, next.LineHeight, next.Color
-			old.Alpha, old.LCD = next.Alpha, next.LCD
-			old.TabWidth = next.TabWidth
-			old.Prelayout = next.Prelayout
-			value = any(old).(T)
+			next = old
 		}
 	}
-	_ = world.Insert(entity, value)
+	writer.putHTML(next)
+}
+
+func (writer *htmlEntityWriter) putChild(next htmlChild) {
+	if old := writer.world.GetRef[htmlChild](writer.entity); old != nil {
+		// External offsets and scroll parents are replayed after emission.
+		next.transformOffset = old.transformOffset
+	}
+	writer.putHTML(next)
+}
+
+func (writer *htmlEntityWriter) putText(next scene.Text2D) {
+	if old, ok := writer.world.Get[scene.Text2D](writer.entity); ok {
+		// Keep the widget's wrapping settings and the retained text caches.
+		old.Value, old.Font, old.FontSize, old.DPI = next.Value, next.Font, next.FontSize, next.DPI
+		old.MaxWidth, old.LineHeight, old.Color = next.MaxWidth, next.LineHeight, next.Color
+		old.Alpha, old.LCD = next.Alpha, next.LCD
+		old.TabWidth = next.TabWidth
+		old.Prelayout = next.Prelayout
+		next = old
+	}
+	writer.putHTML(next)
 }
 
 func (writer *htmlEntityWriter) removeMissingHTML[T any]() {

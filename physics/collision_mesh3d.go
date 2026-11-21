@@ -37,6 +37,17 @@ func collideCustomShapes3D(contact manifold3D, colliderA colliderState3D, bodyA 
 	if !customA && !customB {
 		return contact, false, false
 	}
+	if colliderA.kind == shapeBox3D && colliderB.kind == shapeTriangleMesh3D {
+		result, ok := collideBoxTriangleMesh(makeWorldBox3D(colliderA, bodyA), colliderB, bodyB)
+		result.pair = contact.pair
+		return result, ok, true
+	}
+	if colliderB.kind == shapeBox3D && colliderA.kind == shapeTriangleMesh3D {
+		result, ok := collideBoxTriangleMesh(makeWorldBox3D(colliderB, bodyB), colliderA, bodyA)
+		result.pair = contact.pair
+		result.normal = result.normal.Mul(-1)
+		return result, ok, true
+	}
 	if colliderA.kind == shapeCapsule3D && colliderB.kind == shapeTriangleMesh3D {
 		contact.normal, contact.point, contact.penetration = collideCapsuleTriangleMesh(makeWorldCapsule(colliderA, bodyA), colliderB, bodyB)
 		return contact, contact.penetration >= 0, true

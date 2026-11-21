@@ -318,6 +318,42 @@ func TestHTMLPaintCullAllocatesClipOnDemand(t *testing.T) {
 	}
 }
 
+func TestHTMLPaintCullSharesInheritedSnapshots(t *testing.T) {
+	var source strings.Builder
+	source.WriteString(`<div id="scroll" style="height:80px;overflow:auto">`)
+	for i := range 160 {
+		fmt.Fprintf(&source, `<div id="row%d" style="height:20px;background:red">Row</div>`, i)
+	}
+	source.WriteString("</div>")
+	world, owner := incrementalHTMLFixture(t, source.String())
+	first := incrementalHTMLNode(t, world, owner, "row0")
+	sibling := incrementalHTMLNode(t, world, owner, "row1")
+	far := incrementalHTMLNode(t, world, owner, "row40")
+	window := func(node Node) *htmlBoxPaintClip {
+		return world.GetRef[htmlRenderState](owner).BoxRenderings[node.node].clipWindow
+	}
+	initial := window(first)
+	if initial == nil || window(sibling) != initial || window(far) != initial {
+		t.Fatal("one scroll window did not start with one shared row snapshot")
+	}
+	before := *initial
+	htmlCullScroll(t, world, owner, "scroll", 0, -800)
+	if *initial != before || htmlCullRole(world, owner, far, htmlRoleSurface) == 0 {
+		t.Fatal("scrolling mutated an older snapshot or failed to mount the entering row")
+	}
+	htmlCullScroll(t, world, owner, "scroll", 0, 0)
+	first.SetAttribute("style", "height:20px;background:red;overflow:hidden")
+	incrementalSync(t, world)
+	if own := window(first); own == window(sibling) || !own.clipped || *initial != before {
+		t.Fatal("adding a local clip modified the inherited snapshot")
+	}
+	first.SetAttribute("style", "height:20px;background:red")
+	incrementalSync(t, world)
+	if window(first).clipped || htmlCullRole(world, owner, sibling, htmlRoleSurface) == 0 {
+		t.Fatal("removing the local clip did not restore inherited culling")
+	}
+}
+
 func TestHTMLPaintCullLocalPaintPreservesScrollAnchor(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<div id="scroll" style="height:80px;overflow:auto;background:red">`+strings.Repeat(`<div style="height:20px;background:blue">Row</div>`, 100)+`</div>`)
 	scroll := incrementalHTMLNode(t, world, owner, "scroll")

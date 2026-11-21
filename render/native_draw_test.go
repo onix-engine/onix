@@ -206,3 +206,18 @@ func TestNativeDrawScratchTrimsAfterScenePeak(t *testing.T) {
 		t.Fatal("idle scene retained mesh draw peak")
 	}
 }
+
+func TestNativeScissorTransitions(t *testing.T) {
+	var state nativeRasterState
+	var empty Rect
+	if !state.changeScissor(nil) || state.changeScissor(nil) {
+		t.Fatal("initial disabled state was not submitted exactly once")
+	}
+	if !state.changeScissor(&empty) || state.changeScissor(&empty) {
+		t.Fatal("enabled empty scissor was not submitted exactly once")
+	}
+	rect := Rect{X: 1, Width: 32}
+	if !state.changeScissor(&rect) || state.changeScissor(&rect) || !state.changeScissor(nil) || !state.changeScissor(&rect) {
+		t.Fatal("scissor changes were lost across disable and re-enable")
+	}
+}

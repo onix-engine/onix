@@ -4,11 +4,12 @@ package png
 import (
 	"bytes"
 	"image"
-	stdpng "image/png"
+
+	onixpng "github.com/onix-engine/onix/images/png"
 )
 
 type Decoder struct{}
 
 func (Decoder) DecodeIcon(data []byte) (image.Image, error) {
-	return stdpng.Decode(bytes.NewReader(data))
+	return onixpng.Decode(bytes.NewReader(data))
 }

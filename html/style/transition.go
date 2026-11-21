@@ -2,16 +2,14 @@ package style
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 )
 
-var transitionProperties = [...]string{"transition-property", "transition-duration", "transition-timing-function", "transition-delay"}
 var transitionInitial = [...]string{"all", "0s", "ease", "0s"}
 
-func applyTransitionProperty(computed *ComputedStyle, property, raw string) error {
+func applyTransitionProperty(computed *ComputedStyle, property propertyID, raw string) error {
 	values := computed.transitionValues()
-	if property == "transition" {
+	if property == propertyTransition {
 		var builders [4]strings.Builder
 		entries := splitCSSList(raw)
 		if len(entries) == 0 {
@@ -52,10 +50,7 @@ func applyTransitionProperty(computed *ComputedStyle, property, raw string) erro
 			values[i] = builders[i].String()
 		}
 	} else {
-		index := slices.Index(transitionProperties[:], property)
-		if index < 0 {
-			return nil
-		}
+		index := int(property - propertyTransitionProperty)
 		entries := splitCSSList(raw)
 		if len(entries) == 0 {
 			return fmt.Errorf("empty transition value")

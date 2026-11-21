@@ -112,6 +112,7 @@ type webGLRenderTarget struct {
 }
 
 type webGLMesh struct {
+	indexStride  uint32
 	vertexBuffer js.Value
 	indexBuffer  js.Value
 	vertexCount  int
@@ -141,14 +142,14 @@ type webGL2Driver struct {
 	meshDrawReset    js.Value
 	meshCommandBytes js.Value
 	meshCommandData  js.Value
-	meshCommand      [20]uint32
+	meshCommand      [21]uint32
 	driverStatistics
-	meshUniformData webGLUniformData
-	gl              js.Value
-	astcExtension   js.Value
-	deviceName      string
-	width           int
-	height          int
+	meshUniformData   webGLUniformData
+	gl                js.Value
+	compressedFormats [len(textureFormats)]bool
+	deviceName        string
+	width             int
+	height            int
 
 	quadVBO           js.Value
 	quadEBO           js.Value
@@ -211,7 +212,6 @@ func NewWebGL2Driver(context js.Value) (Driver, error) {
 	height := context.Get("drawingBufferHeight").Int()
 	driver := &webGL2Driver{
 		gl:             context,
-		astcExtension:  context.Call("getExtension", "WEBGL_compressed_texture_astc"),
 		deviceName:     webGLDeviceName(context),
 		surfaceSamples: context.Call("getParameter", webGLSamples).Int(),
 		width:          width,
@@ -221,6 +221,22 @@ func NewWebGL2Driver(context js.Value) (Driver, error) {
 			Width:  int32(width),
 			Height: int32(height),
 		},
+	}
+	for _, extension := range [...]struct {
+		name    string
+		formats [2]TextureFormat
+	}{
+		{"WEBGL_compressed_texture_s3tc", [2]TextureFormat{TextureFormatBC1, TextureFormatBC3}},
+		{"WEBGL_compressed_texture_s3tc_srgb", [2]TextureFormat{TextureFormatBC1SRGB, TextureFormatBC3SRGB}},
+		{"EXT_texture_compression_rgtc", [2]TextureFormat{TextureFormatBC4, TextureFormatBC5}},
+		{"EXT_texture_compression_bptc", [2]TextureFormat{TextureFormatBC7, TextureFormatBC7SRGB}},
+		{"WEBGL_compressed_texture_astc", [2]TextureFormat{TextureFormatASTC4x4, TextureFormatASTC4x4SRGB}},
+	} {
+		if context.Call("getExtension", extension.name).Truthy() {
+			for _, format := range extension.formats {
+				driver.compressedFormats[format] = true
+			}
+		}
 	}
 	for pipeline, sources := range [2][2]string{
 		{spriteMultiVertexGLSL, spriteMultiFragmentGLSL},
@@ -500,6 +516,13 @@ func (d *webGL2Driver) applyScissor(scissor Rect) {
 	d.gl.Call("scissor", scissor.X, height-int(scissor.Y+scissor.Height), scissor.Width, scissor.Height)
 }
 
+func (d *webGL2Driver) SupportsCompressedTexture(format TextureFormat, width, height int) bool {
+	if !format.Valid() || !d.compressedFormats[format] {
+		return false
+	}
+	return format >= TextureFormatASTC4x4 || (width%4 == 0 && height%4 == 0)
+}
+
 func (d *webGL2Driver) CreateTexture(descriptor TextureDescriptor, pixels []byte) (TextureHandle, error) {
 	if err := descriptor.Validate(pixels); err != nil {
 		return TextureHandle{}, err
@@ -519,18 +542,21 @@ func (d *webGL2Driver) CreateTexture(descriptor TextureDescriptor, pixels []byte
 	}
 	compressedInternal, compressed := descriptor.Format.GLCompressedInternalFormat()
 	if compressed {
-		if descriptor.Format != TextureFormatASTC4x4 && descriptor.Format != TextureFormatASTC4x4SRGB {
+		if !d.SupportsCompressedTexture(descriptor.Format, descriptor.Width, descriptor.Height) {
 			d.gl.Call("deleteTexture", texture)
-			return TextureHandle{}, fmt.Errorf("render: WebGL2 compressed format %s is unsupported", descriptor.Format.Name())
+			return TextureHandle{}, fmt.Errorf("render: WebGL2 cannot sample %s at %dx%d", descriptor.Format.Name(), descriptor.Width, descriptor.Height)
 		}
-		if !d.astcExtension.Truthy() {
-			d.gl.Call("deleteTexture", texture)
-			return TextureHandle{}, errors.New("render: WebGL2 ASTC texture extension is unavailable")
-		}
+		d.gl.Call("texParameteri", webGLTexture2D, 0x813D, descriptor.MipLevels()-1) // TEXTURE_MAX_LEVEL
 		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 		for level, mip := range descriptor.MipChain {
 			d.gl.Call("compressedTexImage2D", webGLTexture2D, level, compressedInternal, mip.Width, mip.Height, 0,
 				data, mip.Offset, mip.Bytes)
+		}
+	} else if descriptor.MipLevels() > 1 {
+		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
+		d.gl.Call("texParameteri", webGLTexture2D, 0x813D, descriptor.MipLevels()-1)
+		for level, mip := range descriptor.MipChain {
+			d.gl.Call("texImage2D", webGLTexture2D, level, internalFormat, mip.Width, mip.Height, 0, format, webGLUnsignedByte, data, mip.Offset)
 		}
 	} else {
 		data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
@@ -1014,6 +1040,7 @@ func (d *webGL2Driver) CreateMesh(vertices []Vertex3D, indices []uint32) (MeshHa
 		indexBuffer:  d.gl.Call("createBuffer"),
 		vertexCount:  len(vertices),
 		indexCount:   len(indices),
+		indexStride:  4,
 	}
 	if !mesh.vertexBuffer.Truthy() || !mesh.indexBuffer.Truthy() {
 		d.deleteMesh(mesh)
@@ -1023,7 +1050,13 @@ func (d *webGL2Driver) CreateMesh(vertices []Vertex3D, indices []uint32) (MeshHa
 	vertexData, vertexBytes := (&d.instanceDataRetention).copySliceToJS(&d.instanceData, vertices)
 	d.bindArrayBuffer(mesh.vertexBuffer)
 	d.gl.Call("bufferData", webGLArrayBuffer, vertexData, webGLStaticDraw, 0, vertexBytes)
-	indexData, indexBytes := (&d.instanceDataRetention).copySliceToJS(&d.instanceData, indices)
+	indexPixels := sliceBytes(indices)
+	// WebGL2 always enables fixed-index primitive restart.
+	if compact := compactMeshIndices(indices, 65534, false); compact != nil {
+		defer meshIndexBuffers.put(compact)
+		mesh.indexStride, indexPixels = 2, sliceBytes(compact.data)
+	}
+	indexData, indexBytes := (&d.instanceDataRetention).copySliceToJS(&d.instanceData, indexPixels)
 	d.gl.Call("bindBuffer", webGLElementArrayBuffer, mesh.indexBuffer)
 	d.gl.Call("bufferData", webGLElementArrayBuffer, indexData, webGLStaticDraw, 0, indexBytes)
 	return d.meshes.Insert(mesh), nil
@@ -1067,12 +1100,15 @@ func (d *webGL2Driver) DrawMeshes(batch MeshBatch3D) error {
 	var currentProgram *webGLProgram
 	boundGeometry := false
 	boundMesh := MeshHandle{}
+	var indexStride uint32
 	for _, draw := range batch.Draws {
 		if !boundGeometry || draw.Mesh != boundMesh {
 			vertexBuffer := d.meshGeometry.vertexBuffer
+			indexStride = 4
 			indexBuffer := d.meshGeometry.indexBuffer
 			if draw.Mesh.Valid() {
 				mesh, _ := d.meshes.Get(draw.Mesh)
+				indexStride = mesh.indexStride
 				vertexBuffer = mesh.vertexBuffer
 				indexBuffer = mesh.indexBuffer
 			}
@@ -1158,6 +1194,7 @@ func (d *webGL2Driver) DrawMeshes(batch MeshBatch3D) error {
 			}
 		}
 		d.meshCommand[16], d.meshCommand[17] = draw.FirstInstance, draw.FirstIndex
+		d.meshCommand[20] = indexStride
 		d.meshCommand[18], d.meshCommand[19] = draw.IndexCount, draw.InstanceCount
 		d.bindArrayBuffer(d.meshGeometry.instanceBuffer)
 		js.CopyBytesToJS(d.meshCommandBytes, sliceBytes(d.meshCommand[:]))
@@ -1200,12 +1237,15 @@ func (d *webGL2Driver) DrawMeshPicking(batch MeshBatch3D) error {
 	d.setProjection(&d.pickingProgram, batch.ViewProjection)
 	boundGeometry := false
 	boundMesh := MeshHandle{}
+	var indexStride uint32
 	for _, draw := range batch.Draws {
 		if !boundGeometry || draw.Mesh != boundMesh {
 			vertexBuffer := d.meshGeometry.vertexBuffer
+			indexStride = 4
 			indexBuffer := d.meshGeometry.indexBuffer
 			if draw.Mesh.Valid() {
 				mesh, _ := d.meshes.Get(draw.Mesh)
+				indexStride = mesh.indexStride
 				vertexBuffer, indexBuffer = mesh.vertexBuffer, mesh.indexBuffer
 			}
 			d.configureMeshVertexAttributes(vertexBuffer)
@@ -1214,7 +1254,7 @@ func (d *webGL2Driver) DrawMeshPicking(batch MeshBatch3D) error {
 		}
 		d.bindArrayBuffer(d.meshGeometry.instanceBuffer)
 		d.configureMeshInstanceAttributes(int(draw.FirstInstance)*int(unsafe.Sizeof(Instance3D{})), false)
-		d.gl.Call("drawElementsInstanced", webGLTriangles, int(draw.IndexCount), webGLUnsignedInt, int(draw.FirstIndex)*4, int(draw.InstanceCount))
+		d.gl.Call("drawElementsInstanced", webGLTriangles, int(draw.IndexCount), glIndexType(indexStride), int(draw.FirstIndex)*int(indexStride), int(draw.InstanceCount))
 	}
 	return nil
 }
@@ -2103,7 +2143,7 @@ func (d *webGL2Driver) ensureMeshDrawHelper() {
 	if d.meshDrawHelper.Truthy() {
 		return
 	}
-	d.meshCommandBytes = js.Global().Get("Uint8Array").New(80)
+	d.meshCommandBytes = js.Global().Get("Uint8Array").New(len(d.meshCommand) * 4)
 	d.meshCommandData = js.Global().Get("Uint32Array").New(d.meshCommandBytes.Get("buffer"))
 	helper := js.Global().Get("Function").New("gl", "textures", "stride", webGLMeshDrawHelper).Invoke(d.gl, d.meshTextureTable, int(unsafe.Sizeof(Instance3D{})))
 	d.meshDrawHelper, d.meshDrawReset = helper.Get("draw"), helper.Get("reset")
@@ -2123,6 +2163,6 @@ return {
   gl.activeTexture(0x84c0);
   const base=command[16]*stride;
   for (let attribute=3; attribute<=14; attribute++) gl.vertexAttribPointer(attribute,4,0x1406,false,stride,base+(attribute-3)*16);
-  gl.drawElementsInstanced(0x0004,command[18],0x1405,command[17]*4,command[19]);
+  gl.drawElementsInstanced(0x0004,command[18],command[20] === 2 ? 0x1403 : 0x1405,command[17]*command[20],command[19]);
  }
 };`

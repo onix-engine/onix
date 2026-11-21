@@ -3,6 +3,7 @@ package html
 import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/layout"
+	"github.com/onix-engine/onix/html/style"
 	"github.com/onix-engine/onix/scene"
 )
 
@@ -40,7 +41,7 @@ func prepareHTMLStructure(state *htmlRenderState, root *layout.Box) bool {
 func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 	rendered := state.BoxRenderings[box.Node]
 	if rendered == nil {
-		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: htmlStackIndexValue(box.Style.ZIndex), OverflowX: htmlOverflowModeFor(box.Style.OverflowX), OverflowY: htmlOverflowModeFor(box.Style.OverflowY), ExtentRect: box.BorderBox()}
+		rendered = &htmlBoxRendering{Box: box, Parent: box.Parent, ZIndex: box.Style.ZIndex.Number, ZIndexSpecified: box.Style.ZIndex.Kind == style.ValueNumber, OverflowX: htmlOverflowModeFor(box.Style.OverflowX), OverflowY: htmlOverflowModeFor(box.Style.OverflowY), ExtentRect: box.BorderBox()}
 		state.BoxRenderings[box.Node] = rendered
 		// New boxes must emit even if their first layout produced no geometry.
 		if !queueHTMLBox(state, box) {
@@ -76,10 +77,8 @@ func appendHTMLStructureEntities(world *ecs.World, state *htmlRenderState, box *
 	updateHTMLBoxOrder(world, state, rendered, context.stack(box, stackIndex))
 	beginHTMLOwnerSpan(state, rendered)
 	state.Children = append(state.Children, rendered.Entities...)
-	if rendered.Clip != 0 {
-		state.Children = append(state.Children, rendered.Clip)
-	}
-	if binding, ok := state.OverflowBindings[box.Node]; ok {
+	if binding := rendered.Overflow; binding != nil {
+		state.Children = append(state.Children, binding.entity)
 		state.Children = append(state.Children, binding.parts...)
 	}
 	end := rendered.Stack + 4
@@ -147,8 +146,8 @@ func updateHTMLBoxOrder(world *ecs.World, state *htmlRenderState, rendered *html
 				}
 			}
 		}
-		if rendered.Clip != 0 && delta != 0 {
-			if stack := world.GetMut[scene.UIStackIndex](rendered.Clip); stack != nil {
+		if binding := rendered.Overflow; binding != nil && delta != 0 {
+			if stack := world.GetMut[scene.UIStackIndex](binding.entity); stack != nil {
 				*stack += delta
 				state.SyncStats.OrderUpdated++
 			}

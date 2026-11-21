@@ -2,6 +2,36 @@ package ecs
 
 import "testing"
 
+func TestQueryBeforeFirstComponentWrite(t *testing.T) {
+	w := NewWorld()
+	query := w.Query[int](Without[bool]())
+	binding := w.BindComponent[int]()
+	removal := w.PrepareRemoval(Type[int]())
+	removed := 0
+	w.OnComponentRemove(func(_ *World, _ Entity, value *int) { removed = *value })
+	for _, info := range w.componentInfos {
+		if info.newColumn != nil {
+			t.Fatal("observing a component installed a storage factory")
+		}
+	}
+
+	spawner := w.NewSpawner1[int]()
+	entity := spawner.Spawn(7)
+	if value, ok := binding.Get(w.Row(entity)); !ok || value != 7 {
+		t.Fatal("binding missed the first insertion")
+	}
+	seen := 0
+	for found, access := range query.All {
+		if found != entity || access.Get() != 7 {
+			t.Fatal("cached query returned the wrong row")
+		}
+		seen++
+	}
+	if seen != 1 || !removal.Apply(entity) || removed != 7 {
+		t.Fatalf("query matched %d rows and removal hook observed %d", seen, removed)
+	}
+}
+
 func TestComponentBindingRowsAndChangeTracking(t *testing.T) {
 	w := NewWorld()
 	spawn := w.NewSpawner1[int]()

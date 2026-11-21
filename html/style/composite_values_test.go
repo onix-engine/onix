@@ -146,7 +146,7 @@ func TestCompositeCSSAllocations(t *testing.T) {
 		t.Run(test.property, func(t *testing.T) {
 			computed := defaultStyle(nil)
 			if allocs := testing.AllocsPerRun(100, func() {
-				if err := applyProperty(&computed, test.property, test.input, nil, parseContext{}); err != nil {
+				if err := applyProperty(&computed, cascadePropertyIndex[test.property].id, test.input, nil, parseContext{}); err != nil {
 					panic(err)
 				}
 			}); allocs != 0 {
@@ -162,7 +162,7 @@ func BenchmarkCompositeCSSProperties(b *testing.B) {
 			computed := defaultStyle(nil)
 			b.ReportAllocs()
 			for b.Loop() {
-				if err := applyProperty(&computed, test.property, test.input, nil, parseContext{}); err != nil {
+				if err := applyProperty(&computed, cascadePropertyIndex[test.property].id, test.input, nil, parseContext{}); err != nil {
 					b.Fatal(err)
 				}
 			}

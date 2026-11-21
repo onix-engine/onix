@@ -2,7 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"sort"
+	"iter"
+	"slices"
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
@@ -139,16 +140,23 @@ func UnbindControl(world *ecs.World, entity ecs.Entity) {
 	controlRemovalFor(world).Apply(entity)
 }
 
-func (composition ControlComposition) directChildren(world *ecs.World, owner ecs.Entity) []ecs.Entity {
-	children := make([]ecs.Entity, 0, 8)
-	for entity := range composition {
-		parent, ok := world.Get[scene.Parent](entity)
-		if ok && parent.Entity == owner {
-			children = append(children, entity)
+func (composition ControlComposition) directChildren(world *ecs.World, owner ecs.Entity) iter.Seq2[int, ecs.Entity] {
+	return func(yield func(int, ecs.Entity) bool) {
+		hierarchy := scene.HierarchyFor(world)
+		children := make([]ecs.Entity, 0, 8)
+		for child := hierarchy.FirstChild(owner); child != 0; child = hierarchy.NextSibling(child) {
+			if _, ok := composition[child]; ok {
+				children = append(children, child)
+			}
+		}
+		// Variant slots use entity order. Snapshot them before nested binders run.
+		slices.Sort(children)
+		for index, child := range children {
+			if !yield(index, child) {
+				return
+			}
 		}
 	}
-	sort.Slice(children, func(i, j int) bool { return children[i] < children[j] })
-	return children
 }
 
 func (composition ControlComposition) bindButton(world *ecs.World, owner ecs.Entity, node CompositionNode) error {

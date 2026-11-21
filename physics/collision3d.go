@@ -23,24 +23,14 @@ type worldCapsule struct {
 }
 
 func (world *World3D) buildContacts() {
+	world.stats.ContactBuilds++
 	world.buildBroadphase()
 	world.contacts = world.contacts[:0]
-	previous := colliderPair{a: -1, b: -1}
 	for _, pair := range world.pairs {
-		if pair == previous {
-			continue
-		}
-		previous = pair
 		colliderA := &world.colliders[pair.a]
 		colliderB := &world.colliders[pair.b]
-		if !colliderA.alive || !colliderB.alive || colliderA.bodyIndex == colliderB.bodyIndex || colliderA.filter.Reject(colliderB.filter) {
-			continue
-		}
 		bodyA := &world.bodies[colliderA.bodyIndex]
 		bodyB := &world.bodies[colliderB.bodyIndex]
-		if !bodyA.alive || !bodyB.alive || bodyA.bodyType != BodyDynamic && bodyB.bodyType != BodyDynamic && !colliderA.sensor && !colliderB.sensor {
-			continue
-		}
 		if colliderA.kind == shapeTriangleMesh3D && bodyA.bodyType == BodyDynamic ||
 			colliderB.kind == shapeTriangleMesh3D && bodyB.bodyType == BodyDynamic {
 			continue
@@ -54,89 +44,6 @@ func (world *World3D) buildContacts() {
 		contact.friction = math.Sqrt(colliderA.friction * colliderB.friction)
 		contact.restitution = max(colliderA.restitution, colliderB.restitution)
 		world.contacts = append(world.contacts, contact)
-	}
-}
-
-func (world *World3D) buildBroadphase() {
-	world.ensureBuckets(len(world.colliders))
-	for index := range world.bucketHeads {
-		world.bucketHeads[index] = -1
-	}
-	if cap(world.aabbs) < len(world.colliders) {
-		world.aabbs = make([]aabb3D, len(world.colliders))
-	} else {
-		world.aabbs = world.aabbs[:len(world.colliders)]
-	}
-	world.gridEntries = world.gridEntries[:0]
-	world.large = world.large[:0]
-	world.pairs = world.pairs[:0]
-	cellSize := world.CellSize
-	if cellSize <= 1e-9 {
-		cellSize = 4
-	}
-	for index := range world.colliders {
-		collider := world.colliders[index]
-		if !collider.alive || int(collider.bodyIndex) >= len(world.bodies) || !world.bodies[collider.bodyIndex].alive {
-			continue
-		}
-		bounds := colliderBounds3D(collider, world.bodies[collider.bodyIndex])
-		world.aabbs[index] = bounds
-		minX, minY, minZ := floorCell(bounds.min.X, cellSize), floorCell(bounds.min.Y, cellSize), floorCell(bounds.min.Z, cellSize)
-		maxX, maxY, maxZ := floorCell(bounds.max.X, cellSize), floorCell(bounds.max.Y, cellSize), floorCell(bounds.max.Z, cellSize)
-		cellCount := int64(maxX-minX+1) * int64(maxY-minY+1) * int64(maxZ-minZ+1)
-		if cellCount > maxGridCellsPerCollider {
-			world.large = append(world.large, index)
-			continue
-		}
-		for z := minZ; z <= maxZ; z++ {
-			for y := minY; y <= maxY; y++ {
-				for x := minX; x <= maxX; x++ {
-					bucket := gridHash3D(x, y, z) & (len(world.bucketHeads) - 1)
-					world.gridEntries = append(world.gridEntries, broadphaseEntry3D{collider: index, next: world.bucketHeads[bucket]})
-					world.bucketHeads[bucket] = len(world.gridEntries) - 1
-				}
-			}
-		}
-	}
-	for _, head := range world.bucketHeads {
-		for left := head; left >= 0; left = world.gridEntries[left].next {
-			for right := world.gridEntries[left].next; right >= 0; right = world.gridEntries[right].next {
-				world.appendPair(world.gridEntries[left].collider, world.gridEntries[right].collider)
-			}
-		}
-	}
-	for _, large := range world.large {
-		for other := range world.colliders {
-			if other != large && world.colliders[other].alive {
-				world.appendPair(large, other)
-			}
-		}
-	}
-	slices.SortFunc(world.pairs, func(a, b colliderPair) int {
-		if a.a != b.a {
-			return a.a - b.a
-		}
-		return a.b - b.b
-	})
-}
-
-func (world *World3D) appendPair(a, b int) {
-	if a == b || !overlapAABB3D(world.aabbs[a], world.aabbs[b]) {
-		return
-	}
-	if a > b {
-		a, b = b, a
-	}
-	world.pairs = append(world.pairs, colliderPair{a: a, b: b})
-}
-
-func (world *World3D) ensureBuckets(colliderCount int) {
-	target := 64
-	for target < colliderCount*4 {
-		target <<= 1
-	}
-	if len(world.bucketHeads) < target {
-		world.bucketHeads = make([]int, target)
 	}
 }
 
@@ -409,16 +316,7 @@ func boxEdge3D(box worldBox3D, axis int, direction Vector3D) (Vector3D, Vector3D
 // support points. Fixed scratch bounds cover every intersection of two quads.
 func boxFaceContacts3D(contact *manifold3D, reference, incident worldBox3D, face int, normal Vector3D) {
 	center := reference.center.Add(normal.Mul(reference.half.component(face)))
-	incidentFace := 0
-	for index := 1; index < 3; index++ {
-		if math.Abs(incident.axis[index].Dot(normal)) > math.Abs(incident.axis[incidentFace].Dot(normal)) {
-			incidentFace = index
-		}
-	}
-	incidentCenter := incident.center.Sub(incident.axis[incidentFace].Mul(math.Copysign(incident.half.component(incidentFace), incident.axis[incidentFace].Dot(normal))))
-	u, v := (incidentFace+1)%3, (incidentFace+2)%3
-	du, dv := incident.axis[u].Mul(incident.half.component(u)), incident.axis[v].Mul(incident.half.component(v))
-	points := [16]Vector3D{incidentCenter.Sub(du).Sub(dv), incidentCenter.Add(du).Sub(dv), incidentCenter.Add(du).Add(dv), incidentCenter.Sub(du).Add(dv)}
+	points := incidentFaceQuad3D(incident, normal)
 	count := 4
 	for _, index := range [2]int{(face + 1) % 3, (face + 2) % 3} {
 		points, count = clipContactPolygon3D(points, count, center, reference.axis[index], reference.half.component(index))
@@ -455,6 +353,19 @@ func boxFaceContacts3D(contact *manifold3D, reference, incident worldBox3D, face
 	} else {
 		contact.point = boxSupport3D(incident, normal.Mul(-1))
 	}
+}
+
+func incidentFaceQuad3D(incident worldBox3D, normal Vector3D) [16]Vector3D {
+	incidentFace := 0
+	for index := 1; index < 3; index++ {
+		if math.Abs(incident.axis[index].Dot(normal)) > math.Abs(incident.axis[incidentFace].Dot(normal)) {
+			incidentFace = index
+		}
+	}
+	incidentCenter := incident.center.Sub(incident.axis[incidentFace].Mul(math.Copysign(incident.half.component(incidentFace), incident.axis[incidentFace].Dot(normal))))
+	u, v := (incidentFace+1)%3, (incidentFace+2)%3
+	du, dv := incident.axis[u].Mul(incident.half.component(u)), incident.axis[v].Mul(incident.half.component(v))
+	return [16]Vector3D{incidentCenter.Sub(du).Sub(dv), incidentCenter.Add(du).Sub(dv), incidentCenter.Add(du).Add(dv), incidentCenter.Sub(du).Add(dv)}
 }
 
 func clipContactPolygon3D(points [16]Vector3D, count int, origin, normal Vector3D, offset float64) ([16]Vector3D, int) {
@@ -596,41 +507,12 @@ func nonzeroSign(value float64) float64 {
 
 func closestPointOnSegment3D(point, start, end Vector3D) Vector3D {
 	delta := end.Sub(start)
-	lengthSquared := delta.LengthSquared()
-	if lengthSquared <= 1e-12 {
-		return start
-	}
-	t := clamp(point.Sub(start).Dot(delta)/lengthSquared, 0, 1)
-	return start.Add(delta.Mul(t))
+	return start.Add(delta.Mul(segmentProjection(point.Sub(start).Dot(delta), delta.LengthSquared())))
 }
 
 func closestPointsOnSegments3D(a0, a1, b0, b1 Vector3D) (Vector3D, Vector3D) {
 	d1, d2, offset := a1.Sub(a0), b1.Sub(b0), a0.Sub(b0)
-	a, e := d1.LengthSquared(), d2.LengthSquared()
-	if a <= 1e-12 && e <= 1e-12 {
-		return a0, b0
-	}
-	var s, t float64
-	if a <= 1e-12 {
-		t = clamp(d2.Dot(offset)/e, 0, 1)
-	} else {
-		c := d1.Dot(offset)
-		if e <= 1e-12 {
-			s = clamp(-c/a, 0, 1)
-		} else {
-			b := d1.Dot(d2)
-			denominator := a*e - b*b
-			if denominator != 0 {
-				s = clamp((b*d2.Dot(offset)-c*e)/denominator, 0, 1)
-			}
-			t = (b*s + d2.Dot(offset)) / e
-			if t < 0 {
-				t, s = 0, clamp(-c/a, 0, 1)
-			} else if t > 1 {
-				t, s = 1, clamp((b-c)/a, 0, 1)
-			}
-		}
-	}
+	s, t := segmentParameters(d1.LengthSquared(), d2.LengthSquared(), d1.Dot(d2), d1.Dot(offset), d2.Dot(offset))
 	return a0.Add(d1.Mul(s)), b0.Add(d2.Mul(t))
 }
 

@@ -1,6 +1,7 @@
 package html
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"unsafe"
@@ -8,8 +9,44 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/element"
 	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/internal/reuse"
 	uinode "github.com/onix-engine/onix/scene/node"
 )
+
+func TestHTMLDocumentReclaimsRetainedMapsAfterShrink(t *testing.T) {
+	source := func(rows int, color string) string {
+		return `<p id="target" style="color:` + color + `">Target</p>` + strings.Repeat("<p>Row</p>", rows)
+	}
+	world, owner := incrementalHTMLFixture(t, source(512, "blue"))
+	mapIdentities := func() [4]unsafe.Pointer {
+		state := world.GetRef[htmlRenderState](owner)
+		return [4]unsafe.Pointer{
+			reflect.ValueOf(state.AnimationBaselines).UnsafePointer(),
+			reflect.ValueOf(state.OverflowExtents).UnsafePointer(),
+			reflect.ValueOf(state.BoxRenderings).UnsafePointer(),
+			reflect.ValueOf(state.Styles).UnsafePointer(),
+		}
+	}
+	large := mapIdentities()
+	world.GetMut[Surface](owner).Value = source(512, "red")
+	incrementalSync(t, world)
+	if got := mapIdentities(); got != large {
+		t.Fatal("same-size replacement discarded warm tables")
+	}
+	world.GetMut[Surface](owner).Value = source(4, "blue")
+	for range reuse.RetentionFrames {
+		incrementalSync(t, world)
+	}
+	for i, got := range mapIdentities() {
+		if got == nil || got == large[i] {
+			t.Fatalf("table %d did not reclaim its old storage", i)
+		}
+	}
+	target := incrementalHTMLNode(t, world, owner, "target")
+	target.SetText("Updated")
+	incrementalSync(t, world)
+	assertHTMLPartialMatchesFresh(t, world, owner, strings.Replace(source(4, "blue"), "Target", "Updated", 1))
+}
 
 func TestHTMLDocumentInitializesIndexAndFormsAfterMetadata(t *testing.T) {
 	world, owner := incrementalHTMLFixture(t, `<!doctype html><html><head><style>.x{color:red}</style></head><body>

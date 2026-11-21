@@ -3,11 +3,20 @@ package style
 import (
 	"hash/maphash"
 	"slices"
+	"weak"
 )
 
 type valueSlot[T any] struct {
-	value *T
-	hash  uint64
+	strong *T
+	weak   weak.Pointer[T]
+	hash   uint64
+}
+
+func (slot valueSlot[T]) load() *T {
+	if slot.strong != nil {
+		return slot.strong
+	}
+	return slot.weak.Value()
 }
 
 // valueIndex interns immutable values in a bounded document cache or a pooled
@@ -40,21 +49,31 @@ func (index *valueIndex[T]) store(hash uint64, value *T) {
 	if (index.used+1)*10 >= len(index.slots)*7 {
 		previous := index.slots
 		index.slots = make([]valueSlot[T], len(previous)*2)
+		index.used = 0
 		for _, slot := range previous {
-			if slot.value != nil {
-				index.insert(slot.hash, slot.value)
+			if slot.load() != nil {
+				index.insert(slot)
 			}
 		}
 	}
-	index.insert(hash, value)
-	index.used++
+	slot := valueSlot[T]{hash: hash, strong: value}
+	if index.limit > 0 {
+		// The document owns live styles. Its lookup table may outlast entire
+		// editor views, so only pass-local tables keep a strong reference.
+		slot.weak = weak.Make(value)
+		slot.strong = nil
+	}
+	index.insert(slot)
 }
 
-func (index *valueIndex[T]) insert(hash uint64, value *T) {
+func (index *valueIndex[T]) insert(entry valueSlot[T]) {
 	for offset := uint64(0); ; offset++ {
-		slot := &index.slots[(hash+offset)&uint64(len(index.slots)-1)]
-		if slot.value == nil {
-			*slot = valueSlot[T]{hash: hash, value: value}
+		slot := &index.slots[(entry.hash+offset)&uint64(len(index.slots)-1)]
+		if slot.load() == nil {
+			if *slot == (valueSlot[T]{}) {
+				index.used++
+			}
+			*slot = entry
 			return
 		}
 	}
@@ -78,11 +97,13 @@ func (index *styleIndex) commit(current, previous *ComputedStyle) *ComputedStyle
 	hash := styleHash(index.seed, current)
 	for offset := uint64(0); ; offset++ {
 		slot := &index.slots[(hash+offset)&uint64(len(index.slots)-1)]
-		if slot.value == nil {
+		if *slot == (valueSlot[ComputedStyle]{}) {
 			break
 		}
-		if slot.hash == hash && styleEqual(slot.value, current) {
-			return slot.value
+		if slot.hash == hash {
+			if value := slot.load(); value != nil && styleEqual(value, current) {
+				return value
+			}
 		}
 	}
 	stored := *current
@@ -99,11 +120,13 @@ func (index *styleIndex) resolveMotion(current *motionStyle) *motionStyle {
 	hash := motionHash(index.motions.seed, current)
 	for offset := uint64(0); ; offset++ {
 		slot := &index.motions.slots[(hash+offset)&uint64(len(index.motions.slots)-1)]
-		if slot.value == nil {
+		if *slot == (valueSlot[motionStyle]{}) {
 			break
 		}
-		if slot.hash == hash && motionEqual(slot.value, current) {
-			return slot.value
+		if slot.hash == hash {
+			if value := slot.load(); motionEqual(value, current) {
+				return value
+			}
 		}
 	}
 	stored := *current

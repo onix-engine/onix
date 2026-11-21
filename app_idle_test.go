@@ -23,6 +23,75 @@ type idleTrimDriver struct {
 
 func (d *idleTrimDriver) TrimIdleBuffers() error { d.trims++; return nil }
 
+type idleCaretDriver struct {
+	idleTrimDriver
+	phases   [2]bool
+	discards int
+}
+
+func (d *idleCaretDriver) PrepareCaretFrame(visible bool) bool {
+	i := 0
+	if visible {
+		i = 1
+	}
+	hit := d.phases[i]
+	d.phases[i] = true
+	return hit
+}
+
+func (d *idleCaretDriver) DiscardCaretFrames() {
+	d.phases = [2]bool{}
+	d.discards++
+}
+
+func TestIdleCaretFramesReleasedOnInputAndScheduledWork(t *testing.T) {
+	app := NewApp()
+	defer app.Destroy()
+	app.SetRenderMode(RenderOnDemand)
+	app.SetIdleEnabled(true)
+	app.SetTargetFPS(0)
+	const blink = 500 * time.Millisecond
+	now := time.Unix(10, 0)
+	app.now = func() time.Time { return now }
+	app.uiCaretBlinkDelay = func(*ecs.World) (time.Duration, bool) { return blink, true }
+	app.uiCaretVisible = func(*ecs.World) bool { return now.UnixNano()/int64(blink)%2 == 0 }
+	driver := &idleCaretDriver{}
+	device, err := render.NewDevice(driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graphics.BindFrame(app.World, graphics.NewCanvas2D(device, 10, 10))
+	step := func(advance time.Duration, want bool) {
+		t.Helper()
+		now = now.Add(advance)
+		if rendered, err := app.Step(); err != nil || rendered != want {
+			t.Fatalf("at %s rendered=%v want=%v err=%v", now, rendered, want, err)
+		}
+	}
+	step(0, true)
+	step(blink, true)
+	step(blink, true)
+	step(blink, false)
+	step(blink, false)
+	step(blink, false)
+	step(blink, false)
+	if driver.trims != 1 {
+		t.Fatal("cached caret frames prevented idle buffer cleanup")
+	}
+	inputState, _ := app.World.GetResource[*input.State]()
+	inputState.Enqueue(input.Event{Kind: input.EventKeyDown, Key: input.KeyA})
+	step(blink, true)
+	if driver.discards != 1 {
+		t.Fatal("input arriving on the blink deadline used a stale frame")
+	}
+	step(blink, true)
+	app.WakeAt(now.Add(blink))
+	step(blink, true)
+	if driver.discards != 2 {
+		t.Fatal("scheduled work arriving on the blink deadline used a stale frame")
+	}
+}
+
 func TestIdleBufferDeadlineReleasesWithoutRendering(t *testing.T) {
 	app := NewApp()
 	app.SetRenderMode(RenderOnDemand)

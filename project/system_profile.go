@@ -1,11 +1,8 @@
 package project
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	iofs "io/fs"
-	"path"
 )
 
 // RuntimeFeatureID identifies one engine-owned runtime feature in a project
@@ -81,34 +78,7 @@ type EngineConfig struct {
 // off.
 func ReadEngineConfig(source iofs.FS, root string) (EngineConfig, error) {
 	manifest, _, err := loadGameManifest(source, root)
-	if err != nil {
-		return EngineConfig{}, err
-	}
-	config := manifest.Engine
-	config.TextureCompression = true
-	data, err := iofs.ReadFile(source, path.Join(root, "resources", "project.json"))
-	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			return manifest.Engine, nil
-		}
-		return EngineConfig{}, err
-	}
-	var raw struct {
-		Engine map[string]json.RawMessage `json:"engine"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return EngineConfig{}, err
-	}
-	if raw.Engine == nil {
-		return manifest.Engine, nil
-	}
-	config.TextureCompression = true
-	if value, ok := raw.Engine["textureCompression"]; ok {
-		if err := json.Unmarshal(value, &config.TextureCompression); err != nil {
-			return EngineConfig{}, fmt.Errorf("textureCompression: %w", err)
-		}
-	}
-	return config, nil
+	return manifest.Engine, err
 }
 
 // Validate checks IDs, duplicates, and explicit feature dependencies.

@@ -46,6 +46,7 @@ type Texture struct {
 	format             render.TextureFormat
 	wrapU              render.TextureAddressMode
 	premultipliedAlpha bool
+	hasASTCVariant     bool
 	zeroInitialized    bool
 	wrapV              render.TextureAddressMode
 }
@@ -285,6 +286,7 @@ func (t *Texture) Dispose() error {
 	t.Width = 0
 	t.Height = 0
 	t.pix = nil
+	t.hasASTCVariant = false
 	t.zeroInitialized = false
 	t.err = nil
 	t.updates = nil
@@ -305,10 +307,9 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	if base == nil || len(updates) == 0 {
 		return
 	}
-	// Block-compressed texels are not independently addressable, so a partial
-	// region cannot be re-encoded in place.
+	// Packaged mip chains are immutable, including their decoded RGBA fallback.
 	texelBytes := base.format.TexelBytes()
-	if texelBytes == 0 {
+	if texelBytes == 0 || base.mipLevels != 0 {
 		return
 	}
 	pixelCount := len(base.pix)
@@ -416,7 +417,11 @@ func (t *Texture) payloadLevels() int {
 
 // payloadBytes reports the encoded size of the texture's CPU pixel payload.
 func (t *Texture) payloadBytes() int {
-	return t.format.ChainSize(t.Width, t.Height, t.payloadLevels())
+	n := t.format.ChainSize(t.Width, t.Height, t.payloadLevels())
+	if t.hasASTCVariant {
+		n += render.TextureFormatASTC4x4.ChainSize(t.Width, t.Height, t.payloadLevels())
+	}
+	return n
 }
 
 // MipLevels reports the depth the uploaded texture will have. It differs from
@@ -426,8 +431,8 @@ func (t *Texture) MipLevels() int {
 		return 0
 	}
 	base := t.baseTexture()
-	if base.format.Compressed() {
-		return max(base.mipLevels, 1)
+	if base.mipLevels > 0 {
+		return base.mipLevels
 	}
 	if base.mipmap {
 		return render.MipLevels(base.Width, base.Height)
@@ -644,18 +649,24 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		copy(pixels, t.pix)
 		clear(pixels[len(t.pix):])
 	}
-	t.handle, t.err = driver.CreateTexture(render.TextureDescriptor{
+	descriptor := render.TextureDescriptor{
 		WrapU: t.wrapU, WrapV: t.wrapV,
 		Width:  t.Width,
 		Height: t.Height,
 		Filter: filter,
 		Format: t.format,
 		Levels: t.payloadLevels(),
-	}, pixels)
+	}
+	if t.hasASTCVariant {
+		pixels = t.selectTextureVariant(driver, &descriptor)
+	}
+	t.handle, t.err = driver.CreateTexture(descriptor, pixels)
 	if t.err == nil {
+		t.format = descriptor.Format
 		t.deviceValues().Set(device, t.handle)
 		if !t.usage.Has(ResourceUsageCPU) {
 			t.pix = nil
+			t.hasASTCVariant = false
 			t.zeroInitialized = false
 		}
 	}

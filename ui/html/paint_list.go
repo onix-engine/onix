@@ -1,6 +1,7 @@
 package html
 
 import (
+	"github.com/onix-engine/onix/html/element"
 	"strings"
 
 	"github.com/onix-engine/onix/ecs"
@@ -33,7 +34,7 @@ func emitHTMLPaintListBox(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		htmlNeedsRasterPaint(computed) || computed.Background.Image != "" || len(computed.ExtraBackgroundLayers) != 0 {
 		return false
 	}
-	if _, focusable := htmlFocusableFromNode(owner, box.Node); focusable || isHTMLControlNode(box.Node) ||
+	if _, focusable := htmlFocusableFromNode(owner, box.Node); focusable || element.IsWidgetControl(box.Node) ||
 		state.NodeEvents[box.Node].handlesPointer() {
 		return false
 	}

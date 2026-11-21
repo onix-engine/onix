@@ -100,6 +100,7 @@ type webGPUMesh struct {
 	vertexBuffer      js.Value
 	indexBuffer       js.Value
 	bindGroups        *frameCacheEntry[webGPUDataKey, webGPUDataBinding]
+	indexFormat       string
 	vertexCount       int
 	indexCount        int
 	deformation       meshDeformationLayout
@@ -137,7 +138,6 @@ type webGPURenderTarget struct {
 	colorAttachment      js.Value
 	depthAttachment      js.Value
 	renderPassDescriptor js.Value
-	readback             webGPUBuffer
 	multisample          webGPUColorBuffer
 	depth                webGPUDepthBuffer
 	descriptor           RenderTargetDescriptor
@@ -171,6 +171,7 @@ type webGPUDriver struct {
 	meshPipelineLayout    js.Value
 	textureData           js.Value
 	uploadData            js.Value
+	readback              webGPUBuffer
 	shapeBindGroups       [webGPUFramesInFlight]webGPUShapeBindGroup
 	format                string
 	deviceName            string
@@ -193,6 +194,9 @@ type webGPUDriver struct {
 	deformationUniformsRetention  scratchRetention
 	textureDataRetention          scratchRetention
 	uploadDataRetention           scratchRetention
+	readbackRetention             scratchRetention
+	readbackEpoch                 uint64
+	readbacksInFlight             int
 	cacheFrame                    uint64
 	deformationOffset             int
 	deformationSize               int
@@ -206,7 +210,10 @@ type webGPUDriver struct {
 	scissor                       Rect
 	activeTarget                  RenderTargetHandle
 	scissorSet                    bool
+	destroyPending                bool
 	astcSupported                 bool
+	bcSupported                   bool
+	unalignedSupported            bool
 	scissorEmpty                  bool
 	viewportEmpty                 bool
 	blendSet                      bool
@@ -239,18 +246,19 @@ func NewWebGPUDriver(canvas js.Value, transparent, antialias bool) (Driver, erro
 	if adapter.IsNull() || adapter.IsUndefined() {
 		return nil, errors.New("render: WebGPU adapter is unavailable")
 	}
-	astcSupported := false
 	features := adapter.Get("features")
-	if !features.IsNull() && !features.IsUndefined() {
-		astcSupported = features.Call("has", "texture-compression-astc").Bool()
+	required := webGPUArray()
+	hasFeature := func(name string) bool {
+		if !features.Truthy() || !features.Call("has", name).Bool() {
+			return false
+		}
+		required.Call("push", name)
+		return true
 	}
-	var devicePromise js.Value
-	if astcSupported {
-		devicePromise = adapter.Call("requestDevice", webGPUObject("requiredFeatures", webGPUArray("texture-compression-astc")))
-	} else {
-		devicePromise = adapter.Call("requestDevice")
-	}
-	device, err := awaitWebGPU(devicePromise)
+	bcSupported := hasFeature("texture-compression-bc")
+	astcSupported := hasFeature("texture-compression-astc")
+	unalignedSupported := hasFeature("texture-compression-unaligned")
+	device, err := awaitWebGPU(adapter.Call("requestDevice", webGPUObject("requiredFeatures", required)))
 	if err != nil {
 		return nil, fmt.Errorf("render: request WebGPU device: %w", err)
 	}
@@ -266,7 +274,7 @@ func NewWebGPUDriver(canvas js.Value, transparent, antialias bool) (Driver, erro
 		return nil, errors.New("render: WebGPU canvas dimensions must be positive")
 	}
 	d := &webGPUDriver{
-		device: device, queue: device.Get("queue"), context: context, format: format, astcSupported: astcSupported,
+		device: device, queue: device.Get("queue"), context: context, format: format, astcSupported: astcSupported, bcSupported: bcSupported, unalignedSupported: unalignedSupported,
 		deviceName: webGPUDeviceName(adapter), width: width, height: height,
 		viewport:       Rect{Width: int32(width), Height: int32(height)},
 		sampleCount:    webGPUSampleCount(antialias),
@@ -404,6 +412,10 @@ func (d *webGPUDriver) BeginFrame(clear Color) error {
 	if d.frameActive || d.activeTarget.Valid() {
 		return errors.New("render: WebGPU frame is already active")
 	}
+	if d.readbackRetention.retention.trimCapacity(d.readback.capacity, d.readbackRetention.used, 64<<10) != 0 {
+		d.releaseReadback()
+	}
+	d.readbackRetention.used = 0
 	d.frameIndex = (d.frameIndex + 1) % webGPUFramesInFlight
 	frame := &d.frames[d.frameIndex]
 	frame.destroyRetired()
@@ -542,34 +554,34 @@ func (d *webGPUDriver) transformProjection(projection [16]float32) [16]float32 {
 	return result
 }
 
+var webGPUTextureFormats = [...]string{
+	TextureFormatRGBA8: "rgba8unorm", TextureFormatSRGBA8: "rgba8unorm-srgb", TextureFormatR8: "r8unorm",
+	TextureFormatBC1: "bc1-rgba-unorm", TextureFormatBC1SRGB: "bc1-rgba-unorm-srgb",
+	TextureFormatBC3: "bc3-rgba-unorm", TextureFormatBC3SRGB: "bc3-rgba-unorm-srgb",
+	TextureFormatBC4: "bc4-r-unorm", TextureFormatBC5: "bc5-rg-unorm",
+	TextureFormatBC7: "bc7-rgba-unorm", TextureFormatBC7SRGB: "bc7-rgba-unorm-srgb",
+	TextureFormatASTC4x4: "astc-4x4-unorm", TextureFormatASTC4x4SRGB: "astc-4x4-unorm-srgb",
+}
+
+func (d *webGPUDriver) SupportsCompressedTexture(format TextureFormat, width, height int) bool {
+	if !d.unalignedSupported && (width%4 != 0 || height%4 != 0) {
+		return false
+	}
+	if format == TextureFormatASTC4x4 || format == TextureFormatASTC4x4SRGB {
+		return d.astcSupported
+	}
+	return format >= TextureFormatBC1 && format <= TextureFormatBC7SRGB && d.bcSupported
+}
+
 func (d *webGPUDriver) CreateTexture(descriptor TextureDescriptor, pixels []byte) (TextureHandle, error) {
 	if err := descriptor.Validate(pixels); err != nil {
 		return TextureHandle{}, err
 	}
-	format := "rgba8unorm"
-	if descriptor.Format == TextureFormatSRGBA8 {
-		format = "rgba8unorm-srgb"
+	if descriptor.Format.Compressed() && !d.SupportsCompressedTexture(descriptor.Format, descriptor.Width, descriptor.Height) {
+		return TextureHandle{}, fmt.Errorf("render: WebGPU cannot sample %s at %dx%d", descriptor.Format.Name(), descriptor.Width, descriptor.Height)
 	}
-	if descriptor.Format == TextureFormatR8 {
-		format = "r8unorm"
-	}
-	_, compressed := descriptor.Format.GLCompressedInternalFormat()
-	if compressed {
-		if descriptor.Format != TextureFormatASTC4x4 && descriptor.Format != TextureFormatASTC4x4SRGB {
-			return TextureHandle{}, fmt.Errorf("render: WebGPU compressed format %s is unsupported", descriptor.Format.Name())
-		}
-		if !d.astcSupported {
-			return TextureHandle{}, errors.New("render: WebGPU ASTC texture feature is unavailable")
-		}
-		format = "astc-4x4-unorm"
-		if descriptor.Format.SRGB() {
-			format = "astc-4x4-unorm-srgb"
-		}
-	}
-	levels := 1
-	if compressed {
-		levels = descriptor.MipLevels()
-	}
+	format := webGPUTextureFormats[descriptor.Format]
+	levels := descriptor.MipLevels()
 	texture := d.device.Call("createTexture", webGPUObject(
 		"size", webGPUArray(descriptor.Width, descriptor.Height, 1),
 		"format", format, "mipLevelCount", levels,
@@ -585,31 +597,21 @@ func (d *webGPUDriver) CreateTexture(descriptor TextureDescriptor, pixels []byte
 		mipmapFilter = "linear"
 	}
 	resource.sampler = d.device.Call("createSampler", webGPUObject("magFilter", "linear", "minFilter", "linear", "mipmapFilter", mipmapFilter, "addressModeU", descriptor.WrapU.webGPUName(), "addressModeV", descriptor.WrapV.webGPUName()))
-	var err error
-	if compressed {
-		err = d.writeCompressedTexture(resource, descriptor, pixels)
-	} else {
-		err = d.writeTexture(resource, TextureRegion{Width: descriptor.Width, Height: descriptor.Height}, pixels)
-	}
-	if err != nil {
-		texture.Call("destroy")
-		return TextureHandle{}, err
-	}
+	d.writeTextureLevels(resource, descriptor, pixels)
 	d.recordTextureUploadStatistics(1, uint64(len(pixels)))
 	return d.textures.Insert(resource), nil
 }
 
-func (d *webGPUDriver) writeCompressedTexture(texture *webGPUTexture, descriptor TextureDescriptor, pixels []byte) error {
+func (d *webGPUDriver) writeTextureLevels(texture *webGPUTexture, descriptor TextureDescriptor, pixels []byte) {
+	block := descriptor.Format.Block()
 	data := copyBytesToJS(&d.textureData, &d.textureDataRetention, pixels)
 	for level, mip := range descriptor.MipChain {
-		rowBytes := ((mip.Width + 3) / 4) * 16
-		rows := (mip.Height + 3) / 4
-		levelData := data.Call("subarray", mip.Offset, mip.Offset+mip.Bytes)
+		columns := (mip.Width + block.Width - 1) / block.Width
+		rows := (mip.Height + block.Height - 1) / block.Height
 		destination := webGPUObject("texture", texture.value, "origin", webGPUArray(0, 0, 0), "mipLevel", level)
-		layout := webGPUObject("offset", 0, "bytesPerRow", rowBytes, "rowsPerImage", rows)
-		d.queue.Call("writeTexture", destination, levelData, layout, webGPUArray(mip.Width, mip.Height, 1))
+		layout := webGPUObject("offset", mip.Offset, "bytesPerRow", columns*block.Bytes, "rowsPerImage", rows)
+		d.queue.Call("writeTexture", destination, data, layout, webGPUArray(columns*block.Width, rows*block.Height, 1))
 	}
-	return nil
 }
 
 func (d *webGPUDriver) writeTexture(texture *webGPUTexture, region TextureRegion, pixels []byte) error {
@@ -733,6 +735,28 @@ func (d *webGPUDriver) EndRenderTarget() error {
 	return nil
 }
 
+func (d *webGPUDriver) returnReadback(buffer webGPUBuffer, epoch uint64, reusable bool) {
+	if reusable && epoch == d.readbackEpoch && buffer.capacity > d.readback.capacity {
+		buffer, d.readback = d.readback, buffer
+	}
+	if buffer.value.Truthy() {
+		buffer.value.Call("destroy")
+	}
+	d.readbacksInFlight--
+	if d.destroyPending && d.readbacksInFlight == 0 {
+		d.device.Call("destroy")
+	}
+}
+
+func (d *webGPUDriver) releaseReadback() {
+	d.readbackEpoch++
+	if d.readback.value.Truthy() {
+		d.readback.value.Call("destroy")
+		d.readback = webGPUBuffer{}
+	}
+	d.readbackRetention = scratchRetention{}
+}
+
 func (d *webGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region RenderTargetRegion, destination []byte) error {
 	target, ok := d.targets.Get(handle)
 	if d.frameActive || d.activeTarget.Valid() || !ok || target == nil || target.descriptor.ColorFormat == RenderTargetDepth {
@@ -742,36 +766,51 @@ func (d *webGPUDriver) ReadRenderTarget(handle RenderTargetHandle, region Render
 	if texture == nil || !texture.value.Truthy() {
 		return errors.New("render: WebGPU render target color texture is unavailable")
 	}
+	if region.Width <= 0 || region.Height <= 0 || region.X < 0 || region.Y < 0 ||
+		region.X > target.descriptor.Width-region.Width || region.Y > target.descriptor.Height-region.Height {
+		return errors.New("render: invalid WebGPU readback region")
+	}
 	rowBytes := region.Width * target.descriptor.ColorFormat.TexelBytes()
+	if len(destination)/region.Height < rowBytes {
+		return errors.New("render: WebGPU readback destination too small")
+	}
 	bytesPerRow := align(rowBytes, 256)
 	required := bytesPerRow * region.Height
-	if !target.readback.value.Truthy() || target.readback.capacity < required {
-		if target.readback.value.Truthy() {
-			target.readback.value.Call("destroy")
+	// A mapAsync can yield to a second read or an idle trim. Each pending
+	// copy owns its buffer until unmap, and only one idle buffer stays cached.
+	buffer := d.readback
+	d.readback = webGPUBuffer{}
+	if buffer.capacity < required {
+		if buffer.value.Truthy() {
+			buffer.value.Call("destroy")
 		}
-		capacity := align(nextBufferCapacity(required), 256)
-		target.readback = webGPUBuffer{
-			value:    d.device.Call("createBuffer", webGPUObject("size", capacity, "usage", webGPUBufferMapRead|webGPUBufferCopyDst)),
-			capacity: capacity,
+		buffer = webGPUBuffer{
+			value:    d.device.Call("createBuffer", webGPUObject("size", required, "usage", webGPUBufferMapRead|webGPUBufferCopyDst)),
+			capacity: required,
 		}
 	}
+	d.readbacksInFlight++
+	d.readbackRetention.used = max(d.readbackRetention.used, required)
+	epoch, reusable := d.readbackEpoch, false
+	defer func() { d.returnReadback(buffer, epoch, reusable) }()
 	encoder := d.device.Call("createCommandEncoder")
 	encoder.Call("copyTextureToBuffer",
 		webGPUObject("texture", texture.value, "origin", webGPUObject("x", region.X, "y", region.Y, "z", 0)),
-		webGPUObject("buffer", target.readback.value, "offset", 0, "bytesPerRow", bytesPerRow, "rowsPerImage", region.Height),
+		webGPUObject("buffer", buffer.value, "offset", 0, "bytesPerRow", bytesPerRow, "rowsPerImage", region.Height),
 		webGPUObject("width", region.Width, "height", region.Height, "depthOrArrayLayers", 1),
 	)
 	d.queue.Call("submit", webGPUArray(encoder.Call("finish")))
-	if _, err := awaitWebGPU(target.readback.value.Call("mapAsync", webGPUBufferMapRead, 0, required)); err != nil {
+	if _, err := awaitWebGPU(buffer.value.Call("mapAsync", webGPUBufferMapRead, 0, required)); err != nil {
 		return fmt.Errorf("render: WebGPU render target map: %w", err)
 	}
-	mapped := target.readback.value.Call("getMappedRange", 0, required)
+	mapped := buffer.value.Call("getMappedRange", 0, required)
 	bytes := js.Global().Get("Uint8Array").New(mapped)
 	for row := range region.Height {
 		source := row * bytesPerRow
 		js.CopyBytesToGo(destination[row*rowBytes:(row+1)*rowBytes], bytes.Call("subarray", source, source+rowBytes))
 	}
-	target.readback.value.Call("unmap")
+	buffer.value.Call("unmap")
+	reusable = true
 	return nil
 }
 
@@ -869,9 +908,6 @@ func (d *webGPUDriver) deleteRenderTarget(target *webGPURenderTarget, removeColo
 			value.Call("destroy")
 		}
 	}
-	if target.readback.value.Truthy() {
-		target.readback.value.Call("destroy")
-	}
 	if removeColor {
 		if texture, ok := d.textures.Remove(target.color); ok {
 			d.deleteTexture(texture, retire)
@@ -880,7 +916,6 @@ func (d *webGPUDriver) deleteRenderTarget(target *webGPURenderTarget, removeColo
 	target.color = TextureHandle{}
 	target.multisample = webGPUColorBuffer{}
 	target.depth = webGPUDepthBuffer{}
-	target.readback = webGPUBuffer{}
 }
 
 func (d *webGPUDriver) DrawSprites(batch SpriteBatch) error {
@@ -999,7 +1034,12 @@ func (d *webGPUDriver) CreateMesh(vertices []Vertex3D, indices []uint32) (MeshHa
 		return MeshHandle{}, errors.New("render: WebGPU mesh data is empty")
 	}
 	vertexBuffer := d.device.Call("createBuffer", webGPUObject("size", roundup4(len(sliceBytes(vertices))), "usage", webGPUBufferVertex|webGPUBufferCopyDst))
-	indexBuffer := d.device.Call("createBuffer", webGPUObject("size", roundup4(len(sliceBytes(indices))), "usage", webGPUBufferIndex|webGPUBufferCopyDst))
+	indexPixels, format := sliceBytes(indices), "uint32"
+	if compact := compactMeshIndices(indices, 65535, true); compact != nil {
+		defer meshIndexBuffers.put(compact)
+		indexPixels, format = sliceBytes(compact.data), "uint16"
+	}
+	indexBuffer := d.device.Call("createBuffer", webGPUObject("size", len(indexPixels), "usage", webGPUBufferIndex|webGPUBufferCopyDst))
 	if vertexBuffer.IsNull() || indexBuffer.IsNull() {
 		if vertexBuffer.Truthy() {
 			vertexBuffer.Call("destroy")
@@ -1010,8 +1050,8 @@ func (d *webGPUDriver) CreateMesh(vertices []Vertex3D, indices []uint32) (MeshHa
 		return MeshHandle{}, errors.New("render: WebGPU could not create mesh buffers")
 	}
 	d.writeStaticBuffer(vertexBuffer, sliceBytes(vertices))
-	d.writeStaticBuffer(indexBuffer, sliceBytes(indices))
-	return d.meshes.Insert(&webGPUMesh{vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, indexCount: len(indices), vertexCount: len(vertices)}), nil
+	d.writeStaticBuffer(indexBuffer, indexPixels)
+	return d.meshes.Insert(&webGPUMesh{indexFormat: format, vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, indexCount: len(indices), vertexCount: len(vertices)}), nil
 }
 
 func (d *webGPUDriver) DestroyMesh(handle MeshHandle) error {
@@ -1083,7 +1123,7 @@ func (d *webGPUDriver) DrawMeshPicking(batch MeshBatch3D) error {
 		if draw.Mesh.Valid() {
 			mesh, _ := d.meshes.Get(draw.Mesh)
 			d.frame.Call("setVertexBuffer", 0, mesh.vertexBuffer)
-			d.frame.Call("setIndexBuffer", mesh.indexBuffer, "uint32")
+			d.frame.Call("setIndexBuffer", mesh.indexBuffer, mesh.indexFormat)
 		} else {
 			d.frame.Call("setVertexBuffer", 0, frame.buffer.value, vertexOffset)
 			d.frame.Call("setIndexBuffer", frame.buffer.value, "uint32", indexOffset)
@@ -1169,7 +1209,7 @@ func (d *webGPUDriver) drawMeshes(batch MeshBatch3D, gpuDeformation bool) error 
 		if draw.Mesh.Valid() {
 			mesh, _ := d.meshes.Get(draw.Mesh)
 			d.frame.Call("setVertexBuffer", 0, mesh.vertexBuffer)
-			d.frame.Call("setIndexBuffer", mesh.indexBuffer, "uint32")
+			d.frame.Call("setIndexBuffer", mesh.indexBuffer, mesh.indexFormat)
 		} else {
 			d.frame.Call("setVertexBuffer", 0, frame.buffer.value, vertexOffset)
 			d.frame.Call("setIndexBuffer", frame.buffer.value, "uint32", indexOffset)
@@ -1400,7 +1440,9 @@ func (d *webGPUDriver) Destroy() {
 	if d.context.Truthy() {
 		d.context.Call("unconfigure")
 	}
-	if d.device.Truthy() {
+	d.releaseReadback()
+	d.destroyPending = true
+	if d.device.Truthy() && d.readbacksInFlight == 0 {
 		d.device.Call("destroy")
 	}
 	d.uploadData = js.Undefined()
@@ -1475,13 +1517,7 @@ func (d *webGPUDriver) TrimIdleBuffers() error {
 		frame.offset = 0
 		frame.generation++
 	}
-	d.targets.Range(func(target *webGPURenderTarget) bool {
-		if target.readback.value.Truthy() {
-			target.readback.value.Call("destroy")
-			target.readback = webGPUBuffer{}
-		}
-		return true
-	})
+	d.releaseReadback()
 	d.releaseSurfaceDepth()
 	if d.multisample.value.Truthy() {
 		d.multisample.value.Call("destroy")
