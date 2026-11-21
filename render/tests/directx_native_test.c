@@ -152,6 +152,56 @@ static void check_streams(OnixGPUDriver *d) {
     }
     require(onix_gpu_destroy_render_target(d, target) && onix_gpu_destroy_texture(d, texture), "destroy stream resources");
 }
+static void check_mesh_winding(OnixGPUDriver *d) {
+    uint32_t color, target = onix_gpu_create_render_target(d, 16, 16, 0, 1, &color);
+    const uint8_t white[] = {255, 255, 255, 255};
+    uint32_t texture = onix_gpu_create_texture_with_format(d, 1, 1, 1, 0, 0, white, 4, 0, 0);
+    require(target && texture, "mesh winding resources");
+    const OnixGPUVertex3D vertices[] = {
+        {.position = {-1, -1, .5f}, .normal = {0, 0, 1}},
+        {.position = {1, -1, .5f}, .normal = {0, 0, 1}},
+        {.position = {0, 1, .5f}, .normal = {0, 0, 1}},
+    };
+    const uint32_t indices[] = {0, 1, 2, 0, 2, 1}; // Front and back windings.
+    uint32_t mesh = onix_gpu_create_mesh(d, vertices, 3, indices, 6);
+    require(mesh != 0, "create winding mesh");
+    const OnixGPUMeshPush push = {
+        .view_projection = {[0] = 1, [5] = 1, [10] = 1, [15] = 1},
+        .camera_position = {0, 0, 2, 1},
+    };
+    OnixNativeMeshUniforms uniforms = {.lighting = {[4] = 1}}; // Unit exposure.
+    memcpy(&uniforms, &push, sizeof(push));
+    OnixGPUInstance3D instance = {
+        .model = {[0] = 1, [5] = 1, [10] = 1, [15] = 1},
+        .base_color = {1, 1, 1, 1},
+        .emissive_metallic = {1, 0, 0, 0},
+        .material = {.5f, 1, .5f, 0},
+    };
+    OnixNativeMeshDraw3D draw = {.mesh = mesh, .texture = texture, .index_count = 3, .instance_count = 1};
+    const float clear[4] = {0};
+    for (int mirrored = 0; mirrored < 2; mirrored++) {
+        instance.model[0] = mirrored ? -1 : 1;
+        instance.material[3] = mirrored ? 1024 : 0; // Reflected model winding flag.
+        for (int back = 0; back < 2; back++) {
+            draw.first_index = back * 3;
+            require(onix_gpu_begin_frame(d, clear) && onix_gpu_begin_render_target(d, target, clear, 0, 1, 1),
+                    "begin mesh winding target");
+            onix_gpu_set_viewport(d, 0, 0, 16, 16);
+            onix_gpu_set_scissor(d, mirrored, 4, 4, 8, 8);
+            require(onix_gpu_draw_meshes(d, &push, NULL, 0, NULL, 0, &instance, 1, NULL, 0, &draw, 1,
+                                         (const float *)&uniforms),
+                    "draw single-sided PBR mesh");
+            require(onix_gpu_end_render_target(d), "end mesh winding target");
+            uint8_t pixel[4];
+            require(onix_gpu_read_render_target(d, target, 8, 8, 1, 1, pixel, 4), "read mesh winding");
+            require(pixel[3] == (back ? 0 : 255), back ? "discard mesh back face" : "keep mesh front face");
+        }
+    }
+    onix_gpu_set_scissor(d, 0, 0, 0, 0, 0);
+    require(onix_gpu_destroy_mesh(d, mesh) && onix_gpu_destroy_render_target(d, target) &&
+                onix_gpu_destroy_texture(d, texture),
+            "destroy mesh winding resources");
+}
 static void check_picking(OnixGPUDriver *d) {
     uint32_t color, target = onix_gpu_create_render_target(d, 16, 16, 1, 1, &color), identifier = 1234567, pixel = 0;
     require(target != 0, "picking target");
@@ -222,6 +272,7 @@ int main(void) {
     check_sprites(d);
     check_streams(d);
     check_mipmap_updates(d);
+    check_mesh_winding(d);
     check_picking(d);
     require(onix_gpu_present(d), "present");
     onix_gpu_destroy(d);

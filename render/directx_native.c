@@ -473,8 +473,12 @@ OnixGPUDriver *onix_gpu_create(OnixGPUSurface surface, OnixGPUShader sprite_v, O
             goto fail;
     }
     for (int i = 0; i < 2; i++) {
-        D3D11_RASTERIZER_DESC raster = {
-            .FillMode = D3D11_FILL_SOLID, .CullMode = D3D11_CULL_NONE, .DepthClipEnable = TRUE, .ScissorEnable = i};
+        // Match the mesh shaders' counter-clockwise front-face convention.
+        D3D11_RASTERIZER_DESC raster = {.FillMode = D3D11_FILL_SOLID,
+                                        .CullMode = D3D11_CULL_NONE,
+                                        .FrontCounterClockwise = TRUE,
+                                        .DepthClipEnable = TRUE,
+                                        .ScissorEnable = i};
         if (!dx_ok(ID3D11Device_CreateRasterizerState(d->device, &raster, &d->rasterizers[i]), "create rasterizer"))
             goto fail;
     }

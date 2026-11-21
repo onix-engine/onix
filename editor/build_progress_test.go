@@ -109,7 +109,7 @@ func TestModuleResourceProgressListsPackagesAndCachedRestores(t *testing.T) {
 	}
 }
 
-func TestWorkspaceProgressShowsPlayLogAndKeepsAnimating(t *testing.T) {
+func TestWorkspaceProgressShowsPlayLogWithoutActivityBar(t *testing.T) {
 	a := workspaceEditorFixture(t)
 	a.runBuilding, a.runDone = true, make(chan runProcessResult, 1)
 	a.buildProgress = newBuildProgressFeed(nil)
@@ -118,7 +118,7 @@ func TestWorkspaceProgressShowsPlayLogAndKeepsAnimating(t *testing.T) {
 	a.requestWake = func(time.Time) { wakes++ }
 	a.updateBuildProgress()
 	if !a.modalVisible() || a.activeWorkspaceDialog() != "progress" || wakes != 1 {
-		t.Fatal("Play compilation did not display an animated progress dialog")
+		t.Fatal("Play compilation did not display a refreshing progress dialog")
 	}
 	world := ecs.NewWorld()
 	syncWorkspaceTest(t, a, world)
@@ -129,12 +129,8 @@ func TestWorkspaceProgressShowsPlayLogAndKeepsAnimating(t *testing.T) {
 	if _, ok := htmlui.NodeByID(world, a.dialogUI.htmlDialogs["progress"], htmlDialogFieldID("progress", "log")); !ok {
 		t.Fatal("progress log field missing from authored HTML")
 	}
-	before := frame.element("progress-activity").Style
-	a.time += .5
-	a.updateBuildProgress()
-	syncWorkspaceTest(t, a, world)
-	if before == frame.element("progress-activity").Style || wakes != 2 {
-		t.Fatal("silent compilation froze the activity bar")
+	if !frame.element("progress-activity").Hidden || frame.element("progress-bar").Hidden {
+		t.Fatal("Play compilation should show only the main progress bar")
 	}
 	a.closeWorkspaceDialog()
 	if a.activeWorkspaceDialog() != "progress" {
