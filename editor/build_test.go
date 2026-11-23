@@ -40,6 +40,36 @@ func TestAppendBuildFlagsCombinesPlatformAndReleaseTags(t *testing.T) {
 	}
 }
 
+func TestNativeReleaseEnvironment(t *testing.T) {
+	original := []string{"CGO_CFLAGS=-O2 -I/custom", "CGO_CPPFLAGS=-DMY_APP", "CGO_LDFLAGS=-L/host", "CGO_LDFLAGS=-L/target"}
+	for _, platform := range buildPlatforms() {
+		if got, err := nativeReleaseEnvironment(slices.Clone(original), platform, BuildModeDebug); err != nil || !slices.Equal(got, original) {
+			t.Fatalf("debug %s environment = %v", platform, got)
+		}
+		got, err := nativeReleaseEnvironment(slices.Clone(original), platform, BuildModeRelease)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch platform {
+		case BuildPlatformLinux, BuildPlatformWindows, BuildPlatformAndroid:
+			if !slices.Contains(got, "CGO_CPPFLAGS=-DMY_APP -ffunction-sections -fdata-sections") || !slices.Contains(got, "CGO_LDFLAGS=-L/target -Wl,--gc-sections") {
+				t.Fatalf("release %s environment = %v", platform, got)
+			}
+		case BuildPlatformMacOS:
+			if !slices.Contains(got, "CGO_LDFLAGS=-L/target -Wl,-dead_strip") {
+				t.Fatalf("release macOS environment = %v", got)
+			}
+		default:
+			if !slices.Equal(got, original) {
+				t.Fatalf("unexpected release flags for %s: %v", platform, got)
+			}
+		}
+		if !slices.Contains(got, original[0]) {
+			t.Fatalf("lost compiler flags for %s: %v", platform, got)
+		}
+	}
+}
+
 func TestWindowsBuildArgsUseGUISubsystemInEveryMode(t *testing.T) {
 	for _, mode := range []BuildMode{BuildModeDebug, BuildModeRelease} {
 		args := windowsBuildArgs(mode, "")

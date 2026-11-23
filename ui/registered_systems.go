@@ -12,10 +12,17 @@ type RuntimeFeature interface {
 }
 
 type runtimeSystems struct {
-	update      [runtimeSystemCapacity]ecs.System
-	sync        [runtimeSystemCapacity]ecs.System
-	afterLayout [runtimeSystemCapacity]ecs.System
+	update      [runtimeSystemCapacity]runtimeStep
+	sync        [runtimeSystemCapacity]runtimeStep
+	afterLayout [runtimeSystemCapacity]runtimeStep
 	features    uint8
+}
+
+// The form and widget profiles share one control pass at the same position
+// in each stage. Installing Widgets upgrades that pass in place.
+type runtimeStep struct {
+	run      ecs.System
+	controls bool
 }
 
 const (
@@ -34,8 +41,8 @@ func (AuthoredControls) registerRuntime(systems *runtimeSystems) {
 		return
 	}
 	systems.features |= runtimeFeatureAuthoredControls
-	addRuntimeSystem(&systems.sync, syncAuthoredControls)
-	addRuntimeSystem(&systems.afterLayout, syncAuthoredControls)
+	addRuntimeSystem(&systems.sync, runtimeStep{run: syncAuthoredControls})
+	addRuntimeSystem(&systems.afterLayout, runtimeStep{run: syncAuthoredControls})
 }
 
 // Widgets enables the reusable control input and visual systems, except
@@ -47,9 +54,7 @@ func (Widgets) registerRuntime(systems *runtimeSystems) {
 		return
 	}
 	systems.features |= runtimeFeatureWidgets
-	addRuntimeSystem(&systems.update, update)
-	addRuntimeSystem(&systems.sync, syncWidgets)
-	addRuntimeSystem(&systems.afterLayout, syncAfterLayout)
+	systems.setControls(update, syncWidgets, syncAfterLayout)
 }
 
 // HTMLRenderer enables synchronization of html.Surface components into UI
@@ -61,9 +66,11 @@ func (HTMLRenderer) registerRuntime(systems *runtimeSystems) {
 	if systems.features&runtimeFeatureHTML != 0 {
 		return
 	}
-	Widgets{}.registerRuntime(systems)
+	if systems.features&runtimeFeatureWidgets == 0 {
+		systems.setControls(updateForms, syncForms, syncFormsAfterLayout)
+	}
 	systems.features |= runtimeFeatureHTML
-	addRuntimeSystem(&systems.update, updateHTMLRuntime)
+	addRuntimeSystem(&systems.update, runtimeStep{run: updateHTMLRuntime})
 	prependRuntimeSystem(&systems.sync, syncHTMLRuntime)
 }
 
@@ -92,9 +99,15 @@ func RegisterRuntimeExtension(world *ecs.World, extension RuntimeExtension) {
 	prependRuntimeSystem(&runtimeSystemsFor(world).sync, extension.Sync)
 }
 
-func addRuntimeSystem(systems *[runtimeSystemCapacity]ecs.System, system ecs.System) {
+func (systems *runtimeSystems) setControls(update, sync, afterLayout ecs.System) {
+	addRuntimeSystem(&systems.update, runtimeStep{run: update, controls: true})
+	addRuntimeSystem(&systems.sync, runtimeStep{run: sync, controls: true})
+	addRuntimeSystem(&systems.afterLayout, runtimeStep{run: afterLayout, controls: true})
+}
+
+func addRuntimeSystem(systems *[runtimeSystemCapacity]runtimeStep, system runtimeStep) {
 	for index := range systems {
-		if systems[index] == nil {
+		if systems[index].run == nil || system.controls && systems[index].controls {
 			systems[index] = system
 			return
 		}
@@ -102,14 +115,14 @@ func addRuntimeSystem(systems *[runtimeSystemCapacity]ecs.System, system ecs.Sys
 	panic("ui: runtime system capacity exceeded")
 }
 
-func prependRuntimeSystem(systems *[runtimeSystemCapacity]ecs.System, system ecs.System) {
-	if systems[len(systems)-1] != nil {
+func prependRuntimeSystem(systems *[runtimeSystemCapacity]runtimeStep, system ecs.System) {
+	if systems[len(systems)-1].run != nil {
 		panic("ui: runtime system capacity exceeded")
 	}
 	for index := len(systems) - 1; index > 0; index-- {
 		systems[index] = systems[index-1]
 	}
-	systems[0] = system
+	systems[0] = runtimeStep{run: system}
 }
 
 func RegisterRuntimeFeature[T RuntimeFeature](world *ecs.World) {
@@ -162,22 +175,22 @@ func SyncAfterLayout(world *ecs.World) error {
 }
 
 type runtimeStage interface {
-	systems(*runtimeSystems) *[runtimeSystemCapacity]ecs.System
+	systems(*runtimeSystems) *[runtimeSystemCapacity]runtimeStep
 }
 
 type runtimeUpdateStage struct{}
 type runtimeSyncStage struct{}
 type runtimeAfterLayoutStage struct{}
 
-func (runtimeUpdateStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]ecs.System {
+func (runtimeUpdateStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]runtimeStep {
 	return &runtime.update
 }
 
-func (runtimeSyncStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]ecs.System {
+func (runtimeSyncStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]runtimeStep {
 	return &runtime.sync
 }
 
-func (runtimeAfterLayoutStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]ecs.System {
+func (runtimeAfterLayoutStage) systems(runtime *runtimeSystems) *[runtimeSystemCapacity]runtimeStep {
 	return &runtime.afterLayout
 }
 
@@ -195,10 +208,10 @@ func runRuntimeSystems[S runtimeStage](context *ecs.SystemContext) error {
 func (systems *runtimeSystems) runRuntimeSystemSet[S runtimeStage](context *ecs.SystemContext) error {
 	var stage S
 	for _, system := range stage.systems(systems) {
-		if system == nil {
+		if system.run == nil {
 			break
 		}
-		if err := system(context); err != nil {
+		if err := system.run(context); err != nil {
 			return err
 		}
 	}
@@ -225,8 +238,8 @@ func runRuntimeStageWith[F RuntimeFeature, S runtimeStage](world *ecs.World) err
 }
 
 type runtimeProfile[F RuntimeFeature] struct {
-	systems runtimeSystems
 	context ecs.SystemContext
+	systems runtimeSystems
 }
 
 func runtimeProfileFor[F RuntimeFeature](world *ecs.World) *runtimeProfile[F] {
@@ -244,7 +257,7 @@ func syncAuthoredControls(context *ecs.SystemContext) error {
 	if context == nil || context.World == nil {
 		return nil
 	}
-	syncControls(context.World, Skin{})
+	syncControls(context.World)
 	syncVariants(context.World, authoredControlVariantMatches)
 	return nil
 }

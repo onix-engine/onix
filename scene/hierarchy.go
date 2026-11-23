@@ -177,14 +177,13 @@ func (h *Hierarchy) sync(world *ecs.World) {
 		// Include the previous tick because callers can read the hierarchy
 		// between writes performed by systems sharing the same change tick.
 		h.changes = world.ChangesSince(h.lastRun - 1)
-		changes := &h.changes
 		if h.versions[0] != versions[0] {
 			if h.detached[0] != detached[0] {
 				for _, entity := range h.entities {
 					h.refreshParent(world, entity)
 				}
 			} else {
-				for entity := range world.Query[Parent](ecs.Unscoped(), changes.Changed[Parent]()).All {
+				for entity := range h.changes.ChangedEntities(ecs.Type[Parent]()).Unscoped().All {
 					h.refreshParent(world, entity)
 				}
 			}
@@ -195,13 +194,13 @@ func (h *Hierarchy) sync(world *ecs.World) {
 					h.queueSiblingOrder(h.node(entity).parent)
 				}
 			} else {
-				for entity := range world.Query[SiblingOrder](ecs.Unscoped(), changes.Changed[SiblingOrder]()).All {
+				for entity := range h.changes.ChangedEntities(ecs.Type[SiblingOrder]()).Unscoped().All {
 					h.queueSiblingOrder(h.node(entity).parent)
 				}
 			}
 		}
-		h.refreshFlags[Activity](world, changes, versions, detached, 1)
-		h.refreshFlags[Visibility](world, changes, versions, detached, 2)
+		h.refreshFlags(world, ecs.Type[Activity](), versions, detached, 1)
+		h.refreshFlags(world, ecs.Type[Visibility](), versions, detached, 2)
 		for i := 0; i < len(h.queue); i++ {
 			n := h.node(h.queue[i])
 			n.state &^= hierarchyResolved | hierarchyDepthResolved
@@ -411,7 +410,7 @@ func hierarchyLocalFlags(world *ecs.World, entity ecs.Entity) uint8 {
 	return flags
 }
 
-func (h *Hierarchy) refreshFlags[T any](world *ecs.World, changes *ecs.SystemContext, versions, detached [4]uint64, index int) {
+func (h *Hierarchy) refreshFlags(world *ecs.World, component ecs.ComponentType, versions, detached [4]uint64, index int) {
 	if h.versions[index] == versions[index] {
 		return
 	}
@@ -428,7 +427,7 @@ func (h *Hierarchy) refreshFlags[T any](world *ecs.World, changes *ecs.SystemCon
 			refresh(entity)
 		}
 	} else {
-		for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
+		for entity := range h.changes.ChangedEntities(component).Unscoped().All {
 			refresh(entity)
 		}
 	}

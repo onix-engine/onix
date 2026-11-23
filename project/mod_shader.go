@@ -2,7 +2,6 @@ package project
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/onix-engine/onix/ecs"
@@ -32,47 +31,50 @@ func (s *modShaderResource) dispose() error {
 	return errors.Join(spriteErr, meshErr, s.sources.dispose())
 }
 
-func (r *Resources) modShader(b *ecs.Bundle, spec *ShaderComponentSpec, mesh bool) error {
-	if spec == nil {
-		return nil
-	}
-	if !spec.HasSource() {
-		if mesh {
-			b.Put(scene.Shader[graphics.MeshShader]{Custom: spec.Custom})
-		} else {
-			b.Put(scene.Shader[graphics.Material2DShader]{Custom: spec.Custom})
-		}
-		return nil
-	}
-	if !spec.Compiled.HasSource() {
-		return fmt.Errorf("shader contains uncompiled WGSL; run the editor resource build first")
-	}
-	resource, err := r.modShaders.load(spec.Compiled, func() (*modShaderResource, error) {
-		sources, err := (ShaderSpec{ID: "element", ShaderSources: spec.Compiled}).load(r.source, ".")
+func (r *Resources) modShaderSources(compiled ShaderSources) (*modShaderResource, error) {
+	return r.modShaders.load(compiled, func() (*modShaderResource, error) {
+		sources, err := (ShaderSpec{ID: "element", ShaderSources: compiled}).load(r.source, ".")
 		if err != nil {
 			return nil, err
 		}
 		return &modShaderResource{sources: sources}, nil
 	}, (*modShaderResource).dispose)
-	if err != nil {
-		return err
+}
+
+func (s *modShaderResource) spriteProgram() (*graphics.Material2DShader, error) {
+	if s.sprite == nil {
+		var err error
+		s.sprite, err = graphics.NewMaterial2DShader(s.sources.descriptor)
+		return s.sprite, err
 	}
-	resource.mu.Lock()
-	defer resource.mu.Unlock()
-	if mesh {
-		if resource.mesh == nil {
-			resource.mesh, err = graphics.NewMeshShader(resource.sources.descriptor)
-		}
-		if err == nil {
-			b.Put(scene.Shader[graphics.MeshShader]{Program: resource.mesh, Custom: spec.Custom})
-		}
-	} else {
-		if resource.sprite == nil {
-			resource.sprite, err = graphics.NewMaterial2DShader(resource.sources.descriptor)
-		}
-		if err == nil {
-			b.Put(scene.Shader[graphics.Material2DShader]{Program: resource.sprite, Custom: spec.Custom})
-		}
+	return s.sprite, nil
+}
+
+func (s *modShaderResource) meshProgram() (*graphics.MeshShader, error) {
+	if s.mesh == nil {
+		var err error
+		s.mesh, err = graphics.NewMeshShader(s.sources.descriptor)
+		return s.mesh, err
 	}
-	return err
+	return s.mesh, nil
+}
+
+func appendModShader[T graphics.Material2DShader | graphics.MeshShader](r *Resources, b *ecs.Bundle, spec *ShaderComponentSpec, program func(*modShaderResource) (*T, error)) error {
+	shader := scene.Shader[T]{Custom: spec.Custom}
+	if spec.Compiled.HasSource() {
+		resource, err := r.modShaderSources(spec.Compiled)
+		if err != nil {
+			return err
+		}
+		resource.mu.Lock()
+		shader.Program, err = program(resource)
+		resource.mu.Unlock()
+		if err != nil {
+			return err
+		}
+	} else if spec.wgslSources().HasSource() {
+		return errors.New("shader contains uncompiled WGSL; run the editor resource build first")
+	}
+	b.Put(shader)
+	return nil
 }

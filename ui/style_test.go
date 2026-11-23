@@ -1,12 +1,47 @@
 package ui
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene"
 )
+
+func TestFormSkinSharesDefaultsWithNativeWidgets(t *testing.T) {
+	world := ecs.NewWorld()
+	theme := DefaultTheme()
+	forms := formSkinFor(world, theme)
+	complete := DefaultSkin(theme)
+	if !reflect.DeepEqual(forms.Selector, complete.Selector) || !reflect.DeepEqual(forms.Scroll, complete.Scroll) || !reflect.DeepEqual(forms.TextField, complete.TextField) {
+		t.Fatal("HTML form defaults differ from native defaults")
+	}
+	hovered := forms.Selector.Item.Hovered
+	if full := skinFor(world, theme); full != forms || full.Selector.Item.Hovered != hovered || !reflect.DeepEqual(*full, complete) {
+		t.Fatal("enabling native widgets did not complete the cached form skin")
+	}
+	larger := theme
+	larger.FontSize *= 2
+	if n := testing.AllocsPerRun(100, func() {
+		formSkinFor(world, larger)
+		skinFor(world, theme)
+	}); n != 0 {
+		t.Fatalf("alternating font sizes allocated %.0f objects per run", n)
+	}
+	theme.Surface = graphics.White
+	if got := formSkinFor(world, theme).Selector.Item.Normal.Background.Fill; got != theme.Surface {
+		t.Fatalf("select color after theme change = %v, want %v", got, theme.Surface)
+	}
+	if !reflect.DeepEqual(*skinFor(world, theme), DefaultSkin(theme)) {
+		t.Fatal("native styles did not follow the new palette")
+	}
+	custom := Skin{Scroll: ScrollStyle{Track: ColorSurface(graphics.White)}}
+	world.InsertResource(custom)
+	if formSkinFor(world, theme) != world.GetResourceRef[Skin]() || skinFor(world, theme) != world.GetResourceRef[Skin]() {
+		t.Fatal("explicit world skin must take precedence in both profiles")
+	}
+}
 
 func TestStateStyleResolutionAndFallback(t *testing.T) {
 	style := NewStateStyle("normal").

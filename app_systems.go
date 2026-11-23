@@ -117,9 +117,7 @@ func (app *App) hasProjectFeature(id project.RuntimeFeatureID) bool {
 	case project.FeatureUIControls:
 		return app.hasSystemSet(systemSetUIControls)
 	case project.FeatureUIWidgets:
-		// UIControls and the higher-level UI features install the same generic
-		// layout/transform runtime, so they also satisfy Layout/Widget scenes.
-		return app.hasSystemSet(systemSetUIWidgets) || app.hasSystemSet(systemSetUIControls)
+		return app.hasSystemSet(systemSetUIWidgets)
 	case project.FeatureUITextInput:
 		return app.hasSystemSet(systemSetUITextInput)
 	case project.FeatureUIMarkdown:
@@ -168,7 +166,7 @@ func (Render2D) install(app *App) error {
 		return err
 	}
 	app.installedSystemSets |= systemSetRender2D
-	app.ensureCamera2D()
+	app.configureCamera2D(true)
 	return app.refreshRenderTail()
 }
 
@@ -199,7 +197,7 @@ func (Render3D) install(app *App) error {
 		return err
 	}
 	app.installedSystemSets |= systemSetRender3D
-	app.configureCamera2D()
+	app.configureCamera2D(false)
 	return app.refreshRenderTail()
 }
 
@@ -239,36 +237,30 @@ func (app *App) refreshRenderTail() error {
 	return app.AddSystems(StageRender, appendDefaultDebugRenderSystem(systems)...)
 }
 
-func (app *App) ensureCamera2D() {
-	var entity ecs.Entity
-	for value, _ := range app.World.Query[scene.Camera2D]().All {
-		if camera, ok := app.World.Get[scene.Camera](value); ok && camera.Fallback {
-			entity = value
-			break
-		}
-	}
-	if entity == 0 {
-		entity = scene.SpawnCamera2D(app.World)
-		app.World.GetMut[scene.Camera](entity).Fallback = true
-	}
-	app.configureCamera2D()
-}
-
-func (app *App) configureCamera2D() {
+func (app *App) configureCamera2D(createFallback bool) {
 	overlay := app.hasSystemSet(systemSetRender3D)
 	settings, hasSettings := app.World.GetResource[scene.RenderSettings2D]()
-	for entity, _ := range app.World.Query[scene.Camera2D]().All {
-		camera := app.World.GetMut[scene.Camera](entity)
-		if camera != nil && camera.Fallback {
-			if hasSettings {
-				camera.ClearColor = settings.ClearColor
-			}
-			if overlay {
-				camera.Order, camera.Clear = 1000, false
-			} else {
-				camera.Order, camera.Clear = 0, true
-			}
+	configure := func(camera *scene.Camera) {
+		if hasSettings {
+			camera.ClearColor = settings.ClearColor
 		}
+		if overlay {
+			camera.Order, camera.Clear = 1000, false
+		} else {
+			camera.Order, camera.Clear = 0, true
+		}
+	}
+	for _, camera := range app.World.Query[scene.Camera](ecs.With[scene.Camera2D]()).All {
+		if camera.Ref().Fallback {
+			configure(camera.Mut())
+			createFallback = false
+		}
+	}
+	if createFallback {
+		entity := scene.SpawnCamera2D(app.World)
+		camera := app.World.GetMut[scene.Camera](entity)
+		camera.Fallback = true
+		configure(camera)
 	}
 }
 
@@ -547,11 +539,15 @@ func (app *App) ensureUIRuntime() error {
 }
 
 func (UITextInput) install(app *App) error {
-	if app.hasSystemSet(systemSetUITextInput) {
-		return nil
-	}
 	if err := app.InstallSystems[UIWidgets](); err != nil {
 		return err
+	}
+	return app.ensureFocusedTextInput()
+}
+
+func (app *App) ensureFocusedTextInput() error {
+	if app.hasSystemSet(systemSetUITextInput) {
+		return nil
 	}
 	if err := app.AddSystem(StageInputGUI, engineui.FocusedInputSystem("dispatch_focused_input")); err != nil {
 		return err
@@ -584,7 +580,10 @@ func (UIHTML) install(app *App) error {
 	if err := app.InstallSystems[Render2D](); err != nil {
 		return err
 	}
-	if err := app.InstallSystems[UITextInput](); err != nil {
+	if err := app.ensureUIRuntime(); err != nil {
+		return err
+	}
+	if err := app.ensureFocusedTextInput(); err != nil {
 		return err
 	}
 	engineui.RegisterRuntimeFeature[engineui.HTMLRenderer](app.World)

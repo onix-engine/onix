@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"math"
 	"runtime"
 
 	"github.com/onix-engine/onix/images/png"
+	"github.com/onix-engine/onix/internal/glyphdraw"
 )
 
 // Borrow table storage from the face. Glyph lookup and measurement do not
@@ -246,9 +246,9 @@ func (f *Face) rasterizeColorGlyph(id uint16, size float64, phaseX, phaseY uint8
 		}
 
 		a := uint16(entry[3])
-		fill := image.NewUniform(color.RGBA{uint8(uint16(entry[2]) * a / 255), uint8(uint16(entry[1]) * a / 255), uint8(uint16(entry[0]) * a / 255), entry[3]})
+		fill := color.RGBA{uint8(uint16(entry[2]) * a / 255), uint8(uint16(entry[1]) * a / 255), uint8(uint16(entry[0]) * a / 255), entry[3]}
 		x, y := layer.Bounds.Min.X-bounds.Min.X, bounds.Max.Y-layer.Bounds.Max.Y
-		draw.DrawMask(bitmap.Color, layer.Image.Rect.Add(image.Pt(x, y)), fill, image.Point{}, layer.Image, image.Point{}, draw.Over)
+		glyphdraw.MaskOver(bitmap.Color, layer.Image.Rect.Add(image.Pt(x, y)), fill, layer.Image)
 	}
 	return bitmap, nil
 }

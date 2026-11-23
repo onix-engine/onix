@@ -6,7 +6,26 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/onix-engine/onix/project"
 )
+
+func TestHTMLFeatureSettingsIndependentOfWidgets(t *testing.T) {
+	for _, id := range []project.RuntimeFeatureID{project.FeatureUIHTML, project.FeatureUIMarkdown} {
+		config, _ := setProjectRuntimeFeature(project.EngineConfig{}, id, true)
+		if err := config.Validate(); err != nil || config.HasFeature(project.FeatureUIWidgets) {
+			t.Fatalf("enable %s: features %v, error %v", id, config.Features, err)
+		}
+		config, _ = setProjectRuntimeFeature(config, project.FeatureUITextInput, true)
+		if !config.HasFeature(project.FeatureUIWidgets) {
+			t.Fatal("native text input requires widgets")
+		}
+		config, _ = setProjectRuntimeFeature(config, project.FeatureUIWidgets, false)
+		if err := config.Validate(); err != nil || !config.HasFeature(id) || config.HasFeature(project.FeatureUITextInput) {
+			t.Fatalf("disable widgets: features %v, error %v", config.Features, err)
+		}
+	}
+}
 
 func TestEditorSettingsRememberAndForgetRecentProjects(t *testing.T) {
 	home := t.TempDir()

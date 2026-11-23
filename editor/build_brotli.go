@@ -11,11 +11,23 @@ import (
 
 // compressWasmBrotli streams the raw WASM into its transport artifact so the
 // build does not retain both the raw and compressed modules in memory.
-func compressWasmBrotli(sourcePath string) (string, error) {
+func compressWasmBrotli(sourcePath string, packData bool) (string, error) {
 	targetPath := sourcePath + ".br"
 	source, err := os.Open(sourcePath)
 	if err != nil {
 		return "", fmt.Errorf("open raw WASM file: %w", err)
+	}
+
+	var input io.Reader = source
+	if packData {
+		info, err := source.Stat()
+		if err != nil {
+			return "", errors.Join(err, source.Close())
+		}
+		input, err = packedWebWASM(source, info.Size())
+		if err != nil {
+			return "", errors.Join(err, source.Close())
+		}
 	}
 
 	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
@@ -23,7 +35,7 @@ func compressWasmBrotli(sourcePath string) (string, error) {
 		return "", errors.Join(fmt.Errorf("create WASM Brotli file: %w", err), source.Close())
 	}
 	writer := brotli.NewWriterLevel(target, brotli.BestCompression)
-	_, copyErr := io.Copy(writer, source)
+	_, copyErr := io.Copy(writer, input)
 	writerErr := writer.Close()
 	targetErr := target.Close()
 	sourceErr := source.Close()

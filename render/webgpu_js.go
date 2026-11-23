@@ -2026,58 +2026,54 @@ func webGPUBlendFactor(factor BlendFactor) string {
 	}
 }
 
+func webGPULayoutEntry(binding, visibility int, kind string, resource js.Value) js.Value {
+	return webGPUObject("binding", binding, "visibility", visibility, kind, resource)
+}
+
 func (d *webGPUDriver) createBindGroupLayouts() (js.Value, js.Value) {
-	texture := d.device.Call("createBindGroupLayout", webGPUObject("entries", webGPUArray(
-		webGPUObject("binding", 0, "visibility", webGPUShaderVertex|webGPUShaderFragment, "buffer", webGPUObject("type", "uniform", "hasDynamicOffset", true, "minBindingSize", 0)),
-		webGPUObject("binding", 1, "visibility", webGPUShaderVertex|webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 2, "visibility", webGPUShaderVertex|webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 3, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 4, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 5, "visibility", webGPUShaderVertex, "buffer", webGPUObject("type", "read-only-storage", "minBindingSize", 4)),
-		webGPUObject("binding", 6, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 7, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-	)))
-	d.meshTextureLayout = d.device.Call("createBindGroupLayout", webGPUObject("entries", webGPUArray(
-		webGPUObject("binding", 0, "visibility", webGPUShaderVertex|webGPUShaderFragment, "buffer", webGPUObject("type", "uniform", "hasDynamicOffset", true, "minBindingSize", 0)),
-		webGPUObject("binding", 1, "visibility", webGPUShaderVertex|webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 2, "visibility", webGPUShaderVertex|webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 3, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 4, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 6, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 7, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 8, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 9, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 10, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 11, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 12, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 13, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 14, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 15, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 16, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 17, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 18, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "unfilterable-float")),
-		webGPUObject("binding", 19, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 20, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "unfilterable-float")),
-		webGPUObject("binding", 21, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 22, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 23, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 24, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 25, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 26, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 27, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 28, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 29, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 30, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 31, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-		webGPUObject("binding", 32, "visibility", webGPUShaderFragment, "texture", webGPUObject("sampleType", "float")),
-		webGPUObject("binding", 33, "visibility", webGPUShaderFragment, "sampler", webGPUObject("type", "filtering")),
-	)))
-	d.meshDataLayout = d.device.Call("createBindGroupLayout", webGPUObject("entries", webGPUArray(
-		webGPUObject("binding", 0, "visibility", webGPUShaderVertex, "buffer", webGPUObject("type", "read-only-storage", "hasDynamicOffset", true, "minBindingSize", 4)),
-		webGPUObject("binding", 1, "visibility", webGPUShaderVertex, "buffer", webGPUObject("type", "read-only-storage", "minBindingSize", 4)),
-	)))
-	shape := d.device.Call("createBindGroupLayout", webGPUObject("entries", webGPUArray(webGPUObject("binding", 0, "visibility", webGPUShaderVertex|webGPUShaderFragment, "buffer", webGPUObject("type", "uniform", "hasDynamicOffset", true, "minBindingSize", 128)))))
-	return texture, shape
+	layout := func(entries ...any) js.Value {
+		return d.device.Call("createBindGroupLayout", webGPUObject("entries", webGPUArray(entries...)))
+	}
+	const both = webGPUShaderVertex | webGPUShaderFragment
+	uniform := func(size int) js.Value {
+		return webGPULayoutEntry(0, both, "buffer", webGPUObject("type", "uniform", "hasDynamicOffset", true, "minBindingSize", size))
+	}
+	filterable := webGPUObject("sampleType", "float")
+	unfilterable := webGPUObject("sampleType", "unfilterable-float")
+	sampler := webGPUObject("type", "filtering")
+	storage := webGPUObject("type", "read-only-storage", "minBindingSize", 4)
+
+	sprite := [...]any{
+		uniform(0),
+		webGPULayoutEntry(1, both, "texture", filterable),
+		webGPULayoutEntry(2, both, "sampler", sampler),
+		webGPULayoutEntry(3, webGPUShaderFragment, "texture", filterable),
+		webGPULayoutEntry(4, webGPUShaderFragment, "sampler", sampler),
+		webGPULayoutEntry(5, webGPUShaderVertex, "buffer", storage),
+		webGPULayoutEntry(6, webGPUShaderFragment, "texture", filterable),
+		webGPULayoutEntry(7, webGPUShaderFragment, "sampler", sampler),
+	}
+	texture := layout(sprite[:]...)
+
+	// Meshes share the sprite bindings except for the vertex storage buffer at 5.
+	var mesh [7 + 2*MeshExtraTextureSlots]any
+	copy(mesh[:5], sprite[:5])
+	copy(mesh[5:7], sprite[6:])
+	for slot := range MeshExtraTextureSlots {
+		binding := 8 + 2*slot
+		sample := filterable
+		if slot == 5 || slot == 6 { // Shadow atlas and screen depth.
+			sample = unfilterable
+		}
+		mesh[binding-1] = webGPULayoutEntry(binding, webGPUShaderFragment, "texture", sample)
+		mesh[binding] = webGPULayoutEntry(binding+1, webGPUShaderFragment, "sampler", sampler)
+	}
+	d.meshTextureLayout = layout(mesh[:]...)
+	d.meshDataLayout = layout(
+		webGPULayoutEntry(0, webGPUShaderVertex, "buffer", webGPUObject("type", "read-only-storage", "hasDynamicOffset", true, "minBindingSize", 4)),
+		webGPULayoutEntry(1, webGPUShaderVertex, "buffer", storage),
+	)
+	return texture, layout(uniform(128))
 }
 
 func (d *webGPUDriver) createPipelineLayout(groups ...any) js.Value {

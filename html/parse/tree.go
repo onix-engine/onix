@@ -13,24 +13,24 @@ import (
 
 // A treeBuilder implements the HTML5 parsing algorithm:
 type treeBuilder struct {
-	tokenizer             *htmlScanner
-	context               *uinode.Node
-	originalIM            insertionMode
-	doc                   *uinode.Node
-	im                    insertionMode
-	arena                 *Parser
-	head                  *uinode.Node
-	form                  *uinode.Node
-	oe                    nodeStack
-	templateStack         insertionModeStack
-	afe                   nodeStack
-	tok                   htmlToken
-	scripting, framesetOK bool
-	ignoreLF              bool
-	fosterParenting       bool
-	quirks                bool
-	fragment              bool
-	hasSelfClosingToken   bool
+	tokenizer           *htmlScanner
+	context             *uinode.Node
+	originalIM          insertionMode
+	doc                 *uinode.Node
+	im                  insertionMode
+	arena               *Parser
+	head                *uinode.Node
+	form                *uinode.Node
+	oe                  nodeStack
+	templateStack       insertionModeStack
+	afe                 nodeStack
+	tok                 htmlToken
+	framesetOK          bool
+	ignoreLF            bool
+	fosterParenting     bool
+	quirks              bool
+	fragment            bool
+	hasSelfClosingToken bool
 }
 
 func (p *treeBuilder) top() *uinode.Node {
@@ -40,13 +40,20 @@ func (p *treeBuilder) top() *uinode.Node {
 	return p.doc
 }
 
-var (
-	defaultScopeStopTags = map[uinode.Namespace][]string{
-		uinode.HTML:   {"applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "select"},
-		uinode.MathML: {"annotation-xml", "mi", "mn", "mo", "ms", "mtext"},
-		uinode.SVG:    {"desc", "foreignObject", "title"},
+func isDefaultScopeStop(n *uinode.Node) bool {
+	switch n.Namespace {
+	case uinode.HTML:
+		switch n.Data {
+		case "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "select":
+			return true
+		}
+	case uinode.MathML:
+		return n.Data == "annotation-xml" || mathMLTextIntegrationPoint(n)
+	case uinode.SVG:
+		return htmlIntegrationPoint(n)
 	}
-)
+	return false
+}
 
 type scope int
 
@@ -59,19 +66,22 @@ const (
 	tableBodyScope
 )
 
-func (p *treeBuilder) popUntil(s scope, matchTags ...string) bool {
-	if i := p.indexOfElementInScope(s, matchTags...); i != -1 {
+func (p *treeBuilder) popUntil(s scope, tag string, otherTags ...string) bool {
+	if i := p.indexOfElementInScope(s, tag, otherTags...); i != -1 {
 		p.oe = p.oe[:i]
 		return true
 	}
 	return false
 }
 
-func (p *treeBuilder) indexOfElementInScope(s scope, matchTags ...string) int {
+func (p *treeBuilder) indexOfElementInScope(s scope, tag string, otherTags ...string) int {
 	for i := len(p.oe) - 1; i >= 0; i-- {
 		tagName := p.oe[i].Data
 		if p.oe[i].Namespace == uinode.HTML {
-			for _, t := range matchTags {
+			if tagName == tag {
+				return i
+			}
+			for _, t := range otherTags {
 				if t == tagName {
 					return i
 				}
@@ -96,18 +106,16 @@ func (p *treeBuilder) indexOfElementInScope(s scope, matchTags ...string) int {
 		}
 		switch s {
 		case defaultScope, listItemScope, buttonScope:
-			for _, t := range defaultScopeStopTags[p.oe[i].Namespace] {
-				if t == tagName {
-					return -1
-				}
+			if isDefaultScopeStop(p.oe[i]) {
+				return -1
 			}
 		}
 	}
 	return -1
 }
 
-func (p *treeBuilder) elementInScope(s scope, matchTags ...string) bool {
-	return p.indexOfElementInScope(s, matchTags...) != -1
+func (p *treeBuilder) elementInScope(s scope, tag string) bool {
+	return p.indexOfElementInScope(s, tag) != -1
 }
 
 func (p *treeBuilder) clearStackToContext(s scope) {
@@ -141,21 +149,15 @@ func (p *treeBuilder) parseGenericRawTextElement() {
 	p.im = textIM
 }
 
-func (p *treeBuilder) generateImpliedEndTags(exceptions ...string) {
+func (p *treeBuilder) generateImpliedEndTags(except string) {
 	var i int
-loop:
 	for i = len(p.oe) - 1; i >= 0; i-- {
 		n := p.oe[i]
-		if n.Type != uinode.ElementNode {
+		if n.Type != uinode.ElementNode || n.Data == except {
 			break
 		}
 		switch n.Data {
 		case "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc":
-			for _, except := range exceptions {
-				if n.Data == except {
-					break loop
-				}
-			}
 			continue
 		}
 		break
@@ -194,26 +196,18 @@ func (p *treeBuilder) shouldFosterParent() bool {
 }
 
 func (p *treeBuilder) fosterParent(n *uinode.Node) {
-	var table, parent, prev, template *uinode.Node
+	var table, parent, prev *uinode.Node
 	var i int
 	for i = len(p.oe) - 1; i >= 0; i-- {
-		if p.oe[i].Data == "table" {
-			table = p.oe[i]
+		current := p.oe[i]
+		if current.Data == "template" {
+			current.AppendChild(n)
+			return
+		}
+		if current.Data == "table" {
+			table = current
 			break
 		}
-	}
-
-	var j int
-	for j = len(p.oe) - 1; j >= 0; j-- {
-		if p.oe[j].Data == "template" {
-			template = p.oe[j]
-			break
-		}
-	}
-
-	if template != nil && (table == nil || j > i) {
-		template.AppendChild(n)
-		return
 	}
 
 	if table == nil {
@@ -500,21 +494,12 @@ func inHeadIM(p *treeBuilder) bool {
 			p.oe.pop()
 			p.acknowledgeSelfClosingTag()
 			return true
-		case "noscript":
-			if p.scripting {
-				p.parseGenericRawTextElement()
-				return true
-			}
-			p.addElement()
-			p.im = inHeadNoscriptIM
-			p.tokenizer.NextIsNotRawText()
-			return true
 		case "script", "title":
 			p.addElement()
 			p.setOriginalIM()
 			p.im = textIM
 			return true
-		case "noframes", "style":
+		case "noframes", "noscript", "style":
 			p.parseGenericRawTextElement()
 			return true
 		case "head":
@@ -540,7 +525,7 @@ func inHeadIM(p *treeBuilder) bool {
 			if !p.oe.contains("template") {
 				return true
 			}
-			p.generateImpliedEndTags()
+			p.generateImpliedEndTags("")
 			for i := len(p.oe) - 1; i >= 0; i-- {
 				if n := p.oe[i]; n.Namespace == uinode.HTML && n.Data == "template" {
 					p.oe = p.oe[:i]
@@ -561,47 +546,6 @@ func inHeadIM(p *treeBuilder) bool {
 	}
 
 	p.parseImpliedToken(TokenEndTag, "head")
-	return false
-}
-
-func inHeadNoscriptIM(p *treeBuilder) bool {
-	switch p.tok.Type {
-	case tokenDoctype:
-		return true
-	case TokenStartTag:
-		switch p.tok.Data {
-		case "html":
-			return inBodyIM(p)
-		case "basefont", "bgsound", "link", "meta", "noframes", "style":
-			return inHeadIM(p)
-		case "head":
-			return true
-		case "noscript":
-			p.tokenizer.NextIsNotRawText()
-			return true
-		}
-	case TokenEndTag:
-		switch p.tok.Data {
-		case "noscript", "br":
-		default:
-			return true
-		}
-	case TokenText:
-		s := strings.TrimLeft(p.tok.Data, whitespace)
-		if len(s) == 0 {
-			return inHeadIM(p)
-		}
-	case tokenComment:
-		return inHeadIM(p)
-	}
-	p.oe.pop()
-	if p.top().Data != "head" {
-		panic("html: the new current node will be a head element.")
-	}
-	p.im = inHeadIM
-	if p.tok.Data == "noscript" {
-		return true
-	}
 	return false
 }
 
@@ -779,10 +723,7 @@ func inBodyIM(p *treeBuilder) bool {
 			p.popUntil(buttonScope, "p")
 			p.addElement()
 		case "button":
-			if p.elementInScope(defaultScope, "button") {
-				p.generateImpliedEndTags()
-				p.popUntil(defaultScope, "button")
-			}
+			p.popUntil(defaultScope, "button")
 			p.reconstructActiveFormattingElements()
 			p.addElement()
 			p.framesetOK = false
@@ -850,12 +791,9 @@ func inBodyIM(p *treeBuilder) bool {
 			p.oe.pop()
 			p.acknowledgeSelfClosingTag()
 		case "hr":
-			if p.elementInScope(buttonScope, "p") {
-				p.generateImpliedEndTags("p")
-				p.popUntil(defaultScope, "p")
-			}
+			p.popUntil(buttonScope, "p")
 			if p.elementInScope(defaultScope, "select") {
-				p.generateImpliedEndTags()
+				p.generateImpliedEndTags("")
 			}
 			p.addElement()
 			p.oe.pop()
@@ -877,16 +815,8 @@ func inBodyIM(p *treeBuilder) bool {
 		case "iframe":
 			p.framesetOK = false
 			p.parseGenericRawTextElement()
-		case "noembed":
+		case "noembed", "noscript":
 			p.parseGenericRawTextElement()
-		case "noscript":
-			if p.scripting {
-				p.parseGenericRawTextElement()
-				return true
-			}
-			p.reconstructActiveFormattingElements()
-			p.addElement()
-			p.tokenizer.NextIsNotRawText()
 		case "select":
 			if p.fragment && p.context.Data == "select" {
 				return true
@@ -907,7 +837,7 @@ func inBodyIM(p *treeBuilder) bool {
 			p.addElement()
 		case "optgroup":
 			if p.elementInScope(defaultScope, "select") {
-				p.generateImpliedEndTags()
+				p.generateImpliedEndTags("")
 			} else if p.top().Data == "option" {
 				p.oe.pop()
 			}
@@ -915,7 +845,7 @@ func inBodyIM(p *treeBuilder) bool {
 			p.addElement()
 		case "rb", "rtc":
 			if p.elementInScope(defaultScope, "ruby") {
-				p.generateImpliedEndTags()
+				p.generateImpliedEndTags("")
 			}
 			p.addElement()
 		case "rp", "rt":
@@ -960,21 +890,10 @@ func inBodyIM(p *treeBuilder) bool {
 			}
 			return true
 		case "address", "article", "aside", "blockquote", "button", "center", "details", "dialog", "dir", "div", "dl", "fieldset", "figcaption", "figure", "footer", "header", "hgroup", "listing", "main", "menu", "nav", "ol", "pre", "search", "section", "select", "summary", "ul":
-			if !p.elementInScope(defaultScope, p.tok.Data) {
-				return true
-			}
-			p.generateImpliedEndTags()
+			// Implied end tags only shorten the same stack suffix that popUntil removes.
 			p.popUntil(defaultScope, p.tok.Data)
 		case "form":
 			if p.oe.contains("template") {
-				i := p.indexOfElementInScope(defaultScope, "form")
-				if i == -1 {
-					return true
-				}
-				p.generateImpliedEndTags()
-				if p.oe[i].Data != "form" {
-					return true
-				}
 				p.popUntil(defaultScope, "form")
 			} else {
 				node := p.form
@@ -983,14 +902,14 @@ func inBodyIM(p *treeBuilder) bool {
 				if node == nil || i == -1 || p.oe[i] != node {
 					return true
 				}
-				p.generateImpliedEndTags()
+				p.generateImpliedEndTags("")
 				p.oe.remove(node)
 			}
 		case "p":
-			if !p.elementInScope(buttonScope, "p") {
+			if !p.popUntil(buttonScope, "p") {
 				p.parseImpliedToken(TokenStartTag, "p")
+				p.popUntil(buttonScope, "p")
 			}
-			p.popUntil(buttonScope, "p")
 		case "li":
 			p.popUntil(listItemScope, "li")
 		case "dd", "dt":
@@ -1016,14 +935,6 @@ func inBodyIM(p *treeBuilder) bool {
 		if len(p.templateStack) > 0 {
 			p.im = inTemplateIM
 			return false
-		}
-		for _, e := range p.oe {
-			switch e.Data {
-			case "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc", "tbody", "td", "tfoot", "th",
-				"thead", "tr", "body", "html":
-			default:
-				return true
-			}
 		}
 	}
 
@@ -1494,31 +1405,18 @@ func inTemplateIM(p *treeBuilder) bool {
 		case "base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style", "template", "title":
 			return inHeadIM(p)
 		case "caption", "colgroup", "tbody", "tfoot", "thead":
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inTableIM)
 			p.im = inTableIM
-			return false
 		case "col":
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inColumnGroupIM)
 			p.im = inColumnGroupIM
-			return false
 		case "tr":
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inTableBodyIM)
 			p.im = inTableBodyIM
-			return false
 		case "td", "th":
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inRowIM)
 			p.im = inRowIM
-			return false
 		default:
-			p.templateStack.pop()
-			p.templateStack = append(p.templateStack, inBodyIM)
 			p.im = inBodyIM
-			return false
 		}
+		p.templateStack[len(p.templateStack)-1] = p.im
+		return false
 	case TokenEndTag:
 		switch p.tok.Data {
 		case "template":
@@ -1530,7 +1428,7 @@ func inTemplateIM(p *treeBuilder) bool {
 		if !p.oe.contains("template") {
 			return true
 		}
-		p.generateImpliedEndTags()
+		p.generateImpliedEndTags("")
 		for i := len(p.oe) - 1; i >= 0; i-- {
 			if n := p.oe[i]; n.Namespace == uinode.HTML && n.Data == "template" {
 				p.oe = p.oe[:i]

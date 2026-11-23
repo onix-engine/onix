@@ -14,12 +14,12 @@ const (
 )
 
 type inputPickInput2D struct {
-	revision func(*ecs.World) (uint64, uint64)
-	change   inputPickChange2D
+	component ecs.ComponentType
+	change    inputPickChange2D
 }
 
 func pickInput2D[T any](change inputPickChange2D) inputPickInput2D {
-	return inputPickInput2D{revision: (*ecs.World).ComponentValueRevision[T], change: change}
+	return inputPickInput2D{component: ecs.Type[T](), change: change}
 }
 
 // Transform inputs lead the table so only their membership revisions need storage.
@@ -66,7 +66,7 @@ func (cache *inputPickCache2D) refresh(world *ecs.World, entity, camera ecs.Enti
 	var changes inputPickChange2D
 	var transformWrites uint64
 	for i, input := range inputPickInputs2D {
-		version, membership := input.revision(world)
+		version, membership := input.component.ValueRevision(world)
 		versions[i] = version
 		if cache.versions[i] != version {
 			changes |= input.change

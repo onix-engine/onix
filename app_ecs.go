@@ -247,10 +247,12 @@ func (app *App) ensureECSResources() {
 		app.World = ecs.NewWorld()
 	}
 	app.ensureInputSystem()
-	if _, ok := app.World.GetResource[*input.State](); !ok {
-		app.World.InsertResource(input.NewState())
+	state, ok := app.World.GetResource[*input.State]()
+	if !ok {
+		state = input.NewState()
+		app.World.InsertResource(state)
 	}
-	if state, ok := app.World.GetResource[*input.State](); ok && state != nil && app.Context != nil {
+	if state != nil && app.Context != nil {
 		if app.clipboardContext != app.Context || app.clipboardState != state {
 			state.SetClipboard(app.Context.SetClipboardText, app.Context.ClipboardText)
 			app.clipboardContext = app.Context

@@ -2,6 +2,7 @@
 
 package window
 
+// #cgo ios,onix_release CFLAGS: -g0
 import "C"
 
 import (

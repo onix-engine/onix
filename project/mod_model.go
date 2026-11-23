@@ -8,7 +8,8 @@ import (
 
 // ModelRig reads a model already loaded by this module's private content.
 func (r *Resources) ModelRig(name string) (*ModelRig, error) {
-	model, ok, err := r.modModels.get(name)
+	models, _ := r.modModels.(*resourceCache[string, modelResource])
+	model, ok, err := models.get(name)
 	if err != nil {
 		return nil, err
 	}

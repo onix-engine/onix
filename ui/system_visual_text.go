@@ -12,7 +12,7 @@ import (
 	"github.com/onix-engine/onix/ui/html"
 )
 
-func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	transform.Translation.X.Value, transform.Translation.Y.Value = 0, 0
 	frame := SurfaceStyle{}
 	stackIndex := 0
@@ -21,14 +21,14 @@ func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scen
 		group, _ := world.Get[ButtonGroup](owner)
 		size.Width, size.Height = group.Width, group.Height
 		stackIndex = group.StackIndex + 3
-		frame = styleFor(world, owner, skin.ButtonGroup).Frame
+		frame = styleFor(world, owner, &skin.ButtonGroup).Frame
 	case world.Has[Tab](owner):
 		tab, _ := world.Get[Tab](owner)
 		size.Width, size.Height = tab.Width, max(tab.HeaderHeight, 0)
 		if stack, ok := world.Get[scene.UIStackIndex](owner); ok {
 			stackIndex = int(stack) + 3
 		}
-		frame = styleFor(world, owner, skin.Tab).Frame
+		frame = styleFor(world, owner, &skin.Tab).Frame
 	default:
 		size.Width, size.Height = 0, 0
 	}
@@ -39,7 +39,7 @@ func syncFrameBorder(world *ecs.World, entity, owner ecs.Entity, transform *scen
 	})
 }
 
-func syncTabItemBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncTabItemBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	item := world.GetRef[TabItem](owner)
 	side := world.GetRef[TabItemBorder](entity)
 	control, controlOK := controlViewFor(world, owner)
@@ -139,7 +139,7 @@ func syncSelectorIcon(world *ecs.World, entity, owner ecs.Entity, transform *sce
 	applySurface(world, entity, visualSize.Width, visualSize.Height, SurfaceStyle{Image: image})
 }
 
-func syncSelectorPanel(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncSelectorPanel(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
@@ -152,11 +152,11 @@ func syncSelectorPanel(world *ecs.World, entity, owner ecs.Entity, transform *sc
 	transform.Translation.X.Value, transform.Translation.Y.Value = 0, 0
 	*size = *listSize
 	setUIStackIndex(world, entity, selectorPopupStackBase+1)
-	style := styleFor(world, list.Selector, skin.Selector)
+	style := styleFor(world, list.Selector, &skin.Selector)
 	applySurface(world, entity, size.Width, size.Height, style.Popup)
 }
 
-func syncSelectorPanelBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncSelectorPanelBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
@@ -169,7 +169,7 @@ func syncSelectorPanelBorder(world *ecs.World, entity, owner ecs.Entity, transfo
 	transform.Translation.X.Value, transform.Translation.Y.Value = 0, 0
 	*size = *listSize
 	setUIStackIndex(world, entity, selectorPopupStackBase+4)
-	style := styleFor(world, list.Selector, skin.Selector)
+	style := styleFor(world, list.Selector, &skin.Selector)
 	applySurface(world, entity, size.Width, size.Height, SurfaceStyle{
 		Background: scene.RoundedRectShape2D(graphics.ColorRGBA{}, 0),
 		Border:     style.Popup.Border,
@@ -182,7 +182,7 @@ const (
 	selectorScrollMinThumbSize float32 = 20
 )
 
-func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb bool, transform *scene.UITransform, size *scene.Size2D, skin Skin, counts map[ecs.Entity]itemMetrics) {
+func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb bool, transform *scene.UITransform, size *scene.Size2D, skin *Skin, counts map[ecs.Entity]itemMetrics) {
 	list := world.GetRef[SelectorList](owner)
 	if list == nil {
 		return
@@ -220,7 +220,7 @@ func syncSelectorScrollElement(world *ecs.World, entity, owner ecs.Entity, thumb
 	}
 }
 
-func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	value, composition, caret, focused := textFieldState(world, owner)
 	field, fieldExists := world.Get[TextField](owner)
 	valueText := world.GetRef[scene.Text2D](valueEntity)
@@ -260,7 +260,7 @@ func syncCaretElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, t
 
 type selectionRect struct{ X, Y, W, H float32 }
 
-func syncNativeSelection(world *ecs.World, entity, owner, valueEntity ecs.Entity, skin Skin) {
+func syncNativeSelection(world *ecs.World, entity, owner, valueEntity ecs.Entity, skin *Skin) {
 	rects := *world.GetRef[scene.UIVisualRects2D](entity)
 	count := 0
 	changed := false
@@ -294,7 +294,7 @@ func syncNativeSelection(world *ecs.World, entity, owner, valueEntity ecs.Entity
 	applySurface(world, entity, 0, 0, textFieldStyleFor(world, owner, skin).Selection)
 }
 
-func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin Skin, scratch *textSelectionScratch) {
+func syncSelectionElement(world *ecs.World, entity, owner, valueEntity ecs.Entity, index int, transform *scene.UITransform, size *scene.Size2D, skin *Skin, scratch *textSelectionScratch) {
 	value, _, _, _ := textFieldState(world, owner)
 	start, end, _ := textFieldSelection(world, owner)
 	valueText := world.GetRef[scene.Text2D](valueEntity)

@@ -443,8 +443,8 @@ func SpawnButton(world *ecs.World, opts ButtonOptions) ecs.Entity {
 	bundle.Put(opts.Variant)
 	style := buttonStyleFor(skinFor(world, theme), opts.Variant, false)
 	if opts.Style != nil {
-		style = *opts.Style
-		bundle.Put(StyleOverride[ButtonStyle]{Value: style})
+		style = opts.Style
+		bundle.Put(StyleOverride[ButtonStyle]{Value: *style})
 	}
 	if opts.Icon.Empty() {
 		bundle.Put(pendingButtonIcon{})
@@ -526,7 +526,7 @@ func SpawnButtonGroup[T any](world *ecs.World, opts ButtonGroupOptions[T]) ecs.E
 			Radius: opts.Radius, Disabled: item.Disabled, PassThrough: opts.PassThrough,
 			FontSize: opts.FontSize, DPI: opts.DPI, Theme: theme, Style: &style.Button,
 		})
-		world.Remove[StyleOverride[ButtonStyle]](button)
+		world.Discard(button, ecs.Type[StyleOverride[ButtonStyle]]())
 		_ = world.Insert(button, scene.Parent{Entity: group})
 		_ = world.Insert(button, buttonGroupItem{Group: group, Index: index})
 		_ = world.Insert(button, ButtonGroupValue[T]{Group: group, Index: index, Value: item.Value})
@@ -706,7 +706,7 @@ func SpawnMenu(world *ecs.World, opts MenuOptions) ecs.Entity {
 		X: opts.X, Y: opts.Y, Width: width, Height: height,
 		Label: opts.Label, Icon: style.Indicator, Radius: opts.Radius, PassThrough: opts.PassThrough, Theme: theme, Style: &style.Trigger,
 	})
-	world.Remove[StyleOverride[ButtonStyle]](entity)
+	world.Discard(entity, ecs.Type[StyleOverride[ButtonStyle]]())
 	putStyleOverride(world, entity, opts.Style)
 	_ = world.Insert(entity, Menu{Label: opts.Label, Selected: -1, Width: opts.Width, ItemHeight: height, Padding: padding, StackIndex: theme.StackIndex})
 	panel := spawnSurfacePart[MenuPanelPart](world, entity, 0, height, width, padding*2+height*float32(len(opts.Items)), theme.Surface, theme.StackIndex+1)

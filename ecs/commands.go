@@ -62,7 +62,7 @@ func (s *commandValues[T]) queue(commands *Commands, entity Entity, value T) {
 
 func (s *typedInsertCommandStream[T]) apply(world *World, entity Entity, index int) error {
 	if index < 0 {
-		world.Remove[T](entity)
+		world.Discard(entity, Type[T]())
 		return nil
 	}
 	return world.Insert(entity, s.values[index])

@@ -49,3 +49,39 @@ func TestTextLineLayoutKeepsNativeTextAndCaretGeometry(t *testing.T) {
 		t.Fatal("empty side lost its scrollable extent")
 	}
 }
+
+func TestHiddenLinesKeepWrappedSourceCoordinates(t *testing.T) {
+	for _, mode := range []TextWrapMode{TextWrapNone, TextWrapWords, TextWrapTokens, TextWrapCharacters} {
+		text := NewText2D("abc def ghi\r\n隐藏行\r\nafter\n")
+		text.Font, text.LineHeight, text.WrapMode, text.WrapWidth = notosanssc.NotoSansSCRegular, 20, mode, 35
+		value := text.Text()
+		start, end := value.LineStart(1), value.LineStart(2)
+		text.LineLayout = &TextLineLayout2D{Hidden: []TextHiddenLines2D{{start, end}, {value.Len(), value.Len() + 1}}}
+		rows := TextLineCount2D(&text)
+		if rows < 2 || !text.ensureLayout() {
+			t.Fatal("missing visible lines")
+		}
+		for _, line := range text.lines {
+			if line.start >= start && line.start < end || line.start == value.Len() {
+				t.Fatalf("mode %v laid out hidden text at %d", mode, line.start)
+			}
+		}
+		for _, g := range text.glyphs {
+			if int(g.byteIndex) >= start && int(g.byteIndex) < end {
+				t.Fatalf("mode %v painted hidden glyph", mode)
+			}
+		}
+		caret := value.RuneOffset(end) + 1
+		x, y, _, h, ok := TextCaretRect2D(&text, value, caret)
+		if !ok || TextCaretIndex2D(&text, value, x, y+h/2) != caret {
+			t.Fatalf("mode %v lost source hit", mode)
+		}
+		for range TextSelectionRects2D(&text, value, value.RuneOffset(start), value.RuneOffset(end), 0, 0) {
+			t.Fatalf("mode %v painted hidden selection", mode)
+		}
+		text.LineLayout = nil
+		if TextLineCount2D(&text) <= rows {
+			t.Fatalf("mode %v did not expand", mode)
+		}
+	}
+}

@@ -51,7 +51,7 @@ func TestTextareaScrollMeasurementsRefreshBetweenSyncPhases(t *testing.T) {
 	for _, value := range []string{"short", strings.Repeat("long text ", 40), "short"} {
 		text := world.GetMut[scene.Text2D](textEntity)
 		text.Value = value
-		syncSurfaceElements(world, Skin{}, syncMetrics{})
+		syncSurfaceElements(world, &Skin{}, syncMetrics{})
 		size, _ := world.Get[scene.Size2D](track)
 		if (size.Width > 0) != (len(value) > 5) {
 			t.Fatalf("stale scrollbar measurement for %q: %+v", value, size)
@@ -97,10 +97,10 @@ func BenchmarkRefactorTextareaScrollParts(b *testing.B) {
 	for range 100 {
 		SpawnTextarea(world, TextOptions{Width: 120, Height: 60, Value: "text"})
 	}
-	syncSurfaceElements(world, Skin{}, syncMetrics{})
+	syncSurfaceElements(world, &Skin{}, syncMetrics{})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		syncSurfaceElements(world, Skin{}, syncMetrics{})
+		syncSurfaceElements(world, &Skin{}, syncMetrics{})
 	}
 }

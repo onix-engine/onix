@@ -1,26 +1,38 @@
 package syntax
 
 import (
+	"archive/zip"
+	_ "embed"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"sync"
+	"weak"
 
 	textmate "github.com/eugenioenko/textmate-go"
 	"github.com/eugenioenko/textmate-go/grammars"
 )
 
-// Bound compiled grammar retention independently of live documents. Each entry
-// owns a registry so evicting a language also releases its compiled includes.
-var grammarCache struct {
-	entries [4]grammarEntry
-	next    int
-	sync.Mutex
-}
+//go:generate python3 pack_grammars.py
 
-type grammarEntry struct {
-	grammar *textmate.Grammar
-	scope   string
+//go:embed grammars.zip
+var grammarAssets string
+
+var grammarFiles = sync.OnceValues(func() (*zip.Reader, error) {
+	return zip.NewReader(strings.NewReader(grammarAssets), int64(len(grammarAssets)))
+})
+
+// Both sets of keys come from the embedded catalog. Open documents own the
+// compiled grammars, and their registries own the raw rules for lazy includes.
+var grammarCache = struct {
+	compiled map[string]weak.Pointer[textmate.Grammar]
+	raw      map[string]weak.Pointer[textmate.RawGrammar]
+	sync.Mutex
+}{
+	compiled: make(map[string]weak.Pointer[textmate.Grammar]),
+	raw:      make(map[string]weak.Pointer[textmate.RawGrammar]),
 }
 
 func detectLanguage(filename string) (string, string) {
@@ -49,37 +61,52 @@ func loadGrammar(scope string) (*textmate.Grammar, error) {
 	}
 	grammarCache.Lock()
 	defer grammarCache.Unlock()
-	for _, entry := range grammarCache.entries {
-		if entry.scope == scope {
-			return entry.grammar, nil
-		}
+	if grammar := grammarCache.compiled[scope].Value(); grammar != nil {
+		return grammar, nil
 	}
-	registry := textmate.NewRegistry(textmate.RegistryOptions{LoadGrammar: func(name string) (*textmate.RawGrammar, error) {
-		if name == "text.vim-help" {
-			data, err := resources.ReadFile("resources/grammars/vimdoc.json")
-			if err != nil {
-				return nil, err
-			}
-			return textmate.ParseRawGrammar(data)
-		}
-		return grammars.Load(name)
-	}})
+	registry := textmate.NewRegistry(textmate.RegistryOptions{LoadGrammar: loadRawGrammar})
 	grammar, err := registry.LoadGrammar(scope)
 	if err != nil {
 		registry.Dispose()
 		return nil, fmt.Errorf("syntax grammar %s: %w", scope, err)
 	}
-	// The grammar retains the registry for lazy compilation of included rules.
-	grammarCache.entries[grammarCache.next] = grammarEntry{scope: scope, grammar: grammar}
-	grammarCache.next = (grammarCache.next + 1) % len(grammarCache.entries)
+	grammarCache.compiled[scope] = weak.Make(grammar)
 	return grammar, nil
 }
 
-// ReleaseGrammarCache drops idle compiled grammars. Active documents keep their
-// grammar valid and do not lose line states or captures.
+// Called synchronously by Registry.LoadGrammar while grammarCache is locked.
+func loadRawGrammar(scope string) (*textmate.RawGrammar, error) {
+	if raw := grammarCache.raw[scope].Value(); raw != nil {
+		return raw, nil
+	}
+	var source fs.FS = resources
+	name := "resources/grammars/vimdoc.json"
+	if scope != "text.vim-help" {
+		files, err := grammarFiles()
+		if err != nil {
+			return nil, err
+		}
+		source, name = files, scope
+	}
+	data, err := fs.ReadFile(source, name)
+	if errors.Is(err, fs.ErrNotExist) && scope != "text.vim-help" {
+		return nil, nil // Optional include outside the embedded catalog.
+	}
+	if err != nil {
+		return nil, err
+	}
+	raw, err := textmate.ParseRawGrammar(data)
+	if err == nil {
+		grammarCache.raw[scope] = weak.Make(raw)
+	}
+	return raw, err
+}
+
+// ReleaseGrammarCache forgets shared lookup entries. Active documents keep
+// their grammar, line states and captures.
 func ReleaseGrammarCache() {
 	grammarCache.Lock()
-	clear(grammarCache.entries[:])
-	grammarCache.next = 0
+	clear(grammarCache.compiled)
+	clear(grammarCache.raw)
 	grammarCache.Unlock()
 }

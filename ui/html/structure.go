@@ -69,27 +69,6 @@ func prepareHTMLStructureBox(state *htmlRenderState, box *layout.Box) bool {
 	return true
 }
 
-// Rebuild membership and update order in the same tree walk. Each box's own
-// primitives share a base stack; their relative offsets remain unchanged.
-func appendHTMLStructureEntities(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int, context htmlStackContext) {
-	rendered := state.BoxRenderings[box.Node]
-	context = context.enter(box)
-	updateHTMLBoxOrder(world, state, rendered, context.stack(box, stackIndex))
-	beginHTMLOwnerSpan(state, rendered)
-	state.Children = append(state.Children, rendered.Entities...)
-	if binding := rendered.Overflow; binding != nil {
-		state.Children = append(state.Children, binding.entity)
-		state.Children = append(state.Children, binding.parts...)
-	}
-	end := rendered.Stack + 4
-	for _, child := range box.Children {
-		appendHTMLStructureEntities(world, state, child, stackIndex, context)
-		end = max(end, state.BoxRenderings[child.Node].PaintEnd)
-	}
-	setHTMLScrollbarPaintEnd(world, state, rendered, end)
-	rendered.OwnerEnd = len(state.Children)
-}
-
 // Reserve scrollbar paint slots after the complete content subtree. Cached
 // child endpoints keep nested scrolling from repeatedly walking descendants.
 func updateHTMLScrollbarPaintOrder(world *ecs.World, state *htmlRenderState, rendered *htmlBoxRendering) bool {
@@ -165,7 +144,7 @@ func updateHTMLChangedStackOrders(world *ecs.World, state *htmlRenderState, stac
 			continue
 		}
 		if !htmlStackChangedAncestor(state, rendered.Box) {
-			updateHTMLStackSubtree(world, state, rendered.Box, stackIndex, htmlStackContextFor(rendered.Box.Parent))
+			updateHTMLStackSubtree(world, state, rendered.Box, stackIndex, htmlStackContextFor(rendered.Box.Parent), false)
 			for parent := rendered.Box.Parent; parent != nil; parent = parent.Parent {
 				if !updateHTMLScrollbarPaintOrder(world, state, state.BoxRenderings[parent.Node]) {
 					break
@@ -175,16 +154,23 @@ func updateHTMLChangedStackOrders(world *ecs.World, state *htmlRenderState, stac
 	}
 }
 
-func updateHTMLStackSubtree(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int, context htmlStackContext) {
+// Structural changes also rebuild owner spans in paint order during this walk.
+func updateHTMLStackSubtree(world *ecs.World, state *htmlRenderState, box *layout.Box, stackIndex int, context htmlStackContext, rebuildOwners bool) int {
 	rendered := state.BoxRenderings[box.Node]
 	context = context.enter(box)
 	updateHTMLBoxOrder(world, state, rendered, context.stack(box, stackIndex))
+	if rebuildOwners {
+		appendHTMLOwnerEntities(state, rendered)
+	}
 	end := rendered.Stack + 4
 	for _, child := range box.Children {
-		updateHTMLStackSubtree(world, state, child, stackIndex, context)
-		end = max(end, state.BoxRenderings[child.Node].PaintEnd)
+		end = max(end, updateHTMLStackSubtree(world, state, child, stackIndex, context, rebuildOwners))
 	}
 	setHTMLScrollbarPaintEnd(world, state, rendered, end)
+	if rebuildOwners {
+		rendered.OwnerEnd = len(state.Children)
+	}
+	return rendered.PaintEnd
 }
 
 // Shared primitives can belong to more than one box; changing their order

@@ -178,6 +178,9 @@ func TestResourceChangeTickIsReadOnly(t *testing.T) {
 		t.Fatal("inserted resource has the wrong change tick")
 	}
 	world.GetResource[int]()
+	if ref := world.GetResourceRef[int](); ref == nil || *ref != 1 {
+		t.Fatal("read-only reference lost the resource value")
+	}
 	if world.ResourceChangeTick[int]() != inserted || world.ChangeTick() != inserted || world.MutationVersion() != version {
 		t.Fatal("read-only resource access marked a write")
 	}
@@ -191,8 +194,8 @@ func TestResourceChangeTickIsReadOnly(t *testing.T) {
 		t.Fatal("mutable access did not advance the resource change tick")
 	}
 	world.RemoveResource[int]()
-	if world.ResourceChangeTick[int]() != 0 {
-		t.Fatal("removed resource has a change tick")
+	if world.ResourceChangeTick[int]() != 0 || world.GetResourceRef[int]() != nil {
+		t.Fatal("removed resource is still visible")
 	}
 }
 

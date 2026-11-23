@@ -174,6 +174,46 @@ func TestWebGPUTextureBindGroupMatchesLayout(t *testing.T) {
 	}
 }
 
+func TestWebGPUMeshExtraTextureSlotsMatchLayout(t *testing.T) {
+	descriptor := js.FuncOf(func(_ js.Value, args []js.Value) any { return args[0] })
+	defer descriptor.Release()
+	var group js.Value
+	bind := js.FuncOf(func(_ js.Value, args []js.Value) any { group = args[1]; return nil })
+	defer bind.Release()
+	d := webGPUDriver{
+		device: webGPUObject("createBindGroupLayout", descriptor, "createBindGroup", descriptor),
+		frame:  webGPUObject("setBindGroup", bind), dynamicOffsets: webGPUArray(0),
+	}
+	d.createBindGroupLayouts()
+	d.frames[0].buffer.value = webGPUObject()
+	var extra [MeshExtraTextureSlots]*webGPUTexture
+	for i := range extra {
+		extra[i] = &webGPUTexture{view: webGPUObject(), sampler: webGPUObject()}
+	}
+	d.setMeshTextureBindGroup(extra[0], extra[0], extra[0], extra, 0)
+	layout, entries := d.meshTextureLayout.Get("entries"), group.Get("entries")
+	if layout.Length() != 7+2*len(extra) || entries.Length() != layout.Length() {
+		t.Fatalf("mesh entries %d, layout entries %d", entries.Length(), layout.Length())
+	}
+	for i, texture := range extra {
+		binding := 8 + 2*i
+		view, sampler := layout.Index(binding-1), layout.Index(binding)
+		sampleType := "float"
+		if binding == 18 || binding == 20 {
+			sampleType = "unfilterable-float"
+		}
+		if view.Get("binding").Int() != binding || view.Get("texture").Get("sampleType").String() != sampleType ||
+			sampler.Get("binding").Int() != binding+1 || sampler.Get("sampler").Get("type").String() != "filtering" {
+			t.Fatalf("unexpected layout for mesh texture slot %d", i)
+		}
+		view, sampler = entries.Index(binding-1), entries.Index(binding)
+		if view.Get("binding").Int() != binding || !view.Get("resource").Equal(texture.view) ||
+			sampler.Get("binding").Int() != binding+1 || !sampler.Get("resource").Equal(texture.sampler) {
+			t.Fatalf("incorrect resources for mesh texture slot %d", i)
+		}
+	}
+}
+
 func TestWebGPUMeshBindingsReuseAcrossAnimatedOffsets(t *testing.T) {
 	creations := 0
 	create := js.FuncOf(func(_ js.Value, args []js.Value) any { creations++; return args[0] })

@@ -1125,7 +1125,7 @@ func (s *SceneInstance) restoreAppliedNode(entity ecs.Entity, previous sceneSpaw
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Animator](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Animator]())
 	}
 	// Dynamic recompilation does not have the static plan's cache key and
 	// pre-resolved target arrays. Restore the complete plan node metadata after
@@ -1165,9 +1165,9 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 		if err := s.World.Insert(entity, sceneapi.UIGlobalTransform{}); err != nil {
 			return err
 		}
-		s.World.Remove[sceneapi.Transform](entity)
-		s.World.Remove[sceneapi.GlobalTransform](entity)
-		s.World.Remove[sceneapi.RenderOrder2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Transform]())
+		s.World.Discard(entity, ecs.Type[sceneapi.GlobalTransform]())
+		s.World.Discard(entity, ecs.Type[sceneapi.RenderOrder2D]())
 		if err := s.World.Insert(entity, sceneapi.UIStackIndex(spec.Order)); err != nil {
 			return err
 		}
@@ -1178,9 +1178,9 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 		if err := s.World.Insert(entity, sceneapi.GlobalTransform{}); err != nil {
 			return err
 		}
-		s.World.Remove[sceneapi.UITransform](entity)
-		s.World.Remove[sceneapi.UIGlobalTransform](entity)
-		s.World.Remove[sceneapi.UIStackIndex](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.UITransform]())
+		s.World.Discard(entity, ecs.Type[sceneapi.UIGlobalTransform]())
+		s.World.Discard(entity, ecs.Type[sceneapi.UIStackIndex]())
 		applyRenderOrderSpec(s.World, entity, spec)
 	}
 	if err := s.World.Insert(entity, sceneapi.Visibility{Visible: node.Visible}); err != nil {
@@ -1198,21 +1198,21 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.SiblingOrder](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.SiblingOrder]())
 	}
 	if spec.Layout != nil {
 		if err := s.World.Insert(entity, *spec.Layout); err != nil {
 			return err
 		}
 	} else {
-		s.World.Remove[engineui.Layout](entity)
+		s.World.Discard(entity, ecs.Type[engineui.Layout]())
 	}
 	if spec.Widget != nil {
 		if err := s.World.Insert(entity, *spec.Widget); err != nil {
 			return err
 		}
 	} else {
-		s.World.Remove[engineui.Widget](entity)
+		s.World.Discard(entity, ecs.Type[engineui.Widget]())
 	}
 	if err := resolveWidgetTarget(s.World, entity, spec, s.Entities); err != nil {
 		return err
@@ -1223,7 +1223,7 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Size2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Size2D]())
 	}
 	if spec.BlockInput && (spec.Components.Has2D() || spec.Control != nil) {
 		if err := s.World.Insert(entity, sceneapi.InputBlocker2D{
@@ -1232,7 +1232,7 @@ func (s *SceneInstance) applyAuthoredNodeSpec(entity ecs.Entity, spec SceneNodeS
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.InputBlocker2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.InputBlocker2D]())
 	}
 	if err := s.applyAuthoredVisualComponents(entity, node); err != nil {
 		return err
@@ -1270,25 +1270,25 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 				return err
 			}
 		} else {
-			s.World.Remove[sceneapi.Sprite2D](entity)
+			s.World.Discard(entity, ecs.Type[sceneapi.Sprite2D]())
 		}
 		if node.HasAnimation {
 			if err := s.World.Insert(entity, animator); err != nil {
 				return err
 			}
 		} else {
-			s.World.Remove[sceneapi.Animator](entity)
+			s.World.Discard(entity, ecs.Type[sceneapi.Animator]())
 		}
 	} else {
-		s.World.Remove[sceneapi.Sprite2D](entity)
-		s.World.Remove[sceneapi.Animator](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Sprite2D]())
+		s.World.Discard(entity, ecs.Type[sceneapi.Animator]())
 	}
 	if node.HasSprite && spec.Components.Sprite.Trail != nil {
 		if err := s.World.Insert(entity, spec.Components.Sprite.Trail.component()); err != nil {
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.SpriteTrail2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.SpriteTrail2D]())
 	}
 	if node.HasText {
 		text, err := s.project.ecsTextForPlanNode(node)
@@ -1299,7 +1299,7 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Text2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Text2D]())
 	}
 	if node.HasParticle {
 		emitter, err := s.project.ecsParticleEmitterForGameObject(spec)
@@ -1310,7 +1310,7 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.ParticleEmitter2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.ParticleEmitter2D]())
 	}
 	if node.HasTilemap {
 		tilemap, err := s.project.ecsTilemapForGameObject(spec)
@@ -1321,7 +1321,7 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Tilemap2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Tilemap2D]())
 	}
 	if node.HasSpine {
 		component, err := s.project.ecsSpineForGameObject(spec)
@@ -1332,7 +1332,7 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 			return err
 		}
 	} else {
-		s.World.Remove[sceneapi.Spine2D](entity)
+		s.World.Discard(entity, ecs.Type[sceneapi.Spine2D]())
 	}
 	if node.HasModel {
 		mesh, material, supported, err := s.project.modelForSpec(spec)
@@ -1347,8 +1347,8 @@ func (s *SceneInstance) applyAuthoredVisualComponents(entity ecs.Entity, node sc
 				return err
 			}
 		} else {
-			s.World.Remove[render3d.Mesh](entity)
-			s.World.Remove[render3d.Material[graphics.StandardMaterial]](entity)
+			s.World.Discard(entity, ecs.Type[render3d.Mesh]())
+			s.World.Discard(entity, ecs.Type[render3d.Material[graphics.StandardMaterial]]())
 		}
 	}
 	if node.HasCamera {
@@ -1647,7 +1647,7 @@ func (s *SceneInstance) recomposeControlsUnder(root ecs.Entity) error {
 	}
 	for _, entity := range entities {
 		if s.World.Has[engineui.Control](entity) {
-			s.World.Remove[engineui.Variants[engineui.ControlVariant]](entity)
+			s.World.Discard(entity, ecs.Type[engineui.Variants[engineui.ControlVariant]]())
 		}
 	}
 	for _, entity := range entities {
@@ -1770,7 +1770,7 @@ func (s *SceneInstance) bindControlComposition(owner ecs.Entity, unbind bool) er
 		return true
 	})
 	if unbind {
-		s.World.Remove[engineui.Variants[engineui.ControlVariant]](owner)
+		s.World.Discard(owner, ecs.Type[engineui.Variants[engineui.ControlVariant]]())
 	}
 	return engineui.BindControlComposition(s.World, composition, owner, func(entity ecs.Entity) error {
 		return s.bindSceneControl(entity, engineui.Button{})
@@ -1897,8 +1897,8 @@ func buildConfiguredSceneComponents(bundle *Bundle, node sceneSpawnNode) (ecs.Bu
 	if node.Spec.Control != nil && !config.HasFeature(FeatureUIControls) {
 		return ecs.Bundle{}, fmt.Errorf("scene node %q requires the UI Controls system", node.Spec.ID)
 	}
-	if (node.Spec.Layout != nil || node.Spec.Widget != nil) && !config.HasFeature(FeatureUIWidgets) && !config.HasFeature(FeatureUIControls) {
-		return ecs.Bundle{}, fmt.Errorf("scene node %q requires the UI Widgets system", node.Spec.ID)
+	if (node.Spec.Layout != nil || node.Spec.Widget != nil) && !supportsSceneUILayout(config.HasFeature) {
+		return ecs.Bundle{}, fmt.Errorf("scene node %q requires a UI runtime for layout", node.Spec.ID)
 	}
 	return bundle.buildSceneComponents(node, true, true)
 }
@@ -2715,11 +2715,11 @@ func sceneSortIndex(world *ecs.World, entity ecs.Entity, ui bool, fallback int) 
 
 func applyRenderOrderSpec(world *ecs.World, entity ecs.Entity, spec SceneNodeSpec) {
 	if specUsesUI(&spec) {
-		world.Remove[sceneapi.RenderOrder2D](entity)
+		world.Discard(entity, ecs.Type[sceneapi.RenderOrder2D]())
 		setUIStackIndex(world, entity, spec.Order)
 		return
 	}
-	world.Remove[sceneapi.UIStackIndex](entity)
+	world.Discard(entity, ecs.Type[sceneapi.UIStackIndex]())
 	order := spec.Order
 	if spec.Components.Particle != nil && order == 0 {
 		order = int(sceneapi.DefaultParticleRenderOrder)
@@ -2742,7 +2742,7 @@ func setUIStackIndex(world *ecs.World, entity ecs.Entity, stackIndex int) {
 func applyRenderLayersSpec(world *ecs.World, entity ecs.Entity, values []uint) {
 	layers, ok := renderLayersFromSpec(values)
 	if !ok {
-		world.Remove[sceneapi.RenderLayers](entity)
+		world.Discard(entity, ecs.Type[sceneapi.RenderLayers]())
 		return
 	}
 	if current := world.GetMut[sceneapi.RenderLayers](entity); current != nil {
@@ -2755,7 +2755,7 @@ func applyRenderLayersSpec(world *ecs.World, entity ecs.Entity, values []uint) {
 func applyUITargetCameraSpec(world *ecs.World, entity ecs.Entity, targetID string, entities map[string]ecs.Entity) error {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
-		world.Remove[sceneapi.UITargetCamera](entity)
+		world.Discard(entity, ecs.Type[sceneapi.UITargetCamera]())
 		return nil
 	}
 	target, ok := entities[targetID]

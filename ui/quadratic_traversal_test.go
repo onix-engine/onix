@@ -22,7 +22,7 @@ func quadraticButtonGroupFixture(count int) (*ecs.World, ecs.Entity, []ecs.Entit
 		}
 	}
 	world.GetMut[ButtonGroup](owner).Buttons = items
-	syncButtonGroups(world, Skin{})
+	syncButtonGroups(world, &Skin{})
 	return world, owner, items, boundaries
 }
 
@@ -30,7 +30,7 @@ func TestButtonGroupDividerPrefixesRefreshWithControls(t *testing.T) {
 	world, owner, items, dividers := quadraticButtonGroupFixture(4)
 	check := func(want []float32, width float32) {
 		t.Helper()
-		syncButtonGroups(world, Skin{})
+		syncButtonGroups(world, &Skin{})
 		group, _ := world.Get[ButtonGroup](owner)
 		if group.Width != width {
 			t.Fatalf("group width=%v, want %v", group.Width, width)
@@ -49,7 +49,7 @@ func TestButtonGroupDividerPrefixesRefreshWithControls(t *testing.T) {
 	check([]float32{10, 14, 13}, 14)
 	world.Despawn(items[2])
 	check([]float32{10, 11, 11}, 11)
-	if n := testing.AllocsPerRun(100, func() { syncButtonGroups(world, Skin{}) }); n != 0 {
+	if n := testing.AllocsPerRun(100, func() { syncButtonGroups(world, &Skin{}) }); n != 0 {
 		t.Fatalf("warm divider sync allocated %v objects", n)
 	}
 }
@@ -61,7 +61,7 @@ func BenchmarkButtonGroupDividerTraversal(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				syncButtonGroups(world, Skin{})
+				syncButtonGroups(world, &Skin{})
 			}
 		})
 	}

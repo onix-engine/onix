@@ -131,7 +131,7 @@ func (app *App) LoadModules[P module.ContentProfile](plan *project.ProjectPlan, 
 		if app.hasSystemSet(systemSetRender2D) {
 			// Include fallback cameras created after the entry scene established its query scope.
 			runtime.SyncScopes()
-			app.configureCamera2D()
+			app.configureCamera2D(false)
 		}
 	}
 	return entry, nil

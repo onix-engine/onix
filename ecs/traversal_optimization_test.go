@@ -122,7 +122,7 @@ func TestTraversalMigrationMovesMiddleRowsAndPreservesTicks(t *testing.T) {
 	for _, entity := range entities {
 		_, meta, _ := world.entityMeta(entity)
 		col := world.archetypes[meta.archetypeID].componentColumn[testPosition](world.registerComponent[testPosition]())
-		ticks[entity] = [2]Tick{col.added[meta.row], col.changed[meta.row]}
+		ticks[entity] = [2]Tick{col.state.added[meta.row], col.state.changed[meta.row]}
 	}
 	for _, entity := range entities[:2] {
 		if err := world.Insert(entity, testLocalTag{}); err != nil {
@@ -138,7 +138,7 @@ func TestTraversalMigrationMovesMiddleRowsAndPreservesTicks(t *testing.T) {
 		}
 		_, meta, _ := world.entityMeta(entity)
 		col := world.archetypes[meta.archetypeID].componentColumn[testPosition](world.registerComponent[testPosition]())
-		if got := [2]Tick{col.added[meta.row], col.changed[meta.row]}; got != ticks[entity] {
+		if got := [2]Tick{col.state.added[meta.row], col.state.changed[meta.row]}; got != ticks[entity] {
 			t.Fatalf("ticks changed: %v != %v", got, ticks[entity])
 		}
 		velocity, exists := world.Get[testVelocity](entity)

@@ -4,6 +4,7 @@ package ecs
 
 import (
 	"math/bits"
+	"reflect"
 	"slices"
 )
 
@@ -102,19 +103,19 @@ func (unscopedOption) resolve(*World) rowFilter { return rowFilter{kind: filterU
 func Unscoped() QueryOption { return unscopedOption{} }
 
 func (withOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: world.componentIDFor[T](), kind: filterWith}
+	return rowFilter{component: world.identifyComponent(reflect.TypeFor[T]()), kind: filterWith}
 }
 
 func (withoutOption[T]) resolve(world *World) rowFilter {
-	return rowFilter{component: world.componentIDFor[T](), kind: filterWithout}
+	return rowFilter{component: world.identifyComponent(reflect.TypeFor[T]()), kind: filterWithout}
 }
 
 func (option addedOption[T]) resolve(world *World) rowFilter {
-	return world.resolveChangeFilter[T](option.context, filterAdded)
+	return world.resolveChangeFilter(reflect.TypeFor[T](), option.context, filterAdded)
 }
 
 func (option changedOption[T]) resolve(world *World) rowFilter {
-	return world.resolveChangeFilter[T](option.context, filterChanged)
+	return world.resolveChangeFilter(reflect.TypeFor[T](), option.context, filterChanged)
 }
 
 func With[T any]() QueryOption {
@@ -133,14 +134,56 @@ func (context *SystemContext) Changed[T any]() QueryOption {
 	return changedOption[T]{context: context}
 }
 
-func (world *World) resolveChangeFilter[T any](context *SystemContext, kind filterKind) rowFilter {
+func (world *World) resolveChangeFilter(typ reflect.Type, context *SystemContext, kind filterKind) rowFilter {
 	if context == nil {
 		panic("ecs: system context is nil")
 	}
 	if context.World != world {
 		panic("ecs: change filter context belongs to a different world")
 	}
-	return rowFilter{component: world.componentIDFor[T](), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
+	return rowFilter{component: world.identifyComponent(typ), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
+}
+
+// ChangedEntityQuery visits entity IDs whose component was written during a
+// system's change window. It shares the table and tick indexes of typed queries.
+type ChangedEntityQuery struct {
+	view queryView
+}
+
+// ChangedEntities snapshots the current change window for one component type.
+func (context *SystemContext) ChangedEntities(component ComponentType) (result ChangedEntityQuery) {
+	if component.typ == nil {
+		return result
+	}
+	world := context.World
+	filter := world.resolveChangeFilter(component.typ, context, filterChanged)
+	result.view.init(world, []componentID{filter.component}, nil)
+	result.view.filters.append(filter)
+	return result
+}
+
+// Unscoped includes matching entities outside the current execution scope.
+func (q ChangedEntityQuery) Unscoped() ChangedEntityQuery {
+	q.view.unscoped = true
+	return q
+}
+
+// All visits matching entity IDs in the same order as a typed component query.
+func (q ChangedEntityQuery) All(yield func(Entity) bool) {
+	cursor := queryCursor{view: q.view}
+	if cursor.open(yield != nil) == 0 {
+		return
+	}
+	defer cursor.close()
+	for start, end := cursor.nextRows(0); start < end; start, end = cursor.nextRows(end) {
+		filter := cursor.inline[0]
+		entities := cursor.archetype.entities
+		for row := start; row < end; row++ {
+			if filter.matches(row) && !yield(entities[row]) {
+				return
+			}
+		}
+	}
 }
 
 type queryView struct {
@@ -150,19 +193,6 @@ type queryView struct {
 	filters  queryFilters
 	limited  bool
 	unscoped bool
-}
-
-func (v queryView) begin(callback bool) bool {
-	if !callback || v.world == nil || v.plan == nil {
-		return false
-	}
-	v.plan.update(v.world)
-	v.world.activeQueryIterators++
-	return true
-}
-
-func (v queryView) end() {
-	v.world.activeQueryIterators--
 }
 
 // filterBinding resolves one change filter against one bound table: its tick
@@ -190,14 +220,18 @@ type queryCursor struct {
 	archetypeBits  uint64
 	archetypeIndex int
 	archetypeBase  uint32
-	tick           Tick
 }
 
-func (v queryView) cursor(callback bool) (queryCursor, bool) {
-	if !v.begin(callback) {
-		return queryCursor{}, false
+// open initializes the cursor in place. Zero means there is no iteration;
+// otherwise all mutable accesses in the iteration share the returned tick.
+func (cursor *queryCursor) open(callback bool) Tick {
+	v := &cursor.view
+	if !callback || v.world == nil || v.plan == nil {
+		return 0
 	}
-	cursor := queryCursor{view: v, archetypeIndex: -1, row: -1}
+	v.plan.update(v.world)
+	v.world.activeQueryIterators++
+	cursor.archetypeIndex = -1
 	if !v.limited && !v.unscoped && v.world.queryScope != nil {
 		cursor.scope = v.world.queryScope
 		cursor.scope.bind(v.world)
@@ -205,7 +239,7 @@ func (v queryView) cursor(callback bool) (queryCursor, bool) {
 	if count := v.filters.count; count > len(cursor.inline) {
 		cursor.extra = queryBindingPool.get(count - len(cursor.inline))
 	}
-	return cursor, true
+	return v.world.mutationTick()
 }
 
 // binding returns the resolved storage of one change filter.
@@ -234,9 +268,6 @@ func (cursor *queryCursor) nextEntity() bool {
 			cursor.bindArchetype(archetype)
 		}
 		cursor.row = int(meta.row)
-		if cursor.view.filters.count != 0 && !cursor.rowMatches() {
-			continue
-		}
 		return true
 	}
 	return false
@@ -309,9 +340,34 @@ func (cursor *queryCursor) groupMatches(group int) bool {
 	return true
 }
 
-// nextBlock skips unchanged groups before testing individual blocks. The
-// generated adapters only run row filters inside matching 64-row blocks.
+// nextRows returns a half-open range in the current table. Explicit lists
+// yield one row at a time to preserve their order and repeated entities.
+func (cursor *queryCursor) nextRows(after int) (int, int) {
+	if cursor.view.limited {
+		if cursor.nextEntity() {
+			return cursor.row, cursor.row + 1
+		}
+		return 0, 0
+	}
+	if cursor.archetype != nil && after < len(cursor.archetype.entities) {
+		if start, end := cursor.nextBlock(after, len(cursor.archetype.entities)); start < end {
+			return start, end
+		}
+	}
+	for cursor.nextArchetype() {
+		if start, end := cursor.nextBlock(0, len(cursor.archetype.entities)); start < end {
+			return start, end
+		}
+	}
+	return 0, 0
+}
+
+// nextBlock returns a whole table for dense traversal. With row filters or
+// a partial scope, it skips excluded groups and blocks.
 func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
+	if cursor.view.filters.count == 0 && cursor.scopeTable == nil {
+		return start, length
+	}
 	for start < length {
 		if table := cursor.scopeTable; table != nil && len(table.sparse) != 0 {
 			for cursor.scopeBlock < len(table.sparse) && int(table.sparse[cursor.scopeBlock]) < start {
@@ -357,35 +413,37 @@ func (cursor *queryCursor) nextBlock(start, length int) (int, int) {
 	return length, length
 }
 
-func (cursor *queryCursor) mutationTick() Tick {
-	if cursor.tick == 0 {
-		cursor.tick = cursor.view.world.mutationTick()
-	}
-	return cursor.tick
-}
-
 func (cursor *queryCursor) close() {
 	if cursor.extra != nil {
 		queryBindingPool.put(cursor.extra)
 	}
-	cursor.view.end()
+	cursor.view.world.activeQueryIterators--
 }
 
-func buildQuery(world *World, key simpleQueryKey, options []QueryOption) queryView {
-	key.sort()
-	for index := 1; index < int(key.count); index++ {
-		if key.ids[index-1] == key.ids[index] {
+func (view *queryView) init(world *World, ids []componentID, options []QueryOption) {
+	view.world = world
+	// Insert the at most seven IDs in sorted order for the cache. Accessors
+	// retain the original order supplied by the caller.
+	key := simpleQueryKey{count: uint8(len(ids))}
+	for i, id := range ids {
+		j := i
+		for j > 0 && key.ids[j-1] > id {
+			key.ids[j] = key.ids[j-1]
+			j--
+		}
+		if j > 0 && key.ids[j-1] == id {
 			panic("ecs: query contains duplicate component type")
 		}
+		key.ids[j] = id
 	}
 	if len(options) == 0 {
-		return queryView{world: world, plan: world.simpleQueryPlan(key)}
+		view.plan = world.simpleQueryPlan(key)
+		return
 	}
 	// Reuse the world's scratch masks so a warm query builds no new storage.
 	spec := &world.queryMasks
 	spec.required = maskForInto(spec.required, key.ids[:key.count])
 	spec.without = spec.without[:0]
-	view := queryView{world: world}
 	for _, option := range options {
 		if option == nil {
 			continue
@@ -405,14 +463,15 @@ func buildQuery(world *World, key simpleQueryKey, options []QueryOption) queryVi
 		}
 	}
 	view.plan = world.queryPlan(*spec)
-	return view
 }
 
-func (cursor *queryCursor) rowMatches() bool {
-	row := cursor.row
-	for index := 0; index < cursor.view.filters.count; index++ {
-		binding := cursor.binding(index)
-		if !tickInRange(binding.ticks[row], binding.lastRun, binding.thisRun) {
+func (binding *filterBinding) matches(row int) bool {
+	return tickInRange(binding.ticks[row], binding.lastRun, binding.thisRun)
+}
+
+func (cursor *queryCursor) remainingFiltersMatch(row int) bool {
+	for index := 1; index < cursor.view.filters.count; index++ {
+		if !cursor.binding(index).matches(row) {
 			return false
 		}
 	}
@@ -443,10 +502,6 @@ func (w *World) simpleQueryPlan(key simpleQueryKey) *queryPlan {
 	plan := w.queryPlan(querySpec{required: w.queryMasks.required})
 	w.simpleQueryPlans[key] = plan
 	return plan
-}
-
-func (key *simpleQueryKey) sort() {
-	slices.Sort(key.ids[:key.count])
 }
 
 // maskWith sets one bit, growing the mask word-wise. Reused capacity is

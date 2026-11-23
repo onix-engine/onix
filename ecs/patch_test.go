@@ -64,8 +64,8 @@ func TestPatchMigratesOncePreservingTicksAndSwappedEntity(t *testing.T) {
 	second := spawn.Spawn(testPosition{X: 3}, testVelocity{X: 4}, testName{Value: "second"})
 	positionColumn, positionRow := w.componentRow[testPosition](first)
 	nameColumn, nameRow := w.componentRow[testName](first)
-	positionAdded := positionColumn.added[positionRow]
-	nameAdded, nameChanged := nameColumn.added[nameRow], nameColumn.changed[nameRow]
+	positionAdded := positionColumn.state.added[positionRow]
+	nameAdded, nameChanged := nameColumn.state.added[nameRow], nameColumn.state.changed[nameRow]
 	patch := w.NewPatch2[testPosition, testSize](Type[testVelocity](), Type[testPosition](), Type[testVisibility]())
 	patch.Reserve(2)
 	cleaned := 0
@@ -86,21 +86,21 @@ func TestPatchMigratesOncePreservingTicksAndSwappedEntity(t *testing.T) {
 	positionColumn, positionRow = w.componentRow[testPosition](first)
 	nameColumn, nameRow = w.componentRow[testName](first)
 	sizeColumn, sizeRow := w.componentRow[testSize](first)
-	if positionColumn.values[positionRow].X != 10 || positionColumn.added[positionRow] != positionAdded || positionColumn.changed[positionRow] != sizeColumn.added[sizeRow] {
+	if positionColumn.values[positionRow].X != 10 || positionColumn.state.added[positionRow] != positionAdded || positionColumn.state.changed[positionRow] != sizeColumn.state.added[sizeRow] {
 		t.Fatal("replacement lost Added or did not share the insertion tick")
 	}
-	if nameColumn.values[nameRow].Value != "first" || nameColumn.added[nameRow] != nameAdded || nameColumn.changed[nameRow] != nameChanged {
+	if nameColumn.values[nameRow].Value != "first" || nameColumn.state.added[nameRow] != nameAdded || nameColumn.state.changed[nameRow] != nameChanged {
 		t.Fatal("retained component ticks changed")
 	}
 	if w.GetRef[testPosition](second).X != 3 || w.GetRef[testName](second).Value != "second" || w.GetRef[testVelocity](second).X != 4 {
 		t.Fatal("swapped entity row was corrupted")
 	}
 	structure = w.StructureVersion()
-	added := sizeColumn.added[sizeRow]
+	added := sizeColumn.state.added[sizeRow]
 	if err := patch.Apply(first, testPosition{X: 11}, testSize{}); err != nil {
 		t.Fatal(err)
 	}
-	if w.StructureVersion() != structure || sizeColumn.added[sizeRow] != added || cleaned != 1 {
+	if w.StructureVersion() != structure || sizeColumn.state.added[sizeRow] != added || cleaned != 1 {
 		t.Fatal("replacement-only patch migrated or reset Added")
 	}
 }

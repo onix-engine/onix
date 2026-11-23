@@ -175,17 +175,24 @@ func referenceValue(name string) string {
 	case "nbsp;", "nbsp":
 		return "\u00a0"
 	}
-	low, high := 0, len(namedReferences)
+	if len(name) >= len(namedReferences) {
+		return ""
+	}
+	table := namedReferences[len(name)]
+	stride := len(name) + referenceValueWidth
+	low, high := 0, len(table)/stride
 	for low < high {
 		mid := int(uint(low+high) >> 1)
-		if namedReferences[mid].name < name {
+		start := mid * stride
+		switch strings.Compare(table[start:start+len(name)], name) {
+		case -1:
 			low = mid + 1
-		} else {
+		case 1:
 			high = mid
+		default:
+			field := table[start+len(name) : start+stride]
+			return field[strings.IndexByte(field, '=')+1:]
 		}
-	}
-	if low < len(namedReferences) && namedReferences[low].name == name {
-		return namedReferences[low].value
 	}
 	return ""
 }

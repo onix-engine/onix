@@ -1798,8 +1798,8 @@ func syncHTML(context *ecs.SystemContext) error {
 			world.Despawn(child)
 		}
 		delete(owners.Children, owner)
-		world.Remove[*scene.UIPaintList2D](owner)
-		world.Remove[htmlRenderState](owner)
+		world.Discard(owner, ecs.Type[*scene.UIPaintList2D]())
+		world.Discard(owner, ecs.Type[htmlRenderState]())
 	}
 
 	entries := world.FrameScratch[htmlSyncEntriesScratch, ecs.Entity]()
@@ -2721,7 +2721,7 @@ func spawnHTMLNodeInputTarget(world *ecs.World, owner ecs.Entity, node *uinode.N
 	bundle := beginHTMLEntity(world, owner, node, htmlRoleEvent, variant, 0, 11)
 	bundle.putPlacement(owner, float32(rect.X), float32(rect.Y), stackIndex, visible)
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
+	bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
 	bundle.ensureComponent[scene.InputState2D]()
 	bundle.putChild(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
@@ -2835,13 +2835,13 @@ func spawnHTMLFocusable(world *ecs.World, owner ecs.Entity, node *uinode.Node, r
 	bundle := beginHTMLEntity(world, owner, node, htmlRoleFocusable, variant, 0, 13)
 	bundle.putPlacement(owner, float32(rect.X), float32(rect.Y), stackIndex, visible)
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
+	bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: width, Height: height, PassThrough: passThrough})
 	bundle.ensureComponent[scene.InputState2D]()
-	(&bundle).putHTML(focusable)
+	bundle.putOptional(focusableSlot, focusable)
 	if editingHost {
 		bundle.putTextField(htmlNodeText(node), "", 0, false, true)
-		(&bundle).putHTML(Editable{Owner: owner, ID: focusable.ID})
-		(&bundle).putHTML(htmlEditableNodeRef{Node: node})
+		bundle.putOptional(editableSlot, Editable{Owner: owner, ID: focusable.ID})
+		bundle.putOptional(editableNodeSlot, htmlEditableNodeRef{Node: node})
 	}
 	bundle.putChild(htmlChild{Owner: owner, Node: node})
 	entity := bundle.finish()
@@ -2981,7 +2981,7 @@ func spawnHTMLSelectIndicator(world *ecs.World, owner, control ecs.Entity, rect 
 	bundle.putPlacement(control, x, y, stackIndex, visible)
 	(&bundle).putHTML(image)
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.InputBlocker2D{Width: width, Height: height, Receiver: control, PassThrough: passThrough})
+	bundle.putOptional(inputBlockerSlot, scene.InputBlocker2D{Width: width, Height: height, Receiver: control, PassThrough: passThrough})
 	(&bundle).putHTML(htmlSelectIndicator{Control: control})
 	bundle.putChild(htmlChild{Owner: owner})
 	entity := bundle.finish()
@@ -3009,7 +3009,7 @@ func spawnHTMLCheckboxMark(world *ecs.World, owner, control ecs.Entity, rect lay
 	sprite.Width, sprite.Height = markSize, markSize
 	bundle := beginHTMLEntity(world, owner, htmlEntityNode(world, control), htmlRoleCheckbox, "", control, 11)
 	bundle.putPlacement(control, (width-markSize)*0.5, (height-markSize)*0.5, stackIndex, visible && nodeChecked)
-	(&bundle).putHTML(sprite)
+	bundle.putOptional(spriteSlot, sprite)
 	(&bundle).putHTML(scene.Size2D{Width: markSize, Height: markSize})
 	(&bundle).putHTML(htmlCheckboxMark{Control: control})
 	bundle.putChild(htmlChild{Owner: owner})
@@ -3389,7 +3389,7 @@ func emitHTMLOverflowClip(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 		}
 	}
 	(&bundle).putHTML(scene.Size2D{Width: float32(rect.Width), Height: float32(rect.Height)})
-	(&bundle).putHTML(scene.ClipRect2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight})
+	bundle.putOptional(clipRectSlot, scene.ClipRect2D{X: clipX, Y: clipY, Width: clipWidth, Height: clipHeight})
 	if htmlOverflowClipsAxis(box.Style.OverflowX) && htmlOverflowClipsAxis(box.Style.OverflowY) {
 		radius := htmlOverflowClipRadius(box.Style, rect.Width, rect.Height)
 		if radius > 0 {
@@ -3557,17 +3557,17 @@ func emitHTMLScrollbarPart(world *ecs.World, owner ecs.Entity, node *uinode.Node
 	}
 	bundle := beginHTMLEntity(world, owner, node, role, htmlScrollbarVariant(axis, kind), area, 12)
 	bundle.putPlacement(area, x, y, stackIndex, visible)
-	(&bundle).putHTML(sprite)
+	bundle.putOptional(spriteSlot, sprite)
 	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
 	// Keep scrollbar drags above the content input target. Without an input
 	// target of their own, presses on a thumb fall through to an underlying
 	// textarea and start text selection while the scroll position changes.
-	(&bundle).putHTML(scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
-	(&bundle).putHTML(ScrollbarPart{Area: area, Axis: axis, Kind: kind})
+	bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: sprite.Width, Height: sprite.Height})
+	bundle.putOptional(scrollbarSlot, ScrollbarPart{Area: area, Axis: axis, Kind: kind})
 	if scroll := world.GetRef[scene.UIScroll](area); scroll != nil && !scroll.ScrollbarOverlay {
-		(&bundle).putHTML(scene.ClipExempt2D{ParentOnly: true})
+		bundle.putOptional(clipExemptSlot, scene.ClipExempt2D{ParentOnly: true})
 		frame, _ := world.Get[scene.Size2D](area)
-		(&bundle).putHTML(scene.ClipRect2D{X: -x, Y: -y, Width: frame.Width, Height: frame.Height})
+		bundle.putOptional(clipRectSlot, scene.ClipRect2D{X: -x, Y: -y, Width: frame.Width, Height: frame.Height})
 		if rounded, ok := world.Get[scene.RoundedClip2D](area); ok {
 			rounded.X, rounded.Y, rounded.Width, rounded.Height = -x, -y, frame.Width, frame.Height
 			(&bundle).putHTML(rounded)
@@ -3804,14 +3804,14 @@ func spawnHTMLBoxSurface(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 	var entity ecs.Entity
 	if writer.entity == 0 {
 		spawners := htmlPaintSpawnersFor(world)
-		writer.optional = htmlOptionalBit[scene.Sprite2D]() | htmlOptionalBit[scene.InputTarget2D]() | htmlOptionalBit[htmlElementSurface]()
+		writer.optional = spriteSlot.mask() | inputTargetSlot.mask() | elementSurfaceSlot.mask()
 		entity = writer.finishSpawn(spawners.surfaces.Spawn(scene.UITransformFromXY(float32(rect.X), float32(rect.Y)), scene.UIGlobalTransform{},
 			scene.Visibility{Visible: visible}, scene.AnchorTopLeft, scene.UIStackIndex(stackIndex), scene.Parent{Entity: owner},
 			sprite, scene.Size2D{Width: sprite.Width, Height: sprite.Height}, htmlChild{Owner: owner}, htmlElementSurface{}, target, scene.InputState2D{}))
 	} else {
 		putHTMLSurface(&writer, owner, float32(rect.X), float32(rect.Y), sprite, stackIndex, visible)
-		writer.putHTML(htmlElementSurface{})
-		writer.putHTML(target)
+		writer.putOptional(elementSurfaceSlot, htmlElementSurface{})
+		writer.putOptional(inputTargetSlot, target)
 		writer.ensureComponent[scene.InputState2D]()
 		entity = writer.finish()
 	}
@@ -3912,7 +3912,7 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 				Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world), texture),
 			})
 		} else {
-			world.Remove[scene.Shader[graphics.Material2DShader]](entity)
+			world.Discard(entity, ecs.Type[scene.Shader[graphics.Material2DShader]]())
 		}
 		markHTMLChildNode(world, entity, box.Node)
 		state.Children = append(state.Children, entity)
@@ -4040,15 +4040,15 @@ func spawnHTMLFlattenedOpacitySurface(world *ecs.World, owner ecs.Entity, state 
 	}
 	bundle := beginHTMLEntity(world, owner, box.Node, htmlRoleSurface, "", 0, 10)
 	bundle.putPlacement(owner, float32(bounds.X), float32(bounds.Y), stackIndex, visible)
-	(&bundle).putHTML(sprite)
+	bundle.putOptional(spriteSlot, sprite)
 	if gpu {
-		(&bundle).putHTML(scene.Shader[graphics.Material2DShader]{
+		bundle.putOptional(materialShaderSlot, scene.Shader[graphics.Material2DShader]{
 			Program: state.Textures.blurShader,
 			Custom:  htmlGPUBlurCompositeParameters(graphics.DeviceFor(world), texture),
 		})
 	}
 	(&bundle).putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
-	(&bundle).putHTML(htmlOpacitySurface{})
+	bundle.putOptional(opacitySurfaceSlot, htmlOpacitySurface{})
 	bundle.putChild(htmlChild{Owner: owner, Node: box.Node})
 	entity := bundle.finish()
 	scene.SetUIShapeFragments2D(world, entity, nil)
@@ -4257,7 +4257,7 @@ func htmlSurfaceSprite(state *htmlRenderState, node *uinode.Node, role htmlRende
 
 func putHTMLSurface(writer *htmlEntityWriter, owner ecs.Entity, x, y float32, sprite scene.Sprite2D, stackIndex int, visible bool) {
 	writer.putPlacement(owner, x, y, stackIndex, visible)
-	writer.putHTML(sprite)
+	writer.putOptional(spriteSlot, sprite)
 	writer.putHTML(scene.Size2D{Width: sprite.Width, Height: sprite.Height})
 	writer.putChild(htmlChild{Owner: owner})
 }
@@ -4537,14 +4537,14 @@ func spawnHTMLControl(world *ecs.World, owner ecs.Entity, node *uinode.Node, rec
 		bundle.putTextField(control.DefaultValue, control.Placeholder, control.MaxLength, element.HasInputType(node, "password"), false)
 	}
 	bundle.putPlacement(owner, float32(rect.X), float32(rect.Y), stackIndex, visible)
-	(&bundle).putHTML(sprite)
+	bundle.putOptional(spriteSlot, sprite)
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.ClipRect2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height, Disabled: control.Disabled, AllowDisabledInput: true})
+	bundle.putOptional(clipRectSlot, scene.ClipRect2D{Width: width, Height: height})
+	bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: width, Height: height, Disabled: control.Disabled, AllowDisabledInput: true})
 	bundle.ensureComponent[scene.InputState2D]()
 	(&bundle).putHTML(control)
 	if hasFocusable {
-		(&bundle).putHTML(focusable)
+		bundle.putOptional(focusableSlot, focusable)
 	}
 	bundle.putChild(htmlChild{Owner: owner})
 	return bundle.finish()
@@ -4984,13 +4984,13 @@ func spawnHTMLImage(world *ecs.World, owner ecs.Entity, fragment layout.ImageFra
 			Transform: scene.SpriteLayerTransform2D{X: x, Y: y},
 		}
 		layers.InvalidateMatrices()
-		(&bundle).putHTML(layers)
-		(&bundle).putHTML(scene.ClipRect2D{Width: width, Height: height})
+		bundle.putOptional(spriteLayersSlot, layers)
+		bundle.putOptional(clipRectSlot, scene.ClipRect2D{Width: width, Height: height})
 	} else {
-		(&bundle).putHTML(sprite)
+		bundle.putOptional(spriteSlot, sprite)
 	}
 	(&bundle).putHTML(scene.Size2D{Width: width, Height: height})
-	(&bundle).putHTML(scene.InputTarget2D{Width: width, Height: height})
+	bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: width, Height: height})
 	bundle.ensureComponent[scene.InputState2D]()
 	bundle.putChild(htmlChild{Owner: owner})
 	entity := bundle.finish()
@@ -5077,7 +5077,7 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 	if bundle.entity == 0 && control == 0 && receiver == 0 && focusOwner == 0 {
 		width, height := float32(fragment.Rect.Width), float32(fragment.Rect.Height)
 		spawners := htmlPaintSpawnersFor(world)
-		bundle.optional = htmlOptionalBit[scene.InputTarget2D]()
+		bundle.optional = inputTargetSlot.mask()
 		return bundle.finishSpawn(spawners.texts.Spawn(scene.UITransformFromXY(float32(x), float32(y)), scene.UIGlobalTransform{},
 			scene.Visibility{Visible: visible}, scene.AnchorTopLeft, scene.UIStackIndex(stackIndex), scene.Parent{Entity: owner},
 			text, scene.Size2D{Width: width, Height: height}, htmlChild{Owner: owner},
@@ -5086,13 +5086,13 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 	bundle.putPlacement(parent, float32(x), float32(y), stackIndex, visible)
 	bundle.putText(text)
 	if selectLabel {
-		(&bundle).putHTML(selectClip)
+		bundle.putOptional(clipRectSlot, selectClip)
 	}
 	(&bundle).putHTML(scene.Size2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height)})
 	if receiver != 0 {
-		(&bundle).putHTML(scene.InputBlocker2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), Receiver: receiver, PassThrough: passThrough})
+		bundle.putOptional(inputBlockerSlot, scene.InputBlocker2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), Receiver: receiver, PassThrough: passThrough})
 	} else {
-		(&bundle).putHTML(scene.InputTarget2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), PassThrough: passThrough})
+		bundle.putOptional(inputTargetSlot, scene.InputTarget2D{Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height), PassThrough: passThrough})
 		bundle.ensureComponent[scene.InputState2D]()
 	}
 	bundle.putChild(htmlChild{Owner: owner})
@@ -5100,10 +5100,10 @@ func spawnHTMLText(world *ecs.World, owner, control, receiver, focusOwner ecs.En
 		(&bundle).putHTML(FocusOwner{Entity: focusOwner})
 	}
 	if control != 0 {
-		(&bundle).putHTML(ControlText{Control: control, Content: scene.TextRangeRect2D{
+		bundle.putOptional(controlTextSlot, ControlText{Control: control, Content: scene.TextRangeRect2D{
 			X: float32(x), Y: float32(y), Width: float32(fragment.Rect.Width), Height: float32(fragment.Rect.Height),
 		}})
-		(&bundle).putHTML(htmlControlTextNode{Node: fragment.Node})
+		bundle.putOptional(controlTextNodeSlot, htmlControlTextNode{Node: fragment.Node})
 	}
 	entity := bundle.finish()
 	markHTMLChildNode(world, entity, fragment.Node)

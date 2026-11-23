@@ -313,53 +313,18 @@ func (cache *renderTree2D) snapshot(node *retainedEntity2D, position int, item r
 	return item
 }
 
-// Fixed-size blocks avoid allocating one GC object for every entity. Owners
-// stay stable during growth; maintenance can relocate them to compact sparse blocks.
 type renderInput2D struct {
-	revision func(*ecs.World) (uint64, uint64)
-	changed  func(*ecs.World, *ecs.SystemContext, *renderTree2D)
-	poll     func(*ecs.World, *renderTree2D) int
-	dirty    renderNodeDirty2D
+	component ecs.ComponentType
+	poll      func(*ecs.World, *renderTree2D) int
+	dirty     renderNodeDirty2D
 }
 
 func retainedInput2D[T any](flags renderNodeDirty2D) renderInput2D {
-	input := renderInput2D{
-		revision: (*ecs.World).ComponentValueRevision[T],
-		dirty:    flags,
-		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
-			for entity := range world.Query[T](changes.Changed[T]()).All {
-				cache.mark(entity, flags)
-			}
-		},
-	}
-	return input
-}
-
-// Local ordering cannot make an entity drawable. Ignore writes to ancestors
-// and other entities that have no retained output.
-func localRetainedInput2D[T any]() renderInput2D {
-	input := retainedInput2D[T](renderNodeDirtyOrder2D)
-	input.changed = func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
-		for entity := range world.Query[T](changes.Changed[T]()).All {
-			if cache.nodes[entity] != nil {
-				cache.mark(entity, renderNodeDirtyOrder2D)
-			}
-		}
-	}
-	return input
+	return renderInput2D{component: ecs.Type[T](), dirty: flags}
 }
 
 func inheritedRetainedInput2D[T any]() renderInput2D {
-	input := renderInput2D{
-		revision: (*ecs.World).ComponentValueRevision[T],
-		dirty:    renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D,
-		changed: func(world *ecs.World, changes *ecs.SystemContext, cache *renderTree2D) {
-			for entity := range world.Query[T](ecs.Unscoped(), changes.Changed[T]()).All {
-				cache.enqueueHierarchy(entity)
-			}
-		},
-	}
-	return input
+	return retainedInput2D[T](renderNodeDirtyGeometry2D | renderNodeDirtyVisibility2D | renderNodeDirtyOrder2D)
 }
 
 func (cache *renderTree2D) beginHierarchyChanges(world *ecs.World) {
@@ -465,7 +430,7 @@ const baseRenderInputCount2D = 22
 var baseRetainedInputs2D = [baseRenderInputCount2D]renderInput2D{
 	inheritedRetainedInput2D[PainterGroup2D](), inheritedRetainedInput2D[Parent](), inheritedRetainedInput2D[SceneLayer](),
 	inheritedRetainedInput2D[RenderLayers](), inheritedRetainedInput2D[UITargetCamera](),
-	inheritedRetainedInput2D[UIStackIndex](), localRetainedInput2D[RenderOrder2D](),
+	inheritedRetainedInput2D[UIStackIndex](), retainedInput2D[RenderOrder2D](renderNodeDirtyOrder2D),
 	retainedInput2D[Sprite2D](renderNodeDirtyContent2D), retainedInput2D[Text2D](renderNodeDirtyContent2D),
 	retainedInput2D[GlobalTransform](renderNodeDirtyGeometry2D), retainedInput2D[UIGlobalTransform](renderNodeDirtyGeometry2D),
 	retainedInput2D[Visibility](renderNodeDirtyVisibility2D), retainedInput2D[Anchor](renderNodeDirtyContent2D),
@@ -674,7 +639,7 @@ func (node *retainedEntity2D) updateProperties(c *graphics.Canvas2D, world *ecs.
 
 func (state *RenderWorld) revisions2D(world *ecs.World) (versions, structures [retainedRenderInputCount2D]uint64) {
 	for i, input := range state.retainedInputs() {
-		versions[i], structures[i] = input.revision(world)
+		versions[i], structures[i] = input.component.ValueRevision(world)
 	}
 	return
 }
@@ -699,14 +664,18 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 	full = full || cache.materialStructure != materialStructure
 	writes := uint64(0)
 	propertiesOnly := true
-	if cache.initialized && cache.structures == structures {
-		for i := inheritedRenderInputs2D; i < len(inputs); i++ {
-			writes += versions[i] - cache.versions[i]
-		}
-	}
-	for i, input := range inputs {
-		if input.dirty != renderNodeDirtyGeometry2D && versions[i] != cache.versions[i] {
-			propertiesOnly = false
+	inputsChanged := versions != cache.versions
+	if inputsChanged && cache.initialized && cache.structures == structures {
+		for i, input := range inputs {
+			if versions[i] == cache.versions[i] {
+				continue
+			}
+			if i >= inheritedRenderInputs2D {
+				writes += versions[i] - cache.versions[i]
+			}
+			if input.dirty != renderNodeDirtyGeometry2D {
+				propertiesOnly = false
+			}
 		}
 	}
 	nodeCount := len(cache.nodes)
@@ -746,7 +715,7 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 		if len(cache.dirty) != 0 {
 			propertiesOnly = false
 		}
-		if !cache.direct && !cache.missing && len(cache.dirty) == 0 && cache.versions == versions {
+		if !cache.direct && !cache.missing && len(cache.dirty) == 0 && !inputsChanged {
 			cache.stats.Reused = len(cache.items)
 			if cache.stats.PaintUpdated != 0 {
 				cache.generation++
@@ -766,7 +735,19 @@ func (cache *renderTree2D) extract(c *graphics.Canvas2D, world *ecs.World, state
 					hierarchyChanged = true
 				}
 				paintListsChanged = paintListsChanged || input.dirty == renderNodeDirtyPaintList2D
-				input.changed(world, &cache.changes, cache)
+				changed := cache.changes.ChangedEntities(input.component)
+				if i < inheritedRenderInputs2D {
+					for entity := range changed.Unscoped().All {
+						cache.enqueueHierarchy(entity)
+					}
+				} else {
+					for entity := range changed.All {
+						// Local order alone cannot introduce a drawable.
+						if input.dirty != renderNodeDirtyOrder2D || cache.nodes[entity] != nil {
+							cache.mark(entity, input.dirty)
+						}
+					}
+				}
 			}
 		}
 		if hierarchyChanged {

@@ -188,8 +188,8 @@ func Release(world *ecs.World, owner ecs.Entity) {
 		}
 		delete(owners.Children, owner)
 	}
-	world.Remove[*scene.UIPaintList2D](owner)
-	world.Remove[htmlRenderState](owner)
+	world.Discard(owner, ecs.Type[*scene.UIPaintList2D]())
+	world.Discard(owner, ecs.Type[htmlRenderState]())
 }
 
 func Dispose(world *ecs.World) {

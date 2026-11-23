@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -336,49 +335,32 @@ func parseCFFRealNumber(data []byte, offset int) (float64, int, error) {
 		return 0, offset, fmt.Errorf("invalid cff real number")
 	}
 	offset++
-	var builder strings.Builder
+	var scratch [32]byte
+	digits := scratch[:0]
 	for {
 		if offset >= len(data) {
 			return 0, offset, fmt.Errorf("cff real number truncated")
 		}
 		for _, nibble := range []byte{data[offset] >> 4, data[offset] & 0x0f} {
 			switch nibble {
-			case 0x0:
-				builder.WriteByte('0')
-			case 0x1:
-				builder.WriteByte('1')
-			case 0x2:
-				builder.WriteByte('2')
-			case 0x3:
-				builder.WriteByte('3')
-			case 0x4:
-				builder.WriteByte('4')
-			case 0x5:
-				builder.WriteByte('5')
-			case 0x6:
-				builder.WriteByte('6')
-			case 0x7:
-				builder.WriteByte('7')
-			case 0x8:
-				builder.WriteByte('8')
-			case 0x9:
-				builder.WriteByte('9')
 			case 0xA:
-				builder.WriteByte('.')
+				digits = append(digits, '.')
 			case 0xB:
-				builder.WriteString("E")
+				digits = append(digits, 'E')
 			case 0xC:
-				builder.WriteString("E-")
+				digits = append(digits, 'E', '-')
+			case 0xD:
+				return 0, offset + 1, fmt.Errorf("unsupported cff real nibble %x", nibble)
 			case 0xE:
-				builder.WriteByte('-')
+				digits = append(digits, '-')
 			case 0xF:
-				value, err := strconv.ParseFloat(builder.String(), 64)
+				value, err := strconv.ParseFloat(string(digits), 64)
 				if err != nil {
-					return 0, offset + 1, fmt.Errorf("parse cff real number %q: %w", builder.String(), err)
+					return 0, offset + 1, fmt.Errorf("parse cff real number %q: %w", string(digits), err)
 				}
 				return value, offset + 1, nil
 			default:
-				return 0, offset + 1, fmt.Errorf("unsupported cff real nibble %x", nibble)
+				digits = append(digits, '0'+nibble)
 			}
 		}
 		offset++
@@ -594,9 +576,9 @@ func (c *cffFont) execType2Charstring(data []byte, localSubrs cffIndex, state *c
 			}
 			state.stack = state.stack[:0]
 			i++
-		case 6:
+		case 6, 7:
 			state.startContour()
-			horizontal := true
+			horizontal := b == 6
 			for _, delta := range state.stack {
 				if horizontal {
 					state.lineTo(state.x+delta, state.y)
@@ -607,33 +589,13 @@ func (c *cffFont) execType2Charstring(data []byte, localSubrs cffIndex, state *c
 			}
 			state.stack = state.stack[:0]
 			i++
-		case 7:
-			state.startContour()
-			vertical := true
-			for _, delta := range state.stack {
-				if vertical {
-					state.lineTo(state.x, state.y+delta)
-				} else {
-					state.lineTo(state.x+delta, state.y)
-				}
-				vertical = !vertical
-			}
-			state.stack = state.stack[:0]
-			i++
 		case 8:
 			if len(state.stack)%6 != 0 {
 				return fmt.Errorf("cff rrcurveto expected groups of 6, got %d arguments", len(state.stack))
 			}
 			state.startContour()
 			for j := 0; j < len(state.stack); j += 6 {
-				p0 := OutlinePoint{X: state.x, Y: state.y}
-				p1 := OutlinePoint{X: state.x + state.stack[j], Y: state.y + state.stack[j+1]}
-				p2 := OutlinePoint{X: p1.X + state.stack[j+2], Y: p1.Y + state.stack[j+3]}
-				p3 := OutlinePoint{X: p2.X + state.stack[j+4], Y: p2.Y + state.stack[j+5]}
-				curve := flattenCubic(p0, p1, p2, p3, 0.5)
-				state.current = append(state.current, curve[1:]...)
-				state.x = p3.X
-				state.y = p3.Y
+				state.cubicToRelative(state.stack[j], state.stack[j+1], state.stack[j+2], state.stack[j+3], state.stack[j+4], state.stack[j+5])
 			}
 			state.stack = state.stack[:0]
 			i++
@@ -909,8 +871,7 @@ func (s *cffType2State) cubicToRelative(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	p1 := OutlinePoint{X: s.x + dx1, Y: s.y + dy1}
 	p2 := OutlinePoint{X: p1.X + dx2, Y: p1.Y + dy2}
 	p3 := OutlinePoint{X: p2.X + dx3, Y: p2.Y + dy3}
-	curve := flattenCubic(p0, p1, p2, p3, 0.5)
-	s.current = append(s.current, curve[1:]...)
+	s.current = appendCubic(s.current, p0, p1, p2, p3, 0.5)
 	s.x = p3.X
 	s.y = p3.Y
 }
@@ -989,9 +950,10 @@ func outlineBounds(contours []OutlineContour) Bounds {
 	}
 }
 
-func flattenCubic(p0, p1, p2, p3 OutlinePoint, tolerance float64) []OutlinePoint {
+// appendCubic appends subdivision endpoints in order. The contour already contains p0.
+func appendCubic(contour OutlineContour, p0, p1, p2, p3 OutlinePoint, tolerance float64) OutlineContour {
 	if cubicFlatEnough(p0, p1, p2, p3, tolerance) {
-		return []OutlinePoint{p0, p3}
+		return append(contour, p3)
 	}
 	p01 := midpoint(p0, p1)
 	p12 := midpoint(p1, p2)
@@ -999,9 +961,8 @@ func flattenCubic(p0, p1, p2, p3 OutlinePoint, tolerance float64) []OutlinePoint
 	p012 := midpoint(p01, p12)
 	p123 := midpoint(p12, p23)
 	p0123 := midpoint(p012, p123)
-	left := flattenCubic(p0, p01, p012, p0123, tolerance)
-	right := flattenCubic(p0123, p123, p23, p3, tolerance)
-	return append(left[:len(left)-1], right...)
+	contour = appendCubic(contour, p0, p01, p012, p0123, tolerance)
+	return appendCubic(contour, p0123, p123, p23, p3, tolerance)
 }
 
 func cubicFlatEnough(p0, p1, p2, p3 OutlinePoint, tolerance float64) bool {

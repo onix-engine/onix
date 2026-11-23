@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestCFFRealNumberNibbles(t *testing.T) {
+	for _, tc := range []struct {
+		data []byte
+		want float64
+		next int
+		ok   bool
+	}{
+		{[]byte{30, 0x12, 0x34, 0x56, 0x78, 0x90, 0xf0}, 1234567890, 7, true},
+		{[]byte{30, 0xe1, 0xa5, 0xc2, 0xff}, -0.015, 5, true},
+		{[]byte{30, 0x2b, 0x3f}, 2000, 3, true},
+		{append(append([]byte{30}, bytes.Repeat([]byte{0}, 20)...), 0x1f), 1, 22, true},
+		{[]byte{30, 0x1d}, 0, 2, false},
+		{[]byte{30, 0xab, 0xff}, 0, 3, false},
+		{[]byte{30, 0x12}, 0, 2, false},
+	} {
+		got, next, err := parseCFFRealNumber(tc.data, 0)
+		if got != tc.want || next != tc.next || (err == nil) != tc.ok {
+			t.Errorf("parse %x = %g, %d, %v", tc.data, got, next, err)
+		}
+	}
+}
+
 func TestParseOTFCFF(t *testing.T) {
 	face, err := Parse(buildTestOTFCFF())
 	if err != nil {

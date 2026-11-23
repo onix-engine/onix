@@ -329,24 +329,30 @@ func textareaSubmitEdits(edits []input.TextEdit) ([]input.TextEdit, int) {
 }
 
 func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, multiline bool, edits []input.TextEdit, state *input.State, mouseSelecting bool, buffer *input.TextBuffer) (V, int, int, int) {
-	apply := func(value V, start, end, limit int, multiline bool, edits []input.TextEdit) (V, int, int) {
-		switch v := any(value).(type) {
-		case string:
-			var next string
-			var caret, submits int
-			if buffer != nil {
-				next, caret, submits = buffer.ApplyTextEditsInRange(v, start, end, limit, multiline, edits)
-			} else {
-				next, caret, submits = state.ApplyTextEditsInRange(v, start, end, limit, multiline, edits)
-			}
-			return any(next).(V), caret, submits
-		case piecetree.Snapshot:
-			next, caret, submits := buffer.ApplyEdits(v, start, end, limit, multiline, edits)
-			return any(next).(V), caret, submits
-		}
-		panic("unreachable")
+	_, document := any(value).(piecetree.Snapshot)
+	source, caret, anchor, submits := editTextSnapshot(piecetree.Text(value), caret, anchor, maxRunes, multiline, edits, state, mouseSelecting, buffer, document)
+	if document {
+		return any(source).(V), caret, anchor, submits
 	}
-	source := piecetree.Text(value)
+	return any(source.String()).(V), caret, anchor, submits
+}
+
+// Both storage modes use the same selection, clipboard and IME logic. Document
+// edits keep immutable pieces, while string fields use the flat buffer API.
+func editTextSnapshot(source piecetree.Snapshot, caret, anchor, maxRunes int, multiline bool, edits []input.TextEdit, state *input.State, mouseSelecting bool, buffer *input.TextBuffer, document bool) (piecetree.Snapshot, int, int, int) {
+	apply := func(start, end int) (piecetree.Snapshot, int, int) {
+		if document {
+			return buffer.ApplyEdits(source, start, end, maxRunes, multiline, edits)
+		}
+		var next string
+		var caret, submits int
+		if buffer != nil {
+			next, caret, submits = buffer.ApplyTextEditsInRange(source.String(), start, end, maxRunes, multiline, edits)
+		} else {
+			next, caret, submits = state.ApplyTextEditsInRange(source.String(), start, end, maxRunes, multiline, edits)
+		}
+		return piecetree.FromString(next), caret, submits
+	}
 	length := 0
 	if buffer != nil {
 		buffer.SyncSnapshot(source)
@@ -363,13 +369,13 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 	anchor = max(0, min(anchor, length))
 	start, end := orderedSelection(anchor, caret)
 	if !state.Composing() && textClipboardShortcut(state, input.KeyA) {
-		return value, length, 0, 0
+		return source, length, 0, 0
 	}
 	if textClipboardShortcut(state, input.KeyC) {
 		if start != end {
 			state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end)))
 		}
-		return value, caret, anchor, 0
+		return source, caret, anchor, 0
 	}
 	if textClipboardShortcut(state, input.KeyX) {
 		if start != end && state.SetClipboardText(source.Slice(source.ByteOffset(start), source.ByteOffset(end))) {
@@ -383,7 +389,7 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 	}
 	if state.Composing() {
 		compositionCaret, compositionAnchor := caret, anchor
-		value, caret, submits := apply(value, start, end, maxRunes, multiline, edits)
+		value, caret, submits := apply(start, end)
 		// Composition updates do not commit text. Keep the selected range intact
 		// so the following IME commit replaces it instead of appending after it.
 		committed := false
@@ -408,15 +414,14 @@ func editTextValue[V piecetree.Value](value V, caret, anchor, maxRunes int, mult
 			edits = prependTextEdit(edits, input.TextEdit{Command: input.TextCommandBackspace})
 		}
 	}
-	next, editedCaret, submits := apply(value, start, end, maxRunes, multiline, edits)
-	value = next
+	next, editedCaret, submits := apply(start, end)
 	if textEditsChangeValue(edits) {
 		caret = editedCaret
 		anchor = caret
 	}
 	selectionStart, selectionEnd := orderedSelection(anchor, caret)
 	state.SetTextInputSelection(selectionStart, selectionEnd)
-	return value, caret, anchor, submits
+	return next, caret, anchor, submits
 }
 
 func prependTextEdit(edits []input.TextEdit, edit input.TextEdit) []input.TextEdit {

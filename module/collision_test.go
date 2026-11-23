@@ -7,6 +7,12 @@ import (
 )
 
 func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
+	type BothDimensions = WithContent[WithContent[Render2D, SpatialContent], Physics2DContent]
+	t.Run("full", testModuleCollisionDelivery[FullContent])
+	t.Run("composed", testModuleCollisionDelivery[BothDimensions])
+}
+
+func testModuleCollisionDelivery[P ContentProfile](t *testing.T) {
 	plan, source := compileFixture(t, map[string]string{
 		"resources/project.json":     `{"entry":"main.json","scenes":["main.json"]}`,
 		"resources/scenes/main.json": `{"modules":[{"id":"ball","mod":"ball"},{"id":"wall","mod":"wall"},{"id":"body3d","mod":"body3d"},{"id":"log","mod":"log"}]}`,
@@ -35,7 +41,7 @@ func TestModuleCollisionEventsKeepOwnershipAndBufferDelivery(t *testing.T) {
 		}
 		return handleValue[Collision3D](c, "hit3d", func(_ *Context, v Collision3D) error { count3D++; value3D = v; return nil })
 	}}))
-	r := newFixture(t, plan, registry, Options{Source: source})
+	r := newFixtureWith[P](t, plan, registry, Options{Source: source})
 	s, err := r.Manager().StartEntry()
 	must(t, err)
 	runtime := physics.NewRuntime2D()

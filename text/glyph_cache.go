@@ -3,7 +3,6 @@ package text
 import (
 	"errors"
 	"image"
-	"image/draw"
 	"math"
 	"math/bits"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/glyphdraw"
 	"github.com/onix-engine/onix/render"
 )
 
@@ -391,10 +391,10 @@ func (c *GlyphCache) glyphAtLocked(r rune, phaseX, phaseY uint8, color font.LCDC
 	}
 
 	var bitmap image.Image
-	_, colored := mask.(*image.RGBA)
+	colorMask, colored := mask.(*image.RGBA)
 	if colored {
 		rgba := image.NewRGBA(image.Rect(0, 0, dr.Dx()+2*glyphBitmapPadding, dr.Dy()+2*glyphBitmapPadding))
-		draw.Draw(rgba, rgba.Rect.Inset(glyphBitmapPadding), mask, maskp, draw.Src)
+		glyphdraw.Copy(rgba, rgba.Rect.Inset(glyphBitmapPadding), colorMask, maskp)
 		bitmap = rgba
 	} else {
 		alpha := glyphBitmap(mask, maskp, dr)

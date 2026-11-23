@@ -116,7 +116,7 @@ func bindHTMLStickyContent(world *ecs.World, state *htmlRenderState) {
 					if transform := world.GetMut[scene.UITransform](entity); transform != nil {
 						transform.Translation.X.Value, transform.Translation.Y.Value = content.X, content.Y
 					}
-					world.Remove[ScrollContent](entity)
+					world.Discard(entity, ecs.Type[ScrollContent]())
 				} else {
 					world.SetIfChanged(entity, content)
 				}

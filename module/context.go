@@ -156,7 +156,7 @@ func (c *Context) Remove[T any](e Entity) error {
 		}
 		c.runtime.world.Commands().Remove[T](e.entity)
 	} else {
-		c.runtime.world.Remove[T](e.entity)
+		c.runtime.world.Discard(e.entity, ecs.Type[T]())
 	}
 	return nil
 }

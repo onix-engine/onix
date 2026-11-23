@@ -5,31 +5,33 @@ import (
 	"github.com/onix-engine/onix/scene"
 )
 
-var compositionPartTypes = [...]ecs.ComponentType{
-	ecs.Type[Part[BodyPart]](),
-	ecs.Type[Part[LabelPart]](),
-	ecs.Type[Part[IconPart]](),
-	ecs.Type[Part[ValuePart]](),
-	ecs.Type[Part[ItemPart]](),
-	ecs.Type[Part[TrackPart]](),
-	ecs.Type[Part[KnobPart]](),
-	ecs.Type[Part[FillPart]](),
-	ecs.Type[Part[ThumbPart]](),
-	ecs.Type[Part[PanelPart]](),
-	ecs.Type[Part[CaretPart]](),
-	ecs.Type[Part[SelectionPart]](),
-	ecs.Type[Part[FrameBorderPart]](),
-	ecs.Type[Part[IncrementPart]](),
-	ecs.Type[Part[DecrementPart]](),
-	ecs.Type[Part[NumberInputBorderPart]](),
-	ecs.Type[Part[SelectorListPart]](),
-	ecs.Type[Part[SelectorPanelBorderPart]](),
-	ecs.Type[Part[ScrollTrackHorizontalPart]](),
-	ecs.Type[Part[ScrollTrackVerticalPart]](),
-	ecs.Type[Part[ScrollThumbHorizontalPart]](),
-	ecs.Type[Part[ScrollThumbVerticalPart]](),
-	ecs.Type[Part[VirtualJoystickTrackPart]](),
-	ecs.Type[Part[VirtualJoystickKnobPart]](),
+func appendCompositionPartTypes(types []ecs.ComponentType) []ecs.ComponentType {
+	return append(types,
+		ecs.Type[Part[BodyPart]](),
+		ecs.Type[Part[LabelPart]](),
+		ecs.Type[Part[IconPart]](),
+		ecs.Type[Part[ValuePart]](),
+		ecs.Type[Part[ItemPart]](),
+		ecs.Type[Part[TrackPart]](),
+		ecs.Type[Part[KnobPart]](),
+		ecs.Type[Part[FillPart]](),
+		ecs.Type[Part[ThumbPart]](),
+		ecs.Type[Part[PanelPart]](),
+		ecs.Type[Part[CaretPart]](),
+		ecs.Type[Part[SelectionPart]](),
+		ecs.Type[Part[FrameBorderPart]](),
+		ecs.Type[Part[IncrementPart]](),
+		ecs.Type[Part[DecrementPart]](),
+		ecs.Type[Part[NumberInputBorderPart]](),
+		ecs.Type[Part[SelectorListPart]](),
+		ecs.Type[Part[SelectorPanelBorderPart]](),
+		ecs.Type[Part[ScrollTrackHorizontalPart]](),
+		ecs.Type[Part[ScrollTrackVerticalPart]](),
+		ecs.Type[Part[ScrollThumbHorizontalPart]](),
+		ecs.Type[Part[ScrollThumbVerticalPart]](),
+		ecs.Type[Part[VirtualJoystickTrackPart]](),
+		ecs.Type[Part[VirtualJoystickKnobPart]](),
+	)
 }
 
 type controlPartsScratch struct{}
@@ -44,7 +46,7 @@ type controlRemovalCache struct {
 func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
 	cache := world.FrameValue[controlRemovalCache, controlRemovalCache]()
 	if !cache.rootInitialized {
-		types := append([]ecs.ComponentType{
+		types := appendCompositionPartTypes([]ecs.ComponentType{
 			ecs.Type[Control](), ecs.Type[scene.InputTarget2D](), ecs.Type[scene.InputState2D](),
 			ecs.Type[Variants[ControlVariant]](), ecs.Type[Button](), ecs.Type[Toggle[bool]](),
 			ecs.Type[TextField](), ecs.Type[TextFieldKeyHandler](), ecs.Type[Input](), ecs.Type[Textarea](), ecs.Type[textFieldMaskCache](),
@@ -54,7 +56,7 @@ func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
 			ecs.Type[NumberInputStep](), ecs.Type[Relation[Control]](), ecs.Type[Relation[scene.Text2D]](),
 			ecs.Type[Relation[SurfaceStyle]](), ecs.Type[Relation[Progress]](),
 			ecs.Type[scene.ClipRect2D](), ecs.Type[scene.ClipExempt2D](),
-		}, compositionPartTypes[:]...)
+		})
 		cache.root = world.PrepareRemoval(types...)
 		cache.rootInitialized = true
 	}
@@ -64,11 +66,11 @@ func controlRemovalFor(world *ecs.World) ecs.PreparedRemoval {
 func compositionRemovalFor(world *ecs.World, clipFlags int) ecs.PreparedRemoval {
 	cache := world.FrameValue[controlRemovalCache, controlRemovalCache]()
 	if !cache.partsInitialized[clipFlags] {
-		types := append([]ecs.ComponentType{
+		types := appendCompositionPartTypes([]ecs.ComponentType{
 			ecs.Type[NumberInputStep](), ecs.Type[SelectorList](), ecs.Type[SelectorItem](),
 			ecs.Type[ProgressThumb](), ecs.Type[Relation[Progress]](), ecs.Type[Relation[Control]](),
 			ecs.Type[Relation[scene.Text2D]](), ecs.Type[Relation[SurfaceStyle]](),
-		}, compositionPartTypes[:]...)
+		})
 		if clipFlags&1 != 0 {
 			types = append(types, ecs.Type[scene.ClipRect2D]())
 		}

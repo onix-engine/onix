@@ -66,10 +66,17 @@ func NewBundle(capacity int) Bundle {
 func (b *Bundle) Extend(group Bundle) { b.entries = append(b.entries, group.entries...) }
 
 func (bundle *Bundle) Put[T any](value T) {
+	bundle.putEntry(componentValue[T]{value: value})
+}
+
+// Share slice growth across component types when assembling dynamic bundles.
+//
+//go:noinline
+func (bundle *Bundle) putEntry(entry bundleEntry) {
 	if bundle == nil {
 		panic("ecs: bundle is nil")
 	}
-	bundle.entries = append(bundle.entries, componentValue[T]{value: value})
+	bundle.entries = append(bundle.entries, entry)
 }
 
 // Value inspects a statically supplied component before spawning.
@@ -90,5 +97,5 @@ func (bundle *Bundle) PutEntity[T any](build func(Entity) T) {
 	if build == nil {
 		panic("ecs: entity component builder is nil")
 	}
-	bundle.entries = append(bundle.entries, entityComponentValue[T]{build: build})
+	bundle.putEntry(entityComponentValue[T]{build: build})
 }

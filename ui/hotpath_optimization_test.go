@@ -12,14 +12,14 @@ func TestStableControlSyncPreservesVersionsAndUpdatesBounds(t *testing.T) {
 	world := ecs.NewWorld()
 	spawner := world.NewSpawner3[Control, scene.InputTarget2D, scene.Size2D]()
 	entity := spawner.Spawn(Control{}, scene.InputTarget2D{Width: 20, Height: 10}, scene.Size2D{Width: 20, Height: 10})
-	syncControls(world, Skin{})
+	syncControls(world)
 	targetVersion, sizeVersion := world.ComponentVersion[scene.InputTarget2D](), world.ComponentVersion[scene.Size2D]()
-	syncControls(world, Skin{})
+	syncControls(world)
 	if targetVersion != world.ComponentVersion[scene.InputTarget2D]() || sizeVersion != world.ComponentVersion[scene.Size2D]() {
 		t.Fatal("unchanged control marked components changed")
 	}
 	SetControlBounds(world, entity, 30, 15)
-	syncControls(world, Skin{})
+	syncControls(world)
 	size, _ := world.Get[scene.Size2D](entity)
 	if size != (scene.Size2D{Width: 30, Height: 15}) {
 		t.Fatalf("updated bounds=%v", size)
@@ -167,7 +167,7 @@ func TestTabHierarchyCacheTracksDynamicChildren(t *testing.T) {
 	for range 100 {
 		parents.Spawn(scene.Parent{Entity: root})
 	}
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	cache := world.FrameValue[tabHierarchyScratch, tabHierarchy]()
 	if cache.initialized {
 		t.Fatal("absent Tab collected parent hierarchy")
@@ -177,29 +177,29 @@ func TestTabHierarchyCacheTracksDynamicChildren(t *testing.T) {
 	other := tabs.Spawn(Tab{Width: 200, Height: 80, HeaderHeight: 20}, scene.Size2D{})
 	items := world.NewSpawner4[TabItem, scene.Parent, scene.UITransform, scene.Size2D]()
 	item := items.Spawn(TabItem{Tabs: tab, Width: 30}, scene.Parent{Entity: tab}, scene.NewUITransform(), scene.Size2D{})
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	if len(tabChildren(cache.children, cache.ranges, tab)) != 1 {
 		t.Fatal("new child not indexed")
 	}
 	versions := cache.versions
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	if cache.versions != versions {
 		t.Fatal("stable parent input changed cache")
 	}
 	parent := world.GetMut[scene.Parent](item)
 	parent.Entity = other
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	if len(tabChildren(cache.children, cache.ranges, tab)) != 0 || len(tabChildren(cache.children, cache.ranges, other)) != 1 {
 		t.Fatal("reparent not reflected")
 	}
 	world.Remove[scene.Parent](item)
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	if len(tabChildren(cache.children, cache.ranges, other)) != 0 {
 		t.Fatal("removed parent retained")
 	}
 	world.Despawn(item)
 	items.Spawn(TabItem{Tabs: tab}, scene.Parent{Entity: tab}, scene.NewUITransform(), scene.Size2D{})
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	if len(tabChildren(cache.children, cache.ranges, tab)) != 1 {
 		t.Fatal("entity reuse not indexed")
 	}
@@ -229,11 +229,11 @@ func BenchmarkHotpathTabsAbsent(b *testing.B) {
 	for range 10000 {
 		parents.Spawn(scene.Parent{Entity: root})
 	}
-	syncTabs(world, Skin{})
+	syncTabs(world, &Skin{})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		syncTabs(world, Skin{})
+		syncTabs(world, &Skin{})
 	}
 }
 
@@ -243,10 +243,10 @@ func BenchmarkHotpathStaticControls(b *testing.B) {
 	for range 10000 {
 		spawner.Spawn(Control{}, scene.InputTarget2D{Width: 20, Height: 10}, scene.Size2D{Width: 20, Height: 10})
 	}
-	syncControls(world, Skin{})
+	syncControls(world)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		syncControls(world, Skin{})
+		syncControls(world)
 	}
 }

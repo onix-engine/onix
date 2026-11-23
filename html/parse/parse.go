@@ -85,7 +85,7 @@ func (p *Parser) parseTree(input string) (root *uinode.Node, err error) {
 	b := &p.builder
 	b.arena, b.tokenizer = p, &p.scanner
 	b.doc = p.newNode(uinode.DocumentNode, "#document")
-	b.scripting, b.framesetOK = true, true
+	b.framesetOK = true
 	b.im = initialIM
 	// Body fragments use the document node as the synthetic html root, so no
 	// wrapper nodes, child copies or second tree traversal are needed.
@@ -199,15 +199,30 @@ func (p *Parser) token(kind TokenType) htmlToken {
 		clear(p.attrs)
 		p.attrs = p.attrs[:0]
 		clear(p.names)
+		// Short attribute lists can check the names already decoded in this token.
+		// Keep a hash index for larger lists to bound duplicate detection cost.
+		var names map[string]struct{}
+		if len(z.attr) > 8 {
+			if p.names == nil {
+				p.names = make(map[string]struct{}, len(z.attr))
+			}
+			names = p.names
+		}
+	attributes:
 		for _, attr := range z.attr {
 			key := p.lower(z.input[attr[0].start:attr[0].end])
-			if _, duplicate := p.names[key]; duplicate {
-				continue
+			if names == nil {
+				for _, previous := range p.attrs {
+					if previous.Name == key {
+						continue attributes
+					}
+				}
+			} else {
+				if _, duplicate := names[key]; duplicate {
+					continue
+				}
+				names[key] = struct{}{}
 			}
-			if p.names == nil {
-				p.names = make(map[string]struct{})
-			}
-			p.names[key] = struct{}{}
 			value := p.decode(z.input[attr[1].start:attr[1].end], true, true, true, false)
 			p.attrs = append(p.attrs, htmlAttribute{Name: key, Value: value})
 		}
@@ -217,7 +232,7 @@ func (p *Parser) token(kind TokenType) htmlToken {
 }
 
 func documentToken(z *htmlScanner, kind TokenType) bool {
-	return kind == tokenDoctype || (kind == TokenStartTag || kind == TokenSelfClosingTag) && z.startTagIn("html", "head", "body")
+	return kind == tokenDoctype || (kind == TokenStartTag || kind == TokenSelfClosingTag) && z.matchingTag("html", "head", "body") != ""
 }
 
 func (p *Parser) leadingSpace() bool {

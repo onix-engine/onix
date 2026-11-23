@@ -5,6 +5,38 @@ import (
 	"testing"
 )
 
+func TestDiscardRemovesOnlyPresentComponents(t *testing.T) {
+	world := NewWorld()
+	spawn := world.NewSpawner1[testVelocity]()
+	entity := spawn.Spawn(testVelocity{X: 3})
+	registered, revision := len(world.componentInfos), world.StructureVersion()
+	if world.Discard(entity, Type[testSize]()) || len(world.componentInfos) != registered || world.StructureVersion() != revision {
+		t.Fatal("discard of an unknown type changed the world")
+	}
+	cleanups := 0
+	world.OnComponentRemove[testVelocity](func(w *World, e Entity, v *testVelocity) {
+		if e != entity || v.X != 3 || v != w.GetRef[testVelocity](e) {
+			t.Fatal("cleanup did not see the original row")
+		}
+		cleanups++
+	})
+	velocity := Type[testVelocity]()
+	if !world.Discard(entity, velocity) || world.Discard(entity, velocity) || cleanups != 1 || world.ComponentDetachRevision[testVelocity]() != 1 {
+		t.Fatal("discard did not remove the component exactly once")
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		_ = world.Insert(entity, testVelocity{X: 3})
+		world.Discard(entity, velocity)
+	}); allocs != 0 {
+		t.Fatalf("warm insert and discard allocated %v times", allocs)
+	}
+	world.Despawn(entity)
+	replacement := spawn.Spawn(testVelocity{X: 5})
+	if world.Discard(entity, velocity) || !world.Has[testVelocity](replacement) {
+		t.Fatal("discard through a stale entity changed its replacement")
+	}
+}
+
 func TestPreparedRemovalMovesOnceAndPreservesTicks(t *testing.T) {
 	world := NewWorld()
 	nodes := world.NewSpawner4[testPosition, testVelocity, testName, testSize]()
@@ -12,7 +44,7 @@ func TestPreparedRemovalMovesOnceAndPreservesTicks(t *testing.T) {
 	second := nodes.Spawn(testPosition{X: 3}, testVelocity{X: 4}, testName{Value: "second"}, testSize{})
 	world.GetMut[testPosition](first).X = 5
 	positionColumn, positionRow := world.componentRow[testPosition](first)
-	added, changed := positionColumn.added[positionRow], positionColumn.changed[positionRow]
+	added, changed := positionColumn.state.added[positionRow], positionColumn.state.changed[positionRow]
 	retainedCleanup, removedCleanup := 0, 0
 	world.OnComponentRemove[testPosition](func(*World, Entity, *testPosition) { retainedCleanup++ })
 	removal := world.PrepareRemoval(Type[testVelocity](), Type[testSize](), Type[testVelocity](), Type[testVisibility]())
@@ -32,7 +64,7 @@ func TestPreparedRemovalMovesOnceAndPreservesTicks(t *testing.T) {
 		t.Fatal("incorrect component cleanup")
 	}
 	positionColumn, positionRow = world.componentRow[testPosition](first)
-	if positionColumn.values[positionRow].X != 5 || positionColumn.added[positionRow] != added || positionColumn.changed[positionRow] != changed {
+	if positionColumn.values[positionRow].X != 5 || positionColumn.state.added[positionRow] != added || positionColumn.state.changed[positionRow] != changed {
 		t.Fatal("retained value or ticks changed")
 	}
 	if world.GetRef[testPosition](second).X != 3 || world.GetRef[testName](second).Value != "second" {
@@ -136,7 +168,7 @@ func TestPreparedRemovalCommandsAndIterationGuard(t *testing.T) {
 }
 
 func TestRemovalCleanupPanicKeepsStorageAndReleasesGuard(t *testing.T) {
-	for _, mode := range []string{"batch", "single", "despawn"} {
+	for _, mode := range []string{"batch", "single", "discard", "despawn"} {
 		t.Run(mode, func(t *testing.T) {
 			world := NewWorld()
 			nodes := world.NewSpawner2[testPosition, testVelocity]()
@@ -153,6 +185,8 @@ func TestRemovalCleanupPanicKeepsStorageAndReleasesGuard(t *testing.T) {
 				switch mode {
 				case "batch":
 					removal.Apply(entity)
+				case "discard":
+					world.Discard(entity, Type[testVelocity]())
 				case "single":
 					world.Remove[testVelocity](entity)
 				case "despawn":

@@ -1,6 +1,8 @@
 package html
 
 import (
+	"math/bits"
+
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
@@ -144,49 +146,40 @@ func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *uinode.Node, role
 	if writer.entity != 0 {
 		// These links are added after the primitive is emitted and may change when
 		// its DOM ancestor becomes or ceases to be a control/editing host.
-		world.Remove[FocusOwner](writer.entity)
-		world.Remove[EditableText](writer.entity)
-		world.Remove[ScrollContent](writer.entity)
+		world.Discard(writer.entity, ecs.Type[FocusOwner]())
+		world.Discard(writer.entity, ecs.Type[EditableText]())
+		world.Discard(writer.entity, ecs.Type[ScrollContent]())
 	}
 	return writer
 }
 
-func htmlOptionalBit[T any]() uint16 {
-	switch any((*T)(nil)).(type) {
-	case *scene.Sprite2D:
-		return 1 << 0
-	case *scene.SpriteLayers2D:
-		return 1 << 1
-	case *scene.ClipRect2D:
-		return 1 << 2
-	case *scene.InputTarget2D:
-		return 1 << 3
-	case *scene.InputBlocker2D:
-		return 1 << 4
-	case *Focusable:
-		return 1 << 5
-	case *Editable:
-		return 1 << 6
-	case *htmlEditableNodeRef:
-		return 1 << 7
-	case *ControlText:
-		return 1 << 8
-	case *htmlControlTextNode:
-		return 1 << 9
-	case *scene.UIScroll:
-		return 1 << 10
-	case *ScrollbarPart:
-		return 1 << 11
-	case *scene.ClipExempt2D:
-		return 1 << 12
-	case *scene.Shader[graphics.Material2DShader]:
-		return 1 << 13
-	case *htmlElementSurface:
-		return 1 << 14
-	case *htmlOpacitySurface:
-		return 1 << 15
-	}
-	return 0
+// Each optional component owns one bit in a retained entity binding.
+type htmlComponentSlot[T any] uint8
+
+const (
+	spriteSlot          htmlComponentSlot[scene.Sprite2D]                          = iota
+	spriteLayersSlot    htmlComponentSlot[scene.SpriteLayers2D]                    = iota
+	clipRectSlot        htmlComponentSlot[scene.ClipRect2D]                        = iota
+	inputTargetSlot     htmlComponentSlot[scene.InputTarget2D]                     = iota
+	inputBlockerSlot    htmlComponentSlot[scene.InputBlocker2D]                    = iota
+	focusableSlot       htmlComponentSlot[Focusable]                               = iota
+	editableSlot        htmlComponentSlot[Editable]                                = iota
+	editableNodeSlot    htmlComponentSlot[htmlEditableNodeRef]                     = iota
+	controlTextSlot     htmlComponentSlot[ControlText]                             = iota
+	controlTextNodeSlot htmlComponentSlot[htmlControlTextNode]                     = iota
+	scrollSlot          htmlComponentSlot[scene.UIScroll]                          = iota
+	scrollbarSlot       htmlComponentSlot[ScrollbarPart]                           = iota
+	clipExemptSlot      htmlComponentSlot[scene.ClipExempt2D]                      = iota
+	materialShaderSlot  htmlComponentSlot[scene.Shader[graphics.Material2DShader]] = iota
+	elementSurfaceSlot  htmlComponentSlot[htmlElementSurface]                      = iota
+	opacitySurfaceSlot  htmlComponentSlot[htmlOpacitySurface]                      = iota
+)
+
+func (slot htmlComponentSlot[T]) mask() uint16 { return 1 << slot }
+
+func (writer *htmlEntityWriter) putOptional[T any](slot htmlComponentSlot[T], value T) {
+	writer.optional |= slot.mask()
+	writer.putHTML(value)
 }
 
 // putTextField updates authored configuration while retaining native interaction
@@ -213,16 +206,23 @@ func (writer *htmlEntityWriter) putTextField(value, placeholder string, maxLengt
 // The generic writer uses ordinary bundles only for new entities. Updating a
 // retained primitive does not box every component in a freshly allocated bundle.
 func (writer *htmlEntityWriter) putHTML[T any](value T) {
-	writer.optional |= htmlOptionalBit[T]()
 	if writer.entity == 0 {
-		if writer.capacity != 0 {
-			writer.bundle = ecs.NewBundle(writer.capacity)
-			writer.capacity = 0
-		}
-		writer.bundle.Put(value)
+		writer.spawnBundle().Put(value)
 		return
 	}
 	_ = writer.world.Insert(writer.entity, value)
+}
+
+// Allocate only for the dynamic spawn path. Retained entities and typed
+// paint spawners never need this bundle.
+//
+//go:noinline
+func (writer *htmlEntityWriter) spawnBundle() *ecs.Bundle {
+	if writer.capacity != 0 {
+		writer.bundle = ecs.NewBundle(writer.capacity)
+		writer.capacity = 0
+	}
+	return &writer.bundle
 }
 
 // The layout engine authors every primitive's local placement. Input and global
@@ -256,7 +256,7 @@ func (writer *htmlEntityWriter) putScroll(next scene.UIScroll) {
 			next = old
 		}
 	}
-	writer.putHTML(next)
+	writer.putOptional(scrollSlot, next)
 }
 
 func (writer *htmlEntityWriter) putChild(next htmlChild) {
@@ -280,35 +280,39 @@ func (writer *htmlEntityWriter) putText(next scene.Text2D) {
 	writer.putHTML(next)
 }
 
-func (writer *htmlEntityWriter) removeMissingHTML[T any]() {
-	bit := htmlOptionalBit[T]()
-	if writer.oldOptional&bit != 0 && writer.optional&bit == 0 {
-		writer.world.Remove[T](writer.entity)
+// Resolve the ECS type only when its component is removed.
+var htmlOptionalTypes = [...]func() ecs.ComponentType{
+	spriteSlot:          ecs.Type[scene.Sprite2D],
+	spriteLayersSlot:    ecs.Type[scene.SpriteLayers2D],
+	clipRectSlot:        ecs.Type[scene.ClipRect2D],
+	inputTargetSlot:     ecs.Type[scene.InputTarget2D],
+	inputBlockerSlot:    ecs.Type[scene.InputBlocker2D],
+	focusableSlot:       ecs.Type[Focusable],
+	editableSlot:        ecs.Type[Editable],
+	editableNodeSlot:    ecs.Type[htmlEditableNodeRef],
+	controlTextSlot:     ecs.Type[ControlText],
+	controlTextNodeSlot: ecs.Type[htmlControlTextNode],
+	scrollSlot:          ecs.Type[scene.UIScroll],
+	scrollbarSlot:       ecs.Type[ScrollbarPart],
+	clipExemptSlot:      ecs.Type[scene.ClipExempt2D],
+	materialShaderSlot:  ecs.Type[scene.Shader[graphics.Material2DShader]],
+	elementSurfaceSlot:  ecs.Type[htmlElementSurface],
+	opacitySurfaceSlot:  ecs.Type[htmlOpacitySurface],
+}
+
+func (writer *htmlEntityWriter) removeMissingHTML() {
+	for removed := writer.oldOptional &^ writer.optional; removed != 0; removed &= removed - 1 {
+		component := htmlOptionalTypes[bits.TrailingZeros16(removed)]()
+		writer.world.Discard(writer.entity, component)
 	}
 }
 
 func (writer *htmlEntityWriter) finish() ecs.Entity {
 	if writer.entity == 0 {
 		return writer.finishSpawn(writer.world.Spawn(writer.bundle))
-	} else {
-		writer.removeMissingHTML[scene.Sprite2D]()
-		writer.removeMissingHTML[scene.SpriteLayers2D]()
-		writer.removeMissingHTML[scene.ClipRect2D]()
-		writer.removeMissingHTML[scene.InputTarget2D]()
-		writer.removeMissingHTML[scene.InputBlocker2D]()
-		writer.removeMissingHTML[Focusable]()
-		writer.removeMissingHTML[Editable]()
-		writer.removeMissingHTML[htmlEditableNodeRef]()
-		writer.removeMissingHTML[ControlText]()
-		writer.removeMissingHTML[htmlControlTextNode]()
-		writer.removeMissingHTML[scene.UIScroll]()
-		writer.removeMissingHTML[ScrollbarPart]()
-		writer.removeMissingHTML[scene.ClipExempt2D]()
-		writer.removeMissingHTML[scene.Shader[graphics.Material2DShader]]()
-		writer.removeMissingHTML[htmlElementSurface]()
-		writer.removeMissingHTML[htmlOpacitySurface]()
-		writer.state.SyncStats.Reused++
 	}
+	writer.removeMissingHTML()
+	writer.state.SyncStats.Reused++
 	return writer.bind(false)
 }
 

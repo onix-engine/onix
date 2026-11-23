@@ -3,6 +3,9 @@ package ecs
 import "reflect"
 
 type resourceSlot[T any] struct {
+	// Slots are identified by pointer. Omit the otherwise generated equality
+	// function for each resource and its change ticks.
+	_       [0]func()
 	value   T
 	added   Tick
 	changed Tick
@@ -33,6 +36,16 @@ func (world *World) GetResource[T any]() (T, bool) {
 		return zero, false
 	}
 	return slot.value, true
+}
+
+// GetResourceRef borrows the resource for reading without marking it changed.
+func (world *World) GetResourceRef[T any]() *T {
+	requireWorld(world)
+	slot, ok := world.resourceSlotFor[T]()
+	if !ok {
+		return nil
+	}
+	return &slot.value
 }
 
 // ResourceChangeTick returns the last write tick, or zero for a missing resource.

@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"fmt"
+	"hash/maphash"
 	"maps"
 	"slices"
 	"strings"
@@ -165,15 +166,40 @@ func (d *Document) UpdateRange[V piecetree.Value](filename string, value V, star
 		d.lines, d.ranges = d.lines[:0], d.ranges[:0]
 	}
 	d.ranges = trimBuffer(d.ranges, len(d.ranges))
-	d.scratch = trimBuffer(d.scratch, len(d.ranges))
 	d.lines = trimBuffer(d.lines, len(d.lines))
-	d.lineScratch = trimBuffer(d.lineScratch, len(d.lines))
 	clear(d.tokens)
 	d.tokens = trimBuffer(d.tokens[:0], len(d.ranges))
 	clear(d.painter.tokens)
 	d.painter.tokens = trimBuffer(d.painter.tokens[:0], len(d.ranges))
 	d.source, d.initialized = source, true
 	return nil
+}
+
+const syntaxLineBudget = 20_000
+
+var lineHashSeed = maphash.MakeSeed()
+
+// Repeated short lines (braces, blank lines, markup) share a result only
+// within this edit and only with the exact same incoming grammar state.
+type lineMemo struct {
+	state  *textmate.StateStack
+	text   string
+	result textmate.LineResult
+}
+
+func tokenizeLine(grammar *textmate.Grammar, memo *[32]lineMemo, text string, state *textmate.StateStack) textmate.LineResult {
+	var entry *lineMemo
+	if len(text) <= 128 {
+		entry = &memo[maphash.String(lineHashSeed, text)%uint64(len(memo))]
+		if entry.state == state && entry.text == text && entry.result.RuleStack != nil {
+			return entry.result
+		}
+	}
+	result := grammar.TokenizeLineWithOptions(text, state, textmate.TokenizeOptions{MaxLineBytes: syntaxLineBudget})
+	if entry != nil && !result.Stopped {
+		*entry = lineMemo{state: state, text: text, result: result}
+	}
+	return result
 }
 
 func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int) {
@@ -192,26 +218,17 @@ func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int
 	if first > 0 {
 		state = d.lines[first-1].endState
 	}
-	ranges := append(d.scratch[:0], d.ranges[:prefix]...)
-	lines := append(d.lineScratch[:0], d.lines[:first]...)
+	ranges, lines := d.scratch[:0], d.lineScratch[:0]
+	lastLine, lastToken := len(d.lines), len(d.ranges)
 	shift := source.Len() - d.source.Len()
+	var memo [32]lineMemo
 	for pos <= source.Len() {
 		// The suffix text is unchanged by contract. Matching its incoming lexical
 		// state proves that all its cached tokens and ending states remain valid.
-		if pos >= newEnd && pos-shift >= oldEnd && len(lines) > first {
+		if pos >= newEnd && pos-shift >= oldEnd && len(lines) != 0 {
 			old, found := slices.BinarySearchFunc(d.lines, pos-shift, func(line lexicalLine, offset int) int { return line.start - offset })
 			if found && old > 0 && state.Equal(d.lines[old-1].endState) {
-				tokenShift := len(ranges) - d.lines[old].tokenStart
-				for _, capture := range d.ranges[d.lines[old].tokenStart:] {
-					capture.StartByte = uint32(int(capture.StartByte) + shift)
-					capture.EndByte = uint32(int(capture.EndByte) + shift)
-					ranges = append(ranges, capture)
-				}
-				for _, line := range d.lines[old:] {
-					line.start += shift
-					line.tokenStart += tokenShift
-					lines = append(lines, line)
-				}
+				lastLine, lastToken = old, d.lines[old].tokenStart
 				break
 			}
 		}
@@ -222,10 +239,9 @@ func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int
 		// The tokenizer's long-line fallback only needs the incoming state and
 		// a length beyond its budget. Bound copies even for a fragmented,
 		// document-sized generated line, then extend its fallback token below.
-		const lineBudget = 20_000
-		text := source.Slice(pos, min(end, pos+lineBudget+1))
-		tokenStart := len(ranges)
-		result := d.grammar.TokenizeLineWithOptions(text, state, textmate.TokenizeOptions{MaxLineBytes: lineBudget})
+		text := source.Slice(pos, min(end, pos+syntaxLineBudget+1))
+		tokenStart := prefix + len(ranges)
+		result := tokenizeLine(d.grammar, &memo, text, state)
 		d.retokenized++
 		// Convert monotonically increasing rune offsets in one pass. The editor and
 		// wire protocol use bytes, including for CJK and astral Unicode characters.
@@ -240,7 +256,7 @@ func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int
 		}
 		for _, token := range result.Tokens {
 			begin, finish := toByte(token.Start), toByte(token.End)
-			if end-pos > lineBudget {
+			if end-pos > syntaxLineBudget {
 				begin, finish = 0, end-pos
 			}
 			if begin == finish {
@@ -263,11 +279,34 @@ func (d *Document) tokenize(source piecetree.Snapshot, start, oldEnd, newEnd int
 		}
 		pos = end + 1
 	}
-	oldRanges, oldLines := d.ranges, d.lines
-	d.ranges, d.lines = ranges, lines
-	clear(oldRanges)
-	clear(oldLines)
-	d.scratch, d.lineScratch = oldRanges[:0], oldLines[:0]
+	// Keep the unchanged prefix and suffix in their existing arrays. A
+	// same-width edit with the same token count touches only the changed lines.
+	d.ranges, d.scratch = spliceTokens(d.ranges, prefix, lastToken, ranges)
+	d.lines, d.lineScratch = spliceTokens(d.lines, first, lastLine, lines)
+	tokenShift := prefix + len(ranges) - lastToken
+	if shift != 0 {
+		for i := prefix + len(ranges); i < len(d.ranges); i++ {
+			d.ranges[i].StartByte = uint32(int(d.ranges[i].StartByte) + shift)
+			d.ranges[i].EndByte = uint32(int(d.ranges[i].EndByte) + shift)
+		}
+	}
+	if shift != 0 || tokenShift != 0 {
+		for i := first + len(lines); i < len(d.lines); i++ {
+			d.lines[i].start += shift
+			d.lines[i].tokenStart += tokenShift
+		}
+	}
+}
+
+// On a full replacement the edit buffer already contains the entire result.
+func spliceTokens[T any](before []T, start, end int, edited []T) ([]T, []T) {
+	if start == 0 && end == len(before) {
+		before, edited = edited, before
+	} else {
+		before = slices.Replace(before, start, end, edited...)
+	}
+	clear(edited)
+	return before, trimBuffer(edited[:0], 0)
 }
 
 func lexicalCategory(token textmate.Token) string {

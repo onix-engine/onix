@@ -119,7 +119,7 @@ func (config EngineConfig) Validate() error {
 		}
 	}
 	for _, id := range config.Features {
-		for _, dependency := range runtimeFeatureDependencies(id) {
+		for _, dependency := range id.Dependencies() {
 			if !containsRuntimeFeature(config.Features, dependency) {
 				return fmt.Errorf("runtime feature %q requires %q", id, dependency)
 			}
@@ -146,17 +146,23 @@ func containsRuntimeFeature(values []RuntimeFeatureID, id RuntimeFeatureID) bool
 	return false
 }
 
-func runtimeFeatureDependencies(id RuntimeFeatureID) []RuntimeFeatureID {
+// Dependencies lists the runtime features required in a project's engine configuration.
+func (id RuntimeFeatureID) Dependencies() []RuntimeFeatureID {
 	switch id {
 	case FeatureAnimations2D, FeatureSpriteTrails2D, FeatureParticles2D, FeatureTilemaps2D, FeatureSpine2D:
 		return []RuntimeFeatureID{FeatureRender2D}
-	case FeatureUIControls, FeatureUIWidgets:
+	case FeatureUIControls, FeatureUIWidgets, FeatureUIHTML, FeatureUIMarkdown:
 		return []RuntimeFeatureID{FeatureRender2D, FeatureInput2D}
-	case FeatureUITextInput, FeatureUIMarkdown, FeatureUIHTML:
+	case FeatureUITextInput:
 		return []RuntimeFeatureID{FeatureRender2D, FeatureInput2D, FeatureUIWidgets}
 	default:
 		return nil
 	}
+}
+
+// Layout and Widget are scene constraints supported by every UI profile.
+func supportsSceneUILayout(installed func(RuntimeFeatureID) bool) bool {
+	return installed(FeatureUIWidgets) || installed(FeatureUIControls) || installed(FeatureUIHTML) || installed(FeatureUIMarkdown)
 }
 
 func validImageDecoderID(id ImageDecoderID) bool {
@@ -226,6 +232,7 @@ func (b *Bundle) ValidateSceneFeatures(id SceneID, installed func(RuntimeFeature
 	}
 	var required [14]RuntimeFeatureID
 	count := 0
+	needsLayout := false
 	add := func(feature RuntimeFeatureID) {
 		for index := 0; index < count; index++ {
 			if required[index] == feature {
@@ -267,13 +274,16 @@ func (b *Bundle) ValidateSceneFeatures(id SceneID, installed func(RuntimeFeature
 			add(FeatureUIControls)
 		}
 		if node.Spec.Layout != nil || node.Spec.Widget != nil {
-			add(FeatureUIWidgets)
+			needsLayout = true
 		}
 	}
 	for index := 0; index < count; index++ {
 		if !installed(required[index]) {
 			return fmt.Errorf("scene %q requires runtime feature %q", id, required[index])
 		}
+	}
+	if needsLayout && !supportsSceneUILayout(installed) {
+		return fmt.Errorf("scene %q requires a UI runtime for layout", id)
 	}
 	return nil
 }

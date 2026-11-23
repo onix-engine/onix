@@ -372,35 +372,46 @@ func (w *World) EntityBySlot(slot EntitySlot) (Entity, bool) {
 }
 
 func (world *World) Insert[T any](entity Entity, value T) error {
-	requireWorld(world)
-	world.assertStructuralMutationAllowed()
-	index, meta, ok := world.entityMeta(entity)
-	if !ok {
-		return fmt.Errorf("ecs: entity %d does not exist", entity)
+	index, meta, err := world.structuralEntity(entity)
+	if err != nil {
+		return err
 	}
 	id := world.registerComponent[T]()
-	oldArchetype := world.archetypes[meta.archetypeID]
 	tick := world.mutationTick()
-	if oldArchetype.has(id) {
-		oldArchetype.componentColumn[T](id).replace(int(meta.row), value, tick)
-		return nil
+	storage, row := world.insertColumn(entity, index, meta, id)
+	column := storage.typed[T]()
+	if row < 0 {
+		column.append(value, tick)
+	} else {
+		column.replace(row, value, tick)
 	}
-
-	target := world.migrateAdding(entity, index, oldArchetype, int(meta.row), id)
-	target.typed[T]().append(value, tick)
 	return nil
 }
 
-// migrateAdding transfers the shared columns and returns the one empty slot
-// in the destination table. The caller immediately appends its typed value.
-func (world *World) migrateAdding(entity Entity, index uint32, source *archetype, row int, id componentID) *columnState {
+func (w *World) structuralEntity(entity Entity) (uint32, *entityMeta, error) {
+	requireWorld(w)
+	w.assertStructuralMutationAllowed()
+	index, meta, ok := w.entityMeta(entity)
+	if !ok {
+		return 0, nil, fmt.Errorf("ecs: entity %d does not exist", entity)
+	}
+	return index, meta, nil
+}
+
+// insertColumn returns the existing row, or migrates the entity and returns
+// -1 so the caller appends the entity's value to the destination column.
+func (world *World) insertColumn(entity Entity, index uint32, meta *entityMeta, id componentID) (*columnState, int) {
+	source, row := world.archetypes[meta.archetypeID], int(meta.row)
+	if column := source.column(id); column != nil {
+		return column, row
+	}
 	target := world.archetypeWithAdded(source, id)
 	targetRow := target.appendEntity(entity)
 	added := target.columnIndex(id)
 	moveSharedRow(source, target, row, added)
 	world.removeArchetypeEntity(source, row)
 	world.commitMigration(index, target, targetRow)
-	return target.columns[added]
+	return target.columns[added], -1
 }
 
 // commitMigration binds one metadata slot to its destination row and records
@@ -432,27 +443,47 @@ func moveSharedRow(source, target *archetype, row, skip int) {
 }
 
 func (world *World) Remove[T any](entity Entity) (T, bool) {
-	var zero T
-	requireWorld(world)
-	world.assertStructuralMutationAllowed()
-	index, meta, ok := world.entityMeta(entity)
-	if !ok {
+	source, row, column := world.removalColumn(entity, reflect.TypeFor[T]())
+	if source == nil {
+		var zero T
 		return zero, false
 	}
-	id, registered := world.componentTypes[reflect.TypeFor[T]()]
-	oldArchetype := world.archetypes[meta.archetypeID]
-	if !registered || !oldArchetype.has(id) {
-		return zero, false
-	}
-	oldRow := int(meta.row)
-	removedIndex := oldArchetype.columnIndex(id)
-	removed := oldArchetype.columns[removedIndex].typed[T]().values[oldRow]
-	world.migrateRemoving(entity, index, oldArchetype, oldRow, removedIndex, id)
+	removed := source.columns[column].typed[T]().values[row]
+	world.migrateRemoving(entity, source, row, column)
 	return removed, true
 }
 
-func (world *World) migrateRemoving(entity Entity, index uint32, source *archetype, row, removed int, id componentID) {
+// Discard removes a component and runs its cleanup hook. It returns false if
+// the entity is stale or lacks the component. An unknown type is left unregistered.
+func (world *World) Discard(entity Entity, component ComponentType) bool {
+	source, row, column := world.removalColumn(entity, component.typ)
+	if source == nil {
+		return false
+	}
+	world.migrateRemoving(entity, source, row, column)
+	return true
+}
+
+func (world *World) removalColumn(entity Entity, typ reflect.Type) (*archetype, int, int) {
+	requireWorld(world)
+	world.assertStructuralMutationAllowed()
+	_, meta, ok := world.entityMeta(entity)
+	if !ok {
+		return nil, 0, 0
+	}
+	id, registered := world.componentTypes[typ]
+	if registered {
+		source := world.archetypes[meta.archetypeID]
+		if column := source.columnIndex(id); column >= 0 {
+			return source, int(meta.row), column
+		}
+	}
+	return nil, 0, 0
+}
+
+func (world *World) migrateRemoving(entity Entity, source *archetype, row, removed int) {
 	column := source.columns[removed]
+	id := column.id
 	if world.componentInfos[id].onRemove != nil {
 		world.cleanupComponent(id, entity, column, row)
 	}
@@ -462,35 +493,39 @@ func (world *World) migrateRemoving(entity Entity, index uint32, source *archety
 	column.swapRemove(row)
 	world.componentInfos[id].detached++
 	world.removeArchetypeEntity(source, row)
+	index, _ := entity.Index()
 	world.commitMigration(index, target, targetRow)
 }
 
 func (world *World) Has[T any](entity Entity) bool {
+	return world.hasComponent(entity, reflect.TypeFor[T]())
+}
+
+func (world *World) hasComponent(entity Entity, typ reflect.Type) bool {
 	requireWorld(world)
 	_, meta, ok := world.entityMeta(entity)
 	if !ok {
 		return false
 	}
-	id, registered := world.componentTypes[reflect.TypeFor[T]()]
+	id, registered := world.componentTypes[typ]
 	return registered && world.archetypes[meta.archetypeID].has(id)
 }
 
 func (world *World) Get[T any](entity Entity) (value T, ok bool) {
-	column, row := world.componentRow[T](entity)
-	if column == nil {
-		return
+	if value := world.GetRef[T](entity); value != nil {
+		return *value, true
 	}
-	return column.values[row], true
+	return
 }
 
 // GetRef returns a component reference without marking it changed.
 // Callers must not mutate it or retain it across structural mutations.
 func (world *World) GetRef[T any](entity Entity) *T {
-	column, row := world.componentRow[T](entity)
+	column, row := world.lookupComponent(entity, reflect.TypeFor[T]())
 	if column == nil {
 		return nil
 	}
-	return &column.values[row]
+	return &column.typed[T]().values[row]
 }
 
 // componentRow locates one component row without marking it changed. A nil
@@ -514,12 +549,12 @@ func (world *World) lookupComponent(entity Entity, typ reflect.Type) (*columnSta
 }
 
 func (world *World) GetMut[T any](entity Entity) *T {
-	column, row := world.componentRow[T](entity)
+	column, row := world.lookupComponent(entity, reflect.TypeFor[T]())
 	if column == nil {
 		return nil
 	}
-	column.markChanged(row, world.mutationTick())
-	return &column.values[row]
+	column.markChanged(row, 0)
+	return &column.typed[T]().values[row]
 }
 
 // SetIfChanged updates an existing component only when its value differs.
@@ -530,7 +565,7 @@ func (world *World) SetIfChanged[T comparable](entity Entity, value T) bool {
 	if column == nil || column.values[row] == value {
 		return false
 	}
-	column.replace(row, value, world.mutationTick())
+	column.replace(row, value, 0)
 	return true
 }
 

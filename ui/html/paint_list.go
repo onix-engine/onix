@@ -103,7 +103,7 @@ func publishHTMLPaintList(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	}
 	state.PaintListDirty = false
 	if state.PaintList.Len() == 0 {
-		world.Remove[*scene.UIPaintList2D](owner)
+		world.Discard(owner, ecs.Type[*scene.UIPaintList2D]())
 		state = world.GetMut[htmlRenderState](owner)
 		state.PaintList = nil
 		return

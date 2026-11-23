@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -69,18 +70,31 @@ func TestProjectInputAndLayout(t *testing.T) {
 			}
 		}
 		got := make(map[string]int)
-		for _, access := range world.Query[scene.Text2D]().All {
-			text := access.Get()
-			if text.Value != "0" && text.FontSize >= 24 && text.FontSize <= 44 {
-				if _, err := strconv.ParseUint(text.Value, 10, 32); err == nil {
-					got[text.Value]++
+		record := func(value string, fontSize float64) {
+			if value != "0" && fontSize >= 24 && fontSize <= 44 {
+				if _, err := strconv.ParseUint(value, 10, 32); err == nil {
+					got[value]++
 				}
 			}
 		}
-		for value, count := range want {
-			if got[value] != count {
-				t.Fatalf("tile %s: emitted %d text visuals, want %d", value, got[value], count)
+		for _, access := range world.Query[scene.Text2D]().All {
+			text := access.Ref()
+			record(text.Value, text.FontSize)
+		}
+		if list, ok := world.Get[*scene.UIPaintList2D](page); ok {
+			for box := range list.Boxes {
+				if box.Text.Font == nil {
+					continue
+				}
+				var text strings.Builder
+				for _, glyph := range box.Text.Layout.Glyphs {
+					text.WriteRune(glyph.Rune)
+				}
+				record(text.String(), box.Text.FontSize)
 			}
+		}
+		if !maps.Equal(got, want) {
+			t.Fatalf("emitted tile values %v, want %v", got, want)
 		}
 	}
 	assertTileText()

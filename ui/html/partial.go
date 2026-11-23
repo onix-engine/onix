@@ -387,7 +387,7 @@ func reconcileHTMLPartial(world *ecs.World, owner ecs.Entity, state *htmlRenderS
 	if structure {
 		state.Children = state.Children[:0]
 		state.OwnerSpansValid = true
-		appendHTMLStructureEntities(world, state, state.LayoutCache.Root, stackIndex, htmlStackContext{})
+		updateHTMLStackSubtree(world, state, state.LayoutCache.Root, stackIndex, htmlStackContext{}, true)
 	} else {
 		updateHTMLChangedStackOrders(world, state, stackIndex)
 		if clipChanged || paintStackChanged {
@@ -463,12 +463,7 @@ func appendHTMLBoxEntities(state *htmlRenderState, box *layout.Box) {
 		return
 	}
 	rendered := state.BoxRenderings[box.Node]
-	beginHTMLOwnerSpan(state, rendered)
-	state.Children = append(state.Children, rendered.Entities...)
-	if binding := rendered.Overflow; binding != nil {
-		state.Children = append(state.Children, binding.entity)
-		state.Children = append(state.Children, binding.parts...)
-	}
+	appendHTMLOwnerEntities(state, rendered)
 	for _, child := range box.Children {
 		appendHTMLBoxEntities(state, child)
 	}

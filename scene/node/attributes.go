@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"sync/atomic"
+
+	"github.com/onix-engine/onix/internal/smallsort"
 )
 
 // Attribute is an authored name/value pair. Names retain their exact spelling;
@@ -203,7 +205,7 @@ func (a *AttributeSet) SetAttributes(attributes ...Attribute) {
 	if len(data.values) < len(previous) {
 		clear(previous[len(data.values):])
 	}
-	slices.SortStableFunc(data.values, func(left, right Attribute) int { return cmp.Compare(left.Name, right.Name) })
+	smallsort.InsertionSortFunc(data.values, func(left, right Attribute) int { return cmp.Compare(left.Name, right.Name) })
 	kept := data.values[:0]
 	for _, attribute := range data.values {
 		if len(kept) == 0 || kept[len(kept)-1].Name != attribute.Name {

@@ -56,3 +56,23 @@ func TestTokenizerAttributesRemainIndependent(t *testing.T) {
 		t.Fatal("tokenizer reused a previously returned token's attributes")
 	}
 }
+
+func TestDuplicateAttributesKeepFirstAcrossTokenSizes(t *testing.T) {
+	var parser Parser
+	for _, count := range []int{8, 9, 2} {
+		var source strings.Builder
+		source.WriteString("<div ID=first")
+		for i := 0; i < count-2; i++ {
+			fmt.Fprintf(&source, " data-%d=x", i)
+		}
+		source.WriteString(" id=last>")
+		root, err := parser.Parse(source.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		node := root.Children[0]
+		if node.AttrCount() != count-1 || node.AttrValue("id") != "first" {
+			t.Fatalf("%d attributes: %s", count, root.String())
+		}
+	}
+}

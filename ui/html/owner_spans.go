@@ -10,6 +10,15 @@ func beginHTMLOwnerSpan(state *htmlRenderState, rendered *htmlBoxRendering) {
 	state.SyncStats.OwnerListBoxes++
 }
 
+func appendHTMLOwnerEntities(state *htmlRenderState, rendered *htmlBoxRendering) {
+	beginHTMLOwnerSpan(state, rendered)
+	state.Children = append(state.Children, rendered.Entities...)
+	if binding := rendered.Overflow; binding != nil {
+		state.Children = append(state.Children, binding.entity)
+		state.Children = append(state.Children, binding.parts...)
+	}
+}
+
 func rebuildHTMLOwnerList(state *htmlRenderState) {
 	state.Children = state.Children[:0]
 	state.OwnerSpansValid = true

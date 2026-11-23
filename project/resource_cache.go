@@ -34,11 +34,15 @@ type cacheEntry[T any] struct {
 
 type resourceCache[K comparable, T any] struct {
 	entries  map[K]*cacheEntry[T]
+	counters cacheCounters
+	mu       sync.RWMutex
+	closed   bool
+}
+
+type cacheCounters struct {
 	hits     atomic.Uint64
 	misses   atomic.Uint64
 	resident atomic.Uint64
-	mu       sync.RWMutex
-	closed   bool
 }
 
 func newResourceCache[K comparable, T any](capacity int) *resourceCache[K, T] {
@@ -78,7 +82,7 @@ func (c *resourceCache[K, T]) get(key K) (T, bool, error) {
 		var zero T
 		return zero, false, nil
 	}
-	value, err := entry.resolve(c)
+	value, err := entry.resolve(&c.counters)
 	return value, true, err
 }
 
@@ -99,7 +103,7 @@ func (c *resourceCache[K, T]) load(key K, load func() (T, error), dispose func(T
 		c.entries[key] = entry
 	}
 	c.mu.Unlock()
-	return entry.resolve(c)
+	return entry.resolve(&c.counters)
 }
 
 func (c *resourceCache[K, T]) replace(key K, value T, dispose func(T) error) error {
@@ -117,12 +121,12 @@ func (c *resourceCache[K, T]) replace(key K, value T, dispose func(T) error) err
 	}
 	previous := c.entries[key]
 	c.entries[key] = entry
-	c.resident.Add(1)
+	c.counters.resident.Add(1)
 	c.mu.Unlock()
 	if previous == nil {
 		return nil
 	}
-	return previous.close(c)
+	return previous.close(&c.counters)
 }
 
 func (c *resourceCache[K, T]) remove(key K) error {
@@ -136,7 +140,7 @@ func (c *resourceCache[K, T]) remove(key K) error {
 	if entry == nil {
 		return nil
 	}
-	return entry.close(c)
+	return entry.close(&c.counters)
 }
 
 func (c *resourceCache[K, T]) loaded(key K) (T, bool) {
@@ -210,7 +214,7 @@ func (c *resourceCache[K, T]) statistics() cacheStatistics {
 	if c == nil {
 		return cacheStatistics{}
 	}
-	return cacheStatistics{Hits: c.hits.Load(), Misses: c.misses.Load(), Resident: c.resident.Load()}
+	return cacheStatistics{Hits: c.counters.hits.Load(), Misses: c.counters.misses.Load(), Resident: c.counters.resident.Load()}
 }
 
 func (c *resourceCache[K, T]) disposeResources() error {
@@ -223,41 +227,34 @@ func (c *resourceCache[K, T]) disposeResources() error {
 		return nil
 	}
 	c.closed = true
-	entries := make([]*cacheEntry[T], 0, len(c.entries))
-	for key, entry := range c.entries {
-		entries = append(entries, entry)
-		delete(c.entries, key)
-	}
+	entries := c.entries
+	c.entries = nil
 	c.mu.Unlock()
 
 	errList := make([]error, 0)
 	for _, entry := range entries {
-		if err := entry.close(c); err != nil {
+		if err := entry.close(&c.counters); err != nil {
 			errList = append(errList, err)
 		}
 	}
 	return errors.Join(errList...)
 }
 
-func (e *cacheEntry[T]) resolve(owner interface {
-	recordHit()
-	recordMiss()
-	recordResident()
-}) (T, error) {
+func (e *cacheEntry[T]) resolve(counters *cacheCounters) (T, error) {
 	counted := false
 	for {
 		e.mu.Lock()
 		switch e.state {
 		case cacheEntryReady:
 			if !counted {
-				owner.recordHit()
+				counters.hits.Add(1)
 			}
 			value, err := e.value, e.err
 			e.mu.Unlock()
 			return value, err
 		case cacheEntryLoading:
 			if !counted {
-				owner.recordHit()
+				counters.hits.Add(1)
 				counted = true
 			}
 			wait := e.wait
@@ -269,7 +266,7 @@ func (e *cacheEntry[T]) resolve(owner interface {
 			e.mu.Unlock()
 			return zero, iofs.ErrClosed
 		case cacheEntryEmpty:
-			owner.recordMiss()
+			counters.misses.Add(1)
 			counted = true
 			load := e.load
 			if load == nil {
@@ -290,7 +287,7 @@ func (e *cacheEntry[T]) resolve(owner interface {
 				e.load = nil
 				e.state = cacheEntryReady
 				if err == nil {
-					owner.recordResident()
+					counters.resident.Add(1)
 				}
 			}
 			close(e.wait)
@@ -311,7 +308,7 @@ func (e *cacheEntry[T]) loaded() (T, bool) {
 	return e.value, true
 }
 
-func (e *cacheEntry[T]) close(owner interface{ releaseResident() }) error {
+func (e *cacheEntry[T]) close(counters *cacheCounters) error {
 	for {
 		e.mu.Lock()
 		if e.state == cacheEntryLoading {
@@ -334,18 +331,11 @@ func (e *cacheEntry[T]) close(owner interface{ releaseResident() }) error {
 		e.state = cacheEntryClosed
 		e.mu.Unlock()
 		if loaded {
-			owner.releaseResident()
+			counters.resident.Add(^uint64(0))
 		}
 		if loaded && dispose != nil {
 			return dispose(value)
 		}
 		return nil
 	}
-}
-
-func (c *resourceCache[K, T]) recordHit()      { c.hits.Add(1) }
-func (c *resourceCache[K, T]) recordMiss()     { c.misses.Add(1) }
-func (c *resourceCache[K, T]) recordResident() { c.resident.Add(1) }
-func (c *resourceCache[K, T]) releaseResident() {
-	c.resident.Add(^uint64(0))
 }

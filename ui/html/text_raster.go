@@ -3,12 +3,12 @@ package html
 import (
 	"image"
 	"image/color"
-	"image/draw"
 	"math"
 
 	"github.com/onix-engine/onix/font"
 	"github.com/onix-engine/onix/html/layout"
 	"github.com/onix-engine/onix/html/style"
+	"github.com/onix-engine/onix/internal/glyphdraw"
 )
 
 func htmlVisibilityHash(computed *style.ComputedStyle) uint64 {
@@ -76,8 +76,7 @@ func rasterHTMLText(dst *image.RGBA, box *layout.Box, regular, bold *font.Face, 
 			}
 			left, top := int(ix)+bitmap.Bounds.Min.X, int(iy)-bitmap.Bounds.Max.Y
 			if bitmap.Color != nil {
-				mask := image.NewUniform(color.Alpha{A: c.A})
-				draw.DrawMask(dst, bitmap.Color.Rect.Add(image.Pt(left, top)), bitmap.Color, image.Point{}, mask, image.Point{}, draw.Over)
+				glyphdraw.ColorOver(dst, bitmap.Color.Rect.Add(image.Pt(left, top)), bitmap.Color, c.A)
 				continue
 			}
 			if bitmap.Image == nil {

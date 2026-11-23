@@ -4,53 +4,39 @@
 
 package parse
 
-import (
-	"io"
-	"strings"
-)
+import "strings"
 
 type span struct{ start, end int }
 
 type htmlScanner struct {
-	err                               error
-	input                             string
-	rawTag                            string
-	attr                              [][2]span
-	pendingAttr                       [2]span
-	raw, data                         span
-	tt                                TokenType
-	textIsRaw, convertNUL, allowCDATA bool
+	input                                  string
+	rawTag                                 string
+	attr                                   [][2]span
+	pendingAttr                            [2]span
+	raw, data                              span
+	textIsRaw, convertNUL, allowCDATA, eof bool
 }
 
-func (z *htmlScanner) reset(input string)    { *z = htmlScanner{input: input, attr: z.attr[:0]} }
-func (z *htmlScanner) AllowCDATA(allow bool) { z.allowCDATA = allow }
-func (z *htmlScanner) NextIsNotRawText()     { z.rawTag = "" }
+func (z *htmlScanner) reset(input string) { *z = htmlScanner{input: input, attr: z.attr[:0]} }
+func (z *htmlScanner) NextIsNotRawText()  { z.rawTag = "" }
 func (z *htmlScanner) readByte() byte {
 	if z.raw.end == len(z.input) {
-		z.err = io.EOF
+		z.eof = true
 		return 0
 	}
 	c := z.input[z.raw.end]
 	z.raw.end++
 	return c
 }
-func (z *htmlScanner) rawTagName() string {
-	for _, name := range [...]string{"iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "textarea", "title", "xmp"} {
-		if z.startTagIn(name) {
-			return name
-		}
-	}
-	return ""
-}
 
 // skipWhiteSpace skips past any white space.
 func (z *htmlScanner) skipWhiteSpace() {
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	for {
 		c := z.readByte()
-		if z.err != nil {
+		if z.eof {
 			return
 		}
 		switch c {
@@ -69,25 +55,16 @@ func (z *htmlScanner) readRawOrRCDATA() {
 		z.rawTag = ""
 		return
 	}
-loop:
 	for {
-		c := z.readByte()
-		if z.err != nil {
-			break loop
+		next := strings.Index(z.input[z.raw.end:], "</")
+		if next < 0 {
+			z.raw.end = len(z.input)
+			z.eof = true
+			break
 		}
-		if c != '<' {
-			continue loop
-		}
-		c = z.readByte()
-		if z.err != nil {
-			break loop
-		}
-		if c != '/' {
-			z.raw.end--
-			continue loop
-		}
-		if z.readRawEndTag() || z.err != nil {
-			break loop
+		z.raw.end += next + len("</")
+		if z.readRawEndTag() || z.eof {
+			break
 		}
 	}
 	z.data.end = z.raw.end
@@ -98,7 +75,7 @@ loop:
 func (z *htmlScanner) readRawEndTag() bool {
 	for i := 0; i < len(z.rawTag); i++ {
 		c := z.readByte()
-		if z.err != nil {
+		if z.eof {
 			return false
 		}
 		if c != z.rawTag[i] && c != z.rawTag[i]-('a'-'A') {
@@ -107,7 +84,7 @@ func (z *htmlScanner) readRawEndTag() bool {
 		}
 	}
 	c := z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return false
 	}
 	switch c {
@@ -127,7 +104,7 @@ func (z *htmlScanner) readScript() {
 
 scriptData:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '<' {
@@ -137,7 +114,7 @@ scriptData:
 
 scriptDataLessThanSign:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -150,14 +127,14 @@ scriptDataLessThanSign:
 	goto scriptData
 
 scriptDataEndTagOpen:
-	if z.readRawEndTag() || z.err != nil {
+	if z.readRawEndTag() || z.eof {
 		return
 	}
 	goto scriptData
 
 scriptDataEscapeStart:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '-' {
@@ -168,7 +145,7 @@ scriptDataEscapeStart:
 
 scriptDataEscapeStartDash:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '-' {
@@ -179,7 +156,7 @@ scriptDataEscapeStartDash:
 
 scriptDataEscaped:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -192,7 +169,7 @@ scriptDataEscaped:
 
 scriptDataEscapedDash:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -205,7 +182,7 @@ scriptDataEscapedDash:
 
 scriptDataEscapedDashDash:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -220,7 +197,7 @@ scriptDataEscapedDashDash:
 
 scriptDataEscapedLessThanSign:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '/' {
@@ -233,7 +210,7 @@ scriptDataEscapedLessThanSign:
 	goto scriptData
 
 scriptDataEscapedEndTagOpen:
-	if z.readRawEndTag() || z.err != nil {
+	if z.readRawEndTag() || z.eof {
 		return
 	}
 	goto scriptDataEscaped
@@ -242,7 +219,7 @@ scriptDataDoubleEscapeStart:
 	z.raw.end--
 	for i := 0; i < len("script"); i++ {
 		c = z.readByte()
-		if z.err != nil {
+		if z.eof {
 			return
 		}
 		if c != "script"[i] && c != "SCRIPT"[i] {
@@ -251,7 +228,7 @@ scriptDataDoubleEscapeStart:
 		}
 	}
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -263,7 +240,7 @@ scriptDataDoubleEscapeStart:
 
 scriptDataDoubleEscaped:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -276,7 +253,7 @@ scriptDataDoubleEscaped:
 
 scriptDataDoubleEscapedDash:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -289,7 +266,7 @@ scriptDataDoubleEscapedDash:
 
 scriptDataDoubleEscapedDashDash:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch c {
@@ -304,7 +281,7 @@ scriptDataDoubleEscapedDashDash:
 
 scriptDataDoubleEscapedLessThanSign:
 	c = z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '/' {
@@ -318,7 +295,7 @@ scriptDataDoubleEscapeEnd:
 		z.raw.end += len("</script>")
 		goto scriptDataEscaped
 	}
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	goto scriptDataDoubleEscaped
@@ -326,19 +303,11 @@ scriptDataDoubleEscapeEnd:
 
 func (z *htmlScanner) readComment() {
 
-	z.data.start = z.raw.end
-	defer func() {
-		if z.data.end < z.data.start {
-			z.data.end = z.data.start
-		}
-	}()
-
 	var dashCount int
 	beginning := true
 	for {
 		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.calculateAbruptCommentDataEnd()
+		if z.eof {
 			return
 		}
 		switch c {
@@ -347,17 +316,14 @@ func (z *htmlScanner) readComment() {
 			continue
 		case '>':
 			if dashCount >= 2 || beginning {
-				z.data.end = z.raw.end - len("-->")
 				return
 			}
 		case '!':
 			if dashCount >= 2 {
 				c = z.readByte()
-				if z.err != nil {
-					z.data.end = z.calculateAbruptCommentDataEnd()
+				if z.eof {
 					return
 				} else if c == '>' {
-					z.data.end = z.raw.end - len("--!>")
 					return
 				} else if c == '-' {
 					dashCount = 1
@@ -371,137 +337,52 @@ func (z *htmlScanner) readComment() {
 	}
 }
 
-func (z *htmlScanner) calculateAbruptCommentDataEnd() int {
-	raw := z.input[z.raw.start:z.raw.end]
-	const prefixLen = len("<!--")
-	if len(raw) >= prefixLen {
-		raw = raw[prefixLen:]
-		if strings.HasSuffix(raw, "--!") {
-			return z.raw.end - 3
-		} else if strings.HasSuffix(raw, "--") {
-			return z.raw.end - 2
-		} else if strings.HasSuffix(raw, "-") {
-			return z.raw.end - 1
-		}
+// readUntil consumes a delimiter and returns the preceding source span.
+func (z *htmlScanner) readUntil(delimiter byte) span {
+	start := z.raw.end
+	if offset := strings.IndexByte(z.input[start:], delimiter); offset >= 0 {
+		end := start + offset
+		z.raw.end = end + 1
+		return span{start, end}
 	}
-	return z.raw.end
-}
-
-func (z *htmlScanner) readUntilCloseAngle() {
-	z.data.start = z.raw.end
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			return
-		}
-		if c == '>' {
-			z.data.end = z.raw.end - len(">")
-			return
-		}
-	}
+	z.raw.end = len(z.input)
+	z.eof = true
+	return span{start, z.raw.end}
 }
 
 func (z *htmlScanner) readMarkupDeclaration() TokenType {
-	z.data.start = z.raw.end
-	var c [2]byte
-	for i := 0; i < 2; i++ {
-		c[i] = z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			if i == 1 && c[0] == '>' {
-				z.data.end--
-			}
-			return tokenComment
-		}
-	}
-	if c[0] == '-' && c[1] == '-' {
+	rest := z.input[z.raw.end:]
+	switch {
+	case strings.HasPrefix(rest, "--"):
+		z.raw.end += len("--")
 		z.readComment()
-		return tokenComment
-	}
-	z.raw.end -= 2
-	if z.readDoctype() {
+	case len(rest) >= len("DOCTYPE") && strings.EqualFold(rest[:len("DOCTYPE")], "doctype"):
+		z.raw.end += len("DOCTYPE")
+		z.skipWhiteSpace()
+		z.data = z.readUntil('>')
 		return tokenDoctype
-	}
-	if z.allowCDATA && z.readCDATA() {
+	case z.allowCDATA && strings.HasPrefix(rest, "[CDATA["):
+		z.raw.end += len("[CDATA[")
+		z.data.start = z.raw.end
+		if offset := strings.Index(z.input[z.raw.end:], "]]>"); offset >= 0 {
+			z.data.end = z.raw.end + offset
+			z.raw.end = z.data.end + len("]]>")
+		} else {
+			z.raw.end = len(z.input)
+			z.data.end = z.raw.end
+			z.eof = true
+		}
 		z.convertNUL = true
 		return TokenText
+	default:
+		z.readUntil('>')
 	}
-	z.readUntilCloseAngle()
 	return tokenComment
 }
 
-func (z *htmlScanner) readDoctype() bool {
-	const s = "DOCTYPE"
-	for i := 0; i < len(s); i++ {
-		c := z.readByte()
-		if z.err != nil {
-			if z.err == io.EOF {
-				z.raw.end = z.data.start
-				z.err = nil
-				return false
-			}
-			z.data.end = z.raw.end
-			return false
-		}
-		if c != s[i] && c != s[i]+('a'-'A') {
-			z.raw.end = z.data.start
-			return false
-		}
-	}
-	if z.skipWhiteSpace(); z.err != nil {
-		z.data.start = z.raw.end
-		z.data.end = z.raw.end
-		return true
-	}
-	z.readUntilCloseAngle()
-	return true
-}
-
-func (z *htmlScanner) readCDATA() bool {
-	const s = "[CDATA["
-	for i := 0; i < len(s); i++ {
-		c := z.readByte()
-		if z.err != nil {
-			if z.err == io.EOF {
-				z.raw.end = z.data.start
-				z.err = nil
-				return false
-			}
-			z.data.end = z.raw.end
-			return false
-		}
-		if c != s[i] {
-			z.raw.end = z.data.start
-			return false
-		}
-	}
-	z.data.start = z.raw.end
-	brackets := 0
-	for {
-		c := z.readByte()
-		if z.err != nil {
-			z.data.end = z.raw.end
-			return true
-		}
-		switch c {
-		case ']':
-			brackets++
-		case '>':
-			if brackets >= 2 {
-				z.data.end = z.raw.end - len("]]>")
-				return true
-			}
-			brackets = 0
-		default:
-			brackets = 0
-		}
-	}
-}
-
-func (z *htmlScanner) startTagIn(ss ...string) bool {
+func (z *htmlScanner) matchingTag(names ...string) string {
 loop:
-	for _, s := range ss {
+	for _, s := range names {
 		if z.data.end-z.data.start != len(s) {
 			continue loop
 		}
@@ -514,39 +395,36 @@ loop:
 				continue loop
 			}
 		}
-		return true
+		return s
 	}
-	return false
+	return ""
 }
 
 func (z *htmlScanner) readStartTag() TokenType {
 	z.readTag(true)
-	if z.err != nil {
+	if z.eof {
 		return TokenEOF
 	}
-	c, raw := z.input[z.data.start], false
+	c := z.input[z.data.start]
 	if 'A' <= c && c <= 'Z' {
 		c += 'a' - 'A'
 	}
 	switch c {
 	case 'i':
-		raw = z.startTagIn("iframe")
+		z.rawTag = z.matchingTag("iframe")
 	case 'n':
-		raw = z.startTagIn("noembed", "noframes", "noscript")
+		z.rawTag = z.matchingTag("noembed", "noframes", "noscript")
 	case 'p':
-		raw = z.startTagIn("plaintext")
+		z.rawTag = z.matchingTag("plaintext")
 	case 's':
-		raw = z.startTagIn("script", "style")
+		z.rawTag = z.matchingTag("script", "style")
 	case 't':
-		raw = z.startTagIn("textarea", "title")
+		z.rawTag = z.matchingTag("textarea", "title")
 	case 'x':
-		raw = z.startTagIn("xmp")
-	}
-	if raw {
-		z.rawTag = z.rawTagName()
+		z.rawTag = z.matchingTag("xmp")
 	}
 	nAttrs := len(z.attr)
-	if z.err == nil && z.input[z.raw.end-2] == '/' && (nAttrs == 0 || z.raw.end-2 != z.attr[nAttrs-1][1].end-1) {
+	if z.input[z.raw.end-2] == '/' && (nAttrs == 0 || z.raw.end-2 != z.attr[nAttrs-1][1].end-1) {
 		return TokenSelfClosingTag
 	}
 	return TokenStartTag
@@ -555,12 +433,12 @@ func (z *htmlScanner) readStartTag() TokenType {
 func (z *htmlScanner) readTag(saveAttr bool) {
 	z.attr = z.attr[:0]
 	z.readTagName()
-	if z.skipWhiteSpace(); z.err != nil {
+	if z.skipWhiteSpace(); z.eof {
 		return
 	}
 	for {
 		c := z.readByte()
-		if z.err != nil || c == '>' {
+		if z.eof || c == '>' {
 			break
 		}
 		z.raw.end--
@@ -569,7 +447,7 @@ func (z *htmlScanner) readTag(saveAttr bool) {
 		if saveAttr && z.pendingAttr[0].start != z.pendingAttr[0].end {
 			z.attr = append(z.attr, z.pendingAttr)
 		}
-		if z.skipWhiteSpace(); z.err != nil {
+		if z.skipWhiteSpace(); z.eof {
 			break
 		}
 	}
@@ -579,7 +457,7 @@ func (z *htmlScanner) readTagName() {
 	z.data.start = z.raw.end - 1
 	for {
 		c := z.readByte()
-		if z.err != nil {
+		if z.eof {
 			z.data.end = z.raw.end
 			return
 		}
@@ -599,7 +477,7 @@ func (z *htmlScanner) readTagAttrKey() {
 	z.pendingAttr[0].start = z.raw.end
 	for {
 		c := z.readByte()
-		if z.err != nil {
+		if z.eof {
 			z.pendingAttr[0].end = z.raw.end
 			return
 		}
@@ -620,11 +498,11 @@ func (z *htmlScanner) readTagAttrKey() {
 func (z *htmlScanner) readTagAttrVal() {
 	z.pendingAttr[1].start = z.raw.end
 	z.pendingAttr[1].end = z.raw.end
-	if z.skipWhiteSpace(); z.err != nil {
+	if z.skipWhiteSpace(); z.eof {
 		return
 	}
 	c := z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	if c == '/' {
@@ -634,11 +512,11 @@ func (z *htmlScanner) readTagAttrVal() {
 		z.raw.end--
 		return
 	}
-	if z.skipWhiteSpace(); z.err != nil {
+	if z.skipWhiteSpace(); z.eof {
 		return
 	}
 	quote := z.readByte()
-	if z.err != nil {
+	if z.eof {
 		return
 	}
 	switch quote {
@@ -647,24 +525,13 @@ func (z *htmlScanner) readTagAttrVal() {
 		return
 
 	case '\'', '"':
-		z.pendingAttr[1].start = z.raw.end
-		for {
-			c := z.readByte()
-			if z.err != nil {
-				z.pendingAttr[1].end = z.raw.end
-				return
-			}
-			if c == quote {
-				z.pendingAttr[1].end = z.raw.end - 1
-				return
-			}
-		}
+		z.pendingAttr[1] = z.readUntil(quote)
 
 	default:
 		z.pendingAttr[1].start = z.raw.end - 1
 		for {
 			c := z.readByte()
-			if z.err != nil {
+			if z.eof {
 				z.pendingAttr[1].end = z.raw.end
 				return
 			}
@@ -685,23 +552,21 @@ func (z *htmlScanner) scan() TokenType {
 	z.raw.start = z.raw.end
 	z.data.start = z.raw.end
 	z.data.end = z.raw.end
-	if z.err != nil {
-		z.tt = TokenEOF
-		return z.tt
+	if z.eof {
+		return TokenEOF
 	}
 	if z.rawTag != "" {
 		if z.rawTag == "plaintext" {
 			z.raw.end = len(z.input)
-			z.err = io.EOF
+			z.eof = true
 			z.data.end = z.raw.end
 			z.textIsRaw = true
 		} else {
 			z.readRawOrRCDATA()
 		}
 		if z.data.end > z.data.start {
-			z.tt = TokenText
 			z.convertNUL = true
-			return z.tt
+			return TokenText
 		}
 	}
 	z.textIsRaw = false
@@ -712,12 +577,12 @@ loop:
 		next := strings.IndexByte(z.input[z.raw.end:], '<')
 		if next < 0 {
 			z.raw.end = len(z.input)
-			z.err = io.EOF
+			z.eof = true
 			break loop
 		}
 		z.raw.end += next + 1
 		c := z.readByte()
-		if z.err != nil {
+		if z.eof {
 			break loop
 		}
 
@@ -737,51 +602,41 @@ loop:
 		if x := z.raw.end - len("<a"); z.raw.start < x {
 			z.raw.end = x
 			z.data.end = x
-			z.tt = TokenText
-			return z.tt
+			return TokenText
 		}
 		switch tokenType {
 		case TokenStartTag:
-			z.tt = z.readStartTag()
-			return z.tt
+			return z.readStartTag()
 		case TokenEndTag:
 			c = z.readByte()
-			if z.err != nil {
+			if z.eof {
 				break loop
 			}
 			if c == '>' {
-				z.tt = tokenComment
-				return z.tt
+				return tokenComment
 			}
 			if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
 				z.readTag(false)
-				if z.err != nil {
-					z.tt = TokenEOF
-				} else {
-					z.tt = TokenEndTag
+				if z.eof {
+					return TokenEOF
 				}
-				return z.tt
+				return TokenEndTag
 			}
 			z.raw.end--
-			z.readUntilCloseAngle()
-			z.tt = tokenComment
-			return z.tt
+			z.readUntil('>')
+			return tokenComment
 		case tokenComment:
 			if c == '!' {
-				z.tt = z.readMarkupDeclaration()
-				return z.tt
+				return z.readMarkupDeclaration()
 			}
 			z.raw.end--
-			z.readUntilCloseAngle()
-			z.tt = tokenComment
-			return z.tt
+			z.readUntil('>')
+			return tokenComment
 		}
 	}
 	if z.raw.start < z.raw.end {
 		z.data.end = z.raw.end
-		z.tt = TokenText
-		return z.tt
+		return TokenText
 	}
-	z.tt = TokenEOF
-	return z.tt
+	return TokenEOF
 }

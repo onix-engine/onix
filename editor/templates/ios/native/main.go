@@ -4,6 +4,7 @@
 package main
 
 /*
+#cgo onix_release CFLAGS: -g0
 #include <stdint.h>
 */
 import "C"

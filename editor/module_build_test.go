@@ -337,7 +337,8 @@ func TestModuleBuildSelectsContentLifecycle(t *testing.T) {
 		{"sprite", `"sprite":{"color":"#ffffff"}`, `[]`, "Render2D"},
 		{"layout", `"layout":{}`, `[]`, "WithContent[module.Render2D, module.LayoutContent]"},
 		{"collider", `"rigidBody2D":{},"circleCollider2D":{"radius":10}`, `[]`, "WithContent[module.Render2D, module.Physics2DContent]"},
-		{"script HTML", `"sprite":{"color":"#ffffff"}`, `["render2d","input2d","ui-widgets","ui-html"]`, "WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]"},
+		{"script HTML", `"sprite":{"color":"#ffffff"}`, `["render2d","input2d","ui-html"]`, "WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]"},
+		{"script HTML with widgets", `"sprite":{"color":"#ffffff"}`, `["render2d","input2d","ui-widgets","ui-html"]`, "WithContent[module.WithContent[module.Render2D, module.LayoutContent], module.HTMLContent]"},
 		{"animation", `"sprite":{"color":"#ffffff"}`, `["render2d","animations2d"]`, "WithContent[module.Render2D, module.AnimationsContent]"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -354,6 +355,12 @@ func TestModuleBuildSelectsContentLifecycle(t *testing.T) {
 			}
 			if !strings.Contains(string(data), "type OnixContentProfile = module."+test.profile) {
 				t.Fatalf("wrong generated profile, want %s", test.profile)
+			}
+			if strings.Contains(test.features, `"ui-html"`) {
+				if !strings.Contains(string(data), "InstallSystems[onix.UIHTML]") ||
+					strings.Contains(string(data), "InstallSystems[onix.UIWidgets]") != strings.Contains(test.features, `"ui-widgets"`) {
+					t.Fatalf("generated HTML and widget systems do not match %s", test.features)
+				}
 			}
 		})
 	}

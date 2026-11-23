@@ -51,14 +51,14 @@ func Script[T any](name string, hooks Hooks[T]) ScriptBinding {
 			}
 			if hooks.Install != nil {
 				if err := hooks.Install(ctx.World.MustMut[T](ctx.Entity), ctx); err != nil {
-					ctx.World.Remove[T](ctx.Entity)
+					ctx.World.Discard(ctx.Entity, ecs.Type[T]())
 					return err
 				}
 			}
 			return nil
 		},
 		Remove: func(ctx *ScriptContext) error {
-			ctx.World.Remove[T](ctx.Entity)
+			ctx.World.Discard(ctx.Entity, ecs.Type[T]())
 			return nil
 		},
 		InputMask: hooks.InputMask,

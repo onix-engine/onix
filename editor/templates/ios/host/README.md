@@ -6,6 +6,7 @@ Suggested flow on macOS:
 
 1. Use Debug -> Build in Onix Editor and select iOS to generate the Go entry package, native bridge, and static library.
 2. Add the generated `../libonix.a`, matching header, `OnixMetalView.swift`, and `Assets.xcassets` to your Xcode target. Expose the generated header through the target's bridging header and select `AppIcon` as the target's App Icons Source.
+   Set the host target's **Dead Code Stripping** (`DEAD_CODE_STRIPPING`) to **Yes** for Release so the final link can discard unused native functions and data.
 3. Use `OnixMetalView` as the game view. It installs its `CAMetalLayer` through `OnixSetMetalLayer` before starting the Go runtime and forwards resize, frame tick, touch, and device scale events.
 4. For a custom host, forward lifecycle, resize, frame tick, touch events, and device scale updates to:
    `OnixStart`, `OnixResize`, `OnixSetDevicePixelRatio`, `OnixUpdate`, `OnixTouchStart`, `OnixTouchMove`, `OnixTouchEnd`, `OnixTextInput`, `OnixTextComposition`, `OnixTextCommand`

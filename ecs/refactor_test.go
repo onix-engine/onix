@@ -9,7 +9,7 @@ func TestSetIfChangedPreservesTicksAndRejectsMissingComponents(t *testing.T) {
 	spawner := world.NewSpawner1[testVisibility]()
 	entity := spawner.Spawn(testVisibility{Visible: true})
 	column, row := world.componentRow[testVisibility](entity)
-	added, changed := column.added[row], column.changed[row]
+	added, changed := column.state.added[row], column.state.changed[row]
 	version, tick := world.ComponentVersion[testVisibility](), world.changeTick
 	if world.SetIfChanged(entity, testVisibility{Visible: true}) || world.changeTick != tick || world.ComponentVersion[testVisibility]() != version {
 		t.Fatal("equal writes changed ticks or versions")
@@ -17,7 +17,7 @@ func TestSetIfChangedPreservesTicksAndRejectsMissingComponents(t *testing.T) {
 	if world.SetIfChanged(entity, benchmarkPosition{}) || world.Has[benchmarkPosition](entity) {
 		t.Fatal("missing components were inserted")
 	}
-	if !world.SetIfChanged(entity, testVisibility{}) || column.added[row] != added || column.changed[row] == changed {
+	if !world.SetIfChanged(entity, testVisibility{}) || column.state.added[row] != added || column.state.changed[row] == changed {
 		t.Fatal("changed write did not preserve added tick and update changed tick")
 	}
 	world.Despawn(entity)

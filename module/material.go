@@ -1,6 +1,7 @@
 package module
 
 import (
+	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/scene/render3d"
 )
@@ -18,6 +19,6 @@ func (c *Context) InstallMaterial3D[T graphics.Material3D](entity Entity, materi
 		return ErrInvalid
 	}
 	render3d.WorldFor(c.runtime.world).RegisterMaterial[T]()
-	c.runtime.world.Remove[render3d.Material[graphics.StandardMaterial]](entity.entity)
+	c.runtime.world.Discard(entity.entity, ecs.Type[render3d.Material[graphics.StandardMaterial]]())
 	return c.runtime.world.Insert(entity.entity, render3d.Material[T]{Material: material})
 }

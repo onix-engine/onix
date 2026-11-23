@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -127,26 +128,22 @@ func TestBundlePreparationKeepsEntryAssociations(t *testing.T) {
 	assertRemovalPanic(t, func() { world.PrepareBundle(bundle) })
 }
 
+// Array lengths give the traversal tests distinct real component types.
+func traversalComponentType(index int) ComponentType {
+	return ComponentType{typ: reflect.ArrayOf(index, reflect.TypeFor[byte]())}
+}
+
 func TestComponentTypeMaskKeepsRegistrationOrder(t *testing.T) {
 	world := NewWorld()
-	for _, ids := range [][]componentID{{}, {255, 0, 63, 64, 127, 128, 255}, {256, 0, 63, 64, 127, 128, 255, 256, 0}} {
-		registered := make([]componentID, 0, len(ids))
-		types := make([]ComponentType, len(ids))
-		for index, id := range ids {
-			types[index] = ComponentType{register: func(w *World) componentID {
-				if w != world {
-					t.Fatal("descriptor registered in another world")
-				}
-				registered = append(registered, id)
-				return id
-			}}
-		}
-		mask := componentTypeMask(world, types)
-		ordered := slices.Clone(ids)
-		slices.Sort(ordered)
-		if !slices.Equal(registered, ids) || !slices.Equal(mask, maskFor(slices.Compact(ordered))) {
-			t.Fatalf("IDs %v produced registration %v and mask %v", ids, registered, mask)
-		}
+	for i := range 255 {
+		world.identifyComponent(traversalComponentType(i).typ)
+	}
+	first, second := traversalComponentType(300), traversalComponentType(270)
+	types := []ComponentType{first, traversalComponentType(63), traversalComponentType(64), first, second, traversalComponentType(0)}
+	mask := componentTypeMask(world, types)
+	if !slices.Equal(mask, maskFor([]componentID{0, 63, 64, 255, 256})) ||
+		world.componentTypes[first.typ] != 255 || world.componentTypes[second.typ] != 256 {
+		t.Fatal("descriptors lost registration order or mask bits")
 	}
 	assertRemovalPanic(t, func() { componentTypeMask(world, []ComponentType{{}}) })
 }
@@ -285,8 +282,9 @@ func BenchmarkComponentTypeMaskTraversal(b *testing.B) {
 			world := NewWorld()
 			types := make([]ComponentType, count)
 			for index := range types {
-				id := componentID(count - index - 1)
-				types[index] = ComponentType{register: func(*World) componentID { return id }}
+				typ := traversalComponentType(index)
+				world.identifyComponent(typ.typ)
+				types[count-index-1] = typ
 			}
 			b.ReportAllocs()
 			var mask componentMask

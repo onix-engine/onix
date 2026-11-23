@@ -249,6 +249,15 @@ func TestUIHTMLInstallsTextInputRuntime(t *testing.T) {
 	if !app.hasSystemSet(systemSetUIHTML) || !app.hasSystemSet(systemSetUITextInput) {
 		t.Fatal("UI HTML did not install its text-input dependency")
 	}
+	if app.hasProjectFeature(project.FeatureUIWidgets) {
+		t.Fatal("UI HTML installed native widgets")
+	}
+	if err := app.InstallSystems[UITextInput](); err != nil {
+		t.Fatal(err)
+	}
+	if !app.hasSystemSet(systemSetUIWidgets) {
+		t.Fatal("explicit native text input did not install its widgets")
+	}
 }
 
 func TestUIMarkdownInstallsHTMLRuntime(t *testing.T) {
@@ -258,6 +267,9 @@ func TestUIMarkdownInstallsHTMLRuntime(t *testing.T) {
 	}
 	if !app.hasSystemSet(systemSetUIMarkdown) || !app.hasSystemSet(systemSetUIHTML) || !app.hasSystemSet(systemSetUITextInput) {
 		t.Fatal("UI Markdown did not install its HTML runtime dependency")
+	}
+	if app.hasSystemSet(systemSetUIWidgets) {
+		t.Fatal("UI Markdown installed native widgets")
 	}
 }
 

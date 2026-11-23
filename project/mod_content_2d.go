@@ -75,8 +75,10 @@ func (r *Resources) AppendModContent2D(b *ecs.Bundle, c ModComponents) error {
 		material := &ModMaterial2D{Custom: spec.Custom}
 		b.Put(scene.MeshMaterial2D[ModMaterial2D]{Material: material})
 	}
-	if err := r.modShader(b, c.Shader, c.Model != nil); err != nil {
-		return err
+	if c.Shader != nil && c.Model == nil {
+		if err := appendModShader(r, b, c.Shader, (*modShaderResource).spriteProgram); err != nil {
+			return err
+		}
 	}
 	if t := c.Text; t != nil {
 		value := scene.NewText2D(t.Value)

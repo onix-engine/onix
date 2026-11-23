@@ -623,6 +623,7 @@ type TextShadow struct {
 
 type Resources struct {
 	videos            optionalResourceStore
+	modModels         modelResourceStore
 	iconDecoder       window.IconDecoder
 	fontDecoder       FontDecoder
 	imageDecoder      ImageDecoder
@@ -635,7 +636,6 @@ type Resources struct {
 	atlasMetadata     *resourceCache[resource.ContentID, *graphics.AtlasMetadata]
 	atlases           *resourceCache[atlasResourceKey, *graphics.Atlas]
 	modShaders        *resourceCache[ShaderSources, *modShaderResource]
-	modModels         *resourceCache[string, modelResource]
 	modParticles      map[string]*TextureSpec
 	modRigs           map[string]*ModelRig
 	textures          *resourceCache[textureResourceKey, *graphics.Texture]

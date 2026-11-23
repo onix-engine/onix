@@ -52,11 +52,11 @@ func BenchmarkTraversalValueSurfaces(b *testing.B) {
 		bundle.Put(Part[CaretPart]{})
 		world.Spawn(bundle)
 	}
-	syncSurfaceElements(world, Skin{}, syncMetrics{})
+	syncSurfaceElements(world, &Skin{}, syncMetrics{})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		syncSurfaceElements(world, Skin{}, syncMetrics{})
+		syncSurfaceElements(world, &Skin{}, syncMetrics{})
 	}
 }
 

@@ -178,7 +178,7 @@ func applyPhysics2DComponents(world *ecs.World, entity ecs.Entity, spec SceneNod
 
 func replacePhysicsComponent[Spec any, Component any](world *ecs.World, entity ecs.Entity, spec *Spec, build func(Spec) Component) error {
 	if spec == nil {
-		world.Remove[Component](entity)
+		world.Discard(entity, ecs.Type[Component]())
 		return nil
 	}
 	return world.Insert(entity, build(*spec))
@@ -407,9 +407,9 @@ func applyPhysics3DComponents(bundle *Bundle, world *ecs.World, entity ecs.Entit
 	if err := replacePhysicsComponent(world, entity, components.RigidBody3D, func(value RigidBody3DSpec) enginephysics.RigidBody3D { return value.component() }); err != nil {
 		return err
 	}
-	world.Remove[enginephysics.TriangleMeshCollider3D](entity)
-	world.Remove[enginephysics.ConvexHullCollider3D](entity)
-	world.Remove[enginephysics.CompoundCollider3D](entity)
+	world.Discard(entity, ecs.Type[enginephysics.TriangleMeshCollider3D]())
+	world.Discard(entity, ecs.Type[enginephysics.ConvexHullCollider3D]())
+	world.Discard(entity, ecs.Type[enginephysics.CompoundCollider3D]())
 	if components.TriangleMeshCollider3D != nil {
 		collider, err := components.TriangleMeshCollider3D.component(bundle, spec)
 		if err != nil {

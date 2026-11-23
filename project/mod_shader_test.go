@@ -50,7 +50,25 @@ func TestModuleShaderProgramsAreSharedAndUniformsBelongToElements(t *testing.T) 
 	if second.Custom[0][0] != .75 {
 		t.Fatal("updating one element changed the other element's uniforms")
 	}
-	if err := resources.Dispose(); err != nil || first.Program.UploadError() == nil {
+	model, err := resources.ModContent(ModComponents{
+		Model: &ModelSpec{ID: "cube", Mesh: &MeshSpec{Primitive: "cube", Size: 1}},
+		Shader: &ShaderComponentSpec{
+			Compiled: ShaderSources{WebGL2Fragment: fragment, WebGL2Generated: true},
+			Custom:   [4][4]float32{{.5}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entity := world.Spawn(model)
+	mesh := world.GetRef[scene.Shader[graphics.MeshShader]](entity)
+	if mesh == nil || mesh.Program == nil || mesh.Custom[0][0] != .5 || world.Has[scene.Shader[graphics.Material2DShader]](entity) {
+		t.Fatal("model did not receive its mesh shader and uniforms")
+	}
+	if stats := resources.modShaders.statistics(); stats.Misses != 1 || stats.Hits != 2 {
+		t.Fatalf("sprite and model should share compiled shader sources, got %+v", stats)
+	}
+	if err := resources.Dispose(); err != nil || first.Program.UploadError() == nil || mesh.Program.UploadError() == nil {
 		t.Fatal("module shader program was not disposed with its resource store", err)
 	}
 }

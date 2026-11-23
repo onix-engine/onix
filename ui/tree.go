@@ -27,12 +27,12 @@ type treeIconWidthCache struct {
 	valid                         bool
 }
 
-func (c treeIconWidthCache) matches(theme Theme, style TreeStyle) bool {
+func (c treeIconWidthCache) matches(theme Theme, style *TreeStyle) bool {
 	return c.valid && c.font == theme.Font && c.fontSize == theme.FontSize && c.dpi == theme.DPI &&
 		c.collapsed == style.Collapsed && c.expanded == style.Expanded && c.leaf == style.Leaf
 }
 
-func (c *treeIconWidthCache) update(theme Theme, style TreeStyle) {
+func (c *treeIconWidthCache) update(theme Theme, style *TreeStyle) {
 	c.font, c.fontSize, c.dpi = theme.Font, theme.FontSize, theme.DPI
 	c.collapsed, c.expanded, c.leaf = style.Collapsed, style.Expanded, style.Leaf
 	c.collapsedWidth = measureIconWidth(theme, style.Collapsed)
@@ -51,7 +51,7 @@ func (c treeIconWidthCache) width(leaf, expanded bool) float32 {
 	return c.collapsedWidth
 }
 
-func cachedTreeIconWidth(world *ecs.World, tree ecs.Entity, theme Theme, style TreeStyle, leaf, expanded bool) float32 {
+func cachedTreeIconWidth(world *ecs.World, tree ecs.Entity, theme Theme, style *TreeStyle, leaf, expanded bool) float32 {
 	cache, ok := world.Get[treeIconWidthCache](tree)
 	if !ok || !cache.matches(theme, style) {
 		cache.update(theme, style)
@@ -141,7 +141,7 @@ func SpawnTree[T comparable](world *ecs.World, opts TreeOptions[T]) ecs.Entity {
 	_ = world.Insert(tree, scene.InputBlocker2D{Width: opts.Width, Height: height, PassThrough: opts.PassThrough})
 	_ = world.Insert(tree, Tree[T]{Width: opts.Width, RowHeight: rowHeight})
 	iconWidths := treeIconWidthCache{}
-	iconWidths.update(theme, style)
+	iconWidths.update(theme, &style)
 	_ = world.Insert(tree, iconWidths)
 	putStyleOverride(world, tree, opts.Style)
 	depthByID := map[T]int{}
@@ -168,7 +168,7 @@ func SpawnTree[T comparable](world *ecs.World, opts TreeOptions[T]) ecs.Entity {
 			Depth:     depth,
 		})
 		_ = world.Insert(node, treeActivation{activate: activateTreeNode[T]})
-		icon := treeNodeIcon(style, spec.Leaf, spec.Expanded)
+		icon := treeNodeIcon(&style, spec.Leaf, spec.Expanded)
 		indicator := spawnText[LabelPart](world, node, treeIndicatorX(depth), textBaseline(rowVisualHeight), iconFallback(icon), theme)
 		_ = world.Insert(indicator, Relation[TreeNode[T]]{Owner: node})
 		_ = world.Insert(indicator, Part[TreeIndicatorTextPart]{})
@@ -285,7 +285,7 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		control, _ := controlViewFor(world, entity)
 		state := controlState(&control, false)
 		state.Disabled = state.Disabled || node.Disabled
-		style := styleFor(world, node.Tree, skin.Tree)
+		style := styleFor(world, node.Tree, &skin.Tree)
 		applySurface(world, entity, size.Width, size.Height, style.Row.Resolve(node.Selected, state))
 	}
 	for entity, access := range world.Query[Relation[TreeNode[T]]]().All {
@@ -299,7 +299,7 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		if !ok {
 			continue
 		}
-		style := styleFor(world, node.Tree, skin.Tree)
+		style := styleFor(world, node.Tree, &skin.Tree)
 		icon := treeNodeIcon(style, node.Leaf, node.Expanded)
 		iconWidth := cachedTreeIconWidth(world, node.Tree, theme, style, node.Leaf, node.Expanded)
 		text := world.GetMut[scene.Text2D](entity)
@@ -337,7 +337,7 @@ func syncTree[T comparable](context *ecs.SystemContext) error {
 		tree := access.Get()
 
 		height := tree.RowHeight * float32(visibleCountByTree[entity])
-		style := styleFor(world, entity, skin.Tree)
+		style := styleFor(world, entity, &skin.Tree)
 		applySurface(world, entity, tree.Width, height, style.Background)
 	}
 	return nil
@@ -388,7 +388,7 @@ func (node *TreeNode[T]) treeNodeSelected(world *ecs.World) bool {
 	return ok && tree.HasSelection && tree.Selected == node.ID
 }
 
-func treeNodeIcon(style TreeStyle, leaf, expanded bool) IconStyle {
+func treeNodeIcon(style *TreeStyle, leaf, expanded bool) IconStyle {
 	if leaf {
 		return style.Leaf
 	}

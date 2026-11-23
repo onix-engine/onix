@@ -18,14 +18,17 @@ type ContentProfile interface {
 }
 
 type contentSupport struct {
-	append       func(*project.Resources, *ecs.Bundle, project.ModComponents) error
-	syncHTML     func(*ecs.World) error
-	layout       func(*ecs.World) error
-	deform       func(*ecs.World) error
-	release      func(*ecs.World, ecs.Entity)
-	controlID    func(*ecs.World, ecs.Entity) string
-	queueUploads func(*graphics.UploadQueue, *ecs.World, ecs.Entity)
-	features     project.ModContentFeatures
+	collision2D   *collisionBridge
+	collision3D   *collisionBridge
+	bindAnimation func(*Context, ecs.Entity) error
+	append        func(*project.Resources, *ecs.Bundle, project.ModComponents) error
+	syncHTML      func(*ecs.World) error
+	layout        func(*ecs.World) error
+	deform        func(*ecs.World) error
+	release       func(*ecs.World, ecs.Entity)
+	controlID     func(*ecs.World, ecs.Entity) string
+	queueUploads  func(*graphics.UploadQueue, *ecs.World, ecs.Entity)
+	features      project.ModContentFeatures
 }
 
 // Render2D supports sprites, text, cameras, materials and pointer input.
@@ -41,6 +44,7 @@ func (Render2D) contentSupport() contentSupport {
 func (FullContent) contentSupport() contentSupport {
 	return contentSupport{
 		features: project.ModContentAll, append: (*project.Resources).AppendModContent,
+		collision2D: &collisionBridge2D, collision3D: &collisionBridge3D, bindAnimation: (*Context).bindAnimation,
 		syncHTML: ui.SyncHTML, layout: ui.UpdateLayout,
 		deform:  func(world *ecs.World) error { return render3d.UpdateDeformationsSystem("").Run(world) },
 		release: html.Release,
@@ -66,7 +70,10 @@ type ContentFeature interface{ contentFeature() contentSupport }
 func (WithContent[P, F]) contentSupport() contentSupport {
 	var p P
 	var f F
-	base, extra := p.contentSupport(), f.contentFeature()
+	return p.contentSupport().with(f.contentFeature())
+}
+
+func (base contentSupport) with(extra contentSupport) contentSupport {
 	if base.features&extra.features == extra.features {
 		return base
 	}
@@ -78,6 +85,15 @@ func (WithContent[P, F]) contentSupport() contentSupport {
 		return after(r, b, c)
 	}
 	base.features |= extra.features
+	if extra.collision2D != nil {
+		base.collision2D = extra.collision2D
+	}
+	if extra.collision3D != nil {
+		base.collision3D = extra.collision3D
+	}
+	if extra.bindAnimation != nil {
+		base.bindAnimation = extra.bindAnimation
+	}
 	if extra.syncHTML != nil {
 		base.syncHTML = extra.syncHTML
 	}
@@ -117,7 +133,7 @@ func (s contentSupport) build(r *project.Resources, c project.ModComponents) (ec
 type AnimationsContent struct{}
 
 func (AnimationsContent) contentFeature() contentSupport {
-	return contentSupport{features: project.ModContentAnimations, append: (*project.Resources).AppendModContentAnimation}
+	return contentSupport{features: project.ModContentAnimations, append: (*project.Resources).AppendModContentAnimation, bindAnimation: (*Context).bindAnimation}
 }
 
 type LayoutContent struct{}
@@ -159,11 +175,11 @@ func (SpineContent) contentFeature() contentSupport {
 type SpatialContent struct{}
 
 func (SpatialContent) contentFeature() contentSupport {
-	return contentSupport{features: project.ModContentSpatial, append: (*project.Resources).AppendModContentSpatial, deform: func(w *ecs.World) error { return render3d.UpdateDeformationsSystem("").Run(w) }, queueUploads: project.QueueSpatialEntityUploads}
+	return contentSupport{features: project.ModContentSpatial, append: (*project.Resources).AppendModContentSpatial, deform: func(w *ecs.World) error { return render3d.UpdateDeformationsSystem("").Run(w) }, queueUploads: project.QueueSpatialEntityUploads, collision3D: &collisionBridge3D}
 }
 
 type Physics2DContent struct{}
 
 func (Physics2DContent) contentFeature() contentSupport {
-	return contentSupport{features: project.ModContentPhysics2D, append: (*project.Resources).AppendModContentPhysics2D}
+	return contentSupport{features: project.ModContentPhysics2D, append: (*project.Resources).AppendModContentPhysics2D, collision2D: &collisionBridge2D}
 }

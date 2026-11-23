@@ -157,23 +157,13 @@ func setProjectRuntimeFeature(config project.EngineConfig, id project.RuntimeFea
 	}
 	if enabled {
 		set(id)
-		switch id {
-		case project.FeatureRender3D:
-			// 3D has no 2D renderer dependency.
-		case project.FeatureAnimations2D, project.FeatureSpriteTrails2D, project.FeatureParticles2D, project.FeatureTilemaps2D, project.FeatureSpine2D:
-			set(project.FeatureRender2D)
-		case project.FeatureUIControls, project.FeatureUIWidgets:
-			set(project.FeatureRender2D)
-			set(project.FeatureInput2D)
-		case project.FeatureUITextInput, project.FeatureUIMarkdown, project.FeatureUIHTML:
-			set(project.FeatureRender2D)
-			set(project.FeatureInput2D)
-			set(project.FeatureUIWidgets)
+		for _, dependency := range id.Dependencies() {
+			set(dependency)
 		}
 	} else {
 		for index := 0; index < len(features); {
 			current := features[index]
-			if current != id && !runtimeFeatureDependsOn(current, id) {
+			if current != id && !slices.Contains(current.Dependencies(), id) {
 				index++
 				continue
 			}
@@ -183,26 +173,4 @@ func setProjectRuntimeFeature(config project.EngineConfig, id project.RuntimeFea
 	}
 	config.Features = features
 	return config, added
-}
-
-func runtimeFeatureDependsOn(feature, dependency project.RuntimeFeatureID) bool {
-	for _, required := range runtimeFeatureDependenciesForEditor(feature) {
-		if required == dependency {
-			return true
-		}
-	}
-	return false
-}
-
-func runtimeFeatureDependenciesForEditor(feature project.RuntimeFeatureID) []project.RuntimeFeatureID {
-	switch feature {
-	case project.FeatureAnimations2D, project.FeatureSpriteTrails2D, project.FeatureParticles2D, project.FeatureTilemaps2D, project.FeatureSpine2D:
-		return []project.RuntimeFeatureID{project.FeatureRender2D}
-	case project.FeatureUIControls, project.FeatureUIWidgets:
-		return []project.RuntimeFeatureID{project.FeatureRender2D, project.FeatureInput2D}
-	case project.FeatureUITextInput, project.FeatureUIMarkdown, project.FeatureUIHTML:
-		return []project.RuntimeFeatureID{project.FeatureRender2D, project.FeatureInput2D, project.FeatureUIWidgets}
-	default:
-		return nil
-	}
 }

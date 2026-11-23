@@ -40,7 +40,7 @@ func TestHTMLSelectInteractionPaletteUpdatesRetainedOptions(t *testing.T) {
 			// Sync visuals directly to preserve the interaction state under test.
 			syncTextContent(world, DefaultTheme())
 			view, _ := controlViewFor(world, item)
-			resolved := controlSurface(world, item, &view, DefaultSkin(DefaultTheme()))
+			resolved := controlSurface(world, item, &view, skinFor(world, DefaultTheme()))
 			applySurface(world, body, view.Width, view.Height, resolved)
 			wantBackground, wantText := graphics.ColorFromRGB(238, 238, 238), graphics.ColorFromRGB(0x12, 0x34, 0x56)
 			if !state.Disabled && (state.Selected || state.Hovered || state.Pressed) {

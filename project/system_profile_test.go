@@ -9,7 +9,7 @@ func TestEngineConfigValidate(t *testing.T) {
 	if err := (EngineConfig{Features: []RuntimeFeatureID{FeatureRender2D, FeatureUIWidgets, FeatureInput2D}}).Validate(); err != nil {
 		t.Fatalf("validate supported features: %v", err)
 	}
-	if err := (EngineConfig{Features: []RuntimeFeatureID{FeatureRender2D, FeatureInput2D, FeatureUIWidgets, FeatureUIHTML}}).Validate(); err != nil {
+	if err := (EngineConfig{Features: []RuntimeFeatureID{FeatureRender2D, FeatureInput2D, FeatureUIHTML}}).Validate(); err != nil {
 		t.Fatalf("validate HTML feature: %v", err)
 	}
 	if err := (EngineConfig{Features: []RuntimeFeatureID{FeaturePhysics3D}}).Validate(); err != nil {
@@ -18,7 +18,7 @@ func TestEngineConfigValidate(t *testing.T) {
 	if err := (EngineConfig{Features: []RuntimeFeatureID{FeatureWebView}}).Validate(); err != nil {
 		t.Fatalf("validate WebView feature: %v", err)
 	}
-	for _, features := range [][]RuntimeFeatureID{{"unknown"}, {FeatureRender2D, FeatureRender2D}, {FeatureParticles2D}, {FeatureRender2D, FeatureInput2D, FeatureUIHTML}} {
+	for _, features := range [][]RuntimeFeatureID{{"unknown"}, {FeatureRender2D, FeatureRender2D}, {FeatureParticles2D}, {FeatureRender2D, FeatureUIHTML}} {
 		if err := (EngineConfig{Features: features}).Validate(); err == nil {
 			t.Fatalf("invalid features %v were accepted", features)
 		}

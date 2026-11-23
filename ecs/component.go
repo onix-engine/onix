@@ -35,13 +35,13 @@ type componentInfo struct {
 type columnValues interface {
 	reserveValues(int)
 	compactValues(int)
-	moveValueTo(columnValues, int)
-	removeValue(int)
+	removeValue(row int, destination columnValues)
 }
 
+// Keep state named so its methods do not enter every component type's method set.
 type typedColumn[T any] struct {
 	values []T
-	columnState
+	state  columnState
 }
 
 // columnState keeps change tracking independent of the component value type.
@@ -156,13 +156,13 @@ func (c *columnState) reserve(additional int) {
 
 func (c *typedColumn[T]) append(value T, tick Tick) {
 	c.appendWithTicks(value, tick, tick)
-	c.world.componentInfos[c.id].values++
-	c.world.componentInfos[c.id].members++
+	c.state.world.componentInfos[c.state.id].values++
+	c.state.world.componentInfos[c.state.id].members++
 }
 
 func (c *typedColumn[T]) appendWithTicks(value T, added, changed Tick) {
 	c.values = append(c.values, value)
-	c.appendTicks(added, changed)
+	c.state.appendTicks(added, changed)
 }
 
 func (c *columnState) appendTicks(added, changed Tick) {
@@ -185,21 +185,15 @@ func (c *columnState) appendTicks(added, changed Tick) {
 
 func (c *typedColumn[T]) replace(row int, value T, tick Tick) {
 	c.values[row] = value
-	c.markChanged(row, tick)
+	c.state.markChanged(row, tick)
 }
 
 // moveTo transfers one row into target and drops it from the source. Change
 // ticks are preserved; both tables record the migration.
 func (c *columnState) moveTo(target *columnState, row int) {
-	c.storage.moveValueTo(target.storage, row)
+	c.storage.removeValue(row, target.storage)
 	target.appendTicks(c.added[row], c.changed[row])
 	c.removeTicks(row)
-}
-
-func (c *typedColumn[T]) moveValueTo(target columnValues, row int) {
-	dst := target.(*typedColumn[T])
-	dst.values = append(dst.values, c.values[row])
-	c.removeValue(row)
 }
 
 func (c *columnState) swapRemove(row int) {
@@ -209,11 +203,17 @@ func (c *columnState) swapRemove(row int) {
 }
 
 func (c *columnState) removeRow(row int) {
-	c.storage.removeValue(row)
+	c.storage.removeValue(row, nil)
 	c.removeTicks(row)
 }
 
-func (c *typedColumn[T]) removeValue(row int) {
+// Migrations keep the removed value in a destination column. Despawns and
+// component removals pass nil. Both paths swap out and clear the source row.
+func (c *typedColumn[T]) removeValue(row int, destination columnValues) {
+	if destination != nil {
+		dst := destination.(*typedColumn[T])
+		dst.values = append(dst.values, c.values[row])
+	}
 	last := len(c.values) - 1
 	if row != last {
 		c.values[row] = c.values[last]
@@ -244,7 +244,11 @@ func (c *columnState) ticks(kind filterKind) []Tick {
 	return c.changed
 }
 
+// Queries reuse their iteration tick. Direct writes pass zero for a fresh tick.
 func (c *columnState) markChanged(row int, tick Tick) {
+	if tick == 0 {
+		tick = c.world.mutationTick()
+	}
 	c.changed[row] = tick
 	includeTick(c.changedRanges, row, tick)
 	c.touch()
@@ -259,26 +263,24 @@ func (c *columnState) ranges(kind filterKind) []tickRange {
 }
 
 func (world *World) registerComponent[T any]() componentID {
-	id := world.componentIDFor[T]()
+	id := world.identifyComponent(reflect.TypeFor[T]())
 	if world.componentInfos[id].newColumn == nil {
 		world.componentInfos[id].newColumn = newTypedColumn[T]
 	}
 	return id
 }
 
-// Queries and filters need a stable ID before the first insertion. Only
-// writers install a column factory, so observing a type can omit its storage code.
-func (world *World) componentIDFor[T any]() componentID {
-	return world.identifyComponent(reflect.TypeFor[T]())
-}
-
 func newTypedColumn[T any](world *World, id componentID) *columnState {
-	c := &typedColumn[T]{columnState: columnState{world: world, id: id}}
+	c := &typedColumn[T]{state: columnState{world: world, id: id}}
 	// A table keeps the header, while typed queries borrow values from the same allocation.
-	c.storage = c
-	return &c.columnState
+	c.state.storage = c
+	return &c.state
 }
 
+// Queries can obtain an ID before a writer installs the column factory.
+// Share the registry lookup and growth code across every component type.
+//
+//go:noinline
 func (world *World) identifyComponent(typ reflect.Type) componentID {
 	requireWorld(world)
 	if id, ok := world.componentTypes[typ]; ok {
@@ -305,8 +307,14 @@ func (world *World) ComponentRevision[T any]() (version, structure uint64) {
 // migrations that only relocate unchanged values between archetypes.
 // The second result changes only when values are inserted or removed.
 func (world *World) ComponentValueRevision[T any]() (version, membership uint64) {
+	return Type[T]().ValueRevision(world)
+}
+
+// ValueRevision reads the value and membership revisions for this component
+// type in world. Reading an unregistered type returns zero for both.
+func (component ComponentType) ValueRevision(world *World) (version, membership uint64) {
 	requireWorld(world)
-	if id, ok := world.componentTypes[reflect.TypeFor[T]()]; ok {
+	if id, ok := world.componentTypes[component.typ]; ok {
 		info := &world.componentInfos[id]
 		return info.values, info.members
 	}
@@ -339,7 +347,10 @@ func (archetype *archetype) componentColumn[T any](id componentID) *typedColumn[
 	return archetype.column(id).typed[T]()
 }
 
-// A missing column is a normal result for an unbound component lookup.
+// Keep the checked conversion in one place per type across queries, inserts
+// and direct accesses. A missing column is a normal lookup result.
+//
+//go:noinline
 func (c *columnState) typed[T any]() *typedColumn[T] {
 	if c == nil {
 		return nil
@@ -350,7 +361,7 @@ func (c *columnState) typed[T any]() *typedColumn[T] {
 // OnComponentRemove installs a cleanup hook for removal and despawn. Hooks
 // must not change entity structure; archetype migration does not invoke them.
 func (world *World) OnComponentRemove[T any](cleanup func(*World, Entity, *T)) {
-	id := world.componentIDFor[T]()
+	id := world.identifyComponent(reflect.TypeFor[T]())
 	if cleanup == nil {
 		world.componentInfos[id].onRemove = nil
 		return

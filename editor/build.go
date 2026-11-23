@@ -234,12 +234,49 @@ func vcpkgTargetTriplet(targetOS, architecture string) (string, error) {
 
 func appendEnvironmentFlag(env []string, name, flag string) []string {
 	prefix := name + "="
-	for _, entry := range env {
+	// os/exec uses the last value when a target overrides a host variable.
+	for i := len(env) - 1; i >= 0; i-- {
+		entry := env[i]
 		if strings.HasPrefix(entry, prefix) {
 			return setEnvironmentValue(env, name, strings.TrimSpace(entry[len(prefix):]+" "+flag))
 		}
 	}
 	return append(env, prefix+flag)
+}
+
+// Native release links can discard C functions and data that have no callers.
+// CGO_CPPFLAGS reach C, Objective-C and C++ without replacing their optimization flags.
+func nativeReleaseEnvironment(env []string, platform BuildPlatform, mode BuildMode) ([]string, error) {
+	if mode != BuildModeRelease {
+		return env, nil
+	}
+	var linkerFlag string
+	switch platform {
+	case BuildPlatformLinux, BuildPlatformWindows, BuildPlatformAndroid:
+		linkerFlag = "-Wl,--gc-sections"
+	case BuildPlatformMacOS:
+		// Mach-O objects already have symbol-level dead stripping.
+		linkerFlag = "-Wl,-dead_strip"
+	default:
+		return env, nil
+	}
+
+	// Ask the target Go toolchain for the effective values, including go env -w
+	// and the flags configured for cross-compilation and vcpkg.
+	cmd := exec.Command("go", "env", "-json", "CGO_CPPFLAGS", "CGO_LDFLAGS")
+	cmd.Env = env
+	data, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("read native build flags: %w", err)
+	}
+	var flags map[string]string
+	if err := json.Unmarshal(data, &flags); err != nil {
+		return nil, fmt.Errorf("decode native build flags: %w", err)
+	}
+	if platform != BuildPlatformMacOS {
+		env = setEnvironmentValue(env, "CGO_CPPFLAGS", strings.TrimSpace(flags["CGO_CPPFLAGS"]+" -ffunction-sections -fdata-sections"))
+	}
+	return setEnvironmentValue(env, "CGO_LDFLAGS", strings.TrimSpace(flags["CGO_LDFLAGS"]+" "+linkerFlag)), nil
 }
 
 func macOSArchitectureConfigs() []macOSArchitectureConfig {
@@ -528,6 +565,9 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 			return "", fmt.Errorf("create output directory: %w", err)
 		}
 		args := []string{"build", "-buildvcs=false", "-overlay", layout.OverlayPath}
+		if options.Platform == BuildPlatformWeb && options.Mode == BuildModeRelease {
+			args = append(args, "-trimpath")
+		}
 		tags := []string{layout.Backend.BuildTag()}
 		if options.Platform == BuildPlatformWeChat {
 			tags = append(tags, "wechat")
@@ -542,7 +582,7 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 			return output, nil
 		}
 		reportBuildActivity(options.Progress, "Compressing WebAssembly...", .9)
-		return compressWasmBrotli(output)
+		return compressWasmBrotli(output, options.Platform == BuildPlatformWeb && options.Mode == BuildModeRelease)
 	})
 }
 
@@ -656,6 +696,10 @@ func buildAndroid(root string, options BuildOptions) (string, error) {
 	}
 	env := androidCommandEnvironment(os.Environ(), config)
 	env = append(env, "GOOS=android", "GOARCH=arm64", "CGO_ENABLED=1", "CC="+cc, "CXX="+cxx)
+	env, err = nativeReleaseEnvironment(env, BuildPlatformAndroid, options.Mode)
+	if err != nil {
+		return "", err
+	}
 	args := []string{"build", "-buildvcs=false", "-buildmode=c-shared", "-trimpath"}
 	args = appendBuildFlags(args, options.Mode, options.Backend.BuildTag())
 	args = append(args, "-o", libPath, layout.NativePkg)

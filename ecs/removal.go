@@ -1,13 +1,14 @@
 package ecs
 
+import "reflect"
+
 // ComponentType identifies a component without constructing or boxing a value.
-// Resolve descriptors once with PrepareRemoval or NewPatchN, outside the execution loop.
 type ComponentType struct {
-	register func(*World) componentID
+	typ reflect.Type
 }
 
 func Type[T any]() ComponentType {
-	return ComponentType{register: (*World).componentIDFor[T]}
+	return ComponentType{typ: reflect.TypeFor[T]()}
 }
 
 // PreparedRemoval removes a component set in one archetype migration.
@@ -61,11 +62,11 @@ func (world *World) PrepareRemoval(types ...ComponentType) PreparedRemoval {
 
 func componentTypeMask(world *World, types []ComponentType) componentMask {
 	var mask componentMask
-	for _, typ := range types {
-		if typ.register == nil {
+	for _, component := range types {
+		if component.typ == nil {
 			panic("ecs: uninitialized component type")
 		}
-		mask = maskWith(mask, typ.register(world))
+		mask = maskWith(mask, world.identifyComponent(component.typ))
 	}
 	return mask
 }

@@ -3,9 +3,9 @@ package ui
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // VirtualJoystickAxis limits a virtual joystick to one or both axes.
@@ -290,7 +290,7 @@ func normalizedVirtualJoystickAxis(axis VirtualJoystickAxis) VirtualJoystickAxis
 	}
 }
 
-func syncVirtualJoysticks(world *ecs.World, skin Skin) {
+func syncVirtualJoysticks(world *ecs.World, skin *Skin) {
 	for entity, access := range world.Query[VirtualJoystick]().All {
 		joystick := access.Get()
 
@@ -299,7 +299,7 @@ func syncVirtualJoysticks(world *ecs.World, skin Skin) {
 			continue
 		}
 		control, _ := controlViewFor(world, entity)
-		style := styleFor(world, entity, skin.VirtualJoystick)
+		style := *styleFor(world, entity, &skin.VirtualJoystick)
 		trackWidth, trackHeight, trackOK := virtualJoystickPartSize(world, joystick.Track)
 		if !trackOK {
 			trackWidth, trackHeight = width, height

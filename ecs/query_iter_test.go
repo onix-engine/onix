@@ -76,6 +76,30 @@ func TestQueryIterationReleasesStructuralGuard(t *testing.T) {
 	}
 }
 
+func TestQueryInRebindsFiltersWhenRevisitingTable(t *testing.T) {
+	world := NewWorld()
+	plain := world.NewSpawner2[testPosition, testVelocity]()
+	tagged := world.NewSpawner3[testPosition, testVelocity, testVisibility]()
+	a := plain.Spawn(testPosition{X: 1}, testVelocity{})
+	b := tagged.Spawn(testPosition{X: 2}, testVelocity{}, testVisibility{})
+	c := plain.Spawn(testPosition{X: 3}, testVelocity{})
+	window := world.ChangesSince(0)
+	view := world.Query[testPosition](window.Changed[testPosition](), window.Changed[testVelocity]())
+
+	var got []float32
+	for entity, access := range view.In([]Entity{a, b, a, b, c}).All {
+		got = append(got, access.Get().X)
+		if entity == b {
+			// Move the second filter's tick outside the saved window before
+			// the next visit to the tagged table.
+			world.GetMut[testVelocity](b)
+		}
+	}
+	if !slices.Equal(got, []float32{1, 2, 1, 3}) {
+		t.Fatalf("filtered rows across tables = %v", got)
+	}
+}
+
 func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 	world := NewWorld()
 	spawner := world.NewSpawner2[testPosition, testVelocity]()

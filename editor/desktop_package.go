@@ -68,6 +68,10 @@ func buildLinuxPackage(root string, options BuildOptions) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			env, err = nativeReleaseEnvironment(env, BuildPlatformLinux, options.Mode)
+			if err != nil {
+				return "", err
+			}
 			if err := runCommandWithProgress(options.Progress, root, env, "go", args...); err != nil {
 				return "", err
 			}
@@ -123,6 +127,10 @@ func buildWindowsPackage(root string, options BuildOptions) (string, error) {
 			}
 			args := windowsBuildArgs(options.Mode, resourceFile, layout.Backend.BuildTag())
 			args = append(args, "-overlay", layout.OverlayPath, "-o", executable, layout.ProjectImportPath)
+			env, err = nativeReleaseEnvironment(env, BuildPlatformWindows, options.Mode)
+			if err != nil {
+				return "", err
+			}
 			if err := runCommandWithProgress(options.Progress, root, env, "go", args...); err != nil {
 				return "", err
 			}
@@ -278,6 +286,10 @@ func buildMacOSExecutableWith(
 		reportBuildActivity(options.Progress, "Compiling macOS "+string(architecture)+"...", .65)
 		args := macOSBuildArgs(options.Mode, backend.BuildTag())
 		args = append(args, "-overlay", layout.OverlayPath, "-o", output, layout.ProjectImportPath)
+		env, err = nativeReleaseEnvironment(env, BuildPlatformMacOS, options.Mode)
+		if err != nil {
+			return err
+		}
 		return run(root, env, "go", args...)
 	}
 	if len(architectures) == 1 {

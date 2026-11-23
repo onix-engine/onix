@@ -10,15 +10,17 @@ import (
 )
 
 func TestContentProfilesRejectUnsupportedComponents(t *testing.T) {
-	for _, components := range []string{
-		`"html":{"resource":"page"}`,
-		`"animation":{"clip":{"duration":1,"sampleRate":60,"floatTracks":[{"binding":{"target":"transform.position.x"},"keyframes":[{"time":0,"value":0},{"time":1,"value":10}]}]}}`,
-		`"layout":{}`,
+	for _, tc := range []struct{ space, components string }{
+		{"ui", `"html":{"resource":"page"}`},
+		{"ui", `"animation":{"clip":{"duration":1,"sampleRate":60,"floatTracks":[{"binding":{"target":"transform.position.x"},"keyframes":[{"time":0,"value":0},{"time":1,"value":10}]}]}}`},
+		{"ui", `"layout":{}`},
+		{"world", `"rigidBody2D":{},"collision":{"emit":"hit"}`},
+		{"world", `"rigidBody3D":{},"collision":{"emit":"hit"}`},
 	} {
-		t.Run(components, func(t *testing.T) {
+		t.Run(tc.components, func(t *testing.T) {
 			plan, source := compileFixture(t, map[string]string{
 				"resources/scenes/main.json": `{"modules":[{"id":"a","mod":"box"}]}`,
-				"box/mod.json":               `{"components":{` + components + `},"resources":{"page":{"kind":"html","path":"page.html"}}}`,
+				"box/mod.json":               `{"space":"` + tc.space + `","components":{` + tc.components + `},"resources":{"page":{"kind":"html","path":"page.html"}}}`,
 				"box/page.html":              `<button>hello</button>`,
 			})
 			r := newFixtureWith[Render2D](t, plan, Registry{}, Options{Source: source})
@@ -48,6 +50,9 @@ func TestComposedContentProfilesConstructOnlySelectedCapabilities(t *testing.T) 
 	}
 	if r.content.syncHTML != nil || r.content.deform != nil || r.content.release != nil {
 		t.Fatal("unused HTML/3D lifecycle was installed")
+	}
+	if r.content.collision2D == nil || r.content.collision3D != nil || r.content.bindAnimation != nil {
+		t.Fatal("expected only the 2D collision bridge")
 	}
 	must(t, r.Close())
 	if r.world.EntityCount() != 0 {

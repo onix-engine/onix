@@ -735,20 +735,7 @@ func enrichHTMLControlStates(world *ecs.World) {
 						textarea.BarSize = -1
 					}
 					if computed.HasTrackColor || computed.HasThumbColor || computed.HasThumbHoverColor {
-						scrollStyle := skinFor(world, Theme{}).Scroll
-						if computed.HasTrackColor {
-							scrollStyle.Track = ColorSurface(computed.TrackColor)
-						}
-						if computed.HasThumbColor {
-							thumb := ColorSurface(computed.ThumbColor)
-							scrollStyle.Thumb.Normal = thumb
-							scrollStyle.Thumb.Hovered = &thumb
-						}
-						if computed.HasThumbHoverColor {
-							hovered := ColorSurface(computed.ThumbHoverColor)
-							scrollStyle.Thumb.Hovered = &hovered
-						}
-						_ = world.Insert(entity, StyleOverride[ScrollStyle]{Value: scrollStyle})
+						applyHTMLScrollColors(world, entity, computed)
 					}
 				}
 				_ = world.Insert3(entity, Control{}, runtime, textarea)
@@ -869,7 +856,7 @@ func bindHTMLSelector(world *ecs.World, owner ecs.Entity, control htmlui.Control
 	setVisible(world, list, false)
 	// HTML controls are styled by the authored page, so keep the generated
 	// selector popup on the same surface instead of falling back to the world theme.
-	selectorStyle := skinFor(world, theme).Selector
+	selectorStyle := formSkinFor(world, theme).Selector
 	var popupBorder graphics.ColorRGBA
 	if sprite, spriteOK := world.Get[scene.Sprite2D](owner); spriteOK && sprite.Shape.Border.A > 0 {
 		popupBorder = sprite.Shape.Border
@@ -1141,20 +1128,7 @@ func refreshRetainedHTMLControl(world *ecs.World, entity ecs.Entity, control htm
 			if computed.Hidden {
 				textarea.BarSize = -1
 			}
-			scrollStyle := skinFor(world, Theme{}).Scroll
-			if computed.HasTrackColor {
-				scrollStyle.Track = ColorSurface(computed.TrackColor)
-			}
-			if computed.HasThumbColor {
-				thumb := ColorSurface(computed.ThumbColor)
-				scrollStyle.Thumb.Normal = thumb
-				scrollStyle.Thumb.Hovered = &thumb
-			}
-			if computed.HasThumbHoverColor {
-				hovered := ColorSurface(computed.ThumbHoverColor)
-				scrollStyle.Thumb.Hovered = &hovered
-			}
-			_ = world.Insert(entity, StyleOverride[ScrollStyle]{Value: scrollStyle})
+			applyHTMLScrollColors(world, entity, computed)
 		}
 	}
 	if control.Tag != "select" {
@@ -1167,7 +1141,7 @@ func refreshRetainedHTMLControl(world *ecs.World, entity ecs.Entity, control htm
 		if scroll := world.GetRef[scene.UIScroll](runtime.List); scroll != nil {
 			scrollPosition = scroll.Position
 		}
-		world.Remove[htmlSelectorRuntime](entity)
+		world.Discard(entity, ecs.Type[htmlSelectorRuntime]())
 	}
 	if selector := world.GetMut[Selector](entity); selector != nil {
 		selector.ItemHeight, selector.ListHeight = selectorHTMLItemHeight(control), selectorHTMLListHeight(control)

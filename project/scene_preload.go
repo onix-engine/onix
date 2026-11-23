@@ -216,7 +216,7 @@ func (p *ScenePreloader) Activate(current *SceneInstance) error {
 	}
 	registry := current.scriptRegistry
 	for index, entity := range p.entities {
-		p.scene.World.Remove[sceneapi.Activity](entity)
+		p.scene.World.Discard(entity, ecs.Type[sceneapi.Activity]())
 		node := p.plan.Nodes[index]
 		if visibility := p.scene.World.GetMut[sceneapi.Visibility](entity); visibility != nil {
 			visibility.Visible = node.Visible

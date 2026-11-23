@@ -1,6 +1,7 @@
 package scene
 
 import (
+	"iter"
 	"math"
 	"slices"
 	"sort"
@@ -171,13 +172,45 @@ type TextPrelayout2D struct {
 	Revision         uint64
 }
 
-// TextLineLayout2D adds vertical gaps and a minimum scrollable extent. Owners
-// increment Revision whenever offsets or dimensions change; unchanged layouts
+// TextLineLayout2D hides source lines, adds vertical gaps and sets a minimum extent. Owners
+// increment Revision whenever ranges, offsets or dimensions change; unchanged layouts
 // require no slice comparison or allocation during measurement.
 type TextLineLayout2D struct {
+	Hidden        []TextHiddenLines2D
 	Offsets       []float32
 	Width, Height float32
 	Revision      uint64
+}
+
+// TextHiddenLines2D omits hard lines whose start byte falls in [Start, End).
+// Start and End are line starts. Use document length + 1 to include the final
+// line. Supply sorted, disjoint ranges and keep at least the first line visible.
+type TextHiddenLines2D struct{ Start, End int }
+
+func (t *Text2D) visibleHardLines(value piecetree.Snapshot) iter.Seq2[int, int] {
+	return func(yield func(int, int) bool) {
+		var hidden []TextHiddenLines2D
+		if t.LineLayout != nil {
+			hidden = t.LineLayout.Hidden
+		}
+		for start := 0; start <= value.Len(); {
+			for len(hidden) != 0 && hidden[0].End <= start {
+				hidden = hidden[1:]
+			}
+			if len(hidden) != 0 && hidden[0].Start <= start {
+				start = hidden[0].End
+				continue
+			}
+			end := value.IndexByte(start, '\n')
+			if end < 0 {
+				end = value.Len()
+			}
+			if !yield(start, end) {
+				return
+			}
+			start = end + 1
+		}
+	}
 }
 
 type TextSpan2D struct {
@@ -583,71 +616,70 @@ func (snapshots *renderSnapshots2D) appendSpriteTrailRenderItems2D[T renderGloba
 
 func (snapshots *renderSnapshots2D) appendSpriteRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
 	for entity, access := range world.Query3[Sprite2D, T, Visibility]().All {
-		sprite := access.A.Ref()
+		if !access.C.Ref().Visible || !spriteDrawable2D(access.A.Ref(), graphics.DeviceFor(world)) {
+			continue
+		}
 		transform := access.B.Ref()
-		visibility := access.C.Ref()
-
-		if sprite.Texture != nil {
-		}
-		if !visibility.Visible || !spriteDrawable2D(sprite, graphics.DeviceFor(world)) {
-			continue
-		}
-		width, height := sprite.Size()
-		width, height = renderSize2D(world, entity, width, height)
-		if width <= 0 || height <= 0 {
-			continue
-		}
-		matrix, clip := (*transform).renderMatrix2D(), (*transform).renderClip2D()
-		anchor := anchorForEntity2D(world, entity)
-		if !renderItemVisible2D(viewport, matrix, anchor, width, height, ui, clip, cull) {
-			continue
-		}
-		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
-		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.capture(sprite, snapshots.addSprite), snapshots.addMaterial(material2DForEntity(world, entity)), anchor, matrix, clip, width, height, ui, info.sortIndex)
-		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
-		items = append(items, item)
+		items = snapshots.appendSpriteItem2D(world, hierarchy, items, viewport, cull, ui, entity, access.A.Ref(), (*transform).renderMatrix2D(), (*transform).renderClip2D())
 	}
 	return items
 }
 
+func (snapshots *renderSnapshots2D) appendSpriteItem2D(world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool, entity ecs.Entity, sprite *Sprite2D, matrix mgl32.Mat4, clip clipRect2D) []renderItem2D {
+	width, height := sprite.Size()
+	width, height = renderSize2D(world, entity, width, height)
+	if width <= 0 || height <= 0 {
+		return items
+	}
+	anchor := anchorForEntity2D(world, entity)
+	if !renderItemVisible2D(viewport, matrix, anchor, width, height, ui, clip, cull) {
+		return items
+	}
+	info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
+	item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.capture(sprite, snapshots.addSprite), snapshots.addMaterial(material2DForEntity(world, entity)), anchor, matrix, clip, width, height, ui, info.sortIndex)
+	item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
+	return append(items, item)
+}
+
 func (snapshots *renderSnapshots2D) appendSpriteLayerRenderItems2D[T renderGlobalTransform2D](world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool) []renderItem2D {
 	for entity, access := range world.Query3[SpriteLayers2D, T, Visibility]().All {
-		layers := access.A.Ref()
+		if !access.C.Ref().Visible {
+			continue
+		}
 		transform := access.B.Ref()
-		visibility := access.C.Ref()
+		items = snapshots.appendSpriteLayers2D(world, hierarchy, items, viewport, cull, ui, entity, access.A.Ref(), (*transform).renderMatrix2D(), (*transform).renderClip2D())
+	}
+	return items
+}
 
-		if layers == nil || transform == nil || visibility == nil || !visibility.Visible {
+func (snapshots *renderSnapshots2D) appendSpriteLayers2D(world *ecs.World, hierarchy *renderHierarchy2DCache, items []renderItem2D, viewport renderViewport2D, cull, ui bool, entity ecs.Entity, layers *SpriteLayers2D, rootMatrix mgl32.Mat4, clip clipRect2D) []renderItem2D {
+	rootAlpha := float32(1)
+	if root, ok := world.Get[Sprite2D](entity); ok {
+		rootAlpha = root.Alpha
+	}
+	if rootAlpha <= 0 {
+		return items
+	}
+	info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
+	material := material2DForEntity(world, entity)
+	for index := range layers.Layers {
+		layer := &layers.Layers[index]
+		width, height := layer.Sprite.Size()
+		if !layer.Visible || !spriteDrawable2D(&layer.Sprite, graphics.DeviceFor(world)) || width <= 0 || height <= 0 {
 			continue
 		}
-		rootAlpha := float32(1)
-		if root, ok := world.Get[Sprite2D](entity); ok {
-			rootAlpha = root.Alpha
-		}
-		if rootAlpha <= 0 {
+		matrix := rootMatrix.Mul4(layers.LayerMatrix(index))
+		if !renderItemVisible2D(viewport, matrix, layer.Anchor, width, height, ui, clip, cull) {
 			continue
 		}
-		rootMatrix, clip := (*transform).renderMatrix2D(), (*transform).renderClip2D()
-		info := renderEntityInfo2D(world, entity, ui, 0, hierarchy)
-		material := material2DForEntity(world, entity)
-		for index := range layers.Layers {
-			layer := &layers.Layers[index]
-			width, height := layer.Sprite.Size()
-			if !layer.Visible || !spriteDrawable2D(&layer.Sprite, graphics.DeviceFor(world)) || width <= 0 || height <= 0 {
-				continue
-			}
-			matrix := rootMatrix.Mul4(layers.LayerMatrix(index))
-			if !renderItemVisible2D(viewport, matrix, layer.Anchor, width, height, ui, clip, cull) {
-				continue
-			}
-			sprite := layer.Sprite
-			sprite.Alpha *= rootAlpha
-			if sprite.Alpha <= 0 {
-				continue
-			}
-			item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), snapshots.addMaterial(material), layer.Anchor, matrix, clip, width, height, ui, info.sortIndex+layer.Order)
-			item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
-			items = append(items, item)
+		sprite := layer.Sprite
+		sprite.Alpha *= rootAlpha
+		if sprite.Alpha <= 0 {
+			continue
 		}
+		item := newSpriteRenderItem2D(uint32(len(items)), entity, snapshots.addSprite(sprite), snapshots.addMaterial(material), layer.Anchor, matrix, clip, width, height, ui, info.sortIndex+layer.Order)
+		item.entity, item.layers, item.target, item.scene, item.group = entity, info.layers, info.target, info.scene, info.group
+		items = append(items, item)
 	}
 	return items
 }
@@ -1502,6 +1534,12 @@ func (t *Text2D) rebuildGlyphWindow() {
 	if start < end {
 		// UTF-8 bytes bound the glyph count without a separate rune scan.
 		records = t.lines[end-1].end - t.lines[start].start
+		if t.LineLayout != nil && len(t.LineLayout.Hidden) > 0 {
+			records = 0
+			for _, row := range t.lines[start:end] {
+				records += row.end - row.start
+			}
+		}
 	}
 	t.glyphs = resetLayoutBuffer(t.glyphs, records)
 	if validOutlineWidth(t.OutlineWidth) {
@@ -1686,6 +1724,9 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	records := cap(t.glyphs)
 	if withGlyphs && !t.glyphBand.valid {
 		records = layoutValue.Runes()
+		if t.LineLayout != nil && len(t.LineLayout.Hidden) > 0 {
+			records = 0 // Grow from the visible glyphs only.
+		}
 	}
 	lineSpan := t.layoutLineSpan(layoutValue)
 	previousLines := t.lines
@@ -1860,7 +1901,13 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 			end := min(len(ranges), max(0, min(len(ranges), int(t.glyphBand.bottom/step)))+2)
 			count := 0
 			if start < end {
-				count = ranges[end-1].end - ranges[start].start
+				if t.LineLayout != nil && len(t.LineLayout.Hidden) > 0 {
+					for _, row := range ranges[start:end] {
+						count += row.end - row.start
+					}
+				} else {
+					count = ranges[end-1].end - ranges[start].start
+				}
 			}
 			t.glyphs = resetLayoutBuffer(t.glyphs, count)
 			if validOutlineWidth(t.OutlineWidth) {
@@ -1880,20 +1927,11 @@ func (t *Text2D) buildLayout(withGlyphs bool) bool {
 	} else if (t.WrapMode == TextWrapCharacters || t.WrapMode == TextWrapTokens) && wrapWidth > 0 {
 		layoutRanges(t.wrapPreservedRanges(layoutValue, objects, wrapWidth, reuseWidths))
 	} else {
-		lineStart := 0
-		for lineStart <= layoutValue.Len() {
-			lineEnd := layoutValue.Len()
-			if offset := layoutValue.IndexByte(lineStart, '\n'); offset >= 0 {
-				lineEnd = offset
-			}
-			if lineStart > 0 {
+		for start, end := range t.visibleHardLines(layoutValue) {
+			if start > 0 {
 				finishLine()
 			}
-			layoutRange(textWrapRange2D{start: lineStart, end: lineEnd})
-			if lineEnd == layoutValue.Len() {
-				break
-			}
-			lineStart = lineEnd + 1
+			layoutRange(textWrapRange2D{start: start, end: end})
 		}
 	}
 	finishLine()
@@ -2038,21 +2076,12 @@ func (t *Text2D) wrapRanges(value piecetree.Snapshot, objects []TextInlineObject
 	width := t.WrapWidth
 	words := t.WrapMode == TextWrapWords && width > 0
 	result := resetLayoutBuffer(t.wrapRangeCache, t.layoutLineSpan(value))
-	lineStart := 0
-	for lineStart <= value.Len() {
-		lineEnd := value.Len()
-		if offset := value.IndexByte(lineStart, '\n'); offset >= 0 {
-			lineEnd = offset
-		}
+	for lineStart, lineEnd := range t.visibleHardLines(value) {
 		if !words {
 			result = append(result, textWrapRange2D{start: lineStart, end: lineEnd})
 		} else {
 			result = t.appendWordWrapRanges(result, value, lineStart, lineEnd, width, objects)
 		}
-		if lineEnd == value.Len() {
-			break
-		}
-		lineStart = lineEnd + 1
 	}
 	t.wrapRangeCache = result
 	return t.wrapRangeCache
@@ -2063,11 +2092,7 @@ func (t *Text2D) wrapPreservedRanges(value piecetree.Snapshot, objects []TextInl
 	previousRanges := t.wrapRangeCache
 	result := resetLayoutBuffer(t.wrapRangeCache, t.layoutLineSpan(value))
 	objectIndex := 0
-	for start := 0; start <= value.Len(); {
-		end := value.Len()
-		if offset := value.IndexByte(start, '\n'); offset >= 0 {
-			end = offset
-		}
+	for start, end := range t.visibleHardLines(value) {
 		if reuseMetrics && len(result) < len(previousRanges) {
 			previous := previousRanges[len(result)]
 			// A complete hard line that fitted before still fits at this width.
@@ -2075,10 +2100,6 @@ func (t *Text2D) wrapPreservedRanges(value piecetree.Snapshot, objects []TextInl
 				(previous.end == t.lastValue.Len() || t.lastValue.ByteAt(previous.end) == '\n') &&
 				value.EqualRange(start, end, t.lastValue, previous.start, previous.end) {
 				result = append(result, textWrapRange2D{start: start, end: end})
-				if end == value.Len() {
-					break
-				}
-				start = end + 1
 				continue
 			}
 		}
@@ -2139,10 +2160,6 @@ func (t *Text2D) wrapPreservedRanges(value piecetree.Snapshot, objects []TextInl
 		if len(result)-rangeStart > 1 {
 			reuseMetrics = false
 		}
-		if end == value.Len() {
-			break
-		}
-		start = end + 1
 	}
 	t.wrapRangeCache = result
 	return result

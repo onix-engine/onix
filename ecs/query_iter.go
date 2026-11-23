@@ -2,14 +2,17 @@
 
 package ecs
 
+import (
+	"reflect"
+	"runtime"
+)
+
 // Query iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query[A any](options ...QueryOption) QueryView1[A] {
-	requireWorld(world)
-	ids := [1]componentID{world.componentIDFor[A]()}
-	key := simpleQueryKey{count: 1}
-	copy(key.ids[:], ids[:])
-	return QueryView1[A]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query[A any](options ...QueryOption) (result QueryView1[A]) {
+	result.ids = [1]componentID{world.identifyComponent(reflect.TypeFor[A]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView1 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -27,51 +30,48 @@ func (v QueryView1[A]) In(entities []Entity) QueryView1[A] {
 }
 
 func (v QueryView1[A]) All(yield func(Entity, ComponentAccess[A]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
-				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
+				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
-				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))}) {
+				if !yield(entity, ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -85,12 +85,10 @@ type Components2[A, B any] struct {
 
 // Query2 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query2[A, B any](options ...QueryOption) QueryView2[A, B] {
-	requireWorld(world)
-	ids := [2]componentID{world.componentIDFor[A](), world.componentIDFor[B]()}
-	key := simpleQueryKey{count: 2}
-	copy(key.ids[:], ids[:])
-	return QueryView2[A, B]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query2[A, B any](options ...QueryOption) (result QueryView2[A, B]) {
+	result.ids = [2]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView2 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -108,64 +106,56 @@ func (v QueryView2[A, B]) In(entities []Entity) QueryView2[A, B] {
 }
 
 func (v QueryView2[A, B]) All(yield func(Entity, Components2[A, B]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components2[A, B]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components2[A, B]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components2[A, B]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -180,12 +170,10 @@ type Components3[A, B, C any] struct {
 
 // Query3 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query3[A, B, C any](options ...QueryOption) QueryView3[A, B, C] {
-	requireWorld(world)
-	ids := [3]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C]()}
-	key := simpleQueryKey{count: 3}
-	copy(key.ids[:], ids[:])
-	return QueryView3[A, B, C]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query3[A, B, C any](options ...QueryOption) (result QueryView3[A, B, C]) {
+	result.ids = [3]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]()), world.identifyComponent(reflect.TypeFor[C]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView3 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -203,71 +191,60 @@ func (v QueryView3[A, B, C]) In(entities []Entity) QueryView3[A, B, C] {
 }
 
 func (v QueryView3[A, B, C]) All(yield func(Entity, Components3[A, B, C]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		var c *typedColumn[C]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-				c = current.componentColumn[C](v.ids[2])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components3[A, B, C]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &c.values[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := cursor.archetype.componentColumn[C](v.ids[2])
+		c := table.componentColumn[C](v.ids[2])
 		cValues := c.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components3[A, B, C]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components3[A, B, C]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -283,12 +260,10 @@ type Components4[A, B, C, D any] struct {
 
 // Query4 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query4[A, B, C, D any](options ...QueryOption) QueryView4[A, B, C, D] {
-	requireWorld(world)
-	ids := [4]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D]()}
-	key := simpleQueryKey{count: 4}
-	copy(key.ids[:], ids[:])
-	return QueryView4[A, B, C, D]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query4[A, B, C, D any](options ...QueryOption) (result QueryView4[A, B, C, D]) {
+	result.ids = [4]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]()), world.identifyComponent(reflect.TypeFor[C]()), world.identifyComponent(reflect.TypeFor[D]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView4 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -306,78 +281,64 @@ func (v QueryView4[A, B, C, D]) In(entities []Entity) QueryView4[A, B, C, D] {
 }
 
 func (v QueryView4[A, B, C, D]) All(yield func(Entity, Components4[A, B, C, D]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		var c *typedColumn[C]
-		var d *typedColumn[D]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-				c = current.componentColumn[C](v.ids[2])
-				d = current.componentColumn[D](v.ids[3])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components4[A, B, C, D]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &c.values[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &d.values[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := cursor.archetype.componentColumn[C](v.ids[2])
+		c := table.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := cursor.archetype.componentColumn[D](v.ids[3])
+		d := table.componentColumn[D](v.ids[3])
 		dValues := d.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components4[A, B, C, D]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components4[A, B, C, D]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -394,12 +355,10 @@ type Components5[A, B, C, D, E any] struct {
 
 // Query5 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query5[A, B, C, D, E any](options ...QueryOption) QueryView5[A, B, C, D, E] {
-	requireWorld(world)
-	ids := [5]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E]()}
-	key := simpleQueryKey{count: 5}
-	copy(key.ids[:], ids[:])
-	return QueryView5[A, B, C, D, E]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query5[A, B, C, D, E any](options ...QueryOption) (result QueryView5[A, B, C, D, E]) {
+	result.ids = [5]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]()), world.identifyComponent(reflect.TypeFor[C]()), world.identifyComponent(reflect.TypeFor[D]()), world.identifyComponent(reflect.TypeFor[E]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView5 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -417,85 +376,68 @@ func (v QueryView5[A, B, C, D, E]) In(entities []Entity) QueryView5[A, B, C, D, 
 }
 
 func (v QueryView5[A, B, C, D, E]) All(yield func(Entity, Components5[A, B, C, D, E]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		var c *typedColumn[C]
-		var d *typedColumn[D]
-		var e *typedColumn[E]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-				c = current.componentColumn[C](v.ids[2])
-				d = current.componentColumn[D](v.ids[3])
-				e = current.componentColumn[E](v.ids[4])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components5[A, B, C, D, E]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &c.values[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &d.values[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &e.values[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := cursor.archetype.componentColumn[C](v.ids[2])
+		c := table.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := cursor.archetype.componentColumn[D](v.ids[3])
+		d := table.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := cursor.archetype.componentColumn[E](v.ids[4])
+		e := table.componentColumn[E](v.ids[4])
 		eValues := e.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components5[A, B, C, D, E]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components5[A, B, C, D, E]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -513,12 +455,10 @@ type Components6[A, B, C, D, E, F any] struct {
 
 // Query6 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query6[A, B, C, D, E, F any](options ...QueryOption) QueryView6[A, B, C, D, E, F] {
-	requireWorld(world)
-	ids := [6]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E](), world.componentIDFor[F]()}
-	key := simpleQueryKey{count: 6}
-	copy(key.ids[:], ids[:])
-	return QueryView6[A, B, C, D, E, F]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query6[A, B, C, D, E, F any](options ...QueryOption) (result QueryView6[A, B, C, D, E, F]) {
+	result.ids = [6]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]()), world.identifyComponent(reflect.TypeFor[C]()), world.identifyComponent(reflect.TypeFor[D]()), world.identifyComponent(reflect.TypeFor[E]()), world.identifyComponent(reflect.TypeFor[F]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView6 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -536,92 +476,72 @@ func (v QueryView6[A, B, C, D, E, F]) In(entities []Entity) QueryView6[A, B, C, 
 }
 
 func (v QueryView6[A, B, C, D, E, F]) All(yield func(Entity, Components6[A, B, C, D, E, F]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		var c *typedColumn[C]
-		var d *typedColumn[D]
-		var e *typedColumn[E]
-		var f *typedColumn[F]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-				c = current.componentColumn[C](v.ids[2])
-				d = current.componentColumn[D](v.ids[3])
-				e = current.componentColumn[E](v.ids[4])
-				f = current.componentColumn[F](v.ids[5])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components6[A, B, C, D, E, F]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &c.values[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &d.values[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &e.values[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-				F: ComponentAccess[F]{value: &f.values[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := cursor.archetype.componentColumn[C](v.ids[2])
+		c := table.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := cursor.archetype.componentColumn[D](v.ids[3])
+		d := table.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := cursor.archetype.componentColumn[E](v.ids[4])
+		e := table.componentColumn[E](v.ids[4])
 		eValues := e.values
-		f := cursor.archetype.componentColumn[F](v.ids[5])
+		f := table.componentColumn[F](v.ids[5])
 		fValues := f.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components6[A, B, C, D, E, F]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components6[A, B, C, D, E, F]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}
@@ -640,12 +560,10 @@ type Components7[A, B, C, D, E, F, G any] struct {
 
 // Query7 iterates matching entities. Get and Ref do not mark changes; Mut does.
 // Access values and component pointers must not outlive the iteration.
-func (world *World) Query7[A, B, C, D, E, F, G any](options ...QueryOption) QueryView7[A, B, C, D, E, F, G] {
-	requireWorld(world)
-	ids := [7]componentID{world.componentIDFor[A](), world.componentIDFor[B](), world.componentIDFor[C](), world.componentIDFor[D](), world.componentIDFor[E](), world.componentIDFor[F](), world.componentIDFor[G]()}
-	key := simpleQueryKey{count: 7}
-	copy(key.ids[:], ids[:])
-	return QueryView7[A, B, C, D, E, F, G]{view: buildQuery(world, key, options), ids: ids}
+func (world *World) Query7[A, B, C, D, E, F, G any](options ...QueryOption) (result QueryView7[A, B, C, D, E, F, G]) {
+	result.ids = [7]componentID{world.identifyComponent(reflect.TypeFor[A]()), world.identifyComponent(reflect.TypeFor[B]()), world.identifyComponent(reflect.TypeFor[C]()), world.identifyComponent(reflect.TypeFor[D]()), world.identifyComponent(reflect.TypeFor[E]()), world.identifyComponent(reflect.TypeFor[F]()), world.identifyComponent(reflect.TypeFor[G]())}
+	result.view.init(world, result.ids[:], options)
+	return result
 }
 
 // QueryView7 retains a query plan and its filter snapshot. Range over All to iterate.
@@ -663,99 +581,76 @@ func (v QueryView7[A, B, C, D, E, F, G]) In(entities []Entity) QueryView7[A, B, 
 }
 
 func (v QueryView7[A, B, C, D, E, F, G]) All(yield func(Entity, Components7[A, B, C, D, E, F, G]) bool) {
-	cursor, ok := v.view.cursor(yield != nil)
-	if !ok {
+	cursor := queryCursor{view: v.view}
+	tick := cursor.open(yield != nil)
+	if tick == 0 {
 		return
 	}
-	defer cursor.close()
-	tickBits := uint64(cursor.mutationTick()) << 32
-	if cursor.view.limited {
-		var current *archetype
-		var a *typedColumn[A]
-		var b *typedColumn[B]
-		var c *typedColumn[C]
-		var d *typedColumn[D]
-		var e *typedColumn[E]
-		var f *typedColumn[F]
-		var g *typedColumn[G]
-		for cursor.nextEntity() {
-			if cursor.archetype != current {
-				current = cursor.archetype
-				a = current.componentColumn[A](v.ids[0])
-				b = current.componentColumn[B](v.ids[1])
-				c = current.componentColumn[C](v.ids[2])
-				d = current.componentColumn[D](v.ids[3])
-				e = current.componentColumn[E](v.ids[4])
-				f = current.componentColumn[F](v.ids[5])
-				g = current.componentColumn[G](v.ids[6])
-			}
-			row := cursor.row
-			entity := cursor.archetype.entities[row]
-			if !yield(entity, Components7[A, B, C, D, E, F, G]{
-				A: ComponentAccess[A]{value: &a.values[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-				B: ComponentAccess[B]{value: &b.values[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-				C: ComponentAccess[C]{value: &c.values[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-				D: ComponentAccess[D]{value: &d.values[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-				E: ComponentAccess[E]{value: &e.values[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-				F: ComponentAccess[F]{value: &f.values[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-				G: ComponentAccess[G]{value: &g.values[row], state: &g.columnState, rowTick: tickBits | uint64(uint32(row))},
-			}) {
-				return
-			}
-		}
-		return
+	if runtime.GOARCH == "wasm" {
+		closeCursor := cursor.close
+		defer closeCursor()
+	} else {
+		defer cursor.close()
 	}
-	for cursor.nextArchetype() {
-		entities := cursor.archetype.entities
-		a := cursor.archetype.componentColumn[A](v.ids[0])
+	tickBits := uint64(tick) << 32
+	filtered := v.view.filters.count != 0
+	multipleFilters := v.view.filters.count > 1
+	for start, end := cursor.nextRows(0); start < end; {
+		table := cursor.archetype
+		entities := table.entities
+		a := table.componentColumn[A](v.ids[0])
 		aValues := a.values
-		b := cursor.archetype.componentColumn[B](v.ids[1])
+		b := table.componentColumn[B](v.ids[1])
 		bValues := b.values
-		c := cursor.archetype.componentColumn[C](v.ids[2])
+		c := table.componentColumn[C](v.ids[2])
 		cValues := c.values
-		d := cursor.archetype.componentColumn[D](v.ids[3])
+		d := table.componentColumn[D](v.ids[3])
 		dValues := d.values
-		e := cursor.archetype.componentColumn[E](v.ids[4])
+		e := table.componentColumn[E](v.ids[4])
 		eValues := e.values
-		f := cursor.archetype.componentColumn[F](v.ids[5])
+		f := table.componentColumn[F](v.ids[5])
 		fValues := f.values
-		g := cursor.archetype.componentColumn[G](v.ids[6])
+		g := table.componentColumn[G](v.ids[6])
 		gValues := g.values
-		if v.view.filters.count == 0 && cursor.scopeTable == nil {
-			for row := 0; row < len(entities); row++ {
-				entity := entities[row]
+		if !v.view.limited && !filtered && cursor.scopeTable == nil {
+			for row, entity := range entities {
 				if !yield(entity, Components7[A, B, C, D, E, F, G]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-					G: ComponentAccess[G]{value: &gValues[row], state: &g.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.state, rowTick: tickBits | uint64(uint32(row))},
+					G: ComponentAccess[G]{value: &gValues[row], state: &g.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
 			}
+			start, end = cursor.nextRows(len(entities))
 			continue
 		}
-		for start, end := cursor.nextBlock(0, len(entities)); start < end; start, end = cursor.nextBlock(end, len(entities)) {
+		first := cursor.inline[0]
+		for {
 			for row := start; row < end; row++ {
-				cursor.row = row
-				if !cursor.rowMatches() {
+				if filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) {
 					continue
 				}
 				entity := entities[row]
 				if !yield(entity, Components7[A, B, C, D, E, F, G]{
-					A: ComponentAccess[A]{value: &aValues[row], state: &a.columnState, rowTick: tickBits | uint64(uint32(row))},
-					B: ComponentAccess[B]{value: &bValues[row], state: &b.columnState, rowTick: tickBits | uint64(uint32(row))},
-					C: ComponentAccess[C]{value: &cValues[row], state: &c.columnState, rowTick: tickBits | uint64(uint32(row))},
-					D: ComponentAccess[D]{value: &dValues[row], state: &d.columnState, rowTick: tickBits | uint64(uint32(row))},
-					E: ComponentAccess[E]{value: &eValues[row], state: &e.columnState, rowTick: tickBits | uint64(uint32(row))},
-					F: ComponentAccess[F]{value: &fValues[row], state: &f.columnState, rowTick: tickBits | uint64(uint32(row))},
-					G: ComponentAccess[G]{value: &gValues[row], state: &g.columnState, rowTick: tickBits | uint64(uint32(row))},
+					A: ComponentAccess[A]{value: &aValues[row], state: &a.state, rowTick: tickBits | uint64(uint32(row))},
+					B: ComponentAccess[B]{value: &bValues[row], state: &b.state, rowTick: tickBits | uint64(uint32(row))},
+					C: ComponentAccess[C]{value: &cValues[row], state: &c.state, rowTick: tickBits | uint64(uint32(row))},
+					D: ComponentAccess[D]{value: &dValues[row], state: &d.state, rowTick: tickBits | uint64(uint32(row))},
+					E: ComponentAccess[E]{value: &eValues[row], state: &e.state, rowTick: tickBits | uint64(uint32(row))},
+					F: ComponentAccess[F]{value: &fValues[row], state: &f.state, rowTick: tickBits | uint64(uint32(row))},
+					G: ComponentAccess[G]{value: &gValues[row], state: &g.state, rowTick: tickBits | uint64(uint32(row))},
 				}) {
 					return
 				}
+			}
+			start, end = cursor.nextRows(end)
+			if start == end || cursor.archetype != table {
+				break
 			}
 		}
 	}

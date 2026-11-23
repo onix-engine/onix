@@ -126,7 +126,7 @@ func TestTableCompactionPreservesPreparedPlansAndTicks(t *testing.T) {
 	column := source.column(w.registerComponent[scopeNumber]()).typed[scopeNumber]()
 	since := w.ChangeTick()
 	*w.GetMut[scopeNumber](entities[0]) = 9999
-	added, changed := slices.Clone(column.added[:32]), slices.Clone(column.changed[:32])
+	added, changed := slices.Clone(column.state.added[:32]), slices.Clone(column.state.changed[:32])
 	for _, e := range entities[32:] {
 		if err := patch.Apply(e, true); err != nil {
 			t.Fatal(err)
@@ -137,7 +137,7 @@ func TestTableCompactionPreservesPreparedPlansAndTicks(t *testing.T) {
 	for range reuse.RetentionFrames + 1 {
 		w.Maintain()
 	}
-	if cap(source.entities) > 64 || cap(column.values) > 64 || len(column.values) != 32 || !slices.Equal(column.added, added) || !slices.Equal(column.changed, changed) {
+	if cap(source.entities) > 64 || cap(column.values) > 64 || len(column.values) != 32 || !slices.Equal(column.state.added, added) || !slices.Equal(column.state.changed, changed) {
 		t.Fatal("table compaction lost values/ticks or retained peak storage")
 	}
 	window := w.ChangesSince(since)
@@ -167,14 +167,14 @@ func TestTableCompactionPreservesPreparedPlansAndTicks(t *testing.T) {
 	for range reuse.RetentionFrames + 1 {
 		w.Maintain()
 	}
-	if source.entities != nil || column.values != nil || column.added != nil || column.changed != nil || column.addedRanges != nil || column.changedRanges != nil {
+	if source.entities != nil || column.values != nil || column.state.added != nil || column.state.changed != nil || column.state.addedRanges != nil || column.state.changedRanges != nil {
 		t.Fatal("empty table retained backing arrays")
 	}
 	if !remove.Apply(entities[0]) {
 		t.Fatal("prepared removal failed after compaction")
 	}
 	spawn.Spawn(99)
-	if source != spawn.plan.archetype || source.column(column.id) != &column.columnState || *w.GetRef[scopeNumber](entities[0]) != 9999 {
+	if source != spawn.plan.archetype || source.column(column.state.id) != &column.state || *w.GetRef[scopeNumber](entities[0]) != 9999 {
 		t.Fatal("compaction invalidated prepared table/column identities")
 	}
 	changes := w.ChangesSince(0)
@@ -283,7 +283,7 @@ func TestEmptyLargeComponentTableReleasesCapacity(t *testing.T) {
 	}
 	a, c := spawn.plan.archetype, spawn.a
 	bytes := func() uintptr {
-		return uintptr(cap(a.entities))*unsafe.Sizeof(Entity(0)) + uintptr(cap(c.values))*256 + uintptr(cap(c.added)+cap(c.changed))*unsafe.Sizeof(Tick(0)) + uintptr(cap(c.addedRanges)+cap(c.changedRanges))*unsafe.Sizeof(tickRange{})
+		return uintptr(cap(a.entities))*unsafe.Sizeof(Entity(0)) + uintptr(cap(c.values))*256 + uintptr(cap(c.state.added)+cap(c.state.changed))*unsafe.Sizeof(Tick(0)) + uintptr(cap(c.state.addedRanges)+cap(c.state.changedRanges))*unsafe.Sizeof(tickRange{})
 	}
 	before := bytes()
 	for _, e := range entities {

@@ -3,10 +3,10 @@ package module
 import (
 	"fmt"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func transformBundle(t project.ModTransform, ui bool, parent ecs.Entity, order int, visible, active bool, anchor *scene.Anchor) ecs.Bundle {
@@ -104,8 +104,12 @@ func (r *Runtime) installContent(c *Context) error {
 }
 
 func (r *Runtime) bindContent(c *Context, entity ecs.Entity, name string, components project.ModComponents) error {
-	if components.Collision != nil {
-		if err := r.bindCollision(c, entity, name, components.Collision.Emit, components.RigidBody3D != nil); err != nil {
+	if collision := components.Collision; collision != nil {
+		bridge := r.content.collision2D
+		if components.RigidBody3D != nil {
+			bridge = r.content.collision3D
+		}
+		if err := bridge.bind(c, entity, name, collision.Emit); err != nil {
 			return err
 		}
 	}
@@ -126,24 +130,29 @@ func (r *Runtime) bindContent(c *Context, entity ecs.Entity, name string, compon
 
 	}
 	if components.Animation != nil {
-		a := r.world.GetMut[scene.Animator](entity)
-		if a == nil || a.Clip == nil {
-			return fmt.Errorf("animation component is missing")
-		}
-		floats, err := c.bindPrivateTracks(entity, a.Clip.FloatTracks)
-		if err != nil {
-			return err
-		}
-		textures, err := c.bindPrivateTracks(entity, a.Clip.TextureTracks)
-		if err != nil {
-			return err
-		}
-		bools, err := c.bindPrivateTracks(entity, a.Clip.BoolTracks)
-		if err != nil {
-			return err
-		}
-		a.BindTargets(entity, floats, textures, bools)
+		return r.content.bindAnimation(c, entity)
 	}
+	return nil
+}
+
+func (c *Context) bindAnimation(entity ecs.Entity) error {
+	a := c.runtime.world.GetMut[scene.Animator](entity)
+	if a == nil || a.Clip == nil {
+		return fmt.Errorf("animation component is missing")
+	}
+	floats, err := c.bindPrivateTracks(entity, a.Clip.FloatTracks)
+	if err != nil {
+		return err
+	}
+	textures, err := c.bindPrivateTracks(entity, a.Clip.TextureTracks)
+	if err != nil {
+		return err
+	}
+	bools, err := c.bindPrivateTracks(entity, a.Clip.BoolTracks)
+	if err != nil {
+		return err
+	}
+	a.BindTargets(entity, floats, textures, bools)
 	return nil
 }
 

@@ -111,7 +111,7 @@ func (control TextControl[T]) bindControl(world *ecs.World, entity ecs.Entity, o
 	}
 	switch any(*new(T)).(type) {
 	case Input:
-		world.Remove[Textarea](entity)
+		world.Discard(entity, ecs.Type[Textarea]())
 		if err := world.Insert(entity, Input{}); err != nil {
 			return err
 		}
@@ -121,10 +121,10 @@ func (control TextControl[T]) bindControl(world *ecs.World, entity ecs.Entity, o
 		if password {
 			return world.Insert(entity, textFieldMaskCache{})
 		}
-		world.Remove[textFieldMaskCache](entity)
+		world.Discard(entity, ecs.Type[textFieldMaskCache]())
 	case Textarea:
-		world.Remove[Input](entity)
-		world.Remove[textFieldMaskCache](entity)
+		world.Discard(entity, ecs.Type[Input]())
+		world.Discard(entity, ecs.Type[textFieldMaskCache]())
 		if err := world.Insert(entity, Textarea{Wrap: control.Wrap, Padding: control.Padding}); err != nil {
 			return err
 		}
@@ -210,7 +210,7 @@ func UnbindVariant[T comparable](world *ecs.World, owner, entity ecs.Entity) {
 		break
 	}
 	if len(variants.Items) == 0 {
-		world.Remove[Variants[T]](owner)
+		world.Discard(owner, ecs.Type[Variants[T]]())
 	}
 }
 

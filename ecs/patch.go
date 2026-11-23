@@ -1,10 +1,6 @@
 package ecs
 
-import (
-	"cmp"
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 type patchPlan struct {
 	world       *World
@@ -42,13 +38,17 @@ func newPatchPlan(world *World, writes []componentID, removed []ComponentType) *
 	world.assertStructuralMutationAllowed()
 	entries := make([]patchWrite, len(writes))
 	for i, id := range writes {
-		entries[i] = patchWrite{id: id, index: uint32(i)}
-	}
-	slices.SortFunc(entries, func(a, b patchWrite) int { return cmp.Compare(a.id, b.id) })
-	for i := 1; i < len(entries); i++ {
-		if entries[i-1].id == entries[i].id {
-			panic(fmt.Sprintf("ecs: duplicate component %s in patch", world.componentInfos[entries[i].id].typ))
+		// Typed patches contain at most eight writes. Insert in ID order
+		// while retaining the position of each caller argument.
+		j := i
+		for j > 0 && id < entries[j-1].id {
+			entries[j] = entries[j-1]
+			j--
 		}
+		if j > 0 && id == entries[j-1].id {
+			panic(fmt.Sprintf("ecs: duplicate component %s in patch", world.componentInfos[id].typ))
+		}
+		entries[j] = patchWrite{id: id, index: uint32(i)}
 	}
 	mask := componentTypeMask(world, removed)
 	for _, entry := range entries {
@@ -84,10 +84,9 @@ func (p *patchPlan) require() {
 func (p *patchPlan) begin(entity Entity) (patchRow, error) {
 	p.require()
 	w := p.world
-	w.assertStructuralMutationAllowed()
-	index, meta, ok := w.entityMeta(entity)
-	if !ok {
-		return patchRow{}, fmt.Errorf("ecs: entity %d does not exist", entity)
+	index, meta, err := w.structuralEntity(entity)
+	if err != nil {
+		return patchRow{}, err
 	}
 	t := p.transition(w.archetypes[meta.archetypeID])
 	row := int(meta.row)
@@ -117,9 +116,9 @@ func (row patchRow) writePatchColumn[T any](index int, value T) {
 		added = entry.source.ticks(filterAdded)[row.sourceRow]
 	}
 	target.appendWithTicks(value, added, row.tick)
-	target.world.componentInfos[target.id].values++
+	entry.target.world.componentInfos[entry.target.id].values++
 	if entry.source == nil {
-		target.world.componentInfos[target.id].members++
+		entry.target.world.componentInfos[entry.target.id].members++
 	}
 }
 

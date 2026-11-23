@@ -19,16 +19,8 @@ func (a ComponentAccess[T]) Ref() *T {
 }
 
 func (a ComponentAccess[T]) Mut() *T {
-	a.markChanged()
+	a.state.markChanged(int(uint32(a.rowTick)), Tick(a.rowTick>>32))
 	return a.value
-}
-
-func (a ComponentAccess[T]) markChanged() {
-	tick := Tick(a.rowTick >> 32)
-	if tick == 0 {
-		tick = a.state.world.mutationTick()
-	}
-	a.state.markChanged(int(uint32(a.rowTick)), tick)
 }
 
 // CommitComponent writes only when the value differs. Query accesses use their
@@ -38,6 +30,6 @@ func CommitComponent[T comparable](access ComponentAccess[T], value T) bool {
 		return false
 	}
 	*access.value = value
-	access.markChanged()
+	access.state.markChanged(int(uint32(access.rowTick)), Tick(access.rowTick>>32))
 	return true
 }

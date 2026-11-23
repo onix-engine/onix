@@ -122,7 +122,53 @@ func focusedInputEventKind(kind input.EventKind) bool {
 	}
 }
 
+type widgetInputHandlers struct {
+	reset   func(*ecs.World)
+	press   func(*ecs.World, ecs.Entity)
+	pointer func(*ecs.World, *uiEventState, *scene.InputEvent)
+	wheel   func(*ecs.World, ecs.Entity, float32) bool
+}
+
 func update(context *ecs.SystemContext) error {
+	return updateControlInput(context, &widgetInputHandlers{
+		reset: resetWidgetFrameState, press: dismissContextMenus,
+		pointer: updateWidgetPointer, wheel: updateFocusedNumberInputWheel,
+	})
+}
+
+func updateForms(context *ecs.SystemContext) error {
+	return updateControlInput(context, nil)
+}
+
+func dismissContextMenus(world *ecs.World, picked ecs.Entity) {
+	if !isContextMenuPick(world, picked) {
+		closeContextMenus(world)
+	}
+}
+
+func updateWidgetPointer(world *ecs.World, state *uiEventState, event *scene.InputEvent) {
+	updateVirtualJoystickInput(world, event)
+	switch event.Kind {
+	case scene.InputEventPress, scene.InputEventMove:
+		if progress, ok := sliderProgressOwner(world, event.Entity); ok {
+			updateSliderProgressValue(world, progress, event.X, event.Y)
+		}
+		if event.Kind == scene.InputEventPress && isSelectorPick(world, event.Entity) && !isHTMLActivationTarget(world, event.Entity) {
+			activate(world, event.Entity)
+			state.ActivatedOnPress = event.Entity
+		}
+	case scene.InputEventTap:
+		if state.ActivatedOnPress == event.Entity {
+			state.ActivatedOnPress = 0
+		} else {
+			activate(world, event.Entity)
+		}
+	case scene.InputEventCancel:
+		state.ActivatedOnPress = 0
+	}
+}
+
+func updateControlInput(context *ecs.SystemContext, widgets *widgetInputHandlers) error {
 	world := context.World
 	if world == nil {
 		return nil
@@ -142,7 +188,10 @@ func update(context *ecs.SystemContext) error {
 		focus(world, state, 0)
 	}
 
-	resetFrameState(world)
+	resetTextFieldFrameState(world)
+	if widgets != nil {
+		widgets.reset(world)
+	}
 	keyboardHandled := false
 	if handler := world.GetRef[TextFieldKeyHandler](state.Focused); handler != nil && handler.Handle != nil {
 		keyboardHandled = handler.Handle(uiInputState)
@@ -157,33 +206,28 @@ func update(context *ecs.SystemContext) error {
 		}
 		if event.Kind == scene.InputEventPress {
 			pressDispatched = true
-			if !isContextMenuPick(world, event.Entity) {
-				closeContextMenus(world)
+			if widgets != nil {
+				widgets.press(world, event.Entity)
 			}
 			closeOtherSelectors(world, event.Entity)
 		}
 		if event.Handled {
 			continue
 		}
-		updateVirtualJoystickInput(world, event)
 		uiTarget := world.Has[scene.UIGlobalTransform](event.Entity) || world.Has[Control](event.Entity)
+		if widgets != nil {
+			widgets.pointer(world, state, event)
+		}
 		switch event.Kind {
 		case scene.InputEventWheel:
 			handled := updateTextareaWheel(world, event.Entity, event.WheelX, event.WheelY)
-			if !handled {
-				handled = updateFocusedNumberInputWheel(world, state.Focused, event.WheelY)
+			if !handled && widgets != nil {
+				handled = widgets.wheel(world, state.Focused, event.WheelY)
 			}
 			if handled {
 				uiInputState.ConsumePointerWheel()
 			}
 		case scene.InputEventPress:
-			if progress, ok := sliderProgressOwner(world, event.Entity); ok {
-				updateSliderProgressValue(world, progress, event.X, event.Y)
-			}
-			if isSelectorPick(world, event.Entity) && !isHTMLActivationTarget(world, event.Entity) {
-				activate(world, event.Entity)
-				state.ActivatedOnPress = event.Entity
-			}
 			focused := focusTarget(world, event.Entity)
 			selected := false
 			scrolling := focused != 0 && world.Has[Textarea](focused) && beginTextareaScrollDrag(world, focused, event.X, event.Y)
@@ -209,22 +253,10 @@ func update(context *ecs.SystemContext) error {
 				}
 			}
 		case scene.InputEventMove:
-			if progress, ok := sliderProgressOwner(world, event.Entity); ok {
-				updateSliderProgressValue(world, progress, event.X, event.Y)
-			}
 			if state.Focused != 0 && textFieldSelecting(world, state.Focused) {
 				setCaretFromInput(world, state.Focused, event.X, event.Y, true)
 			}
-		case scene.InputEventRelease:
-			setSelecting(world, state.Focused, false)
-		case scene.InputEventTap:
-			if state.ActivatedOnPress == event.Entity {
-				state.ActivatedOnPress = 0
-			} else {
-				activate(world, event.Entity)
-			}
-		case scene.InputEventCancel:
-			state.ActivatedOnPress = 0
+		case scene.InputEventRelease, scene.InputEventCancel:
 			setSelecting(world, state.Focused, false)
 		}
 		if uiTarget && !((event.Kind == scene.InputEventTap || event.Kind == scene.InputEventPress && isSelectorPick(world, event.Entity)) && isHTMLActivationTarget(world, event.Entity)) {
@@ -241,7 +273,9 @@ func update(context *ecs.SystemContext) error {
 		}
 	}
 	if pointer.Pressed && !pressDispatched {
-		closeContextMenus(world)
+		if widgets != nil {
+			widgets.press(world, 0)
+		}
 		closeOtherSelectors(world, 0)
 	}
 	updateTextareaScrollDrags(world, uiInputState)
@@ -317,17 +351,22 @@ func isSelectorPick(world *ecs.World, entity ecs.Entity) bool {
 	return world.Has[Selector](entity) || world.Has[SelectorItem](entity)
 }
 
-func syncWidgets(context *ecs.SystemContext) error {
-	world := context.World
-	if world == nil {
-		return nil
-	}
+func controlTheme(world *ecs.World) Theme {
 	theme, ok := world.GetResource[Theme]()
 	if ok {
 		theme = themeWithDefaults(theme)
 	} else {
 		theme = DefaultTheme()
 	}
+	return theme
+}
+
+func syncWidgets(context *ecs.SystemContext) error {
+	world := context.World
+	if world == nil {
+		return nil
+	}
+	theme := controlTheme(world)
 	skin := skinFor(world, theme)
 	ensureTextFieldCaches(world)
 	syncCaretBlink(world)
@@ -353,12 +392,7 @@ func syncAfterLayout(context *ecs.SystemContext) error {
 	if world == nil {
 		return nil
 	}
-	theme, ok := world.GetResource[Theme]()
-	if ok {
-		theme = themeWithDefaults(theme)
-	} else {
-		theme = DefaultTheme()
-	}
+	theme := controlTheme(world)
 	skin := skinFor(world, theme)
 	finalizeScrollAreas(world)
 	metrics := collectSyncMetrics(world)
@@ -368,9 +402,9 @@ func syncAfterLayout(context *ecs.SystemContext) error {
 	return nil
 }
 
-func applyUISyncVisuals(world *ecs.World, skin Skin, metrics syncMetrics) {
+func applyUISyncVisuals(world *ecs.World, skin *Skin, metrics syncMetrics) {
 	syncPanels(world, skin)
-	syncControls(world, skin)
+	syncControls(world)
 	syncVirtualJoysticks(world, skin)
 	syncJoinedEdges(world, skin)
 	syncProgress(world, skin)
@@ -407,7 +441,7 @@ func syncInputBlockers(world *ecs.World) {
 	state.versions, state.initialized = versions, true
 }
 
-func resetFrameState(world *ecs.World) {
+func resetTextFieldFrameState(world *ecs.World) {
 	for _, row := range world.Query[TextField]().All {
 		access := row
 
@@ -415,6 +449,9 @@ func resetFrameState(world *ecs.World) {
 			access.Mut().Submitted = false
 		}
 	}
+}
+
+func resetWidgetFrameState(world *ecs.World) {
 	for _, row := range world.Query[NumberInput]().All {
 		access := row
 
@@ -759,16 +796,16 @@ func activate(world *ecs.World, entity ecs.Entity) {
 	}
 }
 
-func syncPanels(world *ecs.World, skin Skin) {
+func syncPanels(world *ecs.World, skin *Skin) {
 	for entity, access := range world.Query2[Panel, scene.Size2D]().All {
 		size := access.B.Ref()
 
-		style := styleFor(world, entity, skin.Panel)
+		style := styleFor(world, entity, &skin.Panel)
 		applySurface(world, entity, size.Width, size.Height, style.Body)
 	}
 }
 
-func syncControls(world *ecs.World, _ Skin) {
+func syncControls(world *ecs.World) {
 	state := world.FrameValue[syncControlStateTag, componentSyncState]()
 	versions := [4]uint64{world.ComponentVersion[Control](), world.ComponentVersion[scene.InputTarget2D](), world.ComponentVersion[scene.Size2D]()}
 	if state.initialized && state.versions == versions {
@@ -784,22 +821,22 @@ func syncControls(world *ecs.World, _ Skin) {
 	state.versions, state.initialized = versions, true
 }
 
-func controlSurface(world *ecs.World, entity ecs.Entity, control *controlView, skin Skin) SurfaceStyle {
+func controlSurface(world *ecs.World, entity ecs.Entity, control *controlView, skin *Skin) SurfaceStyle {
 	state := controlState(control, false)
 	if remove, ok := world.Get[imageGridRemove](entity); ok {
-		style := styleFor(world, remove.Grid, skin.ImageGrid)
+		style := styleFor(world, remove.Grid, &skin.ImageGrid)
 		return style.Remove.Resolve(state)
 	}
 	if step, ok := world.Get[NumberInputStep](entity); ok {
-		style := styleFor(world, step.Input, skin.NumberInput)
+		style := styleFor(world, step.Input, &skin.NumberInput)
 		return style.Step.Resolve(state)
 	}
 	if thumb, ok := world.Get[ProgressThumb](entity); ok {
-		style := styleFor(world, thumb.Progress, skin.Progress)
+		style := styleFor(world, thumb.Progress, &skin.Progress)
 		return style.Thumb.Resolve(state)
 	}
 	if progress, ok := world.Get[Progress](entity); ok {
-		style := styleFor(world, entity, skin.Progress)
+		style := styleFor(world, entity, &skin.Progress)
 		if !progress.Slider || progress.Indeterminate {
 			state.Hovered, state.Pressed = false, false
 		}
@@ -807,65 +844,69 @@ func controlSurface(world *ecs.World, entity ecs.Entity, control *controlView, s
 	}
 	if item, ok := world.Get[TabItem](entity); ok {
 		tabs, _ := world.Get[Tab](item.Tabs)
-		style := styleFor(world, item.Tabs, skin.Tab)
+		style := styleFor(world, item.Tabs, &skin.Tab)
 		state.Disabled = state.Disabled || item.Disabled
 		surface := style.Item.Resolve(tabs.Selected == item.Index, state)
-		if _, custom := world.Get[StyleOverride[TabStyle]](item.Tabs); !custom && tabs.Selected == item.Index {
+		if style == &skin.Tab && tabs.Selected == item.Index {
 			surface.Background.Fill = tabs.Highlight
 		}
 		return surface
 	}
 	if item, ok := world.Get[SelectorItem](entity); ok {
-		style := styleFor(world, item.Owner, skin.Selector)
-		if authored := htmlSelectStyleFor(world, item.Owner); authored != nil {
-			palette := authored.Item
-			palette.Normal = style.Item.Normal
-			return palette.Resolve(state)
-		}
-		return style.Item.Resolve(state)
+		return selectorItemSurface(world, item.Owner, skin, state)
 	}
 	if item, ok := world.Get[MenuItem](entity); ok {
-		style := styleFor(world, item.Owner, skin.Menu)
+		style := styleFor(world, item.Owner, &skin.Menu)
 		return style.Item.Resolve(state)
 	}
 	if item, ok := world.Get[ContextMenuItem](entity); ok {
-		style := styleFor(world, item.Owner, skin.ContextMenu)
+		style := styleFor(world, item.Owner, &skin.ContextMenu)
 		return style.Item.Resolve(state)
 	}
 	if item, ok := world.Get[buttonGroupItem](entity); ok {
-		style := styleFor(world, item.Group, skin.ButtonGroup)
+		style := styleFor(world, item.Group, &skin.ButtonGroup)
 		return style.Button.Body.Resolve(state)
 	}
-	if _, ok := world.Get[NumberInput](entity); ok {
-		field, _ := world.Get[TextField](entity)
-		state.Focused = field.Focused
-		style := styleFor(world, entity, skin.NumberInput)
+	if world.Has[NumberInput](entity) {
+		field := world.GetRef[TextField](entity)
+		state.Focused = field != nil && field.Focused
+		style := styleFor(world, entity, &skin.NumberInput)
 		return style.Field.Body.Resolve(state)
 	}
 	if world.Has[Input](entity) || world.Has[Textarea](entity) {
-		field, _ := world.Get[TextField](entity)
-		state.Focused = field.Focused
+		field := world.GetRef[TextField](entity)
+		state.Focused = field != nil && field.Focused
 		if textarea := world.GetRef[Textarea](entity); textarea != nil && textarea.scrollDragging {
 			state.Pressed = false
 		}
-		style := styleFor(world, entity, skin.TextField)
+		style := styleFor(world, entity, &skin.TextField)
 		return style.Body.Resolve(state)
 	}
-	if _, ok := world.Get[Selector](entity); ok {
-		style := styleFor(world, entity, skin.Selector)
+	if world.Has[Selector](entity) {
+		style := styleFor(world, entity, &skin.Selector)
 		return style.Body.Resolve(state)
 	}
-	if _, ok := world.Get[Menu](entity); ok {
-		style := styleFor(world, entity, skin.Menu)
+	if world.Has[Menu](entity) {
+		style := styleFor(world, entity, &skin.Menu)
 		return style.Trigger.Body.Resolve(state)
 	}
-	if _, ok := world.Get[Button](entity); ok {
+	if world.Has[Button](entity) {
 		variant, _ := world.Get[ButtonVariant](entity)
 		style := buttonStyleFor(skin, variant, world.Has[Danger](entity))
 		style = styleFor(world, entity, style)
 		return style.Body.Resolve(state)
 	}
 	return skin.TextField.Body.Resolve(state)
+}
+
+func selectorItemSurface(world *ecs.World, owner ecs.Entity, skin *Skin, state ControlState) SurfaceStyle {
+	style := styleFor(world, owner, &skin.Selector)
+	if authored := htmlSelectStyleFor(world, owner); authored != nil {
+		palette := authored.Item
+		palette.Normal = style.Item.Normal
+		return palette.Resolve(state)
+	}
+	return style.Item.Resolve(state)
 }
 
 func syncNumberInputs(world *ecs.World) {
@@ -895,7 +936,7 @@ func syncNumberInputs(world *ecs.World) {
 }
 
 // The border is a separate high-stack layer so step buttons cannot cover it.
-func syncNumberInputBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncNumberInputBorder(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	control, ok := controlViewFor(world, owner)
 	if !ok {
 		applySurface(world, entity, 0, 0, SurfaceStyle{})
@@ -919,70 +960,70 @@ func syncText(world *ecs.World, theme Theme) map[ecs.Entity]float32 {
 
 func syncTextContent(world *ecs.World, theme Theme) {
 	selectorLabels := collectSelectorLabels(world)
-	for entity, access := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
-		if !func(entity ecs.Entity, visualAccess ecs.ComponentAccess[Relation[scene.Text2D]], textAccess ecs.ComponentAccess[scene.Text2D]) bool {
-			visual := visualAccess.Ref()
-			next := *textAccess.Ref()
-			text := &next
-			defer func() {
-				previous := textAccess.Ref()
-				if previous.Value != next.Value || previous.Font != next.Font || previous.FontSize != next.FontSize || previous.DPI != next.DPI || previous.Color != next.Color || previous.WrapMode != next.WrapMode || previous.WrapWidth != next.WrapWidth {
-					*textAccess.Mut() = next
-				}
-			}()
-			authored := world.Has[Relation[Control]](entity)
-			if !authored {
-				text.Font = theme.Font
-				text.DPI = theme.DPI
-				text.FontSize = theme.FontSize
-				text.Color = theme.Text
-				if world.Has[Danger](visual.Owner) {
-					text.Color = graphics.White
-				}
+	for entity, row := range world.Query2[Relation[scene.Text2D], scene.Text2D]().All {
+		owner := row.A.Ref().Owner
+		next := row.B.Get()
+		authored := world.Has[Relation[Control]](entity)
+		if !authored {
+			next.Font = theme.Font
+			next.DPI = theme.DPI
+			next.FontSize = theme.FontSize
+			next.Color = theme.Text
+			if world.Has[Danger](owner) {
+				next.Color = graphics.White
 			}
-			switch {
-			case world.Has[Part[TitlePart]](entity):
-				if panel := world.GetRef[Panel](visual.Owner); panel != nil {
-					text.Value = panel.Title
-				}
-			case world.Has[Part[IconPart]](entity):
-				if !authored {
-					syncIconText(world, visual.Owner, text, theme)
-				}
-			case world.Has[Part[LabelPart]](entity):
-				if !authored {
-					syncLabelText(world, visual.Owner, text, theme, selectorLabels)
-				} else if selector := world.GetRef[Selector](visual.Owner); selector != nil {
-					text.Value = selectorCurrentLabel(world, selectorLabels, visual.Owner, selector)
-				}
-			case world.Has[Part[ValuePart]](entity):
-				if authored {
-					syncAuthoredValueText(world, visual.Owner, text)
-				} else {
-					syncValueText(world, visual.Owner, text, theme)
-				}
-				syncTextareaTextLayout(world, entity, visual.Owner, text)
-			case world.Has[Part[ItemPart]](entity):
-				if !authored {
-					syncItemText(world, entity, visual.Owner, text, theme)
-				} else if item := world.GetRef[SelectorItem](visual.Owner); item != nil {
-					if color, ok := html.ControlTextColor(world, item.Owner); ok {
-						text.Color = color
-						if state, exists := controlViewFor(world, visual.Owner); exists {
-							if authored := htmlSelectStyleFor(world, item.Owner); authored != nil {
-								palette := authored.Text
-								palette.Normal = color
-								text.Color = palette.Resolve(controlState(&state, false))
-							} else if (state.Selected || state.Hovered || state.Pressed) && !state.Disabled {
-								text.Color = graphics.White
-							}
-						}
+		}
+		switch {
+		case world.Has[Part[TitlePart]](entity):
+			if panel := world.GetRef[Panel](owner); panel != nil {
+				next.Value = panel.Title
+			}
+		case authored:
+			syncAuthoredTextContent(world, entity, owner, &next, selectorLabels)
+		case world.Has[Part[IconPart]](entity):
+			syncIconText(world, owner, &next, theme)
+		case world.Has[Part[LabelPart]](entity):
+			syncLabelText(world, owner, &next, theme, selectorLabels)
+		case world.Has[Part[ValuePart]](entity):
+			syncValueText(world, owner, &next, theme)
+			syncTextareaTextLayout(world, entity, owner, &next)
+		case world.Has[Part[ItemPart]](entity):
+			syncItemText(world, entity, owner, &next, theme)
+		}
+		commitControlText(row.B, next)
+	}
+}
+
+func commitControlText(access ecs.ComponentAccess[scene.Text2D], next scene.Text2D) {
+	previous := access.Ref()
+	if previous.Value != next.Value || previous.Font != next.Font || previous.FontSize != next.FontSize || previous.DPI != next.DPI || previous.Color != next.Color || previous.WrapMode != next.WrapMode || previous.WrapWidth != next.WrapWidth {
+		*access.Mut() = next
+	}
+}
+
+func syncAuthoredTextContent(world *ecs.World, entity, owner ecs.Entity, text *scene.Text2D, selectorLabels map[ecs.Entity]string) {
+	switch {
+	case world.Has[Part[LabelPart]](entity):
+		if selector := world.GetRef[Selector](owner); selector != nil {
+			text.Value = selectorCurrentLabel(world, selectorLabels, owner, selector)
+		}
+	case world.Has[Part[ValuePart]](entity):
+		syncAuthoredValueText(world, owner, text)
+		syncTextareaTextLayout(world, entity, owner, text)
+	case world.Has[Part[ItemPart]](entity):
+		if item := world.GetRef[SelectorItem](owner); item != nil {
+			if color, ok := html.ControlTextColor(world, item.Owner); ok {
+				text.Color = color
+				if state, exists := controlViewFor(world, owner); exists {
+					if authored := htmlSelectStyleFor(world, item.Owner); authored != nil {
+						palette := authored.Text
+						palette.Normal = color
+						text.Color = palette.Resolve(controlState(&state, false))
+					} else if (state.Selected || state.Hovered || state.Pressed) && !state.Disabled {
+						text.Color = graphics.White
 					}
 				}
 			}
-			return true
-		}(entity, access.A, access.B) {
-			break
 		}
 	}
 }
@@ -1098,19 +1139,7 @@ func layoutTextVisuals(world *ecs.World, iconWidths, labelWidths map[ecs.Entity]
 			nextTransform := *transformAccess.Ref()
 			transform := &nextTransform
 			defer func() { ecs.CommitComponent(transformAccess, nextTransform) }()
-			if world.Has[TextField](visual.Owner) && !world.Has[Textarea](visual.Owner) {
-				if text := world.GetRef[scene.Text2D](entity); text != nil {
-					syncSingleLineTextVisual(world, entity, visual.Owner, text, transform, control)
-				} else {
-					centerTextVisual(world, entity, transform, control.Height)
-				}
-				return true
-			}
-			if textarea, ok := world.Get[Textarea](visual.Owner); ok && world.Has[Part[ValuePart]](entity) {
-				if text := world.GetRef[scene.Text2D](entity); text != nil {
-					syncTextareaVisual(world, entity, visual.Owner, &textarea, text, transform, control)
-					world.SetIfChanged(visual.Owner, textarea)
-				}
+			if layoutFieldText(world, entity, visual.Owner, transform, control) {
 				return true
 			}
 			if world.Has[Button](visual.Owner) {
@@ -1182,6 +1211,25 @@ func layoutTextVisuals(world *ecs.World, iconWidths, labelWidths map[ecs.Entity]
 			break
 		}
 	}
+}
+
+func layoutFieldText(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, control controlView) bool {
+	if world.Has[TextField](owner) && !world.Has[Textarea](owner) {
+		if text := world.GetRef[scene.Text2D](entity); text != nil {
+			syncSingleLineTextVisual(world, entity, owner, text, transform, control)
+		} else {
+			centerTextVisual(world, entity, transform, control.Height)
+		}
+		return true
+	}
+	if textarea, ok := world.Get[Textarea](owner); ok && world.Has[Part[ValuePart]](entity) {
+		if text := world.GetRef[scene.Text2D](entity); text != nil {
+			syncTextareaVisual(world, entity, owner, &textarea, text, transform, control)
+			world.SetIfChanged(owner, textarea)
+		}
+		return true
+	}
+	return false
 }
 
 func syncSingleLineTextVisual(world *ecs.World, visualEntity, owner ecs.Entity, text *scene.Text2D, transform *scene.UITransform, control controlView) {
@@ -1549,10 +1597,10 @@ func syncItemText(world *ecs.World, entity, owner ecs.Entity, text *scene.Text2D
 	}
 }
 
-func syncMenuIndicators(world *ecs.World, skin Skin) {
+func syncMenuIndicators(world *ecs.World, skin *Skin) {
 	for entity, _ := range world.Query[Menu]().All {
 		if icon := world.GetRef[IconContent](entity); icon != nil {
-			indicator := styleFor(world, entity, skin.Menu).Indicator
+			indicator := styleFor(world, entity, &skin.Menu).Indicator
 			if icon.Value != indicator {
 				mutable := world.GetMut[IconContent](entity)
 				mutable.Value = indicator
@@ -1586,7 +1634,7 @@ func ensureButtonIcons(world *ecs.World, theme Theme) {
 			iconTheme.DPI = sizeOr(font.DPI, theme.DPI)
 		}
 		spawnButtonIcon(world, entity, world.GetRef[IconContent](entity).Value, control.Height, iconTheme)
-		world.Remove[pendingButtonIcon](entity)
+		world.Discard(entity, ecs.Type[pendingButtonIcon]())
 	}
 	versions[1] = world.ComponentStructureVersion[pendingButtonIcon]()
 	*state = versions
@@ -1785,7 +1833,7 @@ func syncSelectorItems(world *ecs.World, metrics syncMetrics) {
 	}
 }
 
-func syncTabs(world *ecs.World, skin Skin) {
+func syncTabs(world *ecs.World, skin *Skin) {
 	hasTabs := false
 	for range world.Query2[Tab, scene.Size2D]().All {
 		hasTabs = true
@@ -1826,7 +1874,7 @@ func syncTabs(world *ecs.World, skin Skin) {
 
 		tab := tabAccess.Ref()
 		ecs.CommitComponent(sizeAccess, scene.Size2D{Width: tab.Width, Height: tab.Height})
-		style := styleFor(world, entity, skin.Tab)
+		style := styleFor(world, entity, &skin.Tab)
 		frame := style.Frame
 		frame.Border = scene.Shape2D{}
 		applySurface(world, entity, tab.Width, tab.Height, frame)
@@ -1889,7 +1937,7 @@ func tabChildren(parentChildren []tabParentChild, childRanges map[ecs.Entity]tab
 	return parentChildren[childRange.start:childRange.end]
 }
 
-func syncButtonGroups(world *ecs.World, skin Skin) {
+func syncButtonGroups(world *ecs.World, skin *Skin) {
 	positions := world.FrameScratchMap[buttonGroupPositionsScratch, buttonGroupPositionKey, float32]()
 	for groupEntity, access := range world.Query[ButtonGroup]().All {
 		groupAccess := access
@@ -1919,7 +1967,7 @@ func syncButtonGroups(world *ecs.World, skin Skin) {
 		if group.Width != x {
 			groupAccess.Mut().Width = x
 		}
-		frame := styleFor(world, groupEntity, skin.ButtonGroup).Frame
+		frame := styleFor(world, groupEntity, &skin.ButtonGroup).Frame
 		frame.Border = scene.Shape2D{}
 		applySurface(world, groupEntity, group.Width, group.Height, frame)
 	}
@@ -1948,7 +1996,7 @@ func syncButtonGroups(world *ecs.World, skin Skin) {
 			size.Width = divider.Width
 			size.Height = group.Height - inset*2
 			setUIStackIndex(world, entity, group.StackIndex+2)
-			surface := styleFor(world, divider.Group, skin.ButtonGroup).Divider
+			surface := styleFor(world, divider.Group, &skin.ButtonGroup).Divider
 			if divider.CustomColor {
 				surface = ColorSurface(divider.Color)
 			}
@@ -1960,7 +2008,7 @@ func syncButtonGroups(world *ecs.World, skin Skin) {
 	}
 }
 
-func syncJoinedEdges(world *ecs.World, skin Skin) {
+func syncJoinedEdges(world *ecs.World, skin *Skin) {
 	for entity, access := range world.Query4[joinedEdge, scene.UITransform, scene.Size2D, scene.Visibility]().All {
 		if !func(entity ecs.Entity, edgeAccess ecs.ComponentAccess[joinedEdge], transformAccess ecs.ComponentAccess[scene.UITransform], sizeAccess ecs.ComponentAccess[scene.Size2D], visibilityAccess ecs.ComponentAccess[scene.Visibility]) bool {
 			edge := edgeAccess.Ref()
@@ -2003,11 +2051,11 @@ func syncJoinedEdges(world *ecs.World, skin Skin) {
 				}
 			}
 			if _, ok := world.Get[Button](edge.Owner); ok {
-				var style ButtonStyle
+				var style *ButtonStyle
 				if item, grouped := world.Get[buttonGroupItem](edge.Owner); grouped {
-					style = styleFor(world, item.Group, skin.ButtonGroup).Button
+					style = &styleFor(world, item.Group, &skin.ButtonGroup).Button
 				} else if world.Has[Menu](edge.Owner) {
-					style = styleFor(world, edge.Owner, skin.Menu).Trigger
+					style = &styleFor(world, edge.Owner, &skin.Menu).Trigger
 				} else {
 					variant, _ := world.Get[ButtonVariant](edge.Owner)
 					style = buttonStyleFor(skin, variant, world.Has[Danger](edge.Owner))
@@ -2023,7 +2071,7 @@ func syncJoinedEdges(world *ecs.World, skin Skin) {
 	}
 }
 
-func syncProgress(world *ecs.World, skin Skin) {
+func syncProgress(world *ecs.World, skin *Skin) {
 	for entity, access := range world.Query[Progress]().All {
 		progress := access.Get()
 
@@ -2037,7 +2085,7 @@ func syncProgress(world *ecs.World, skin Skin) {
 		if progress.Indeterminate {
 			fillWidth = widgetWidth * 0.35
 		}
-		style := styleFor(world, entity, skin.Progress)
+		style := styleFor(world, entity, &skin.Progress)
 		applySurface(world, progress.Fill, fillWidth, widgetHeight, style.Fill)
 		if progress.Thumb != 0 {
 			setVisible(world, progress.Thumb, progress.Slider && !progress.Indeterminate)
@@ -2050,12 +2098,12 @@ func syncProgress(world *ecs.World, skin Skin) {
 	}
 }
 
-func syncImageGridSurfaces(world *ecs.World, skin Skin) {
+func syncImageGridSurfaces(world *ecs.World, skin *Skin) {
 	for entity, access := range world.Query2[imageGridCell, scene.Size2D]().All {
 		cell := access.A.Ref()
 		size := access.B.Ref()
 
-		style := styleFor(world, cell.Grid, skin.ImageGrid)
+		style := styleFor(world, cell.Grid, &skin.ImageGrid)
 		applySurface(world, entity, size.Width, size.Height, style.Cell)
 	}
 }
@@ -2120,7 +2168,54 @@ func syncSurfaceElementVisibility(world *ecs.World) {
 	}
 }
 
-func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
+type controlPartSync func(*ecs.World, ecs.Entity, ecs.Entity, scene.UITransform, scene.Size2D, *Skin, syncMetrics) (scene.UITransform, bool)
+
+func syncWidgetPart(world *ecs.World, entity, owner ecs.Entity, transform scene.UITransform, size scene.Size2D, skin *Skin, metrics syncMetrics) (scene.UITransform, bool) {
+	switch {
+	case world.Has[Part[BodyPart]](entity):
+		control, ok := controlViewFor(world, owner)
+		if ok {
+			transform.Translation.X.Value, transform.Translation.Y.Value = 0, 0
+			setUIStackIndex(world, entity, control.StackIndex)
+			surface := controlSurface(world, owner, &control, skin)
+			if item := world.GetRef[TabItem](owner); item != nil {
+				if tabs := world.GetRef[Tab](item.Tabs); tabs != nil && tabs.ItemBorders {
+					surface.Border = scene.Shape2D{}
+				}
+			}
+			applySurface(world, entity, control.Width, control.Height, surface)
+		}
+	case world.Has[Part[IconPart]](entity):
+		syncIconElement(world, entity, owner, &transform, &size, metrics.labelWidths[owner])
+	case world.Has[Part[TrackPart]](entity):
+		syncCheckboxElement(world, entity, owner, false, &transform, &size, skin)
+	case world.Has[Part[KnobPart]](entity):
+		syncCheckboxElement(world, entity, owner, true, &transform, &size, skin)
+	case world.Has[Part[FrameBorderPart]](entity):
+		syncFrameBorder(world, entity, owner, &transform, &size, skin)
+	case world.Has[Part[TabItemBorderPart]](entity):
+		syncTabItemBorder(world, entity, owner, &transform, &size, skin)
+	case world.Has[Part[NumberInputBorderPart]](entity):
+		syncNumberInputBorder(world, entity, owner, &transform, &size, skin)
+	case world.Has[Part[NumberStepIconPart]](entity):
+		syncNumberInputStepIcon(world, entity, owner, &transform, &size)
+	case world.Has[Part[SelectorIconPart]](entity):
+		syncSelectorIcon(world, entity, owner, &transform, &size)
+	case world.Has[Part[MenuPanelPart]](entity):
+		syncMenuPanelElement(world, entity, owner, &transform, &size, skin, metrics.menus)
+	case world.Has[Part[ContextMenuPanelPart]](entity):
+		syncContextMenuPanelElement(world, entity, owner, &transform, &size, skin, metrics.contextMenus)
+	default:
+		return transform, false
+	}
+	return transform, true
+}
+
+func syncSurfaceElements(world *ecs.World, skin *Skin, metrics syncMetrics) {
+	syncControlSurfaces(world, skin, metrics, syncWidgetPart)
+}
+
+func syncControlSurfaces(world *ecs.World, skin *Skin, metrics syncMetrics, syncPart controlPartSync) {
 	var valueTexts map[ecs.Entity]ecs.Entity
 	var selections *textSelectionScratch
 	var scrollTexts map[ecs.Entity]textareaScrollMetrics
@@ -2130,36 +2225,11 @@ func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
 			nextTransform, nextSize := *transformAccess.Ref(), *sizeAccess.Ref()
 			transform, size := &nextTransform, &nextSize
 			defer func() { ecs.CommitComponent(transformAccess, nextTransform) }()
+			if updated, handled := syncPart(world, entity, visual.Owner, nextTransform, nextSize, skin, metrics); handled {
+				nextTransform = updated
+				return true
+			}
 			switch {
-			case world.Has[Part[BodyPart]](entity):
-				control, ok := controlViewFor(world, visual.Owner)
-				if ok {
-					transform.Translation.X.Value, transform.Translation.Y.Value = 0, 0
-					setUIStackIndex(world, entity, control.StackIndex)
-					surface := controlSurface(world, visual.Owner, &control, skin)
-					if item := world.GetRef[TabItem](visual.Owner); item != nil {
-						if tabs := world.GetRef[Tab](item.Tabs); tabs != nil && tabs.ItemBorders {
-							surface.Border = scene.Shape2D{}
-						}
-					}
-					applySurface(world, entity, control.Width, control.Height, surface)
-				}
-			case world.Has[Part[IconPart]](entity):
-				syncIconElement(world, entity, visual.Owner, transform, size, metrics.labelWidths[visual.Owner])
-			case world.Has[Part[TrackPart]](entity):
-				syncCheckboxElement(world, entity, visual.Owner, false, transform, size, skin)
-			case world.Has[Part[KnobPart]](entity):
-				syncCheckboxElement(world, entity, visual.Owner, true, transform, size, skin)
-			case world.Has[Part[FrameBorderPart]](entity):
-				syncFrameBorder(world, entity, visual.Owner, transform, size, skin)
-			case world.Has[Part[TabItemBorderPart]](entity):
-				syncTabItemBorder(world, entity, visual.Owner, transform, size, skin)
-			case world.Has[Part[NumberInputBorderPart]](entity):
-				syncNumberInputBorder(world, entity, visual.Owner, transform, size, skin)
-			case world.Has[Part[NumberStepIconPart]](entity):
-				syncNumberInputStepIcon(world, entity, visual.Owner, transform, size)
-			case world.Has[Part[SelectorIconPart]](entity):
-				syncSelectorIcon(world, entity, visual.Owner, transform, size)
 			case world.Has[Part[SelectorPanelPart]](entity):
 				syncSelectorPanel(world, entity, visual.Owner, transform, size, skin)
 			case world.Has[Part[SelectorPanelBorderPart]](entity):
@@ -2168,10 +2238,6 @@ func syncSurfaceElements(world *ecs.World, skin Skin, metrics syncMetrics) {
 				syncSelectorScrollElement(world, entity, visual.Owner, false, transform, size, skin, metrics.selectors)
 			case world.Has[Part[SelectorScrollThumbPart]](entity):
 				syncSelectorScrollElement(world, entity, visual.Owner, true, transform, size, skin, metrics.selectors)
-			case world.Has[Part[MenuPanelPart]](entity):
-				syncMenuPanelElement(world, entity, visual.Owner, transform, size, skin, metrics.menus)
-			case world.Has[Part[ContextMenuPanelPart]](entity):
-				syncContextMenuPanelElement(world, entity, visual.Owner, transform, size, skin, metrics.contextMenus)
 			case isScrollPart(world, entity):
 				if scrollTexts == nil {
 					scrollTexts = world.FrameScratchMap[textareaScrollMetrics, ecs.Entity, textareaScrollMetrics]()
@@ -2281,7 +2347,7 @@ func progressRatio(progress Progress) float32 {
 	return ratio
 }
 
-func syncCheckboxElement(world *ecs.World, entity, owner ecs.Entity, knob bool, transform *scene.UITransform, size *scene.Size2D, skin Skin) {
+func syncCheckboxElement(world *ecs.World, entity, owner ecs.Entity, knob bool, transform *scene.UITransform, size *scene.Size2D, skin *Skin) {
 	control, ok := controlViewFor(world, owner)
 	if !ok {
 		return
@@ -2292,15 +2358,16 @@ func syncCheckboxElement(world *ecs.World, entity, owner ecs.Entity, knob bool, 
 	}
 	boxSize := checkboxBoxSize(control.Height)
 	boxY := (control.Height - boxSize) * 0.5
-	style := styleFor(world, owner, skin.Checkbox)
+	style := styleFor(world, owner, &skin.Checkbox)
 	state := controlState(&control, false)
 	if !knob {
 		transform.Translation.X.Value = 0
 		transform.Translation.Y.Value = boxY
 		size.Width = boxSize
 		size.Height = boxSize
+		surface := style.Track.Resolve(toggle.Value, state)
 		setUIStackIndex(world, entity, control.StackIndex)
-		applySurface(world, entity, boxSize, boxSize, style.Track.Resolve(toggle.Value, state))
+		applySurface(world, entity, boxSize, boxSize, surface)
 	} else {
 		if !toggle.Value {
 			size.Width = 0
@@ -2316,12 +2383,13 @@ func syncCheckboxElement(world *ecs.World, entity, owner ecs.Entity, knob bool, 
 		transform.Translation.Y.Value = boxY + (boxSize-markSize)*0.5
 		size.Width = markSize
 		size.Height = markSize
+		surface := style.Mark.Resolve(state)
 		setUIStackIndex(world, entity, control.StackIndex+1)
-		applySurface(world, entity, size.Width, size.Height, style.Mark.Resolve(state))
+		applySurface(world, entity, markSize, markSize, surface)
 	}
 }
 
-func syncContextMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin, metrics map[ecs.Entity]itemMetrics) {
+func syncContextMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin, metrics map[ecs.Entity]itemMetrics) {
 	menu := world.GetRef[ContextMenu](owner)
 	if menu == nil {
 		return
@@ -2335,11 +2403,11 @@ func syncContextMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, tra
 	size.Width = menuPanelWidth(menu.Width, padding, contentWidth)
 	size.Height = height
 	setUIStackIndex(world, entity, menu.StackIndex+1)
-	style := styleFor(world, owner, skin.ContextMenu)
+	style := styleFor(world, owner, &skin.ContextMenu)
 	applySurface(world, entity, size.Width, size.Height, style.Popup)
 }
 
-func syncMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin, metrics map[ecs.Entity]itemMetrics) {
+func syncMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin, metrics map[ecs.Entity]itemMetrics) {
 	menu := world.GetRef[Menu](owner)
 	if menu == nil {
 		return
@@ -2352,11 +2420,11 @@ func syncMenuPanelElement(world *ecs.World, entity, owner ecs.Entity, transform 
 	size.Width = menuPanelWidth(menu.Width, padding, contentWidth)
 	size.Height = itemPanelHeight(metric.count, menu.ItemHeight, padding)
 	setUIStackIndex(world, entity, menu.StackIndex+1)
-	style := styleFor(world, owner, skin.Menu)
+	style := styleFor(world, owner, &skin.Menu)
 	applySurface(world, entity, size.Width, size.Height, style.Popup)
 }
 
-func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin Skin, scrollTexts map[ecs.Entity]textareaScrollMetrics) {
+func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform *scene.UITransform, size *scene.Size2D, skin *Skin, scrollTexts map[ecs.Entity]textareaScrollMetrics) {
 	if textarea := world.GetRef[Textarea](owner); textarea != nil {
 		syncTextareaScrollElement(world, entity, owner, textarea, transform, size, skin, scrollTexts)
 		return
@@ -2374,22 +2442,21 @@ func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform
 	if area.ScrollBarStackIndex != 0 {
 		barStackIndex = area.ScrollBarStackIndex
 	}
-	style := styleFor(world, owner, skin.Scroll)
+	style := styleFor(world, owner, &skin.Scroll)
+	var surface SurfaceStyle
 	switch {
 	case world.Has[Part[ScrollTrackHorizontalPart]](entity):
 		transform.Translation.X.Value = 0
 		transform.Translation.Y.Value = max(area.Height-barSize, 0)
 		size.Width = visibleLength(metrics.HorizontalVisible, metrics.ViewportWidth)
 		size.Height = visibleLength(metrics.HorizontalVisible, barSize)
-		setUIStackIndex(world, entity, barStackIndex)
-		applySurface(world, entity, size.Width, size.Height, style.Track)
+		surface = style.Track
 	case world.Has[Part[ScrollTrackVerticalPart]](entity):
 		transform.Translation.X.Value = max(area.Width-barSize, 0)
 		transform.Translation.Y.Value = 0
 		size.Width = visibleLength(metrics.VerticalVisible, barSize)
 		size.Height = visibleLength(metrics.VerticalVisible, metrics.ViewportHeight)
-		setUIStackIndex(world, entity, barStackIndex)
-		applySurface(world, entity, size.Width, size.Height, style.Track)
+		surface = style.Track
 	case world.Has[Part[ScrollThumbHorizontalPart]](entity):
 		thumbHeight := thumbBarSize
 		if area.HoverHorizontal || area.DraggingHorizontal {
@@ -2400,9 +2467,9 @@ func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform
 		transform.Translation.Y.Value = max(area.Height-barSize, 0) + (barSize-thumbHeight)*0.5
 		size.Width = visibleLength(metrics.HorizontalVisible, thumbWidth)
 		size.Height = visibleLength(metrics.HorizontalVisible, thumbHeight)
-		setUIStackIndex(world, entity, barStackIndex+1)
+		barStackIndex++
 		state := ControlState{Hovered: area.HoverHorizontal || area.DraggingHorizontal, Pressed: area.DraggingHorizontal}
-		applySurface(world, entity, size.Width, size.Height, style.Thumb.Resolve(state))
+		surface = style.Thumb.Resolve(state)
 	case world.Has[Part[ScrollThumbVerticalPart]](entity):
 		thumbWidth := thumbBarSize
 		if area.HoverVertical || area.DraggingVertical {
@@ -2413,10 +2480,15 @@ func syncScrollAreaElement(world *ecs.World, entity, owner ecs.Entity, transform
 		transform.Translation.Y.Value = scrollThumbOffset(metrics.ViewportHeight, thumbHeight, offset.Y(), metrics.MaxScrollY)
 		size.Width = visibleLength(metrics.VerticalVisible, thumbWidth)
 		size.Height = visibleLength(metrics.VerticalVisible, thumbHeight)
-		setUIStackIndex(world, entity, barStackIndex+1)
+		barStackIndex++
 		state := ControlState{Hovered: area.HoverVertical || area.DraggingVertical, Pressed: area.DraggingVertical}
-		applySurface(world, entity, size.Width, size.Height, style.Thumb.Resolve(state))
+		surface = style.Thumb.Resolve(state)
+	default:
+		return
 	}
+	width, height := size.Width, size.Height
+	setUIStackIndex(world, entity, barStackIndex)
+	applySurface(world, entity, width, height, surface)
 }
 
 type textareaScrollMetrics struct {
@@ -2442,7 +2514,7 @@ func measureTextareaScroll(world *ecs.World, owner ecs.Entity) textareaScrollMet
 	return metrics
 }
 
-func syncTextareaScrollElement(world *ecs.World, entity, owner ecs.Entity, textarea *Textarea, transform *scene.UITransform, size *scene.Size2D, skin Skin, scrollTexts map[ecs.Entity]textareaScrollMetrics) {
+func syncTextareaScrollElement(world *ecs.World, entity, owner ecs.Entity, textarea *Textarea, transform *scene.UITransform, size *scene.Size2D, skin *Skin, scrollTexts map[ecs.Entity]textareaScrollMetrics) {
 	metrics, exists := scrollTexts[owner]
 	if !exists {
 		metrics = measureTextareaScroll(world, owner)
@@ -2459,12 +2531,12 @@ func syncTextareaScrollElement(world *ecs.World, entity, owner ecs.Entity, texta
 	horizontal, vertical := metrics.horizontal, metrics.vertical
 	barSize := metrics.barSize
 	trackWidth, trackHeight := metrics.trackWidth, metrics.trackHeight
-	style := styleFor(world, owner, skin.Scroll)
 	barStackIndex := control.StackIndex + 3
 	if world.Has[Part[ScrollThumbHorizontalPart]](entity) || world.Has[Part[ScrollThumbVerticalPart]](entity) {
 		barStackIndex++
 	}
 	setUIStackIndex(world, entity, barStackIndex)
+	style := styleFor(world, owner, &skin.Scroll)
 	switch {
 	case world.Has[Part[ScrollTrackHorizontalPart]](entity):
 		transform.Translation.X.Value = trackX

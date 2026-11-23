@@ -173,7 +173,7 @@ func assertChangedRowsMatchTicks(t *testing.T, world *World, window *SystemConte
 				continue
 			}
 			for row, entity := range archetype.entities {
-				if tickInRange(position.ticks(kind)[row], window.LastRun(), window.ThisRun()) && tickInRange(velocity.ticks(kind)[row], window.LastRun(), window.ThisRun()) {
+				if tickInRange(position.state.ticks(kind)[row], window.LastRun(), window.ThisRun()) && tickInRange(velocity.state.ticks(kind)[row], window.LastRun(), window.ThisRun()) {
 					expected[entity] = true
 				}
 			}

@@ -17,7 +17,7 @@ func TestCompressWasmBrotliReplacesRawArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	artifact, err := compressWasmBrotli(sourcePath)
+	artifact, err := compressWasmBrotli(sourcePath, false)
 	if err != nil {
 		t.Fatalf("compress WASM artifact: %v", err)
 	}

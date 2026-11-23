@@ -1,5 +1,7 @@
 package ecs
 
+import "reflect"
+
 // ComponentBinding resolves a component type once for repeated access in one world.
 // It retains no column pointers and survives entity migrations.
 type ComponentBinding[T any] struct {
@@ -8,7 +10,7 @@ type ComponentBinding[T any] struct {
 }
 
 func (w *World) BindComponent[T any]() ComponentBinding[T] {
-	return ComponentBinding[T]{world: w, id: w.componentIDFor[T]()}
+	return ComponentBinding[T]{world: w, id: w.identifyComponent(reflect.TypeFor[T]())}
 }
 
 // EntityRow borrows one entity's location until the next structural mutation.
@@ -46,7 +48,7 @@ func (b ComponentBinding[T]) Access(row EntityRow) ComponentAccess[T] {
 	if column == nil {
 		return ComponentAccess[T]{}
 	}
-	return ComponentAccess[T]{value: &column.values[row.row], state: &column.columnState, rowTick: uint64(row.row)}
+	return ComponentAccess[T]{value: &column.values[row.row], state: &column.state, rowTick: uint64(row.row)}
 }
 
 func (b ComponentBinding[T]) Get(row EntityRow) (value T, ok bool) {

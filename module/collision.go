@@ -28,19 +28,22 @@ type collisionEmitter[T any] struct {
 	element string
 }
 
-func (r *Runtime) bindCollision(c *Context, entity ecs.Entity, element, port string, threeD bool) error {
-	if threeD {
-		emit, err := c.BindEmitter[Collision3D](port)
-		if err != nil {
-			return err
-		}
-		return r.world.Insert(entity, collisionEmitter[Collision3D]{emit, element})
-	}
-	emit, err := c.BindEmitter[Collision2D](port)
+type collisionBridge struct {
+	bind    func(*Context, ecs.Entity, string, string) error
+	publish func(*Runtime) error
+}
+
+var (
+	collisionBridge2D = collisionBridge{bindCollision[Collision2D], (*Runtime).publishCollisions2D}
+	collisionBridge3D = collisionBridge{bindCollision[Collision3D], (*Runtime).publishCollisions3D}
+)
+
+func bindCollision[T any](c *Context, entity ecs.Entity, element, port string) error {
+	emit, err := c.BindEmitter[T](port)
 	if err != nil {
 		return err
 	}
-	return r.world.Insert(entity, collisionEmitter[Collision2D]{emit, element})
+	return c.runtime.world.Insert(entity, collisionEmitter[T]{emit, element})
 }
 
 // PublishCollisions runs after physics. It queues the next module batch, so a
@@ -53,6 +56,17 @@ func (r *Runtime) PublishCollisions() error {
 		return ErrBusy
 	}
 	var result error
+	if bridge := r.content.collision2D; bridge != nil {
+		result = bridge.publish(r)
+	}
+	if bridge := r.content.collision3D; bridge != nil {
+		result = joinError(result, bridge.publish(r))
+	}
+	return result
+}
+
+func (r *Runtime) publishCollisions2D() error {
+	var result error
 	for event := range r.collisions2D.All(r.world) {
 		binding := r.world.GetRef[collisionEmitter[Collision2D]](event.Entity)
 		if binding == nil || !collisionSourceActive(binding.emit.context) {
@@ -60,6 +74,11 @@ func (r *Runtime) PublishCollisions() error {
 		}
 		result = joinError(result, binding.emit.Emit(Collision2D{Element: binding.element, Phase: event.Phase, Type: event.CollisionType, OtherType: event.OtherType, Normal: [2]float32{float32(event.Normal.X), float32(event.Normal.Y)}, Point: [2]float32{float32(event.Point.X), float32(event.Point.Y)}, Penetration: float32(event.Penetration)}))
 	}
+	return result
+}
+
+func (r *Runtime) publishCollisions3D() error {
+	var result error
 	for event := range r.collisions3D.All(r.world) {
 		binding := r.world.GetRef[collisionEmitter[Collision3D]](event.Entity)
 		if binding == nil || !collisionSourceActive(binding.emit.context) {

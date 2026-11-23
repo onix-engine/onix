@@ -10,6 +10,9 @@ import (
 
 func TestParseHTML5TreeConstruction(t *testing.T) {
 	for _, test := range []struct{ source, want string }{
+		{`<button><p>one<button>two`, `(button)(p)"one"(/)(/)(button)"two"(/)`},
+		{`<p>outer<button>inner<hr>tail</button>after<hr>`, `(p)"outer"(button)"inner"(hr)(/)"tail"(/)"after"(/)(hr)(/)`},
+		{`<template><form><p>x</form>y</template>`, `(template)(form)(p)"x"(/)(/)"y"(/)`},
 		{`<svg><foreignObject><template><div>inside</div></template><p>after`, `(svg)(foreignObject)(template)(div)"inside"(/)(/)(p)"after"(/)(/)(/)`},
 		{"<p>one<p>two<table><tr><td>A<td>B", "(p)\"one\"(/)(p)\"two\"(/)(table)(tbody)(tr)(td)\"A\"(/)(td)\"B\"(/)(/)(/)(/)"},
 		{"<b class=x><p>bold<i>italic</b>after</i>", "(b class=\"x\")(/)(p)(b class=\"x\")\"bold\"(i)\"italic\"(/)(/)(i)\"after\"(/)(/)"},
@@ -28,6 +31,10 @@ func TestParseHTML5TreeConstruction(t *testing.T) {
 		{"<svg><![CDATA[A < B &amp; C]]><text>tail</text></svg>", "(svg)\"A < B & C\"(text)\"tail\"(/)(/)"},
 		{"<script><!--<script></script>--></script><p>after", "(script)\"<!--<script></script>-->\"(/)(p)\"after\"(/)"},
 		{"<style>a>b { content: \"&amp;\" }</style><p>after", "(style)\"a>b { content: \\\"&amp;\\\" }\"(/)(p)\"after\"(/)"},
+		{`<StYlE>a</style-x>b<</sTyLe ><p>tail`, `(style)"a</style-x>b<"(/)(p)"tail"(/)`},
+		{`<textarea>x&amp;</text`, `(textarea)"x&</text"(/)`},
+		{`<svg><![CDATA[x]]]]><path/></svg>`, `(svg)"x]]"(path)(/)(/)`},
+		{`<!doctype html><head><noscript><b>x</b></noscript></head><body><noscript><i>y</i></noscript>`, `(html)(head)(noscript)"<b>x</b>"(/)(/)(body)(noscript)"<i>y</i>"(/)(/)(/)`},
 		{"<textarea>\nA &amp; B <b>literal</b></textarea>", "(textarea)\"A & B <b>literal</b>\"(/)"},
 		{"<pre><!--comment-->\nA</pre>", "(pre)\"\\nA\"(/)"},
 		{"<pre>\nA\nB</pre>", "(pre)\"A\\nB\"(/)"},

@@ -52,18 +52,7 @@ func layoutTableContainer(box *Box, usedWidth, usedHeight style.Value, containin
 	scratch.rows = scratch.rows[:0]
 	clear(scratch.cells)
 	scratch.cells = scratch.cells[:0]
-	for _, child := range box.Children {
-		if child.Style.Display.Keyword == "table-row" {
-			scratch.rows = append(scratch.rows, tableRow{box: child})
-		} else if isTableRowGroup(child) {
-			for _, row := range child.Children {
-				if row.Style.Display.Keyword == "table-row" {
-					scratch.rows = append(scratch.rows, tableRow{box: row})
-				}
-			}
-		}
-	}
-	slices.SortStableFunc(scratch.rows, func(left, right tableRow) int { return tableRowOrder(left.box) - tableRowOrder(right.box) })
+	scratch.rows = collectTableRows(scratch.rows, box.Children)
 	groupEnd := len(scratch.rows)
 	for index := len(scratch.rows) - 1; index >= 0; index-- {
 		if index == len(scratch.rows)-1 || scratch.rows[index].box.Parent != scratch.rows[index+1].box.Parent {
@@ -408,16 +397,54 @@ func isTableRowGroup(box *Box) bool {
 	return false
 }
 
-func tableRowOrder(box *Box) int {
-	if box.Parent != nil {
-		switch box.Parent.Style.Display.Keyword {
-		case "table-header-group":
-			return -1
-		case "table-footer-group":
-			return 1
+// Rows in each section retain DOM order. Tables already in header/body/footer
+// order need just one pass, including tables consisting entirely of direct rows.
+func collectTableRows(rows []tableRow, children []*Box) []tableRow {
+	start, previous := len(rows), 0
+	for _, child := range children {
+		section := tableSectionOrder(child.Style.Display.Keyword)
+		if section < 0 {
+			continue
+		}
+		if section < previous {
+			rows = rows[:start]
+			for order := range 3 {
+				for _, child := range children {
+					if tableSectionOrder(child.Style.Display.Keyword) == order {
+						rows = appendTableRows(rows, child)
+					}
+				}
+			}
+			return rows
+		}
+		rows = appendTableRows(rows, child)
+		previous = section
+	}
+	return rows
+}
+
+func tableSectionOrder(display string) int {
+	switch display {
+	case "table-header-group":
+		return 0
+	case "table-row", "table-row-group":
+		return 1
+	case "table-footer-group":
+		return 2
+	}
+	return -1
+}
+
+func appendTableRows(rows []tableRow, child *Box) []tableRow {
+	if child.Style.Display.Keyword == "table-row" {
+		return append(rows, tableRow{box: child})
+	}
+	for _, row := range child.Children {
+		if row.Style.Display.Keyword == "table-row" {
+			rows = append(rows, tableRow{box: row})
 		}
 	}
-	return 0
+	return rows
 }
 
 func tableSpan(cell *Box, name string, limit int) int {

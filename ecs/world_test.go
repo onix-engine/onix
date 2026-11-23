@@ -236,7 +236,7 @@ func TestReadReferencesDoNotMarkComponentsChanged(t *testing.T) {
 	entity := spawner.Spawn(testPosition{X: 9})
 	_, meta, _ := world.entityMeta(entity)
 	column := world.archetypes[meta.archetypeID].componentColumn[testPosition](world.registerComponent[testPosition]())
-	before := column.changed[int(meta.row)]
+	before := column.state.changed[int(meta.row)]
 
 	for _, access := range world.Query[testPosition]().All {
 		position := access.Ref()
@@ -248,7 +248,7 @@ func TestReadReferencesDoNotMarkComponentsChanged(t *testing.T) {
 	if ok := world.GetRef[testPosition](entity); ok == nil {
 		t.Fatal("expected entity read reference")
 	}
-	if after := column.changed[int(meta.row)]; after != before {
+	if after := column.state.changed[int(meta.row)]; after != before {
 		t.Fatalf("read reference changed tick: before=%d after=%d", before, after)
 	}
 }
@@ -903,7 +903,7 @@ func TestQueryAccessMarksOnlyRequestedMutableComponents(t *testing.T) {
 	velocityID := world.componentTypes[reflect.TypeFor[testVelocity]()]
 	positionColumn := archetype.componentColumn[testPosition](positionID)
 	velocityColumn := archetype.componentColumn[testVelocity](velocityID)
-	positionTick, velocityTick := positionColumn.changed[int(meta.row)], velocityColumn.changed[int(meta.row)]
+	positionTick, velocityTick := positionColumn.state.changed[int(meta.row)], velocityColumn.state.changed[int(meta.row)]
 
 	for _, access := range world.Query2[testPosition, testVelocity]().All {
 		position := access.A
@@ -911,10 +911,10 @@ func TestQueryAccessMarksOnlyRequestedMutableComponents(t *testing.T) {
 
 		position.Mut().X += velocity.Ref().X
 	}
-	if positionColumn.changed[int(meta.row)] == positionTick {
+	if positionColumn.state.changed[int(meta.row)] == positionTick {
 		t.Fatal("mutable access did not mark position changed")
 	}
-	if velocityColumn.changed[int(meta.row)] != velocityTick {
+	if velocityColumn.state.changed[int(meta.row)] != velocityTick {
 		t.Fatal("read access marked velocity changed")
 	}
 }

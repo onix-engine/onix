@@ -3,6 +3,8 @@
 package render
 
 /*
+#cgo android,onix_release CFLAGS: -fvisibility=hidden
+#cgo ios,onix_release CFLAGS: -g0
 #include "native_draw.h"
 */
 import "C"

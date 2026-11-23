@@ -236,11 +236,18 @@ func (r *Resources) AppendModContentSpine(b *ecs.Bundle, c ModComponents) error 
 func (r *Resources) AppendModContentSpatial(b *ecs.Bundle, c ModComponents) error {
 	var model modelResource
 	if m := c.Model; m != nil {
-		if r.modModels == nil {
-			r.modModels = newResourceCache[string, modelResource](0)
+		if c.Shader != nil {
+			if err := appendModShader(r, b, c.Shader, (*modShaderResource).meshProgram); err != nil {
+				return err
+			}
+		}
+		models, ok := r.modModels.(*resourceCache[string, modelResource])
+		if !ok {
+			models = newResourceCache[string, modelResource](0)
+			r.modModels = models
 		}
 		var err error
-		model, err = r.modModels.load(m.ID, func() (modelResource, error) { return r.loadModModel(*m) }, modelResource.dispose)
+		model, err = models.load(m.ID, func() (modelResource, error) { return r.loadModModel(*m) }, modelResource.dispose)
 		if err != nil {
 			return err
 		}

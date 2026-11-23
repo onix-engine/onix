@@ -91,6 +91,51 @@ func TestQueryTablesTrackOccupancyAndOrder(t *testing.T) {
 	}
 }
 
+func TestChangedEntitiesMatchesTypedQueryAcrossScopes(t *testing.T) {
+	world := NewWorld()
+	spawn := world.NewSpawner1[int]()
+	a, unchanged, b := spawn.Spawn(1), spawn.Spawn(2), spawn.Spawn(3)
+	spawnPair := world.NewSpawner2[int, bool]()
+	c := spawnPair.Spawn(4, true)
+	last := world.ChangeTick()
+	for _, entity := range []Entity{c, b, a} {
+		*world.GetMut[int](entity) += 10
+	}
+	window := world.ChangesSince(last)
+	query := window.ChangedEntities(Type[int]())
+	var scope QueryScope
+	scope.Reset([]Entity{c, unchanged, b})
+	world.SetQueryScope(&scope)
+
+	for _, unscoped := range []bool{false, true} {
+		ids := query
+		options := []QueryOption{window.Changed[int]()}
+		want := []Entity{b, c}
+		if unscoped {
+			ids = ids.Unscoped()
+			options = append(options, Unscoped())
+			want = []Entity{a, b, c}
+		}
+		var typed []Entity
+		for entity := range world.Query[int](options...).All {
+			typed = append(typed, entity)
+		}
+		if got := slices.Collect(ids.All); !slices.Equal(got, typed) || !slices.Equal(got, want) {
+			t.Fatalf("unscoped=%v: IDs %v, typed query %v, want %v", unscoped, got, typed, want)
+		}
+	}
+	for range query.All {
+		break
+	}
+	if !world.Despawn(unchanged) {
+		t.Fatal("could not despawn after early exit")
+	}
+	empty := world.ChangesSince(world.ChangeTick())
+	for entity := range empty.ChangedEntities(Type[int]()).Unscoped().All {
+		t.Fatalf("empty change window yielded %v", entity)
+	}
+}
+
 func TestScopedQueriesMatchEntityOracleAcrossMutations(t *testing.T) {
 	world := NewWorld()
 	spawn := world.NewSpawner1[int]()

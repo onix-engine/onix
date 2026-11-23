@@ -118,18 +118,22 @@ func TestBundleValidatesLayoutWidgetRuntimeFeature(t *testing.T) {
 		"resources/scenes.json":            {Data: []byte(`{"entry":"main","scenes":[{"id":"main","path":"scenes/main.scene.json"}]}`)},
 		"resources/scenes/main.scene.json": {Data: []byte(`{"nodes":[{"id":"panel","coordinateSpace":"ui","layout":{}}]}`)},
 	}
-	bundle, err := LoadConfiguredWith[ResourceFeature](source, ".", EngineConfig{
-		Features:  []RuntimeFeatureID{FeatureRender2D},
-		Resources: []ResourceID{ResourceImages, ResourceFonts},
-	})
+	config := EngineConfig{Features: []RuntimeFeatureID{FeatureRender2D, FeatureInput2D, FeatureUIHTML}}
+	bundle, err := LoadConfiguredWith[ResourceFeature](source, ".", config)
 	if err != nil {
 		t.Fatalf("load project: %v", err)
 	}
 	defer bundle.Dispose()
 	if err := bundle.ValidateSceneFeatures(bundle.EntrySceneID(), func(id RuntimeFeatureID) bool {
 		return id == FeatureRender2D
-	}); err == nil || !strings.Contains(err.Error(), `requires runtime feature "ui-widgets"`) {
-		t.Fatalf("missing UI Widgets system was accepted: %v", err)
+	}); err == nil || !strings.Contains(err.Error(), "requires a UI runtime for layout") {
+		t.Fatalf("missing layout runtime was accepted: %v", err)
+	}
+	if err := bundle.ValidateSceneFeatures(bundle.EntrySceneID(), config.HasFeature); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bundle.InstantiateEntryScene(ecs.NewWorld()); err != nil {
+		t.Fatalf("load layout with HTML enabled: %v", err)
 	}
 }
 

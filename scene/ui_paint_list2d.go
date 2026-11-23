@@ -76,6 +76,16 @@ func (list *UIPaintList2D) Capacity() (boxes, free, glyphs int) {
 
 func (list *UIPaintList2D) Len() int { return len(list.boxes) - len(list.free) }
 
+// Boxes iterates live paint slots. The layout glyph slices are borrowed for the visit.
+func (list *UIPaintList2D) Boxes(yield func(UIBoxPaint2D) bool) {
+	for i := range list.boxes {
+		box := &list.boxes[i].box
+		if (box.Shape.Kind != 0 || box.Text.Font != nil) && !yield(*box) {
+			return
+		}
+	}
+}
+
 func (list *UIPaintList2D) Reset() {
 	list.invalidateSlots()
 	clear(list.boxes)

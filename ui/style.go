@@ -56,28 +56,21 @@ func (style StateStyle[T]) WithDisabled(value T) StateStyle[T] {
 }
 
 func (style StateStyle[T]) Resolve(state ControlState) T {
+	var override *T
 	switch {
 	case state.Disabled:
-		if style.Disabled != nil {
-			return *style.Disabled
-		}
+		override = style.Disabled
 	case state.Pressed:
-		if style.Pressed != nil {
-			return *style.Pressed
-		}
+		override = style.Pressed
 	case state.Selected:
-		if style.Selected != nil {
-			return *style.Selected
-		}
+		override = style.Selected
 	case state.Hovered:
-		if style.Hovered != nil {
-			return *style.Hovered
-		}
+		override = style.Hovered
 	case state.Focused:
-		if style.Focused != nil {
-			return *style.Focused
-		}
-	default:
+		override = style.Focused
+	}
+	if override != nil {
+		return *override
 	}
 	return style.Normal
 }
@@ -332,87 +325,104 @@ type Skin struct {
 }
 
 type defaultSkinCache struct {
-	Skin  Skin
-	Theme Theme
+	// The cache is shared by pointer. Only Theme participates in cache lookup.
+	_       [0]func()
+	Skin    Skin
+	Theme   Theme
+	widgets bool
 }
 
 func DefaultSkin(theme Theme) Skin {
 	theme = themeWithDefaults(theme)
-	primary := interactiveSurface(theme.Primary, theme.PrimaryHover, theme.PrimaryActive, theme.SurfaceDisabled)
+	var skin Skin
+	skin.setFormDefaults(theme)
+	skin.setWidgetDefaults(theme)
+	return skin
+}
+
+func (skin *Skin) setFormDefaults(theme Theme) {
 	surface := interactiveSurface(theme.Surface, theme.SurfaceHover, theme.SurfaceActive, theme.SurfaceDisabled)
-	danger := interactiveSurface(alphaColor(theme.Danger, 0.78), alphaColor(theme.Danger, 0.9), alphaColor(theme.Danger, 0.72), theme.SurfaceDisabled)
-	transparent := interactiveSurface(graphics.ColorRGBA{}, theme.SurfaceHover, theme.SurfaceActive, theme.SurfaceDisabled)
-	selectorItem := interactiveSurface(theme.Surface, theme.PrimaryHover, theme.PrimaryActive, theme.SurfaceDisabled)
-	buttonPrimary := ButtonStyle{Body: primary, JoinedEdge: primary}
-	buttonSurface := ButtonStyle{Body: surface, JoinedEdge: surface}
-	buttonDanger := ButtonStyle{Body: danger, JoinedEdge: danger}
-	textField := TextFieldStyle{
+	skin.TextField = TextFieldStyle{
 		Body:      surface,
 		Caret:     ColorSurface(theme.Text),
 		Selection: ColorSurface(theme.Selection),
 	}
-	checkboxOff := checkboxTrackStates(theme, false)
-	checkboxOn := checkboxTrackStates(theme, true)
+	skin.Selector = SelectorStyle{
+		Body: surface,
+		Popup: ColorSurface(theme.Surface).WithBorder(
+			scene.OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, alphaColor(theme.Muted, 0.48), 0, 1),
+		),
+		Item: interactiveSurface(theme.Surface, theme.PrimaryHover, theme.PrimaryActive, theme.SurfaceDisabled),
+	}
+	skin.Scroll = ScrollStyle{
+		Track: ColorSurface(alphaColor(theme.SurfaceHover, 0.9)),
+		Thumb: NewStateStyle(ColorSurface(alphaColor(theme.Muted, 0.48))).WithHovered(ColorSurface(alphaColor(theme.Muted, 0.62))),
+	}
+}
+
+func (skin *Skin) setWidgetDefaults(theme Theme) {
+	surface := skin.TextField.Body
+	primary := interactiveSurface(theme.Primary, theme.PrimaryHover, theme.PrimaryActive, theme.SurfaceDisabled)
+	danger := interactiveSurface(alphaColor(theme.Danger, 0.78), alphaColor(theme.Danger, 0.9), alphaColor(theme.Danger, 0.72), theme.SurfaceDisabled)
+	buttonPrimary := ButtonStyle{Body: primary, JoinedEdge: primary}
+	skin.Panel = PanelStyle{Body: ColorSurface(theme.Background)}
+	skin.Button = ButtonStyles{
+		Primary: buttonPrimary,
+		Surface: ButtonStyle{Body: surface, JoinedEdge: surface},
+		Danger:  ButtonStyle{Body: danger, JoinedEdge: danger},
+	}
+	skin.ButtonGroup = ButtonGroupStyle{
+		Button:  buttonPrimary,
+		Frame:   ColorSurface(graphics.ColorRGBA{}),
+		Divider: ColorSurface(alphaColor(theme.Muted, 0.48)),
+	}
+	skin.NumberInput = NumberInputStyle{Field: skin.TextField, Step: surface}
+	skin.Menu = MenuStyle{Trigger: buttonPrimary, Popup: ColorSurface(theme.Surface), Item: surface, Indicator: TextIcon("v")}
+	skin.ContextMenu = MenuStyle{Trigger: buttonPrimary, Popup: ColorSurface(theme.Surface), Item: surface}
+
 	checkboxMark := interactiveSurface(theme.Primary, theme.PrimaryHover, theme.PrimaryActive, alphaColor(theme.Text, 0.55))
 	checkboxMark.Normal.Background = scene.CheckmarkShape2D(theme.Primary)
 	checkboxMark.Hovered.Background = scene.CheckmarkShape2D(theme.PrimaryHover)
 	checkboxMark.Pressed.Background = scene.CheckmarkShape2D(theme.PrimaryActive)
 	checkboxMark.Disabled.Background = scene.CheckmarkShape2D(alphaColor(theme.Text, 0.55))
-	tabOff := interactiveSurface(alphaColor(theme.Surface, 0.92), theme.SurfaceHover, theme.SurfaceActive, theme.SurfaceDisabled)
-	tabOn := NewStateStyle(ColorSurface(theme.Accent)).WithDisabled(ColorSurface(theme.SurfaceDisabled))
-	treeOff := interactiveSurface(graphics.ColorRGBA{}, alphaColor(theme.SurfaceHover, 0.7), alphaColor(theme.SurfaceActive, 0.85), alphaColor(theme.SurfaceDisabled, 0.85))
-	treeOn := NewStateStyle(ColorSurface(alphaColor(theme.PrimaryHover, 0.75))).WithDisabled(ColorSurface(alphaColor(theme.SurfaceDisabled, 0.85)))
-	return Skin{
-		Panel:  PanelStyle{Body: ColorSurface(theme.Background)},
-		Button: ButtonStyles{Primary: buttonPrimary, Surface: buttonSurface, Danger: buttonDanger},
-		ButtonGroup: ButtonGroupStyle{
-			Button:  buttonPrimary,
-			Frame:   ColorSurface(graphics.ColorRGBA{}),
-			Divider: ColorSurface(alphaColor(theme.Muted, 0.48)),
+	skin.Checkbox = CheckboxStyle{Track: ToggleStyle[SurfaceStyle]{Off: checkboxTrackStates(theme, false), On: checkboxTrackStates(theme, true)}, Mark: checkboxMark}
+	skin.Tab = TabStyle{
+		Frame: ColorSurface(alphaColor(theme.Background, 0.98)),
+		Item: ToggleStyle[SurfaceStyle]{
+			Off: interactiveSurface(alphaColor(theme.Surface, 0.92), theme.SurfaceHover, theme.SurfaceActive, theme.SurfaceDisabled),
+			On:  NewStateStyle(ColorSurface(theme.Accent)).WithDisabled(ColorSurface(theme.SurfaceDisabled)),
 		},
-		TextField:   textField,
-		NumberInput: NumberInputStyle{Field: textField, Step: surface},
-		Menu:        MenuStyle{Trigger: buttonPrimary, Popup: ColorSurface(theme.Surface), Item: surface, Indicator: TextIcon("v")},
-		ContextMenu: MenuStyle{Trigger: buttonPrimary, Popup: ColorSurface(theme.Surface), Item: surface},
-		Checkbox:    CheckboxStyle{Track: ToggleStyle[SurfaceStyle]{Off: checkboxOff, On: checkboxOn}, Mark: checkboxMark},
-		Selector: SelectorStyle{
-			Body: surface,
-			Popup: ColorSurface(theme.Surface).WithBorder(
-				scene.OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, alphaColor(theme.Muted, 0.48), 0, 1),
-			),
-			Item: selectorItem,
+		Panel: ColorSurface(alphaColor(theme.Surface, 0.32)),
+	}
+	skin.Progress = ProgressStyle{Track: surface, Fill: ColorSurface(theme.Accent), Thumb: NewStateStyle(ColorSurface(theme.Text))}
+	skin.VirtualJoystick = VirtualJoystickStyle{
+		Track: interactiveSurface(alphaColor(theme.Surface, 0.68), alphaColor(theme.SurfaceHover, 0.78), alphaColor(theme.SurfaceActive, 0.84), alphaColor(theme.SurfaceDisabled, 0.68)),
+		Knob:  interactiveSurface(alphaColor(theme.Primary, 0.9), theme.PrimaryHover, theme.PrimaryActive, alphaColor(theme.Muted, 0.55)),
+	}
+	skin.Tree = TreeStyle{
+		Background: ColorSurface(theme.Background),
+		Row: ToggleStyle[SurfaceStyle]{
+			Off: interactiveSurface(graphics.ColorRGBA{}, alphaColor(theme.SurfaceHover, 0.7), alphaColor(theme.SurfaceActive, 0.85), alphaColor(theme.SurfaceDisabled, 0.85)),
+			On:  NewStateStyle(ColorSurface(alphaColor(theme.PrimaryHover, 0.75))).WithDisabled(ColorSurface(alphaColor(theme.SurfaceDisabled, 0.85))),
 		},
-		Tab: TabStyle{
-			Frame: ColorSurface(alphaColor(theme.Background, 0.98)),
-			Item:  ToggleStyle[SurfaceStyle]{Off: tabOff, On: tabOn},
-			Panel: ColorSurface(alphaColor(theme.Surface, 0.32)),
-		},
-		Progress: ProgressStyle{Track: surface, Fill: ColorSurface(theme.Accent), Thumb: NewStateStyle(ColorSurface(theme.Text))},
-		VirtualJoystick: VirtualJoystickStyle{
-			Track: interactiveSurface(alphaColor(theme.Surface, 0.68), alphaColor(theme.SurfaceHover, 0.78), alphaColor(theme.SurfaceActive, 0.84), alphaColor(theme.SurfaceDisabled, 0.68)),
-			Knob:  interactiveSurface(alphaColor(theme.Primary, 0.9), theme.PrimaryHover, theme.PrimaryActive, alphaColor(theme.Muted, 0.55)),
-		},
-		Scroll: ScrollStyle{
-			Track: ColorSurface(alphaColor(theme.SurfaceHover, 0.9)),
-			Thumb: NewStateStyle(ColorSurface(alphaColor(theme.Muted, 0.48))).WithHovered(ColorSurface(alphaColor(theme.Muted, 0.62))),
-		},
-		Tree: TreeStyle{
-			Background: ColorSurface(theme.Background),
-			Row:        ToggleStyle[SurfaceStyle]{Off: treeOff, On: treeOn},
-			Collapsed:  TextIcon(">"),
-			Expanded:   TextIcon("v"),
-			Leaf:       TextIcon("-"),
-		},
-		ImageGrid: ImageGridStyle{Cell: ColorSurface(theme.Surface), Remove: transparent},
+		Collapsed: TextIcon(">"),
+		Expanded:  TextIcon("v"),
+		Leaf:      TextIcon("-"),
+	}
+	skin.ImageGrid = ImageGridStyle{
+		Cell:   ColorSurface(theme.Surface),
+		Remove: interactiveSurface(graphics.ColorRGBA{}, theme.SurfaceHover, theme.SurfaceActive, theme.SurfaceDisabled),
 	}
 }
 
 func interactiveSurface(normal, hovered, pressed, disabled graphics.ColorRGBA) StateStyle[SurfaceStyle] {
-	return NewStateStyle(ColorSurface(normal)).
-		WithHovered(ColorSurface(hovered)).
-		WithPressed(ColorSurface(pressed)).
-		WithSelected(ColorSurface(pressed)).
-		WithDisabled(ColorSurface(disabled))
+	return StateStyle[SurfaceStyle]{
+		Normal:   ColorSurface(normal),
+		Hovered:  new(ColorSurface(hovered)),
+		Pressed:  new(ColorSurface(pressed)),
+		Selected: new(ColorSurface(pressed)),
+		Disabled: new(ColorSurface(disabled)),
+	}
 }
 
 func checkboxTrackStates(theme Theme, checked bool) StateStyle[SurfaceStyle] {
@@ -426,37 +436,56 @@ func checkboxTrackStates(theme Theme, checked bool) StateStyle[SurfaceStyle] {
 		pressedFill, pressedBorder = normalFill, theme.PrimaryActive
 		disabledFill, disabledBorder = alphaColor(theme.Primary, 0.35), alphaColor(theme.Primary, 0.55)
 	}
-	return NewStateStyle(checkboxSurface(normalFill, normalBorder)).
-		WithHovered(checkboxSurface(hoverFill, hoverBorder)).
-		WithPressed(checkboxSurface(pressedFill, pressedBorder)).
-		WithDisabled(checkboxSurface(disabledFill, disabledBorder))
+	return StateStyle[SurfaceStyle]{
+		Normal:   checkboxSurface(normalFill, normalBorder),
+		Hovered:  new(checkboxSurface(hoverFill, hoverBorder)),
+		Pressed:  new(checkboxSurface(pressedFill, pressedBorder)),
+		Disabled: new(checkboxSurface(disabledFill, disabledBorder)),
+	}
 }
 
 func checkboxSurface(fill, border graphics.ColorRGBA) SurfaceStyle {
 	return SurfaceStyle{Background: scene.RoundedRectShape2D(fill, 0), Border: scene.OutlinedRoundedRectShape2D(graphics.ColorRGBA{}, border, 0, 2)}
 }
 
-func skinFor(world *ecs.World, theme Theme) Skin {
-	if skin, ok := world.GetResource[Skin](); ok {
+func skinFor(world *ecs.World, theme Theme) *Skin {
+	if skin := world.GetResourceRef[Skin](); skin != nil {
 		return skin
 	}
-	theme = themeWithDefaults(theme)
-	if cache, ok := world.GetResource[*defaultSkinCache](); ok && cache != nil && cache.Theme == theme {
-		return cache.Skin
+	cache := cachedFormSkin(world, theme)
+	if !cache.widgets {
+		cache.Skin.setWidgetDefaults(cache.Theme)
+		cache.widgets = true
 	}
-	skin := DefaultSkin(theme)
-	if cache, ok := world.GetResource[*defaultSkinCache](); ok && cache != nil {
-		cache.Theme = theme
-		cache.Skin = skin
-	} else {
-		world.InsertResource(&defaultSkinCache{Theme: theme, Skin: skin})
-	}
-	return skin
+	return &cache.Skin
 }
 
-func styleFor[T any](world *ecs.World, entity ecs.Entity, fallback T) T {
-	if override, ok := world.Get[StyleOverride[T]](entity); ok {
-		return override.Value
+func formSkinFor(world *ecs.World, theme Theme) *Skin {
+	if skin := world.GetResourceRef[Skin](); skin != nil {
+		return skin
+	}
+	return &cachedFormSkin(world, theme).Skin
+}
+
+func cachedFormSkin(world *ecs.World, theme Theme) *defaultSkinCache {
+	theme = themeWithDefaults(theme)
+	// Only colors affect the skin. CSS font changes on a select reuse the same defaults.
+	theme.Font, theme.FontSize, theme.DPI, theme.StackIndex = nil, 0, 0, 0
+	cache, _ := world.GetResource[*defaultSkinCache]()
+	if cache == nil {
+		cache = &defaultSkinCache{}
+		world.InsertResource(cache)
+	}
+	if cache.Theme != theme {
+		cache.Theme, cache.widgets = theme, false
+		cache.Skin.setFormDefaults(theme)
+	}
+	return cache
+}
+
+func styleFor[T any](world *ecs.World, entity ecs.Entity, fallback *T) *T {
+	if override := world.GetRef[StyleOverride[T]](entity); override != nil {
+		return &override.Value
 	}
 	return fallback
 }
@@ -478,21 +507,21 @@ func controlStateForValues(hovered, pressed, focused, disabled bool) ControlStat
 	return ControlState{Hovered: hovered, Pressed: pressed, Focused: focused, Disabled: disabled}
 }
 
-func buttonStyleFor(skin Skin, variant ButtonVariant, danger bool) ButtonStyle {
+func buttonStyleFor(skin *Skin, variant ButtonVariant, danger bool) *ButtonStyle {
 	if danger {
-		return skin.Button.Danger
+		return &skin.Button.Danger
 	}
 	if variant == ButtonSurface {
-		return skin.Button.Surface
+		return &skin.Button.Surface
 	}
-	return skin.Button.Primary
+	return &skin.Button.Primary
 }
 
-func textFieldStyleFor(world *ecs.World, entity ecs.Entity, skin Skin) TextFieldStyle {
-	if _, ok := world.Get[NumberInput](entity); ok {
-		return styleFor(world, entity, skin.NumberInput).Field
+func textFieldStyleFor(world *ecs.World, entity ecs.Entity, skin *Skin) *TextFieldStyle {
+	if world.Has[NumberInput](entity) {
+		return &styleFor(world, entity, &skin.NumberInput).Field
 	}
-	return styleFor(world, entity, skin.TextField)
+	return styleFor(world, entity, &skin.TextField)
 }
 
 func applySurface(world *ecs.World, entity ecs.Entity, width, height float32, surface SurfaceStyle) {

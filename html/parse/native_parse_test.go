@@ -2,6 +2,7 @@ package parse
 
 import (
 	"errors"
+	"html"
 	"strings"
 	"testing"
 	"unsafe"
@@ -95,11 +96,36 @@ func TestParserBorrowsUnchangedSource(t *testing.T) {
 
 func TestCharacterReferences(t *testing.T) {
 	var parser Parser
-	for _, ref := range namedReferences {
-		source := "&" + ref.name
-		if got := parser.decode(source, false, true, false, false); got != ref.value {
-			t.Fatalf("%s = %q; want %q", source, got, ref.value)
+	count := 0
+	for length, bucket := range namedReferences {
+		stride := length + referenceValueWidth
+		if len(bucket)%stride != 0 {
+			t.Fatalf("misaligned reference bucket for length %d", length)
 		}
+		previous := ""
+		for i := 0; i < len(bucket); i += stride {
+			name := bucket[i : i+length]
+			if name <= previous {
+				t.Fatalf("reference %q out of order after %q", name, previous)
+			}
+			previous = name
+			source := "&" + name
+			want := html.UnescapeString(source)
+			// The Go standard library omits these two expanding references.
+			switch name {
+			case "nLt;":
+				want = "≪\u20d2"
+			case "nGt;":
+				want = "≫\u20d2"
+			}
+			if got := parser.decode(source, false, true, false, false); got != want {
+				t.Fatalf("%s = %q; want %q", source, got, want)
+			}
+			count++
+		}
+	}
+	if count != 2231 {
+		t.Fatalf("got %d named character references, want 2231", count)
 	}
 	for _, test := range []struct{ source, text, attribute string }{
 		{"&notit;", "¬it;", "&notit;"},

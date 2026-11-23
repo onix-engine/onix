@@ -24,6 +24,21 @@ var htmlBlurGLSL string
 //go:embed shaders/blur.wgsl
 var htmlBlurWGSL string
 
+func htmlBlurShaderDescriptor() render.ShaderDescriptor {
+	switch render.CompiledBackend {
+	case render.BackendOpenGL, render.BackendWebGL:
+		return render.ShaderDescriptor{WebGL2FragmentSource: htmlBlurGLSL, WebGL2Generated: true}
+	case render.BackendMetal:
+		return render.ShaderDescriptor{MetalSource: htmlBlurMetal}
+	case render.BackendVulkan:
+		return render.ShaderDescriptor{VulkanFragmentSPIRV: htmlBlurSPIRV}
+	case render.BackendWebGPU:
+		return render.ShaderDescriptor{WebGPUFragmentSource: htmlBlurWGSL}
+	default:
+		return render.ShaderDescriptor{}
+	}
+}
+
 type htmlGPUBlur struct {
 	target     *render.RenderTarget
 	source     *htmlOwnedTexture
@@ -79,6 +94,10 @@ func htmlGPUBlurSigma(world *ecs.World, owner ecs.Entity, cache *htmlTextureCach
 }
 
 func htmlGPUBlurAvailable(world *ecs.World, owner ecs.Entity, cache *htmlTextureCache, box *layout.Box, sigma float64) bool {
+	// The built-in blur has no DirectX shader. Use the CPU raster path there.
+	if render.CompiledBackend == render.BackendDirectX {
+		return false
+	}
 	if sigma <= 0 || sigma > 4 || math.IsNaN(sigma) || graphics.CanvasFor(world) == nil || graphics.DeviceFor(world) == nil {
 		return false
 	}
@@ -101,11 +120,7 @@ func htmlGPUBlurAvailable(world *ecs.World, owner ecs.Entity, cache *htmlTexture
 		entity = parent.Entity
 	}
 	if cache.blurShader == nil {
-		shader, err := graphics.NewMaterial2DShader(render.ShaderDescriptor{
-			VulkanFragmentSPIRV: htmlBlurSPIRV, MetalSource: htmlBlurMetal,
-			WebGL2FragmentSource: htmlBlurGLSL, WebGL2Generated: true,
-			WebGPUFragmentSource: htmlBlurWGSL,
-		})
+		shader, err := graphics.NewMaterial2DShader(htmlBlurShaderDescriptor())
 		if err != nil {
 			return false
 		}
