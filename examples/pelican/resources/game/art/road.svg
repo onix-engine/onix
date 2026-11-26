@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="200" viewBox="0 0 1280 200"><path fill="#f7e6ba" d="M0 0h1280v200H0z"/><path fill="#fff4d5" d="M0 0h1280v15H0z"/><path fill="#c5b48e" d="M0 15h1280v5H0z"/><path fill="#e9d5a7" d="M0 122h1280v78H0z"/><path fill="none" stroke="#fff8df" stroke-width="5" stroke-dasharray="64 54" d="M0 88h1280"/><g fill="#d1bc8d"><ellipse cx="60" cy="152" rx="8" ry="3"/><ellipse cx="180" cy="38" rx="5" ry="2"/><ellipse cx="346" cy="184" rx="9" ry="3"/><ellipse cx="710" cy="143" rx="6" ry="2"/><ellipse cx="900" cy="53" rx="8" ry="2"/><ellipse cx="1140" cy="171" rx="7" ry="3"/></g><g fill="none" stroke="#80a38a" stroke-width="4" stroke-linecap="round"><path d="M110 200l-9-25m9 25 9-33m-9 33 21-18M980 200l-9-22m9 22 5-30m-5 30 18-21"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="200" viewBox="0 0 1280 200">
+  <!-- A timber quay. Every fourth length of planking repeats at the tile boundary. -->
+  <path fill="#f1d5a4" d="M0 0h1280v200H0z"/>
+  <path fill="#fff0c9" d="M0 0h1280v7H0z"/>
+  <path fill="#d4ac80" d="M0 7h1280v3H0z"/>
+  <path fill="#f6dfb6" d="M0 34h1280v27H0z"/>
+  <path fill="#dfbb8d" d="M0 32h1280v2H0zm0 29h1280v2H0z"/>
+  <g fill="none" stroke="#c9a47c" stroke-width="2">
+    <path d="M96 10L79 32m317-22-17 22m317-22-17 22m317-22-17 22M236 34l-23 27m342-27-23 27m342-27-23 27m342-27-23 27M57 63L29 92m349-29-28 29m348-29-28 29m348-29-28 29"/>
+  </g>
+  <g fill="#d2ae82">
+    <path d="M117 18l71-2 42 2-58 1zM442 49l48-2 30 1-44 2zM753 20l69-2 31 2-63 1zM996 81l90-3 63 2-87 2zM1146 47l52-2 29 1-46 2z"/>
+    <path d="M269 79q38-7 59-3 21 5 57-1-32 9-61 4-16-4-55 0zM870 46q22-5 37-2 22 4 40 0-23 7-42 3-14-3-35-1z"/>
+  </g>
+  <path fill="#ffebbd" d="M0 90h1280v5H0z"/>
+  <path fill="#9d725d" d="M0 95h1280v5H0z"/>
+  <path fill="#214558" d="M0 100h1280v100H0z"/>
+</svg>

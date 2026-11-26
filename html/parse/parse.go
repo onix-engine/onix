@@ -34,6 +34,9 @@ type htmlToken struct {
 	Type TokenType
 }
 
+// MaxNestingDepth bounds the parser stack of open elements.
+const MaxNestingDepth = 512
+
 // ErrNestingDepth reports HTML nesting beyond the parser's 512-element limit.
 var ErrNestingDepth = errors.New("html: maximum element depth (512) exceeded")
 
@@ -50,7 +53,7 @@ func Parse(input string) (*uinode.Node, error) {
 // document order and form state as part of their own document preparation.
 func ParseTree(input string) (*uinode.Node, error) {
 	var parser Parser
-	return parser.parseTree(input)
+	return parser.ParseTree(input)
 }
 
 // Reset invalidates the previous tree and releases source references while retaining
@@ -72,14 +75,15 @@ func (p *Parser) Reset() {
 // Parse replaces the previous result. Once capacity is sufficient, parsing
 // reuses all storage, including entity decoding and malformed-tree repairs.
 func (p *Parser) Parse(input string) (*uinode.Node, error) {
-	root, err := p.parseTree(input)
+	root, err := p.ParseTree(input)
 	if err == nil {
 		element.InitializeElementStates(root)
 	}
 	return root, err
 }
 
-func (p *Parser) parseTree(input string) (root *uinode.Node, err error) {
+// ParseTree reuses parser storage without initializing element state.
+func (p *Parser) ParseTree(input string) (root *uinode.Node, err error) {
 	p.Reset()
 	p.scanner.reset(input)
 	b := &p.builder

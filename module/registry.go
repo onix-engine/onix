@@ -119,37 +119,31 @@ func (r *Registry) RegisterValue[T any](name project.ValueType, decode func(proj
 
 type Signal struct{}
 
-func builtinValues() map[project.ValueType]any {
-	r := Registry{}
-	r.addValue("", func(project.SlotValue) (Signal, error) { return Signal{}, nil })
-	r.addValue(project.StringValue, func(v project.SlotValue) (string, error) { return v.String, nil })
-	r.addValue(project.BoolValue, func(v project.SlotValue) (bool, error) { return v.Bool, nil })
-	r.addValue(project.IntValue, func(v project.SlotValue) (int64, error) { return v.Integer, nil })
-	r.addValue(project.NumberValue, func(v project.SlotValue) (float64, error) { return v.Number, nil })
-	r.addValue(project.Vec2Value, func(v project.SlotValue) ([2]float32, error) { return [2]float32{v.Vector[0], v.Vector[1]}, nil })
-	r.addValue(project.Vec3Value, func(v project.SlotValue) ([3]float32, error) {
-		return [3]float32{v.Vector[0], v.Vector[1], v.Vector[2]}, nil
-	})
-	r.addValue(project.ColorValue, func(v project.SlotValue) ([4]float32, error) { return v.Vector, nil })
-	r.addValue("SceneSwitchRequest", func(v project.SlotValue) (SceneSwitchRequest, error) {
-		if len(v.Fields) != 4 || v.Fields[0].Name != "overlay" || v.Fields[1].Name != "retain" || v.Fields[2].Name != "scene" || v.Fields[3].Name != "startup" {
-			return SceneSwitchRequest{}, ErrType
+func (r *Registry) decoder(name project.ValueType) any {
+	switch name {
+	case "":
+		return func(project.SlotValue) (Signal, error) { return Signal{}, nil }
+	case project.StringValue:
+		return func(v project.SlotValue) (string, error) { return v.String, nil }
+	case project.BoolValue:
+		return func(v project.SlotValue) (bool, error) { return v.Bool, nil }
+	case project.IntValue:
+		return func(v project.SlotValue) (int64, error) { return v.Integer, nil }
+	case project.NumberValue:
+		return func(v project.SlotValue) (float64, error) { return v.Number, nil }
+	case project.Vec2Value:
+		return func(v project.SlotValue) ([2]float32, error) { return [2]float32(v.Vector[:2]), nil }
+	case project.Vec3Value:
+		return func(v project.SlotValue) ([3]float32, error) { return [3]float32(v.Vector[:3]), nil }
+	case project.ColorValue:
+		return func(v project.SlotValue) ([4]float32, error) { return v.Vector, nil }
+	case "SceneSwitchRequest":
+		return func(v project.SlotValue) (SceneSwitchRequest, error) {
+			if len(v.Fields) != 4 || v.Fields[0].Name != "overlay" || v.Fields[1].Name != "retain" || v.Fields[2].Name != "scene" || v.Fields[3].Name != "startup" {
+				return SceneSwitchRequest{}, ErrType
+			}
+			return SceneSwitchRequest{Scene: project.SceneID(v.Fields[2].Value.String), Retain: v.Fields[1].Value.Bool, Overlay: v.Fields[0].Value.Bool, Startup: v.Fields[3].Value}, nil
 		}
-		return SceneSwitchRequest{Scene: project.SceneID(v.Fields[2].Value.String), Retain: v.Fields[1].Value.Bool, Overlay: v.Fields[0].Value.Bool, Startup: v.Fields[3].Value}, nil
-	})
-	r.addValue[TextRenderRequest]("TextRenderRequest", nil)
-	r.addValue[SceneStartup]("SceneStartup", nil)
-	r.addValue[SceneSwitchResult]("SceneSwitchResult", nil)
-	r.addValue[Collision2D]("Collision2D", nil)
-	r.addValue[Collision3D]("Collision3D", nil)
-	r.addValue[RenderOutputHandle](project.VisualValue, nil)
-	r.addValue[TextRenderResult]("TextRenderResult", nil)
-	return r.values
-}
-
-func (r *Registry) addValue[T any](name project.ValueType, decode func(project.SlotValue) (T, error)) {
-	if r.values == nil {
-		r.values = make(map[project.ValueType]any)
 	}
-	r.values[name] = decode
+	return r.values[name]
 }

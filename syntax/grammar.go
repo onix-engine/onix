@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"weak"
 
 	textmate "github.com/eugenioenko/textmate-go"
@@ -29,6 +30,8 @@ var grammarFiles = sync.OnceValues(func() (*zip.Reader, error) {
 var grammarCache = struct {
 	compiled map[string]weak.Pointer[textmate.Grammar]
 	raw      map[string]weak.Pointer[textmate.RawGrammar]
+	recent   *textmate.Grammar
+	expiry   *time.Timer
 	sync.Mutex
 }{
 	compiled: make(map[string]weak.Pointer[textmate.Grammar]),
@@ -102,10 +105,39 @@ func loadRawGrammar(scope string) (*textmate.RawGrammar, error) {
 	return raw, err
 }
 
+// CloseKeepingGrammar releases the document and lets another document reuse its
+// compiled grammar across GCs. Only the most recently closed grammar stays warm.
+func (d *Document) CloseKeepingGrammar(grace time.Duration) {
+	grammar := d.grammar
+	d.Close()
+	if grammar == nil || grace <= 0 {
+		return
+	}
+	grammarCache.Lock()
+	defer grammarCache.Unlock()
+	if grammarCache.expiry != nil {
+		grammarCache.expiry.Stop()
+	}
+	grammarCache.recent = grammar
+	var expiry *time.Timer
+	expiry = time.AfterFunc(grace, func() {
+		grammarCache.Lock()
+		if grammarCache.expiry == expiry {
+			grammarCache.recent, grammarCache.expiry = nil, nil
+		}
+		grammarCache.Unlock()
+	})
+	grammarCache.expiry = expiry
+}
+
 // ReleaseGrammarCache forgets shared lookup entries. Active documents keep
 // their grammar, line states and captures.
 func ReleaseGrammarCache() {
 	grammarCache.Lock()
+	if grammarCache.expiry != nil {
+		grammarCache.expiry.Stop()
+		grammarCache.recent, grammarCache.expiry = nil, nil
+	}
 	clear(grammarCache.compiled)
 	clear(grammarCache.raw)
 	grammarCache.Unlock()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -63,7 +64,7 @@ type workspaceAnimationDetail struct {
 	Time                                    float32
 }
 
-func (s *workspaceAnimation) selectedAnimationKey[T any](tracks []project.AnimationTrackSpec[T]) (scene.AnimationBinding, project.AnimationKeyframeSpec[T], bool) {
+func (s *workspaceAnimation) selectedAnimationKey[T project.AnimationSpecValue](tracks []project.AnimationTrackSpec[T]) (scene.AnimationBinding, project.AnimationKeyframeSpec[T], bool) {
 	if s.Track < 0 || s.Track >= len(tracks) || s.Key < 0 || s.Key >= len(tracks[s.Track].Keyframes) {
 		return scene.AnimationBinding{}, project.AnimationKeyframeSpec[T]{}, false
 	}
@@ -761,7 +762,7 @@ func normalizeAnimationSelection(s *workspaceAnimation, clip *project.AnimationC
 	s.CurveOpen = s.CurveOpen && s.Segment
 	s.Time = min(max(s.Time, 0), clip.Duration)
 }
-func (b *editorVNodeView) renderAnimationTracks[T any](s *workspaceAnimation, kind string, tracks []project.AnimationTrackSpec[T], start, end float32) {
+func (b *editorVNodeView) renderAnimationTracks[T project.AnimationSpecValue](s *workspaceAnimation, kind string, tracks []project.AnimationTrackSpec[T], start, end float32) {
 	span := end - start
 	title := "Double-click to edit transition"
 	if kind == "texture" {
@@ -870,14 +871,7 @@ func (a *ModuleEditor) finishAnimationDrafts(clip *project.AnimationClipSpec) er
 		if err != nil {
 			return err
 		}
-		switch s.Kind {
-		case "float":
-			err = s.mutateAnimationKeys(clip.FloatTracks, "key-time", float32(value))
-		case "texture":
-			err = s.mutateAnimationKeys(clip.TextureTracks, "key-time", float32(value))
-		case "bool":
-			err = s.mutateAnimationKeys(clip.BoolTracks, "key-time", float32(value))
-		}
+		err = s.editClipKeys(clip, "key-time", float32(value))
 		if err != nil {
 			return err
 		}
@@ -926,39 +920,56 @@ func (a *ModuleEditor) stageAnimationInspectorDrafts() error {
 	}
 	return a.stagePatches(patches)
 }
-func (s *workspaceAnimation) animationKeys[T any](tracks []project.AnimationTrackSpec[T]) ([]project.AnimationKeyframeSpec[T], error) {
+func (s *workspaceAnimation) animationKeys[T project.AnimationSpecValue](tracks []project.AnimationTrackSpec[T]) ([]project.AnimationKeyframeSpec[T], error) {
 	if s.Track < 0 || s.Track >= len(tracks) {
 		return nil, fmt.Errorf("select an animation track")
 	}
 	return tracks[s.Track].Keyframes, nil
 }
-func (s *workspaceAnimation) mutateAnimationKeys[T any](tracks []project.AnimationTrackSpec[T], action string, number float32) error {
+func (s *workspaceAnimation) editClipKeys(clip *project.AnimationClipSpec, action string, number float32) error {
+	switch s.Kind {
+	case "float":
+		return s.mutateAnimationKeys(clip.FloatTracks, action, number, sampleFloatKey)
+	case "texture":
+		return s.mutateAnimationKeys(clip.TextureTracks, action, number, nil)
+	case "bool":
+		return s.mutateAnimationKeys(clip.BoolTracks, action, number, nil)
+	}
+	return nil
+}
+
+func sampleFloatKey(segment []project.AnimationKeyframeSpec[float32], time float32) float32 {
+	var keys [2]scene.AnimationKeyframe[float32]
+	for i := range keys {
+		key := &segment[i]
+		keys[i] = scene.AnimationKeyframe[float32]{
+			Time: key.Time, Value: key.Value, InTangent: key.InTangent, OutTangent: key.OutTangent,
+			Tween: key.EffectiveAnimationTween(scene.AnimationLinear), Curve: key.Curve,
+		}
+	}
+	value, _ := (scene.AnimationTrack[float32]{Keyframes: keys[:]}).Sample(time, func(a, b, t float32) float32 { return a + (b-a)*t })
+	return value
+}
+
+func (s *workspaceAnimation) mutateAnimationKeys[T project.AnimationSpecValue](tracks []project.AnimationTrackSpec[T], action string, number float32, sample func([]project.AnimationKeyframeSpec[T], float32) T) error {
 	keys, err := s.animationKeys(tracks)
 	if err != nil {
 		return err
 	}
+	indexAt := func(time float32) int {
+		return sort.Search(len(keys), func(i int) bool { return keys[i].Time >= time })
+	}
 	switch action {
 	case "add-key":
-		i, exists := slices.BinarySearchFunc(keys, s.Time, func(k project.AnimationKeyframeSpec[T], time float32) int {
-			if k.Time < time {
-				return -1
-			}
-			if k.Time > time {
-				return 1
-			}
-			return 0
-		})
-		if !exists {
+		if len(keys) == 0 {
+			return fmt.Errorf("a track needs at least one keyframe")
+		}
+		i := indexAt(s.Time)
+		if i == len(keys) || keys[i].Time != s.Time {
 			key := keys[max(0, i-1)]
 			key.Time = s.Time
-			if _, numeric := any(key.Value).(float32); numeric && i > 0 && i < len(keys) {
-				var sample [2]scene.AnimationKeyframe[float32]
-				for j := range sample {
-					source := keys[i-1+j]
-					sample[j] = scene.AnimationKeyframe[float32]{Time: source.Time, Value: any(source.Value).(float32), InTangent: any(source.InTangent).(float32), OutTangent: any(source.OutTangent).(float32), Tween: source.EffectiveAnimationTween(scene.AnimationLinear), Curve: source.Curve}
-				}
-				value, _ := (scene.AnimationTrack[float32]{Keyframes: sample[:]}).Sample(s.Time, func(a, b, t float32) float32 { return a + (b-a)*t })
-				key.Value = any(value).(T)
+			if sample != nil && i > 0 && i < len(keys) {
+				key.Value = sample(keys[i-1:i+1], s.Time)
 			}
 			keys = slices.Insert(keys, i, key)
 		}
@@ -978,27 +989,24 @@ func (s *workspaceAnimation) mutateAnimationKeys[T any](tracks []project.Animati
 		if s.Key < 0 || s.Key >= len(keys) {
 			return fmt.Errorf("select a keyframe")
 		}
-		for i, key := range keys {
-			if i != s.Key && key.Time == number {
-				return fmt.Errorf("a keyframe already exists at this time")
-			}
+		if math.IsNaN(float64(number)) || math.IsInf(float64(number), 0) {
+			return fmt.Errorf("enter a finite number")
 		}
-		keys[s.Key].Time = number
-		slices.SortFunc(keys, func(a, b project.AnimationKeyframeSpec[T]) int {
-			if a.Time < b.Time {
-				return -1
-			}
-			if a.Time > b.Time {
-				return 1
-			}
-			return 0
-		})
-		for i, key := range keys {
-			if key.Time == number {
-				s.Key = i
-				break
-			}
+		position := indexAt(number)
+		if position < len(keys) && position != s.Key && keys[position].Time == number {
+			return fmt.Errorf("a keyframe already exists at this time")
 		}
+		key := keys[s.Key]
+		key.Time = number
+		switch {
+		case position > s.Key:
+			position--
+			copy(keys[s.Key:position], keys[s.Key+1:position+1])
+		case position < s.Key:
+			copy(keys[position+1:s.Key+1], keys[position:s.Key])
+		}
+		keys[position] = key
+		s.Key = position
 		s.Time = number
 		s.Segment = false
 	}
@@ -1210,14 +1218,7 @@ func (a *ModuleEditor) animationEvent(event htmlui.Event) bool {
 			s.Track, s.Key = 0, 0
 			return nil
 		case "add-key", "delete-key", "key-time":
-			switch s.Kind {
-			case "float":
-				return s.mutateAnimationKeys(clip.FloatTracks, name, number)
-			case "texture":
-				return s.mutateAnimationKeys(clip.TextureTracks, name, number)
-			case "bool":
-				return s.mutateAnimationKeys(clip.BoolTracks, name, number)
-			}
+			return s.editClipKeys(clip, name, number)
 		}
 		switch name {
 		case "tween", "x1", "y1", "x2", "y2":

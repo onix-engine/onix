@@ -10,7 +10,12 @@ import (
 	"github.com/onix-engine/onix/scene"
 )
 
-type AnimationKeyframeSpec[T any] struct {
+// AnimationSpecValue is a keyframe value supported by the project file format.
+type AnimationSpecValue interface {
+	float32 | bool | TextureSpec
+}
+
+type AnimationKeyframeSpec[T AnimationSpecValue] struct {
 	Value      T                    `json:"value"`
 	InTangent  T                    `json:"inTangent,omitzero"`
 	OutTangent T                    `json:"outTangent,omitzero"`
@@ -29,7 +34,7 @@ func (key AnimationKeyframeSpec[T]) EffectiveAnimationTween(defaultTween scene.A
 	return tween
 }
 
-type AnimationTrackSpec[T any] struct {
+type AnimationTrackSpec[T AnimationSpecValue] struct {
 	Binding   scene.AnimationBinding     `json:"binding"`
 	TimeTween scene.AnimationTween       `json:"timeTween,omitempty"`
 	Keyframes []AnimationKeyframeSpec[T] `json:"keyframes"`
@@ -77,7 +82,7 @@ func (s AnimationClipSpec) Clone() AnimationClipSpec {
 	return clone
 }
 
-func cloneAnimationTrackSpecs[T any](tracks []AnimationTrackSpec[T]) []AnimationTrackSpec[T] {
+func cloneAnimationTrackSpecs[T AnimationSpecValue](tracks []AnimationTrackSpec[T]) []AnimationTrackSpec[T] {
 	clone := slices.Clone(tracks)
 	for index := range clone {
 		clone[index].Keyframes = slices.Clone(tracks[index].Keyframes)
@@ -185,7 +190,7 @@ func claimAnimationBinding(id string, binding scene.AnimationBinding, seen map[s
 	return nil
 }
 
-func validateAnimationTracks[T any](id string, tracks []AnimationTrackSpec[T], duration float32, defaultTween scene.AnimationTween, seen map[scene.AnimationBinding]struct{}, validateTarget, validateValues func(int, AnimationTrackSpec[T]) error) error {
+func validateAnimationTracks[T AnimationSpecValue](id string, tracks []AnimationTrackSpec[T], duration float32, defaultTween scene.AnimationTween, seen map[scene.AnimationBinding]struct{}, validateTarget, validateValues func(int, AnimationTrackSpec[T]) error) error {
 	for index, track := range tracks {
 		if err := scene.ValidateAnimationTimeCurve(track.TimeTween, track.TimeCurve); err != nil {
 			return fmt.Errorf("animation %q track %d target %q: %w", id, index, track.Binding.Target, err)
@@ -210,7 +215,7 @@ func validateAnimationTracks[T any](id string, tracks []AnimationTrackSpec[T], d
 	return nil
 }
 
-func validateAnimationTrack[T any](id string, binding scene.AnimationBinding, keys []AnimationKeyframeSpec[T], duration float32, defaultTween scene.AnimationTween) error {
+func validateAnimationTrack[T AnimationSpecValue](id string, binding scene.AnimationBinding, keys []AnimationKeyframeSpec[T], duration float32, defaultTween scene.AnimationTween) error {
 	if strings.TrimSpace(string(binding.Target)) == "" {
 		return fmt.Errorf("animation %q contains a track without a target", id)
 	}
@@ -280,8 +285,8 @@ func (r *Resources) compileAnimationClipSpec(spec AnimationClipSpec, id string) 
 	for index, event := range spec.Events {
 		clip.Events[index] = scene.AnimationEvent{Time: event.Time, Name: event.Name, Value: event.Value}
 	}
-	clip.FloatTracks = compileAnimationTracks(spec.FloatTracks, scene.AnimationLinear, func(value float32) float32 { return value })
-	clip.BoolTracks = compileAnimationTracks(spec.BoolTracks, scene.AnimationStep, func(value bool) bool { return value })
+	clip.FloatTracks = compileAnimationTracks(spec.FloatTracks, scene.AnimationLinear)
+	clip.BoolTracks = compileAnimationTracks(spec.BoolTracks, scene.AnimationStep)
 	clip.TextureTracks = make([]scene.AnimationTrack[*graphics.Texture], len(spec.TextureTracks))
 	for trackIndex, track := range spec.TextureTracks {
 		keys := make([]scene.AnimationKeyframe[*graphics.Texture], len(track.Keyframes))
@@ -302,15 +307,14 @@ func (r *Resources) compileAnimationClipSpec(spec AnimationClipSpec, id string) 
 	return clip, nil
 }
 
-func compileAnimationTracks[S, T any](tracks []AnimationTrackSpec[S], defaultTween scene.AnimationTween, convert func(S) T) []scene.AnimationTrack[T] {
+func compileAnimationTracks[T float32 | bool](tracks []AnimationTrackSpec[T], defaultTween scene.AnimationTween) []scene.AnimationTrack[T] {
 	result := make([]scene.AnimationTrack[T], len(tracks))
 	for trackIndex, track := range tracks {
 		keys := make([]scene.AnimationKeyframe[T], len(track.Keyframes))
 		for keyIndex, key := range track.Keyframes {
-			value := convert(key.Value)
-			keys[keyIndex] = key.compileAnimationKeyframe(value, defaultTween)
-			keys[keyIndex].InTangent = convert(key.InTangent)
-			keys[keyIndex].OutTangent = convert(key.OutTangent)
+			keys[keyIndex] = key.compileAnimationKeyframe(key.Value, defaultTween)
+			keys[keyIndex].InTangent = key.InTangent
+			keys[keyIndex].OutTangent = key.OutTangent
 		}
 		// The compiler owns this freshly allocated keyframe slice, so avoid the
 		// defensive copy performed by the public constructor.
@@ -319,7 +323,7 @@ func compileAnimationTracks[S, T any](tracks []AnimationTrackSpec[S], defaultTwe
 	return result
 }
 
-func (key AnimationKeyframeSpec[S]) compileAnimationKeyframe[T any](value T, defaultTween scene.AnimationTween) scene.AnimationKeyframe[T] {
+func (key AnimationKeyframeSpec[S]) compileAnimationKeyframe[T scene.AnimationClipValue](value T, defaultTween scene.AnimationTween) scene.AnimationKeyframe[T] {
 	return scene.AnimationKeyframe[T]{
 		Time: key.Time, Value: value,
 		Tween: key.EffectiveAnimationTween(defaultTween),

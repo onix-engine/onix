@@ -41,12 +41,24 @@ type Bundle struct {
 	entries []bundleEntry
 }
 
-// PreparedBundle caches the world-specific component IDs and sorted entries
-// of a Bundle. It is immutable after creation and can be reused for repeated
-// spawns without rebuilding the bundle description.
+// PreparedBundle is a reusable, world-bound spawn plan. Copies share the
+// sorted entries and the target table bound on the first successful spawn.
 type PreparedBundle struct {
-	world   *World
-	entries []preparedBundleEntry
+	plan *bundlePlan
+}
+
+type bundlePlan struct {
+	world       *World
+	table       *archetype
+	entries     []preparedBundleEntry
+	hasBuilders bool
+}
+
+func (b PreparedBundle) forWorld(world *World) *bundlePlan {
+	if b.plan == nil || b.plan.world != world {
+		panic("ecs: prepared bundle belongs to a different world")
+	}
+	return b.plan
 }
 
 type preparedBundleEntry struct {

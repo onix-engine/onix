@@ -46,13 +46,16 @@ func UpdateDeformationsSystem(name string) ecs.SystemConfig {
 }
 
 func updateMeshDeformations3D(context *ecs.SystemContext) error {
+	var hierarchy *scene.Hierarchy
 	for entity, access := range context.World.Query[Deformation]().All {
-		if !scene.IsActive(context.World, entity) {
+		deformation := access.Ref()
+		if len(deformation.JointEntities) == 0 && len(deformation.NodeEntities) == 0 {
 			continue
 		}
-		deformation := access.Ref()
-
-		if len(deformation.JointEntities) == 0 && len(deformation.NodeEntities) == 0 {
+		if hierarchy == nil {
+			hierarchy = scene.HierarchyFor(context.World)
+		}
+		if !hierarchy.IsActive(entity) {
 			continue
 		}
 		if len(deformation.JointEntities) != 0 && len(deformation.JointEntities) != len(deformation.InverseBind) {
@@ -71,27 +74,25 @@ func updateMeshDeformations3D(context *ecs.SystemContext) error {
 		}
 		deformation = access.Mut()
 		if len(deformation.JointEntities) != 0 {
-			deformation.JointMatrices = reuse.Resize(deformation.JointMatrices, len(deformation.JointEntities))
-		}
-		for index, jointEntity := range deformation.JointEntities {
-			global, ok := context.World.Get[scene.GlobalTransform](jointEntity)
-			if !ok {
-				deformation.JointMatrices[index] = mgl32.Ident4()
-				continue
-			}
-			deformation.JointMatrices[index] = meshFromWorld.Mul4(global.Matrix).Mul4(deformation.InverseBind[index])
+			deformation.JointMatrices = deformationMatrices(context.World, meshFromWorld, deformation.JointEntities, deformation.InverseBind, deformation.JointMatrices)
 		}
 		if len(deformation.NodeEntities) != 0 {
-			deformation.NodeMatrices = reuse.Resize(deformation.NodeMatrices, len(deformation.NodeEntities))
-			for index, nodeEntity := range deformation.NodeEntities {
-				deformation.NodeMatrices[index] = mgl32.Ident4()
-				if global, ok := context.World.Get[scene.GlobalTransform](nodeEntity); ok {
-					deformation.NodeMatrices[index] = meshFromWorld.Mul4(global.Matrix).Mul4(deformation.NodeInverseBind[index])
-				}
-			}
+			deformation.NodeMatrices = deformationMatrices(context.World, meshFromWorld, deformation.NodeEntities, deformation.NodeInverseBind, deformation.NodeMatrices)
 		}
 	}
 	return nil
+}
+
+func deformationMatrices(world *ecs.World, meshFromWorld mgl32.Mat4, entities []ecs.Entity, inverseBind, matrices []mgl32.Mat4) []mgl32.Mat4 {
+	matrices = reuse.Resize(matrices, len(entities))
+	for i, entity := range entities {
+		if global := world.GetRef[scene.GlobalTransform](entity); global != nil {
+			matrices[i] = meshFromWorld.Mul4(global.Matrix).Mul4(inverseBind[i])
+		} else {
+			matrices[i] = mgl32.Ident4()
+		}
+	}
+	return matrices
 }
 
 // Material binds typed material data to a mesh and its optional submeshes.
@@ -286,13 +287,17 @@ type preparedMeshHandles3DScratch struct{}
 type preparedShaderHandles3DScratch struct{}
 type preparedTextureHandles3DScratch struct{}
 
-type renderResource3D[H any] interface {
+type resourceHandle3D interface {
+	render.MeshHandle | render.MeshShaderHandle | render.TextureHandle
+}
+
+type renderResource3D[H resourceHandle3D] interface {
 	comparable
 	RenderHandleFor(*render.Device) H
 	UploadError() error
 }
 
-func prepareRenderResource3D[A renderResource3D[H], H any](cache map[A]H, resource A, device *render.Device) (H, error) {
+func prepareRenderResource3D[A renderResource3D[H], H resourceHandle3D](cache map[A]H, resource A, device *render.Device) (H, error) {
 	if handle, ok := cache[resource]; ok {
 		return handle, nil
 	}

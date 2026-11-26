@@ -91,6 +91,78 @@
       }
     },
     {
+      "id": "landmarks",
+      "transform": {
+        "position": [
+          0,
+          354
+        ]
+      }
+    },
+    {
+      "id": "landmark-0",
+      "transform": {
+        "position": [
+          648,
+          0
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/village.svg"
+          },
+          "size": [
+            360,
+            140
+          ]
+        }
+      },
+      "parent": "landmarks"
+    },
+    {
+      "id": "landmark-1",
+      "transform": {
+        "position": [
+          1928,
+          0
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/windmill.svg"
+          },
+          "size": [
+            360,
+            140
+          ]
+        }
+      },
+      "parent": "landmarks"
+    },
+    {
+      "id": "landmark-2",
+      "transform": {
+        "position": [
+          3208,
+          0
+        ]
+      },
+      "components": {
+        "sprite": {
+          "texture": {
+            "image": "art/beacon.svg"
+          },
+          "size": [
+            360,
+            140
+          ]
+        }
+      },
+      "parent": "landmarks"
+    },
+    {
       "id": "road-0",
       "transform": {
         "position": [
@@ -793,8 +865,8 @@
       "id": "wing",
       "transform": {
         "position": [
-          -64,
-          -245
+          -104,
+          -221
         ]
       },
       "components": {

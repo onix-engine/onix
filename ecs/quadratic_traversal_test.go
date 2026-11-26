@@ -109,8 +109,8 @@ func TestBundlePreparationKeepsEntryAssociations(t *testing.T) {
 			world := NewWorld()
 			bundle := reverseTraversalBundle(count)
 			storage := make([]preparedBundleEntry, count)
-			entries := world.prepareBundle(bundle, storage)
-			for index, entry := range entries {
+			world.prepareBundle(bundle, storage)
+			for index, entry := range storage {
 				value := entry.entry.(traversalBundleEntry)
 				if entry.id != componentID(index) || value.id != entry.id || value.payload != index*3 {
 					t.Fatalf("component %d lost its entry: %+v %+v", index, entry, value)
@@ -168,7 +168,8 @@ func TestMaskGrowthClearsReusedWords(t *testing.T) {
 	}
 }
 
-func TestComponentMaskEqualIgnoresTrailingZeroWords(t *testing.T) {
+func TestQueryPlanKeysIgnoreTrailingZeroWords(t *testing.T) {
+	world := NewWorld()
 	for _, test := range []struct {
 		left, right componentMask
 		want        bool
@@ -181,8 +182,10 @@ func TestComponentMaskEqualIgnoresTrailingZeroWords(t *testing.T) {
 		{componentMask{1}, componentMask{1, 0, 2}, false},
 		{componentMask{1, 0, 2}, componentMask{1}, false},
 	} {
-		if got := test.left.equal(test.right); got != test.want {
-			t.Fatalf("%v equal %v = %v, want %v", test.left, test.right, got, test.want)
+		required := world.queryPlan(querySpec{required: test.left}) == world.queryPlan(querySpec{required: test.right})
+		without := world.queryPlan(querySpec{without: test.left}) == world.queryPlan(querySpec{without: test.right})
+		if required != test.want || without != test.want {
+			t.Fatalf("%v and %v share plans: required=%v, without=%v, want %v", test.left, test.right, required, without, test.want)
 		}
 	}
 }

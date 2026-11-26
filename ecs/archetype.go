@@ -56,11 +56,6 @@ func (m componentMask) intersects(other componentMask) bool {
 	return false
 }
 
-// equal compares masks without their trailing zero words.
-func (m componentMask) equal(other componentMask) bool {
-	return slices.Equal(m[:lastMaskWord(m)+1], other[:lastMaskWord(other)+1])
-}
-
 func lastMaskWord(mask componentMask) int {
 	for i := len(mask) - 1; i >= 0; i-- {
 		if mask[i] != 0 {
@@ -91,7 +86,8 @@ func hashComponentID(hash uint64, id componentID) uint64 {
 }
 
 type archetype struct {
-	edges *archetypeEdges
+	edges    *archetypeEdges
+	nextHash *archetype // next table with the same component ID hash
 	// ids is sorted and columns is aligned with it. Single-column lookups use
 	// a short linear scan; bulk bindings can merge the sorted IDs directly.
 	mask       componentMask

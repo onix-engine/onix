@@ -46,16 +46,17 @@ func main() {
 		fmt.Fprintf(&source, "func (v QueryView%d[%s]) In(entities []Entity) QueryView%d[%s] {\nv.view.entities = entities\nv.view.limited = true\nreturn v\n}\n", count, params, count, params)
 		// Wasm shares a single method-value wrapper across query types. Native code is faster with a direct defer.
 		fmt.Fprintf(&source, "\nfunc (v QueryView%d[%s]) All(yield func(Entity, %s) bool) {\ncursor := queryCursor{view: v.view}\ntick := cursor.open(yield != nil)\nif tick == 0 { return }\nif runtime.GOARCH == \"wasm\" {\ncloseCursor := cursor.close\ndefer closeCursor()\n} else {\ndefer cursor.close()\n}\ntickBits := uint64(tick) << 32\n", count, params, result)
-		fmt.Fprintln(&source, "filtered := v.view.filters.count != 0\nmultipleFilters := v.view.filters.count > 1\nfor start, end := cursor.nextRows(0); start < end; {\ntable := cursor.archetype\nentities := table.entities")
+		fmt.Fprintln(&source, "filters := v.view.filters.count\nfor start, end := cursor.nextRows(0); start < end; {\ntable := cursor.archetype")
 		for index, letter := range letters {
-			column := strings.ToLower(letter)
-			fmt.Fprintf(&source, "%s := table.componentColumn[%s](v.ids[%d])\n%sValues := %s.values\n", column, letter, index, column, column)
+			fmt.Fprintf(&source, "%s := table.componentColumn[%s](v.ids[%d])\n", strings.ToLower(letter), letter, index)
 		}
-		// A full table can range over its entity slice directly, without row-filter checks.
-		fmt.Fprintln(&source, "if !v.view.limited && !filtered && cursor.scopeTable == nil {\nfor row, entity := range entities {")
-		writeYield(&source, letters, count, params)
-		fmt.Fprintln(&source, "}\nstart, end = cursor.nextRows(len(entities))\ncontinue\n}")
-		fmt.Fprintln(&source, "first := cursor.inline[0]\nfor {\nfor row := start; row < end; row++ {\nif filtered && (!first.matches(row) || multipleFilters && !cursor.remainingFiltersMatch(row)) { continue }\nentity := entities[row]")
+		// A common end bound keeps absolute table row indices for change tracking.
+		fmt.Fprintln(&source, "first := cursor.inline[0]\nfor {\nentities := table.entities[:end]")
+		for _, letter := range letters {
+			column := strings.ToLower(letter)
+			fmt.Fprintf(&source, "%sValues := %s.values[:end]\n", column, column)
+		}
+		fmt.Fprintln(&source, "for row := start; row < len(entities); row++ {\nif filters != 0 && (!first.matches(row) || filters > 1 && !cursor.remainingFiltersMatch(row)) { continue }\nrowTick := tickBits | uint64(uint32(row))")
 		writeYield(&source, letters, count, params)
 		fmt.Fprintln(&source, "}\nstart, end = cursor.nextRows(end)\nif start == end || cursor.archetype != table { break }\n}\n}\n}")
 	}
@@ -122,13 +123,13 @@ func writeYield(source *bytes.Buffer, letters []string, count int, params string
 	access := func(letter string) string {
 		column := strings.ToLower(letter)
 		values := column + "Values"
-		return fmt.Sprintf("ComponentAccess[%s]{value: &%s[row], state: &%s.state, rowTick: tickBits | uint64(uint32(row))}", letter, values, column)
+		return fmt.Sprintf("ComponentAccess[%s]{value: &%s[row], state: &%s.state, rowTick: rowTick}", letter, values, column)
 	}
 	if count == 1 {
-		fmt.Fprintf(source, "if !yield(entity, %s) { return }\n", access("A"))
+		fmt.Fprintf(source, "if !yield(entities[row], %s) { return }\n", access("A"))
 		return
 	}
-	fmt.Fprintf(source, "if !yield(entity, Components%d[%s]{\n", count, params)
+	fmt.Fprintf(source, "if !yield(entities[row], Components%d[%s]{\n", count, params)
 	for _, letter := range letters {
 		fmt.Fprintf(source, "%s: %s,\n", letter, access(letter))
 	}

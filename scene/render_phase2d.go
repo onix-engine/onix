@@ -1,32 +1,12 @@
 package scene
 
 import (
+	"cmp"
+
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 )
-
-type renderPhaseItem2D interface {
-	renderSortKey() renderSortKey2D
-	renderMaterial() renderMaterialKey
-}
-
-// Read both keys through a pointer so traversal does not copy the full render
-// item (which also contains transforms, materials and geometry references).
-type renderPhaseReader2D[T any] interface {
-	*T
-	renderPhaseKeys() (renderSortKey2D, renderMaterialKey)
-}
-
-type renderPhaseList2D[T any] interface {
-	len() int
-	at(int) *T
-}
-
-type renderPhaseSlice2D[T any] []T
-
-func (items renderPhaseSlice2D[T]) len() int        { return len(items) }
-func (items renderPhaseSlice2D[T]) at(index int) *T { return &items[index] }
 
 // Filtered views store only positions in the immutable extracted item array.
 type renderItemList2D struct {
@@ -64,90 +44,55 @@ type renderSortKey2D struct {
 }
 
 type renderBatch2D struct {
-	scene     uint64
-	group     uint64
-	start     int
-	end       int
-	ui        bool
-	sortIndex int
-	material  renderMaterialKey
+	start, end int
 }
 
-func compareRenderPhaseItem2D[T renderPhaseItem2D](a, b T) int {
-	aKey, bKey := a.renderSortKey(), b.renderSortKey()
-	if aKey.scene < bKey.scene {
-		return -1
+func compareRenderPhaseItem2D(a, b renderItem2D) int {
+	if order := cmp.Compare(a.scene.Order, b.scene.Order); order != 0 {
+		return order
 	}
-	if aKey.scene > bKey.scene {
-		return 1
-	}
-	if aKey.ui != bKey.ui {
-		if aKey.ui {
+	if a.ui != b.ui {
+		if a.ui {
 			return 1
 		}
 		return -1
 	}
-	if aKey.group < bKey.group {
+	if order := cmp.Compare(a.group, b.group); order != 0 {
+		return order
+	}
+	if order := cmp.Compare(a.sortIndex, b.sortIndex); order != 0 {
+		return order
+	}
+	if a.depth < b.depth {
 		return -1
 	}
-	if aKey.group > bKey.group {
+	if a.depth > b.depth {
 		return 1
 	}
-	if aKey.sortIndex < bKey.sortIndex {
-		return -1
+	if order := cmp.Compare(a.order, b.order); order != 0 {
+		return order
 	}
-	if aKey.sortIndex > bKey.sortIndex {
-		return 1
+	if order := cmp.Compare(a.localOrder, b.localOrder); order != 0 {
+		return order
 	}
-	if aKey.depth < bKey.depth {
-		return -1
-	}
-	if aKey.depth > bKey.depth {
-		return 1
-	}
-	if aKey.order < bKey.order {
-		return -1
-	}
-	if aKey.order > bKey.order {
-		return 1
-	}
-	if aKey.localOrder < bKey.localOrder {
-		return -1
-	}
-	if aKey.localOrder > bKey.localOrder {
-		return 1
-	}
-	if aKey.sequence < bKey.sequence {
-		return -1
-	}
-	if aKey.sequence > bKey.sequence {
-		return 1
-	}
-	return 0
+	return cmp.Compare(a.sequence, b.sequence)
 }
 
-// drawRenderPhase2D consumes sorted items, preserving order while gathering
-// ranges only for renderers that require a complete batch (such as Spine).
-func drawRenderPhase2D[T renderPhaseItem2D, P renderPhaseReader2D[T]](c *graphics.Canvas2D, world *ecs.World, items []T, views DrawViews2D, cull bool, batched func(*T) bool, draw func(renderBatch2D, renderViewport2D, bool)) {
-	drawRenderPhaseList2D[T, P](c, world, renderPhaseSlice2D[T](items), views, cull, batched, draw)
+func sameRenderBatch2D(a, b *renderItem2D) bool {
+	return a.scene.Order == b.scene.Order && a.group == b.group && a.ui == b.ui &&
+		a.sortIndex == b.sortIndex && a.material == b.material
 }
 
-func drawRenderPhaseList2D[T renderPhaseItem2D, P renderPhaseReader2D[T], L renderPhaseList2D[T]](c *graphics.Canvas2D, world *ecs.World, items L, views DrawViews2D, cull bool, batched func(*T) bool, draw func(renderBatch2D, renderViewport2D, bool)) {
-	currentUI := false
-	spaceReady := false
+// drawRenderPhaseList2D groups consecutive items for renderers that draw batches.
+func drawRenderPhaseList2D(c *graphics.Canvas2D, world *ecs.World, items renderItemList2D, views DrawViews2D, cull bool, batched func(*renderItem2D) bool, draw func(renderBatch2D, renderViewport2D, bool)) {
 	var viewport renderViewport2D
-	var previous renderBatch2D
-	for start := 0; start < items.len(); {
-		key, material := P(items.at(start)).renderPhaseKeys()
-		batch := renderBatch2D{scene: key.scene, group: key.group, start: start, end: start + 1, ui: key.ui, sortIndex: key.sortIndex, material: material}
-		begin := start == 0 || previous.scene != batch.scene || previous.group != batch.group || previous.ui != batch.ui || previous.sortIndex != batch.sortIndex || previous.material != batch.material
-
-		if !spaceReady || currentUI != batch.ui {
-			currentUI = batch.ui
-			spaceReady = true
+	var previous *renderItem2D
+	for start := 0; start < items.count; {
+		item := items.at(start)
+		if previous == nil || previous.ui != item.ui {
 			if cull {
-				viewport = renderViewport2DForSpace(c, world, batch.ui)
-				if batch.ui {
+				viewport = renderViewport2DForSpace(c, world, item.ui)
+				if item.ui {
 					c.ResetProjectionMatrix()
 					c.SetViewMatrix(mgl32.Ident4())
 				} else if camera, projection, transform, ok := activeCamera2DComponents(world); ok {
@@ -157,7 +102,7 @@ func drawRenderPhaseList2D[T renderPhaseItem2D, P renderPhaseReader2D[T], L rend
 				}
 			} else {
 				c.ResetProjectionMatrix()
-				if batch.ui {
+				if item.ui {
 					c.SetViewMatrix(views.UI)
 				} else {
 					c.SetViewMatrix(views.World)
@@ -165,17 +110,15 @@ func drawRenderPhaseList2D[T renderPhaseItem2D, P renderPhaseReader2D[T], L rend
 				viewport = renderViewport2D{clipFromLayer: c.ProjectionMatrix().Mul4(c.ViewMatrix()), active: true}
 			}
 		}
-		if begin && batched != nil && batched(items.at(start)) {
-			for batch.end < items.len() {
-				next, nextMaterial := P(items.at(batch.end)).renderPhaseKeys()
-				if next.scene != key.scene || next.group != key.group || next.ui != key.ui || next.sortIndex != key.sortIndex || nextMaterial != material {
-					break
-				}
+		begin := previous == nil || !sameRenderBatch2D(previous, item)
+		batch := renderBatch2D{start: start, end: start + 1}
+		if begin && batched != nil && batched(item) {
+			for batch.end < items.count && sameRenderBatch2D(item, items.at(batch.end)) {
 				batch.end++
 			}
 		}
 		draw(batch, viewport, begin)
-		previous = batch
+		previous = item
 		start = batch.end
 	}
 }

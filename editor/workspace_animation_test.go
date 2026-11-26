@@ -688,6 +688,35 @@ func TestWorkspaceAnimationKeyframesCurvesSaveAndUndo(t *testing.T) {
 		t.Fatal("delete did not remove selected key")
 	}
 }
+func TestWorkspaceAnimationMoveKeyAcrossNeighbors(t *testing.T) {
+	keys := []project.AnimationKeyframeSpec[float32]{
+		{Time: 0, Value: 10}, {Time: 1, Value: 20, OutTangent: 3}, {Time: 2, Value: 30}, {Time: 3, Value: 40},
+	}
+	clip := project.AnimationClipSpec{FloatTracks: []project.AnimationTrackSpec[float32]{{Keyframes: keys}}}
+	state := workspaceAnimation{Kind: "float", Key: 1}
+	for _, step := range []struct {
+		time     float32
+		selected int
+		values   [4]float32
+	}{
+		{4, 3, [4]float32{10, 30, 40, 20}},
+		{0.5, 1, [4]float32{10, 20, 30, 40}},
+		{0.5, 1, [4]float32{10, 20, 30, 40}},
+	} {
+		if err := state.editClipKeys(&clip, "key-time", step.time); err != nil {
+			t.Fatal(err)
+		}
+		if state.Key != step.selected || state.Time != step.time || keys[state.Key].Time != step.time || keys[state.Key].OutTangent != 3 {
+			t.Fatalf("moved key at %g: selection %d, keys %+v", step.time, state.Key, keys)
+		}
+		for i, key := range keys {
+			if key.Value != step.values[i] || i > 0 && key.Time <= keys[i-1].Time {
+				t.Fatalf("key order at %g: %+v", step.time, keys)
+			}
+		}
+	}
+}
+
 func TestWorkspaceAnimationRejectsInvalidEditsAtomically(t *testing.T) {
 	a := animationEditorFixture(t)
 	animationClick(t, a, "open")

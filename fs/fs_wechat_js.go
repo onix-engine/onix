@@ -234,7 +234,7 @@ func (b *wechatBackend) resolve(name string) string {
 	return path.Join(b.root, name)
 }
 
-func callJS[T any](operation func() T) (value T, err error) {
+func callJS(operation func() js.Value) (value js.Value, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = wechatError(fmt.Sprint(recovered))

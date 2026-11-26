@@ -53,7 +53,7 @@ func (c *Content) SetIfChanged[T comparable](e ecs.Entity, v T) bool {
 }
 func (c *Content) Query2[A, B any]() iter.Seq2[ecs.Entity, ecs.Components2[A, B]] {
 	return func(yield func(ecs.Entity, ecs.Components2[A, B]) bool) {
-		if c == nil || !c.context.live || contentProtected[A]() || contentProtected[B]() || !c.queryAvailable() {
+		if c == nil || !c.context.live || contentProtected[A]() || contentProtected[B]() || !c.context.scene.running() {
 			return
 		}
 		boundary := c.beginQuery()

@@ -84,13 +84,41 @@ func (n Node) structureMutationKind(changed *uinode.Node) htmlMutation {
 // used by Clear and structural SetText instead of scanning the parent twice.
 func (n Node) detachChildrenMutationKind() htmlMutation {
 	kind := n.structureMutationKind(nil)
+	state := n.world.GetMut[htmlRenderState](n.owner)
 	n.node.KeepChildren(func(child *uinode.Node) bool {
+		state.trackDetached(child)
 		if kind&htmlMutationDefinitions == 0 && htmlSubtreeDefinesFilter(child) {
 			kind |= htmlMutationDefinitions
 		}
 		return false
 	})
 	return kind
+}
+
+// Defer retirement until synchronization: a removed subtree may have been
+// reattached elsewhere in the same frame. Appends and reorders need no sweep.
+func (state *htmlRenderState) trackDetached(node *uinode.Node) {
+	if state != nil && state.Styles != nil {
+		state.DetachedRoots = append(state.DetachedRoots, node)
+	}
+}
+
+func (state *htmlRenderState) pruneDetached() {
+	for _, root := range state.DetachedRoots {
+		if !root.Within(state.Root) {
+			walkHTMLDocument(root, state.retireNode)
+		}
+	}
+	state.DetachedRetention.Record(len(state.DetachedRoots))
+	clear(state.DetachedRoots)
+	state.DetachedRoots = state.DetachedRetention.Trim(state.DetachedRoots[:0], 64)
+}
+
+func (state *htmlRenderState) retireNode(node *uinode.Node) {
+	delete(state.Styles, node)
+	removeHTMLNodeAnimation(state, node)
+	delete(state.AnimationBaselines, node)
+	delete(state.OverflowRoutes, node)
 }
 
 func htmlDefinesFilter(node *uinode.Node) bool {

@@ -21,8 +21,7 @@ const (
 type rowFilter struct {
 	component componentID
 	kind      filterKind
-	lastRun   Tick
-	thisRun   Tick
+	window    tickWindow
 }
 
 type querySpec struct {
@@ -55,9 +54,10 @@ func (filters *queryFilters) at(index int) rowFilter {
 }
 
 type queryPlan struct {
-	spec    querySpec
-	blocks  []queryArchetypeBlock
-	scanned int
+	nextHash *queryPlan // next plan with the same mask hash
+	spec     querySpec
+	blocks   []queryArchetypeBlock
+	scanned  int
 }
 
 // Store only words containing matching tables. Dense matches use one bit per
@@ -141,7 +141,7 @@ func (world *World) resolveChangeFilter(typ reflect.Type, context *SystemContext
 	if context.World != world {
 		panic("ecs: change filter context belongs to a different world")
 	}
-	return rowFilter{component: world.identifyComponent(typ), kind: kind, lastRun: context.lastRun, thisRun: context.thisRun}
+	return rowFilter{component: world.identifyComponent(typ), kind: kind, window: newTickWindow(context.lastRun, context.thisRun)}
 }
 
 // ChangedEntityQuery visits entity IDs whose component was written during a
@@ -199,10 +199,9 @@ type queryView struct {
 // column, its block bounds and the read window the filter was created with.
 // All three are constant for the whole traversal of that table.
 type filterBinding struct {
-	ticks   []Tick
-	ranges  []tickRange
-	lastRun Tick
-	thisRun Tick
+	ticks  []Tick
+	ranges []tickRange
+	window tickWindow
 }
 
 // queryCursor shares query lifetime, table binding, tick filters and restricted
@@ -315,15 +314,14 @@ func (cursor *queryCursor) bindArchetype(archetype *archetype) {
 		binding := cursor.binding(index)
 		binding.ticks = column.ticks(filter.kind)
 		binding.ranges = column.ranges(filter.kind)
-		binding.lastRun = filter.lastRun
-		binding.thisRun = filter.thisRun
+		binding.window = filter.window
 	}
 }
 
 func (cursor *queryCursor) rangeMatches(rangeIndex int) bool {
 	for index := 0; index < cursor.view.filters.count; index++ {
 		binding := cursor.binding(index)
-		if !binding.ranges[rangeIndex].matches(rowFilter{lastRun: binding.lastRun, thisRun: binding.thisRun}) {
+		if !binding.ranges[rangeIndex].matches(binding.window) {
 			return false
 		}
 	}
@@ -333,7 +331,7 @@ func (cursor *queryCursor) rangeMatches(rangeIndex int) bool {
 func (cursor *queryCursor) groupMatches(group int) bool {
 	for index := 0; index < cursor.view.filters.count; index++ {
 		binding := cursor.binding(index)
-		if !tickGroupRange(binding.ranges, group, len(binding.ticks)).matches(rowFilter{lastRun: binding.lastRun, thisRun: binding.thisRun}) {
+		if !tickGroupRange(binding.ranges, group, len(binding.ticks)).matches(binding.window) {
 			return false
 		}
 	}
@@ -466,7 +464,7 @@ func (view *queryView) init(world *World, ids []componentID, options []QueryOpti
 }
 
 func (binding *filterBinding) matches(row int) bool {
-	return tickInRange(binding.ticks[row], binding.lastRun, binding.thisRun)
+	return binding.window.contains(binding.ticks[row])
 }
 
 func (cursor *queryCursor) remainingFiltersMatch(row int) bool {
@@ -483,13 +481,17 @@ func (w *World) queryPlan(spec querySpec) *queryPlan {
 	spec.without = spec.without[:lastMaskWord(spec.without)+1]
 	hash := spec.required.hash(0x243f6a8885a308d3)
 	hash = spec.without.hash(hash ^ 0x13198a2e03707344)
-	for _, plan := range w.queryPlans[hash] {
-		if plan.spec.required.equal(spec.required) && plan.spec.without.equal(spec.without) {
+	head := w.queryPlans[hash]
+	for plan := head; plan != nil; plan = plan.nextHash {
+		if slices.Equal(plan.spec.required, spec.required) && slices.Equal(plan.spec.without, spec.without) {
 			return plan
 		}
 	}
-	plan := &queryPlan{spec: querySpec{required: slices.Clone(spec.required), without: slices.Clone(spec.without)}}
-	w.queryPlans[hash] = append(w.queryPlans[hash], plan)
+	plan := &queryPlan{
+		nextHash: head,
+		spec:     querySpec{required: slices.Clone(spec.required), without: slices.Clone(spec.without)},
+	}
+	w.queryPlans[hash] = plan
 	return plan
 }
 

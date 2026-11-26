@@ -289,6 +289,9 @@ func TestRequestsDeferredReplyCancellationAndTimeout(t *testing.T) {
 
 func TestRequestCapacityBackpressureAndIdentityReuse(t *testing.T) {
 	f := setupRequests(t, Options{EventCapacity: 2, RequestCapacity: 1}, false)
+	if err := f.clients[0].Cancel(1); !errors.Is(err, ErrCanceled) || f.runtime.pending != nil {
+		t.Fatalf("cancel before first send returned %v with %d reserved requests", err, len(f.runtime.pending))
+	}
 	oldID, err := f.clients[0].SendTo("server", "old", RequestOptions{})
 	must(t, err)
 	if _, err := f.clients[1].SendTo("server", "second", RequestOptions{}); !errors.Is(err, ErrPendingFull) {

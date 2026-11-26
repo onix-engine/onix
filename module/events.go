@@ -56,15 +56,14 @@ type Message struct {
 	envelope envelope
 	ID       RequestID
 	delivery uint64
-	kind     eventKind
 }
 
 func (m Message) valid() bool {
 	return m.delivery != 0 && m.envelope.target != nil && m.envelope.target.delivery == m.delivery
 }
 
-func (m Message) IsRequest() bool { return m.kind == requestEvent }
-func (m Message) IsReply() bool   { return m.kind == replyEvent }
+func (m Message) IsRequest() bool { return m.envelope.kind == requestEvent }
+func (m Message) IsReply() bool   { return m.envelope.kind == replyEvent }
 
 func (m Message) Value[T any]() (T, bool) {
 	s, ok := m.envelope.store.(*store[T])
@@ -81,7 +80,7 @@ func (m Message) RequestValue[Q, R any]() (Request[Q, R], bool) {
 	}
 	value, ok := m.Value[Q]()
 	e := m.envelope
-	if !ok || e.target == nil {
+	if !ok {
 		return Request[Q, R]{}, false
 	}
 	r := e.target.runtime
@@ -100,18 +99,17 @@ func (m Message) ResultValue[T any]() (Result[T], bool) {
 	if !m.IsReply() || !m.valid() {
 		return Result[T]{}, false
 	}
-	if _, ok := m.envelope.store.(*store[T]); !ok {
+	s, ok := m.envelope.store.(*store[T])
+	if !ok {
 		return Result[T]{}, false
 	}
 	if m.Err != nil {
 		return Result[T]{ID: m.ID, Err: m.Err}, true
 	}
-	value, ok := m.Value[T]()
-	return Result[T]{ID: m.ID, Value: value}, ok
+	return Result[T]{ID: m.ID, Value: s.values[m.envelope.buffer][m.envelope.value]}, true
 }
 
 type valueStore interface {
-	deliver(*Context, envelope) error
 	forward(*Runtime, envelope) error
 	length(uint8) int
 	truncate(uint8, int)
@@ -136,9 +134,8 @@ func (s *store[T]) truncate(buffer uint8, length int) {
 	clear(s.values[buffer][length:])
 	s.values[buffer] = s.values[buffer][:length]
 }
-func (s *store[T]) deliver(c *Context, e envelope) error {
-	e.store = s
-	e.target = c
+func (e envelope) deliver(err error) error {
+	c := e.target
 	if c.message == nil {
 		return nil
 	}
@@ -149,7 +146,7 @@ func (s *store[T]) deliver(c *Context, e envelope) error {
 	previous := c.delivery
 	c.delivery = c.runtime.nextDelivery
 	defer func() { c.delivery = previous }()
-	return c.message(Message{Topic: e.topic, From: e.source.name, ID: e.id, Err: e.err, kind: e.kind, envelope: e, delivery: c.delivery})
+	return c.message(Message{Topic: e.topic, From: e.source.name, ID: e.id, Err: err, envelope: e, delivery: c.delivery})
 }
 func (s *store[T]) forward(r *Runtime, e envelope) error {
 	if !r.hasQueueSpace() {
@@ -163,7 +160,8 @@ func (s *store[T]) forward(r *Runtime, e envelope) error {
 			return err
 		}
 	}
-	return r.enqueue(r.typedStore[T](), value, e)
+	r.appendPayload(r.typedStore[T](), value, e)
+	return nil
 }
 
 // BindEmitter reserves typed buffers during Install. Emit sends to the scene;
@@ -180,11 +178,16 @@ func (r *Runtime) typedStore[T any]() *store[T] {
 		return s.(*store[T])
 	}
 	s := newStore[T](r.options.PayloadCapacity)
+	r.registerStore(key, s)
+	return s
+}
+
+func (r *Runtime) registerStore(key reflect.Type, s valueStore) {
 	// Lease policy belongs to the Go payload type, independently of slot aliases.
-	switch owned := any(s).(type) {
+	switch owned := s.(type) {
 	case *store[RenderOutputHandle]:
 		owned.drop = func(v RenderOutputHandle) { _ = v.Release() }
-		owned.retain = func(v RenderOutputHandle) (RenderOutputHandle, error) { return v.Retain() }
+		owned.retain = RenderOutputHandle.Retain
 	case *store[TextRenderResult]:
 		owned.drop = func(v TextRenderResult) { _ = v.Output.Release() }
 		owned.retain = func(v TextRenderResult) (TextRenderResult, error) {
@@ -195,7 +198,6 @@ func (r *Runtime) typedStore[T any]() *store[T] {
 	}
 	r.typedStores[key] = s
 	reserveUsedBuffers(&r.usedStores, min(len(r.typedStores), r.options.EventCapacity))
-	return s
 }
 func (c *Context) BindEmitter[T any](topic string) (Emitter[T], error) {
 	if !c.usable() {
@@ -208,9 +210,6 @@ func (c *Context) BindEmitter[T any](topic string) (Emitter[T], error) {
 }
 func (e Emitter[T]) Emit(value T) error { return e.EmitTo(SceneTarget, value) }
 func (e Emitter[T]) EmitTo(target string, value T) error {
-	if !e.context.usable() {
-		return ErrDisposed
-	}
 	receiver, err := e.context.destination(target)
 	if err != nil {
 		return err
@@ -283,7 +282,7 @@ func (c *Context) ForwardAs(target, topic string, m Message) error {
 		if !receiver.enabled {
 			return nil
 		}
-		return e.store.deliver(receiver, e)
+		return e.deliver(nil)
 	}
 	if err = e.store.forward(c.runtime, e); err != nil {
 		return err
@@ -316,33 +315,48 @@ func (p Requester[Q, R]) Send(value Q, options RequestOptions) (RequestID, error
 }
 
 func (p Requester[Q, R]) SendTo(target string, value Q, options RequestOptions) (RequestID, error) {
-	c := p.context
-	if c == nil || !c.usable() {
-		return 0, ErrDisposed
-	}
-	if !c.running() {
-		return 0, ErrUnavailable
-	}
-	r := c.runtime
-	if !r.hasQueueSpace() {
-		return 0, ErrQueueFull
-	}
-	receiver, err := c.destination(target)
+	e, err := p.context.reserveRequest(target, p.topic, p.response, options)
 	if err != nil {
 		return 0, err
 	}
+	p.context.runtime.appendPayload(p.request, value, e)
+	return e.id, nil
+}
+
+func (c *Context) reserveRequest(target, topic string, response valueStore, options RequestOptions) (envelope, error) {
+	if !c.usable() {
+		return envelope{}, ErrDisposed
+	}
+	if !c.running() {
+		return envelope{}, ErrUnavailable
+	}
+	r := c.runtime
+	if !r.hasQueueSpace() {
+		return envelope{}, ErrQueueFull
+	}
+	receiver, err := c.destination(target)
+	if err != nil {
+		return envelope{}, err
+	}
+	if r.pending == nil {
+		r.pending = make([]pendingRequest, r.options.RequestCapacity)
+		r.freePending = make([]int, len(r.pending))
+		for i := range r.freePending {
+			r.freePending[i] = len(r.pending) - 1 - i
+		}
+	}
 	if len(r.freePending) == 0 {
-		return 0, ErrPendingFull
+		return envelope{}, ErrPendingFull
 	}
 	if options.Revision.context != nil && options.Revision.context != c {
-		return 0, ErrOwnership
+		return envelope{}, ErrOwnership
 	}
 	timeout := options.TimeoutTicks
 	if timeout == 0 {
 		timeout = r.options.TimeoutTicks
 	}
 	if timeout > ^uint64(0)-r.tick {
-		return 0, ErrInvalid
+		return envelope{}, ErrInvalid
 	}
 	index := r.freePending[len(r.freePending)-1]
 	r.freePending = r.freePending[:len(r.freePending)-1]
@@ -351,36 +365,23 @@ func (p Requester[Q, R]) SendTo(target string, value Q, options RequestOptions) 
 	}
 	r.nextRequest++
 	node := &r.pending[index]
-	// Low bits identify the table slot; the monotonic sequence prevents reuse.
+	// The remainder identifies the slot and the sequence prevents identity reuse.
 	id := r.nextRequest*RequestID(len(r.pending)) + RequestID(index)
-	*node = pendingRequest{id: id, source: c, target: receiver, topic: p.topic, response: p.response, deadline: r.tick + timeout, revision: options.Revision, previous: r.pendingLast, next: -1}
+	*node = pendingRequest{id: id, source: c, target: receiver, topic: topic, response: response, deadline: r.tick + timeout, revision: options.Revision, previous: r.pendingLast, next: -1}
 	if r.pendingLast >= 0 {
 		r.pending[r.pendingLast].next = index
 	} else {
 		r.pendingFirst = index
 	}
 	r.pendingLast = index
-	err = r.enqueue(p.request, value, envelope{kind: requestEvent, source: c, target: receiver, topic: p.topic, id: node.id, pending: index})
-	if err != nil {
-		r.releasePending(index)
-		return 0, err
-	}
-	return node.id, nil
+	return envelope{kind: requestEvent, source: c, target: receiver, topic: topic, id: id, pending: index}, nil
 }
 
 func (p Requester[Q, R]) Cancel(id RequestID) error {
-	if p.context == nil || !p.context.usable() {
+	if !p.context.usable() {
 		return ErrDisposed
 	}
-	r := p.context.runtime
-	pending := r.lookupPending(int(id%RequestID(len(r.pending))), id)
-	if pending == nil {
-		return ErrCanceled
-	}
-	if pending.source != p.context {
-		return ErrOwnership
-	}
-	return r.Cancel(id)
+	return p.context.runtime.cancel(id, p.context)
 }
 
 // Request carries an opaque reply address, never the requester's Context/entity.
@@ -394,21 +395,9 @@ type Request[Q, R any] struct {
 }
 
 func (q Request[Q, R]) Reply(c *Context, value R) error {
-	if q.runtime == nil || c == nil || c.runtime != q.runtime || !c.usable() {
-		return ErrCanceled
-	}
-	p := q.runtime.lookupPending(q.pending, q.ID)
-	if p == nil || p.failure != nil || !p.source.usable() {
-		return ErrCanceled
-	}
-	if p.target != c {
-		return ErrOwnership
-	}
-	if p.replied {
-		return ErrAlreadyReplied
-	}
-	if q.runtime.tick >= p.deadline {
-		return ErrTimeout
+	p, err := q.runtime.pendingReply(c, q.pending, q.ID)
+	if err != nil {
+		return err
 	}
 	if err := q.runtime.enqueue(q.response, value, envelope{kind: replyEvent, source: c, target: p.source, topic: p.topic, id: q.ID, pending: q.pending}); err != nil {
 		return err
@@ -423,46 +412,62 @@ func (q Request[Q, R]) Fail(c *Context, err error) error {
 	if err == nil {
 		return ErrInvalid
 	}
-	if q.runtime == nil || c == nil || c.runtime != q.runtime || !c.usable() {
-		return ErrCanceled
-	}
-	p := q.runtime.lookupPending(q.pending, q.ID)
-	if p == nil || p.failure != nil || !p.source.usable() {
-		return ErrCanceled
-	}
-	if p.target != c {
-		return ErrOwnership
-	}
-	if p.replied {
-		return ErrAlreadyReplied
-	}
-	if q.runtime.tick >= p.deadline {
-		return ErrTimeout
+	p, validationErr := q.runtime.pendingReply(c, q.pending, q.ID)
+	if validationErr != nil {
+		return validationErr
 	}
 	p.failure = err
 	p.failureTick = q.runtime.tick + 1
 	return nil
 }
 
+func (r *Runtime) pendingReply(c *Context, index int, id RequestID) (*pendingRequest, error) {
+	if !c.usable() || c.runtime != r {
+		return nil, ErrCanceled
+	}
+	p := r.lookupPending(index, id)
+	if p == nil || p.failure != nil || !p.source.usable() {
+		return nil, ErrCanceled
+	}
+	if p.target != c {
+		return nil, ErrOwnership
+	}
+	if p.replied {
+		return nil, ErrAlreadyReplied
+	}
+	if r.tick >= p.deadline {
+		return nil, ErrTimeout
+	}
+	return p, nil
+}
+
 func (r *Runtime) enqueue[T any](s *store[T], value T, e envelope) error {
 	if !r.hasQueueSpace() {
 		return ErrQueueFull
 	}
+	r.appendPayload(s, value, e)
+	return nil
+}
+
+func (r *Runtime) appendPayload[T any](s *store[T], value T, e envelope) {
 	e.buffer = r.buffer()
 	if s.values[e.buffer] == nil {
 		s.values[e.buffer] = make([]T, 0, r.options.PayloadCapacity)
 	}
 	e.value = len(s.values[e.buffer])
 	e.store = s
-	if e.value == 0 {
-		r.usedStores[e.buffer] = append(r.usedStores[e.buffer], s)
-	}
 	s.values[e.buffer] = append(s.values[e.buffer], value)
+	r.queueEvent(e)
+}
+
+func (r *Runtime) queueEvent(e envelope) {
+	if e.value == 0 && e.store != nil {
+		r.usedStores[e.buffer] = append(r.usedStores[e.buffer], e.store)
+	}
 	r.queues[r.write] = append(r.queues[r.write], e)
 	if r.options.Wake != nil {
 		r.options.Wake()
 	}
-	return nil
 }
 
 type eventKind uint8
@@ -477,16 +482,15 @@ const (
 )
 
 type envelope struct {
-	err            error
 	store          valueStore
 	source, target *Context
 	observer       *slotObserver
 	slotBuffer     *slotBuffer
 	topic          string
-	slot           Slot
 	id             RequestID
 	pending        int
 	value          int
+	slotIndex      uint32
 	buffer         uint8
 	kind           eventKind
 }

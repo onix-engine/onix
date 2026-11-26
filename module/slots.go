@@ -21,15 +21,9 @@ type Slot struct {
 	index   uint32
 }
 type SlotRevision struct {
-	context  *Context
-	index    uint32
-	revision uint64
-	others   [3]slotVersion
-}
-
-type slotVersion struct {
-	index    uint32
-	revision uint64
+	context   *Context
+	revisions [4]uint64
+	indices   [4]uint32
 }
 type slotObserver struct {
 	handler func(*Context) error
@@ -81,9 +75,9 @@ func (v SlotRevision) With(other SlotRevision) SlotRevision {
 	if v.context != other.context || v.context == nil {
 		panic("module: combined revisions must belong to the same source")
 	}
-	for i := range v.others {
-		if v.others[i].revision == 0 {
-			v.others[i] = slotVersion{other.index, other.revision}
+	for i := 1; i < len(v.revisions); i++ {
+		if v.revisions[i] == 0 {
+			v.indices[i], v.revisions[i] = other.indices[0], other.revisions[0]
 			return v
 		}
 	}
@@ -116,7 +110,7 @@ func (s Slot) Read[T any]() (T, error) {
 		var zero T
 		return zero, ErrDisposed
 	}
-	decode, ok := s.context.runtime.registry.values[value.Type].(func(project.SlotValue) (T, error))
+	decode, ok := s.context.runtime.registry.decoder(value.Type).(func(project.SlotValue) (T, error))
 	if !ok || decode == nil {
 		var zero T
 		return zero, ErrType
@@ -135,18 +129,18 @@ func (s Slot) Revision() SlotRevision {
 	if !s.context.usable() {
 		return SlotRevision{}
 	}
-	return SlotRevision{context: s.context, index: s.index, revision: s.context.slots[s.index].revision}
+	return SlotRevision{context: s.context, indices: [4]uint32{s.index}, revisions: [4]uint64{s.context.slots[s.index].revision}}
 }
 
 func (v SlotRevision) stale() bool {
 	if v.context == nil {
 		return false
 	}
-	if !v.context.usable() || v.context.slots[v.index].revision != v.revision {
+	if !v.context.usable() {
 		return true
 	}
-	for _, other := range v.others {
-		if other.revision != 0 && v.context.slots[other.index].revision != other.revision {
+	for i, revision := range v.revisions {
+		if (i == 0 || revision != 0) && v.context.slots[v.indices[i]].revision != revision {
 			return true
 		}
 	}
@@ -279,10 +273,7 @@ func (w SlotWriter) Write(value project.SlotValue) error {
 		r.usedSlots[buffer] = append(r.usedSlots[buffer], w.buffer)
 	}
 	w.buffer.lengths[buffer]++
-	r.queues[r.write] = append(r.queues[r.write], envelope{kind: slotEvent, slot: w.slot, buffer: buffer, value: index, slotBuffer: w.buffer})
-	if r.options.Wake != nil {
-		r.options.Wake()
-	}
+	r.queueEvent(envelope{kind: slotEvent, target: w.slot.context, slotIndex: w.slot.index, buffer: buffer, value: index, slotBuffer: w.buffer})
 	return nil
 }
 

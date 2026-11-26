@@ -1,26 +1,40 @@
 # Onix
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) · [发布平台支持](#发布平台支持) · [快速开始](#快速开始) · [示例](#示例) · [开发文档](docs/README.zh-CN.md) · [☆ 在 GitHub 上 Star](https://github.com/onix-engine/onix)
 
-Onix 是使用 Go 编写的游戏与应用引擎，提供类型化 ECS、2D/3D 渲染与物理、
-HTML/CSS UI、音频、资源打包和项目编辑器。
+Onix 是用 Go 编写的 2D/3D 游戏与交互应用引擎。用 Go 写玩法，用 HTML/CSS 制作菜单和 HUD，再通过项目编辑器或命令行把同一个项目打包到桌面、移动端、Web 和微信小游戏。
 
-Go 模块路径为 `github.com/onix-engine/onix`，根包名为 `onix`。
+## 引擎特色
 
-## 环境要求
+- **用 Go 类型组织游戏逻辑。** 组件直接定义为 Go 类型，系统按所需组件查询实体，也可以只处理发生变化的数据。玩法模块之间通过类型化消息传值。[ECS API](docs/ecs-api-design.md) · [模块开发](docs/module-system-authoring.md)
+- **原生 HTML/CSS 界面。** Onix 负责界面的布局和绘制，并将它与游戏场景显示在同一个窗口。用 Go 通过 DOM 句柄更新文字和属性，用 CSS 关键帧和过渡制作控件动效。[界面布局与更新](docs/performance.zh-CN.md) · [CSS 动画](docs/html-css-animations.md)
+- **2D 与 3D 场景。** 在 2D 场景里编排精灵和 Spine 骨骼动画，在 3D 场景里用基于物理的材质与 HDR 环境光呈现 glTF 模型。两者都有碰撞检测和刚体模拟。[光照与材质](docs/render-lighting.md) · [2D 物理](docs/physics2d.md) · [3D 物理](docs/physics3d.md)
+- **按需渲染。** 动态场景可以连续出帧，静态界面可以等到输入、数据变化或动画需要刷新时再绘制。[帧调度](docs/design.zh-CN.md)
+- **面向目标平台构建。** 构建流程编译选定的图形后端，并为它准备着色器和纹理。[发布平台支持](#发布平台支持) · [资源打包](docs/resource-packages.md)
 
-- **Go 1.26 或更高版本**，以及用于克隆仓库的 Git。
-- **原生构建所需的 C/C++ 工具链**，启用 CGO，并安装宿主平台需要的开发库。
-  Linux 窗口系统依赖 X11、Xext、Xrender、Xi、Wayland、wayland-cursor 和 xkbcommon；
-  macOS 原生开发需要 Xcode Command Line Tools。
-- **打包或交叉编译所需的目标平台工具**。工具链与打包要求见
-  [桌面构建](docs/desktop-builds.md)和 [Android 构建](docs/android-builds.md)。
+## 发布平台支持
+
+在编辑器的 **Build Project** 中选择平台，或在命令行用 `-platform` 指定表中的平台标识。每次构建使用一个渲染后端，粗体为该平台的默认选项。
+
+| 目标平台 | 构建产物 | 渲染后端 | 构建与发布条件 |
+| --- | --- | --- | --- |
+| Windows（`windows`） | 便携 ZIP 包或 MSI 安装包 | **DirectX 11**、Vulkan、OpenGL | 在 Windows 或 Linux 上使用 MinGW-w64 构建。制作 MSI 还需 WiX 或 wixl。 |
+| macOS（`macos`） | `.app` 应用包或 `.dmg` 磁盘映像 | **Metal**、Vulkan、OpenGL | 支持通用二进制和单架构应用，可在 macOS 上构建，也可在 Linux 上用 osxcross 交叉编译。制作 DMG 需要 macOS。 |
+| Linux（`linux`） | 含可执行文件和资源的 `.tar.gz` 压缩包 | **OpenGL**、Vulkan | 在 Linux 上按构建机的 CPU 架构打包。 |
+| Android（`android`） | ARM64 APK | **Vulkan**、OpenGL ES | 需要 Android SDK、NDK、CMake 和 JDK 17+。发布前需用自己的密钥为 Release APK 签名。 |
+| iOS（`ios`） | ARM64 静态库（`libonix.a`）和 Swift 宿主文件 | **Metal** | 在 macOS 上构建，将生成文件加入 Xcode 应用目标，再通过 Xcode 归档和签名。 |
+| Web（`web`） | 包含 HTML、JavaScript 和 WebAssembly 的静态站点 | **WebGPU**、WebGL 2 | 将生成目录部署到 Web 服务器。WebGPU 需要 HTTPS 或 localhost。 |
+| 微信小游戏（`wechat`） | 含 WebAssembly 运行时的小游戏工程 | **WebGL 2** | 设置小游戏 AppID，在微信开发者工具中导入生成目录并上传。 |
+
+[桌面打包与交叉编译](docs/desktop-builds.md) · [Android 工具链](docs/android-builds.md) · [iOS 宿主集成](editor/templates/ios/host/README.md)
 
 ## 快速开始
 
-在引擎仓库根目录执行以下命令。游戏与应用项目应放在本仓库之外：
+装好 Go 1.27+、Git 和对应平台的原生构建依赖后，运行以下命令，在引擎仓库旁创建自己的项目。[构建环境要求](#环境要求)
 
 ```sh
+git clone https://github.com/onix-engine/onix.git
+cd onix
 go run ./editor/cmd/onix new ../my-game
 go run ./editor/cmd/onix check ../my-game
 go run ./editor/cmd/onix ../my-game
@@ -30,34 +44,26 @@ go run ./editor/cmd/onix ../my-game
 **Build Project** 打包项目。不带参数执行 `go run ./editor/cmd/onix`，
 则进入编辑器的新建／打开项目流程。
 
-如果目标目录及其父目录没有 Go 模块，创建项目时会生成 `go.mod`，通过本地
-`replace` 指向当前引擎仓库。也可以显式设置应用模块路径和初始视口尺寸：
+## 示例
 
-```sh
-go run ./editor/cmd/onix new -module example.com/my-game -width 1280 -height 720 ../my-game
-```
+| 运行截图 | 示例源码 | 使用的引擎功能 |
+| :---: | --- | --- |
+| [![金属头盔上映出走廊的灯光](examples/damaged_helmet/screenshot.webp)](examples/damaged_helmet/screenshot.webp) | [Damaged Helmet](examples/damaged_helmet/) | glTF 材质与 HDR 环境反射。模型由 theblueturtle_ 和 ctxwing 制作，环境图由 Greg Zaal 制作。 [素材许可](examples/damaged_helmet/README.md#资源来源) |
+| [![骑单车的鹈鹕跃过螃蟹](examples/pelican/screenshot.webp)](examples/pelican/screenshot.webp) | [鹈鹕快递](examples/pelican/) | SVG 精灵、视差滚动和 HTML/CSS 游戏界面。 |
+| [![骑在紫色迅猛龙上的角色](examples/spine/screenshot.webp)](examples/spine/screenshot.webp) | [Spine 动画库](examples/spine/) | 运行时切换八套骨骼及其动画。 |
+| [![2048 的数字方块棋盘](examples/2048/screenshot.webp)](examples/2048/screenshot.webp) | [2048](examples/2048/) | 用 Go 实现移动和撤销，通过 DOM 句柄更新 HTML/CSS 棋盘。 |
+| [![飞向绿色水管的像素小鸟](examples/flappybird/screenshot.webp)](examples/flappybird/screenshot.webp) | [Flappy Bird](examples/flappybird/) | 通过类型化消息连接输入、模拟和精灵绘制模块。 |
+| [![展示 CSS 关键帧和过渡效果的控件](examples/animations/screenshot.webp)](examples/animations/screenshot.webp) | [CSS 动画](examples/animations/) | 由引擎绘制的 CSS 关键帧、过渡和悬停交互。 |
+| [![内嵌网页上用于调用 Go 的按钮](examples/webview/screenshot.webp)](examples/webview/screenshot.webp) | [WebView](examples/webview/) | 系统 WebView 中的网页调用 Go 函数。 |
+| [![黑色窗口中的白色文字](examples/hello_world/screenshot.webp)](examples/hello_world/screenshot.webp) | [Hello World](examples/hello_world/) | 用一个 Go 文件打开窗口并绘制文字。 |
 
-### 项目结构
+## 环境要求
 
-```text
-my-game/
-  go.mod
-  go.sum
-  main.go
-  onix_generated.go
-  resources/
-    project.json
-    scenes/
-      main.json
-```
+- **Go 1.27 或更高版本**及 Git。
+- **C/C++ 工具链**，原生构建需启用 CGO。Linux 需要 X11、Xext、Xrender、Xi、Wayland、wayland-cursor 和 xkbcommon 开发库，默认渲染后端还需要 OpenGL。macOS 需要 Xcode Command Line Tools。
+- 打包和交叉编译另需目标平台的工具。[桌面构建](docs/desktop-builds.md) · [Android 构建](docs/android-builds.md)
 
-`main.go` 由应用开发者维护。`onix_generated.go` 包含生成的注册与引擎初始化代码，
-入口包括 `OnixRegistry`、`OnixInstallSystems`、`OnixModuleOptions` 和
-`OnixOpenWindow`；需要更新时重新生成此文件。新项目初始包含一个空场景。
-项目 JSON 和资源文件应放在 `resources/` 中，模块定义与行为的编写方式见
-[模块开发指南](docs/module-system-authoring.md)。
-
-### 常用命令
+## 常用命令
 
 以下命令均在引擎仓库根目录执行，选项放在项目目录参数之前。
 
@@ -71,27 +77,7 @@ my-game/
 | 构建 Web 发布版本 | `go run ./editor/cmd/onix build -platform web -mode release ../my-game` |
 
 `generate` 保留应用的 `main.go`。构建流程会收集、预处理资源，并将平台产物输出到
-项目的 `dist/` 下。发布构建使用 `onix_release` 标签和二进制资源包，应通过构建命令
-或编辑器完成准备。构建目标包括 `windows`、`macos`、`linux`、`web`、`android`、
-`ios` 和 `wechat`，各目标需满足相应的宿主平台与工具链要求。
-
-## 源码导航
-
-| 路径 | 职责 |
-| --- | --- |
-| 根包 `onix` | 应用生命周期、调度和引擎集成 |
-| [`ecs/`](ecs/) | 类型化组件、查询、系统和结构变更命令 |
-| [`module/`](module/) | 模块生命周期、类型化消息、槽位和场景管理 |
-| [`project/`](project/) | 项目校验、编译和资源预处理 |
-| [`editor/`](editor/) | 项目编辑器、代码生成、构建流程和命令行入口 |
-| [`scene/`](scene/)、[`camera/`](camera/)、[`physics/`](physics/) | 场景组件、相机和 2D/3D 物理 |
-| [`render/`](render/)、[`graphics/`](graphics/) | 渲染后端、图形数据和图像编解码 |
-| [`ui/`](ui/)、[`text/`](text/)、[`font/`](font/) | HTML/Markdown UI、文本布局和字体 |
-| [`resource/`](resource/)、[`fs/`](fs/) | 资源包和文件访问 |
-| [`window/`](window/)、[`input/`](input/)、[`audio/`](audio/) | 平台窗口、输入和音频 |
-| [`tests/`](tests/)、[`testdata/`](testdata/) | 集成检查和测试资源 |
-
-平台桥接名称使用 `Onix` 前缀；构建标签和环境变量分别使用 `onix_` 和 `ONIX_` 前缀。
+项目的 `dist/` 下。发布构建使用 `onix_release` 标签和二进制资源包。
 
 ## 开发文档
 

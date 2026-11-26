@@ -1172,7 +1172,7 @@ func TestBuildRenderPhase2DBatchesKeepsAdjacentMaterialRuns(t *testing.T) {
 	if len(batches) != 4 {
 		t.Fatalf("expected 4 batches, got %+v", batches)
 	}
-	want := []renderBatch2D{
+	want := []materialBatch2D{
 		{start: 0, end: 1, sortIndex: 5, material: renderMaterialKey{textureID: 2}},
 		{start: 1, end: 3, sortIndex: 5, material: renderMaterialKey{textureID: 3}},
 		{start: 3, end: 4, sortIndex: 5, material: renderMaterialKey{textureID: 2}},

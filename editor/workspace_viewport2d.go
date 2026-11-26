@@ -231,7 +231,7 @@ func (v *workspaceViewport2D) spawnContent(resources *project.Resources, t proje
 	return entity, nil
 }
 
-func (row *workspace2DRow) bindViewportTracks[T any](owner ecs.Entity, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
+func (row *workspace2DRow) bindViewportTracks[T scene.AnimationClipValue](owner ecs.Entity, tracks []scene.AnimationTrack[T]) ([]ecs.Entity, error) {
 	result := make([]ecs.Entity, len(tracks))
 	for i, track := range tracks {
 		result[i] = owner

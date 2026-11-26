@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
 	htmlui "github.com/onix-engine/onix/ui/html"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type workspaceField struct {
@@ -636,13 +636,17 @@ func (a *ModuleEditor) stagePatches(patches map[DocumentID][]DocumentPatch) erro
 
 // stagedViewEntry caches one decoded staged document, keyed by source identity.
 // Staged JSON is replaced wholesale, never edited in place, so this cannot go stale.
-type stagedViewEntry[T any] struct {
+type stagedViewSpec interface {
+	project.ModSpec | project.SceneSpec
+}
+
+type stagedViewEntry[T stagedViewSpec] struct {
 	spec T
 	// source is retained so a freed buffer's address cannot be reused by a newer one.
 	source []byte
 }
 
-func stagedView[T any](cache map[DocumentID]stagedViewEntry[T], target DocumentID, data []byte) (T, bool) {
+func stagedView[T stagedViewSpec](cache map[DocumentID]stagedViewEntry[T], target DocumentID, data []byte) (T, bool) {
 	if entry, ok := cache[target]; ok && len(entry.source) == len(data) && (len(data) == 0 || &entry.source[0] == &data[0]) {
 		return entry.spec, true
 	}

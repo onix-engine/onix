@@ -1,30 +1,40 @@
 # Onix
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Release platforms](#release-platforms) · [Quick start](#quick-start) · [Examples](#examples) · [Docs](docs/README.md) · [☆ Star on GitHub](https://github.com/onix-engine/onix)
 
-Onix is a game and application engine written in Go. It includes a typed ECS,
-2D and 3D rendering and physics, HTML/CSS UI, audio, resource packaging, and a
-project editor.
+Onix is a Go engine for 2D and 3D games and interactive applications. Write gameplay in Go, build menus and HUDs with HTML/CSS, and use the project editor or CLI to package the same project for desktop, mobile, the web and WeChat Mini Games.
 
-The Go module is `github.com/onix-engine/onix`; the root package is `onix`.
+## Engine features
 
-## Prerequisites
+- **Typed gameplay code.** Define components as Go types and query entities by the data a system needs. Change filters let systems skip unchanged components, and typed messages connect gameplay modules. [ECS API](docs/ecs-api-design.md) · [Module guide](docs/module-system-authoring.md)
+- **Native HTML/CSS UI.** Onix lays out and paints the interface alongside the scene. Update text and attributes from Go through DOM handles, and use CSS keyframes and transitions to animate controls. [HTML layout and updates](docs/performance.md#rendering-and-html) · [CSS animations](docs/html-css-animations.md)
+- **2D and 3D scenes.** Animate sprites and Spine skeletons in 2D, or light glTF models with physically based materials and HDR environments in 3D. Both have physics systems for collision and rigid-body simulation. [Lighting and materials](docs/render-lighting.md) · [2D physics](docs/physics2d.md) · [3D physics](docs/physics3d.md)
+- **On-demand rendering.** Use continuous rendering for a moving scene, or let a static screen rest until input, a tracked change or an animation requests a frame. [Frame scheduling](docs/design.md#scheduling-and-preparation)
+- **Platform-specific builds.** The build pipeline compiles the selected graphics backend and prepares its shaders and textures. [Release platforms](#release-platforms) · [Resource packages](docs/resource-packages.md)
 
-- **Go 1.26 or newer**, with Git to clone the repository.
-- **A C/C++ toolchain for native builds**, with CGO enabled and the development
-  libraries required by the host platform. Linux windowing uses X11, Xext,
-  Xrender, Xi, Wayland, wayland-cursor, and xkbcommon; native macOS development
-  requires Xcode Command Line Tools.
-- **Target-specific tools for packaging or cross-compilation.** See
-  [desktop builds](docs/desktop-builds.md) and
-  [Android builds](docs/android-builds.md) for toolchain and packaging requirements.
+## Release platforms
+
+Choose a target in **Build Project** or pass its ID to the CLI with `-platform`. Each build uses one renderer. The default for each target appears in bold.
+
+| Target | Build output | Renderers | Build and release notes |
+| --- | --- | --- | --- |
+| Windows (`windows`) | Portable ZIP or MSI installer | **DirectX 11**, Vulkan, OpenGL | Build with MinGW-w64 on Windows or Linux. MSI packaging also requires WiX or wixl. |
+| macOS (`macos`) | `.app` bundle or `.dmg` disk image | **Metal**, Vulkan, OpenGL | Build a universal or single-architecture app on macOS, or cross-compile it on Linux with osxcross. Creating a DMG requires macOS. |
+| Linux (`linux`) | `.tar.gz` containing the executable and resources | **OpenGL**, Vulkan | Build on Linux for the host architecture. |
+| Android (`android`) | ARM64 APK | **Vulkan**, OpenGL ES | Requires the Android SDK, NDK, CMake and JDK 17+. Sign the release APK with your publishing key. |
+| iOS (`ios`) | ARM64 static library (`libonix.a`) and Swift host files | **Metal** | Build on macOS, add the generated files to an Xcode target, then archive and sign the app in Xcode. |
+| Web (`web`) | Static site with HTML, JavaScript and WebAssembly | **WebGPU**, WebGL 2 | Deploy the generated directory to a web server. WebGPU requires HTTPS or localhost. |
+| WeChat Mini Games (`wechat`) | Mini Game project with a WebAssembly runtime | **WebGL 2** | Set your Mini Game AppID and open the generated directory in WeChat DevTools to upload it. |
+
+[Desktop packaging and cross-compilation](docs/desktop-builds.md) · [Android toolchain](docs/android-builds.md) · [iOS host integration](editor/templates/ios/host/README.md)
 
 ## Quick start
 
-Run these commands from the engine checkout. Keep game and application projects
-outside this repository:
+With Go 1.27+, Git and your platform’s native build dependencies installed, create a project alongside the engine checkout. [Build requirements](#prerequisites)
 
 ```sh
+git clone https://github.com/onix-engine/onix.git
+cd onix
 go run ./editor/cmd/onix new ../my-game
 go run ./editor/cmd/onix check ../my-game
 go run ./editor/cmd/onix ../my-game
@@ -34,36 +44,26 @@ The last command opens the editor for the new project. Use **Play** to build and
 run it, or **Build Project** to package it. Running `go run ./editor/cmd/onix`
 without arguments opens the editor's New/Open workflow.
 
-When the destination has no enclosing Go module, project creation generates a
-`go.mod` with a local `replace` pointing to this engine checkout. To set the
-application module path and initial viewport explicitly:
+## Examples
 
-```sh
-go run ./editor/cmd/onix new -module example.com/my-game -width 1280 -height 720 ../my-game
-```
+| Screenshot | Example source | Engine features in use |
+| :---: | --- | --- |
+| [![Metal helmet reflecting a lit hallway](examples/damaged_helmet/screenshot.webp)](examples/damaged_helmet/screenshot.webp) | [Damaged Helmet](examples/damaged_helmet/) | glTF materials and reflections under HDR environment lighting. Model by theblueturtle_ and ctxwing, environment by Greg Zaal. [Asset licenses](examples/damaged_helmet/README.md#资源来源) |
+| [![A pelican on a bicycle jumping over a crab](examples/pelican/screenshot.webp)](examples/pelican/screenshot.webp) | [The Pelican Post](examples/pelican/) | Parallax scrolling with SVG sprites and an HTML/CSS HUD. |
+| [![An animated rider on a purple raptor](examples/spine/screenshot.webp)](examples/spine/screenshot.webp) | [Spine gallery](examples/spine/) | Switch between eight skeletons and their animations at runtime. |
+| [![Numbered tiles on a 2048 board](examples/2048/screenshot.webp)](examples/2048/screenshot.webp) | [2048](examples/2048/) | Go move and undo logic updates an HTML/CSS board through DOM handles. |
+| [![A pixel-art bird approaching green pipes](examples/flappybird/screenshot.webp)](examples/flappybird/screenshot.webp) | [Flappy Bird](examples/flappybird/) | Typed messages connect the input, simulation and sprite modules. |
+| [![A grid of CSS keyframe and transition demos](examples/animations/screenshot.webp)](examples/animations/screenshot.webp) | [CSS animations](examples/animations/) | Native CSS keyframes, transitions and hover interactions. |
+| [![An embedded page with a button that calls Go](examples/webview/screenshot.webp)](examples/webview/screenshot.webp) | [WebView](examples/webview/) | A page in the platform WebView calls a Go handler. |
+| [![White text on a black window](examples/hello_world/screenshot.webp)](examples/hello_world/screenshot.webp) | [Hello World](examples/hello_world/) | Open a window and render text from a single Go file. |
 
-### Project layout
+## Prerequisites
 
-```text
-my-game/
-  go.mod
-  go.sum
-  main.go
-  onix_generated.go
-  resources/
-    project.json
-    scenes/
-      main.json
-```
+- **Go 1.27 or newer** and Git.
+- **A C/C++ toolchain** with CGO enabled for native builds. Linux requires the X11, Xext, Xrender, Xi, Wayland, wayland-cursor and xkbcommon development libraries, plus OpenGL for the default renderer. On macOS, install Xcode Command Line Tools.
+- Packaging and cross-compilation require the target platform’s tools. [Desktop builds](docs/desktop-builds.md) · [Android builds](docs/android-builds.md)
 
-`main.go` belongs to the application. `onix_generated.go` contains generated
-registration and engine setup through `OnixRegistry`, `OnixInstallSystems`,
-`OnixModuleOptions`, and `OnixOpenWindow`; regenerate it instead of editing it.
-Project creation starts with an empty scene. Keep project JSON and assets in
-`resources/`, and add module definitions and behavior using the
-[module authoring guide](docs/module-system-authoring.md).
-
-### Command reference
+## Command reference
 
 All commands below run from the engine checkout. Options precede the project
 directory.
@@ -79,29 +79,7 @@ directory.
 
 `generate` preserves the application's `main.go`. Builds collect and preprocess
 resources, then produce platform-specific artifacts under the project's `dist/`.
-Release builds use the `onix_release` tag and binary resource packages; use the
-build command or editor to prepare them. Build targets are `windows`, `macos`,
-`linux`, `web`, `android`, `ios`, and `wechat`, subject to their host and toolchain
-requirements.
-
-## Source map
-
-| Path | Responsibility |
-| --- | --- |
-| Root package `onix` | Application lifecycle, scheduling, and engine integration |
-| [`ecs/`](ecs/) | Typed components, queries, systems, and structural commands |
-| [`module/`](module/) | Module lifecycles, typed messages, slots, and scene management |
-| [`project/`](project/) | Project validation, compilation, and resource preprocessing |
-| [`editor/`](editor/) | Project editor, code generation, build pipeline, and CLI |
-| [`scene/`](scene/), [`camera/`](camera/), [`physics/`](physics/) | Scene components, cameras, and 2D/3D physics |
-| [`render/`](render/), [`graphics/`](graphics/) | Rendering backends, graphics data, and image codecs |
-| [`ui/`](ui/), [`text/`](text/), [`font/`](font/) | HTML/Markdown UI, text layout, and fonts |
-| [`resource/`](resource/), [`fs/`](fs/) | Resource packages and file access |
-| [`window/`](window/), [`input/`](input/), [`audio/`](audio/) | Platform windows, input, and audio |
-| [`tests/`](tests/), [`testdata/`](testdata/) | Integration checks and test fixtures |
-
-Platform bridge names use the `Onix` prefix; build tags and environment variables
-use `onix_` and `ONIX_` respectively.
+Release builds use the `onix_release` tag and binary resource packages.
 
 ## Documentation
 

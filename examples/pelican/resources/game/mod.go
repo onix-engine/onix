@@ -55,6 +55,7 @@ type Mod struct {
 	particles   [12]visual
 	windLines   [3]visual
 	coast, road [2]visual
+	landmarks   visual
 	rear        visual
 	wing        visual
 	pouch       visual
@@ -93,9 +94,10 @@ const (
 	nBest
 	nPause
 	nDeliver
+	nJump
 )
 
-var nodeIDs = [...]string{"cargo", "delivered", "hearts", "score", "progress", "distance", "chapter", "chapter-number", "weather", "notice", "station-hint", "veil", "sheet-label", "sheet-title", "sheet-description", "rules", "start", "restart", "best", "pause", "deliver"}
+var nodeIDs = [...]string{"cargo", "delivered", "hearts", "score", "progress", "distance", "chapter", "chapter-number", "weather", "notice", "station-hint", "veil", "sheet-label", "sheet-title", "sheet-description", "rules", "start", "restart", "best", "pause", "deliver", "jump"}
 var distances = func() [157]string {
 	var a [157]string
 	for i := range a {
@@ -118,6 +120,7 @@ func (m *Mod) Install(c *module.Context) error {
 	}{
 		{id: "rider", v: &m.rider}, {id: "rear-wheel", v: &m.rear}, {id: "front-wheel", v: &m.front}, {id: "crank", v: &m.crank},
 		{id: "pouch", v: &m.pouch}, {id: "wing", v: &m.wing}, {id: "shadow", v: &m.shadow}, {id: "delivery", v: &m.delivery},
+		{id: "landmarks", v: &m.landmarks},
 	} {
 		v, err := bind(c, b.id)
 		if err != nil {
@@ -125,6 +128,11 @@ func (m *Mod) Install(c *module.Context) error {
 		}
 		*b.v = v
 	}
+	m.rear.transform.Pivot = [2]float32{35, 35}
+	m.front.transform.Pivot = m.rear.transform.Pivot
+	m.crank.transform.Pivot = [2]float32{18, 18}
+	m.wing.transform.Pivot = [2]float32{108, 76}
+	m.shadow.transform.Pivot = [2]float32{90, 14}
 	groups := []struct {
 		prefix string
 		values []visual
@@ -306,10 +314,16 @@ func (m *Mod) render(c *module.Context) error {
 			err = v.show(c, b)
 		}
 	}
+	const coastWidth = 1280
+	coastOffset := float32(math.Mod(float64(m.Distance*.18), coastWidth))
+	roadOffset := float32(math.Mod(float64(m.Distance), coastWidth))
 	for i := range m.coast {
-		pose(&m.coast[i], float32(i)*1280-float32(math.Mod(float64(m.Distance*.18), 1280)), 270, 0, 1, 1)
-		pose(&m.road[i], float32(i)*1280-float32(math.Mod(float64(m.Distance), 1280)), 600, 0, 1, 1)
+		tileX := float32(i) * coastWidth
+		pose(&m.coast[i], tileX-coastOffset, 270, 0, 1, 1)
+		pose(&m.road[i], tileX-roadOffset, 600, 0, 1, 1)
 	}
+	// The three islands are spaced one screen apart, one per district.
+	pose(&m.landmarks, -m.Distance*(coastWidth/districtLength), 354, 0, 1, 1)
 	x, y, scale := riderX, float32(606)-m.Height, float32(1)
 	if m.Phase == ready {
 		x = 905
@@ -323,17 +337,13 @@ func (m *Mod) render(c *module.Context) error {
 	pose(&m.rider, x, y, rotation, scale, scale)
 	show(&m.rider, m.Invincible == 0 || int(m.Elapsed*14)%2 == 0)
 	wheelAngle := m.Distance / 32
-	m.rear.transform.Pivot = [2]float32{35, 35}
-	// Wheels rotate about their centers, with authored top-left positions.
 	pose(&m.rear, -83, -70, wheelAngle, 1, 1)
-	m.front.transform.Pivot = [2]float32{35, 35}
 	pose(&m.front, 42, -70, wheelAngle, 1, 1)
-	m.crank.transform.Pivot = [2]float32{18, 18}
 	pose(&m.crank, 12, -52, wheelAngle*.65, 1, 1)
 	pose(&m.pouch, 69, -176, 0, 1, 1+float32(m.Cargo)*.065)
 	show(&m.wing, m.Gliding || m.Height > 0 && m.Velocity > 180)
-	pose(&m.wing, -64, -237, float32(math.Sin(float64(m.Elapsed*16)))*.09, 1, 1)
-	pose(&m.shadow, x-90, 596, 0, max(.45, 1-m.Height/500), 1)
+	pose(&m.wing, -104, -221, float32(math.Sin(float64(m.Elapsed*16)))*.09, 1, 1)
+	pose(&m.shadow, x+15*scale-90, 593, 0, scale*max(.45, 1-m.Height/500), 1)
 	used := 0
 	for i := m.First; i < m.Count; i++ {
 		o := &m.Objects[i]
@@ -396,7 +406,7 @@ func (m *Mod) render(c *module.Context) error {
 }
 func (m *Mod) renderHUD() {
 	n := &m.nodes
-	values := [7]int{m.Cargo, m.Delivered, m.Hearts, m.Score, int(m.Distance / routeLength * 100), int(m.Distance / 100), min(2, int(m.Distance/5200))}
+	values := [7]int{m.Cargo, m.Delivered, m.Hearts, m.Score, int(m.Distance / routeLength * 100), int(m.Distance / 100), min(2, int(m.Distance/districtLength))}
 	for i := 0; i < 4; i++ {
 		if values[i] != m.hudStamp[i] {
 			n[i].SetText(strconv.Itoa(values[i]))
@@ -446,7 +456,15 @@ func (m *Mod) renderHUD() {
 		return
 	}
 	m.lastPhase = m.Phase
+	for _, id := range [...]int{nJump, nDeliver, nPause} {
+		if m.Phase == riding || id == nPause && m.Phase == paused {
+			n[id].RemoveAttribute("disabled")
+		} else {
+			n[id].SetAttribute("disabled", "")
+		}
+	}
 	n[nVeil].SetHidden(m.Phase == riding)
+	n[nBest].SetHidden(m.Phase == paused)
 	n[nRules].SetHidden(m.Phase != ready)
 	n[nRestart].SetHidden(m.Phase == ready)
 	n[nStart].SetHidden(m.Phase == crashed || m.Phase == finished)

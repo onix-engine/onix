@@ -84,6 +84,10 @@ func (f *FontService) Load(c *Context, resource string) error {
 		if loadErr != nil {
 			return loadErr
 		}
+		if c.runtime.fonts == nil {
+			c.runtime.fonts = make(map[[32]byte]*fontResource)
+			c.runtime.outputs = scene.NewRenderOutputPool(c.runtime.options.OutputCapacity)
+		}
 		shared = &fontResource{runtime: c.runtime, key: key, font: font, outputs: make(map[TextRenderRequest]*fontOutput)}
 		c.runtime.fonts[key] = shared
 	}

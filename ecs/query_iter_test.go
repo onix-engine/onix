@@ -100,6 +100,37 @@ func TestQueryInRebindsFiltersWhenRevisitingTable(t *testing.T) {
 	}
 }
 
+func TestQueryFilterObservesWritesToLaterRows(t *testing.T) {
+	world := NewWorld()
+	spawn := world.NewSpawner2[testPosition, testVelocity]()
+	for range queryTickBlockSize {
+		spawn.Spawn(testPosition{}, testVelocity{})
+	}
+	last := world.ChangeTick()
+	first := spawn.Spawn(testPosition{}, testVelocity{})
+	second := spawn.Spawn(testPosition{}, testVelocity{})
+	third := spawn.Spawn(testPosition{}, testVelocity{})
+
+	window := world.ChangesSince(last)
+	var visited []Entity
+	for entity, row := range world.Query2[testPosition, testVelocity](window.Changed[testPosition]()).All {
+		visited = append(visited, entity)
+		row.B.Mut().X++
+		if entity == first {
+			world.GetMut[testPosition](second).X++
+		}
+	}
+	want := []Entity{first, third}
+	if !slices.Equal(visited, want) {
+		t.Fatalf("visited %v, want %v", visited, want)
+	}
+	written := world.ChangesSince(window.ThisRun())
+	got := slices.Collect(written.ChangedEntities(Type[testVelocity]()).All)
+	if !slices.Equal(got, want) {
+		t.Fatalf("marked velocity changes on %v, want %v", got, want)
+	}
+}
+
 func TestQueryInPreservesOrderFiltersAndGenerations(t *testing.T) {
 	world := NewWorld()
 	spawner := world.NewSpawner2[testPosition, testVelocity]()

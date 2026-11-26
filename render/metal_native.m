@@ -150,6 +150,24 @@ void onix_metal_buffer_memory(OnixMetalDriver *driver, OnixBufferMemory *memory)
 	memory->readback = driver->readback_capacity;
 }
 
+int onix_metal_target_size(OnixMetalDriver *driver, int64_t target_id, uint32_t *width, uint32_t *height) {
+	if (driver == NULL) return 0;
+	if (target_id <= 0) {
+		CAMetalLayer *layer = target_id == 0 ? driver->layer : driver->caret_layer;
+		if (layer == nil) return 0;
+		CGSize size = layer.drawableSize;
+		*width = (uint32_t)size.width;
+		*height = (uint32_t)size.height;
+	} else {
+		if (target_id > driver->target_slots.count) return 0;
+		OnixMetalRenderTarget *target = &driver->render_targets[target_id - 1];
+		if (target->color_texture == 0) return 0;
+		*width = target->width;
+		*height = target->height;
+	}
+	return 1;
+}
+
 static _Thread_local char onix_metal_error[1024];
 
 static const char *onix_metal_source =

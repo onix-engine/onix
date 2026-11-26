@@ -43,7 +43,7 @@ type Hierarchy struct {
 	entityChanges, ordered  []ecs.Entity
 	siblings                []hierarchySibling
 	nodes                   []hierarchyNode
-	entityPositions         []uint32
+	entityPositions         []uint32 // entity slot to one-based position in nodes and entities
 	retention               [7]reuse.Retention
 	versions, detached      [4]uint64
 	version                 uint64
@@ -154,10 +154,14 @@ func (h *Hierarchy) Depth(entity ecs.Entity) int {
 
 func (h *Hierarchy) node(entity ecs.Entity) *hierarchyNode {
 	index, ok := entity.Index()
-	if !ok || int(index) >= len(h.nodes) || h.nodes[index].entity != entity {
+	if !ok || int(index) >= len(h.entityPositions) {
 		return nil
 	}
-	return &h.nodes[index]
+	position := h.entityPositions[index]
+	if position == 0 || h.nodes[position-1].entity != entity {
+		return nil
+	}
+	return &h.nodes[position-1]
 }
 
 func (h *Hierarchy) sync(world *ecs.World) {
@@ -254,13 +258,15 @@ func (h *Hierarchy) syncEntities(world *ecs.World) bool {
 				child = next
 			}
 			index, _ := entity.Index()
-			position := h.entityPositions[index]
 			last := len(h.entities) - 1
-			moved := h.entities[last]
-			movedIndex, _ := moved.Index()
-			h.entities[position], h.entityPositions[movedIndex] = moved, position
+			position := h.entityPositions[index]
+			*node = h.nodes[last]
+			h.entities[position-1] = node.entity
+			movedIndex, _ := node.entity.Index()
+			h.entityPositions[movedIndex] = position
+			h.entityPositions[index] = 0
 			h.entities = h.entities[:last]
-			*node = hierarchyNode{}
+			h.nodes = h.nodes[:last]
 		}
 	}
 	first := len(h.entities)
@@ -269,9 +275,9 @@ func (h *Hierarchy) syncEntities(world *ecs.World) bool {
 			h.addEntity(world, entity)
 		}
 	}
-	for _, entity := range h.entities[first:] {
-		h.link(h.node(entity))
-		h.mark(entity)
+	for i := first; i < len(h.nodes); i++ {
+		h.link(&h.nodes[i])
+		h.mark(h.nodes[i].entity)
 	}
 	h.version++
 	return true
@@ -280,17 +286,18 @@ func (h *Hierarchy) syncEntities(world *ecs.World) bool {
 func (h *Hierarchy) rebuild(world *ecs.World) {
 	for _, entity := range h.entities {
 		index, _ := entity.Index()
-		h.nodes[index] = hierarchyNode{}
+		h.entityPositions[index] = 0
 	}
 
+	h.nodes = h.nodes[:0]
 	h.entities = h.entities[:0]
 	h.ordered = h.ordered[:0]
 	clear(h.missingParents)
 	for entity := range world.Entities() {
 		h.addEntity(world, entity)
 	}
-	for _, entity := range h.entities {
-		h.link(h.node(entity))
+	for i := range h.nodes {
+		h.link(&h.nodes[i])
 	}
 	h.version++
 	h.invalidated = len(h.entities)
@@ -298,14 +305,13 @@ func (h *Hierarchy) rebuild(world *ecs.World) {
 
 func (h *Hierarchy) addEntity(world *ecs.World, entity ecs.Entity) {
 	index, _ := entity.Index()
-	if int(index) >= len(h.nodes) {
-		grow := int(index) + 1 - len(h.nodes)
-		h.nodes = append(h.nodes, make([]hierarchyNode, grow)...)
+	if int(index) >= len(h.entityPositions) {
+		grow := int(index) + 1 - len(h.entityPositions)
 		h.entityPositions = append(h.entityPositions, make([]uint32, grow)...)
 	}
 	parent, _ := world.Get[Parent](entity)
-	h.nodes[index] = hierarchyNode{entity: entity, parent: parent.Entity, local: hierarchyLocalFlags(world, entity)}
-	h.entityPositions[index] = uint32(len(h.entities))
+	h.nodes = append(h.nodes, hierarchyNode{entity: entity, parent: parent.Entity, local: hierarchyLocalFlags(world, entity)})
+	h.entityPositions[index] = uint32(len(h.nodes))
 	h.entities = append(h.entities, entity)
 }
 
@@ -469,11 +475,11 @@ func (h *Hierarchy) MaintainCache() {
 	h.entities = h.retention[0].Trim(h.entities, 64)
 	h.queue = h.retention[1].Trim(h.queue[:0], 64)
 	h.path = h.retention[2].Trim(h.path[:0], 64)
-	length := len(h.nodes)
-	for length > 0 && h.nodes[length-1].entity == 0 {
+	length := len(h.entityPositions)
+	for length > 0 && h.entityPositions[length-1] == 0 {
 		length--
 	}
-	h.nodes = h.retention[3].Trim(h.nodes[:length], 64)
+	h.nodes = h.retention[3].Trim(h.nodes, 64)
 	h.entityPositions = h.retention[4].Trim(h.entityPositions[:length], 64)
 	h.ordered = h.retention[5].Trim(h.ordered[:0], 64)
 	h.siblings = h.retention[6].Trim(h.siblings[:0], 16)

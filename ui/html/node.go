@@ -149,6 +149,7 @@ func (n Node) Remove() bool {
 	if !parent.RemoveChild(n.node) {
 		return false
 	}
+	n.world.GetMut[htmlRenderState](n.owner).trackDetached(n.node)
 	element.SynchronizeTextContent(parent)
 	parentNode.markMutation(kind)
 	return true

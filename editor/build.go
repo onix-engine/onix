@@ -586,12 +586,11 @@ func buildWASM(root string, options BuildOptions) (string, error) {
 	})
 }
 
-func (layout projectBuildLayout) withResourceOverlay[T any](build func() (T, error)) (T, error) {
+func (layout projectBuildLayout) withResourceOverlay(build func() (string, error)) (string, error) {
 	result, buildErr := build()
 	cleanupErr := cleanupResourceOverlay(layout)
 	if err := errors.Join(buildErr, cleanupErr); err != nil {
-		var zero T
-		return zero, err
+		return "", err
 	}
 	return result, nil
 }

@@ -95,11 +95,16 @@ func (a *AttributeSet) SortedAttributes() iter.Seq2[string, string] {
 			return
 		}
 		if a.data.large != nil {
-			names := make([]string, 0, len(a.data.large))
-			for name := range a.data.large {
-				names = append(names, name)
+			var local [16]string
+			names := local[:0]
+			if len(a.data.large) <= len(local) {
+				for name := range a.data.large {
+					names = append(names, name)
+				}
+				smallsort.InsertionSortFunc(names, cmp.Compare[string])
+			} else {
+				names = slices.Sorted(maps.Keys(a.data.large))
 			}
-			slices.Sort(names)
 			for _, name := range names {
 				if !yield(name, a.data.large[name]) {
 					return

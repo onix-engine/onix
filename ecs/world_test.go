@@ -635,7 +635,7 @@ func TestPutEntityPanicRollsBackReservation(t *testing.T) {
 		world.Spawn(bundle)
 	}()
 
-	if world.EntityCount() != 0 || len(world.entities) != 1 || world.entities[0].state != entityFree || len(world.free) != 1 {
+	if world.EntityCount() != 0 || world.EntitySlots() != 1 || len(world.free) != 1 || world.free[0] != 0 {
 		t.Fatalf("failed spawn leaked reservation: count=%d entities=%+v free=%v", world.EntityCount(), world.entities, world.free)
 	}
 	matched := 0

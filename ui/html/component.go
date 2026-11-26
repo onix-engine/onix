@@ -9,6 +9,7 @@ import (
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/html/css"
 	"github.com/onix-engine/onix/html/element"
+	"github.com/onix-engine/onix/html/markup"
 	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/scene"
 	uinode "github.com/onix-engine/onix/scene/node"
@@ -24,6 +25,13 @@ type Template struct {
 // NewTemplate creates a component template from an HTML fragment.
 func NewTemplate(source string) Template {
 	return Template{Source: source}
+}
+
+// BuildTemplate builds and compiles a native component document once.
+func BuildTemplate(build func(*markup.Builder)) (Template, error) {
+	var b markup.Builder
+	build(&b)
+	return NewDocumentTemplate(b.Document())
 }
 
 // NewDocumentTemplate takes ownership of a parsed document without serializing
@@ -583,7 +591,7 @@ type htmlComponentAttrValue struct {
 	Removed bool
 }
 
-type htmlComponentVNodeList[T any] struct {
+type htmlComponentVNodeList[T VNode | ComponentVNode] struct {
 	Values []T
 	Active bool
 }
@@ -1028,6 +1036,7 @@ func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*uinod
 			parents[node.Parent] = struct{}{}
 		}
 	}
+	state := world.GetMut[htmlRenderState](owner)
 	for parent := range parents {
 		parentNode := Node{world: world, owner: owner, node: parent}
 		kind := parentNode.structureMutationKind(nil)
@@ -1036,6 +1045,7 @@ func removeHTMLComponentRoots(world *ecs.World, owner ecs.Entity, roots []*uinod
 			if _, remove := removed[child]; !remove {
 				return true
 			}
+			state.trackDetached(child)
 			if kind&htmlMutationDefinitions == 0 && htmlSubtreeDefinesFilter(child) {
 				kind |= htmlMutationDefinitions
 			}
@@ -1661,6 +1671,7 @@ func reconcileHTMLComponentVNodeList(world *ecs.World, owner ecs.Entity, parent 
 					list.Removed = make(map[*uinode.Node]struct{})
 				}
 				list.Removed[item.Node] = struct{}{}
+				world.GetMut[htmlRenderState](owner).trackDetached(item.Node)
 			}
 			clearHTMLComponentVNodeChildren(children, item.Node)
 			changed = true
@@ -1727,7 +1738,18 @@ func reconcileHTMLComponentVNodeChildren(world *ecs.World, owner ecs.Entity, par
 		}
 	}
 	if changed {
-		parent.ClearChildren()
+		// Retained keyed nodes already belong to parent. Mark them before
+		// replacing the child slice to identify any displaced unmanaged nodes.
+		for _, item := range items {
+			item.Node.Parent = nil
+		}
+		state := world.GetMut[htmlRenderState](owner)
+		parent.KeepChildren(func(child *uinode.Node) bool {
+			if child.Parent == parent {
+				state.trackDetached(child)
+			}
+			return false
+		})
 		for _, item := range items {
 			parent.AppendChild(item.Node)
 		}

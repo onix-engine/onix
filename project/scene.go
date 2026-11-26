@@ -794,20 +794,19 @@ func (s *SceneInstance) RenderItems() []SceneRenderItem {
 		return nil
 	}
 	items := make([]SceneRenderItem, 0, s.World.EntityCount())
-	items = appendSceneRenderItemsForTransform(s.World, items, false, func(transform sceneapi.GlobalTransform) mgl32.Mat4 {
-		return transform.Matrix
+	items = appendSceneRenderItemsForTransform(s.World, items, false, func(transform *sceneapi.GlobalTransform) float32 {
+		return transform.Matrix[14]
 	})
-	items = appendSceneRenderItemsForTransform(s.World, items, true, func(transform sceneapi.UIGlobalTransform) mgl32.Mat4 {
-		return transform.Matrix
+	items = appendSceneRenderItemsForTransform(s.World, items, true, func(transform *sceneapi.UIGlobalTransform) float32 {
+		return transform.Matrix[14]
 	})
 	sortSceneRenderItems(items)
 	return items
 }
 
-func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRenderItem, ui bool, matrix func(T) mgl32.Mat4) []SceneRenderItem {
+func appendSceneRenderItemsForTransform[T sceneapi.GlobalTransform | sceneapi.UIGlobalTransform](world *ecs.World, items []SceneRenderItem, ui bool, depth func(*T) float32) []SceneRenderItem {
 	for entity, access := range world.Query3[sceneapi.Sprite2D, T, sceneapi.Visibility]().All {
-		sprite := access.A.Get()
-		transform := access.B.Get()
+		sprite := access.A.Ref()
 		visibility := access.C.Get()
 
 		if !visibility.Visible || sprite.Texture == nil || !sprite.Texture.Valid() {
@@ -817,14 +816,13 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Entity:    entity,
 			UI:        ui,
 			SortIndex: sceneSortIndex(world, entity, ui, 0),
-			Depth:     matrix(transform)[14],
+			Depth:     depth(access.B.Ref()),
 			Sequence:  uint64(entity),
 			Material:  sprite.Texture.BatchKey(),
 		})
 	}
 	for entity, access := range world.Query3[sceneapi.ParticleEmitter2D, T, sceneapi.Visibility]().All {
-		emitter := access.A.Get()
-		transform := access.B.Get()
+		emitter := access.A.Ref()
 		visibility := access.C.Get()
 
 		if !visibility.Visible {
@@ -838,26 +836,24 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Entity:    entity,
 			UI:        ui,
 			SortIndex: sceneSortIndex(world, entity, ui, int(sceneapi.DefaultParticleRenderOrder)),
-			Depth:     matrix(transform)[14],
+			Depth:     depth(access.B.Ref()),
 			Sequence:  uint64(entity),
 			Material:  texture.BatchKey(),
 		})
 	}
 	for entity, access := range world.Query3[sceneapi.Tilemap2D, T, sceneapi.Visibility]().All {
-		tilemap := access.A.Get()
-		transform := access.B.Get()
+		tilemap := access.A.Ref()
 		visibility := access.C.Get()
 
 		if !visibility.Visible || !tilemap.Valid() {
 			continue
 		}
 		items = append(items, SceneRenderItem{
-			Entity: entity, UI: ui, SortIndex: sceneSortIndex(world, entity, ui, 0), Depth: matrix(transform)[14], Sequence: uint64(entity), Material: tilemap.Texture.BatchKey(),
+			Entity: entity, UI: ui, SortIndex: sceneSortIndex(world, entity, ui, 0), Depth: depth(access.B.Ref()), Sequence: uint64(entity), Material: tilemap.Texture.BatchKey(),
 		})
 	}
 	for entity, access := range world.Query3[sceneapi.Text2D, T, sceneapi.Visibility]().All {
-		text := access.A.Get()
-		transform := access.B.Get()
+		text := access.A.Ref()
 		visibility := access.C.Get()
 
 		if !visibility.Visible || strings.TrimSpace(text.Value) == "" || text.Font == nil {
@@ -867,19 +863,18 @@ func appendSceneRenderItemsForTransform[T any](world *ecs.World, items []SceneRe
 			Entity:    entity,
 			UI:        ui,
 			SortIndex: sceneSortIndex(world, entity, ui, 0),
-			Depth:     matrix(transform)[14],
+			Depth:     depth(access.B.Ref()),
 			Sequence:  uint64(entity),
 		})
 	}
 	for entity, access := range world.Query3[sceneapi.Spine2D, T, sceneapi.Visibility]().All {
-		component := access.A.Get()
-		transform := access.B.Get()
+		component := access.A.Ref()
 		visibility := access.C.Get()
 
 		if !visibility.Visible || component.Player == nil {
 			continue
 		}
-		items = append(items, SceneRenderItem{Entity: entity, UI: ui, SortIndex: sceneSortIndex(world, entity, ui, 0), Depth: matrix(transform)[14], Sequence: uint64(entity), Material: component.Player.Resource.Texture.BatchKey()})
+		items = append(items, SceneRenderItem{Entity: entity, UI: ui, SortIndex: sceneSortIndex(world, entity, ui, 0), Depth: depth(access.B.Ref()), Sequence: uint64(entity), Material: component.Player.Resource.Texture.BatchKey()})
 	}
 	return items
 }
@@ -2458,7 +2453,7 @@ func (s *SceneInstance) claimExistingRuntimeAnimationTargets(children map[runtim
 	return nil
 }
 
-func (s *SceneInstance) resolveRuntimeAnimationTrackTargets[T any](children map[runtimeAnimationChildKey]runtimeAnimationChild, owner ecs.Entity, tracks []sceneapi.AnimationTrack[T], kind animationTrackTargetKind, claims map[runtimeAnimationClaim]ecs.Entity, seen map[runtimeAnimationSeen]struct{}, result []ecs.Entity) error {
+func (s *SceneInstance) resolveRuntimeAnimationTrackTargets[T sceneapi.AnimationClipValue](children map[runtimeAnimationChildKey]runtimeAnimationChild, owner ecs.Entity, tracks []sceneapi.AnimationTrack[T], kind animationTrackTargetKind, claims map[runtimeAnimationClaim]ecs.Entity, seen map[runtimeAnimationSeen]struct{}, result []ecs.Entity) error {
 	for index, track := range tracks {
 		entity, err := s.resolveRuntimeAnimationPathIndexed(children, owner, track.Binding.Path)
 		if err != nil {

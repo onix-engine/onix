@@ -12,6 +12,9 @@ typedef struct OnixMetalDriver OnixMetalDriver;
 int onix_metal_trim_idle(OnixMetalDriver *driver);
 void onix_metal_buffer_memory(OnixMetalDriver *driver, OnixBufferMemory *memory);
 
+// Zero selects the window layer, -1 the caret layer, positive IDs live offscreen targets.
+int onix_metal_target_size(OnixMetalDriver *driver, int64_t target_id, uint32_t *width, uint32_t *height);
+
 typedef struct {
 	float model[6];
 	float texture_model[6];

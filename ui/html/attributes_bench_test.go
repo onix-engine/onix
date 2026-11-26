@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/onix-engine/onix/html/markup"
 	"github.com/onix-engine/onix/html/parse"
 	uinode "github.com/onix-engine/onix/scene/node"
 )
@@ -26,7 +27,7 @@ func BenchmarkHTMLAttributeTemplates(b *testing.B) {
 	b.Run("serialize", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			attributeHTMLSink = serializeHTMLNode(root)
+			attributeHTMLSink = markup.HTML(root)
 		}
 	})
 }

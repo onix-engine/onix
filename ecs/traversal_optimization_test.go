@@ -74,7 +74,7 @@ func TestTraversalPartialCommandRollback(t *testing.T) {
 		t.Fatalf("rollback lost retained values: positions=%v velocities=%v", positions.values, velocities.values)
 	}
 	commands.trimStorage()
-	if len(commands.spawnEntries) != 1 {
+	if len(commands.spawns.entries) != 1 {
 		t.Fatal("incorrect retained spawn entries")
 	}
 	if world.cancelReserved(discarded) {

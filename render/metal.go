@@ -3,8 +3,8 @@
 package render
 
 /*
-#cgo darwin LDFLAGS: -framework Foundation -framework Metal -framework QuartzCore -framework CoreVideo -framework IOSurface
-#cgo ios LDFLAGS: -framework Foundation -framework Metal -framework QuartzCore -framework CoreVideo -framework IOSurface
+#cgo darwin LDFLAGS: -framework Foundation -framework Metal -framework QuartzCore -framework CoreVideo -framework IOSurface -framework CoreGraphics
+#cgo ios LDFLAGS: -framework Foundation -framework Metal -framework QuartzCore -framework CoreVideo -framework IOSurface -framework CoreGraphics
 // These entry points consume or copy their Go arguments before returning.
 #cgo noescape onix_metal_begin_frame
 #cgo nocallback onix_metal_begin_frame
@@ -419,7 +419,7 @@ func (d *metalDriver) DestroyMaterial2DShader(handle Material2DShaderHandle) err
 	})
 }
 
-func createMetalShader[R any](descriptor ShaderDescriptor, kind string, pool *GenerationPool[R, uint32], create func(*C.char, C.size_t) C.uint32_t) (Handle[R], error) {
+func createMetalShader[R ShaderResource](descriptor ShaderDescriptor, kind string, pool *GenerationPool[R, uint32], create func(*C.char, C.size_t) C.uint32_t) (Handle[R], error) {
 	if err := descriptor.Validate(); err != nil {
 		return Handle[R]{}, err
 	}

@@ -2,10 +2,9 @@ package html
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/onix-engine/onix/ecs"
-	uinode "github.com/onix-engine/onix/scene/node"
+	"github.com/onix-engine/onix/html/markup"
 )
 
 // Serialize returns the current retained HTML document for page.
@@ -20,7 +19,7 @@ func Serialize(world *ecs.World, page ecs.Entity) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return serializeHTMLNode(root.node), nil
+	return markup.HTML(root.node), nil
 }
 
 // Serialize serializes this retained node and all of its descendants as HTML
@@ -29,108 +28,5 @@ func (n Node) Serialize() (string, error) {
 	if !n.valid() {
 		return "", fmt.Errorf("ecs: html node is invalid")
 	}
-	return serializeHTMLNode(n.node), nil
-}
-
-func serializeHTMLNode(node *uinode.Node) string {
-	if node == nil {
-		return ""
-	}
-	var builder strings.Builder
-	writeHTMLNode(&builder, node)
-	return builder.String()
-}
-
-func writeHTMLNode(builder *strings.Builder, node *uinode.Node) {
-	if node == nil {
-		return
-	}
-	switch node.Type {
-	case uinode.DocumentNode:
-		for _, child := range node.Children {
-			writeHTMLNode(builder, child)
-		}
-	case uinode.TextNode:
-		writeEscapedHTMLText(builder, node.Data)
-	case uinode.ElementNode:
-		builder.WriteByte('<')
-		builder.WriteString(node.Data)
-		writeHTMLAttributes(builder, node)
-		builder.WriteByte('>')
-		if htmlComponentVoidTag(node.Data) {
-			return
-		}
-		for _, child := range node.Children {
-			writeHTMLNode(builder, child)
-		}
-		builder.WriteString("</")
-		builder.WriteString(node.Data)
-		builder.WriteByte('>')
-	}
-}
-
-func writeHTMLAttributes(builder *strings.Builder, node *uinode.Node) {
-	for name, value := range node.SortedAttributes() {
-		builder.WriteByte(' ')
-		builder.WriteString(name)
-		builder.WriteString("=\"")
-		writeEscapedHTMLAttribute(builder, value)
-		builder.WriteByte('"')
-	}
-}
-
-func writeEscapedHTMLText(builder *strings.Builder, value string) {
-	start := 0
-	for index := 0; index < len(value); index++ {
-		var replacement string
-		switch value[index] {
-		case '&':
-			replacement = "&amp;"
-		case '<':
-			replacement = "&lt;"
-		case '>':
-			replacement = "&gt;"
-		case 0:
-			replacement = "\xef\xbf\xbd"
-		default:
-			continue
-		}
-		if start < index {
-			builder.WriteString(value[start:index])
-		}
-		builder.WriteString(replacement)
-		start = index + 1
-	}
-	if start < len(value) {
-		builder.WriteString(value[start:])
-	}
-}
-
-func writeEscapedHTMLAttribute(builder *strings.Builder, value string) {
-	start := 0
-	for index := 0; index < len(value); index++ {
-		var replacement string
-		switch value[index] {
-		case '&':
-			replacement = "&amp;"
-		case '<':
-			replacement = "&lt;"
-		case '>':
-			replacement = "&gt;"
-		case '"':
-			replacement = "&quot;"
-		case 0:
-			replacement = "\xef\xbf\xbd"
-		default:
-			continue
-		}
-		if start < index {
-			builder.WriteString(value[start:index])
-		}
-		builder.WriteString(replacement)
-		start = index + 1
-	}
-	if start < len(value) {
-		builder.WriteString(value[start:])
-	}
+	return markup.HTML(n.node), nil
 }

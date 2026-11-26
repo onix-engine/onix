@@ -321,7 +321,16 @@ func tableCellIntrinsicWidths(box *Box, face *font.Face, styles style.Map, ctx *
 	for _, segment := range collectInlineSegmentsWithIndex(box.Node, styles, ctx, nil) {
 		if segment.Kind == inlineSegmentImage {
 			width, _ := resolveInlineImageSize(segment.Node, segment.Style, ctx)
-			minimum, line = max(minimum, width), line+width
+			minWidth := width
+			if limit := segment.Style.MaxWidth; style.IsLength(limit) {
+				// A cyclic percentage on a replaced element resolves against
+				// zero for min-content and is indefinite for max-content.
+				minWidth = min(width, max(resolveLength(limit, 0), 0))
+				if limit.Percent == 0 {
+					width = minWidth
+				}
+			}
+			minimum, line = max(minimum, minWidth), line+width
 			continue
 		}
 		if segment.Kind == inlineSegmentControl {

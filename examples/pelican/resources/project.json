@@ -3,7 +3,7 @@
   "scenes": [
     "main.json"
   ],
-  "clearColor": "#d5ece8",
+  "clearColor": "#214558",
   "window": {
     "width": 1280,
     "height": 800,

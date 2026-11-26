@@ -420,19 +420,14 @@ func (m *SceneManager) prepareScene(target *Scene, id project.SceneID, startup S
 	parkedQueues, parkedPending, parkedFree := r.queues, r.pending, r.freePending
 	parkedFirst, parkedLast, parkedWrite, parkedTick := r.pendingFirst, r.pendingLast, r.write, r.tick
 	p := &r.prepareWorkspace
-	if p.pending == nil {
-		p.pending = make([]pendingRequest, r.options.RequestCapacity)
-		p.free = make([]int, r.options.RequestCapacity)
+	if p.queues[0] == nil {
 		for i := range p.queues {
 			p.queues[i] = make([]envelope, 0, r.options.EventCapacity)
 		}
 	}
 	p.scene = target
 	r.preparation = p
-	r.queues, r.pending, r.freePending = p.queues, p.pending, p.free[:r.options.RequestCapacity]
-	for i := range r.freePending {
-		r.freePending[i] = r.options.RequestCapacity - 1 - i
-	}
+	r.queues, r.pending, r.freePending = p.queues, p.pending, p.free
 	r.pendingFirst, r.pendingLast, r.write = -1, -1, 0
 	retained := target != nil
 	previousState, previousRendered := SceneDisposed, false

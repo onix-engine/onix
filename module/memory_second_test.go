@@ -44,6 +44,18 @@ func TestContentInputIsCreatedOnDemand(t *testing.T) {
 	}
 }
 
+func TestContentStoreUpdatesExistingResourceInPlace(t *testing.T) {
+	content := (&Context{live: true}).Content()
+	content.Store(0)
+	value, ok := content.ResourceMut[int]()
+	if !ok {
+		t.Fatal("missing stored int")
+	}
+	if allocations := testing.AllocsPerRun(100, func() { content.Store(42) }); allocations != 0 || *value != 42 {
+		t.Fatalf("updating existing resource used %g allocations and left the borrowed value at %d", allocations, *value)
+	}
+}
+
 func TestDestroyCanReadContentBeforeCleanup(t *testing.T) {
 	for _, closeRuntime := range []bool{false, true} {
 		plan, _ := compileFixture(t, map[string]string{

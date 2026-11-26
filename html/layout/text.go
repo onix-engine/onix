@@ -496,7 +496,7 @@ func layoutText(options TextLayoutOptions) ([]TextFragment, []ImageFragment, []C
 			continue
 		}
 		if segment.Kind == inlineSegmentImage {
-			width, height := resolveInlineImageSize(segment.Node, segment.Style, options.Context)
+			width, height := constrainedInlineImageSize(segment.Node, segment.Style, options.Width, options.Context)
 			if width <= 0 || height <= 0 {
 				continue
 			}
@@ -996,7 +996,7 @@ func layoutControlImageFragments(node *uinode.Node, content Rect, line int, styl
 	if node == nil || content.Width <= 0 || content.Height <= 0 {
 		return nil
 	}
-	images := appendControlImageFragments(nil, node, styles, ctx)
+	images := appendControlImageFragments(nil, node, styles, content.Width, ctx)
 	computed, _ := styles.Get(node)
 	isFlex := computed.Display.Kind == style.ValueKeyword && isFlexDisplay(computed.Display.Keyword)
 	if len(images) == 0 && !isFlex {
@@ -1079,7 +1079,7 @@ func shiftTextFragments(fragments []TextFragment, dx float64) {
 	}
 }
 
-func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styles style.Map, ctx *layoutContext) []ImageFragment {
+func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styles style.Map, containingWidth float64, ctx *layoutContext) []ImageFragment {
 	if node == nil {
 		return images
 	}
@@ -1092,7 +1092,7 @@ func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styl
 			continue
 		}
 		if child.Data == "img" {
-			width, height := resolveInlineImageSize(child, computed, ctx)
+			width, height := constrainedInlineImageSize(child, computed, containingWidth, ctx)
 			if width > 0 && height > 0 {
 				images = append(images, ImageFragment{Node: child, Style: computed, Rect: Rect{Width: width, Height: height}})
 			}
@@ -1101,7 +1101,7 @@ func appendControlImageFragments(images []ImageFragment, node *uinode.Node, styl
 		if child.Data == "button" || child.Data == "input" || child.Data == "select" {
 			continue
 		}
-		images = appendControlImageFragments(images, child, styles, ctx)
+		images = appendControlImageFragments(images, child, styles, containingWidth, ctx)
 	}
 	return images
 }
@@ -1696,6 +1696,18 @@ func tabAdvance(position, interval float64) float64 {
 	}
 	nextStop := math.Floor(max(position, 0)/interval+1e-12) + 1
 	return max(nextStop*interval-position, 0)
+}
+
+func constrainedInlineImageSize(node *uinode.Node, computed *style.ComputedStyle, containingWidth float64, ctx *layoutContext) (float64, float64) {
+	width, height := resolveInlineImageSize(node, computed, ctx)
+	if width <= 0 || !style.IsLength(computed.MaxWidth) {
+		return width, height
+	}
+	usedWidth := min(width, max(resolveLength(computed.MaxWidth, containingWidth), 0))
+	if usedWidth < width && computed.Height.Kind == style.ValueAuto {
+		height *= usedWidth / width
+	}
+	return usedWidth, height
 }
 
 func resolveInlineImageSize(node *uinode.Node, computed *style.ComputedStyle, ctx *layoutContext) (float64, float64) {

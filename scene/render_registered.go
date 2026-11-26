@@ -178,7 +178,7 @@ func collectRenderSnapshotsInto2D(c *graphics.Canvas2D, world *ecs.World, items 
 			items = collect(c, world, snapshots, hierarchy, items, cull)
 		}
 	}
-	smallsort.SortFunc(items, compareRenderPhaseItem2D[renderItem2D])
+	smallsort.SortFunc(items, compareRenderPhaseItem2D)
 	snapshots.releaseUnused()
 	world.FrameValue[renderSnapshots2DScratch, reuse.Retention]().Record(snapshots.length())
 	return items
@@ -359,7 +359,7 @@ func drawRenderItems2D(c *graphics.Canvas2D, world *ecs.World, items []renderIte
 
 func drawRenderItemList2D(c *graphics.Canvas2D, world *ecs.World, items renderItemList2D, views DrawViews2D, cull bool) {
 	state := RenderWorldFor(world)
-	drawRenderPhaseList2D[renderItem2D, *renderItem2D](c, world, items, views, cull, func(item *renderItem2D) bool {
+	drawRenderPhaseList2D(c, world, items, views, cull, func(item *renderItem2D) bool {
 		return state.batchDrawers2D[item.kind] != nil
 	}, func(batch renderBatch2D, viewport renderViewport2D, begin bool) {
 		first := items.at(batch.start)

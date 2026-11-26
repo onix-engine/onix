@@ -10,7 +10,7 @@ import (
 
 var shaderBatchCounter atomic.Uint64
 
-type shaderResource[R any] struct {
+type shaderResource[R render.ShaderResource] struct {
 	err         error
 	ops         *shaderResourceOps[R]
 	residencies render.DeviceValues[render.Handle[R]]
@@ -20,66 +20,15 @@ type shaderResource[R any] struct {
 	disposed    bool
 }
 
-type shaderResourceOps[R any] struct {
+type shaderResourceOps[R render.ShaderResource] struct {
 	create      func(render.Driver, render.ShaderDescriptor) (render.Handle[R], bool, error)
-	destroy     func(render.Driver, render.Handle[R]) (bool, error)
+	destroy     func(render.Driver, render.Handle[R]) error
 	kind        string
 	unsupported string
 	disposed    string
 }
 
-type shaderResourceKind uint8
-
-const (
-	shaderResourceMaterial2D shaderResourceKind = iota
-	shaderResourceMesh
-)
-
-func newShaderResourceOps[R any](shaderKind shaderResourceKind, kind, unsupported, disposed string) shaderResourceOps[R] {
-	return shaderResourceOps[R]{
-		kind: kind, unsupported: unsupported, disposed: disposed,
-		create: func(driver render.Driver, descriptor render.ShaderDescriptor) (render.Handle[R], bool, error) {
-			return createShaderHandle[R](driver, descriptor, shaderKind)
-		},
-		destroy: func(driver render.Driver, handle render.Handle[R]) (bool, error) {
-			return destroyShaderHandle(driver, handle, shaderKind)
-		},
-	}
-}
-
-func createShaderHandle[R any](driver render.Driver, descriptor render.ShaderDescriptor, kind shaderResourceKind) (render.Handle[R], bool, error) {
-	if kind == shaderResourceMesh {
-		backend, ok := driver.(render.MeshShaderDriver)
-		if !ok {
-			return render.Handle[R]{}, false, nil
-		}
-		handle, err := backend.CreateMeshShader(descriptor)
-		return render.NewHandle[R](handle.ID(), handle.Generation()), true, err
-	}
-	backend, ok := driver.(render.Material2DShaderDriver)
-	if !ok {
-		return render.Handle[R]{}, false, nil
-	}
-	handle, err := backend.CreateMaterial2DShader(descriptor)
-	return render.NewHandle[R](handle.ID(), handle.Generation()), true, err
-}
-
-func destroyShaderHandle[R any](driver render.Driver, handle render.Handle[R], kind shaderResourceKind) (bool, error) {
-	if kind == shaderResourceMesh {
-		backend, ok := driver.(render.MeshShaderDriver)
-		if !ok {
-			return false, nil
-		}
-		return true, backend.DestroyMeshShader(render.NewHandle[render.MeshShaderResource](handle.ID(), handle.Generation()))
-	}
-	backend, ok := driver.(render.Material2DShaderDriver)
-	if !ok {
-		return false, nil
-	}
-	return true, backend.DestroyMaterial2DShader(render.NewHandle[render.Material2DShaderResource](handle.ID(), handle.Generation()))
-}
-
-func newShaderResource[R any](descriptor render.ShaderDescriptor, ops *shaderResourceOps[R]) (*shaderResource[R], error) {
+func newShaderResource[R render.ShaderResource](descriptor render.ShaderDescriptor, ops *shaderResourceOps[R]) (*shaderResource[R], error) {
 	if err := descriptor.Validate(); err != nil {
 		return nil, err
 	}
@@ -160,8 +109,7 @@ func (s *shaderResource[R]) Dispose() error {
 	}
 	ops := s.ops
 	if err := s.residencies.Release(func(device *render.Device, handle render.Handle[R]) error {
-		_, err := ops.destroy(device.Driver(), handle)
-		return err
+		return ops.destroy(device.Driver(), handle)
 	}); err != nil {
 		return err
 	}

@@ -42,7 +42,8 @@ type iconWidthsScratch struct{}
 type menuWidthsScratch struct{}
 type contextMenuWidthsScratch struct{}
 type selectorListsScratch struct{}
-type itemMetricsScratch[K any] struct{}
+type itemMetricsControl interface{ Menu | ContextMenu | Selector }
+type itemMetricsScratch[K itemMetricsControl] struct{}
 type focusedInputReaderTag struct{}
 type htmlFocusCandidatesScratch struct{}
 type buttonGroupPositionsScratch struct{}
@@ -2640,7 +2641,7 @@ func collectSyncMetrics(world *ecs.World) syncMetrics {
 	return metrics
 }
 
-func collectItemMetricCounts[K any](world *ecs.World) map[ecs.Entity]itemMetrics {
+func collectItemMetricCounts[K itemMetricsControl](world *ecs.World) map[ecs.Entity]itemMetrics {
 	metrics := world.FrameScratchMap[itemMetricsScratch[K], ecs.Entity, itemMetrics]()
 	for entity, _ := range world.Query[K]().All {
 		metrics[entity] = itemMetrics{}
@@ -2655,7 +2656,7 @@ func collectItemMetricCounts[K any](world *ecs.World) map[ecs.Entity]itemMetrics
 	return metrics
 }
 
-func itemMetricOwner[K any](world *ecs.World, entity, owner ecs.Entity, itemPart, includeOwnerLabel bool, metrics map[ecs.Entity]itemMetrics) ecs.Entity {
+func itemMetricOwner[K itemMetricsControl](world *ecs.World, entity, owner ecs.Entity, itemPart, includeOwnerLabel bool, metrics map[ecs.Entity]itemMetrics) ecs.Entity {
 	if itemPart {
 		if item := world.GetRef[Item[K]](owner); item != nil {
 			return item.Owner

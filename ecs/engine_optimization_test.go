@@ -39,8 +39,8 @@ func TestTickRangeNeverSkipsMatchingRows(t *testing.T) {
 			bounds.include(b)
 			for _, last := range ticks {
 				for _, current := range ticks {
-					filter := rowFilter{lastRun: last, thisRun: current}
-					if (tickInRange(a, last, current) || tickInRange(b, last, current)) && !bounds.matches(filter) {
+					window := newTickWindow(last, current)
+					if (window.contains(a) || window.contains(b)) && !bounds.matches(window) {
 						t.Fatalf("range %+v skipped matching ticks %d,%d in %d..%d", bounds, a, b, last, current)
 					}
 				}

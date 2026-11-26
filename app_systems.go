@@ -33,6 +33,7 @@ func (app *App) InstallSystems[T SystemSet]() error {
 const (
 	systemSetTransforms uint32 = 1 << iota
 	systemSetRenderCore
+	systemSetRenderText2D
 	systemSetRender2D
 	systemSetRender3D
 	systemSetInput2D
@@ -55,6 +56,11 @@ const (
 )
 
 type Transforms struct{}
+
+// RenderText2D installs transforms, 2D cameras and text drawing.
+type RenderText2D struct{}
+
+// Render2D adds sprites, sprite layers and UI visuals to RenderText2D.
 type Render2D struct{}
 type Render3D struct{}
 type Input2D struct{}
@@ -145,8 +151,8 @@ func (Transforms) install(app *App) error {
 	return nil
 }
 
-func (Render2D) install(app *App) error {
-	if app.hasSystemSet(systemSetRender2D) {
+func (RenderText2D) install(app *App) error {
+	if app.hasSystemSet(systemSetRenderText2D) {
 		return nil
 	}
 	if err := app.InstallSystems[Transforms](); err != nil {
@@ -155,19 +161,30 @@ func (Render2D) install(app *App) error {
 	if err := app.ensureRenderCore(); err != nil {
 		return err
 	}
-	scene.RegisterSpriteRenderer2D(app.World)
-	scene.RegisterSpriteLayersRenderer2D(app.World)
-	scene.RegisterTextRenderer2D(app.World)
-	scene.RegisterUIRenderer2D(app.World)
-	scene.RegisterCameraRenderer2D(app.World)
 	if err := app.AddSystem(StageRender, ecs.SystemConfig{
 		Name: "extract_render_2d", After: []string{"extract_cameras"}, System: scene.ExtractRender2DSystem("").System,
 	}); err != nil {
 		return err
 	}
-	app.installedSystemSets |= systemSetRender2D
+	scene.RegisterTextRenderer2D(app.World)
+	scene.RegisterCameraRenderer2D(app.World)
+	app.installedSystemSets |= systemSetRenderText2D
 	app.configureCamera2D(true)
 	return app.refreshRenderTail()
+}
+
+func (Render2D) install(app *App) error {
+	if app.hasSystemSet(systemSetRender2D) {
+		return nil
+	}
+	if err := app.InstallSystems[RenderText2D](); err != nil {
+		return err
+	}
+	scene.RegisterSpriteRenderer2D(app.World)
+	scene.RegisterSpriteLayersRenderer2D(app.World)
+	scene.RegisterUIRenderer2D(app.World)
+	app.installedSystemSets |= systemSetRender2D
+	return nil
 }
 
 func (Render3D) install(app *App) error {
@@ -225,7 +242,7 @@ func (app *App) refreshRenderTail() error {
 	schedule.Remove("render_debug_info")
 	schedule.Remove("render_cameras")
 	after := make([]string, 0, 2)
-	if app.hasSystemSet(systemSetRender2D) {
+	if app.hasSystemSet(systemSetRenderText2D) {
 		after = append(after, "extract_render_2d")
 	}
 	if app.hasSystemSet(systemSetRender3D) {

@@ -228,9 +228,8 @@ func wechatStreamSource(clip *Clip) (string, error) {
 			return "", fmt.Errorf("audio: WeChat filesystem is unavailable")
 		}
 		wechatStreamFiles.directory = path.Join(wx.Get("env").Get("USER_DATA_PATH").String(), "onix-audio")
-		if _, err := callWechatAudio(func() js.Value {
+		if err := callWechatAudio(func() {
 			wechatStreamFiles.manager.Call("mkdirSync", wechatStreamFiles.directory, true)
-			return js.Undefined()
 		}); err != nil && !wechatAudioPathExists(wechatStreamFiles.manager, wechatStreamFiles.directory, -1) {
 			return "", fmt.Errorf("audio: create WeChat stream cache: %w", err)
 		}
@@ -249,9 +248,8 @@ func wechatStreamSource(clip *Clip) (string, error) {
 	}
 	data := js.Global().Get("Uint8Array").New(len(encoded))
 	js.CopyBytesToJS(data, encoded)
-	if _, err := callWechatAudio(func() js.Value {
+	if err := callWechatAudio(func() {
 		wechatStreamFiles.manager.Call("writeFileSync", clip.streamSource, data)
-		return js.Undefined()
 	}); err != nil {
 		clip.streamSource = ""
 		return "", fmt.Errorf("audio: cache WeChat stream: %w", err)
@@ -260,20 +258,22 @@ func wechatStreamSource(clip *Clip) (string, error) {
 }
 
 func wechatAudioPathExists(manager js.Value, name string, size int) bool {
-	exists, err := callWechatAudio(func() bool {
+	var exists bool
+	err := callWechatAudio(func() {
 		info := manager.Call("statSync", name)
-		return size < 0 || info.Get("size").Int() == size
+		exists = size < 0 || info.Get("size").Int() == size
 	})
 	return err == nil && exists
 }
 
-func callWechatAudio[T any](operation func() T) (value T, err error) {
+func callWechatAudio(operation func()) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("%v", recovered)
 		}
 	}()
-	return operation(), nil
+	operation()
+	return nil
 }
 
 func registerWechatStreamPlayer(player *wechatStreamPlayer) {

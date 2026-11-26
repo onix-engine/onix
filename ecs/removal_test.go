@@ -235,7 +235,7 @@ func TestPreparedRemovalCommandFailureDropsRemainingWork(t *testing.T) {
 	if !ok || !world.archetypes[meta.archetypeID].has(world.registerComponent[testVelocity]()) || world.IsAlive(reserved) || len(world.commands.queue) != 0 {
 		t.Fatal("cleanup panic left moved storage or pending spawn reservations")
 	}
-	if index, _ := reserved.Index(); world.entities[index].state != entityFree {
+	if reused := world.Spawn(Bundle{}); reused == reserved || reused.PickingID() != reserved.PickingID() {
 		t.Fatal("later spawn reservation was not released")
 	}
 }

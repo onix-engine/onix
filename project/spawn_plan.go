@@ -259,7 +259,7 @@ func sceneAnimationChildIndex(plan *sceneSpawnPlan) map[sceneAnimationChildKey]i
 	return children
 }
 
-func (plan *sceneSpawnPlan) resolveSceneAnimationTrackTargets[T any](children map[sceneAnimationChildKey]int, ownerIndex int, ownerID, kind string, tracks []AnimationTrackSpec[T], targets []uint32, seen map[animationResolvedBinding]struct{}, claimed map[animationResolvedBinding]uint32) error {
+func (plan *sceneSpawnPlan) resolveSceneAnimationTrackTargets[T AnimationSpecValue](children map[sceneAnimationChildKey]int, ownerIndex int, ownerID, kind string, tracks []AnimationTrackSpec[T], targets []uint32, seen map[animationResolvedBinding]struct{}, claimed map[animationResolvedBinding]uint32) error {
 	if len(targets) != len(tracks) {
 		return fmt.Errorf("animation %s target storage length %d does not match track count %d", kind, len(targets), len(tracks))
 	}

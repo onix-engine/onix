@@ -10,11 +10,13 @@ import (
 
 	"github.com/binzume/modelconv/fbx"
 	"github.com/binzume/modelconv/geom"
-	"github.com/onix-engine/onix/render"
 	"github.com/go-gl/mathgl/mgl32"
+	"github.com/onix-engine/onix/render"
 )
 
-type fbxLayer[T any] struct {
+type fbxLayerValue interface{ *geom.Vector2 | *geom.Vector3 }
+
+type fbxLayer[T fbxLayerValue] struct {
 	mapping   string
 	reference string
 	values    []T
@@ -439,7 +441,7 @@ func (importer *fbxImporter) readSkin(geometry *fbx.Geometry) ([]compiledModelSk
 	return result, hasSkin, nil
 }
 
-func readFBXLayer[T any](geometry *fbx.Geometry, layerName, valueName, indexName string, decode func(*fbx.Node) []T) (fbxLayer[T], error) {
+func readFBXLayer[T fbxLayerValue](geometry *fbx.Geometry, layerName, valueName, indexName string, decode func(*fbx.Node) []T) (fbxLayer[T], error) {
 	node := geometry.FindChild(layerName)
 	if node == nil {
 		return fbxLayer[T]{}, nil

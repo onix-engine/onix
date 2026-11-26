@@ -156,7 +156,7 @@ func (track AnimationTrack[T]) Sample(time float32, interpolate func(T, T, float
 	}
 
 	next := nextAnimationKeyframe(keys, time)
-	previous := keys[next-1]
+	previous := &keys[next-1]
 	tween := previous.Tween
 	if tween == AnimationStep || interpolate == nil {
 		return previous.Value, true
@@ -167,11 +167,13 @@ func (track AnimationTrack[T]) Sample(time float32, interpolate func(T, T, float
 	}
 	progress := min(max((time-previous.Time)/span, float32(0)), float32(1))
 	if tween == AnimationCubicSpline {
-		if value, ok := previous.sampleQuaternionSpline(keys[next], span, progress); ok {
-			return value, true
-		}
-		if value, ok := previous.sampleCubicValue(keys[next], span, progress); ok {
-			return value, true
+		if left, ok := any(previous.Value).(float32); ok {
+			right := &keys[next]
+			value, sampled := previous.QuaternionSpline.sample(right.QuaternionSpline, left, span, progress)
+			if !sampled {
+				value = cubicHermiteFloat32(left, any(right.Value).(float32), any(previous.OutTangent).(float32)*span, any(right.InTangent).(float32)*span, progress)
+			}
+			return any(value).(T), true
 		}
 	}
 	progress = sampleAnimationProgress(tween, previous.Curve, progress)
@@ -214,7 +216,7 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 		}
 	}
 	*cursor = index
-	previous := keys[index]
+	previous := &keys[index]
 	if previous.Tween == AnimationStep {
 		return previous.Value, true
 	}
@@ -229,8 +231,8 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 	progress := min(max((time-previous.Time)*inverseSpan, float32(0)), float32(1))
 	if previous.Tween == AnimationCubicSpline {
 		span := float32(1) / inverseSpan
-		if value, ok := previous.sampleQuaternionSpline(keys[index+1], span, progress); ok {
-			return any(value).(float32), true
+		if value, ok := previous.QuaternionSpline.sample(keys[index+1].QuaternionSpline, previous.Value, span, progress); ok {
+			return value, true
 		}
 		return cubicHermiteFloat32(previous.Value, keys[index+1].Value, previous.OutTangent*span, keys[index+1].InTangent*span, progress), true
 	}
@@ -240,22 +242,16 @@ func sampleAnimationFloatTrackAt(track *AnimationTrack[float32], time float32, c
 	return previous.Value + (keys[index+1].Value-previous.Value)*progress, true
 }
 
-func (left AnimationKeyframe[T]) sampleQuaternionSpline(right AnimationKeyframe[T], span, progress float32) (T, bool) {
-	component := left.QuaternionSpline.Component
-	if component == 0 || component > 3 || right.QuaternionSpline.Component != component {
-		var zero T
-		return zero, false
-	}
-	leftValue, ok := any(left.Value).(float32)
-	if !ok {
-		var zero T
-		return zero, false
+func (left AnimationQuaternionSpline) sample(right AnimationQuaternionSpline, reference, span, progress float32) (float32, bool) {
+	component := left.Component
+	if component == 0 || component > 3 || right.Component != component {
+		return 0, false
 	}
 	value := [4]float32{}
 	for index := range value {
 		value[index] = cubicHermiteFloat32(
-			left.QuaternionSpline.Value[index], right.QuaternionSpline.Value[index],
-			left.QuaternionSpline.OutTangent[index]*span, right.QuaternionSpline.InTangent[index]*span,
+			left.Value[index], right.Value[index],
+			left.OutTangent[index]*span, right.InTangent[index]*span,
 			progress,
 		)
 	}
@@ -268,8 +264,7 @@ func (left AnimationKeyframe[T]) sampleQuaternionSpline(right AnimationKeyframe[
 		}
 	}
 	euler := animationQuaternionEuler(value)
-	result := unwrapAnimationAngle(leftValue, euler[component-1])
-	return any(result).(T), true
+	return unwrapAnimationAngle(reference, euler[component-1]), true
 }
 
 func animationQuaternionEuler(value [4]float32) [3]float32 {
@@ -293,15 +288,6 @@ func unwrapAnimationAngle(reference, value float32) float32 {
 		delta += 2 * math.Pi
 	}
 	return value
-}
-
-func (left AnimationKeyframe[T]) sampleCubicValue(right AnimationKeyframe[T], span, progress float32) (T, bool) {
-	if value, ok := any(left.Value).(float32); ok {
-		result := cubicHermiteFloat32(value, any(right.Value).(float32), any(left.OutTangent).(float32)*span, any(right.InTangent).(float32)*span, progress)
-		return any(result).(T), true
-	}
-	var zero T
-	return zero, false
 }
 
 func cubicHermiteFloat32(left, right, outTangent, inTangent, progress float32) float32 {
@@ -359,6 +345,11 @@ func sampleAnimationProgress(tween AnimationTween, curve AnimationCurve, progres
 	}
 }
 
+// AnimationClipValue is a value stored in a playable scene clip.
+type AnimationClipValue interface {
+	float32 | bool | *graphics.Texture
+}
+
 type AnimationClip struct {
 	prepareErr            error
 	BoolTracks            []AnimationTrack[bool]
@@ -412,8 +403,15 @@ func (c *AnimationClip) prepare() error {
 		c.prepareErr = err
 		return err
 	}
+	var hasRotation, hasRootRotation bool
 	for trackIndex := range c.FloatTracks {
-		for keyIndex, key := range c.FloatTracks[trackIndex].Keyframes {
+		track := &c.FloatTracks[trackIndex]
+		if isAnimationRotationTarget(track.target) {
+			hasRotation = true
+			hasRootRotation = hasRootRotation || track.root
+		}
+		for keyIndex := range track.Keyframes {
+			key := &track.Keyframes[keyIndex]
 			if key.Tween == AnimationCubicSpline && (!isFiniteAnimationValue(key.InTangent) || !isFiniteAnimationValue(key.OutTangent)) {
 				c.prepareErr = fmt.Errorf("ecs: float animation track %d keyframe %d has non-finite cubic tangents", trackIndex, keyIndex)
 				return c.prepareErr
@@ -446,18 +444,11 @@ func (c *AnimationClip) prepare() error {
 	c.rootTextureTracks = textureRoots
 	c.rootBoolTracks = boolRoots
 	c.rootRequirements = floatRequirements | textureRequirements | boolRequirements
-	for index := range c.FloatTracks {
-		track := &c.FloatTracks[index]
-		if !isAnimationRotationTarget(track.target) {
-			continue
-		}
-		c.hasRotationTracks = true
-		c.hasRootRotationTracks = c.hasRootRotationTracks || track.root
-	}
+	c.hasRotationTracks, c.hasRootRotationTracks = hasRotation, hasRootRotation
 	return nil
 }
 
-func prepareAnimationTracks[T any](tracks []AnimationTrack[T], allowed func(animationTargetCode) bool) ([]int, uint8, error) {
+func prepareAnimationTracks[T AnimationClipValue](tracks []AnimationTrack[T], allowed func(animationTargetCode) bool) ([]int, uint8, error) {
 	rootCount := 0
 	var requirements uint8
 	for index := range tracks {
@@ -1198,7 +1189,7 @@ func applyFloatAnimationTarget(targets *animationTargetComponents, target animat
 }
 
 // field belongs to access; mark the component only when its sampled field changes.
-func setAnimationFloat[T any](access ecs.ComponentAccess[T], field *float32, value float32) {
+func setAnimationFloat[T Sprite2D | Transform | UITransform](access ecs.ComponentAccess[T], field *float32, value float32) {
 	if *field != value {
 		access.Mut()
 		*field = value

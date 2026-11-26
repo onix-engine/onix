@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/graphics"
+	"github.com/onix-engine/onix/internal/reuse"
 	"github.com/onix-engine/onix/internal/sourcejson"
 	"github.com/onix-engine/onix/render"
 )
@@ -795,12 +796,9 @@ func weightedAttachmentBones(vertices []float32) []int {
 	return result
 }
 
-func (a *Resource) Animations() []string {
-	result := mapKeys(a.animations)
-	slices.Sort(result)
-	return result
-}
-func (a *Resource) Skins() []string { result := mapKeys(a.skins); slices.Sort(result); return result }
+func (a *Resource) Animations() []string { return sortedKeys(a.animations) }
+func (a *Resource) Skins() []string      { return sortedKeys(a.skins) }
+
 func mapKeys[K comparable, V any](values map[K]V) []K {
 	result := make([]K, 0, len(values))
 	for key := range values {
@@ -809,15 +807,22 @@ func mapKeys[K comparable, V any](values map[K]V) []K {
 	return result
 }
 
+func firstResourceName[V skin | animation](resources map[string]V, fallback string) string {
+	first := true
+	for name := range resources {
+		if first || name < fallback {
+			fallback = name
+			first = false
+		}
+	}
+	return fallback
+}
+
 func NewPlayer(resource *Resource) *Player {
 	p := &Player{Resource: resource, Loop: true, Speed: 1, Alpha: 1, Skin: "default"}
 	if resource != nil {
-		if names := resource.Skins(); len(names) > 0 {
-			p.Skin = names[0]
-		}
-		if names := resource.Animations(); len(names) > 0 {
-			p.Animation = names[0]
-		}
+		p.Skin = firstResourceName(resource.skins, p.Skin)
+		p.Animation = firstResourceName(resource.animations, p.Animation)
 		p.resetPose()
 	}
 	return p
@@ -886,12 +891,12 @@ func (p *Player) resetPose() {
 	if p.pose == nil {
 		p.pose = &pose{}
 	}
-	p.pose.bones = resizeSlice(p.pose.bones, len(p.Resource.bones))
-	p.pose.slots = resizeSlice(p.pose.slots, len(p.Resource.slots))
-	p.pose.ik = resizeSlice(p.pose.ik, len(p.Resource.ik))
-	p.pose.transforms = resizeSlice(p.pose.transforms, len(p.Resource.transforms))
-	p.pose.paths = resizeSlice(p.pose.paths, len(p.Resource.paths))
-	p.pose.drawOrder = resizeSlice(p.pose.drawOrder, len(p.Resource.slots))
+	p.pose.bones = reuse.Resize(p.pose.bones, len(p.Resource.bones))
+	p.pose.slots = reuse.Resize(p.pose.slots, len(p.Resource.slots))
+	p.pose.ik = reuse.Resize(p.pose.ik, len(p.Resource.ik))
+	p.pose.transforms = reuse.Resize(p.pose.transforms, len(p.Resource.transforms))
+	p.pose.paths = reuse.Resize(p.pose.paths, len(p.Resource.paths))
+	p.pose.drawOrder = reuse.Resize(p.pose.drawOrder, len(p.Resource.slots))
 	for i, b := range p.Resource.bones {
 		p.pose.bones[i] = bonePose{x: b.x, y: b.y, rotation: b.rotation, scaleX: b.scaleX, scaleY: b.scaleY, shearX: b.shearX, shearY: b.shearY}
 	}
@@ -916,13 +921,6 @@ func (p *Player) resetPose() {
 		}
 	}
 	p.updateWorld()
-}
-
-func resizeSlice[T any](values []T, length int) []T {
-	if cap(values) < length {
-		return make([]T, length)
-	}
-	return values[:length]
 }
 
 func resetSlice[T any](values []T, capacity int) []T {
@@ -1370,8 +1368,8 @@ func (p *Player) applyPath(index int) {
 	if tangents {
 		spacesCount--
 	}
-	spaces := resizeSlice(p.path.spaces, spacesCount)
-	lengths := resizeSlice(p.path.lengths, len(data.bones))
+	spaces := reuse.Resize(p.path.spaces, spacesCount)
+	lengths := reuse.Resize(p.path.lengths, len(data.bones))
 	clear(spaces)
 	clear(lengths)
 	p.path.spaces, p.path.lengths = spaces, lengths
@@ -1468,7 +1466,7 @@ func (p *Player) computePathWorldPositions(slotIndex int, path *attachment, spac
 	const none, before, after = -1, -2, -3
 	verticesLength := path.vertexCount * 2
 	curveCount := verticesLength / 6
-	out := resizeSlice(p.path.positions, len(spaces)*3+2)
+	out := reuse.Resize(p.path.positions, len(spaces)*3+2)
 	clear(out)
 	p.path.positions = out
 	worldVertices := p.vertexAttachmentWorldVerticesInto(p.path.worldVertices, slotIndex, path, path.vertexCount)
@@ -1495,7 +1493,7 @@ func (p *Player) computePathWorldPositions(slotIndex int, path *attachment, spac
 				spaces[i] *= pathLength
 			}
 		}
-		world := resizeSlice(p.path.world, 8)
+		world := reuse.Resize(p.path.world, 8)
 		clear(world)
 		p.path.world = world
 		previousCurve, curve := none, 0
@@ -1551,7 +1549,7 @@ func (p *Player) computePathWorldPositions(slotIndex int, path *attachment, spac
 	var world []float32
 	if path.closed {
 		verticesLength += 2
-		world = resizeSlice(p.path.world, verticesLength)
+		world = reuse.Resize(p.path.world, verticesLength)
 		clear(world)
 		copy(world, worldVertices[2:])
 		copy(world[verticesLength-4:], worldVertices[:2])
@@ -1562,12 +1560,12 @@ func (p *Player) computePathWorldPositions(slotIndex int, path *attachment, spac
 		if curveCount <= 0 || verticesLength <= 0 {
 			return nil
 		}
-		world = resizeSlice(p.path.world, verticesLength)
+		world = reuse.Resize(p.path.world, verticesLength)
 		copy(world, worldVertices[2:2+verticesLength])
 	}
 	p.path.world = world
 
-	curves := resizeSlice(p.path.curves, curveCount)
+	curves := reuse.Resize(p.path.curves, curveCount)
 	p.path.curves = curves
 	pathLength := float32(0)
 	x1, y1 := world[0], world[1]
@@ -1603,7 +1601,7 @@ func (p *Player) computePathWorldPositions(slotIndex int, path *attachment, spac
 		}
 	}
 
-	segments := resizeSlice(p.path.segments, 10)
+	segments := reuse.Resize(p.path.segments, 10)
 	p.path.segments = segments
 	previousCurve, curve, segment := none, 0, 0
 	curveLength := float32(0)
@@ -2164,7 +2162,7 @@ func animationSampleTimes(animation animation) []float32 {
 	return mapKeys(times)
 }
 
-func addTimelineTimes[T any, P timelineFrame[T]](times map[float32]struct{}, duration float32, frames []T) {
+func addTimelineTimes[T timelineFrameValue, P timelineFrame[T]](times map[float32]struct{}, duration float32, frames []T) {
 	for i := range frames {
 		times[min(max(P(&frames[i]).timelineTime(), 0), duration)] = struct{}{}
 	}
@@ -2199,7 +2197,7 @@ func (p *Player) attachmentGeometryInto(dstPositions, dstUVs []float32, slotInde
 			localX2Cos - localY2Sin, localY2Cos + localX2Sin,
 			localX2Cos - localYSin, localYCos + localX2Sin,
 		}
-		positions := resizeSlice(dstPositions, len(offsets))
+		positions := reuse.Resize(dstPositions, len(offsets))
 		for i := 0; i < len(offsets); i += 2 {
 			positions[i], positions[i+1] = transform(bone, offsets[i], offsets[i+1])
 		}
@@ -2404,7 +2402,7 @@ func convexClipPolygon(points []clipPoint) bool {
 
 func (c *skeletonClipper) triangulateClipPolygon(points []clipPoint) {
 	orientation := clipPolygonOrientation(points)
-	remaining := resizeSlice(c.remaining, len(points))
+	remaining := reuse.Resize(c.remaining, len(points))
 	for i := range remaining {
 		remaining[i] = i
 	}
@@ -2496,7 +2494,7 @@ func interpolateClipVertex(a, b clipVertex, mix float32) clipVertex {
 }
 
 func regionAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, textureHeight int) []float32 {
-	out := resizeSlice(dst, 8)
+	out := reuse.Resize(dst, 8)
 	u := float32(r.x) / float32(textureWidth)
 	v := float32(r.y) / float32(textureHeight)
 	if r.rotate {
@@ -2514,7 +2512,7 @@ func regionAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, texture
 }
 
 func meshAttachmentUVsInto(dst []float32, r atlasRegion, textureWidth, textureHeight int, input []float32) []float32 {
-	out := resizeSlice(dst, len(input))
+	out := reuse.Resize(dst, len(input))
 	tw, th := float32(textureWidth), float32(textureHeight)
 	if r.rotate {
 		u := float32(r.x)/tw - float32(r.originalHeight-r.offsetY-r.height)/tw
@@ -2635,13 +2633,17 @@ func parseBlendMode(value string) render.MeshBlendMode {
 	}
 }
 
-type timelineFrame[T any] interface {
+type timelineFrameValue interface {
+	keyframe | deformFrame | ikKeyframe | transformKeyframe | pathKeyframe
+}
+
+type timelineFrame[T timelineFrameValue] interface {
 	*T
 	timelineTime() float32
 	timelineCurve() (uint8, [4]float32)
 }
 
-func locateFrame[T any, P timelineFrame[T]](frames []T, time float32) (int, float32, bool) {
+func locateFrame[T timelineFrameValue, P timelineFrame[T]](frames []T, time float32) (int, float32, bool) {
 	if len(frames) == 0 || time < P(&frames[0]).timelineTime() {
 		return 0, 0, false
 	}
@@ -2749,7 +2751,7 @@ func sampleDeformInto(dst []float32, frames []deformFrame, time float32) ([]floa
 		return nil, false
 	}
 	a := frames[index].vertices
-	result := resizeSlice(dst, len(a))
+	result := reuse.Resize(dst, len(a))
 	copy(result, a)
 	if index == len(frames)-1 {
 		return result, true
@@ -2802,7 +2804,7 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 		for kind, rawFrames := range timelines {
 			frames := parseFrames(rawFrames, kind)
 			result.bones = append(result.bones, boneTimeline{bone: bi, kind: kind, frames: frames})
-			result.duration = max(result.duration, lastTime(frames))
+			result.duration = max(result.duration, lastTimelineTime(frames))
 		}
 	}
 	var slotMaps map[string]map[string][]map[string]sourcejson.RawMessage
@@ -2815,7 +2817,7 @@ func parseAnimation(data []byte, resource *Resource, bones, slots, ik, transform
 		for kind, rawFrames := range timelines {
 			frames := parseFrames(rawFrames, kind)
 			result.slots = append(result.slots, slotTimeline{slot: si, kind: kind, frames: frames})
-			result.duration = max(result.duration, lastTime(frames))
+			result.duration = max(result.duration, lastTimelineTime(frames))
 		}
 	}
 	var ikMaps map[string][]map[string]sourcejson.RawMessage
@@ -3075,13 +3077,7 @@ func valueOrEmpty(value, fallback string) string {
 	}
 	return value
 }
-func lastTime(frames []keyframe) float32 {
-	if len(frames) == 0 {
-		return 0
-	}
-	return frames[len(frames)-1].time
-}
-func lastTimelineTime[T any, P timelineFrame[T]](frames []T) float32 {
+func lastTimelineTime[T timelineFrameValue, P timelineFrame[T]](frames []T) float32 {
 	if len(frames) == 0 {
 		return 0
 	}

@@ -29,17 +29,69 @@ func TestCommandSpawnReusesAndClearsStorage(t *testing.T) {
 	}
 }
 
+func TestQueuedPreparedSpawnsSharePlanAcrossRollback(t *testing.T) {
+	world := NewWorld()
+	bundle := NewBundle(2)
+	bundle.Put(17)
+	bundle.PutEntity(func(entity Entity) Entity { return entity })
+	prepared := world.PrepareBundle(bundle)
+	commands := world.Commands()
+	first := commands.SpawnPrepared(prepared)
+	checkpoint := commands.checkpoint()
+	discarded := commands.SpawnPrepared(prepared)
+	commands.discardFrom(checkpoint)
+	if len(commands.spawns.entries) != 0 || len(commands.spawns.plans) != 1 || commands.spawns.plans[0] != prepared.plan {
+		t.Fatal("rollback must retain only the first plan reference")
+	}
+	plans := commands.spawns.plans
+	for _, plan := range plans[len(plans):cap(plans)] {
+		if plan != nil {
+			t.Fatal("rollback retained the discarded plan")
+		}
+	}
+	reused := commands.SpawnPrepared(prepared)
+	if reused == discarded || reused.PickingID() != discarded.PickingID() {
+		t.Fatal("discarded reservation did not advance its generation and recycle its slot")
+	}
+	if _, alive := world.EntityByPickingID(reused.PickingID()); alive {
+		t.Fatal("reserved slot was visible before flush")
+	}
+	if err := world.FlushCommands(); err != nil {
+		t.Fatal(err)
+	}
+	for _, entity := range []Entity{first, reused} {
+		if got, ok := world.EntityByPickingID(entity.PickingID()); !ok || got != entity {
+			t.Fatalf("picking ID for %v resolved to %v, %t", entity, got, ok)
+		}
+		owner, _ := world.Get[Entity](entity)
+		value, _ := world.Get[int](entity)
+		if owner != entity || value != 17 {
+			t.Fatalf("prepared spawn %v has owner %v and value %d", entity, owner, value)
+		}
+	}
+	assertCommandStorageRecycled(t, commands)
+}
+
 func assertCommandStorageRecycled(t *testing.T, commands *Commands) {
 	t.Helper()
 	if len(commands.activeStreams) != 0 {
 		t.Fatal("flush retained active command streams")
 	}
-	if len(commands.queue) != 0 || cap(commands.queue) == 0 || len(commands.spawnEntries) != 0 || cap(commands.spawnEntries) == 0 {
-		t.Fatalf("storage not recycled: queue=%d/%d spawn=%d/%d", len(commands.queue), cap(commands.queue), len(commands.spawnEntries), cap(commands.spawnEntries))
+	spawns := commands.spawns
+	if len(commands.queue) != 0 || cap(commands.queue) == 0 || len(spawns.entries) != 0 || len(spawns.plans) != 0 {
+		t.Fatalf("storage not recycled: queue=%d/%d entries=%d plans=%d", len(commands.queue), cap(commands.queue), len(spawns.entries), len(spawns.plans))
 	}
-	for _, entry := range commands.spawnEntries[:cap(commands.spawnEntries)] {
+	if cap(spawns.entries) == 0 && cap(spawns.plans) == 0 {
+		t.Fatal("flush dropped all reusable spawn storage")
+	}
+	for _, entry := range spawns.entries[:cap(spawns.entries)] {
 		if entry.entry != nil {
 			t.Fatal("spawn storage retained a bundle reference")
+		}
+	}
+	for _, plan := range spawns.plans[:cap(spawns.plans)] {
+		if plan != nil {
+			t.Fatal("spawn storage retained a prepared plan")
 		}
 	}
 	for _, queued := range commands.queue[:cap(commands.queue)] {
@@ -191,13 +243,14 @@ func TestCommandStorageRecycledAfterFailure(t *testing.T) {
 		if panics {
 			bundle := NewBundle(1)
 			bundle.PutEntity(func(Entity) testPosition { panic("build failed") })
-			commands.Spawn(bundle)
+			commands.SpawnPrepared(world.PrepareBundle(bundle))
 		} else {
 			commands.Insert(Entity(0), testPosition{})
 		}
 		bundle := NewBundle(1)
 		bundle.Put(testPosition{})
 		reserved := commands.Spawn(bundle)
+		commands.SpawnPrepared(world.PrepareBundle(bundle))
 		func() {
 			defer func() {
 				if value := recover(); (value != nil) != panics {
@@ -209,7 +262,7 @@ func TestCommandStorageRecycledAfterFailure(t *testing.T) {
 			}
 		}()
 		assertCommandStorageRecycled(t, commands)
-		if world.IsAlive(reserved) || world.EntityCount() != 0 {
+		if world.IsAlive(reserved) || world.EntityCount() != 0 || len(world.free) != world.EntitySlots() {
 			t.Fatal("failed flush retained a reserved entity")
 		}
 		entity := commands.Spawn(bundle)

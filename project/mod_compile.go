@@ -742,7 +742,7 @@ func (compiler *modCompiler) validateContent(id ModID, components ModComponents,
 	return nil
 }
 
-func validateModAnimationPaths[T any](tracks []AnimationTrackSpec[T], slots map[string]uint32) error {
+func validateModAnimationPaths[T AnimationSpecValue](tracks []AnimationTrackSpec[T], slots map[string]uint32) error {
 	for _, track := range tracks {
 		if err := validateModAnimationPath(track.Binding.Path, slots); err != nil {
 			return err

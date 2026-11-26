@@ -15,6 +15,7 @@ var (
 
 type Texture struct {
 	err                error
+	pages              *texturePages
 	externalDevice     *render.Device
 	renderTarget       *render.RenderTarget
 	source             *Texture
@@ -179,7 +180,7 @@ func CreateTextureR8(width, height int, pixels []byte, mipmap bool, usage Resour
 }
 
 // CreateEmptyTexture creates a zero-filled, single-level texture. Its CPU shadow
-// grows only through the last updated texel; the untouched suffix remains zero.
+// allocates storage for updated regions; untouched texels remain zero.
 // Device recreation expands this compact shadow into a temporary upload payload.
 // GPU storage is created on first use, including any pending region updates.
 func CreateEmptyTexture(width, height int, format render.TextureFormat, usage ResourceUsage) *Texture {
@@ -285,7 +286,7 @@ func (t *Texture) Dispose() error {
 	}
 	t.Width = 0
 	t.Height = 0
-	t.pix = nil
+	t.pix, t.pages = nil, nil
 	t.hasASTCVariant = false
 	t.zeroInitialized = false
 	t.err = nil
@@ -329,7 +330,12 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	}
 	base.contentRevision = textureRevision.Add(1)
 	retainPixels := base.usage.Has(ResourceUsageCPU) || !wasResident
-	if retainPixels {
+	if retainPixels && base.zeroInitialized && base.payloadBytes() > 4*texturePageBytes {
+		if base.pages == nil {
+			base.pages = new(texturePages)
+		}
+		base.pages.update(updates, base.Width*texelBytes, texelBytes, pixelCount)
+	} else if retainPixels {
 		if !base.zeroInitialized {
 			pixelCount = base.Width * base.Height * texelBytes
 		}
@@ -371,7 +377,7 @@ func (t *Texture) UpdateRegions(updates []TextureRegionUpdate) {
 	clear(base.updates)
 	base.updates = base.updates[:0]
 	if wasResident && base.err == nil && !base.usage.Has(ResourceUsageCPU) {
-		base.pix = nil
+		base.pix, base.pages = nil, nil
 	}
 }
 
@@ -646,8 +652,12 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		scratch := acquireTextureUploadScratch(t.payloadBytes())
 		defer releaseTextureUploadScratch(scratch)
 		pixels = scratch.pixels
-		copy(pixels, t.pix)
-		clear(pixels[len(t.pix):])
+		if t.pages != nil {
+			t.pages.restore(pixels)
+		} else {
+			copy(pixels, t.pix)
+			clear(pixels[len(t.pix):])
+		}
 	}
 	descriptor := render.TextureDescriptor{
 		WrapU: t.wrapU, WrapV: t.wrapV,
@@ -665,7 +675,7 @@ func (t *Texture) ensureUploadedFor(device *render.Device) {
 		t.format = descriptor.Format
 		t.deviceValues().Set(device, t.handle)
 		if !t.usage.Has(ResourceUsageCPU) {
-			t.pix = nil
+			t.pix, t.pages = nil, nil
 			t.hasASTCVariant = false
 			t.zeroInitialized = false
 		}

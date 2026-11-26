@@ -148,7 +148,7 @@ func (c *Content) Store[T any](value T) {
 		*slot = value
 		return
 	}
-	c.state[t] = &value
+	c.state[t] = new(value)
 }
 func (c *Content) ResourceMut[T any]() (*T, bool) {
 	if c == nil || !c.context.live {
@@ -164,7 +164,7 @@ func (c *Content) RemoveResource[T any]() (T, bool) {
 }
 func (c *Content) Query[T any]() iter.Seq2[ecs.Entity, ecs.ComponentAccess[T]] {
 	return func(yield func(ecs.Entity, ecs.ComponentAccess[T]) bool) {
-		if c == nil || !c.context.live || contentProtected[T]() || !c.queryAvailable() {
+		if c == nil || !c.context.live || contentProtected[T]() || !c.context.scene.running() {
 			return
 		}
 		boundary := c.beginQuery()
@@ -253,10 +253,6 @@ func (c *Content) Spawn(bundle ecs.Bundle) ecs.Entity {
 	return entity
 }
 
-func (c *Content) queryAvailable() bool {
-	r := c.context.runtime
-	return c.context.scene.state == SceneActive || r.preparation != nil && r.preparation.scene == c.context.scene
-}
 func (c *Content) beginQuery() bool {
 	r := c.context.runtime
 	if r.queryDepth == 0 {

@@ -3,6 +3,9 @@ package syntax
 import (
 	"runtime"
 	"testing"
+	"testing/synctest"
+	"time"
+	"weak"
 
 	"github.com/eugenioenko/textmate-go/grammars"
 )
@@ -23,6 +26,45 @@ func TestGrammarArchiveContainsCatalog(t *testing.T) {
 		}
 		f.Close()
 	}
+}
+
+func TestRecentlyClosedGrammarExpires(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		defer ReleaseGrammarCache()
+		var doc Document
+		open := func(name string) {
+			t.Helper()
+			if err := doc.Update(name, "var value = 1"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		open("one.go")
+		first := weak.Make(doc.grammar)
+		doc.CloseKeepingGrammar(time.Second)
+		runtime.GC()
+		open("two.go")
+		if first.Value() != doc.grammar {
+			t.Fatal("reopening recompiled a warm grammar")
+		}
+		open("other.css")
+		second := weak.Make(doc.grammar)
+		doc.CloseKeepingGrammar(2 * time.Second)
+		runtime.GC()
+		if first.Value() != nil {
+			t.Fatal("second language kept the previous grammar warm")
+		}
+		time.Sleep(time.Second)
+		runtime.GC()
+		if second.Value() == nil {
+			t.Fatal("replacement grammar expired early")
+		}
+		time.Sleep(time.Second)
+		synctest.Wait()
+		runtime.GC()
+		if second.Value() != nil {
+			t.Fatal("idle grammar survived its grace period")
+		}
+	})
 }
 
 func TestGrammarCacheFollowsDocumentLifetime(t *testing.T) {

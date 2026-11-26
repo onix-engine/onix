@@ -1782,7 +1782,7 @@ func (d *openGLESDriver) configureShapeAttributes(base uintptr, initialize bool)
 	}
 }
 
-func (d *openGLESDriver) uploadGLESInstanceBuffer[T any](geometry *glesGeometry, values []T) (uintptr, error) {
+func (d *openGLESDriver) uploadGLESInstanceBuffer[T byte | ShapeInstance2D](geometry *glesGeometry, values []T) (uintptr, error) {
 	var value T
 	byteLength := len(values) * int(unsafe.Sizeof(value))
 	var offset C.uintptr_t
@@ -1913,7 +1913,7 @@ func (d *openGLESDriver) deleteMesh(mesh glesMesh) {
 	}
 }
 
-func createGLESShader[R any](descriptor ShaderDescriptor, defaultVertex, defaultFragment, kind string, pool *GenerationPool[R, *glesProgram]) (Handle[R], error) {
+func createGLESShader[R ShaderResource](descriptor ShaderDescriptor, defaultVertex, defaultFragment, kind string, pool *GenerationPool[R, *glesProgram]) (Handle[R], error) {
 	if err := descriptor.Validate(); err != nil {
 		return Handle[R]{}, err
 	}
@@ -1935,7 +1935,7 @@ func createGLESShader[R any](descriptor ShaderDescriptor, defaultVertex, default
 	return pool.Insert(program), nil
 }
 
-func (driver *openGLESDriver) destroyGLESShader[R any](handle Handle[R], kind string, pool *GenerationPool[R, *glesProgram]) error {
+func (driver *openGLESDriver) destroyGLESShader[R ShaderResource](handle Handle[R], kind string, pool *GenerationPool[R, *glesProgram]) error {
 	program, ok := pool.Remove(handle)
 	if !ok {
 		return fmt.Errorf("render: invalid OpenGL ES %s shader handle %s", kind, handle)
@@ -2095,7 +2095,7 @@ func glesInt(value bool) int {
 	return 0
 }
 
-func sliceData[T any](values []T) unsafe.Pointer {
+func sliceData[T gpuUploadElement](values []T) unsafe.Pointer {
 	if len(values) == 0 {
 		return nil
 	}

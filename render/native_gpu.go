@@ -440,7 +440,7 @@ func (d *nativeGPUDriver) DestroyMaterial2DShader(handle Material2DShaderHandle)
 	})
 }
 
-func createNativeGPUShader[R any](descriptor ShaderDescriptor, defaultVertex, defaultFragment []byte, kind string, pool *GenerationPool[R, uint32], create func(C.OnixGPUShader, C.OnixGPUShader) C.uint32_t) (Handle[R], error) {
+func createNativeGPUShader[R ShaderResource](descriptor ShaderDescriptor, defaultVertex, defaultFragment []byte, kind string, pool *GenerationPool[R, uint32], create func(C.OnixGPUShader, C.OnixGPUShader) C.uint32_t) (Handle[R], error) {
 	if err := descriptor.Validate(); err != nil {
 		return Handle[R]{}, err
 	}

@@ -5,13 +5,19 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/smallsort"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
-func buildRenderPhase2DBatches[T renderPhaseItem2D](items []T) []renderBatch2D {
+type materialBatch2D struct {
+	start, end, sortIndex int
+	material              renderMaterialKey
+	ui                    bool
+}
+
+func buildRenderPhase2DBatches(items []renderItem2D) []materialBatch2D {
 	return buildRenderPhase2DBatchesInto(items, nil)
 }
 
@@ -23,36 +29,36 @@ func TestStreamRenderPhase2DExplicitViewsCullInCanvasSpace(t *testing.T) {
 	drawRenderPhase2D(canvas, world, items, views, false, nil, func(batch renderBatch2D, viewport renderViewport2D, _ bool) {
 		// Negative module coordinates land inside the canvas after the view transform.
 		if !viewport.visible(mgl32.Translate3D(-80, -60, 0), 20, 20) {
-			t.Fatalf("ui=%v: visible negative coordinates were culled", batch.ui)
+			t.Fatalf("ui=%v: visible negative coordinates were culled", items[batch.start].ui)
 		}
 		if viewport.visible(mgl32.Translate3D(1000, 1000, 0), 20, 20) {
-			t.Fatalf("ui=%v: off-canvas geometry was not culled", batch.ui)
+			t.Fatalf("ui=%v: off-canvas geometry was not culled", items[batch.start].ui)
 		}
 	})
 }
 
-func buildRenderPhase2DBatchesInto[T renderPhaseItem2D](items []T, batches []renderBatch2D) []renderBatch2D {
-	smallsort.SortFunc(items, compareRenderPhaseItem2D[T])
+func buildRenderPhase2DBatchesInto(items []renderItem2D, batches []materialBatch2D) []materialBatch2D {
+	smallsort.SortFunc(items, compareRenderPhaseItem2D)
 
 	if len(items) == 0 {
 		return batches[:0]
 	}
 	batches = batches[:0]
 	if cap(batches) < len(items) {
-		batches = make([]renderBatch2D, 0, len(items))
+		batches = make([]materialBatch2D, 0, len(items))
 	}
 	for start := 0; start < len(items); {
 		end := start + 1
 		key := items[start].renderSortKey()
-		material := items[start].renderMaterial()
+		material := items[start].material
 		for end < len(items) {
 			nextKey := items[end].renderSortKey()
-			if nextKey.ui != key.ui || nextKey.sortIndex != key.sortIndex || items[end].renderMaterial() != material {
+			if nextKey.ui != key.ui || nextKey.sortIndex != key.sortIndex || items[end].material != material {
 				break
 			}
 			end++
 		}
-		batches = append(batches, renderBatch2D{
+		batches = append(batches, materialBatch2D{
 			start:     start,
 			end:       end,
 			ui:        key.ui,
@@ -81,7 +87,7 @@ func TestStreamRenderPhase2DPreservesMixedBatchBoundaries(t *testing.T) {
 	var orders []uint64
 	var begins []uint64
 	var sizes []int
-	smallsort.SortFunc(items, compareRenderPhaseItem2D[renderItem2D])
+	smallsort.SortFunc(items, compareRenderPhaseItem2D)
 	drawRenderPhase2D(canvas, world, items, DrawViews2D{}, false, batched, func(batch renderBatch2D, _ renderViewport2D, begin bool) {
 		if begin {
 			begins = append(begins, items[batch.start].order)
@@ -120,7 +126,7 @@ func TestIndexedRenderPhase2DPreservesFilteredBatches(t *testing.T) {
 	var orders []uint64
 	var sizes []int
 	batched := func(item *renderItem2D) bool { return item.kind == renderItemSpine2D }
-	drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, filtered, DrawViews2D{}, false, batched, func(batch renderBatch2D, _ renderViewport2D, _ bool) {
+	drawRenderPhaseList2D(canvas, world, filtered, DrawViews2D{}, false, batched, func(batch renderBatch2D, _ renderViewport2D, _ bool) {
 		subset := filtered.slice(batch.start, batch.end)
 		sizes = append(sizes, subset.len())
 		for i := 0; i < subset.len(); i++ {
@@ -133,11 +139,11 @@ func TestIndexedRenderPhase2DPreservesFilteredBatches(t *testing.T) {
 	if !slices.Equal(orders, []uint64{1, 3, 5, 6, 7}) || !slices.Equal(sizes, []int{1, 2, 1, 1}) {
 		t.Fatalf("filtered orders=%v sizes=%v", orders, sizes)
 	}
-	drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, renderItemList2D{items: items}, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {
+	drawRenderPhaseList2D(canvas, world, renderItemList2D{items: items}, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {
 		t.Fatal("empty camera filter drew an unfiltered item")
 	})
 	if allocations := testing.AllocsPerRun(100, func() {
-		drawRenderPhaseList2D[renderItem2D, *renderItem2D](canvas, world, filtered, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {})
+		drawRenderPhaseList2D(canvas, world, filtered, DrawViews2D{}, false, batched, func(renderBatch2D, renderViewport2D, bool) {})
 	}); allocations != 0 {
 		t.Fatalf("filtered traversal allocated %v times", allocations)
 	}
@@ -182,4 +188,8 @@ func BenchmarkRenderPhase2DTraversal(b *testing.B) {
 			runtime.KeepAlive(total)
 		})
 	}
+}
+
+func drawRenderPhase2D(c *graphics.Canvas2D, world *ecs.World, items []renderItem2D, views DrawViews2D, cull bool, batched func(*renderItem2D) bool, draw func(renderBatch2D, renderViewport2D, bool)) {
+	drawRenderPhaseList2D(c, world, renderItemList2D{items: items, count: len(items)}, views, cull, batched, draw)
 }

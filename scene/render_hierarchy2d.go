@@ -32,6 +32,7 @@ type renderHierarchy2DCache struct {
 	retention  reuse.MapRetention
 	population int
 	highest    uint32
+	denseWait  uint8
 	versions   [6]uint64
 	structure  uint64
 }
@@ -39,12 +40,19 @@ type renderHierarchy2DCache struct {
 func (c *renderHierarchy2DCache) MaintainCache() {
 	// Decide density after a complete population, so a high ID visited first
 	// cannot repeatedly discard and rebuild warm dense storage.
-	if c.sparse != nil && len(c.sparse) > 64 && uint64(c.highest) < uint64(len(c.sparse))*4 {
-		for entity, value := range c.sparse {
-			*c.values.Ensure(entity) = value
+	if c.sparse != nil {
+		switch {
+		case len(c.sparse) <= 64 || uint64(c.highest) >= uint64(len(c.sparse))*4:
+			c.denseWait = reuse.RetentionFrames
+		case c.denseWait > 0:
+			c.denseWait--
+		default:
+			for entity, value := range c.sparse {
+				*c.values.Ensure(entity) = value
+			}
+			c.sparse, c.retention = nil, reuse.MapRetention{}
 		}
-		c.sparse, c.retention = nil, reuse.MapRetention{}
-	} else if c.sparse == nil && uint64(c.highest) >= uint64(max(128, c.values.Len()*8)) {
+	} else if uint64(c.highest) >= uint64(max(128, c.values.Len()*8)) {
 		c.useSparse()
 	}
 	if c.sparse != nil {
@@ -139,6 +147,11 @@ func (c *renderHierarchy2DCache) setValue(entity ecs.Entity, value renderHierarc
 }
 
 func (c *renderHierarchy2DCache) useSparse() {
+	// A full traversal after a sparse phase can be temporary. Delay
+	// re-promoting an established cache, including after a mid-frame reset.
+	if c.population != 0 {
+		c.denseWait = reuse.RetentionFrames
+	}
 	c.sparse = make(map[ecs.Entity]renderHierarchy2DInfo, c.values.Len()+1)
 	for entity, value := range c.values.All {
 		c.sparse[entity] = *value

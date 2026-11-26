@@ -1,6 +1,7 @@
 # Onix engine development guidelines
 
 - Avoid compatibility code. Prefer generics(supports generic methods) and keep implementations concise.
+- Use concrete types for single-type operations and constrain generics to the types or methods they need. Reserve `any` for operations that support arbitrary types.
 - Do not launch the editor for screenshot testing; visual acceptance is manual.
 - Store project JSON files in the resources directory.
 - Aim for zero allocations when adding features, especially on warm paths.

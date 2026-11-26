@@ -143,12 +143,13 @@ func TestWithResourceOverlayCleansGeneratedFiles(t *testing.T) {
 			}
 			writeBuildTestFile(t, filepath.Join(layout.AppDir, "generated.go"), "package main")
 			writeBuildTestFile(t, layout.OverlayPath, `{}`)
-			value, err := layout.withResourceOverlay(func() (int, error) { return 42, test.buildErr })
+			const artifact = "game.wasm"
+			value, err := layout.withResourceOverlay(func() (string, error) { return artifact, test.buildErr })
 			if !errors.Is(err, test.buildErr) {
 				t.Fatalf("build error = %v, want %v", err, test.buildErr)
 			}
-			if test.buildErr == nil && value != 42 {
-				t.Fatalf("build value = %d, want 42", value)
+			if test.buildErr == nil && value != artifact {
+				t.Fatalf("build artifact = %q, want %q", value, artifact)
 			}
 			for _, name := range []string{layout.AppDir, layout.OverlayPath} {
 				if _, err := os.Stat(name); !os.IsNotExist(err) {

@@ -180,7 +180,7 @@ func (p *treeBuilder) addChild(n *uinode.Node) {
 
 func (p *treeBuilder) insertOpenElement(n *uinode.Node) {
 	p.oe = append(p.oe, n)
-	if len(p.oe) > 512 {
+	if len(p.oe) > MaxNestingDepth {
 		panic(ErrNestingDepth)
 	}
 }

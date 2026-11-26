@@ -5,6 +5,8 @@ import (
 	"github.com/onix-engine/onix/scene"
 )
 
+type rigidBodyComponent interface{ RigidBody2D | RigidBody3D }
+
 type tasks2D struct{}
 type tasks3D struct{}
 
@@ -49,7 +51,7 @@ type physicsEntitySet struct {
 	epoch           uint64
 }
 
-func (dirty *physicsBodyChanges) collect[T any](world *ecs.World, since ecs.Tick, current, previous physicsInputs) []ecs.Entity {
+func (dirty *physicsBodyChanges) collect[T rigidBodyComponent](world *ecs.World, since ecs.Tick, current, previous physicsInputs) []ecs.Entity {
 	dirty.context = world.ChangesSince(since)
 	dirty.reset()
 	if current.versions[0] != previous.versions[0] {
@@ -66,7 +68,7 @@ func (dirty *physicsBodyChanges) collect[T any](world *ecs.World, since ecs.Tick
 	return dirty.entities
 }
 
-func (dirty *physicsEntitySet) collectSubtrees[T any](world *ecs.World) {
+func (dirty *physicsEntitySet) collectSubtrees[T rigidBodyComponent](world *ecs.World) {
 	if len(dirty.queue) == 0 {
 		return
 	}
@@ -106,7 +108,7 @@ func (dirty *physicsWriteback) resetTopology() {
 	dirty.links = dirty.links[:0]
 }
 
-func (dirty *physicsWriteback) link[T any](world *ecs.World, entity ecs.Entity) {
+func (dirty *physicsWriteback) link[T rigidBodyComponent](world *ecs.World, entity ecs.Entity) {
 	for link := world.GetRef[scene.Parent](entity); link != nil; link = world.GetRef[scene.Parent](link.Entity) {
 		parent := link.Entity
 		if !world.Has[scene.Transform](parent) {
@@ -165,7 +167,7 @@ func (dirty *physicsEntitySet) mark(entity ecs.Entity, bit uint64) bool {
 	return true
 }
 
-func (dirty *physicsEntitySet) addBody[T any](world *ecs.World, entity ecs.Entity) {
+func (dirty *physicsEntitySet) addBody[T rigidBodyComponent](world *ecs.World, entity ecs.Entity) {
 	if world.Has[T](entity) && world.Has[scene.Transform](entity) && world.InQueryScope(entity) && scene.IsActive(world, entity) && dirty.mark(entity, 1) {
 		dirty.entities = append(dirty.entities, entity)
 	}
@@ -191,7 +193,7 @@ func valueVersion[T any](world *ecs.World) uint64 {
 	return version
 }
 
-func bodyInputs[T any](world *ecs.World) physicsInputs {
+func bodyInputs[T rigidBodyComponent](world *ecs.World) physicsInputs {
 	scope, version := world.QueryScopeKey()
 	bodyValues, bodyMembers := world.ComponentValueRevision[T]()
 	_, transformMembers := world.ComponentValueRevision[scene.Transform]()
@@ -220,9 +222,9 @@ func physicsInputs3D(world *ecs.World) physicsInputs {
 	return inputs
 }
 
-type pendingBodies[T any] struct{}
+type pendingBodies[T rigidBodyComponent] struct{}
 
-func pendingBodySync[T any](world *ecs.World, previous, current physicsInputs, managed int) bool {
+func pendingBodySync[T rigidBodyComponent](world *ecs.World, previous, current physicsInputs, managed int) bool {
 	if previous == current {
 		return false
 	}

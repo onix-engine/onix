@@ -1013,11 +1013,10 @@ func updateEditableText(world *ecs.World, editable, owner ecs.Entity, value stri
 	if !ok {
 		return
 	}
-	setHTMLNodeText(ref.Node, value)
+	Node{world: world, owner: owner, node: ref.Node}.SetText(value)
 	if text := world.GetMut[scene.Text2D](ref.Text); text != nil {
 		text.Value = value
 	}
-	Node{world: world, owner: owner, node: ref.Node}.markMutation(htmlMutationStructure)
 }
 
 // SetEditableSelection updates Selection anchor/focus rune offsets without rebuilding.
@@ -1888,6 +1887,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 			return Layout{}, fmt.Errorf("ecs: parse html: %w", err)
 		}
 	}
+	state.pruneDetached()
 	if state.NodeByID == nil || state.IndexDirty {
 		syncHTMLDocumentIndex(state)
 	}
@@ -2028,18 +2028,6 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 			return Layout{}, fmt.Errorf("ecs: compute html style: %w", err)
 		}
 		state.SyncStats.Styled = len(styles)
-	} else if state.LayoutTopology {
-		// Removed nodes must not remain retained by the style cache.
-		withinDocument := func(node *uinode.Node, inside bool) bool { return inside || node == state.Root }
-		for node := range styles {
-			if !state.NodeFlags.resolve(node, htmlNodeParent, withinDocument) {
-				delete(styles, node)
-				removeHTMLNodeAnimation(state, node)
-				delete(state.AnimationBaselines, node)
-				delete(state.OverflowRoutes, node)
-			}
-		}
-		state.NodeFlags.clear()
 	}
 	state.Stylesheet, state.Styles, state.Viewport = stylesheet, styles, viewport
 	if !mutationSync && !resizeSync {
@@ -2155,7 +2143,8 @@ func convergeHTMLContainerQueries(state *htmlRenderState, box *layout.Box, face,
 	laidOut := false
 	for pass := 0; pass < 4; pass++ {
 		metricsChanged := refreshHTMLContainerMetrics(state, box)
-		if pass > 0 && !metricsChanged {
+		// With no measured containers in either layout, no query can change.
+		if !metricsChanged && (pass > 0 || len(state.StyleCache.ContainerMetrics) == 0) {
 			break
 		}
 		state.StateRoots[0] = state.Root
@@ -2197,11 +2186,9 @@ func convergeHTMLContainerQueries(state *htmlRenderState, box *layout.Box, face,
 }
 
 func refreshHTMLContainerMetrics(state *htmlRenderState, root *layout.Box) bool {
-	if state.ContainerMetricsScratch == nil {
-		state.ContainerMetricsScratch = make(map[*uinode.Node]style.ContainerMetrics)
-	}
-	next := state.ContainerMetricsScratch
+	previous, next := state.StyleCache.ContainerMetrics, state.ContainerMetricsScratch
 	clear(next)
+	changed := false
 	var visit func(*layout.Box)
 	visit = func(box *layout.Box) {
 		if box == nil {
@@ -2212,6 +2199,12 @@ func refreshHTMLContainerMetrics(state *htmlRenderState, root *layout.Box) bool 
 			if box.Style.ContainerType.Keyword == "size" {
 				metrics.Height = box.Content.Height
 			}
+			if next == nil {
+				next = make(map[*uinode.Node]style.ContainerMetrics)
+			}
+			if old, ok := previous[box.Node]; !ok || old != metrics {
+				changed = true
+			}
 			next[box.Node] = metrics
 		}
 		for _, child := range box.Children {
@@ -2219,18 +2212,8 @@ func refreshHTMLContainerMetrics(state *htmlRenderState, root *layout.Box) bool 
 		}
 	}
 	visit(root)
-	previous := state.StyleCache.ContainerMetrics
-	changed := len(previous) != len(next)
-	if !changed {
-		for node, metrics := range next {
-			if previous[node] != metrics {
-				changed = true
-				break
-			}
-		}
-	}
 	state.StyleCache.ContainerMetrics, state.ContainerMetricsScratch = next, previous
-	return changed
+	return changed || len(previous) != len(next)
 }
 
 func sameHTMLRenderKeyExceptEvents(left, right htmlRenderKey) bool {
@@ -4881,18 +4864,6 @@ func htmlNodeText(node *uinode.Node) string {
 		builder.WriteString(htmlNodeText(child))
 	}
 	return builder.String()
-}
-
-func setHTMLNodeText(node *uinode.Node, value string) {
-	if node == nil {
-		return
-	}
-	if len(node.Children) == 1 && node.Children[0] != nil && node.Children[0].Type == uinode.TextNode {
-		node.Children[0].Data = value
-		return
-	}
-	node.ClearChildren()
-	node.AppendChild(uinode.NewText(value))
 }
 
 // spawnHTMLEditableText flattens an editing host into one live text visual.

@@ -125,7 +125,7 @@ func (a *ModuleEditor) renderAnimationBezierControls(b *editorVNodeView, curve s
 	b.close()
 }
 
-func (a *ModuleEditor) renderAnimationStepTransition[T any](b *editorVNodeView, s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) {
+func (a *ModuleEditor) renderAnimationStepTransition[T project.AnimationSpecValue](b *editorVNodeView, s *workspaceAnimation, tracks []project.AnimationTrackSpec[T]) {
 	keys := tracks[s.Track].Keyframes
 	b.text("p", "interval", fmt.Sprintf("Interval: %g → %g s", keys[s.Key].Time, keys[s.Key+1].Time))
 	b.text("p", "discrete", "This track switches values at keyframes and uses Step interpolation.")

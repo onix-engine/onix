@@ -68,6 +68,10 @@ int main(void) {
         uint32_t target_texture;
         uint32_t target = onix_metal_create_render_target(driver, 16, 16, 0, 0, &target_texture);
         require(target != 0, "create persistent target");
+        uint32_t width, height;
+        require(onix_metal_target_size(driver, 0, &width, &height) && width == 64 && height == 64, "window pixel size");
+        require(!onix_metal_target_size(driver, -1, &width, &height), "query must not create a caret layer");
+        require(onix_metal_target_size(driver, target, &width, &height) && width == 16 && height == 16, "offscreen pixel size");
         // Cover several rotations, resize, idle trim, and allocation after trim.
         for (int cycle = 0; cycle < 3; cycle++) {
             for (int frame = 0; frame < 6; frame++) {
@@ -101,6 +105,11 @@ int main(void) {
             require(pixel[0] == 0 && pixel[1] == 255 && pixel[2] == 0 && pixel[3] == 255, "idle preserved persistent target contents");
             require(onix_metal_resize(driver, 64 + cycle * 16, 64), "resize after cleanup");
         }
+        require(onix_metal_target_size(driver, 0, &width, &height) && width == 96 && height == 64, "resized window");
+        require(onix_metal_resize_render_target(driver, target, 37, 23, 0, 0, &target_texture), "resize offscreen");
+        require(onix_metal_target_size(driver, target, &width, &height) && width == 37 && height == 23, "resized offscreen");
+        require(onix_metal_destroy_render_target(driver, target), "destroy offscreen");
+        require(!onix_metal_target_size(driver, target, &width, &height), "retired target omitted");
         onix_metal_destroy(driver);
         [layer release];
         puts("Metal memory lifecycle: two frames, resize, retirement, idle trim and recreation OK");

@@ -4,6 +4,10 @@ import (
 	"github.com/onix-engine/onix/graphics"
 )
 
+type renderSnapshot2D interface {
+	Sprite2D | ParticleEmitter2D | Tilemap2D | Spine2D | textPaint2D
+}
+
 type renderSnapshots2DScratch struct{}
 
 type renderSnapshots2D struct {
@@ -40,7 +44,7 @@ func (s *renderSnapshots2D) length() int {
 
 // Borrow components only while a retained collector builds its temporary item
 // list. The retained owner copies them before any drawing or structural writes.
-func (s *renderSnapshots2D) capture[T any](value *T, snapshot func(T) *T) *T {
+func (s *renderSnapshots2D) capture[T renderSnapshot2D](value *T, snapshot func(T) *T) *T {
 	if s.borrow {
 		return value
 	}

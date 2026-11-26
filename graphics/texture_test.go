@@ -330,3 +330,46 @@ func TestDecodedTextureAddressingReachesDriverBeforeUpload(t *testing.T) {
 		t.Fatal("texture lost addressing")
 	}
 }
+
+func TestPagedTextureRestoresSparseOverlappingRegions(t *testing.T) {
+	for _, format := range []render.TextureFormat{render.TextureFormatR8, render.TextureFormatRGBA8} {
+		t.Run(format.Name(), func(t *testing.T) {
+			const width, height = 1031, 137
+			step := format.TexelBytes()
+			texture := CreateEmptyTexture(width, height, format, ResourceUsageDefault)
+			defer texture.Dispose()
+			want := make([]byte, width*height*step)
+			updates := []TextureRegionUpdate{
+				{X: 800, Y: 7, Width: 220, Height: 6, Pixels: bytes.Repeat([]byte{17}, 220*6*step)},
+				{X: 980, Y: 8, Width: 48, Height: 1, Pixels: bytes.Repeat([]byte{214}, 48*step)},
+				{X: width - 1, Y: height - 1, Width: 1, Height: 1, Pixels: bytes.Repeat([]byte{63}, step)},
+			}
+			for _, u := range updates {
+				texture.UpdateRegions([]TextureRegionUpdate{u})
+				for row := range u.Height {
+					start := ((u.Y+row)*width + u.X) * step
+					copy(want[start:], u.Pixels[row*u.Width*step:(row+1)*u.Width*step])
+				}
+			}
+			if n := testing.AllocsPerRun(50, func() { texture.UpdateRegions(updates) }); n != 0 {
+				t.Fatalf("warm updates allocated %g", n)
+			}
+			for range 2 {
+				driver := &textureTestDriver{}
+				device, err := render.NewDevice(driver)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer device.Destroy()
+				scratch := acquireTextureUploadScratch(len(want))
+				for i := range scratch.pixels {
+					scratch.pixels[i] = 255
+				}
+				releaseTextureUploadScratch(scratch)
+				if !texture.RenderHandleFor(device).Valid() || !bytes.Equal(want, driver.createdPixels) {
+					t.Fatal("device recreation changed shadow pixels")
+				}
+			}
+		})
+	}
+}

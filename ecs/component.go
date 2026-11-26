@@ -9,13 +9,21 @@ type Tick uint32
 
 const maxChangeAge = ^uint32(0) - (2*518_400_000 - 1)
 
+type tickWindow struct {
+	thisRun Tick
+	age     uint32
+}
+
+func newTickWindow(lastRun, thisRun Tick) tickWindow {
+	return tickWindow{thisRun: thisRun, age: min(uint32(thisRun-lastRun), maxChangeAge)}
+}
+
+func (w tickWindow) contains(value Tick) bool {
+	return value != 0 && uint32(w.thisRun-value) < w.age
+}
+
 func tickInRange(value, lastRun, thisRun Tick) bool {
-	if value == 0 {
-		return false
-	}
-	ticksSinceChange := min(uint32(thisRun-value), maxChangeAge)
-	ticksSinceSystem := min(uint32(thisRun-lastRun), maxChangeAge)
-	return ticksSinceSystem > ticksSinceChange
+	return newTickWindow(lastRun, thisRun).contains(value)
 }
 
 type componentID uint32
@@ -122,16 +130,15 @@ func (bounds *tickRange) includeNonzero(tick Tick) {
 	bounds.max = max(bounds.max, tick)
 }
 
-func (bounds tickRange) matches(filter rowFilter) bool {
-	window := min(uint32(filter.thisRun-filter.lastRun), maxChangeAge)
-	if window == 0 || bounds.max == 0 {
+func (bounds tickRange) matches(window tickWindow) bool {
+	if window.age == 0 || bounds.max == 0 {
 		return false
 	}
-	first := filter.thisRun - Tick(window-1)
-	if first <= filter.thisRun {
-		return bounds.max >= first && ^bounds.invertedMin <= filter.thisRun
+	first := window.thisRun - Tick(window.age-1)
+	if first <= window.thisRun {
+		return bounds.max >= first && ^bounds.invertedMin <= window.thisRun
 	}
-	return bounds.max >= first || ^bounds.invertedMin <= filter.thisRun
+	return bounds.max >= first || ^bounds.invertedMin <= window.thisRun
 }
 
 func (c *columnState) touch() {

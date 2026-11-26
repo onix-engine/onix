@@ -1359,7 +1359,10 @@ type renderItem2D struct {
 func (item *renderItem2D) Entity() ecs.Entity { return item.entity }
 
 // snapshot reads the active payload without allocating or retaining ECS storage.
-func (item renderItem2D) snapshot[T any]() *T { value, _ := item.content.(*T); return value }
+func (item renderItem2D) snapshot[T renderSnapshot2D]() *T {
+	value, _ := item.content.(*T)
+	return value
+}
 
 func (item *renderItem2D) materialData() graphics.Material2DData {
 	if item.material2D != nil {
@@ -2861,7 +2864,7 @@ func shapeMaterialKey() renderMaterialKey {
 	return renderMaterialKey{pipeline: render.PipelineShape}
 }
 
-func (item renderItem2D) renderSortKey() renderSortKey2D {
+func (item *renderItem2D) renderSortKey() renderSortKey2D {
 	return renderSortKey2D{
 		scene:      item.scene.Order,
 		group:      item.group,
@@ -2872,14 +2875,6 @@ func (item renderItem2D) renderSortKey() renderSortKey2D {
 		localOrder: item.localOrder,
 		sequence:   item.sequence,
 	}
-}
-
-func (item *renderItem2D) renderPhaseKeys() (renderSortKey2D, renderMaterialKey) {
-	return item.renderSortKey(), item.material
-}
-
-func (item renderItem2D) renderMaterial() renderMaterialKey {
-	return item.material
 }
 
 func (item renderItem2D) quadTransform() mgl32.Mat4 {

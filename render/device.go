@@ -332,6 +332,11 @@ type ShapeInstance2D struct {
 	Kind       ShapeKind
 }
 
+// gpuUploadElement covers pointer-free elements copied verbatim to GPU buffers.
+type gpuUploadElement interface {
+	byte | uint16 | uint32 | float32 | ShapeInstance2D | Vertex3D | Instance3D
+}
+
 type ShapeBatch struct {
 	Instances  []ShapeInstance2D
 	Projection [16]float32

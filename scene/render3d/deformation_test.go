@@ -3,9 +3,9 @@ package render3d
 import (
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestInactiveDeformationDoesNotInvalidateComponents(t *testing.T) {
@@ -24,6 +24,35 @@ func TestInactiveDeformationDoesNotInvalidateComponents(t *testing.T) {
 	}
 	if world.ComponentVersion[Deformation]() != version {
 		t.Fatal("inactive deformation marked the column changed")
+	}
+}
+
+func TestDeformationInheritsActivityAndPreservesBakedMatrices(t *testing.T) {
+	world := ecs.NewWorld()
+	parents := world.NewSpawner2[scene.GlobalTransform, scene.Activity]()
+	nodeMatrix := mgl32.Translate3D(3, 0, 0)
+	parent := parents.Spawn(scene.GlobalTransform{Matrix: nodeMatrix}, scene.Activity{Active: false})
+	baked := mgl32.Translate3D(2, 0, 0)
+	deformations := world.NewSpawner2[Deformation, scene.Parent]()
+	entity := deformations.Spawn(Deformation{
+		NodeEntities: []ecs.Entity{parent, 0}, NodeInverseBind: []mgl32.Mat4{mgl32.Ident4(), mgl32.Ident4()},
+		JointMatrices: []mgl32.Mat4{baked},
+	}, scene.Parent{Entity: parent})
+	sync := UpdateDeformationsSystem("")
+	if err := sync.Run(world); err != nil {
+		t.Fatal(err)
+	}
+	d := world.GetRef[Deformation](entity)
+	if len(d.NodeMatrices) != 0 {
+		t.Fatal("inactive descendant updated its node matrices")
+	}
+	world.SetIfChanged(parent, scene.Activity{Active: true})
+	if err := sync.Run(world); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.NodeMatrices) != 2 || d.NodeMatrices[0] != nodeMatrix || d.NodeMatrices[1] != mgl32.Ident4() ||
+		len(d.JointMatrices) != 1 || d.JointMatrices[0] != baked {
+		t.Fatal("active descendant did not resolve its rigid nodes or preserve its baked joint matrix")
 	}
 }
 

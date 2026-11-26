@@ -55,7 +55,7 @@ func releaseConvexHullCookScratch(scratch *convexHullCookScratch) {
 }
 
 // Cooking buffers contain no references and are overwritten before use.
-func resetCookBuffer[T any](values []T) []T {
+func resetCookBuffer[T uint32 | triangleMeshRef | ConvexFace](values []T) []T {
 	if cap(values) > maxCachedCookEntries {
 		return nil
 	}

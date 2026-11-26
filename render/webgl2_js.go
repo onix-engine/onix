@@ -1351,7 +1351,7 @@ func (d *webGL2Driver) DestroyMeshShader(handle MeshShaderHandle) error {
 	return d.destroyWebGLShader(handle, "mesh", &d.meshShaders)
 }
 
-func (d *webGL2Driver) createWebGLShader[R any](descriptor ShaderDescriptor, defaultVertex, defaultFragment, kind string, pool *GenerationPool[R, *webGLProgram]) (Handle[R], error) {
+func (d *webGL2Driver) createWebGLShader[R ShaderResource](descriptor ShaderDescriptor, defaultVertex, defaultFragment, kind string, pool *GenerationPool[R, *webGLProgram]) (Handle[R], error) {
 	if err := descriptor.Validate(); err != nil {
 		return Handle[R]{}, err
 	}
@@ -1380,7 +1380,7 @@ func (d *webGL2Driver) createWebGLShader[R any](descriptor ShaderDescriptor, def
 	return pool.Insert(&program), nil
 }
 
-func (d *webGL2Driver) destroyWebGLShader[R any](handle Handle[R], kind string, pool *GenerationPool[R, *webGLProgram]) error {
+func (d *webGL2Driver) destroyWebGLShader[R ShaderResource](handle Handle[R], kind string, pool *GenerationPool[R, *webGLProgram]) error {
 	program, ok := pool.Remove(handle)
 	if !ok {
 		return fmt.Errorf("render: invalid WebGL2 %s shader handle %s", kind, handle)
@@ -1900,7 +1900,7 @@ func (d *webGL2Driver) setTextureParameters(filter TextureFilter, wrapU, wrapV T
 	d.gl.Call("texParameteri", webGLTexture2D, webGLTextureWrapT, wrapV.glValue())
 }
 
-func (retention *scratchRetention) copySliceToJS[T any](storage *js.Value, values []T) (js.Value, int) {
+func (retention *scratchRetention) copySliceToJS[T gpuUploadElement](storage *js.Value, values []T) (js.Value, int) {
 	data := sliceBytes(values)
 	return copyBytesToJS(storage, retention, data), len(data)
 }

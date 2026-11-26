@@ -163,7 +163,7 @@ func (p *removalPlan) transition(source *archetype) *removalTransition {
 
 // A plan can handle one source archetype without allocating a map. Keep
 // additional sources keyed by ID because their IDs can be arbitrarily sparse.
-type transitionCache[T any] struct {
+type transitionCache[T removalTransition | patchTransition] struct {
 	first   *T
 	rest    map[uint32]*T
 	firstID uint32

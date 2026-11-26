@@ -94,7 +94,7 @@ func (settings *editorSettings) rememberRecentProject(directory string) error {
 		return fmt.Errorf("project directory is not available")
 	}
 	next := *settings
-	next.RecentProjects = prependDistinct(next.RecentProjects, directory, samePath, recentProjectLimit)
+	next.RecentProjects = prependRecentProject(next.RecentProjects, directory)
 	if slices.Equal(next.RecentProjects, settings.RecentProjects) {
 		return nil
 	}
@@ -120,18 +120,15 @@ func (settings *editorSettings) forgetRecentProject(directory string) error {
 	return nil
 }
 
-func prependDistinct[T any](items []T, value T, equal func(T, T) bool, limit int) []T {
-	if limit <= 0 {
-		return nil
-	}
-	result := make([]T, 1, min(len(items)+1, limit))
-	result[0] = value
-	for _, item := range items {
-		if equal(item, value) {
+func prependRecentProject(projects []string, directory string) []string {
+	result := make([]string, 1, min(len(projects)+1, recentProjectLimit))
+	result[0] = directory
+	for _, item := range projects {
+		if samePath(item, directory) {
 			continue
 		}
 		result = append(result, item)
-		if len(result) == limit {
+		if len(result) == recentProjectLimit {
 			break
 		}
 	}

@@ -64,7 +64,7 @@ func validateModAnimationTargets(plan *ModPlan) error {
 	return nil
 }
 
-func validateModTrackClaims[T any](tracks []AnimationTrackSpec[T], claim func(scene.AnimationBinding) error) error {
+func validateModTrackClaims[T AnimationSpecValue](tracks []AnimationTrackSpec[T], claim func(scene.AnimationBinding) error) error {
 	for _, track := range tracks {
 		if err := claim(track.Binding); err != nil {
 			return err

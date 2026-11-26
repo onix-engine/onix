@@ -6,10 +6,11 @@ import (
 )
 
 const (
-	routeLength float32 = 15600
-	riderX      float32 = 270
-	capacity            = 6
-	target              = 18
+	routeLength    float32 = 15600
+	districtLength         = routeLength / 3
+	riderX         float32 = 270
+	capacity               = 6
+	target                 = 18
 )
 
 type phase uint8
@@ -196,7 +197,7 @@ func (g *game) burst(x, y float32) {
 		*p = particle{X: x, Y: y, VX: float32(math.Cos(a)) * 100, VY: float32(math.Sin(a))*100 - 65, Life: .65}
 	}
 }
-func (g *game) wind() bool { return g.Distance >= 5200 && int(g.Distance/1300)%3 == 1 }
+func (g *game) wind() bool { return g.Distance >= districtLength && int(g.Distance/1300)%3 == 1 }
 func (g *game) step(dt float32) {
 	if g.Phase != riding || dt <= 0 {
 		return

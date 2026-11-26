@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func TestHierarchyPreservesExplicitSiblingOrder(t *testing.T) {
@@ -194,6 +195,22 @@ func TestHierarchyMembershipInvalidatesOnlyAffectedSubtrees(t *testing.T) {
 	if !IsActive(world, grandchild) || hierarchy.Depth(grandchild) != 0 ||
 		hierarchy.Parent(replacement) != entities[2] || hierarchy.invalidated >= len(entities)/2 {
 		t.Fatalf("batch removal and slot reuse left stale topology or rebuilt the whole index, invalidated %d", hierarchy.invalidated)
+	}
+}
+
+func TestHierarchyRetainsDenseNodesWithSparseEntitySlots(t *testing.T) {
+	w, entities := hierarchyFixture(4096)
+	h := HierarchyFor(w)
+	last := entities[len(entities)-1]
+	for _, entity := range entities[:len(entities)-1] {
+		w.Despawn(entity)
+	}
+	HierarchyFor(w)
+	for range 2 * reuse.RetentionFrames {
+		h.MaintainCache()
+	}
+	if len(h.nodes) != 1 || cap(h.nodes) > 64 || h.node(last) != &h.nodes[0] || h.node(entities[0]) != nil {
+		t.Fatalf("sparse hierarchy kept %d nodes (capacity %d), survivor %v", len(h.nodes), cap(h.nodes), last)
 	}
 }
 

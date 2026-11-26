@@ -13,19 +13,21 @@ type entityMeta struct {
 	generation  uint32
 	archetypeID uint32
 	row         uint32
-	state       entityState
 }
 
-type entityState uint8
-
+// No table can contain more rows than the world has entity slots. MaxUint32
+// is therefore an unused row index. Inactive slots reuse archetypeID as a tag.
 const (
-	entityFree entityState = iota
-	entityReserved
-	entityAlive
+	freeSlotTag uint32 = iota
+	reservedSlotTag
 )
 
+func (m *entityMeta) reservedFor(entity Entity) bool {
+	return m.row == invalidEntityIndex && m.archetypeID == reservedSlotTag && m.generation == entity.generation()
+}
+
 type World struct {
-	queryPlans              map[uint64][]*queryPlan
+	queryPlans              map[uint64]*queryPlan
 	scopes                  *QueryScope
 	queryScope              *QueryScope
 	entityChanges           *[entityChangeCapacity]Entity
@@ -35,7 +37,7 @@ type World struct {
 	frameScratch            map[reflect.Type]any
 	messages                map[reflect.Type]messageStore
 	resources               map[reflect.Type]any
-	archetypesByHash        map[uint64][]uint32
+	archetypesByHash        map[uint64]*archetype
 	commands                Commands
 	queryMasks              querySpec
 	free                    []uint32
@@ -122,8 +124,8 @@ func (w *World) EntitySlots() int {
 func NewWorld() *World {
 	world := &World{
 		componentTypes:   map[reflect.Type]componentID{},
-		archetypesByHash: map[uint64][]uint32{},
-		queryPlans:       map[uint64][]*queryPlan{},
+		archetypesByHash: map[uint64]*archetype{},
+		queryPlans:       map[uint64]*queryPlan{},
 		simpleQueryPlans: map[simpleQueryKey]*queryPlan{},
 		resources:        map[reflect.Type]any{},
 		messages:         map[reflect.Type]messageStore{},
@@ -147,21 +149,17 @@ func (w *World) Spawn(bundle Bundle) Entity {
 	w.assertStructuralMutationAllowed()
 
 	var inline [8]preparedBundleEntry
+	var entries []preparedBundleEntry
 	if len(bundle.entries) > len(inline) {
-		return w.spawnLargeBundle(bundle)
+		storage := spawnEntryPool.get(len(bundle.entries))
+		defer spawnEntryPool.put(storage)
+		entries = *storage
+	} else {
+		entries = inline[:len(bundle.entries)]
 	}
-	entries := w.prepareBundle(bundle, inline[:])
+	hasBuilders := w.prepareBundle(bundle, entries)
 	entity := w.reserveEntity()
-	w.spawnReserved(entity, entries, w.mutationTick())
-	return entity
-}
-
-func (w *World) spawnLargeBundle(bundle Bundle) Entity {
-	storage := spawnEntryPool.get(len(bundle.entries))
-	defer spawnEntryPool.put(storage)
-	entries := w.prepareBundle(bundle, *storage)
-	entity := w.reserveEntity()
-	w.spawnReserved(entity, entries, w.mutationTick())
+	w.spawnReserved(entity, entries, hasBuilders, nil)
 	return entity
 }
 
@@ -169,9 +167,9 @@ func (w *World) spawnLargeBundle(bundle Bundle) Entity {
 // with SpawnPrepared when the same component shape is spawned repeatedly.
 func (w *World) PrepareBundle(bundle Bundle) PreparedBundle {
 	requireWorld(w)
-	entries := make([]preparedBundleEntry, len(bundle.entries))
-	entries = w.prepareBundle(bundle, entries)
-	return PreparedBundle{world: w, entries: entries}
+	plan := &bundlePlan{world: w, entries: make([]preparedBundleEntry, len(bundle.entries))}
+	plan.hasBuilders = w.prepareBundle(bundle, plan.entries)
+	return PreparedBundle{plan: plan}
 }
 
 // SpawnPrepared spawns a previously prepared bundle without rebuilding its
@@ -179,23 +177,19 @@ func (w *World) PrepareBundle(bundle Bundle) PreparedBundle {
 func (w *World) SpawnPrepared(bundle PreparedBundle) Entity {
 	requireWorld(w)
 	w.assertStructuralMutationAllowed()
-	if bundle.world != w {
-		panic("ecs: prepared bundle belongs to a different world")
-	}
+	plan := bundle.forWorld(w)
 	entity := w.reserveEntity()
-	w.spawnReserved(entity, bundle.entries, w.mutationTick())
+	plan.spawnReserved(entity)
 	return entity
 }
 
-func (w *World) prepareBundle(bundle Bundle, storage []preparedBundleEntry) []preparedBundleEntry {
-	entries := storage
-	if len(entries) < len(bundle.entries) {
-		entries = make([]preparedBundleEntry, len(bundle.entries))
-	} else {
-		entries = entries[:len(bundle.entries)]
-	}
+// Fill the caller's entry slice and report whether spawning invokes any builders.
+func (w *World) prepareBundle(bundle Bundle, entries []preparedBundleEntry) (hasBuilders bool) {
 	for index, entry := range bundle.entries {
 		entries[index] = preparedBundleEntry{id: entry.componentID(w), entry: entry}
+		if !hasBuilders {
+			_, hasBuilders = entry.(entityBundleEntry)
+		}
 	}
 	// Keep short bundles on the inline insertion path.
 	if len(entries) <= 32 {
@@ -208,24 +202,26 @@ func (w *World) prepareBundle(bundle Bundle, storage []preparedBundleEntry) []pr
 			panic(fmt.Sprintf("ecs: duplicate component %s in bundle", w.componentInfos[entries[index].id].typ))
 		}
 	}
-	return entries
+	return hasBuilders
 }
 
 func comparePreparedBundleEntry(a, b preparedBundleEntry) int {
 	return cmp.Compare(a.id, b.id)
 }
 
-func (w *World) spawnReserved(entity Entity, entries []preparedBundleEntry, tick Tick) {
+func (p *bundlePlan) spawnReserved(entity Entity) {
+	p.table = p.world.spawnReserved(entity, p.entries, p.hasBuilders, p.table)
+}
+
+func (w *World) spawnReserved(entity Entity, entries []preparedBundleEntry, hasBuilders bool, table *archetype) *archetype {
+	tick := w.mutationTick()
 	index, ok := entity.Index()
 	if !ok || int(index) >= len(w.entities) {
 		panic("ecs: reserved entity is invalid")
 	}
-	meta := &w.entities[index]
-	if meta.generation != entity.generation() || meta.state != entityReserved {
+	if !w.entities[index].reservedFor(entity) {
 		panic(fmt.Sprintf("ecs: entity %d is not reserved", entity))
 	}
-	var inline [8]bundleValue
-	var values []bundleValue
 	var pooledValues *[]bundleValue
 	committed := false
 	defer func() {
@@ -236,42 +232,45 @@ func (w *World) spawnReserved(entity Entity, entries []preparedBundleEntry, tick
 			w.cancelReserved(entity)
 		}
 	}()
-	for index, prepared := range entries {
-		builder, ok := prepared.entry.(entityBundleEntry)
-		if !ok {
-			continue
+	var values []bundleValue
+	if hasBuilders {
+		var inline [8]bundleValue
+		if len(entries) <= len(inline) {
+			values = inline[:len(entries)]
+		} else {
+			pooledValues = spawnValuePool.get(len(entries))
+			values = *pooledValues
 		}
-		if values == nil {
-			if len(entries) <= len(inline) {
-				values = inline[:len(entries)]
+		for i, prepared := range entries {
+			if builder, ok := prepared.entry.(entityBundleEntry); ok {
+				values[i] = builder.materialize(entity)
 			} else {
-				pooledValues = spawnValuePool.get(len(entries))
-				values = *pooledValues
+				values[i] = prepared.entry.(bundleValue)
 			}
 		}
-		values[index] = builder.materialize(entity)
-	}
-	meta = &w.entities[index]
-	if meta.generation != entity.generation() || meta.state != entityReserved {
-		panic(fmt.Sprintf("ecs: entity %d reservation changed while materializing bundle", entity))
+		if !w.entities[index].reservedFor(entity) {
+			panic(fmt.Sprintf("ecs: entity %d reservation changed while materializing bundle", entity))
+		}
 	}
 
-	archetype := w.archetypeForBundle(entries)
-	row := archetype.appendEntity(entity)
-	// The table was selected by these sorted entries, so ids and columns line
-	// up with them index for index.
-	for index, prepared := range entries {
+	// Builders can spawn recursively. Bind the table after they have run and
+	// before appending any row so nested spawns retain their table order.
+	if table == nil {
+		table = w.archetypeForBundle(entries)
+	}
+	row := table.appendEntity(entity)
+	for i, prepared := range entries {
 		var value bundleValue
 		if values != nil {
-			value = values[index]
-		}
-		if value == nil {
+			value = values[i]
+		} else {
 			value = prepared.entry.(bundleValue)
 		}
-		value.appendTo(archetype.columns[index], tick)
+		value.appendTo(table.columns[i], tick)
 	}
-	w.commitSpawn(index, archetype, row)
+	w.commitSpawn(index, table, row)
 	committed = true
+	return table
 }
 
 // commitSpawn publishes a reserved entity as alive in its new table row.
@@ -279,7 +278,6 @@ func (w *World) commitSpawn(index uint32, archetype *archetype, row int) {
 	meta := &w.entities[index]
 	meta.archetypeID = archetype.id
 	meta.row = uint32(row)
-	meta.state = entityAlive
 	if row == 0 {
 		w.occupiedArchetypes[archetype.id/64] |= uint64(1) << (archetype.id % 64)
 	}
@@ -340,7 +338,7 @@ func (w *World) EntityByPickingID(id uint32) (Entity, bool) {
 		return 0, false
 	}
 	meta := &w.entities[index]
-	if meta.state != entityAlive {
+	if meta.row == invalidEntityIndex {
 		return 0, false
 	}
 	return makeEntity(index, meta.generation), true
@@ -585,14 +583,14 @@ func (w *World) reserveEntity() Entity {
 		last := len(w.free) - 1
 		index := w.free[last]
 		w.free = w.free[:last]
-		w.entities[index].state = entityReserved
+		w.entities[index].archetypeID = reservedSlotTag
 		return makeEntity(index, w.entities[index].generation)
 	}
 	if uint64(len(w.entities)) >= uint64(invalidEntityIndex) {
 		panic("ecs: entity capacity exhausted")
 	}
 	index := uint32(len(w.entities))
-	w.entities = append(w.entities, entityMeta{generation: 1, archetypeID: invalidEntityIndex, state: entityReserved})
+	w.entities = append(w.entities, entityMeta{generation: 1, archetypeID: reservedSlotTag, row: invalidEntityIndex})
 	return makeEntity(index, 1)
 }
 
@@ -602,7 +600,7 @@ func (w *World) cancelReserved(entity Entity) bool {
 		return false
 	}
 	meta := &w.entities[index]
-	if meta.generation != entity.generation() || meta.state != entityReserved {
+	if !meta.reservedFor(entity) {
 		return false
 	}
 	w.releaseEntity(index)
@@ -611,9 +609,8 @@ func (w *World) cancelReserved(entity Entity) bool {
 
 func (w *World) releaseEntity(index uint32) {
 	meta := &w.entities[index]
-	meta.archetypeID = invalidEntityIndex
-	meta.row = 0
-	meta.state = entityFree
+	meta.archetypeID = freeSlotTag
+	meta.row = invalidEntityIndex
 	meta.generation++
 	if meta.generation == 0 {
 		meta.generation = 1
@@ -627,7 +624,7 @@ func (w *World) entityMeta(entity Entity) (uint32, *entityMeta, bool) {
 		return 0, nil, false
 	}
 	meta := &w.entities[index]
-	if meta.generation != entity.generation() || meta.state != entityAlive {
+	if meta.row == invalidEntityIndex || meta.generation != entity.generation() {
 		return 0, nil, false
 	}
 	return index, meta, true
@@ -684,8 +681,7 @@ func setArchetypeEdge(edges *archetypeEdges, id componentID, target uint32) *arc
 
 func (w *World) archetypeForIDs(ids []componentID, takeOwnership bool) *archetype {
 	hash := hashComponentIDs(ids)
-	for _, id := range w.archetypesByHash[hash] {
-		candidate := w.archetypes[id]
+	for candidate := w.archetypesByHash[hash]; candidate != nil; candidate = candidate.nextHash {
 		if slices.Equal(candidate.ids, ids) {
 			return candidate
 		}
@@ -701,8 +697,7 @@ func (w *World) archetypeForBundle(entries []preparedBundleEntry) *archetype {
 	for _, entry := range entries {
 		hash = hashComponentID(hash, entry.id)
 	}
-	for _, id := range w.archetypesByHash[hash] {
-		candidate := w.archetypes[id]
+	for candidate := w.archetypesByHash[hash]; candidate != nil; candidate = candidate.nextHash {
 		if len(candidate.ids) != len(entries) {
 			continue
 		}
@@ -725,7 +720,7 @@ func (w *World) archetypeForBundle(entries []preparedBundleEntry) *archetype {
 }
 
 func (w *World) createArchetype(hash uint64, ids []componentID) *archetype {
-	archetype := &archetype{id: uint32(len(w.archetypes)), ids: ids}
+	archetype := &archetype{id: uint32(len(w.archetypes)), ids: ids, nextHash: w.archetypesByHash[hash]}
 	if len(ids) > 0 {
 		archetype.mask = make(componentMask, int(ids[len(ids)-1])/64+1)
 	}
@@ -740,7 +735,7 @@ func (w *World) createArchetype(hash uint64, ids []componentID) *archetype {
 	if archetype.id%64 == 0 {
 		w.occupiedArchetypes = append(w.occupiedArchetypes, 0)
 	}
-	w.archetypesByHash[hash] = append(w.archetypesByHash[hash], archetype.id)
+	w.archetypesByHash[hash] = archetype
 	return archetype
 }
 

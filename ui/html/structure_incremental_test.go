@@ -202,3 +202,19 @@ func TestHTMLWarmStructureInvalidationDoesNotAllocate(t *testing.T) {
 	}
 	incrementalSync(t, world)
 }
+
+func TestDetachedSubtreeKeepsReparentedStyles(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<main><div id="old"><span id="move">keep</span><i id="gone">discard</i></div><div id="new"></div></main>`)
+	old := incrementalHTMLNode(t, world, owner, "old")
+	moved := incrementalHTMLNode(t, world, owner, "move")
+	gone := incrementalHTMLNode(t, world, owner, "gone")
+	next := incrementalHTMLNode(t, world, owner, "new")
+	if !old.Remove() || !moved.Remove() || !next.Append(moved) {
+		t.Fatal("failed to move a descendant before synchronization")
+	}
+	incrementalSync(t, world)
+	state := world.GetMut[htmlRenderState](owner)
+	if state.Styles[moved.node] == nil || state.Styles[old.node] != nil || state.Styles[gone.node] != nil || len(state.DetachedRoots) != 0 {
+		t.Fatal("retirement lost a reattached node or retained a detached subtree")
+	}
+}

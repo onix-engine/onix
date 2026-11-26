@@ -33,7 +33,7 @@ func testMetalNative(t *testing.T, name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	binary := filepath.Join(t.TempDir(), name)
-	command := exec.CommandContext(ctx, "xcrun", "clang", "-fno-objc-arc", "-O2", "tests/"+name+".m", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "CoreVideo", "-o", binary)
+	command := exec.CommandContext(ctx, "xcrun", "clang", "-fno-objc-arc", "-O2", "tests/"+name+".m", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "CoreVideo", "-framework", "CoreGraphics", "-o", binary)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("compile Metal regression: %v\n%s", err, output)
 	}

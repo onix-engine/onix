@@ -6,6 +6,32 @@ import (
 	"testing"
 )
 
+func TestArchetypeAndQueryPlanHashCollisions(t *testing.T) {
+	world := NewWorld()
+	auditRegisterColumns(world, 127)
+	leftIDs, rightIDs := []componentID{36, 121}, []componentID{0, 126}
+	if hashComponentIDs(leftIDs) != hashComponentIDs(rightIDs) {
+		t.Fatal("archetype fixture must collide")
+	}
+	left, right := world.archetypeFor(leftIDs), world.archetypeFor(rightIDs)
+	if left == right {
+		t.Fatal("distinct component sets shared a table")
+	}
+	for _, table := range []*archetype{left, right} {
+		entries := []preparedBundleEntry{{id: table.ids[0]}, {id: table.ids[1]}}
+		if world.archetypeFor(table.ids) != table || world.archetypeForBundle(entries) != table {
+			t.Fatal("table lookup lost a colliding component set")
+		}
+	}
+
+	a := querySpec{required: componentMask{1, 2}}
+	b := querySpec{required: componentMask{9, 0x15f0}}
+	first, second := world.queryPlan(a), world.queryPlan(b)
+	if len(world.queryPlans) != 1 || first == second || world.queryPlan(a) != first || world.queryPlan(b) != second {
+		t.Fatal("distinct masks must reuse their own plans under the same hash")
+	}
+}
+
 func TestQueryTablesTrackOccupancyAndOrder(t *testing.T) {
 	world := NewWorld()
 	world.registerComponent[int]()

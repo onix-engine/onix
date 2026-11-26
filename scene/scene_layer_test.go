@@ -3,10 +3,10 @@ package scene
 import (
 	"testing"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/internal/smallsort"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 func TestSceneLayersOrderWorldAndUIAndIsolateCameras(t *testing.T) {
@@ -59,7 +59,7 @@ func TestRenderBatchesDoNotCombineSeparateScenes(t *testing.T) {
 		{scene: SceneLayer{ID: 2, Order: 2}, order: 1},
 		{scene: SceneLayer{ID: 1, Order: 1}, order: 10},
 	}
-	smallsort.SortFunc(items, compareRenderPhaseItem2D[renderItem2D])
+	smallsort.SortFunc(items, compareRenderPhaseItem2D)
 	batches := 0
 	drawRenderPhase2D(graphics.Canvas2DContext(320, 180), w, items, DrawViews2D{}, false, func(*renderItem2D) bool { return true }, func(batch renderBatch2D, _ renderViewport2D, begin bool) {
 		if !begin || batch.end-batch.start != 1 {

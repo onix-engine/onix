@@ -8,6 +8,11 @@ type MeshShaderResource struct{}
 type Material2DShaderResource struct{}
 type RenderTargetResource struct{}
 
+// ShaderResource identifies a GPU resource created by a shader driver.
+type ShaderResource interface {
+	MeshShaderResource | Material2DShaderResource
+}
+
 // Handle is a typed GPU resource reference.
 type Handle[T any] struct {
 	id         uint32

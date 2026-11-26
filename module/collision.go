@@ -23,7 +23,9 @@ type Collision3D struct {
 	Penetration     float32
 }
 
-type collisionEmitter[T any] struct {
+type collisionEvent interface{ Collision2D | Collision3D }
+
+type collisionEmitter[T collisionEvent] struct {
 	emit    Emitter[T]
 	element string
 }
@@ -38,7 +40,7 @@ var (
 	collisionBridge3D = collisionBridge{bindCollision[Collision3D], (*Runtime).publishCollisions3D}
 )
 
-func bindCollision[T any](c *Context, entity ecs.Entity, element, port string) error {
+func bindCollision[T collisionEvent](c *Context, entity ecs.Entity, element, port string) error {
 	emit, err := c.BindEmitter[T](port)
 	if err != nil {
 		return err

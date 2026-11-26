@@ -1413,3 +1413,20 @@ func TestHTMLNodeBoundsFollowCSSLayout(t *testing.T) {
 		t.Fatal("removed node has bounds")
 	}
 }
+
+func TestHTMLContainerQuerySkipsEmptyContainerPass(t *testing.T) {
+	world := ecs.NewWorld()
+	bundle := ecs.NewBundle(1)
+	component := New(`<div><div id="child"></div></div>`)
+	component.CSS = `@container (max-width: 150px) { #child { height: 42px; } }`
+	component.Width, component.Height = 240, 120
+	bundle.Put(component)
+	owner := world.Spawn(bundle)
+	if err := Sync(world); err != nil {
+		t.Fatal(err)
+	}
+	state, ok := world.Get[htmlRenderState](owner)
+	if !ok || len(state.Styles) == 0 || state.SyncStats.Styled != len(state.Styles) {
+		t.Fatalf("expected one style pass, got %d visits for %d nodes", state.SyncStats.Styled, len(state.Styles))
+	}
+}

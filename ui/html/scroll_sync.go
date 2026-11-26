@@ -6,9 +6,11 @@ import (
 	"github.com/onix-engine/onix/scene"
 )
 
+type htmlScrollConsumer interface{ ScrollContent | ScrollbarPart }
+
 // Group retained consumers by every scroll container they depend on. Scopes
 // keep independent indexes; unchanged groups never traverse their consumers.
-type htmlScrollIndex[T any, S comparable] struct {
+type htmlScrollIndex[T htmlScrollConsumer, S comparable] struct {
 	groups       map[ecs.Entity]*htmlScrollGroup[S]
 	seen         map[*htmlStickyBinding]bool
 	context      ecs.SystemContext
@@ -23,7 +25,7 @@ type htmlScrollIndex[T any, S comparable] struct {
 	initialized  bool
 }
 
-type htmlScrollEntry[T any] struct {
+type htmlScrollEntry[T htmlScrollConsumer] struct {
 	value   T
 	entity  ecs.Entity
 	applied uint64
@@ -74,7 +76,7 @@ func (index *htmlScrollIndex[T, S]) trim() {
 
 // Reconciliation and embedding code can rewrite geometry without changing
 // scroll inputs. Replay just the containers with externally written outputs.
-func (index *htmlScrollIndex[T, S]) dirtyOutput[Output any](world *ecs.World, version uint64, slot int, areaOf func(T) ecs.Entity) {
+func (index *htmlScrollIndex[T, S]) dirtyOutput[Output scene.UITransform | scene.Size2D | scene.Sprite2D | scene.ClipRect2D | scene.RoundedClip2D](world *ecs.World, version uint64, slot int, areaOf func(T) ecs.Entity) {
 	if index.outputs[slot] == version {
 		return
 	}

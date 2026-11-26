@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 func renderHierarchyPopulationFixture() (*ecs.World, []ecs.Entity) {
@@ -59,5 +60,51 @@ func BenchmarkRenderHierarchyHighFirstRebuild(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		frame()
+	}
+}
+
+func BenchmarkRenderHierarchyAlternatingPopulation(b *testing.B) {
+	w, entities := renderHierarchyPopulationFixture()
+	cache := frameRenderHierarchy2DCachePtr(w)
+	frame := func(selected []ecs.Entity) {
+		cache.resetValues()
+		for _, entity := range selected {
+			cache.resolve(w, entity)
+		}
+		cache.MaintainCache()
+	}
+	for range 2 {
+		frame(entities)
+		frame(entities[len(entities)-1:])
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		frame(entities)
+		frame(entities[len(entities)-1:])
+	}
+}
+
+func TestRenderHierarchyPromotesAfterPopulationStabilizes(t *testing.T) {
+	w, entities := renderHierarchyPopulationFixture()
+	cache := frameRenderHierarchy2DCachePtr(w)
+	frame := func(selected []ecs.Entity) {
+		cache.resetValues()
+		for _, entity := range selected {
+			cache.resolve(w, entity)
+		}
+		cache.MaintainCache()
+	}
+	for range 3 {
+		frame(entities[len(entities)-1:])
+		frame(entities)
+		if cache.sparse == nil {
+			t.Fatal("one dense frame rebuilt a sparse cache")
+		}
+	}
+	for range reuse.RetentionFrames + 1 {
+		frame(entities)
+	}
+	if cache.sparse != nil || cache.values.Len() != len(entities) {
+		t.Fatal("stable dense population kept the sparse map")
 	}
 }

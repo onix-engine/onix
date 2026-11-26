@@ -7,7 +7,7 @@ import (
 	"unsafe"
 )
 
-func sliceBytes[T any](values []T) []byte {
+func sliceBytes[T gpuUploadElement](values []T) []byte {
 	if len(values) == 0 {
 		return nil
 	}

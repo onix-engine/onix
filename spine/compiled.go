@@ -1,6 +1,7 @@
 package spine
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 
@@ -299,7 +300,7 @@ func compileResource(resource *Resource, mipmapped bool) (compiledResource, erro
 	}
 	compiled := compiledResource{
 		Mipmapped: mipmapped, Width: resource.Width, Height: resource.Height,
-		Children: clone2D(resource.children),
+		Children: mapSlice(resource.children, slices.Clone),
 	}
 	compiled.Bones = mapSlice(resource.bones, func(value boneData) compiledBone {
 		return compiledBone{
@@ -338,14 +339,14 @@ func compileResource(resource *Resource, mipmapped bool) (compiledResource, erro
 	})
 
 	attachments := attachmentIndex{ids: make(map[*attachment]uint32)}
-	for _, skinName := range sortedStringKeys(resource.skins) {
-		for _, slot := range sortedIntKeys(resource.skins[skinName]) {
-			for _, name := range sortedStringKeys(resource.skins[skinName][slot]) {
+	for _, skinName := range sortedKeys(resource.skins) {
+		for _, slot := range sortedKeys(resource.skins[skinName]) {
+			for _, name := range sortedKeys(resource.skins[skinName][slot]) {
 				attachments.add(resource.skins[skinName][slot][name])
 			}
 		}
 	}
-	for _, animationName := range sortedStringKeys(resource.animations) {
+	for _, animationName := range sortedKeys(resource.animations) {
 		for _, timeline := range resource.animations[animationName].deform {
 			attachments.add(timeline.attachment)
 		}
@@ -370,13 +371,13 @@ func compileResource(resource *Resource, mipmapped bool) (compiledResource, erro
 		return result
 	})
 	compiled.Skins = make([]compiledSkin, 0, len(resource.skins))
-	for _, skinName := range sortedStringKeys(resource.skins) {
+	for _, skinName := range sortedKeys(resource.skins) {
 		parsed := resource.skins[skinName]
 		skinValue := compiledSkin{Name: skinName, Slots: make([]compiledSkinSlot, 0, len(parsed))}
-		for _, slot := range sortedIntKeys(parsed) {
+		for _, slot := range sortedKeys(parsed) {
 			entries := parsed[slot]
 			slotValue := compiledSkinSlot{Slot: slot, Entries: make([]compiledSkinEntry, 0, len(entries))}
-			for _, name := range sortedStringKeys(entries) {
+			for _, name := range sortedKeys(entries) {
 				slotValue.Entries = append(slotValue.Entries, compiledSkinEntry{Name: name, Attachment: attachments.add(entries[name])})
 			}
 			skinValue.Slots = append(skinValue.Slots, slotValue)
@@ -384,13 +385,13 @@ func compileResource(resource *Resource, mipmapped bool) (compiledResource, erro
 		compiled.Skins = append(compiled.Skins, skinValue)
 	}
 	compiled.Animations = make([]compiledNamedAnimation, 0, len(resource.animations))
-	for _, name := range sortedStringKeys(resource.animations) {
+	for _, name := range sortedKeys(resource.animations) {
 		compiled.Animations = append(compiled.Animations, compiledNamedAnimation{
 			Name: name, Animation: compileAnimation(resource.animations[name], &attachments),
 		})
 	}
 	compiled.Atlas = make([]compiledAtlasRegion, 0, len(resource.atlas))
-	for _, name := range sortedStringKeys(resource.atlas) {
+	for _, name := range sortedKeys(resource.atlas) {
 		region := resource.atlas[name]
 		compiled.Atlas = append(compiled.Atlas, compiledAtlasRegion{
 			Name: name, X: region.x, Y: region.y, Width: region.width, Height: region.height,
@@ -487,7 +488,7 @@ func restoreResource(compiled compiledResource, texture *graphics.Texture) (*Res
 	}
 	resource := &Resource{
 		Texture: texture, Width: compiled.Width, Height: compiled.Height,
-		children: clone2D(compiled.Children), skins: make(map[string]skin, len(compiled.Skins)),
+		children: mapSlice(compiled.Children, slices.Clone), skins: make(map[string]skin, len(compiled.Skins)),
 		animations: make(map[string]animation, len(compiled.Animations)), atlas: make(map[string]atlasRegion, len(compiled.Atlas)),
 	}
 	resource.bones = mapSlice(compiled.Bones, func(value compiledBone) boneData {
@@ -689,17 +690,7 @@ func mapSlice[S, T any](source []S, convert func(S) T) []T {
 	return result
 }
 
-func clone2D[T any](source [][]T) [][]T {
-	return mapSlice(source, slices.Clone)
-}
-
-func sortedStringKeys[V any](values map[string]V) []string {
-	result := mapKeys(values)
-	slices.Sort(result)
-	return result
-}
-
-func sortedIntKeys[V any](values map[int]V) []int {
+func sortedKeys[K cmp.Ordered, V any](values map[K]V) []K {
 	result := mapKeys(values)
 	slices.Sort(result)
 	return result

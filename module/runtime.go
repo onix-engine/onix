@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"reflect"
 	"slices"
 
@@ -152,25 +153,20 @@ func newRuntime(world *ecs.World, plan *project.ProjectPlan, registry Registry, 
 		return nil, ErrInvalid
 	}
 	r := &Runtime{world: world, plan: plan, options: options, content: content, pendingFirst: -1, pendingLast: -1,
-		typedStores: make(map[reflect.Type]valueStore), pending: make([]pendingRequest, options.RequestCapacity),
-		freePending: make([]int, options.RequestCapacity), commands: make([]structuralCommand, 0, options.CommandCapacity)}
+		typedStores: make(map[reflect.Type]valueStore), commands: make([]structuralCommand, 0, options.CommandCapacity)}
 	r.slotBuffers = make(map[project.ValueType]*slotBuffer)
 	r.privateSpawns = make(map[ecs.Entity]privateSpawn, options.CommandCapacity)
 	r.dirtyEntities = make([]*Context, 0, options.CommandCapacity)
-	r.outputs = scene.NewRenderOutputPool(options.OutputCapacity)
-	r.fonts = make(map[[32]byte]*fontResource)
 	r.contentResources = make(map[project.ModID]*privateResources)
-	r.manager = SceneManager{runtime: r, switches: make([]switchCommand, 0, options.CommandCapacity)}
+	r.manager.runtime = r
 	// Registration can subsequently be edited without mutating this runtime.
-	r.registry.mods = cloneMap(registry.mods)
-	r.registry.scenes = cloneMap(registry.scenes)
-	r.registry.values = builtinValues()
-	for name, factory := range registry.values {
-		r.registry.values[name] = factory
+	r.registry = Registry{
+		mods:   make(map[project.ModID]installer, len(registry.mods)),
+		scenes: make(map[project.SceneID]installer, len(registry.scenes)),
+		values: maps.Clone(registry.values),
 	}
-	for i := range r.freePending {
-		r.freePending[i] = options.RequestCapacity - 1 - i
-	}
+	maps.Copy(r.registry.mods, registry.mods)
+	maps.Copy(r.registry.scenes, registry.scenes)
 	for i := range 2 {
 		r.queues[i] = make([]envelope, 0, options.EventCapacity)
 	}
@@ -185,14 +181,6 @@ func reserveUsedBuffers[T any](buffers *[4][]T, count int) {
 	for i := range buffers {
 		buffers[i] = slices.Grow(buffers[i], count-len(buffers[i]))
 	}
-}
-
-func cloneMap[K comparable, V any](source map[K]V) map[K]V {
-	result := make(map[K]V, len(source))
-	for k, v := range source {
-		result[k] = v
-	}
-	return result
 }
 
 // Foreground and scene preparation use separate payload banks.
@@ -449,8 +437,9 @@ func (r *Runtime) Dispatch() error {
 			continue
 		}
 		if e.kind == slotEvent {
-			if e.slot.context.running() {
-				result = joinError(result, e.slot.set(e.slotBuffer.values[e.buffer][e.value], true))
+			if e.target.running() {
+				slot := Slot{context: e.target, index: e.slotIndex}
+				result = joinError(result, slot.set(e.slotBuffer.values[e.buffer][e.value], true))
 			}
 			continue
 		}
@@ -459,16 +448,15 @@ func (r *Runtime) Dispatch() error {
 			if p == nil || p.failure != nil || !p.source.running() {
 				continue
 			}
-			snapshot := *p
-			r.releasePending(e.pending)
-			if snapshot.revision.stale() {
-				result = joinError(result, r.failRequest(snapshot, ErrStaleRevision))
-			} else {
-				result = joinError(result, e.store.deliver(snapshot.source, e))
+			var failure error
+			if p.revision.stale() {
+				failure = ErrStaleRevision
 			}
+			r.releasePending(e.pending)
+			result = joinError(result, e.deliver(failure))
 			continue
 		}
-		if !e.source.usable() || !e.source.enabled || !e.source.running() && !(e.kind == engineEvent && e.source.definition == nil && e.source.scene.state == SceneSuspended) {
+		if !e.source.acceptsEvent(e.kind) {
 			continue
 		}
 		if e.kind == requestEvent {
@@ -477,8 +465,8 @@ func (r *Runtime) Dispatch() error {
 				continue
 			}
 		}
-		if e.target != nil && e.target.usable() && e.target.enabled && (e.target.running() || e.kind == engineEvent && e.target.definition == nil && e.target.scene.state == SceneSuspended) {
-			result = joinError(result, e.store.deliver(e.target, e))
+		if e.target.acceptsEvent(e.kind) {
+			result = joinError(result, e.deliver(nil))
 		}
 	}
 	clear(r.queues[read])
@@ -496,9 +484,10 @@ func (r *Runtime) Dispatch() error {
 				p.failureTick = r.tick
 			}
 			if p.failure != nil && p.failureTick <= r.tick {
-				snapshot := *p
+				e := envelope{kind: replyEvent, source: p.target, target: p.source, topic: p.topic, id: p.id, store: p.response}
+				failure := p.failure
 				r.releasePending(index)
-				result = joinError(result, r.failRequest(snapshot, snapshot.failure))
+				result = joinError(result, e.deliver(failure))
 			}
 		}
 		index = next
@@ -554,12 +543,19 @@ func (r *Runtime) lookupPending(index int, id RequestID) *pendingRequest {
 }
 
 func (r *Runtime) Cancel(id RequestID) error {
-	if id == 0 {
+	return r.cancel(id, nil)
+}
+
+func (r *Runtime) cancel(id RequestID, source *Context) error {
+	if id == 0 || len(r.pending) == 0 {
 		return ErrCanceled
 	}
 	p := r.lookupPending(int(id%RequestID(len(r.pending))), id)
 	if p == nil {
 		return ErrCanceled
+	}
+	if source != nil && p.source != source {
+		return ErrOwnership
 	}
 	if p.failure != nil {
 		return ErrCanceled
@@ -956,9 +952,6 @@ func (r *Runtime) Close() error {
 	return err
 }
 
-func (r *Runtime) failRequest(p pendingRequest, err error) error {
-	return p.response.deliver(p.source, envelope{kind: replyEvent, source: p.target, target: p.source, topic: p.topic, id: p.id, err: err})
-}
 func (c *Context) Switch(request SceneSwitchRequest) error {
 	if !c.usable() {
 		return ErrDisposed
@@ -981,7 +974,7 @@ func (r *Runtime) deliverInput(source *Context, value Input) error {
 	boundary := !r.busy
 	r.inputStore.values[0][0] = value
 	r.busy = true
-	err := r.inputStore.deliver(&source.scene.context, envelope{kind: engineEvent, source: source, target: &source.scene.context, topic: InputTopic})
+	err := envelope{kind: engineEvent, source: source, target: &source.scene.context, store: r.inputStore, topic: InputTopic}.deliver(nil)
 	r.inputStore.values[0][0] = Input{}
 	if boundary {
 		r.busy = false

@@ -11,7 +11,7 @@ func main() {
 	app := onix.NewApp()
 	app.SetRenderMode(onix.RenderOnDemand)
 	app.World.InsertResource(scene.RenderSettings2D{ClearColor: graphics.Black})
-	if err := app.InstallSystems[onix.Render2D](); err != nil {
+	if err := app.InstallSystems[onix.RenderText2D](); err != nil {
 		panic(err)
 	}
 	app.SetWindowSize(320, 160)

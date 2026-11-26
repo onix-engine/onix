@@ -3,10 +3,10 @@ package scene
 import (
 	"fmt"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/internal/entitycache"
 	"github.com/onix-engine/onix/internal/reuse"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 type Name struct {
@@ -84,27 +84,17 @@ type transformNode struct {
 }
 
 type transformWorkspace struct {
-	scope           *ecs.QueryScope
-	changes         ecs.SystemContext
-	global          ecs.ComponentBinding[GlobalTransform]
-	queue           []ecs.Entity
-	nodes           entitycache.Store[transformNode]
-	versions        [3]uint64
-	retention       reuse.Retention
-	structures      [2]uint64
-	scopeVersion    uint64
-	parentStructure uint64
-	recomputed      int
-	lastRun         ecs.Tick
-	bound           bool
-	initialized     bool
-}
-
-func transformRevisions(world *ecs.World) (versions [3]uint64, structures [2]uint64) {
-	versions[0], structures[0] = world.ComponentValueRevision[Transform]()
-	versions[1], _ = world.ComponentValueRevision[Parent]()
-	versions[2], structures[1] = world.ComponentValueRevision[GlobalTransform]()
-	return
+	changes            ecs.SystemContext
+	global             ecs.ComponentBinding[GlobalTransform]
+	queue              []ecs.Entity
+	nodes              entitycache.Store[transformNode]
+	versions, detached [3]uint64
+	entityVersion      uint64
+	retention          reuse.Retention
+	scopeVersion       uint64
+	recomputed         int
+	lastRun            ecs.Tick
+	initialized        bool
 }
 
 func SyncGlobalTransformSystem(name string) ecs.SystemConfig {
@@ -120,71 +110,55 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		return nil
 	}
 	workspace := world.ScopeValue[transformWorkspaceTag, transformWorkspace]()
-	if !workspace.bound {
-		workspace.global = world.BindComponent[GlobalTransform]()
-		workspace.bound = true
-	}
-	scope, version := world.QueryScopeKey()
-	if workspace.scope != scope || workspace.scopeVersion != version {
-		workspace.initialized = false
-		workspace.scope, workspace.scopeVersion = scope, version
-	}
+	_, scopeVersion := world.QueryScopeKey()
 	workspace.nodes.Trim()
 	workspace.queue = workspace.retention.Trim(workspace.queue[:0], 64)
 	workspace.recomputed = 0
-	versions, structures := transformRevisions(world)
-	if workspace.initialized && workspace.structures == structures && workspace.versions == versions {
+	versions := [3]uint64{componentValueVersion[Transform](world), componentValueVersion[Parent](world), componentValueVersion[GlobalTransform](world)}
+	entityVersion := world.EntityVersion()
+	rebuild := !workspace.initialized || workspace.scopeVersion != scopeVersion
+	if !rebuild && workspace.versions == versions {
+		workspace.entityVersion, workspace.lastRun = entityVersion, world.ChangeTick()
 		return nil
 	}
-	workspace.queue = workspace.queue[:0]
+	if !workspace.initialized {
+		workspace.global = world.BindComponent[GlobalTransform]()
+	}
 	hierarchy := HierarchyFor(world)
-	if !workspace.initialized || workspace.structures != structures {
+	detached := [3]uint64{world.ComponentDetachRevision[Transform](), world.ComponentDetachRevision[Parent](), world.ComponentDetachRevision[GlobalTransform]()}
+	if rebuild || detached[0] != workspace.detached[0] || detached[2] != workspace.detached[2] ||
+		(entityVersion != workspace.entityVersion && !workspace.retireEntities(world, hierarchy)) {
 		workspace.nodes.Reset()
 		for entity, access := range world.Query[Transform]().All {
-			transform := access.Get()
-
-			node := workspace.nodes.Ensure(entity)
-			*node = transformNode{transform: transform, local: transform.LocalMatrix(), dirty: true}
-			if parent, ok := world.Get[Parent](entity); ok {
-				node.parent = parent.Entity
-			}
-			workspace.queue = append(workspace.queue, entity)
+			workspace.add(entity, access.Get(), hierarchy.Parent(entity))
 		}
 	} else {
+		// Other systems can write after this cache was read in the same tick.
 		changes := &workspace.changes
-		since := workspace.lastRun
-		if since == world.ChangeTick() {
-			since--
-		}
-		*changes = world.ChangesSince(since)
+		*changes = world.ChangesSince(workspace.lastRun - 1)
 		if workspace.versions[1] != versions[1] {
-			refreshParent := func(entity ecs.Entity) {
-				node := workspace.node(entity)
-				if node == nil {
-					return
-				}
-				parent, _ := world.Get[Parent](entity)
-				if node.parent != parent.Entity {
-					node.parent = parent.Entity
+			refreshParent := func(entity ecs.Entity, node *transformNode) {
+				if parent := hierarchy.Parent(entity); node != nil && node.parent != parent {
+					node.parent = parent
 					workspace.mark(entity)
 				}
 			}
-			_, parentStructure := world.ComponentValueRevision[Parent]()
-			if workspace.parentStructure != parentStructure {
-				for entity := range workspace.nodes.All {
-					refreshParent(entity)
+			if detached[1] != workspace.detached[1] {
+				for entity, node := range workspace.nodes.All {
+					refreshParent(entity, node)
 				}
 			} else {
 				for entity, _ := range world.Query[Parent](changes.Changed[Parent](), ecs.With[Transform]()).All {
-					refreshParent(entity)
+					refreshParent(entity, workspace.node(entity))
 				}
 			}
 		}
 		if workspace.versions[0] != versions[0] {
 			for entity, access := range world.Query[Transform](changes.Changed[Transform]()).All {
 				transform := access.Get()
-
-				if node := workspace.node(entity); node != nil && node.transform != transform {
+				if node := workspace.node(entity); node == nil {
+					workspace.add(entity, transform, hierarchy.Parent(entity))
+				} else if node.transform != transform {
 					node.transform, node.local = transform, transform.LocalMatrix()
 					workspace.mark(entity)
 				}
@@ -192,9 +166,7 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 		}
 		if workspace.versions[2] != versions[2] {
 			for entity, access := range world.Query[GlobalTransform](changes.Changed[GlobalTransform]()).All {
-				transform := access.Get()
-
-				if node := workspace.node(entity); node != nil && workspace.expectedMatrix(world, node) != transform.Matrix {
+				if node := workspace.node(entity); node != nil && !node.dirty && workspace.expectedMatrix(world, node) != access.Ref().Matrix {
 					workspace.mark(entity)
 				}
 			}
@@ -211,12 +183,37 @@ func syncGlobalTransforms(context *ecs.SystemContext) error {
 			return err
 		}
 	}
-	_, workspace.parentStructure = world.ComponentValueRevision[Parent]()
-	workspace.initialized = true
-	workspace.versions, workspace.structures = transformRevisions(world)
+	versions[2] = componentValueVersion[GlobalTransform](world)
+	workspace.versions, workspace.detached = versions, detached
+	workspace.initialized, workspace.scopeVersion, workspace.entityVersion = true, scopeVersion, entityVersion
 	workspace.retention.Record(len(workspace.queue))
 	workspace.lastRun = world.ChangeTick()
 	return nil
+}
+
+func (workspace *transformWorkspace) add(entity ecs.Entity, transform Transform, parent ecs.Entity) {
+	*workspace.nodes.Ensure(entity) = transformNode{parent: parent, transform: transform, local: transform.LocalMatrix(), dirty: true}
+	workspace.queue = append(workspace.queue, entity)
+}
+
+func (workspace *transformWorkspace) retireEntities(world *ecs.World, hierarchy *Hierarchy) bool {
+	// The work queue is empty until the dirty transforms are collected.
+	changes, complete := world.EntityChangesSince(workspace.entityVersion, workspace.queue[:0])
+	workspace.queue = changes[:0]
+	workspace.retention.Record(len(changes))
+	if !complete {
+		return false
+	}
+	for _, entity := range changes {
+		if !world.IsAlive(entity) && workspace.node(entity) != nil {
+			// Surviving children of a despawned parent have lost their inherited matrix.
+			if hierarchy.missingParents[entity] != 0 {
+				return false
+			}
+			workspace.nodes.Delete(entity)
+		}
+	}
+	return true
 }
 
 func (workspace *transformWorkspace) node(entity ecs.Entity) *transformNode {

@@ -43,6 +43,14 @@ func TestTemporarySlicePoolClearsReferencesAndBoundsCapacity(t *testing.T) {
 	}
 }
 
+func TestSmallStaticBundleSpawnKeepsInlineStorage(t *testing.T) {
+	world := NewWorld()
+	bundle := memoryBundle(2, false)
+	if got := testing.AllocsPerRun(100, func() { world.Despawn(world.Spawn(bundle)) }); got != 0 {
+		t.Fatalf("warm static spawn and despawn allocated %g times", got)
+	}
+}
+
 func TestLargeSpawnScratchSupportsReentryAndPanic(t *testing.T) {
 	for _, prepared := range []bool{false, true} {
 		t.Run(fmt.Sprint(prepared), func(t *testing.T) {
@@ -159,7 +167,7 @@ func TestCommandSpawnPanicClearsAbandonedEntries(t *testing.T) {
 		}()
 		world.Commands().Spawn(invalid)
 	}()
-	entries := world.commands.spawnEntries
+	entries := world.commands.spawns.entries
 	for _, entry := range entries[len(entries):cap(entries)] {
 		if entry.entry != nil {
 			t.Fatal("failed command retained an abandoned bundle reference")

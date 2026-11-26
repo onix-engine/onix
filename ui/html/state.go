@@ -13,21 +13,23 @@ import (
 )
 
 type htmlDocumentState struct {
-	Mutations       map[*uinode.Node]htmlMutation
-	NodeByID        map[string]*uinode.Node
-	MutationRootSet map[*uinode.Node]struct{}
-	Root            *uinode.Node
-	Source          string
-	EmbeddedCSS     []string
-	MutationRoots   []*uinode.Node
-	NodeAncestors   htmlAncestorCache[*uinode.Node, *uinode.Node]
-	NodeFlags       htmlAncestorCache[*uinode.Node, bool]
-	Revision        uint64
-	EventRevision   uint64
-	IndexDirty      bool
-	FromSource      bool
-	SourceDirty     bool
-	SourceCompacted bool
+	Mutations         map[*uinode.Node]htmlMutation
+	NodeByID          map[string]*uinode.Node
+	MutationRootSet   map[*uinode.Node]struct{}
+	Root              *uinode.Node
+	Source            string
+	EmbeddedCSS       []string
+	MutationRoots     []*uinode.Node
+	DetachedRoots     []*uinode.Node
+	NodeAncestors     htmlAncestorCache[*uinode.Node, *uinode.Node]
+	NodeFlags         htmlAncestorCache[*uinode.Node, bool]
+	DetachedRetention reuse.Retention
+	Revision          uint64
+	EventRevision     uint64
+	IndexDirty        bool
+	FromSource        bool
+	SourceDirty       bool
+	SourceCompacted   bool
 }
 
 func (state *htmlDocumentState) matchesSource(value Surface) bool {

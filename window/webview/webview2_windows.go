@@ -17,8 +17,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/onix-engine/onix/scene"
 	"github.com/ebitengine/purego"
+	"github.com/onix-engine/onix/scene"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -222,6 +222,10 @@ func webViewHostWindowProc(window uintptr, message uint32, wParam, lParam uintpt
 
 func postWebViewCommand(window uintptr) bool {
 	return webViewPostMessage(window, webViewWMDispatch, 0, 0)
+}
+
+type webView2Object interface {
+	~struct{ vtable unsafe.Pointer }
 }
 
 type webView2Environment struct{ vtable unsafe.Pointer }
@@ -847,7 +851,7 @@ func appendUTF16String(destination []uint16, value string) ([]uint16, error) {
 	return append(destination, 0), nil
 }
 
-func callCOMString1[T any](object *T, slot int, scratch *[]uint16, value, operation string) error {
+func callCOMString1(object *webView2Core, slot int, scratch *[]uint16, value, operation string) error {
 	wide, err := appendUTF16String((*scratch)[:0], value)
 	if err != nil {
 		return fmt.Errorf("window: %s: %w", operation, err)
@@ -861,7 +865,7 @@ func callCOMString1[T any](object *T, slot int, scratch *[]uint16, value, operat
 	return nil
 }
 
-func callCOMString2[T any](object *T, slot int, scratch *[]uint16, value string, second uintptr, operation string) error {
+func callCOMString2(object *webView2Core, slot int, scratch *[]uint16, value string, second uintptr, operation string) error {
 	wide, err := appendUTF16String((*scratch)[:0], value)
 	if err != nil {
 		return fmt.Errorf("window: %s: %w", operation, err)
@@ -875,7 +879,7 @@ func callCOMString2[T any](object *T, slot int, scratch *[]uint16, value string,
 	return nil
 }
 
-func comMethod[T any](object *T, slot int) uintptr {
+func comMethod[T webView2Object](object *T, slot int) uintptr {
 	vtable := *(*unsafe.Pointer)(unsafe.Pointer(object))
 	return (*[64]uintptr)(vtable)[slot]
 }
@@ -886,23 +890,23 @@ func invokeCOM(procedure uintptr, arguments ...uintptr) uintptr {
 	return result
 }
 
-func comCall0[T any](object *T, slot int) uintptr {
+func comCall0[T webView2Object](object *T, slot int) uintptr {
 	return invokeCOM(comMethod(object, slot), uintptr(unsafe.Pointer(object)))
 }
 
-func comCall1[T any](object *T, slot int, first uintptr) uintptr {
+func comCall1[T webView2Object](object *T, slot int, first uintptr) uintptr {
 	return invokeCOM(comMethod(object, slot), uintptr(unsafe.Pointer(object)), first)
 }
 
-func comCall2[T any](object *T, slot int, first, second uintptr) uintptr {
+func comCall2[T webView2Object](object *T, slot int, first, second uintptr) uintptr {
 	return invokeCOM(comMethod(object, slot), uintptr(unsafe.Pointer(object)), first, second)
 }
 
-func comAddRef[T any](object *T) uintptr {
+func comAddRef[T webView2Object](object *T) uintptr {
 	return comCall0(object, webView2IUnknownAddRef)
 }
 
-func comRelease[T any](object *T) uintptr {
+func comRelease[T webView2Object](object *T) uintptr {
 	return comCall0(object, webView2IUnknownRelease)
 }
 

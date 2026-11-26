@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"syscall/js"
 	"unsafe"
+
+	"github.com/onix-engine/onix/internal/reuse"
 )
 
 const (
@@ -1012,7 +1014,7 @@ func (d *webGPUDriver) DrawShapes(batch ShapeBatch) error {
 	if d.scissorEmpty || d.viewportEmpty {
 		return nil
 	}
-	instanceOffset, uniformOffset := d.upload2D(batch.Projection, batch.Instances)
+	instanceOffset, uniformOffset := d.uploadShapes(batch.Projection, batch.Instances)
 	frame := &d.frames[d.frameIndex]
 	program := d.programs[PipelineShape]
 	pipeline, err := d.pipeline(program, d.blendOrDefault())
@@ -1571,7 +1573,7 @@ func (d *webGPUDriver) ensureMultisample() {
 	d.multisample = webGPUColorBuffer{value: value, view: value.Call("createView"), width: d.width, height: d.height}
 }
 
-func (d *webGPUDriver) upload2D[T any](projection [16]float32, instances []T) (int, int) {
+func (d *webGPUDriver) uploadShapes(projection [16]float32, instances []ShapeInstance2D) (int, int) {
 	instanceBytes := sliceBytes(instances)
 	uniform := [32]float32{}
 	projection = d.transformProjection(projection)
@@ -1586,7 +1588,7 @@ func (d *webGPUDriver) uploadSprite2D(projection [16]float32, instanceBytes []by
 	instanceOffset := align(frame.offset, 4)
 	uniformOffset := align(instanceOffset+len(instanceBytes), 256)
 	projection = d.transformProjection(projection)
-	d.spriteUniformOffsets = growSlice((&d.spriteUniformOffsetsRetention).resetScratch(d.spriteUniformOffsets), len(draws))
+	d.spriteUniformOffsets = reuse.Resize((&d.spriteUniformOffsetsRetention).resetScratch(d.spriteUniformOffsets), len(draws))
 	var offsets [16]int
 	var seen uint16
 	count := 0
@@ -1615,15 +1617,6 @@ func (d *webGPUDriver) uploadSprite2D(projection [16]float32, instanceBytes []by
 	d.writeBuffer(instanceOffset, instanceBytes)
 	d.writeBuffer(uniformOffset, sliceBytes(d.spriteUniformData[:count*64]))
 	return instanceOffset, d.spriteUniformOffsets
-}
-
-func growSlice[T any](values []T, length int) []T {
-	if cap(values) < length {
-		values = make([]T, length)
-	} else {
-		values = values[:length]
-	}
-	return values
 }
 
 func (d *webGPUDriver) uploadMesh(batch MeshBatch3D, gpuDeformation bool) (int, int, int, int) {

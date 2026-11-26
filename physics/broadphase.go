@@ -59,11 +59,13 @@ type broadphaseProxy struct {
 	staticSolid, queued, boundsDirty bool
 }
 
-type spatialEntry[C any] struct {
+type spatialCell interface{ hash() int }
+
+type spatialEntry[C spatialCell] struct {
 	cell                              C
 	collider, next, previous, ownNext int
 }
-type spatialGrid[C interface{ hash() int }] struct {
+type spatialGrid[C spatialCell] struct {
 	heads   []int
 	entries []spatialEntry[C]
 	free    int

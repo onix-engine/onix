@@ -13,6 +13,7 @@ const (
 	commandRemove
 	commandDespawn
 	commandSpawn
+	commandSpawnPrepared
 	commandRemovePrepared
 )
 
@@ -93,14 +94,21 @@ type queuedCommand struct {
 	valueIndex int
 	// data is a stream ID, or the component count for commandSpawn. Keeping
 	// references in the shared stream list makes the queue pointer-free.
-	data uint32
-	kind commandKind
+	data        uint32
+	kind        commandKind
+	hasBuilders bool // commandSpawn
+}
+
+// A flush borrows both payload slices while it applies its queue.
+type queuedSpawns struct {
+	entries []preparedBundleEntry
+	plans   []*bundlePlan
 }
 
 type Commands struct {
 	world         *World
 	queue         []queuedCommand
-	spawnEntries  []preparedBundleEntry
+	spawns        queuedSpawns
 	streams       map[reflect.Type]commandStream
 	streamList    []commandStream
 	activeStreams []uint32 // streams with queued values; capacity is reused
@@ -133,7 +141,7 @@ func (c *Commands) discardFrom(index int) {
 		panic("ecs: invalid command checkpoint")
 	}
 	for _, queued := range c.queue[index:] {
-		if queued.kind == commandSpawn {
+		if queued.kind == commandSpawn || queued.kind == commandSpawnPrepared {
 			c.world.cancelReserved(queued.entity)
 		}
 	}
@@ -147,6 +155,7 @@ func (c *Commands) trimStorage() {
 		panic("ecs: commands is nil")
 	}
 	spawnLength := 0
+	planLength := 0
 	removalLength := 0
 	for _, queued := range c.queue {
 		switch queued.kind {
@@ -154,6 +163,8 @@ func (c *Commands) trimStorage() {
 			c.streamList[queued.data].retain(queued.valueIndex + 1)
 		case commandSpawn:
 			spawnLength = max(spawnLength, queued.valueIndex+int(queued.data))
+		case commandSpawnPrepared:
+			planLength = queued.valueIndex + 1
 		case commandRemovePrepared:
 			removalLength = max(removalLength, queued.valueIndex+1)
 		}
@@ -165,8 +176,10 @@ func (c *Commands) trimStorage() {
 		}
 	}
 	c.activeStreams = active
-	clear(c.spawnEntries[spawnLength:])
-	c.spawnEntries = c.spawnEntries[:spawnLength]
+	clear(c.spawns.entries[spawnLength:])
+	c.spawns.entries = c.spawns.entries[:spawnLength]
+	clear(c.spawns.plans[planLength:])
+	c.spawns.plans = c.spawns.plans[:planLength]
 	clear(c.removals[removalLength:])
 	c.removals = c.removals[:removalLength]
 }
@@ -224,32 +237,32 @@ func (commands *Commands) Spawn(bundle Bundle) Entity {
 	if commands.world == nil {
 		panic("ecs: commands is not attached to a world")
 	}
-	start := len(commands.spawnEntries)
+	start := len(commands.spawns.entries)
 	defer func() {
 		if value := recover(); value != nil {
-			clear(commands.spawnEntries[start:])
-			commands.spawnEntries = commands.spawnEntries[:start]
+			clear(commands.spawns.entries[start:])
+			commands.spawns.entries = commands.spawns.entries[:start]
 			panic(value)
 		}
 	}()
-	commands.spawnEntries = slices.Grow(commands.spawnEntries, len(bundle.entries))
-	commands.spawnEntries = commands.spawnEntries[:start+len(bundle.entries)]
-	entries := commands.world.prepareBundle(bundle, commands.spawnEntries[start:])
-	if uint64(len(entries)) > uint64(^uint32(0)) {
+	count := len(bundle.entries)
+	if uint64(count) > uint64(^uint32(0)) {
 		panic("ecs: command spawn component capacity exhausted")
 	}
+	commands.spawns.entries = slices.Grow(commands.spawns.entries, count)[:start+count]
+	hasBuilders := commands.world.prepareBundle(bundle, commands.spawns.entries[start:])
 	entity := commands.world.reserveEntity()
 	commands.queue = append(commands.queue, queuedCommand{
-		kind:       commandSpawn,
-		entity:     entity,
-		valueIndex: start,
-		data:       uint32(len(entries)),
+		kind:        commandSpawn,
+		entity:      entity,
+		valueIndex:  start,
+		data:        uint32(count),
+		hasBuilders: hasBuilders,
 	})
 	return entity
 }
 
-// SpawnPrepared reserves an entity and queues a previously prepared
-// bundle without rebuilding its component entry list.
+// SpawnPrepared reserves an entity and queues a reference to its spawn plan.
 func (commands *Commands) SpawnPrepared(bundle PreparedBundle) Entity {
 	if commands == nil {
 		panic("ecs: commands is nil")
@@ -257,27 +270,14 @@ func (commands *Commands) SpawnPrepared(bundle PreparedBundle) Entity {
 	if commands.world == nil {
 		panic("ecs: commands is not attached to a world")
 	}
-	if bundle.world != commands.world {
-		panic("ecs: prepared bundle belongs to a different world")
-	}
-	if uint64(len(bundle.entries)) > uint64(^uint32(0)) {
-		panic("ecs: command spawn component capacity exhausted")
-	}
-	start := len(commands.spawnEntries)
-	defer func() {
-		if value := recover(); value != nil {
-			clear(commands.spawnEntries[start:])
-			commands.spawnEntries = commands.spawnEntries[:start]
-			panic(value)
-		}
-	}()
-	commands.spawnEntries = append(commands.spawnEntries, bundle.entries...)
+	plan := bundle.forWorld(commands.world)
 	entity := commands.world.reserveEntity()
+	index := len(commands.spawns.plans)
+	commands.spawns.plans = append(commands.spawns.plans, plan)
 	commands.queue = append(commands.queue, queuedCommand{
-		kind:       commandSpawn,
+		kind:       commandSpawnPrepared,
 		entity:     entity,
-		valueIndex: start,
-		data:       uint32(len(bundle.entries)),
+		valueIndex: index,
 	})
 	return entity
 }
@@ -304,7 +304,7 @@ func (commands *Commands) commandStreamFor[S commandStream](create func() S) S {
 	return stream
 }
 
-func (c queuedCommand) apply(world *World, spawnEntries []preparedBundleEntry) error {
+func (c queuedCommand) apply(world *World, spawns *queuedSpawns) error {
 	switch c.kind {
 	case commandInsert:
 		return world.commands.streamList[c.data].apply(world, c.entity, c.valueIndex)
@@ -314,7 +314,11 @@ func (c queuedCommand) apply(world *World, spawnEntries []preparedBundleEntry) e
 		world.Despawn(c.entity)
 		return nil
 	case commandSpawn:
-		world.spawnReserved(c.entity, spawnEntries[c.valueIndex:c.valueIndex+int(c.data)], world.mutationTick())
+		entries := spawns.entries[c.valueIndex : c.valueIndex+int(c.data)]
+		world.spawnReserved(c.entity, entries, c.hasBuilders, nil)
+		return nil
+	case commandSpawnPrepared:
+		spawns.plans[c.valueIndex].spawnReserved(c.entity)
 		return nil
 	case commandRemovePrepared:
 		PreparedRemoval{plan: world.commands.removals[c.valueIndex]}.Apply(c.entity)
@@ -331,14 +335,14 @@ func (w *World) FlushCommands() error {
 	if len(queue) == 0 {
 		return nil
 	}
-	spawnEntries := w.commands.spawnEntries
+	spawns := w.commands.spawns
 	w.commands.queue = nil
-	w.commands.spawnEntries = nil
+	w.commands.spawns = queuedSpawns{}
 	next := 0
 	defer func() {
 		clear(queue)
 		w.commands.queue = queue[:0]
-		w.commands.spawnEntries = spawnEntries
+		w.commands.spawns = spawns
 		w.commands.resetStorage()
 	}()
 	defer func() {
@@ -350,7 +354,7 @@ func (w *World) FlushCommands() error {
 	}()
 	for index, queued := range queue {
 		next = index
-		if err := queued.apply(w, spawnEntries); err != nil {
+		if err := queued.apply(w, &spawns); err != nil {
 			w.commands.queue = queue[index+1:]
 			w.commands.discardFrom(0)
 			return fmt.Errorf("ecs: apply command %d: %w", index, err)
@@ -368,8 +372,10 @@ func (c *Commands) resetStorage() {
 		c.streamList[id].truncate(0)
 	}
 	c.activeStreams = c.activeStreams[:0]
-	clear(c.spawnEntries)
-	c.spawnEntries = c.spawnEntries[:0]
+	clear(c.spawns.entries)
+	c.spawns.entries = c.spawns.entries[:0]
+	clear(c.spawns.plans)
+	c.spawns.plans = c.spawns.plans[:0]
 	clear(c.removals)
 	c.removals = c.removals[:0]
 }

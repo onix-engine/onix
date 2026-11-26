@@ -128,7 +128,7 @@ func (app *App) LoadModules[P module.ContentProfile](plan *project.ProjectPlan, 
 			return nil, err
 		}
 		app.World.InsertResource(scene.RenderSettings2D{ClearColor: color})
-		if app.hasSystemSet(systemSetRender2D) {
+		if app.hasSystemSet(systemSetRenderText2D) {
 			// Include fallback cameras created after the entry scene established its query scope.
 			runtime.SyncScopes()
 			app.configureCamera2D(false)

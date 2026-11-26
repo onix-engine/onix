@@ -7,7 +7,12 @@ import "github.com/onix-engine/onix/ecs"
 type Activity struct{ Active bool }
 
 func IsActive(world *ecs.World, entity ecs.Entity) bool {
-	return HierarchyFor(world).flags(entity)&hierarchyActive != 0
+	return HierarchyFor(world).IsActive(entity)
+}
+
+// IsActive reads inherited activity as of the last HierarchyFor call.
+func (h *Hierarchy) IsActive(entity ecs.Entity) bool {
+	return h.flags(entity)&hierarchyActive != 0
 }
 
 // IsInteractive requires both activity and visibility along the parent chain.

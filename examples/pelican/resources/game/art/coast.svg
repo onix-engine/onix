@@ -1,1 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="330" viewBox="0 0 1280 330"><path fill="#a7cfbd" d="M0 129Q125 50 242 125T502 122T800 130T1060 128T1280 129V330H0z"/><path fill="#77b8ad" d="M0 177Q185 120 360 181T710 166T1020 179T1280 177V330H0z"/><path fill="#58a4a0" d="M0 219h1280v111H0z"/><g fill="none" stroke="#b9e3d1" stroke-width="3" stroke-linecap="round"><path d="M10 250h130m60 35h210m70-33h175m-3 49h115m60-48h142m48 30h220m30-32h85"/></g><g transform="translate(780 80)"><path d="M12 136L27 16h40l17 120" fill="#fff6dc"/><path d="M22 61h49l4 27H19zM15 111h63l4 25H12z" fill="#df765d"/><path d="M20 17V0h54v17M15 0l32-24L80 0" fill="#315b5b"/><path d="M28 3h38v13H28z" fill="#f9d880"/><path d="M41 110h15v26H41z" fill="#315b5b"/></g><g transform="translate(250 192)"><path d="M0 0h80L64 17H16z" fill="#315b5b"/><path d="M39-56V0M44-53v44h32z" fill="#fff4d5" stroke="#315b5b" stroke-width="2"/></g><g transform="translate(1080 182)"><path d="M0 0h57L44 13H12z" fill="#d7795c"/><path d="M28-39V0M24-38v29H2z" fill="#fff5dc" stroke="#315b5b" stroke-width="2"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="330" viewBox="0 0 1280 330">
+  <defs>
+    <linearGradient id="water" x2="0%" y2="100%">
+      <stop stop-color="#a1d6c9"/><stop offset=".4" stop-color="#77c4bd"/><stop offset="1" stop-color="#429da6"/>
+    </linearGradient>
+  </defs>
+  <!-- The headlands meet at the same height and slope on both ends of the tile. -->
+  <path fill="#8ab7ae" d="M0 151c49-9 75-15 112-23 30-6 50-24 75-31l42 8 39 26 55 11 30 14 80 11 74 2 67-16 37 2 50-16 46-3 56-21 42-2 33-11 59 12 48 24 57 7 51 17 57 3C1165 154 1215 163 1280 151V180H0z"/>
+  <path fill="#73a8a4" d="M0 171l84-13 53-16 22-12 55-9-32 14-18 13-42 13 80-8 38-15 49 8 48 14 61 12h223l55-12 47-19 71-9-48 21-32 9 66-9 39-15 47 3 64 18 57 10C1080 170 1160 161 1190 163S1257 174 1280 171v10H0z"/>
+  <path fill="url(#water)" d="M0 174h1280v156H0z"/>
+  <path fill="#ddedcf" d="M0 174h1280v2H0z"/>
+  <!-- Chalk cliffs, with a tidal arch opening onto the horizon. -->
+  <g transform="translate(967 0)">
+    <path fill="#c1c5ae" d="M0 172l37-12 27-17 30-9 22-17 31-9 30 3 27 11 29 6 18 17 10 27h-16l-7-10q-7-12-17-10-13 4-14 22h-40l-5-9-16 9z"/>
+    <path fill="#d6d2b6" d="M75 150l38-22 33-11-14 16-4 26 10 12-37-1 8-20 6-14zM152 118l25 3-11 13-4 24-8-9 2-19zM202 130l24 4 16 14-19-7-14 5z"/>
+    <path fill="#8aa997" d="M0 172l39-17 27-19 29-9 24-19 31-8 27 6 26 8 31 9 15 15-27-9-26-3-21-12-34 1-28 12-21 15-29 8z"/>
+    <path fill="#a1aea0" d="M174 127l-4 19 4 13-5 10 9-7-2-14 6-16zM125 137l-5 10-2 14 4-7zM230 139l11 8 9 15-6-17z"/>
+    <path fill="#e6e2c5" d="M50 175l41-3 67 3-19 2H65zm158-1 27-2 28 2-15 2h-36z"/>
+    <path fill="#85b5ab" d="M130 181h61l-9 2h-41zm92-3h49l-13 2h-28z"/>
+  </g>
+  <g fill="#d5e9cd">
+    <path d="M30 192l101-2 57 2-100 2zM239 185h115l-26 2h-74zM583 198l120-2 26 2-101 2zM976 187l143-2 51 2-132 2z"/>
+    <path d="M120 226l73-3 39 1-26 3zM360 212l109-3 40 2-110 3zM801 225l175-4 35 2-132 3zM1151 215h103l-34 3h-48z"/>
+  </g>
+  <g fill="#b5e1cb">
+    <path d="M8 262q32 1 66-6 34 5 69 1-56 11-92 5l-43 2zM263 246q38 0 87-7 24 4 69 1-42 10-74 6z"/>
+    <path d="M537 283q46 1 87-9 32 7 79 3-38 11-77 5l-55 5zM1008 253q33-1 66-8 23 5 61 3-33 8-58 4l-69 5z"/>
+  </g>
+  <path fill="#60b1b1" d="M0 304q90-21 176-9l85-8-48 15 158-7q74-14 133-10l-53 12 130-6 128 2 100-18 72 2-74 18 102-6 124 8 114-12 86 3Q1256 310 1280 304v26H0z"/>
+  <g fill="#d1e7c8">
+    <path d="M55 314q41 0 78-9 23 7 72 3-41 12-74 5l-40 4zM383 320l73-9 35 2 53-5-40 10-45-1z"/>
+    <path d="M767 311q42-1 66-10 20 4 50 3-25 9-48 5l-68 6zM1063 318l107-10 47 3-58 1z"/>
+  </g>
+  <!-- A little lateen boat, well offshore and below the pickup line. -->
+  <g transform="translate(438 218)">
+    <path fill="#8ab9b2" d="M-33 11h75l-24 3h-39z"/>
+    <path d="M2 0v-56" stroke="#527d80" stroke-width="2"/>
+    <path fill="#fcf1ce" d="M-2-51Q-7-26-29-4h27z"/>
+    <path fill="#d7aa87" d="M5-45l25 40H5z"/>
+    <path fill="#5c8688" d="M-34-1q37 4 72-2L26 7h-46z"/>
+    <path fill="#f5e4b9" d="M-27 0H30l-4 2h-47z"/>
+  </g>
+  <g transform="translate(1103 239)" stroke-linejoin="round">
+    <path fill="#79b2ac" d="M-44 9l42-2 54 2-22 3-52-1z"/>
+    <path d="M-6-4v-35m0 4 31 27m-31-19-20 20" fill="none" stroke="#648d8e" stroke-width="1.5"/>
+    <path fill="#d69f7f" d="M-6-38l11 3-11 3z"/>
+    <path fill="#f0dfb9" d="M3-2v-16h18l6 16z"/>
+    <path fill="#648d8e" d="M6-15h5v6H6zm8 0h5l2 6h-7z"/>
+    <path fill="#688b8c" d="M-35-6q26 5 75 1L29 5h-50z"/>
+    <path fill="#dba282" d="M-30-2l64 1-6 4h-49z"/>
+  </g>
+  <g transform="translate(110 258)">
+    <path fill="#88bdb3" d="M-17 7l16-2 22 2-12 2z"/>
+    <path d="M0-4v-14" stroke="#70908c" stroke-width="2"/>
+    <path fill="#d49b7b" d="M-6-2l3-8h6l4 8-3 5h-8z"/>
+    <path d="M-4-5h9" stroke="#f4dfb7" stroke-width="2"/>
+  </g>
+</svg>

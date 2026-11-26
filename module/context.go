@@ -94,7 +94,13 @@ func (c *Context) Resource[T any](kind, name string) (T, error) {
 }
 func (c *Context) usable() bool { return c != nil && c.live && !c.disposing && !c.runtime.closed }
 func (c *Context) running() bool {
-	return c.usable() && (c.scene.state == SceneActive || c.runtime.preparation != nil && c.runtime.preparation.scene == c.scene)
+	return c.usable() && c.scene.running()
+}
+func (s *Scene) running() bool {
+	return s.state == SceneActive || s.runtime.preparation != nil && s.runtime.preparation.scene == s
+}
+func (c *Context) acceptsEvent(kind eventKind) bool {
+	return c.usable() && c.enabled && (c.scene.running() || kind == engineEvent && c.definition == nil && c.scene.state == SceneSuspended)
 }
 func (c *Context) owns(e Entity) bool {
 	return c != nil && c.live && e.owner == c && e.entity != 0 && (c.runtime.privateSpawns[e.entity].owner == c || c.runtime.entityContext(e.entity) == c)
