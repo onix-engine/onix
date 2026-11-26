@@ -34,8 +34,10 @@ Chromium 对照用例一致；不支持的行为应明确标出，不应静默�
 ## 延伸阅读
 
 - [ECS API 设计](ecs-api-design.md)
-- [模块开发与生命周期](module-system-authoring.md)
-- [资源包所有权](resource-packages.md)
-- [渲染与光照](render-lighting.md)
-- [HTML 兼容性用例](../tests/htmlcompat/README.md)
+- [模块开发与生命周期](../project/module-system-authoring.md)
+- [资源包所有权](../project/resource-packages.md)
+- [渲染与光照](../rendering/render-lighting.md)
+- [渲染流程](../rendering/render-path.zh-CN.md)
+- [原生 HTML 与滚动](../ui/html.md)
+- [HTML 兼容性用例](../../tests/htmlcompat/README.md)
 - [性能约束](performance.zh-CN.md)

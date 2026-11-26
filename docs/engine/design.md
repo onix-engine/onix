@@ -40,8 +40,10 @@ than silently approximated.
 ## Further reading
 
 - [ECS API design](ecs-api-design.md)
-- [Module authoring and lifecycle](module-system-authoring.md)
-- [Resource package ownership](resource-packages.md)
-- [Rendering and lighting](render-lighting.md)
-- [HTML compatibility fixtures](../tests/htmlcompat/README.md)
+- [Module authoring and lifecycle](../project/module-system-authoring.md)
+- [Resource package ownership](../project/resource-packages.md)
+- [Rendering and lighting](../rendering/render-lighting.md)
+- [Rendering pipeline (简体中文)](../rendering/render-path.zh-CN.md)
+- [Native HTML and scrolling](../ui/html.md)
+- [HTML compatibility fixtures](../../tests/htmlcompat/README.md)
 - [Performance contracts](performance.md)

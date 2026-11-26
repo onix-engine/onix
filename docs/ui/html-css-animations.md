@@ -1,6 +1,10 @@
-# HTML CSS animations
+# CSS animations and transitions
 
-CSS keyframes now pass through parsing, cascading and time sampling into retained ECS rendering. Each DOM node owns its clock, advanced once per frame by `scene.Time.Delta`; repeated `html.Sync` calls in the same frame do not advance twice. `html.Animating` schedules running or delayed animations. Same-name animations preserve elapsed time across style, keyframe or layout updates. Removing an animation or hiding its subtree cancels it; showing it restarts it.
+Each animated DOM node advances its clock once per frame using `scene.Time.Delta`.
+Repeated `html.Sync` calls in the same frame share that clock. `html.Animating`
+reports running or delayed animations. Same-name animations preserve elapsed
+time across style, keyframe, and layout updates. Removing an animation or hiding
+its subtree cancels it. Showing the subtree restarts it.
 
 ## Supported behavior
 
@@ -24,13 +28,16 @@ Geometry, margins, positions, background images/gradient stops, shadows and filt
 
 Animation/transition events, Web Animations API, composition and scroll timelines are absent. Controls, images, overflow clipping, dynamic descendants and other unsupported CPU groups need GPU offscreen compositing for exact group opacity; visual alpha on overlapping children can differ from Chromium. Color syntax remains hex, comma rgb/rgba, basic named colors and currentColor, without complete named/HSL/modern/wide-gamut syntax. CSS-wide/var() keyframes and complete simultaneous animation/transition precedence remain incomplete.
 
-References: [CSS Animations](https://www.w3.org/TR/css-animations-1/), [Transitions](https://www.w3.org/TR/css-transitions-1/), [Easing](https://www.w3.org/TR/css-easing-1/), [color interpolation](https://www.w3.org/TR/css-color-4/#interpolation), [before flag](https://www.w3.org/TR/web-animations-1/#the-before-flag). The manual fixture is `tests/htmlcompat/resources/animations.html`. Recorded checks did not launch the editor or screenshot tests.
+[CSS Animations](https://www.w3.org/TR/css-animations-1/) · [CSS Transitions](https://www.w3.org/TR/css-transitions-1/) · [CSS Easing](https://www.w3.org/TR/css-easing-1/) · [Color interpolation](https://www.w3.org/TR/css-color-4/#interpolation) · [Before flag](https://www.w3.org/TR/web-animations-1/#the-before-flag)
 
-## Examples and commands
+## Verification
+
+The [animation fixture](../../tests/htmlcompat/resources/animations.html) covers
+keyframes, transitions, transforms, and color.
 
 ```sh
-env GOCACHE=/tmp/onix-animation-go-build go test ./html/css ./html/style ./html/layout ./ecs ./ui ./project -run 'Test.*(HTML|Html|CSS|Css|Compute|Parse|Scope|Transform|Incremental|Cascade)' -count=1
-env GOCACHE=/tmp/onix-animation-go-build go test ./ecs -run '^$' -bench '^BenchmarkHTMLCSS(Color)?AnimationFrame$' -benchtime=200ms -benchmem
+go test ./html/css ./html/style ./ui/html
+go test ./ui/html -run '^$' -bench '^BenchmarkHTMLCSS(Color)?AnimationFrame$' -benchmem
 ```
 
 ```sh

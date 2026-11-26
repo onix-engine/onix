@@ -1,17 +1,34 @@
-# 文档
+# Onix 文档
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) · [快速开始](../README.zh-CN.md#快速开始)
 
-Onix 文档按使用目的分类：
+## 项目与模块
 
-| 分类 | 总览 | 内容 |
-| --- | --- | --- |
-| 使用 | [使用指南](usage.zh-CN.md) | 项目、模块、资源、构建、控件与平台集成 |
-| 设计 | [引擎设计](design.zh-CN.md) | 所有权、ECS、调度、渲染与 HTML 架构 |
-| 性能 | [性能指南](performance.zh-CN.md) | 热路径约束、测量方法与优化边界 |
+- [项目与模块开发](project/module-system-authoring.md)（创建和验证项目、编排场景、编写模块行为）
+- [资源包](project/resource-packages.md)（资源预处理、打包配置、运行时所有权）
 
-总览提供英文和简体中文版本。专题参考文档保留 API 与平台细节；代码示例
-和 API 名称不受语言影响。
+## 构建与平台
 
-过程记录、一次性审查、原始基准输出和已完成的迁移日志不再保留。性能总览
-描述当前契约，不记录历史前后对比结果。
+- [桌面构建与安装包](platform/desktop-builds.md) · [图形后端选择](platform/desktop-builds.md#graphics-backends)
+- [Android 构建](platform/android-builds.md) · [iOS 宿主集成](../editor/templates/ios/host/README.md)
+- [Linux DRM/KMS 直接显示](platform/linux-drm.md)
+
+## 界面与 HTML
+
+- [原生 HTML 与滚动](ui/html.md)（DOM 解析与属性、可见性、绘制裁剪、粘性定位、滚动条）
+- [CSS 动画与过渡](ui/html-css-animations.md)
+- [系统字体](ui/system-fonts.md) · [虚拟摇杆](ui/virtual-joystick.md) · [WebView](ui/webview.md)
+
+## 渲染
+
+- [3D 光照与材质](rendering/render-lighting.md) · [自定义着色器](rendering/custom-shaders.md)
+- [2D 与 3D 渲染流程](rendering/render-path.zh-CN.md)
+
+## 物理
+
+- [2D 物理](physics/physics2d.md) · [3D 物理](physics/physics3d.md)
+
+## 引擎开发
+
+- [引擎设计](engine/design.zh-CN.md) · [ECS API 与所有权](engine/ecs-api-design.md)
+- [性能指南](engine/performance.zh-CN.md) · [仓库开发约定](../AGENTS.md)

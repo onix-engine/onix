@@ -6,11 +6,11 @@ Onix 是用 Go 编写的 2D/3D 游戏与交互应用引擎。用 Go 写玩法，
 
 ## 引擎特色
 
-- **用 Go 类型组织游戏逻辑。** 组件直接定义为 Go 类型，系统按所需组件查询实体，也可以只处理发生变化的数据。玩法模块之间通过类型化消息传值。[ECS API](docs/ecs-api-design.md) · [模块开发](docs/module-system-authoring.md)
-- **原生 HTML/CSS 界面。** Onix 负责界面的布局和绘制，并将它与游戏场景显示在同一个窗口。用 Go 通过 DOM 句柄更新文字和属性，用 CSS 关键帧和过渡制作控件动效。[界面布局与更新](docs/performance.zh-CN.md) · [CSS 动画](docs/html-css-animations.md)
-- **2D 与 3D 场景。** 在 2D 场景里编排精灵和 Spine 骨骼动画，在 3D 场景里用基于物理的材质与 HDR 环境光呈现 glTF 模型。两者都有碰撞检测和刚体模拟。[光照与材质](docs/render-lighting.md) · [2D 物理](docs/physics2d.md) · [3D 物理](docs/physics3d.md)
-- **按需渲染。** 动态场景可以连续出帧，静态界面可以等到输入、数据变化或动画需要刷新时再绘制。[帧调度](docs/design.zh-CN.md)
-- **面向目标平台构建。** 构建流程编译选定的图形后端，并为它准备着色器和纹理。[发布平台支持](#发布平台支持) · [资源打包](docs/resource-packages.md)
+- **用 Go 类型组织游戏逻辑。** 组件直接定义为 Go 类型，系统按所需组件查询实体，也可以只处理发生变化的数据。玩法模块之间通过类型化消息传值。[ECS API](docs/engine/ecs-api-design.md) · [模块开发](docs/project/module-system-authoring.md)
+- **原生 HTML/CSS 界面。** Onix 负责界面的布局和绘制，并将它与游戏场景显示在同一个窗口。用 Go 通过 DOM 句柄更新文字和属性，用 CSS 关键帧和过渡制作控件动效。[原生 HTML 与滚动](docs/ui/html.md) · [CSS 动画](docs/ui/html-css-animations.md)
+- **2D 与 3D 场景。** 在 2D 场景里编排精灵和 Spine 骨骼动画，在 3D 场景里用基于物理的材质与 HDR 环境光呈现 glTF 模型。两者都有碰撞检测和刚体模拟。[光照与材质](docs/rendering/render-lighting.md) · [2D 物理](docs/physics/physics2d.md) · [3D 物理](docs/physics/physics3d.md)
+- **按需渲染。** 动态场景可以连续出帧，静态界面可以等到输入、数据变化或动画需要刷新时再绘制。[帧调度](docs/engine/design.zh-CN.md)
+- **面向目标平台构建。** 构建流程编译选定的图形后端，并为它准备着色器和纹理。[发布平台支持](#发布平台支持) · [资源打包](docs/project/resource-packages.md)
 
 ## 发布平台支持
 
@@ -26,7 +26,7 @@ Onix 是用 Go 编写的 2D/3D 游戏与交互应用引擎。用 Go 写玩法，
 | Web（`web`） | 包含 HTML、JavaScript 和 WebAssembly 的静态站点 | **WebGPU**、WebGL 2 | 将生成目录部署到 Web 服务器。WebGPU 需要 HTTPS 或 localhost。 |
 | 微信小游戏（`wechat`） | 含 WebAssembly 运行时的小游戏工程 | **WebGL 2** | 设置小游戏 AppID，在微信开发者工具中导入生成目录并上传。 |
 
-[桌面打包与交叉编译](docs/desktop-builds.md) · [Android 工具链](docs/android-builds.md) · [iOS 宿主集成](editor/templates/ios/host/README.md)
+[桌面打包与交叉编译](docs/platform/desktop-builds.md) · [Android 工具链](docs/platform/android-builds.md) · [iOS 宿主集成](editor/templates/ios/host/README.md)
 
 ## 快速开始
 
@@ -61,7 +61,7 @@ go run ./editor/cmd/onix ../my-game
 
 - **Go 1.27 或更高版本**及 Git。
 - **C/C++ 工具链**，原生构建需启用 CGO。Linux 需要 X11、Xext、Xrender、Xi、Wayland、wayland-cursor 和 xkbcommon 开发库，默认渲染后端还需要 OpenGL。macOS 需要 Xcode Command Line Tools。
-- 打包和交叉编译另需目标平台的工具。[桌面构建](docs/desktop-builds.md) · [Android 构建](docs/android-builds.md)
+- 打包和交叉编译另需目标平台的工具。[桌面构建](docs/platform/desktop-builds.md) · [Android 构建](docs/platform/android-builds.md)
 
 ## 常用命令
 
@@ -81,8 +81,7 @@ go run ./editor/cmd/onix ../my-game
 
 ## 开发文档
 
-从[文档索引](docs/README.zh-CN.md)进入使用、设计和性能总览；每类总览都有
-英文和简体中文版本。API 与平台专题参考集中列在[使用指南](docs/usage.zh-CN.md)。
+[文档索引](docs/README.zh-CN.md)收录项目与平台指南、界面与渲染参考、物理和引擎开发文档。
 
 ## 引擎开发约定
 

@@ -7,6 +7,8 @@ generated Go source and `overlay.json` are removed after building. Release uses
 `onix_release`; manifests, ordinary atlases and Spine require preprocessed binary
 resources.
 
+## Graphics backends
+
 The Renderer row selects exactly one backend for the build. Defaults also apply
 to direct `go build` commands without a renderer tag:
 
@@ -45,6 +47,8 @@ DirectX builtin shaders embed precompiled DXBC. After editing their WGSL sources
 regenerate HLSL with `go run ./render/internal/hlslgen`, then compile the bytecode
 on Windows with `go run ./render/internal/dxbcgen`. Custom shaders compile from
 their packaged HLSL when loaded.
+
+## Application icon
 
 Set App Icon in Project Settings. PNG, JPEG, GIF, WebP and SVG are supported;
 paths are relative to the project's `resources/`. The default is the editor's

@@ -27,16 +27,36 @@ Warm-path allocation assertions should be measured without race instrumentation.
 Reuse render resources and scratch buffers while dimensions and capacity remain
 stable. Upload and readback paths may reuse staging storage; frame fences still
 govern when GPU-visible memory can be reused. Resource residency belongs to a
-device and resize/recreation is a cold path. See [rendering and lighting](render-lighting.md).
+device and resize/recreation is a cold path.
+[Rendering pipeline (简体中文)](../rendering/render-path.zh-CN.md)
 
 Retained HTML layout should avoid rebuilding unaffected subtrees. Correctness
 comes first: local updates must preserve browser order, clipping, inherited
 styles and event behavior. Compare HTML/CSS changes with the
-[Chromium compatibility fixtures](../tests/htmlcompat/README.md).
+[Chromium compatibility fixtures](../../tests/htmlcompat/README.md).
+
+## Cache lifetime
+
+- Clear retired references after the borrow or submission ends. For example,
+  `input.State.DrainEvents` borrows its slice until the next enqueue,
+  `ReleaseEvents`, or frame end. `ReleaseEvents` preserves newly queued events.
+  [Input queue](../../input/state.go)
+- Reuse scratch storage across calls and record the largest batch in a frame.
+  The shared retention policy trims sustained excess capacity. Compaction may
+  allocate once and move backing storage, so reacquire borrowed views after
+  maintenance. [Retention policy](../../internal/reuse/retention.go) · [ECS frame maintenance](ecs-api-design.md#frame-maintenance-and-query-scopes)
+- Tie caches to their owner and bound long-lived caches by entries and payload.
+  Share immutable payloads across consumers when their lifetimes agree. Retire
+  GPU resources through the owning device after pending draws are safe.
 
 ## Measurement
 
-Use targeted package benchmarks with `-benchmem`, warm the path being measured,
-and state the platform, workload, capacity and included setup cost. Report
-allocations separately from latency. A microbenchmark, pixel test or reduced
-upload count is not a whole-frame FPS claim.
+Use targeted package benchmarks with `-benchmem`. Warm the path and report the
+platform, workload, capacity, setup cost, and latency separately from allocation
+counts. Measure live heap, process RSS, and GPU memory separately when comparing
+memory retention. Measure full frames on the target backend for FPS claims.
+
+```sh
+go test ./ecs -run '^$' -bench '^BenchmarkChangedQuerySparse$' -benchmem
+go test ./ui/html -run '^$' -bench '^BenchmarkHTMLPaintCull' -benchmem
+```

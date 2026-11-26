@@ -1,6 +1,6 @@
 # Project data, creation and module runtime
 
-The engine provides strict project compilation, independent project creation, module/scenario lifecycles, typed messages, visual slots, scene management, editor workflows and generated generic registration. Editor and build entry points consume project, scene and module documents and the compiled ProjectPlan. Application examples are maintained outside the engine checkout.
+The project tools create, validate, and compile project, scene, and module documents. This guide covers the editor workflow, generated registration, and the module runtime. [Example projects](../../examples/)
 
 ## Create and validate an independent project
 
@@ -26,7 +26,7 @@ EditScene, EditMod, EditInstance and PatchDocuments expose document edits. Docum
 
 Only mod.json is mandatory; `{}` defines an empty module. Top-level definitions are discovered/validated and referenced definitions compile once. Resource declarations are module-relative and must exist. Absolute paths, parent traversal, backslashes, symlink/embed escapes and cross-module file access are rejected. Modules organize private directories themselves; keep authored JSON under resources/ according to repository conventions.
 
-Resource kinds are image, atlas, font, audio, video, animation, model, spine, shader, html, tilemap and data. Registered scenes determine collection, including local dependencies. Content installers support text/animation, particles, trails, tilemaps, rigs/poses, HTML, cameras, lights and physics. Audio players belong to modules. Configure custom WGSL on private elements' components.shader; roots do not expose shader components and there is no module-level shader list. See [custom shaders](custom-shaders.md).
+Resource kinds are image, atlas, font, audio, video, animation, model, spine, shader, html, tilemap and data. Registered scenes determine collection, including local dependencies. Content installers support text/animation, particles, trails, tilemaps, rigs/poses, HTML, cameras, lights and physics. Audio players belong to modules. Configure custom WGSL on private elements' components.shader; roots do not expose shader components and there is no module-level shader list. See [custom shaders](../rendering/custom-shaders.md).
 
 Module-local transform and scene placement are independent. Position/scale accept two or three finite values; rotation is one Z angle or three Euler angles in radians. Defaults are zero translation/rotation and unit scale. Space defaults to ui or explicitly world; placement hierarchies cannot mix spaces.
 

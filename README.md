@@ -6,11 +6,11 @@ Onix is a Go engine for 2D and 3D games and interactive applications. Write game
 
 ## Engine features
 
-- **Typed gameplay code.** Define components as Go types and query entities by the data a system needs. Change filters let systems skip unchanged components, and typed messages connect gameplay modules. [ECS API](docs/ecs-api-design.md) · [Module guide](docs/module-system-authoring.md)
-- **Native HTML/CSS UI.** Onix lays out and paints the interface alongside the scene. Update text and attributes from Go through DOM handles, and use CSS keyframes and transitions to animate controls. [HTML layout and updates](docs/performance.md#rendering-and-html) · [CSS animations](docs/html-css-animations.md)
-- **2D and 3D scenes.** Animate sprites and Spine skeletons in 2D, or light glTF models with physically based materials and HDR environments in 3D. Both have physics systems for collision and rigid-body simulation. [Lighting and materials](docs/render-lighting.md) · [2D physics](docs/physics2d.md) · [3D physics](docs/physics3d.md)
-- **On-demand rendering.** Use continuous rendering for a moving scene, or let a static screen rest until input, a tracked change or an animation requests a frame. [Frame scheduling](docs/design.md#scheduling-and-preparation)
-- **Platform-specific builds.** The build pipeline compiles the selected graphics backend and prepares its shaders and textures. [Release platforms](#release-platforms) · [Resource packages](docs/resource-packages.md)
+- **Typed gameplay code.** Define components as Go types and query entities by the data a system needs. Change filters let systems skip unchanged components, and typed messages connect gameplay modules. [ECS API](docs/engine/ecs-api-design.md) · [Module guide](docs/project/module-system-authoring.md)
+- **Native HTML/CSS UI.** Onix lays out and paints the interface alongside the scene. Update text and attributes from Go through DOM handles, and use CSS keyframes and transitions to animate controls. [Native HTML and scrolling](docs/ui/html.md) · [CSS animations](docs/ui/html-css-animations.md)
+- **2D and 3D scenes.** Animate sprites and Spine skeletons in 2D, or light glTF models with physically based materials and HDR environments in 3D. Both have physics systems for collision and rigid-body simulation. [Lighting and materials](docs/rendering/render-lighting.md) · [2D physics](docs/physics/physics2d.md) · [3D physics](docs/physics/physics3d.md)
+- **On-demand rendering.** Use continuous rendering for a moving scene, or let a static screen rest until input, a tracked change or an animation requests a frame. [Frame scheduling](docs/engine/design.md#scheduling-and-preparation)
+- **Platform-specific builds.** The build pipeline compiles the selected graphics backend and prepares its shaders and textures. [Release platforms](#release-platforms) · [Resource packages](docs/project/resource-packages.md)
 
 ## Release platforms
 
@@ -26,7 +26,7 @@ Choose a target in **Build Project** or pass its ID to the CLI with `-platform`.
 | Web (`web`) | Static site with HTML, JavaScript and WebAssembly | **WebGPU**, WebGL 2 | Deploy the generated directory to a web server. WebGPU requires HTTPS or localhost. |
 | WeChat Mini Games (`wechat`) | Mini Game project with a WebAssembly runtime | **WebGL 2** | Set your Mini Game AppID and open the generated directory in WeChat DevTools to upload it. |
 
-[Desktop packaging and cross-compilation](docs/desktop-builds.md) · [Android toolchain](docs/android-builds.md) · [iOS host integration](editor/templates/ios/host/README.md)
+[Desktop packaging and cross-compilation](docs/platform/desktop-builds.md) · [Android toolchain](docs/platform/android-builds.md) · [iOS host integration](editor/templates/ios/host/README.md)
 
 ## Quick start
 
@@ -61,7 +61,7 @@ without arguments opens the editor's New/Open workflow.
 
 - **Go 1.27 or newer** and Git.
 - **A C/C++ toolchain** with CGO enabled for native builds. Linux requires the X11, Xext, Xrender, Xi, Wayland, wayland-cursor and xkbcommon development libraries, plus OpenGL for the default renderer. On macOS, install Xcode Command Line Tools.
-- Packaging and cross-compilation require the target platform’s tools. [Desktop builds](docs/desktop-builds.md) · [Android builds](docs/android-builds.md)
+- Packaging and cross-compilation require the target platform’s tools. [Desktop builds](docs/platform/desktop-builds.md) · [Android builds](docs/platform/android-builds.md)
 
 ## Command reference
 
@@ -83,9 +83,8 @@ Release builds use the `onix_release` tag and binary resource packages.
 
 ## Documentation
 
-Start at the [documentation index](docs/README.md) for usage, design and
-performance guides, each with a Simplified Chinese version. Focused API and
-platform references are listed in the [usage guide](docs/usage.md).
+Find project and platform guides, UI and rendering references, physics, and
+engine development topics in the [documentation index](docs/README.md).
 
 ## Engine development
 

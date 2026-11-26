@@ -14,19 +14,27 @@ SceneInstance.Component supports low-frequency named access; RequireComponent va
 and returns an EntitySlot for repeated access. Cache handles rather than component
 pointers; generations/World checks reject stale or foreign Slots. Rebind on scene replacement.
 
-Unify Query/Read/ReadRef/QueryAccess through Query1..7 views and .All range. Components
-expose Get (copy), Ref (borrowed read-only convention), Mut (mark that column Changed),
-and CommitComponent (compare before write for comparable values). Go cannot enforce
-Ref immutability. Query views replaced a direct iter.Seq2 prototype that allocated
-four times per call. Keep archetype column binding, query cursors and filter caching
-shared; generate typed arities from one template rather than variable generic parameters.
-Break/return/panic must release query guards. Borrow access only within iteration;
-Commands handle structural mutations. In borrows an ordered list of checked entity handles.
+Use typed query views with `.All` for iteration. `Get` copies a value, `Ref`
+borrows a read-only reference by convention, and `Mut` marks the component
+changed. `CommitComponent` compares comparable values before writing. Borrow
+access only within iteration and use commands for structural changes. `In`
+borrows an ordered list of checked entity handles.
 
 MessageReader.All borrows pointers for normal range control flow, advancing the cursor
 before body entry. Early exit preserves unread messages; copying remains explicit.
 Discard skips current messages in O(1) for that reader without clearing shared buffers.
-Range and generics do not prove zero allocations or speedups: measure inlining and callers.
+
+## Frame maintenance and query scopes
+
+`App.Step` calls `World.Maintain` after drawing. When driving a World directly,
+call it once at the end of each frame after iterators, borrowed rows and
+component references, and drawing snapshots are finished. Maintenance may
+move component storage while preserving archetype and column identity.
+
+`QueryScope.Reset(nil)` clears members and cached state. `ReleaseCache` retires
+compiled membership and scoped values while retaining the borrowed member
+list. An unused scope also releases its cache after 30 maintenance calls.
+Reacquire scoped values when reusing a scope after either form of retirement.
 
 ## Script runtime
 
