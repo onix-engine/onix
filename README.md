@@ -1,13 +1,19 @@
 # Onix
 
-[简体中文](README.zh-CN.md) · [Release platforms](#release-platforms) · [Quick start](#quick-start) · [Examples](#examples) · [Docs](docs/README.md) · [☆ Star on GitHub](https://github.com/onix-engine/onix)
+[简体中文](README.zh-CN.md) · [Supported platforms](#supported-platforms) · [Quick start](#quick-start) · [Examples](#examples) · [Docs](docs/README.md) · [☆ Star on GitHub](https://github.com/onix-engine/onix)
 
 Onix is a Go engine for 2D and 3D games and interactive applications. Write gameplay in Go, build menus and HUDs with HTML/CSS, and use the project editor or CLI to package the same project for desktop, mobile, the web and WeChat Mini Games.
+
+## Supported platforms
+
+| Windows | macOS | Linux | Android | iOS | Web | WeChat Mini Games |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| <img src="editor/resources/images/icons/windows.svg" width="32" alt=""> | <img src="editor/resources/images/icons/macOS.svg" width="32" alt=""> | <img src="editor/resources/images/icons/linux.svg" width="32" alt=""> | <img src="editor/resources/images/icons/android.svg" width="32" alt=""> | <img src="editor/resources/images/icons/ios.svg" width="32" alt=""> | <img src="editor/resources/images/icons/web.svg" width="32" alt=""> | <img src="editor/resources/images/icons/wechat.svg" width="32" alt=""> |
 
 ## Engine features
 
 - **Typed gameplay code.** Define components as Go types and query entities by the data a system needs. Change filters let systems skip unchanged components, and typed messages connect gameplay modules. [ECS API](docs/engine/ecs-api-design.md) · [Module guide](docs/project/module-system-authoring.md)
-- **Native HTML/CSS UI.** Onix lays out and paints the interface alongside the scene. Update text and attributes from Go through DOM handles, and use CSS keyframes and transitions to animate controls. [Native HTML and scrolling](docs/ui/html.md) · [CSS animations](docs/ui/html-css-animations.md)
+- **Native HTML/CSS rendering. Onix lays out and draws the UI alongside the game scene without a browser or WebView.** Update text and attributes from Go through DOM handles, and use CSS keyframes and transitions to animate controls. [Native HTML and scrolling](docs/ui/html.md) · [CSS animations](docs/ui/html-css-animations.md)
 - **2D and 3D scenes.** Animate sprites and Spine skeletons in 2D, or light glTF models with physically based materials and HDR environments in 3D. Both have physics systems for collision and rigid-body simulation. [Lighting and materials](docs/rendering/render-lighting.md) · [2D physics](docs/physics/physics2d.md) · [3D physics](docs/physics/physics3d.md)
 - **On-demand rendering.** Use continuous rendering for a moving scene, or let a static screen rest until input, a tracked change or an animation requests a frame. [Frame scheduling](docs/engine/design.md#scheduling-and-preparation)
 - **Platform-specific builds.** The build pipeline compiles the selected graphics backend and prepares its shaders and textures. [Release platforms](#release-platforms) · [Resource packages](docs/project/resource-packages.md)

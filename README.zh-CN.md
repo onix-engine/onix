@@ -1,13 +1,19 @@
 # Onix
 
-[English](README.md) · [发布平台支持](#发布平台支持) · [快速开始](#快速开始) · [示例](#示例) · [开发文档](docs/README.zh-CN.md) · [☆ 在 GitHub 上 Star](https://github.com/onix-engine/onix)
+[English](README.md) · [支持的平台](#支持的平台) · [快速开始](#快速开始) · [示例](#示例) · [开发文档](docs/README.zh-CN.md) · [☆ 在 GitHub 上 Star](https://github.com/onix-engine/onix)
 
 Onix 是用 Go 编写的 2D/3D 游戏与交互应用引擎。用 Go 写玩法，用 HTML/CSS 制作菜单和 HUD，再通过项目编辑器或命令行把同一个项目打包到桌面、移动端、Web 和微信小游戏。
+
+## 支持的平台
+
+| Windows | macOS | Linux | Android | iOS | Web | 微信小游戏 |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| <img src="editor/resources/images/icons/windows.svg" width="32" alt=""> | <img src="editor/resources/images/icons/macOS.svg" width="32" alt=""> | <img src="editor/resources/images/icons/linux.svg" width="32" alt=""> | <img src="editor/resources/images/icons/android.svg" width="32" alt=""> | <img src="editor/resources/images/icons/ios.svg" width="32" alt=""> | <img src="editor/resources/images/icons/web.svg" width="32" alt=""> | <img src="editor/resources/images/icons/wechat.svg" width="32" alt=""> |
 
 ## 引擎特色
 
 - **用 Go 类型组织游戏逻辑。** 组件直接定义为 Go 类型，系统按所需组件查询实体，也可以只处理发生变化的数据。玩法模块之间通过类型化消息传值。[ECS API](docs/engine/ecs-api-design.md) · [模块开发](docs/project/module-system-authoring.md)
-- **原生 HTML/CSS 界面。** Onix 负责界面的布局和绘制，并将它与游戏场景显示在同一个窗口。用 Go 通过 DOM 句柄更新文字和属性，用 CSS 关键帧和过渡制作控件动效。[原生 HTML 与滚动](docs/ui/html.md) · [CSS 动画](docs/ui/html-css-animations.md)
+- **原生渲染 HTML/CSS 界面，无需浏览器或 WebView。** Onix 负责界面的布局和绘制，并将它与游戏场景显示在同一个窗口。用 Go 通过 DOM 句柄更新文字和属性，用 CSS 关键帧和过渡制作控件动效。[原生 HTML 与滚动](docs/ui/html.md) · [CSS 动画](docs/ui/html-css-animations.md)
 - **2D 与 3D 场景。** 在 2D 场景里编排精灵和 Spine 骨骼动画，在 3D 场景里用基于物理的材质与 HDR 环境光呈现 glTF 模型。两者都有碰撞检测和刚体模拟。[光照与材质](docs/rendering/render-lighting.md) · [2D 物理](docs/physics/physics2d.md) · [3D 物理](docs/physics/physics3d.md)
 - **按需渲染。** 动态场景可以连续出帧，静态界面可以等到输入、数据变化或动画需要刷新时再绘制。[帧调度](docs/engine/design.zh-CN.md)
 - **面向目标平台构建。** 构建流程编译选定的图形后端，并为它准备着色器和纹理。[发布平台支持](#发布平台支持) · [资源打包](docs/project/resource-packages.md)
