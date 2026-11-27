@@ -43,45 +43,50 @@ func (l *EventLoop) Close() {
 func (l *EventLoop) Run() error {
 	defer l.Close()
 	for len(l.windows) != 0 {
-		for i := 0; i < len(l.windows); {
-			w := &l.windows[i]
-			c := w.context
-			c.ActivateRender()
-			if err := c.pollFrame(); err != nil {
-				return err
-			}
-			if c.shouldClose {
-				l.close(i)
-				continue
-			}
-			if c.frameVisible() {
-				wait, idle := c.idleWait()
-				if (!idle || wait == 0) && c.framePacer.ready(time.Now()) {
-					rendered, err := w.frame()
-					if err != nil {
-						return err
-					}
-					if rendered {
-						if err := c.presentFrame(); err != nil {
-							return err
-						}
-					}
-				}
-			}
-			if c.shouldClose {
-				l.close(i)
-				continue
-			}
-			i++
-		}
-		if l.BetweenFrames != nil {
-			if err := l.BetweenFrames(); err != nil {
-				return err
-			}
+		if err := l.runFrameBatch(); err != nil {
+			return err
 		}
 		if len(l.windows) != 0 {
 			l.waiter.wait(l.windows, l.waitDuration())
 		}
+	}
+	return nil
+}
+
+func (l *EventLoop) dispatchFrames() error {
+	for i := 0; i < len(l.windows); {
+		w := &l.windows[i]
+		c := w.context
+		c.ActivateRender()
+		if err := c.pollFrame(); err != nil {
+			return err
+		}
+		if c.shouldClose {
+			l.close(i)
+			continue
+		}
+		if c.frameVisible() {
+			wait, idle := c.idleWait()
+			if (!idle || wait == 0) && c.framePacer.ready(time.Now()) {
+				rendered, err := w.frame()
+				if err != nil {
+					return err
+				}
+				if rendered {
+					if err := c.presentFrame(); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if c.shouldClose {
+			l.close(i)
+			continue
+		}
+		i++
+	}
+	if l.BetweenFrames != nil {
+		return l.BetweenFrames()
 	}
 	return nil
 }

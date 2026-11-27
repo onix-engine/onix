@@ -183,6 +183,22 @@ func TestHTMLContextStableEventTargetsRemainLocal(t *testing.T) {
 	}
 }
 
+func TestHTMLRepaintRetainsScrollComponentMembership(t *testing.T) {
+	world, owner := incrementalHTMLFixture(t, `<div id="scroller" style="height:30px;overflow:scroll"><div id="row" style="height:80px">Text</div></div>`)
+	row := incrementalHTMLNode(t, world, owner, "row")
+	_, before := world.ComponentValueRevision[ScrollContent]()
+	row.SetAttribute("style", "height:90px")
+	incrementalSync(t, world)
+	if _, after := world.ComponentValueRevision[ScrollContent](); before == 0 || after != before {
+		t.Fatalf("resizing the retained row changed scroll membership from %d to %d", before, after)
+	}
+	incrementalHTMLNode(t, world, owner, "scroller").SetAttribute("style", "height:30px;overflow:visible")
+	incrementalSync(t, world)
+	for entity := range world.Query[ScrollContent]().All {
+		t.Fatalf("entity %d still has a scroll binding after removing overflow", entity)
+	}
+}
+
 func BenchmarkHTMLScrollTextMutation(b *testing.B) {
 	for _, count := range []int{10, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {

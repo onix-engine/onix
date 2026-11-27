@@ -1122,7 +1122,7 @@ func newControlLineItem(node *uinode.Node, computed *style.ComputedStyle, face *
 		Padding: resolveEdges(computed.Padding, base),
 		Border:  resolveBorderEdges(computed.BorderWidth, computed.BorderStyle, base),
 	}
-	borderBoxWidth, borderBoxHeight := intrinsicControlSize(temp, face, ctx, styles)
+	borderBoxWidth, borderBoxHeight := intrinsicControlSize(temp, face, ctx, styles, !style.IsLength(computed.Width))
 	if style.IsLength(computed.Width) {
 		borderBoxWidth = borderBoxDimension(computed.Width, base, horizontalBoxExtras(temp.Padding, temp.Border), isBorderBox(computed))
 	}

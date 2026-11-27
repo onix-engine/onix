@@ -290,6 +290,7 @@ func reconcileHTMLPaintCull(world *ecs.World, owner ecs.Entity, state *htmlRende
 	}
 	state.Children = children
 	state.Reconciling, state.LocalReconcile = false, false
+	state.finishScrollBindings(world)
 	state.PaintCullSync = false
 	state.EmittingBox = nil
 	state.Textures.sweep()

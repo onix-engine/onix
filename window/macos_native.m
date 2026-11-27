@@ -824,6 +824,14 @@ int onix_macos_is_focused(OnixMacWindow *state) {
     return state != NULL && (state->window.isKeyWindow || state->window.isMainWindow);
 }
 
+void *onix_macos_new_pool(void) {
+    return [[NSAutoreleasePool alloc] init];
+}
+
+void onix_macos_drain_pool(void *pool) {
+    [(NSAutoreleasePool *)pool drain];
+}
+
 void onix_macos_poll(OnixMacWindow *state) {
     if (state == NULL) return;
     @autoreleasepool {

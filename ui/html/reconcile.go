@@ -148,9 +148,26 @@ func beginHTMLEntity(world *ecs.World, owner ecs.Entity, node *uinode.Node, role
 		// its DOM ancestor becomes or ceases to be a control/editing host.
 		world.Discard(writer.entity, ecs.Type[FocusOwner]())
 		world.Discard(writer.entity, ecs.Type[EditableText]())
-		world.Discard(writer.entity, ecs.Type[ScrollContent]())
+		// Routing below claims the existing component if this primitive still
+		// scrolls. Discarding it here moves every retained row twice.
+		if !state.Reconciling {
+			// Event-only emission has no scroll routing pass.
+			world.Discard(writer.entity, ecs.Type[ScrollContent]())
+		} else if scroll := world.GetMut[ScrollContent](writer.entity); scroll != nil && scroll.Area != 0 {
+			scroll.Area = 0
+			state.pendingScroll = append(state.pendingScroll, writer.entity)
+		}
 	}
 	return writer
+}
+
+func (state *htmlRenderState) finishScrollBindings(world *ecs.World) {
+	for _, entity := range state.pendingScroll {
+		if content := world.GetRef[ScrollContent](entity); content != nil && content.Area == 0 {
+			world.Discard(entity, ecs.Type[ScrollContent]())
+		}
+	}
+	state.pendingScroll = state.pendingScroll[:0]
 }
 
 // Each optional component owns one bit in a retained entity binding.

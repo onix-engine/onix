@@ -83,6 +83,7 @@ type htmlPaintState struct {
 	PaintList         *scene.UIPaintList2D
 	RenderQueue       []*htmlBoxRendering
 	Children          []ecs.Entity
+	pendingScroll     []ecs.Entity
 	RemovedBoxes      []*htmlBoxRendering
 	PaintCullRoots    []*htmlBoxRendering
 	PaintCullGroups   []*htmlEntityGroup

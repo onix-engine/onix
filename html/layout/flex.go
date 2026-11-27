@@ -574,7 +574,7 @@ func intrinsicFlexContentWidth(box *Box, face *font.Face, ctx *layoutContext, st
 	// A control that is itself a flex container sizes from its flex children;
 	// native control metrics apply only to controls with their native display.
 	if box.Node != nil && box.Node.Type == uinode.ElementNode && !isFlexDisplay(box.Style.Display.Keyword) {
-		if width, _ := intrinsicControlSize(box, face, ctx, styles); width > 0 {
+		if width, _ := intrinsicControlSize(box, face, ctx, styles, true); width > 0 {
 			extra := box.Padding.Left + box.Padding.Right + box.Border.Left + box.Border.Right
 			return maxFloat(width-extra, 0)
 		}

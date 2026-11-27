@@ -58,6 +58,7 @@ type Box struct {
 // workspace. Allocate these together only for boxes that use them.
 type boxScratch struct {
 	marker      *listMarkerCache
+	button      *buttonMeasurement
 	layout      *layoutContext
 	inlinePaint map[inlineBackgroundKey]int
 	flow        *flowScratch

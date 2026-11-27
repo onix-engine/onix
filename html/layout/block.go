@@ -31,7 +31,8 @@ func layoutBlockContents(box *Box, width, height style.Value, containing Rect, a
 	intrinsicWidth, intrinsicHeight := intrinsicImageSize(box, ctx)
 	intrinsicWidth, intrinsicHeight = resolveImageSize(box.Node, width, height, intrinsicWidth, intrinsicHeight, layoutContaining.Width, layoutContaining.Height)
 	hasIntrinsicRatio := intrinsicWidth > 0 && intrinsicHeight > 0
-	controlWidth, controlHeight := intrinsicControlSize(box, face, ctx, styles)
+	needControlWidth := width.Kind == style.ValueAuto || hasIntrinsicRatio && !style.IsLength(height)
+	controlWidth, controlHeight := intrinsicControlSize(box, face, ctx, styles, needControlWidth)
 	if controlWidth > 0 {
 		if width.Kind == style.ValueAuto && !isBorderBox(box.Style) {
 			controlWidth -= horizontalBoxExtras(box.Padding, box.Border)
@@ -777,7 +778,7 @@ const (
 	textInputCaretScrollPadding = 12.0
 )
 
-func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles style.Map) (float64, float64) {
+func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles style.Map, needWidth bool) (float64, float64) {
 	if box == nil || box.Node == nil || box.Node.Type != uinode.ElementNode {
 		return 0, 0
 	}
@@ -795,7 +796,10 @@ func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles 
 
 	switch box.Node.Data {
 	case "button":
-		textWidth := measureTextWidth(face, strings.TrimSpace(descendantText(box.Node)), fontSize, box.Style.LetterSpacing.LengthPx, ctx)
+		var textWidth float64
+		if needWidth && face != nil {
+			textWidth = buttonLabelWidth(box, face, fontSize, ctx)
+		}
 		imageWidth, imageHeight, imageCount := intrinsicControlImageMetrics(box.Node, styles, ctx)
 		if imageCount > 0 {
 			textWidth += imageWidth
@@ -834,6 +838,36 @@ func intrinsicControlSize(box *Box, face *font.Face, ctx *layoutContext, styles 
 	default:
 		return 0, 0
 	}
+}
+
+// The layout cache invalidates ancestors when descendant text changes. Retain
+// only the measured width, so split labels need no concatenation on warm reflow.
+type buttonMeasurement struct {
+	face                  *font.Face
+	fontSize, spacing     float64
+	generation, dirtyPass uint64
+	width                 float64
+}
+
+func buttonLabelWidth(box *Box, face *font.Face, fontSize float64, ctx *layoutContext) float64 {
+	spacing := box.Style.LetterSpacing.LengthPx
+	var measurement *buttonMeasurement
+	if ctx != nil && ctx.retained != nil && box.reflow.generation != 0 {
+		scratch := box.ensureScratch()
+		measurement = scratch.button
+		if measurement == nil {
+			measurement = new(buttonMeasurement)
+			scratch.button = measurement
+		} else if measurement.face == face && measurement.fontSize == fontSize && measurement.spacing == spacing &&
+			measurement.generation == box.reflow.generation && measurement.dirtyPass == box.reflow.dirtyPass {
+			return measurement.width
+		}
+	}
+	width := measureTextWidth(face, strings.TrimSpace(descendantText(box.Node)), fontSize, spacing, ctx)
+	if measurement != nil {
+		*measurement = buttonMeasurement{face, fontSize, spacing, box.reflow.generation, box.reflow.dirtyPass, width}
+	}
+	return width
 }
 
 func intrinsicSelectTextWidth(node *uinode.Node, face *font.Face, fontSize, letterSpacing float64, ctx *layoutContext) float64 {

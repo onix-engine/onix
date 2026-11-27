@@ -2101,6 +2101,7 @@ func renderHTML(world *ecs.World, owner ecs.Entity, value Surface) (Layout, erro
 		prepareHTMLNodeBindings(world, state)
 		applyHTMLNodeBindings(world, state, state.Children)
 	}
+	state.finishScrollBindings(world)
 	content := box.BorderBox()
 	result := Layout{Width: float32(content.Width), Height: float32(content.Height)}
 	state.Boxes = box

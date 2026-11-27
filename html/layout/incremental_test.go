@@ -52,6 +52,24 @@ func updateRetained(tb testing.TB, cache *Cache, root *uinode.Node, styles style
 	return box
 }
 
+func TestRetainedButtonLabelWidthTracksDescendantChanges(t *testing.T) {
+	root, styles, face := retainedFixture(t, `<div><button id="open" style="display:block"><span>Open </span><b id="label">A</b></button></div>`)
+	var cache Cache
+	updateRetained(t, &cache, root, styles, face, nil, true)
+	box := cache.BoxForNode(retainedNode(root, "open"))
+	label := retainedNode(root, "label").Children[0]
+	width := func() float64 { return intrinsicFlexContentWidth(box, face, &cache.context, styles) }
+	before := width()
+	if allocs := testing.AllocsPerRun(100, func() { width() }); allocs != 0 {
+		t.Fatalf("warm button measurement allocated %g times", allocs)
+	}
+	label.Data = "a much longer label"
+	updateRetained(t, &cache, root, styles, face, []*uinode.Node{label}, false)
+	if got, want := width(), intrinsicFlexContentWidth(box, face, nil, styles); got <= before || got != want {
+		t.Fatalf("after text edit width = %g, want %g (before %g)", got, want, before)
+	}
+}
+
 func assertRetainedMatchesFull(t *testing.T, got, want *Box) {
 	t.Helper()
 	if got.Node != want.Node || !reflect.DeepEqual(got.Style, want.Style) || got.Padding != want.Padding || got.Border != want.Border || got.Margin != want.Margin || len(got.Children) != len(want.Children) {

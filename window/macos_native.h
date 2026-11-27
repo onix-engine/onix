@@ -29,6 +29,9 @@ enum {
 
 typedef struct OnixMacWindow OnixMacWindow;
 
+void *onix_macos_new_pool(void);
+void onix_macos_drain_pool(void *pool);
+
 // onix_macos_file_dialog returns the number of selected paths, zero when the
 // panel is cancelled, or a negative value on allocation/native failure.
 int onix_macos_file_dialog(

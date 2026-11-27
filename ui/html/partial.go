@@ -533,8 +533,7 @@ func refreshHTMLBoxOverflow(world *ecs.World, owner ecs.Entity, state *htmlRende
 	}
 	routeHTMLOverflowEntities(world, owner, state, rendered.Entities)
 	if binding := rendered.Overflow; binding != nil {
-		// The clip is stored separately from the box's paint entities. Re-emitting
-		// it also clears ScrollContent, so restore its enclosing scroll route.
+		// The clip is stored separately from the paint entities and needs its enclosing route.
 		routeHTMLOverflowEntities(world, owner, state, []ecs.Entity{binding.entity})
 	}
 }
