@@ -133,7 +133,9 @@ func htmlGaussianBlur(dst *image.RGBA, sigma float64, scratch *htmlFilterScratch
 	w, h := dst.Rect.Dx(), dst.Rect.Dy()
 	rowCount := min(h, length)
 	scratch.rows = slices.Grow(scratch.rows[:0], w*(rowCount+1))[:w*(rowCount+1)]
-	output := scratch.rows[w*rowCount:]
+	// Horizontal convolution uses this row for premultiplied source pixels.
+	// The vertical pass can reuse it as soon as the horizontal rows are ready.
+	workRow := scratch.rows[w*rowCount:]
 	// Convolve premultiplied color to keep transparent texels from creating
 	// dark fringes. Keep only the horizontal rows needed by the vertical
 	// kernel, reading each source row before the in-place output reaches it.
@@ -142,37 +144,29 @@ func htmlGaussianBlur(dst *image.RGBA, sigma float64, scratch *htmlFilterScratch
 		lastRow := min(h-1, y+radius)
 		for nextRow <= lastRow {
 			row := scratch.rows[nextRow%rowCount*w:][:w]
-			for x := range w {
-				var value [4]float64
-				for sx := max(0, x-radius); sx <= min(w-1, x+radius); sx++ {
-					pixel := dst.PixOffset(sx+dst.Rect.Min.X, nextRow+dst.Rect.Min.Y)
-					alpha := float64(dst.Pix[pixel+3]) / 255
-					weight := scratch.kernel[sx-x+radius]
-					for channel := 0; channel < 3; channel++ {
-						value[channel] += float64(dst.Pix[pixel+channel]) * alpha * weight
-					}
-					value[3] += alpha * weight
-				}
-				row[x] = value
+			input := dst.Pix[nextRow*dst.Stride:][:w*4]
+			for x := range workRow {
+				pixel := input[x*4:][:4]
+				alpha := float64(pixel[3]) / 255
+				workRow[x] = [4]float64{float64(pixel[0]) * alpha, float64(pixel[1]) * alpha, float64(pixel[2]) * alpha, alpha}
+			}
+			clear(row)
+			for offset := max(-radius, 1-w); offset <= min(radius, w-1); offset++ {
+				first, end := max(0, -offset), min(w, w-offset)
+				addHTMLBlurRow(row[first:end], workRow[first+offset:end+offset], scratch.kernel[radius+offset])
 			}
 			nextRow++
 		}
 		firstRow := max(0, y-radius)
-		clear(output)
+		clear(workRow)
 		// Accumulate contiguous rows so both the input and output stay local,
 		// preserving each pixel's original order of floating-point operations.
 		for sy := firstRow; sy <= lastRow; sy++ {
 			weight := scratch.kernel[sy-y+radius]
 			row := scratch.rows[sy%rowCount*w:][:w]
-			for x, value := range row {
-				pixel := &output[x]
-				pixel[0] += value[0] * weight
-				pixel[1] += value[1] * weight
-				pixel[2] += value[2] * weight
-				pixel[3] += value[3] * weight
-			}
+			addHTMLBlurRow(workRow, row, weight)
 		}
-		for x, value := range output {
+		for x, value := range workRow {
 			pixel := dst.PixOffset(x+dst.Rect.Min.X, y+dst.Rect.Min.Y)
 			if value[3] > 0 {
 				for channel := 0; channel < 3; channel++ {
@@ -183,6 +177,16 @@ func htmlGaussianBlur(dst *image.RGBA, sigma float64, scratch *htmlFilterScratch
 			}
 			dst.Pix[pixel+3] = uint8(math.Round(value[3] * 255))
 		}
+	}
+}
+
+func addHTMLBlurRow(dst, src [][4]float64, weight float64) {
+	for x, sample := range src {
+		pixel := &dst[x]
+		pixel[0] += sample[0] * weight
+		pixel[1] += sample[1] * weight
+		pixel[2] += sample[2] * weight
+		pixel[3] += sample[3] * weight
 	}
 }
 

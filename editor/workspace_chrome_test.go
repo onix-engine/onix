@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/scene"
+	engineui "github.com/onix-engine/onix/ui"
 	htmlui "github.com/onix-engine/onix/ui/html"
 	"github.com/onix-engine/onix/window"
 )
@@ -208,6 +210,82 @@ func TestWorkspacePreferencesDialogPersistsValuesAndKeepsRetainedControls(t *tes
 		}
 	}); allocations != 0 {
 		t.Fatalf("idle dialog allocated %g", allocations)
+	}
+}
+
+func TestWorkspaceOpenAIPreferences(t *testing.T) {
+	const dialog = "preferences"
+	a := workspaceEditorFixture(t)
+	world := ecs.NewWorld()
+	a.action("file.preferences")
+	syncWorkspaceTest(t, a, world)
+	click := func(id string) {
+		workspaceDialogTestEvent(t, a, world, id, "", htmlui.EventClick)
+	}
+	input := func(name, value string) {
+		workspaceDialogTestEvent(t, a, world, htmlDialogFieldID(dialog, name), value, htmlui.EventInput)
+	}
+	click("preferences-category-openai")
+	owner := a.dialogUI.htmlDialogs[dialog]
+	keyID := htmlDialogFieldID(dialog, preferencesOpenAIAPIKeyField)
+	key, ok := htmlui.ControlByID(world, owner, keyID)
+	if !ok {
+		t.Fatal("OpenAI preferences did not show the API key control")
+	}
+	if field, ok := world.Get[engineui.TextField](key); !ok || !field.Password {
+		t.Fatal("OpenAI preferences did not mask the API key")
+	}
+
+	input(preferencesOpenAIBaseURLField, "invalid")
+	input(preferencesOpenAIAPIKeyField, "test-key")
+	input(preferencesOpenAIModelField, "local-model")
+	click("preferences-save")
+	if a.dialog != dialog || a.dialogError == "" || a.settings.OpenAI != (openAISettings{}) {
+		t.Fatal("invalid Base URL was accepted")
+	}
+	input(preferencesOpenAIBaseURLField, " http://localhost:8080/v1 ")
+	click("preferences-category-editing")
+	workspaceDialogTestEvent(t, a, world, htmlDialogFieldID(dialog, "preferences.snapToGrid"), "true", htmlui.EventChange)
+	click("preferences-save")
+	settings, err := loadEditorSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := openAISettings{BaseURL: "http://localhost:8080/v1", APIKey: "test-key", Model: "local-model"}
+	if settings.OpenAI != want || !settings.SnapToGrid || a.modalVisible() {
+		t.Fatal("OpenAI and editing preferences were not saved together")
+	}
+	if runtime.GOOS != "windows" {
+		path, err := editorSettingsPath()
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := info.Mode().Perm(); perm&0o077 != 0 {
+			t.Fatalf("settings file permits access by other users: %o", perm)
+		}
+	}
+
+	a.action("file.preferences")
+	syncWorkspaceTest(t, a, world)
+	click("preferences-category-openai")
+	input(preferencesOpenAIAPIKeyField, "unsaved-key")
+	click("preferences-close")
+	a.action("file.preferences")
+	syncWorkspaceTest(t, a, world)
+	click("preferences-category-openai")
+	key, ok = htmlui.ControlByID(world, owner, keyID)
+	if !ok || htmlui.ControlValue(world, key) != want.APIKey {
+		t.Fatal("reopened preferences did not restore the saved API key")
+	}
+	input(preferencesOpenAIAPIKeyField, "")
+	click("preferences-save")
+	settings, err = loadEditorSettings()
+	if err != nil || settings.OpenAI.APIKey != "" {
+		t.Fatal("clearing the API key was not persisted", err)
 	}
 }
 

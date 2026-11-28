@@ -339,6 +339,7 @@ var editorDialogNames = [...]string{
 	"run-failure",
 	"color-picker",
 	"nine-slice",
+	workspaceImageDialog,
 }
 
 func editorDialogDefinition(name string) (*html.Definition[editorDialogComponentProps, editorDialogComponentState], error) {

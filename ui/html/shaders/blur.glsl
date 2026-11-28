@@ -125,7 +125,7 @@ void main() {
     bool local_1 = false;
     vec4 result = vec4(0.0);
     float total = 0.0;
-    int index = -12;
+    int index = 0;
     bool local_2 = false;
     bool local_3 = false;
     float mode = abs(input_.parameters.w);
@@ -156,62 +156,59 @@ void main() {
     }
     float sigma = max(input_.parameters.z, 0.001);
     int limit = int(ceil((sigma * 3.0)));
+    index = -(limit);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            int _e119 = index;
-            index = (_e119 + 1);
+            int _e115 = index;
+            index = (_e115 + 1);
         }
         loop_init = false;
         int _e77 = index;
-        if ((_e77 <= 12)) {
+        if ((_e77 <= limit)) {
         } else {
             break;
         }
         {
-            int _e80 = index;
-            if ((abs(_e80) > limit)) {
-                continue;
-            }
-            int _e83 = index;
-            float position = float(_e83);
+            int _e79 = index;
+            float position = float(_e79);
             float weight = exp(((-(position) * position) / ((2.0 * sigma) * sigma)));
             vec2 uv = (sampleUV + (input_.parameters.xy * position));
             vec4 pixel_1 = textureGrad(_group_0_binding_1_fs, vec2(uv), gradientsX, gradientsY);
             vec4 premultiplied = ((mode > 3.5) ? vec4(min(pixel_1.x, pixel_1.w)) : ((mode > 0.5) ? pixel_1 : vec4((pixel_1.xyz * pixel_1.w), pixel_1.w)));
-            vec4 _e114 = result;
-            result = (_e114 + (premultiplied * weight));
-            float _e117 = total;
-            total = (_e117 + weight);
+            vec4 _e110 = result;
+            result = (_e110 + (premultiplied * weight));
+            float _e113 = total;
+            total = (_e113 + weight);
         }
     }
-    vec4 _e122 = result;
-    float _e123 = total;
-    result = (_e122 / vec4(_e123));
+    vec4 _e118 = result;
+    float _e119 = total;
+    result = (_e118 / vec4(_e119));
     if ((mode > 1.5)) {
         local_2 = (mode < 2.5);
     } else {
         local_2 = false;
     }
-    bool _e133 = local_2;
-    if (!(_e133)) {
+    bool _e129 = local_2;
+    if (!(_e129)) {
         local_3 = (mode > 4.5);
     } else {
         local_3 = true;
     }
-    bool _e140 = local_3;
-    if (_e140) {
+    bool _e136 = local_3;
+    if (_e136) {
         vec2 pixel_2 = (input_.uv * vec2(uvec2(textureSize(_group_0_binding_1_fs, 0).xy)));
-        bool _e153 = insideRoundedBox((pixel_2 - input_.box.xy), input_.box.zw, input_.radiusX, input_.radiusY);
-        if (_e153) {
+        bool _e149 = insideRoundedBox((pixel_2 - input_.box.xy), input_.box.zw, input_.radiusX, input_.radiusY);
+        if (_e149) {
             _fs2p_location0 = vec4(0.0);
             return;
         }
     }
     float alpha_1 = input_.color.w;
-    vec4 _e158 = result;
-    float _e165 = result.w;
-    _fs2p_location0 = vec4(((_e158.xyz * input_.color.xyz) * alpha_1), (_e165 * alpha_1));
+    vec4 _e154 = result;
+    float _e161 = result.w;
+    _fs2p_location0 = vec4(((_e154.xyz * input_.color.xyz) * alpha_1), (_e161 * alpha_1));
     return;
 }
 

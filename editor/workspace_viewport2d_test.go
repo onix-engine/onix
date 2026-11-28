@@ -315,6 +315,19 @@ func TestWorkspace2DRenderSceneHTMLGridAndAxes(t *testing.T) {
 	if !foundMajor || !foundMinor || !foundOrigin {
 		t.Fatalf("missing legacy guides: major=%v minor=%v origin=%v", foundMajor, foundMinor, foundOrigin)
 	}
+	driver.clears = driver.clears[:0]
+	if err := a.updateViewport2D(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.render(context); err != nil {
+		t.Fatal(err)
+	}
+	if err := canvas.FinishFrame(); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(driver.clears); got != 2 {
+		t.Fatalf("CSS animation tick rendered %d offscreen passes, want scene and composite", got)
+	}
 	v := &a.viewport2D
 	if id, _ := a.pickViewport2DTarget(a.canvasBounds().X+v.frame.X+60*a.canvasScale, a.canvasBounds().Y+v.frame.Y+80*a.canvasScale); id != "start" {
 		t.Fatal("sprite picking did not match rendered placement", id)
@@ -763,4 +776,36 @@ func TestWorkspace2DStaticRenderAllocations(t *testing.T) {
 	if allocations := testing.AllocsPerRun(100, frame); allocations != 0 {
 		t.Fatalf("warm 2D canvas render allocated %g", allocations)
 	}
+	checkPasses := func(want int) {
+		t.Helper()
+		if err := a.sync(context); err != nil {
+			t.Fatal(err)
+		}
+		frame()
+		if got := len(driver.clears); got != want {
+			t.Fatalf("2D offscreen passes = %d, want %d", got, want)
+		}
+	}
+	a.action("menu-file")
+	checkPasses(0)
+	a.action("menu-file")
+	a.selectInstance("start")
+	checkPasses(1) // Selection changes the overlay.
+	nameField := workspaceFieldID(modDocumentID("button"), "/name", "")
+	a.handleEvent(htmlui.Event{ID: nameField, Kind: htmlui.EventInput, Value: "Play"})
+	checkPasses(1)
+	if got := a.previewDocument().Mods["button"].Plan.Spec.Name; got != "Play" || a.Document.Mods["button"].Plan.Spec.Name != "Button" {
+		t.Fatal("name draft did not isolate the preview plan from the committed plan")
+	}
+	a.handleEvent(htmlui.Event{ID: nameField, Kind: htmlui.EventInput, Value: "Button"})
+	checkPasses(1)
+	if err := a.Document.EditInstance("start", "Move", func(instance *project.ModInstanceSpec) error {
+		instance.Placement.Position = []float32{50, 60}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	a.changed()
+	checkPasses(2) // The scene texture and its composite both changed.
+	checkPasses(0)
 }

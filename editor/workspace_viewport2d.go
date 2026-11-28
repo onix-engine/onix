@@ -52,6 +52,8 @@ type workspaceViewport2D struct {
 	dragEntity       ecs.Entity
 	structure        uint64
 	generation       uint64
+	revision         uint64
+	dragVersion      uint64
 	dragTransform    project.ModTransform
 	frame            rect
 	clearColor       graphics.ColorRGBA
@@ -61,6 +63,7 @@ type workspaceViewport2D struct {
 	cssAnimated      bool
 	animated         bool
 	focusPending     bool
+	paletteVisible   bool
 }
 
 func (v *workspaceViewport2D) dispose() {
@@ -275,6 +278,11 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 		a.initViewport2D()
 	}
 	graphics.BindFrame(v.world, graphics.CanvasFor(a.world))
+	v.target.renderedOn = nil // Selection, guides and the scene framing are composited here.
+	if v.revision != a.Preview.Revision || v.dragVersion != a.canvasDrag.Version {
+		v.sceneTarget.renderedOn = nil
+		v.revision, v.dragVersion = a.Preview.Revision, a.canvasDrag.Version
+	}
 	if v.local != a.Local {
 		v.offset, v.panning = mgl32.Vec2{}, false
 		if a.Local != "" {
@@ -292,6 +300,7 @@ func (a *ModuleEditor) syncViewport2D() (resultErr error) {
 			}
 		}
 		v.clearColor, v.clearColorSource = color, source
+		v.sceneTarget.renderedOn = nil
 	}
 	width, height := a.viewport2DSize()
 	a.layoutViewport2D()
@@ -531,6 +540,9 @@ func setViewport2DOrder(world *ecs.World, entity ecs.Entity, order int) {
 }
 
 func (v *workspaceViewport2D) syncVisuals(animate bool) error {
+	if animate || v.animated || v.cssAnimated {
+		v.sceneTarget.renderedOn, v.target.renderedOn = nil, nil
+	}
 	if err := scene.UpdateWorldAnimatorSystem("").Run(v.world); err != nil {
 		return err
 	}
@@ -616,28 +628,24 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 		if ok, err := v.sceneTarget.ensureTarget(c.Device(), width, height, 1); !ok || err != nil {
 			return err
 		}
-		// Scene views retain the runtime viewport and authored camera background.
-		if err := c.DrawTo(v.sceneTarget.renderTarget, render.RenderTargetClear{Color: render.Color(v.clearColor), ClearColor: true, ClearDepth: true}, func() error {
-			if err := scene.ExtractCamerasSystem("").Run(v.world); err != nil {
+		if v.sceneTarget.renderedOn != c.Device() {
+			v.target.renderedOn = nil
+			if err := v.drawSceneTarget(c); err != nil {
 				return err
 			}
-			state, _ := v.world.GetResource[*scene.RenderWorld]()
-			if len(state.Cameras) > 0 && state.Cameras[0].Camera.Clear {
-				viewportRect(c, rect{W: float32(width), H: float32(height)}, state.Cameras[0].Camera.ClearColor)
-			}
-			if err := scene.ExtractRender2DSystem("").Run(v.world); err != nil {
-				return err
-			}
-			return scene.RenderCamerasSystem("").Run(v.world)
-		}); err != nil {
-			return err
+			v.sceneTarget.renderedOn = c.Device()
 		}
 	}
 	bounds := a.canvasBounds()
 	if ok, err := v.target.ensureTarget(c.Device(), int(bounds.W), int(bounds.H), 1); !ok || err != nil {
 		return err
 	}
-	return c.DrawTo(v.target.renderTarget, render.RenderTargetClear{Color: render.Color(editorTheme.viewportBG), ClearColor: true, ClearDepth: true}, func() error {
+	palette := a.resolveTilemap()
+	if v.target.renderedOn == c.Device() && palette == v.paletteVisible && !(palette && a.tilemap.armed >= 0) {
+		return nil
+	}
+	v.target.renderedOn = nil
+	err := c.DrawTo(v.target.renderTarget, render.RenderTargetClear{Color: render.Color(editorTheme.viewportBG), ClearColor: true, ClearDepth: true}, func() error {
 		a.drawViewport2DGuides(c, bounds)
 		c.ResetViewMatrix()
 		c.ResetProjectionMatrix()
@@ -653,8 +661,30 @@ func (a *ModuleEditor) renderViewport2D(c *graphics.Canvas2D) (resultErr error) 
 			c.DrawShapeMatrices(mgl32.Translate3D(v.frame.X, v.frame.Y, 0).Mul4(mgl32.Scale3D(v.frame.W, v.frame.H, 1)), mgl32.Ident3(), v.frame.W, v.frame.H, render.ShapeRoundedRect, graphics.ColorRGBA{}, graphics.ColorFromRGB(112, 119, 132), 0, 1, 1)
 		}
 		a.drawViewport2DSelection(c)
-		a.drawTilemapPalette(c)
+		if palette {
+			a.drawTilemapPalette(c)
+		}
 		return nil
+	})
+	if err == nil {
+		v.target.renderedOn, v.paletteVisible = c.Device(), palette
+	}
+	return err
+}
+
+func (v *workspaceViewport2D) drawSceneTarget(c *graphics.Canvas2D) error {
+	return c.DrawTo(v.sceneTarget.renderTarget, render.RenderTargetClear{Color: render.Color(v.clearColor), ClearColor: true, ClearDepth: true}, func() error {
+		if err := scene.ExtractCamerasSystem("").Run(v.world); err != nil {
+			return err
+		}
+		state, _ := v.world.GetResource[*scene.RenderWorld]()
+		if len(state.Cameras) > 0 && state.Cameras[0].Camera.Clear {
+			viewportRect(c, rect{W: float32(v.size[0]), H: float32(v.size[1])}, state.Cameras[0].Camera.ClearColor)
+		}
+		if err := scene.ExtractRender2DSystem("").Run(v.world); err != nil {
+			return err
+		}
+		return scene.RenderCamerasSystem("").Run(v.world)
 	})
 }
 

@@ -126,8 +126,8 @@ int naga_f2i32(float value) {
     return static_cast<int>(metal::clamp(value, -2147483600.0, 2147483500.0));
 }
 
-int naga_abs(int val) {
-    return metal::select(as_type<int>(-as_type<uint>(val)), val, val >= 0);
+int naga_neg(int val) {
+    return as_type<int>(-as_type<uint>(val));
 }
 
 
@@ -160,7 +160,7 @@ fragment sprite_fragmentOutput sprite_fragment(
     bool local_1 = {};
     metal::float4 result = metal::float4(0.0);
     float total = 0.0;
-    int index = -12;
+    int index = {};
     bool local_2 = {};
     bool local_3 = {};
     float mode = metal::abs(input.parameters.w);
@@ -189,62 +189,59 @@ fragment sprite_fragmentOutput sprite_fragment(
     }
     float sigma = metal::max(input.parameters.z, 0.001);
     int limit = naga_f2i32(metal::ceil(sigma * 3.0));
+    index = naga_neg(limit);
     uint2 loop_bound = uint2(4294967295u);
     bool loop_init = true;
     while(true) {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            int _e119 = index;
-            index = as_type<int>(as_type<uint>(_e119) + as_type<uint>(1));
+            int _e115 = index;
+            index = as_type<int>(as_type<uint>(_e115) + as_type<uint>(1));
         }
         loop_init = false;
         int _e77 = index;
-        if (_e77 <= 12) {
+        if (_e77 <= limit) {
         } else {
             break;
         }
         {
-            int _e80 = index;
-            if (naga_abs(_e80) > limit) {
-                continue;
-            }
-            int _e83 = index;
-            float position = static_cast<float>(_e83);
+            int _e79 = index;
+            float position = static_cast<float>(_e79);
             float weight = metal::exp((-(position) * position) / ((2.0 * sigma) * sigma));
             metal::float2 uv = sampleUV + (input.parameters.xy * position);
             metal::float4 pixel_1 = source.sample(sourceSampler, uv, metal::gradient2d(gradientsX, gradientsY));
             metal::float4 premultiplied = (mode > 3.5) ? metal::float4(metal::min(pixel_1.x, pixel_1.w)) : (mode > 0.5) ? pixel_1 : metal::float4(pixel_1.xyz * pixel_1.w, pixel_1.w);
-            metal::float4 _e114 = result;
-            result = _e114 + (premultiplied * weight);
-            float _e117 = total;
-            total = _e117 + weight;
+            metal::float4 _e110 = result;
+            result = _e110 + (premultiplied * weight);
+            float _e113 = total;
+            total = _e113 + weight;
         }
     }
-    metal::float4 _e122 = result;
-    float _e123 = total;
-    result = _e122 / metal::float4(_e123);
+    metal::float4 _e118 = result;
+    float _e119 = total;
+    result = _e118 / metal::float4(_e119);
     if (mode > 1.5) {
         local_2 = mode < 2.5;
     } else {
         local_2 = false;
     }
-    bool _e133 = local_2;
-    if (!(_e133)) {
+    bool _e129 = local_2;
+    if (!(_e129)) {
         local_3 = mode > 4.5;
     } else {
         local_3 = true;
     }
-    bool _e140 = local_3;
-    if (_e140) {
+    bool _e136 = local_3;
+    if (_e136) {
         metal::float2 pixel_2 = input.uv * static_cast<metal::float2>(metal::uint2(source.get_width(), source.get_height()));
-        bool _e153 = insideRoundedBox(pixel_2 - input.box.xy, input.box.zw, input.radiusX, input.radiusY);
-        if (_e153) {
+        bool _e149 = insideRoundedBox(pixel_2 - input.box.xy, input.box.zw, input.radiusX, input.radiusY);
+        if (_e149) {
             return sprite_fragmentOutput { metal::float4(0.0) };
         }
     }
     float alpha_1 = input.color.w;
-    metal::float4 _e158 = result;
-    float _e165 = result.w;
-    return sprite_fragmentOutput { metal::float4((_e158.xyz * input.color.xyz) * alpha_1, _e165 * alpha_1) };
+    metal::float4 _e154 = result;
+    float _e161 = result.w;
+    return sprite_fragmentOutput { metal::float4((_e154.xyz * input.color.xyz) * alpha_1, _e161 * alpha_1) };
 }

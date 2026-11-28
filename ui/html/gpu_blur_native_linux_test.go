@@ -142,7 +142,7 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	context.Device.Activate()
 	world := ecs.NewWorld()
 	graphics.BindFrame(world, graphics.NewCanvas2D(context.Device, 128, 96))
-	html := New(`<div id="blur" style="width:32px;height:20px;background:red;filter:blur(2px)"></div><div id="shadow" style="width:32px;height:20px;background:white;box-shadow:0 0 4px black"></div>`)
+	html := New(`<div id="blur" style="width:32px;height:20px;background:red;filter:blur(5px)"></div><div id="shadow" style="width:32px;height:20px;background:white;box-shadow:0 0 4px black"></div>`)
 	html.Width, html.Height, html.Font = 128, 96, notosanssc.NotoSansSCRegular
 	bundle := ecs.NewBundle(1)
 	bundle.Put(html)
@@ -175,7 +175,7 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 	beforeBlur := state.Textures.gpuBlur[blurKey]
 	beforeShadow := state.Textures.gpuBlur[shadowKey]
 	blurVersion, shadowVersion := beforeBlur.version, beforeShadow.version
-	blur.SetAttribute("style", "width:32px;height:20px;background:blue;filter:blur(2px)")
+	blur.SetAttribute("style", "width:32px;height:20px;background:blue;filter:blur(5px)")
 	shadow.SetAttribute("style", "width:32px;height:20px;background:white;box-shadow:0 0 4px green")
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestNativeHTMLGPUEffectsBindToDOM(t *testing.T) {
 		t.Fatalf("recolor did not update tint: %+v", sprite.Tint)
 	}
 	blurVersion = state.Textures.gpuBlur[blurKey].version
-	blur.SetAttribute("style", "width:32px;height:20px;background:blue;filter:blur(2px);opacity:.5")
+	blur.SetAttribute("style", "width:32px;height:20px;background:blue;filter:blur(5px);opacity:.5")
 	if err := Sync(world); err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +289,22 @@ func TestNativeHTMLGPUBlurCacheInvalidationAndOrientation(t *testing.T) {
 	if wider := read(); at(wider, 8, 7).A >= center.A || at(wider, 8, 1).A <= at(pixels, 8, 1).A {
 		t.Fatal("sigma-only change did not change the pixels")
 	}
+	if !htmlGPUBlurAvailable(world, 0, cache, &layout.Box{}, htmlGPUBlurMaxSigma) {
+		t.Fatal("wide blur did not use the GPU")
+	}
+	parameters[0][2] = htmlGPUBlurMaxSigma
+	cache.blurTexture(canvas, key, texture, 1, parameters)
+	wide := read()
+	reference := image.NewRGBA(source.Rect)
+	copy(reference.Pix, source.Pix)
+	htmlGaussianBlur(reference, htmlGPUBlurMaxSigma, &htmlFilterScratch{})
+	for i := 3; i < len(wide); i += 4 {
+		// Each GPU pass writes to an 8-bit attachment.
+		if diff := int(wide[i]) - int(reference.Pix[i]); diff < -1 || diff > 1 {
+			t.Fatalf("wide blur alpha at pixel %d = %d, want %d", i/4, wide[i], reference.Pix[i])
+		}
+	}
+	parameters[0][2] = 3
 	parameters[0][3] = 2
 	parameters[1] = [4]float32{4, 3, 9, 9}
 	cache.blurTexture(canvas, key, texture, 1, parameters)

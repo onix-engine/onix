@@ -3,13 +3,13 @@ package editor
 import (
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/input"
 	"github.com/onix-engine/onix/project"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const (
@@ -322,6 +322,7 @@ func (a *ModuleEditor) tilemapPressPaint(windowX, windowY float32) bool {
 	}
 	t.painting = true
 	if t.paint(cell, t.armed) {
+		a.viewport2D.sceneTarget.renderedOn = nil
 		a.changedCanvas()
 	}
 	return true
@@ -334,6 +335,7 @@ func (a *ModuleEditor) updateTilemapPointer(pointer input.Pointer) {
 	}
 	if pointer.Down || pointer.Released {
 		if cell, ok := a.tilemapCellAt(t.entity, pointer.X, pointer.Y); ok && t.paint(cell, t.armed) {
+			a.viewport2D.sceneTarget.renderedOn = nil
 			a.changedCanvas()
 		}
 	}
@@ -387,14 +389,12 @@ func (a *ModuleEditor) commitTilemapStroke() {
 			}
 		}
 		t.tilemap.Revision++
+		a.viewport2D.sceneTarget.renderedOn = nil
 	}
 	a.report(err)
 }
 
 func (a *ModuleEditor) drawTilemapPalette(c *graphics.Canvas2D) {
-	if !a.resolveTilemap() {
-		return
-	}
 	t := &a.tilemap
 	a.drawTilemapHover(c, t)
 	c.DrawShapeMatrices(mgl32.Translate3D(t.palette.X, t.palette.Y, 0).Mul4(mgl32.Scale3D(t.palette.W, t.palette.H, 1)), mgl32.Ident3(), t.palette.W, t.palette.H, render.ShapeRoundedRect, tilemapPanelFill, tilemapPanelBorder, 8, 1, 1)

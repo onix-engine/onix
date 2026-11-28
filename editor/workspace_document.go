@@ -32,6 +32,7 @@ type SceneDocument struct {
 type ModDocument struct {
 	Plan            *project.ModPlan
 	ID              project.ModID
+	file            DocumentID
 	Spec            project.ModSpec
 	Revision        uint64
 	contentRevision uint64
@@ -335,21 +336,21 @@ func (w *WorkspaceDocument) installPlan(plan *project.ProjectPlan) {
 		doc.Spec, doc.Dirty, doc.Revision = scene.Spec, state.dirty, state.revision
 		doc.Plan = &plan.Scenes[index]
 	}
-	for id, mod := range w.Mods {
+	for _, mod := range w.Mods {
 		mod.Deleted = true
-		state := w.states[modDocumentID(id)]
+		state := w.states[mod.file]
 		if state.data == nil {
 			mod.Dirty, mod.Revision = state.dirty, state.revision
 			mod.Spec, mod.Plan = project.ModSpec{}, nil
 		}
 	}
 	for index, mod := range plan.Mods {
-		state := w.states[modDocumentID(mod.ID)]
 		doc := w.Mods[mod.ID]
 		if doc == nil {
-			doc = &ModDocument{ID: mod.ID}
+			doc = &ModDocument{ID: mod.ID, file: modDocumentID(mod.ID)}
 			w.Mods[mod.ID] = doc
 		}
+		state := w.states[doc.file]
 		if doc.Plan == nil || doc.Revision != state.revision && !workspaceModContentEqual(doc.Spec, mod.Spec) {
 			doc.contentRevision = state.revision
 		}

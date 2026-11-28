@@ -40,6 +40,18 @@ type workspace3DRow struct {
 	selected bool
 }
 
+type viewport3DFrame struct {
+	settings     viewport3DSettings
+	generation   uint64
+	target       mgl32.Vec3
+	width        float32
+	height       float32
+	distance     float32
+	yaw          float32
+	pitch        float32
+	orthographic bool
+}
+
 // Authored meshes, lights and camera transforms enter this world. No module
 // behavior, simulation, event routes or project cameras run in the viewport.
 type workspaceViewport3D struct {
@@ -49,6 +61,7 @@ type workspaceViewport3D struct {
 	local       project.ModID
 	retired     []*project.Resources
 	rows        []workspace3DRow
+	rendered    viewport3DFrame
 	view        editorViewport3D
 	structure   uint64
 	generation  uint64
@@ -448,32 +461,24 @@ func (a *ModuleEditor) render(context *ecs.SystemContext) error {
 	}
 	graphics.BindFrame(v.world, c)
 	bounds := a.canvasBounds()
-	a.syncViewport3DProjection()
-	projection := v.world.GetRef[scene.Projection](v.view.camera)
 	ok, err := v.view.ensureTarget(c.Device(), int(bounds.W), int(bounds.H), preview3DRenderScale(a.settings.Viewport3D.Supersample))
 	if err != nil || !ok {
 		return err
 	}
-	width, height := v.view.renderTarget.Size()
-	camera := v.world.GetMut[scene.Camera](v.view.camera)
-	camera.Viewport = scene.CameraViewport{Width: float32(width), Height: float32(height)}
-	v.world.GetMut[render3d.Camera](v.view.camera).Target = v.view.renderTarget
-	v.world.GetMut[scene.GlobalTransform](v.view.camera).Matrix = preview3DCameraTransformAround(v.view.target, v.view.yaw, v.view.pitch, v.view.distance/max(.05, a.zoom)).LocalMatrix()
-	if err := a.syncViewport3DEnvironment(); err != nil {
-		return err
+	frame := viewport3DFrame{
+		settings: a.settings.Viewport3D, generation: v.generation, target: v.view.target,
+		width: bounds.W, height: bounds.H, distance: v.view.distance / max(.05, a.zoom),
+		yaw: v.view.yaw, pitch: v.view.pitch, orthographic: v.view.orthographic,
 	}
-	for _, system := range [...]ecs.SystemConfig{scene.ExtractCamerasSystem(""), render3d.ExtractSystem(""), render3d.PrepareSystem(""), render3d.SortSystem(""), render3d.DrawSystem("")} {
-		if err := system.Run(v.world); err != nil {
+	if v.view.renderedOn != c.Device() || v.rendered != frame {
+		v.view.renderedOn = nil
+		if err := a.drawViewport3DTarget(c, frame); err != nil {
 			return err
 		}
+		v.rendered, v.view.renderedOn = frame, c.Device()
 	}
+	projection := v.world.GetRef[scene.Projection](v.view.camera)
 	cameraMatrix := v.world.GetRef[scene.GlobalTransform](v.view.camera).Matrix
-	if err := a.drawPreview3DDepthGrid(c, projection, cameraMatrix); err != nil {
-		return err
-	}
-	if err := a.drawPreview3DAxesDepth(c, projection, cameraMatrix); err != nil {
-		return err
-	}
 	c.ResetViewMatrix()
 	c.ResetProjectionMatrix()
 	drawPreview3DColorTexture(c, v.view.colorTexture, bounds, editorPanelCornerRadius-1)
@@ -485,4 +490,28 @@ func (a *ModuleEditor) render(context *ecs.SystemContext) error {
 	a.drawViewport3DControls(c)
 	c.PopClipRect()
 	return nil
+}
+
+func (a *ModuleEditor) drawViewport3DTarget(c *graphics.Canvas2D, frame viewport3DFrame) error {
+	v := &a.viewport3D
+	a.syncViewport3DProjection()
+	projection := v.world.GetRef[scene.Projection](v.view.camera)
+	width, height := v.view.renderTarget.Size()
+	camera := v.world.GetMut[scene.Camera](v.view.camera)
+	camera.Viewport = scene.CameraViewport{Width: float32(width), Height: float32(height)}
+	v.world.GetMut[render3d.Camera](v.view.camera).Target = v.view.renderTarget
+	cameraMatrix := preview3DCameraTransformAround(frame.target, frame.yaw, frame.pitch, frame.distance).LocalMatrix()
+	v.world.GetMut[scene.GlobalTransform](v.view.camera).Matrix = cameraMatrix
+	if err := a.syncViewport3DEnvironment(); err != nil {
+		return err
+	}
+	for _, system := range [...]ecs.SystemConfig{scene.ExtractCamerasSystem(""), render3d.ExtractSystem(""), render3d.PrepareSystem(""), render3d.SortSystem(""), render3d.DrawSystem("")} {
+		if err := system.Run(v.world); err != nil {
+			return err
+		}
+	}
+	if err := a.drawPreview3DDepthGrid(c, projection, cameraMatrix); err != nil {
+		return err
+	}
+	return a.drawPreview3DAxesDepth(c, projection, cameraMatrix)
 }

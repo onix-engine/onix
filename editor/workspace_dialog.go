@@ -133,7 +133,7 @@ func (a *ModuleEditor) syncWorkspaceDialogs(world *ecs.World) error {
 			panel = a.dialogPanel(780, 480)
 		case "color-picker":
 			panel = a.workspaceColorPickerRect()
-		case "nine-slice":
+		case "nine-slice", workspaceImageDialog:
 			panel = a.dialogPanel(860, 720)
 		}
 		u.htmlDialog(world, name, panel, 82)
@@ -158,6 +158,8 @@ func (a *ModuleEditor) syncWorkspaceDialogs(world *ecs.World) error {
 			a.layoutWorkspaceColorPicker(world, panel)
 		case "nine-slice":
 			a.layoutWorkspaceNineSlice(world, panel)
+		case workspaceImageDialog:
+			a.layoutWorkspaceImage(world, panel)
 		case "about":
 			registerEditorHTMLDialogTexture(world, "about-logo", editorresources.LogoTexture(editorresources.Logo64))
 			a.dialogElement(name, "about-logo", 24, 44, 64, 64).Source = "onix-dialog/about-logo"
@@ -253,6 +255,11 @@ func (a *ModuleEditor) syncWorkspaceDialogs(world *ecs.World) error {
 				errorY = 272
 			} else if name == "nine-slice" {
 				errorY, errorHeight = panel.H-68, 18
+			} else if name == workspaceImageDialog {
+				errorY, errorHeight = panel.H-70, 22
+				if panel.W < workspaceImageCompactWidth && a.imageEditor.pixels != nil {
+					errorY -= 36
+				}
 			}
 			frame.dynamic(editorDialogDynamic{Key: editorDialogDynamicKey("workspace-dialog-error"), Tag: "span", Text: a.dialogError,
 				Attrs: []editorDialogAttr{{Name: "id", Value: "workspace-dialog-error"}, {Name: "role", Value: "alert"}, {Name: "style", Value: fmt.Sprintf("position:absolute;left:24px;top:%gpx;width:%gpx;height:%gpx;color:#f38b9c;overflow:auto;pointer-events:auto", errorY, panel.W-48, errorHeight)}}})
@@ -462,6 +469,8 @@ func (a *ModuleEditor) dialogEvent(event htmlui.Event) bool {
 		a.report(a.applyWorkspaceNineSlice())
 	case id == "nine-slice-cancel":
 		a.closeWorkspaceDialog()
+	case name == workspaceImageDialog && id != "image-editor-close":
+		a.workspaceImageAction(id)
 	case id == "scene-create-confirm" || id == "module-create-confirm":
 		a.confirmOutlinerCreate(name)
 	case id == "folder-create-confirm":
@@ -495,19 +504,21 @@ func (a *ModuleEditor) dialogEvent(event htmlui.Event) bool {
 			a.dialog = "project-dialog"
 		}
 	case strings.HasPrefix(id, "preferences-category-"):
-		a.preferencesCategory = preferencesEditing
-		a.changed()
+		for index, item := range preferencesCategories {
+			if id == "preferences-category-"+item.Key {
+				a.preferencesCategory = preferencesCategory(index)
+				a.changed()
+				break
+			}
+		}
 	case id == "preferences-save":
-		if err := saveEditorSettings(a.preferencesDraft); err != nil {
+		if err := a.saveWorkspacePreferences(); err != nil {
 			a.report(err)
-		} else {
-			a.settings = a.preferencesDraft
-			a.closeWorkspaceDialog()
 		}
 	case strings.HasPrefix(id, "project-category-"):
-		for _, item := range projectSettingsCategories {
+		for index, item := range projectSettingsCategories {
 			if id == "project-category-"+item.Key {
-				a.projectCategory = item.Category
+				a.projectCategory = projectSettingsCategory(index)
 				a.changed()
 				break
 			}
@@ -566,6 +577,12 @@ func (a *ModuleEditor) handleWorkspaceDialogValue(name, value string) {
 	switch name {
 	case "preferences.snapToGrid":
 		a.preferencesDraft.SnapToGrid = value == "true"
+	case preferencesOpenAIBaseURLField:
+		a.preferencesDraft.OpenAI.BaseURL = value
+	case preferencesOpenAIAPIKeyField:
+		a.preferencesDraft.OpenAI.APIKey = value
+	case preferencesOpenAIModelField:
+		a.preferencesDraft.OpenAI.Model = value
 	case "project-dialog.name":
 		a.projectName = value
 	case "project-dialog.width":

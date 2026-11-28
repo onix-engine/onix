@@ -4,11 +4,11 @@ import (
 	"errors"
 	"math"
 
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/onix-engine/onix/ecs"
 	"github.com/onix-engine/onix/graphics"
 	"github.com/onix-engine/onix/render"
 	"github.com/onix-engine/onix/scene"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // editorViewport3D owns state whose lifetime belongs to the scene viewport,
@@ -42,6 +42,7 @@ type editorViewport3D struct {
 type editorRenderTarget struct {
 	renderTarget *render.RenderTarget
 	colorTexture *graphics.Texture
+	renderedOn   *render.Device
 }
 
 func preview3DTargetSize(width, height, scale int) (int, int) {
@@ -65,8 +66,8 @@ func (viewport *editorRenderTarget) ensureTarget(device *render.Device, width, h
 			return false, err
 		}
 		viewport.renderTarget = target
-	} else {
-		viewport.renderTarget.Resize(width, height)
+	} else if viewport.renderTarget.Resize(width, height) {
+		viewport.renderedOn = nil
 	}
 	if viewport.colorTexture == nil {
 		color, err := graphics.CreateTextureFromRenderTarget(viewport.renderTarget)
@@ -79,6 +80,7 @@ func (viewport *editorRenderTarget) ensureTarget(device *render.Device, width, h
 }
 
 func (viewport *editorRenderTarget) disposeTarget() error {
+	viewport.renderedOn = nil
 	var disposeErr error
 	if viewport.colorTexture != nil {
 		disposeErr = viewport.colorTexture.Dispose()

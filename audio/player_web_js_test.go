@@ -17,7 +17,7 @@ func TestWebClipKeepsOwnedFloatSamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(clip.pcm) != 0 || !slices.Equal(clip.samples, source) {
+	if !slices.Equal(clip.samples, source) {
 		t.Fatal("Web clip was converted to PCM bytes")
 	}
 	if clip.length != int64(len(source)*BytesPerSample) {

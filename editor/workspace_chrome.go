@@ -119,7 +119,7 @@ func (a *ModuleEditor) chromeAction(id string) bool {
 		a.showWorkspaceDialog("project-dialog")
 	case "file.open-recent-project":
 		a.menuOpen, a.submenu = "file", id
-		a.changed()
+		a.changedTitlebar()
 	case "file.close-project":
 		a.requestWorkspaceNavigation("close-project")
 	case "file.reload", "top-reload":
@@ -358,11 +358,11 @@ func (a *ModuleEditor) updateWorkspaceMenus(in *input.State) {
 		return
 	}
 	if in.KeyPressed(input.KeyEscape) {
-		a.menuOpen, a.submenu = "", ""
-		a.componentMenu = ""
-		a.componentPickerOpen = false
-		a.elementPicker.Field = ""
-		a.changed()
+		a.closeInspectorMenus()
+		if a.menuOpen != "" || a.submenu != "" {
+			a.menuOpen, a.submenu = "", ""
+			a.changedTitlebar()
+		}
 		return
 	}
 	x, y := in.Pointer().X, in.Pointer().Y
@@ -394,7 +394,7 @@ func (a *ModuleEditor) updateWorkspaceMenus(in *input.State) {
 				a.menuOpen, a.submenu = item.key, ""
 			}
 			if menu != a.menuOpen || submenu != a.submenu {
-				a.changed()
+				a.changedTitlebar()
 			}
 			return
 		}
@@ -405,7 +405,7 @@ func (a *ModuleEditor) updateWorkspaceMenus(in *input.State) {
 				a.submenu = ""
 			}
 			if submenu != a.submenu {
-				a.changed()
+				a.changedTitlebar()
 			}
 			return
 		}
@@ -415,7 +415,7 @@ func (a *ModuleEditor) updateWorkspaceMenus(in *input.State) {
 	}
 	if menu != "" && in.MousePressed(input.MouseLeft) {
 		a.menuOpen, a.submenu = "", ""
-		a.changed()
+		a.changedTitlebar()
 	}
 }
 

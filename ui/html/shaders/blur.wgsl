@@ -49,8 +49,7 @@ fn insideRoundedBox(point: vec2<f32>, size: vec2<f32>, rx: vec4<f32>, ry: vec4<f
     let limit = i32(ceil(sigma * 3.0));
     var result = vec4<f32>(0.0);
     var total = 0.0;
-    for (var index = -12; index <= 12; index = index + 1) {
-        if (abs(index) > limit) { continue; }
+    for (var index = -limit; index <= limit; index = index + 1) {
         let position = f32(index);
         let weight = exp(-position * position / (2.0 * sigma * sigma));
         let uv = sampleUV + input.parameters.xy * position;

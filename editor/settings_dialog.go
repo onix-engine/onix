@@ -10,7 +10,14 @@ type preferencesCategory uint8
 
 const (
 	preferencesEditing preferencesCategory = iota
+	preferencesOpenAI
 	preferencesCategoryCount
+)
+
+const (
+	preferencesOpenAIBaseURLField = "preferences.openAI.baseURL"
+	preferencesOpenAIAPIKeyField  = "preferences.openAI.apiKey"
+	preferencesOpenAIModelField   = "preferences.openAI.model"
 )
 
 const (
@@ -31,22 +38,22 @@ const (
 	resourcePackagesRequiredField     = "resource-packages.required"
 )
 
-type settingsCategoryItem[C ~uint8] struct {
-	Category C
-	Key      string
-	Label    string
+type settingsCategoryItem struct {
+	Key   string
+	Label string
 }
 
-var preferencesCategories = [preferencesCategoryCount]settingsCategoryItem[preferencesCategory]{
-	{Category: preferencesEditing, Key: "editing", Label: "Editing"},
+var preferencesCategories = [preferencesCategoryCount]settingsCategoryItem{
+	preferencesEditing: {Key: "editing", Label: "Editing"},
+	preferencesOpenAI:  {Key: "openai", Label: "OpenAI"},
 }
 
-var projectSettingsCategories = [projectSettingsCategoryCount]settingsCategoryItem[projectSettingsCategory]{
-	{Category: projectSettingsWindow, Key: "window", Label: "Window"},
-	{Category: projectSettingsRendering, Key: "rendering", Label: "Rendering & Viewport"},
-	{Category: projectSettingsFeatures, Key: "features", Label: "Runtime Features"},
-	{Category: projectSettingsResources, Key: "resources", Label: "Resources & Decoders"},
-	{Category: projectSettingsResourcePackages, Key: "resource-packages", Label: "Resource Packages"},
+var projectSettingsCategories = [projectSettingsCategoryCount]settingsCategoryItem{
+	projectSettingsWindow:           {Key: "window", Label: "Window"},
+	projectSettingsRendering:        {Key: "rendering", Label: "Rendering & Viewport"},
+	projectSettingsFeatures:         {Key: "features", Label: "Runtime Features"},
+	projectSettingsResources:        {Key: "resources", Label: "Resources & Decoders"},
+	projectSettingsResourcePackages: {Key: "resource-packages", Label: "Resource Packages"},
 }
 
 type settingsDialogLayout[C ~uint8] struct {

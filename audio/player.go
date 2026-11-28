@@ -3,6 +3,7 @@ package audio
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type platformPlayer interface {
 type Player struct {
 	platform platformPlayer
 	clip     *Clip
+	input    atomic.Pointer[clipStreamReader]
 	mu       sync.Mutex
 }
 
@@ -31,19 +33,21 @@ func (c *Clip) NewPlayer() (*Player, error) {
 		return nil, errors.New("audio: clip is empty")
 	}
 	c.mu.Lock()
-	closed, empty := c.closed, c.length == 0
+	closed, samples := c.closed, c.samples
 	c.mu.Unlock()
 	if closed {
 		return nil, errors.New("audio: clip is closed")
 	}
-	if empty {
+	if c.length == 0 {
 		return nil, errors.New("audio: clip is empty")
 	}
-	player, err := newPlatformPlayer(c)
+	p := &Player{clip: c}
+	player, err := p.newPlatformPlayer(samples)
 	if err != nil {
 		return nil, err
 	}
-	return &Player{clip: c, platform: player}, nil
+	p.platform = player
+	return p, nil
 }
 
 func (p *Player) Play() error {
@@ -138,12 +142,17 @@ func (p *Player) Err() error {
 }
 
 func (p *Player) Close() error {
+	// A concurrent seek may hold mu while waiting for an in-flight read.
+	if input := p.input.Load(); input != nil {
+		input.interrupt()
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.platform == nil {
 		return nil
 	}
 	err := p.platform.Close()
+	p.input.Store(nil)
 	p.platform = nil
 	p.clip = nil
 	return err

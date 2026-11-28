@@ -29,6 +29,30 @@ func TestRemoveBody3DReleasesOnlyItsColliders(t *testing.T) {
 	}
 }
 
+func TestRemoved3DCollidersReleaseCookedGeometry(t *testing.T) {
+	world := NewWorld3D()
+	body := world.CreateBody(NewBodyDef3D(BodyStatic))
+	mesh := world.AddCollider(body, NewColliderDef(queryTestMesh(t)))
+	hull := testBoxHull3D(t, V3(1, 1, 1))
+	world.AddCollider(body, NewColliderDef(hull))
+	compound, err := NewCompound([]CompoundChild{{Shape: hull}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	world.AddCollider(body, NewColliderDef(compound))
+
+	if !world.RemoveCollider(mesh) || !world.RemoveBody(body) {
+		t.Fatal("failed to remove the cooked colliders")
+	}
+	for i := range world.colliders {
+		slot := &world.colliders[i]
+		if slot.mesh.Vertices != nil || slot.mesh.Indices != nil || slot.mesh.TriangleIndices != nil || slot.mesh.BVH != nil ||
+			slot.hull.Vertices != nil || slot.hull.Faces != nil || slot.hull.Edges != nil || slot.compound.Children != nil {
+			t.Fatalf("free collider slot %d retains cooked geometry", i)
+		}
+	}
+}
+
 func Test3DDynamicShapesSettleOnStaticBox(t *testing.T) {
 	tests := []struct {
 		add       func(*World3D, Body3D)

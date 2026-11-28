@@ -3856,7 +3856,8 @@ func spawnHTMLBoxShadows(world *ecs.World, owner ecs.Entity, state *htmlRenderSt
 			continue
 		}
 		sigma := max(style.ResolveLength(shadow.BlurRadius, min(rect.Width, rect.Height)), 0) * .5
-		gpu := htmlGPUBlurAvailable(world, owner, &state.Textures, box, sigma)
+		// Broad box shadows already use the linear-time R8 box filter.
+		gpu := sigma <= 4 && htmlGPUBlurAvailable(world, owner, &state.Textures, box, sigma)
 		var texture *graphics.Texture
 		if gpu {
 			var version uint64

@@ -46,15 +46,16 @@ func webAudioContext() (js.Value, error) {
 	return webDevice.ctx, webDevice.err
 }
 
-func newPlatformPlayer(clip *Clip) (platformPlayer, error) {
+func (p *Player) newPlatformPlayer(samples []float32) (platformPlayer, error) {
+	clip := p.clip
 	if err := validateWebAudioContext(); err != nil {
 		return nil, err
 	}
-	if clip.Streaming() {
+	if samples == nil {
 		return newStreamingWebPlayer(clip)
 	}
 	return &webPlayer{
-		samples:  clip.samples,
+		samples:  samples,
 		duration: clip.duration.Seconds(),
 		volume:   1,
 	}, nil

@@ -76,6 +76,7 @@ type ModuleEditor struct {
 	runDirectory          string
 	buildOptions          BuildOptions
 	draftPreview          workspaceDraftPreview
+	imageEditor           workspaceImageEditor
 	definitionMatrices    []mgl32.Mat4
 	files                 []WorkspaceFile
 	rows                  []workspaceTreeRow
@@ -115,6 +116,7 @@ type ModuleEditor struct {
 	componentPickerOpen      bool
 	dragMoved                bool
 	progressDirty            bool
+	titlebarDirty            bool
 }
 
 func NewModuleEditor(directory string) (*ModuleEditor, error) {
@@ -251,6 +253,20 @@ func (a *ModuleEditor) changedCanvas() {
 	a.canvasDirty = true
 	if a.requestRender != nil {
 		a.requestRender()
+	}
+}
+
+func (a *ModuleEditor) changedTitlebar() {
+	a.titlebarDirty = true
+	if a.requestRender != nil {
+		a.requestRender()
+	}
+}
+
+func (a *ModuleEditor) closeInspectorMenus() {
+	if a.componentPickerOpen || a.componentMenu != "" || a.elementPicker.Field != "" {
+		a.componentPickerOpen, a.componentMenu, a.elementPicker.Field = false, "", ""
+		a.changed()
 	}
 }
 
@@ -551,15 +567,14 @@ func (a *ModuleEditor) action(id string) {
 		return
 	}
 	if menu, ok := strings.CutPrefix(id, "menu-"); ok {
-		a.componentPickerOpen, a.componentMenu = false, ""
-		a.elementPicker.Field = ""
+		a.closeInspectorMenus()
 		a.submenu = ""
 		if a.menuOpen == menu {
 			a.menuOpen = ""
 		} else {
 			a.menuOpen = menu
 		}
-		a.changed()
+		a.changedTitlebar()
 		return
 	}
 	a.menuOpen = ""
@@ -915,7 +930,10 @@ func (a *ModuleEditor) openFile(file string) {
 	double := a.lastFile == file && a.time-a.lastFileClick < .5
 	a.lastFile, a.lastFileClick = file, a.time
 	for _, entry := range a.files {
-		if entry.Path == file && entry.IsDir {
+		if entry.Path != file {
+			continue
+		}
+		if entry.IsDir {
 			if double {
 				a.fileBrowser.Directory = file
 				a.lastFile = ""
@@ -924,6 +942,11 @@ func (a *ModuleEditor) openFile(file string) {
 			a.changed()
 			return
 		}
+		break
+	}
+	if isWorkspaceImageFile(file) {
+		a.openWorkspaceImage(file)
+		return
 	}
 	if strings.HasSuffix(file, "/mod.json") {
 		id := project.ModID(strings.TrimSuffix(file, "/mod.json"))
@@ -953,6 +976,12 @@ func (a *ModuleEditor) sync(context *ecs.SystemContext) error {
 		a.width, a.height, a.dirty = width, height, true
 	}
 	if !a.dirty {
+		if a.titlebarDirty {
+			a.titlebarDirty = false
+			if err := a.syncTitlebar(w); err != nil {
+				return err
+			}
+		}
 		if a.progressDirty {
 			a.progressDirty = false
 			if err := a.syncWorkspaceDialogs(w); err != nil {
@@ -965,10 +994,14 @@ func (a *ModuleEditor) sync(context *ecs.SystemContext) error {
 		}
 		return nil
 	}
-	a.dirty, a.canvasDirty, a.progressDirty = false, false, false
+	a.dirty, a.canvasDirty, a.progressDirty, a.titlebarDirty = false, false, false, false
 	if a.Document != nil {
 		a.syncDraftPreview()
-		a.Preview.Sync(a.previewDocument(), a.Local)
+		doc := a.previewDocument()
+		if a.draftPreview.renamed != nil {
+			doc = a.Document // A display-name edit shares the committed scene geometry.
+		}
+		a.Preview.Sync(doc, a.Local)
 	}
 	a.captureOutlinerScroll(w)
 	if err := a.syncWorkspaceComponent(w); err != nil {
@@ -981,6 +1014,10 @@ func (a *ModuleEditor) sync(context *ecs.SystemContext) error {
 	if err := a.syncWorkspaceDialogs(w); err != nil {
 		return err
 	}
+	return a.syncTitlebar(w)
+}
+
+func (a *ModuleEditor) syncTitlebar(w *ecs.World) error {
 	layout := a.layout()
 	return a.titlebar.syncView(w, editorTitlebarView{font: a.font, root: layout.Root, top: layout.TopBar,
 		menu: a.menuOpen, submenu: a.submenu, recent: a.settings.RecentProjects,

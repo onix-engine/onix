@@ -16,10 +16,17 @@ const (
 )
 
 type editorSettings struct {
-	FilePickerDirectory string             `json:"filePickerDirectory,omitempty"`
 	RecentProjects      []string           `json:"recentProjects,omitempty"`
+	FilePickerDirectory string             `json:"filePickerDirectory,omitempty"`
+	OpenAI              openAISettings     `json:"openAI,omitzero"`
 	Viewport3D          viewport3DSettings `json:"viewport3D,omitempty"`
 	SnapToGrid          bool               `json:"snapToGrid,omitempty"`
+}
+
+type openAISettings struct {
+	BaseURL string `json:"baseURL,omitempty"`
+	APIKey  string `json:"apiKey,omitempty"`
+	Model   string `json:"model,omitempty"`
 }
 
 func editorSettingsPath() (string, error) {
@@ -54,7 +61,12 @@ func saveEditorSettings(settings editorSettings) error {
 	if err != nil {
 		return err
 	}
-	return writeJSONFile(path, settings)
+	data, err := documentJSON(settings)
+	if err != nil {
+		return err
+	}
+	// Replace the settings using a private temporary file because they may contain credentials.
+	return writeWorkspaceFile(path, data)
 }
 
 func defaultFilePickerDirectory(settings editorSettings, fallback string) string {

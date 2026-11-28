@@ -10,6 +10,79 @@ import (
 	"github.com/onix-engine/onix/render"
 )
 
+func TestNativeOpenGLMeshBatchFromStructFields(t *testing.T) {
+	if os.Getenv("DISPLAY") == "" {
+		t.Skip("requires an X display; run under xvfb-run")
+	}
+	if render.CompiledBackend != render.BackendOpenGL {
+		t.Skip("requires OpenGL")
+	}
+	context := NewContext(64, 64, "OpenGL mesh upload regression", Options{})
+	defer runtime.UnlockOSThread()
+	defer context.Destroy()
+	driver := context.Device.Driver()
+	targets := driver.(render.RenderTargetDriver)
+	target, _, err := targets.CreateRenderTarget(render.RenderTargetDescriptor{Width: 8, Height: 8, Depth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer targets.DestroyRenderTarget(target)
+	texture, err := driver.CreateTexture(render.TextureDescriptor{Width: 1, Height: 1}, []byte{255, 255, 255, 255})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.DestroyTexture(texture)
+
+	identity := [16]float32{0: 1, 5: 1, 10: 1, 15: 1}
+	mesh := &struct {
+		batch     render.MeshBatch3D
+		vertices  [3]render.Vertex3D
+		indices   [3]uint32
+		instances [1]render.Instance3D
+	}{
+		vertices: [3]render.Vertex3D{
+			{Position: [3]float32{-1, -1, .5}},
+			{Position: [3]float32{1, -1, .5}},
+			{Position: [3]float32{0, 1, .5}},
+		},
+		indices:   [3]uint32{0, 1, 2},
+		instances: [1]render.Instance3D{{Model: identity, BaseColor: [4]float32{1, 1, 1, 1}}},
+	}
+	// The viewport also stores inline mesh arrays in a heap object with Go pointers.
+	t.Cleanup(func() { runtime.KeepAlive(mesh) })
+	mesh.batch = render.MeshBatch3D{
+		ViewProjection: identity,
+		Vertices:       mesh.vertices[:],
+		Indices:        mesh.indices[:],
+		Instances:      mesh.instances[:],
+		Draws:          []render.MeshDraw3D{{Texture: texture, IndexCount: 3, InstanceCount: 1}},
+	}
+	meshes := driver.(render.MeshDriver)
+	frame := func() {
+		if err := driver.BeginFrame(render.Color{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := targets.BeginRenderTarget(target, render.RenderTargetClear{ClearColor: true, ClearDepth: true}); err != nil {
+			t.Fatal(err)
+		}
+		if err := meshes.DrawMeshes(mesh.batch); err != nil {
+			t.Fatal(err)
+		}
+		if err := targets.EndRenderTarget(); err != nil {
+			t.Fatal(err)
+		}
+		if err := driver.Present(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 6 {
+		frame()
+	}
+	if allocations := testing.AllocsPerRun(6, frame); allocations != 0 {
+		t.Fatalf("OpenGL mesh frame allocations = %v, want 0", allocations)
+	}
+}
+
 func TestNativeOpenGLStreamBatches(t *testing.T) {
 	if os.Getenv("DISPLAY") == "" {
 		t.Skip("requires an X display; run under xvfb-run")

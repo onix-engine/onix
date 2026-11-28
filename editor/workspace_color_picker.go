@@ -270,6 +270,7 @@ func workspacePopupContains(r rect, x, y float32) bool {
 func (a *ModuleEditor) closeWorkspacePopup() {
 	a.colorPicker.field, a.colorPicker.drag = "", ""
 	a.disposeWorkspaceNineSlice()
+	a.disposeWorkspaceImage()
 }
 
 func (a *ModuleEditor) disposeWorkspacePopups() {

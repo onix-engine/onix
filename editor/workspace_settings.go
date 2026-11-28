@@ -3,6 +3,7 @@ package editor
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -10,17 +11,18 @@ import (
 	"github.com/onix-engine/onix/render"
 )
 
-func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save string, categories []settingsCategoryItem[C], category C) settingsDialogLayout[C] {
+func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save string, categories []settingsCategoryItem, category C) settingsDialogLayout[C] {
 	layout := newSettingsDialogLayout[C](a.layout().Root, save)
 	p := layout.panel
 	a.dialogLabel(dialog, dialog+"-title", title, 24, 22, p.W-70, 28)
 	a.dialogElement(dialog, dialog+"-sidebar", 1, 64, layout.sidebar.W, p.H-65).Style += ";background:#20232b"
 	a.dialogElement(dialog, dialog+"-header-divider", 1, 64, p.W-2, 1).Style += ";background:#3b404b"
 	a.dialogElement(dialog, dialog+"-sidebar-divider", layout.sidebar.W+1, 64, 1, p.H-65).Style += ";background:#3b404b"
-	for _, item := range categories {
-		r := layout.categoryRect(item.Category)
-		a.dialogButton(dialog, dialog+"-category-"+item.Key, item.Label, r.X-p.X, r.Y-p.Y, r.W, r.H, category == item.Category)
-		if category == item.Category {
+	for index, item := range categories {
+		r := layout.categoryRect(C(index))
+		active := category == C(index)
+		a.dialogButton(dialog, dialog+"-category-"+item.Key, item.Label, r.X-p.X, r.Y-p.Y, r.W, r.H, active)
+		if active {
 			a.dialogLabel(dialog, dialog+"-category-title", item.Label, layout.content.X-p.X, layout.content.Y-p.Y+14, layout.content.W, 26)
 		}
 	}
@@ -31,11 +33,45 @@ func (a *ModuleEditor) layoutWorkspaceSettings[C ~uint8](dialog, title, save str
 }
 
 func (a *ModuleEditor) layoutWorkspacePreferences() {
-	layout := a.layoutWorkspaceSettings("preferences", "Preferences", "Save Preferences", preferencesCategories[:], a.preferencesCategory)
-	r := layout.fieldRect(0)
-	x, y := r.X-layout.panel.X, r.Y-layout.panel.Y
-	a.dialogLabel("preferences", "preferences-label-preferences.snapToGrid", "Snap to Grid", layout.content.X-layout.panel.X, y+5, x-(layout.content.X-layout.panel.X)-16, 24)
-	a.dialogField("preferences", "preferences.snapToGrid", "bool", strconv.FormatBool(a.preferencesDraft.SnapToGrid), x, y, r.W, r.H)
+	const dialog = "preferences"
+	layout := a.layoutWorkspaceSettings(dialog, "Preferences", "Save Preferences", preferencesCategories[:], a.preferencesCategory)
+	field := func(index int, name, label, kind, value string) {
+		r := layout.fieldRect(index)
+		x, y := r.X-layout.panel.X, r.Y-layout.panel.Y
+		labelX := layout.content.X - layout.panel.X
+		a.dialogLabel(dialog, "preferences-label-"+name, label, labelX, y+5, x-labelX-16, 24)
+		a.dialogField(dialog, name, kind, value, x, y, r.W, r.H)
+	}
+	switch a.preferencesCategory {
+	case preferencesEditing:
+		field(0, "preferences.snapToGrid", "Snap to Grid", "bool", strconv.FormatBool(a.preferencesDraft.SnapToGrid))
+	case preferencesOpenAI:
+		config := a.preferencesDraft.OpenAI
+		field(0, preferencesOpenAIBaseURLField, "Base URL", "string", config.BaseURL)
+		field(1, preferencesOpenAIAPIKeyField, "API Key", "string", config.APIKey)
+		field(2, preferencesOpenAIModelField, "Model", "string", config.Model)
+	}
+}
+
+func (a *ModuleEditor) saveWorkspacePreferences() error {
+	next := a.preferencesDraft
+	next.OpenAI.BaseURL = strings.TrimSpace(next.OpenAI.BaseURL)
+	next.OpenAI.APIKey = strings.TrimSpace(next.OpenAI.APIKey)
+	next.OpenAI.Model = strings.TrimSpace(next.OpenAI.Model)
+	if next.OpenAI.BaseURL != "" {
+		baseURL, err := url.Parse(next.OpenAI.BaseURL)
+		if err != nil || (baseURL.Scheme != "http" && baseURL.Scheme != "https") || baseURL.Hostname() == "" || baseURL.User != nil {
+			a.preferencesCategory = preferencesOpenAI
+			return fmt.Errorf("Enter a valid HTTP or HTTPS Base URL without credentials")
+		}
+	}
+	if err := saveEditorSettings(next); err != nil {
+		return err
+	}
+	a.settings = next
+	a.status = "Preferences saved"
+	a.closeWorkspaceDialog()
+	return nil
 }
 
 type workspaceSetting struct {

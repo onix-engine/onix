@@ -1,16 +1,45 @@
 <div id="dialog-root" data-ref="root" class="dialog-root">
     <div id="overlay" data-ref="overlay" aria-hidden="true"></div>
     <section id="panel" data-ref="panel" role="dialog" aria-modal="true">
-        <div id="content" data-ref="content"><span id="preferences-title" data-ref="preferences-title"
-                class="dialog-label dialog-title">Preferences</span>
+        <div id="content" data-ref="content">
+            <span id="preferences-title" data-ref="preferences-title" class="dialog-label dialog-title">Preferences</span>
             <aside id="preferences-sidebar" data-ref="preferences-sidebar"></aside>
             <div id="preferences-header-divider" data-ref="preferences-header-divider"></div>
-            <div id="preferences-sidebar-divider" data-ref="preferences-sidebar-divider"></div><span
-                id="preferences-category-title" data-ref="preferences-category-title" class="dialog-label dialog-section-title"></span><input
-                id="dialog-field-preferences-preferences-snapToGrid"
+            <div id="preferences-sidebar-divider" data-ref="preferences-sidebar-divider"></div>
+            <span id="preferences-category-title" data-ref="preferences-category-title" class="dialog-label dialog-section-title"></span>
+            <input id="dialog-field-preferences-preferences-snapToGrid"
                 data-ref="dialog-field-preferences-preferences-snapToGrid" type="checkbox" hidden class="checkbox"
-                aria-label="Snap to Grid"><span id="preferences-label-preferences.snapToGrid" data-ref="preferences-label-preferences.snapToGrid" hidden class="dialog-label">Snap to Grid</span><button id="preferences-category-editing"
-                data-ref="preferences-category-editing" type="button"><img id="preferences-category-editing-icon" data-ref="preferences-category-editing-icon" class="dialog-button-icon" alt="" src="onix-titlebar/setting.svg"><span id="preferences-category-editing-label" data-ref="preferences-category-editing-label" class="dialog-button-label">Editing</span></button><button id="preferences-save" data-ref="preferences-save" type="button"><img id="preferences-save-icon" data-ref="preferences-save-icon" class="dialog-button-icon" alt="" src="onix-titlebar/save.svg"><span id="preferences-save-label" data-ref="preferences-save-label" class="dialog-button-label">Save Preferences</span></button><button id="preferences-close" data-ref="preferences-close" type="button"><img id="preferences-close-icon" data-ref="preferences-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg"><span id="preferences-close-label" data-ref="preferences-close-label" class="dialog-button-label"></span></button>
+                aria-label="Snap to Grid">
+            <span id="preferences-label-preferences.snapToGrid" data-ref="preferences-label-preferences.snapToGrid" hidden class="dialog-label">Snap to Grid</span>
+            <label id="preferences-label-preferences.openAI.baseURL" data-ref="preferences-label-preferences.openAI.baseURL"
+                for="dialog-field-preferences-preferences-openAI-baseURL" hidden class="dialog-label">Base URL</label>
+            <input id="dialog-field-preferences-preferences-openAI-baseURL"
+                data-ref="dialog-field-preferences-preferences-openAI-baseURL" type="url" spellcheck="false"
+                placeholder="https://api.openai.com/v1" hidden>
+            <label id="preferences-label-preferences.openAI.apiKey" data-ref="preferences-label-preferences.openAI.apiKey"
+                for="dialog-field-preferences-preferences-openAI-apiKey" hidden class="dialog-label">API Key</label>
+            <input id="dialog-field-preferences-preferences-openAI-apiKey"
+                data-ref="dialog-field-preferences-preferences-openAI-apiKey" type="password" autocomplete="off" hidden>
+            <label id="preferences-label-preferences.openAI.model" data-ref="preferences-label-preferences.openAI.model"
+                for="dialog-field-preferences-preferences-openAI-model" hidden class="dialog-label">Model</label>
+            <input id="dialog-field-preferences-preferences-openAI-model"
+                data-ref="dialog-field-preferences-preferences-openAI-model" type="text" spellcheck="false" hidden>
+            <button id="preferences-category-editing" data-ref="preferences-category-editing" type="button">
+                <img id="preferences-category-editing-icon" data-ref="preferences-category-editing-icon" class="dialog-button-icon" alt="" src="onix-titlebar/setting.svg">
+                <span id="preferences-category-editing-label" data-ref="preferences-category-editing-label" class="dialog-button-label">Editing</span>
+            </button>
+            <button id="preferences-category-openai" data-ref="preferences-category-openai" type="button">
+                <img id="preferences-category-openai-icon" data-ref="preferences-category-openai-icon" class="dialog-button-icon" alt="" src="onix-titlebar/web.svg">
+                <span id="preferences-category-openai-label" data-ref="preferences-category-openai-label" class="dialog-button-label">OpenAI</span>
+            </button>
+            <button id="preferences-save" data-ref="preferences-save" type="button">
+                <img id="preferences-save-icon" data-ref="preferences-save-icon" class="dialog-button-icon" alt="" src="onix-titlebar/save.svg">
+                <span id="preferences-save-label" data-ref="preferences-save-label" class="dialog-button-label">Save Preferences</span>
+            </button>
+            <button id="preferences-close" data-ref="preferences-close" type="button">
+                <img id="preferences-close-icon" data-ref="preferences-close-icon" class="dialog-button-icon" alt="" src="onix-titlebar/close.svg">
+                <span id="preferences-close-label" data-ref="preferences-close-label" class="dialog-button-label"></span>
+            </button>
         </div>
     </section>
 </div>
@@ -134,7 +163,7 @@
         cursor: pointer
     }
 
-    #content #preferences-category-editing {
+    #content button[id^="preferences-category-"] {
         justify-content: flex-start
     }
 

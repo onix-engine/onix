@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +103,6 @@ type Clip struct {
 	openStream   func(Source) (io.ReadSeekCloser, error)
 	format       Format
 	streamSource string
-	pcm          []byte
 	samples      []float32
 	length       int64
 	duration     time.Duration
@@ -149,11 +149,12 @@ func NewClip(format Format, decoded DecodedAudio) (*Clip, error) {
 	if err != nil {
 		return nil, fmt.Errorf("audio: decode %s: %w", format, err)
 	}
-	pcm, webSamples := staticClipData(samples, owned)
+	if !owned {
+		samples = slices.Clone(samples)
+	}
 	return &Clip{
 		format:   format,
-		pcm:      pcm,
-		samples:  webSamples,
+		samples:  samples,
 		length:   int64(len(samples) * BytesPerSample),
 		duration: framesDuration(len(samples) / OutputChannels),
 	}, nil
@@ -178,7 +179,7 @@ func DecodeClip(format Format, source Source, decode func([]byte) (DecodedAudio,
 
 // NewStreamingClip creates a clip whose format implementation supplies its
 // stream reader. The callback is installed once while loading the resource
-// and is not a runtime registry.
+// and is not a runtime registry. A blocking reader must allow Close to interrupt Read.
 func NewStreamingClip(format Format, source Source, sampleRate int, sourceFrames int64, open func(Source) (io.ReadSeekCloser, error)) (*Clip, error) {
 	if source == nil || source.Size() <= 0 || sampleRate <= 0 || sourceFrames <= 0 || open == nil {
 		return nil, errors.Join(fmt.Errorf("audio: invalid streaming %s clip", format), closeSource(source))
@@ -193,7 +194,7 @@ func NewStreamingClip(format Format, source Source, sampleRate int, sourceFrames
 	}, nil
 }
 
-func (c *Clip) openStreamingReader() (io.ReadSeekCloser, error) {
+func (c *Clip) openStreamingReader() (*clipStreamReader, error) {
 	if c == nil {
 		return nil, fmt.Errorf("audio: stream reader is unavailable")
 	}
@@ -243,7 +244,6 @@ func (c *Clip) Close() error {
 		return nil
 	}
 	c.closed = true
-	c.pcm = nil
 	c.samples = nil
 	c.openStream = nil
 	if c.readers != 0 {
@@ -275,26 +275,25 @@ func (c *Clip) releaseSource() error {
 
 type clipStreamReader struct {
 	io.ReadSeekCloser
-	err  error
-	clip *Clip
-	once sync.Once
+	err       error
+	clip      *Clip
+	stopOnce  sync.Once
+	closeOnce sync.Once
+}
+
+// The source can be memory-mapped. Interrupt the read first and keep the
+// source pinned until the owner joins the decoder and calls Close.
+func (r *clipStreamReader) interrupt() {
+	r.stopOnce.Do(func() { r.err = r.ReadSeekCloser.Close() })
 }
 
 func (r *clipStreamReader) Close() error {
-	if r == nil {
-		return nil
-	}
-	r.once.Do(func() {
-		var readerErr, sourceErr error
-		if r.ReadSeekCloser != nil {
-			readerErr = r.ReadSeekCloser.Close()
-		}
+	r.interrupt()
+	r.closeOnce.Do(func() {
 		if r.clip != nil {
-			sourceErr = r.clip.releaseSource()
+			r.err = errors.Join(r.err, r.clip.releaseSource())
 		}
-		r.ReadSeekCloser = nil
-		r.clip = nil
-		r.err = errors.Join(readerErr, sourceErr)
+		r.ReadSeekCloser, r.clip = nil, nil
 	})
 	return r.err
 }
@@ -361,5 +360,5 @@ func ResampledFrameCount(sourceFrames int64, sourceRate int) int64 {
 }
 
 func framesDuration[T ~int | ~int64](frames T) time.Duration {
-	return time.Duration(frames) * time.Second / outputSampleRate
+	return time.Duration(frames/outputSampleRate)*time.Second + time.Duration(frames%outputSampleRate)*time.Second/outputSampleRate
 }

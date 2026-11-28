@@ -3,6 +3,8 @@ package editor
 import (
 	"bytes"
 	"maps"
+	"slices"
+	"strings"
 
 	"github.com/onix-engine/onix/project"
 )
@@ -14,6 +16,7 @@ type workspaceDraftPreview struct {
 	drafts   map[string]string
 	staged   map[DocumentID][]byte
 	document *WorkspaceDocument
+	renamed  *ModDocument
 	revision uint64
 	version  uint64
 }
@@ -35,6 +38,7 @@ func (a *ModuleEditor) syncDraftPreview() {
 	}
 	if sourceChanged {
 		p.document = nil
+		p.renamed = nil
 	}
 	p.source, p.revision = a.Document, a.Document.Revision
 	if p.drafts == nil {
@@ -45,6 +49,10 @@ func (a *ModuleEditor) syncDraftPreview() {
 	clear(p.staged)
 	maps.Copy(p.drafts, a.drafts)
 	maps.Copy(p.staged, a.staged)
+	if a.previewNameDraft() {
+		return
+	}
+	p.renamed = nil
 	if !a.hasDrafts() {
 		p.document = nil
 		return
@@ -84,11 +92,15 @@ func (a *ModuleEditor) syncDraftPreview() {
 	}
 	for i := range plan.Mods {
 		mod := &plan.Mods[i]
-		modRevision := a.Document.Mods[mod.ID].Revision
-		if overrides[modDocumentID(mod.ID)] != nil {
+		source := a.Document.Mods[mod.ID]
+		if source == nil {
+			return
+		}
+		modRevision := source.Revision
+		if overrides[source.file] != nil {
 			modRevision = revision
 		}
-		previous := a.Document.Mods[mod.ID]
+		previous := source
 		if p.document != nil {
 			previous = p.document.Mods[mod.ID]
 		}
@@ -96,7 +108,43 @@ func (a *ModuleEditor) syncDraftPreview() {
 		if previous.Revision != modRevision && !workspaceModContentEqual(previous.Spec, mod.Spec) {
 			contentRevision = revision
 		}
-		document.Mods[mod.ID] = &ModDocument{ID: mod.ID, Spec: mod.Spec, Plan: mod, Revision: modRevision, contentRevision: contentRevision}
+		document.Mods[mod.ID] = &ModDocument{ID: mod.ID, file: source.file, Spec: mod.Spec, Plan: mod, Revision: modRevision, contentRevision: contentRevision}
 	}
 	p.document = &document
+}
+
+// A module's display name has no compiled dependencies. Keep a private copy of
+// its metadata across keystrokes so the inspector and plan agree on the name.
+func (a *ModuleEditor) previewNameDraft() bool {
+	if len(a.staged) != 0 || len(a.drafts) != 1 {
+		return false
+	}
+	for id, name := range a.drafts {
+		field := a.fields[id]
+		if field.Kind != "string" || field.Pointer != "/name" || !field.modified(name) {
+			return false
+		}
+		modID, ok := strings.CutSuffix(string(field.Target), "/"+project.ModFileName)
+		mod := a.Document.Mods[project.ModID(modID)]
+		if !ok || mod == nil || mod.Plan == nil {
+			return false
+		}
+		p := &a.draftPreview
+		if p.renamed == nil || p.renamed.ID != mod.ID {
+			doc := *a.Document
+			plan := *doc.Plan
+			plan.Mods = slices.Clone(plan.Mods)
+			index := slices.IndexFunc(plan.Mods, func(item project.ModPlan) bool { return item.ID == mod.ID })
+			copyMod := *mod
+			copyMod.Plan = &plan.Mods[index]
+			doc.Plan, doc.Mods = &plan, maps.Clone(doc.Mods)
+			doc.Mods[mod.ID] = &copyMod
+			p.document, p.renamed = &doc, &copyMod
+		}
+		p.version++
+		p.document.Revision = uint64(1)<<63 | p.version
+		p.renamed.Revision = p.document.Revision
+		p.renamed.Spec.Name, p.renamed.Plan.Spec.Name = name, name
+	}
+	return true
 }

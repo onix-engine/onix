@@ -329,8 +329,8 @@ static void onix_gl_draw_mesh_picking_run(const OnixGLESPickingDraw *draws, size
 }
 
 static int onix_gl_upload_mesh_batch(OnixGLUploadPool *pool, GLuint *vertex_buffer, GLuint *index_buffer, GLuint *instance_buffer, uintptr_t *instance_offset,
-	const void *vertices, GLsizeiptr vertex_bytes, const void *indices, GLsizeiptr index_bytes,
-	const void *instances, GLsizeiptr instance_bytes) {
+	const GLfloat *vertices, GLsizeiptr vertex_bytes, const uint32_t *indices, GLsizeiptr index_bytes,
+	const GLfloat *instances, GLsizeiptr instance_bytes) {
 	uintptr_t offset;
 	if (vertex_bytes > 0) {
 		*vertex_buffer = onix_gl_upload_buffer(pool, GL_ARRAY_BUFFER, vertex_bytes, vertices, 1, &offset);
@@ -1533,19 +1533,13 @@ func (d *openGLESDriver) validateMeshBatch(batch MeshBatch3D, picking bool) erro
 }
 
 func (d *openGLESDriver) uploadMeshBatch(batch MeshBatch3D) error {
-	var vertices unsafe.Pointer
-	var indices unsafe.Pointer
-	vertexBytes, indexBytes := 0, 0
-	if len(batch.Vertices) != 0 {
-		vertices = sliceData(batch.Vertices)
-		indices = sliceData(batch.Indices)
-		vertexBytes = len(batch.Vertices) * int(unsafe.Sizeof(Vertex3D{}))
-		indexBytes = len(batch.Indices) * 4
-	}
+	// Typed pointers describe the pointer-free upload data even when the
+	// backing arrays are fields in a Go object that also contains pointers.
 	if C.onix_gl_upload_mesh_batch(
 		&d.uploads[d.frameIndex], &d.meshGeometry.vertexBuffer, &d.meshGeometry.indexBuffer, &d.meshGeometry.instanceBuffer, &d.meshGeometry.instanceOffset,
-		vertices, C.GLsizeiptr(vertexBytes), indices, C.GLsizeiptr(indexBytes),
-		sliceData(batch.Instances), C.GLsizeiptr(len(batch.Instances)*int(unsafe.Sizeof(Instance3D{}))),
+		(*C.GLfloat)(sliceData(batch.Vertices)), C.GLsizeiptr(len(batch.Vertices)*int(unsafe.Sizeof(Vertex3D{}))),
+		(*C.uint32_t)(sliceData(batch.Indices)), C.GLsizeiptr(len(batch.Indices)*int(unsafe.Sizeof(uint32(0)))),
+		(*C.GLfloat)(sliceData(batch.Instances)), C.GLsizeiptr(len(batch.Instances)*int(unsafe.Sizeof(Instance3D{}))),
 	) == 0 {
 		return errors.New("render: OpenGL ES mesh upload allocation failed")
 	}

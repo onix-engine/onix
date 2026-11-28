@@ -295,11 +295,8 @@ func (world *World3D) removeColliderIndex(index uint32) {
 	if state.nextCollider != 0 {
 		world.colliders[state.nextCollider-1].prevCollider = state.prevCollider
 	}
-	state.alive = false
-	state.generation++
-	if state.generation == 0 {
-		state.generation = 1
-	}
+	// Release cooked geometry as soon as the slot enters the free list.
+	*state = colliderState3D{generation: max(state.generation+1, 1)}
 	world.freeColliders = append(world.freeColliders, index)
 }
 

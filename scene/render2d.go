@@ -357,39 +357,38 @@ func TriangleShape2D(fill graphics.ColorRGBA, direction uint8) Shape2D {
 }
 
 func drawSpriteRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport renderViewport2D) {
-	if !viewport.visible(item.quadTransform(), item.width, item.height) {
+	base := item.quadTransform()
+	if !viewport.visible(base, item.width, item.height) {
 		return
 	}
 	c.SetMaterial2DParameters(item.materialData().Custom)
-	item.drawSprite(c)
+	item.drawSprite(c, base)
 }
 
 func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport renderViewport2D) {
-	if !viewport.visible(item.quadTransform(), item.width, item.height) {
+	base := item.quadTransform()
+	if !viewport.visible(base, item.width, item.height) {
 		return
 	}
-	shape := item.snapshot[Sprite2D]().Shape
+	model, local, ok := clippedQuad2D(base, mgl32.Ident3(), item.width, item.height, item.clip)
+	if !ok {
+		return
+	}
+	sprite := item.snapshot[Sprite2D]()
+	shape := sprite.Shape
 	// A zero-width border is invisible even when its computed color is opaque.
 	// HTML controls retain that color with border:0 and still need the mask.
 	if item.clip.hasRounded && shape.Kind == render.ShapeRoundedRect && shape.Radius <= 0 && shape.BorderWidth <= 0 && shape.Fill.A > 0 {
 		texture := graphics.CreateTextureByColor(graphics.White)
 		if texture != nil && texture.ValidFor(c.Device()) {
-			model, textureModel, ok := clippedQuad2D(item.quadTransform(), mgl32.Ident3(), item.width, item.height, item.clip)
-			if !ok {
-				return
-			}
 			c.BindTexture(texture)
 			// Match the former RGBA8 texel's quantization without retaining one
 			// global texture (and device residency) for each animated color.
 			fill := shape.Fill.GoColor()
 			tint := graphics.ColorFromRGBA(fill.R, fill.G, fill.B, fill.A)
-			c.DrawTintedMatricesCustom(model, textureModel, tint, item.snapshot[Sprite2D]().Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
+			c.DrawTintedMatricesCustom(model, local, tint, sprite.Alpha, roundedClipMaterial2D([4][4]float32{}, item.clip.rounded))
 			return
 		}
-	}
-	model, local, ok := clippedQuad2D(item.quadTransform(), mgl32.Ident3(), item.width, item.height, item.clip)
-	if !ok {
-		return
 	}
 	c.DrawShapeMatrices(
 		model,
@@ -401,7 +400,7 @@ func drawShapeRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport re
 		shape.Border,
 		shape.Radius,
 		shape.BorderWidth,
-		item.snapshot[Sprite2D]().Alpha,
+		sprite.Alpha,
 	)
 }
 
@@ -444,9 +443,13 @@ func drawTextRenderItem2D(c *graphics.Canvas2D, item *renderItem2D, viewport ren
 	item.drawText(c)
 }
 
-func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
-	base := item.quadTransform()
-	if item.snapshot[Sprite2D]().Slice == nil {
+func (item *renderItem2D) drawSprite(c *graphics.Canvas2D, base mgl32.Mat4) {
+	sprite := item.snapshot[Sprite2D]()
+	custom := item.materialData().Custom
+	if item.clip.hasRounded {
+		custom = roundedClipMaterial2D(custom, item.clip.rounded)
+	}
+	if sprite.Slice == nil {
 		width, height := item.width, item.height
 		if item.texture.Trimmed() && item.texture.SourceWidth > 0 && item.texture.SourceHeight > 0 {
 			scaleX := item.width / float32(item.texture.SourceWidth)
@@ -457,7 +460,7 @@ func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 		}
 		model, texture, ok := clippedQuad2D(base, textureMatrix(item.texture), width, height, item.clip)
 		if ok {
-			item.drawSpriteMatrices(c, model, texture)
+			c.DrawTintedMatricesCustom(model, texture, sprite.Tint, sprite.Alpha, custom)
 		}
 		return
 	}
@@ -465,11 +468,11 @@ func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 	rasterScaleX, rasterScaleY := item.texture.RasterScale()
 	xSpans, xCount := nineSliceAxisSpans(
 		float32(item.texture.LogicalWidth()), float32(item.texture.OffsetX)/rasterScaleX, float32(item.texture.Width)/rasterScaleX,
-		item.width, item.snapshot[Sprite2D]().Slice.Left, item.snapshot[Sprite2D]().Slice.Right,
+		item.width, sprite.Slice.Left, sprite.Slice.Right,
 	)
 	ySpans, yCount := nineSliceAxisSpans(
 		float32(item.texture.LogicalHeight()), float32(item.texture.OffsetY)/rasterScaleY, float32(item.texture.Height)/rasterScaleY,
-		item.height, item.snapshot[Sprite2D]().Slice.Top, item.snapshot[Sprite2D]().Slice.Bottom,
+		item.height, sprite.Slice.Top, sprite.Slice.Bottom,
 	)
 	baseTexture := textureMatrix(item.texture)
 	for y := range yCount {
@@ -481,18 +484,10 @@ func (item renderItem2D) drawSprite(c *graphics.Canvas2D) {
 				Mul3(mgl32.Scale2D(xSpan.textureSize, ySpan.textureSize))
 			model, texture, ok := clippedQuad2D(model, texture, xSpan.targetSize, ySpan.targetSize, item.clip)
 			if ok {
-				item.drawSpriteMatrices(c, model, texture)
+				c.DrawTintedMatricesCustom(model, texture, sprite.Tint, sprite.Alpha, custom)
 			}
 		}
 	}
-}
-
-func (item renderItem2D) drawSpriteMatrices(c *graphics.Canvas2D, model mgl32.Mat4, texture mgl32.Mat3) {
-	custom := item.materialData().Custom
-	if item.clip.hasRounded {
-		custom = roundedClipMaterial2D(custom, item.clip.rounded)
-	}
-	c.DrawTintedMatricesCustom(model, texture, item.snapshot[Sprite2D]().Tint, item.snapshot[Sprite2D]().Alpha, custom)
 }
 
 func nineSliceAxis(sourceSize, targetSize, leading, trailing float32) ([4]float32, [4]float32) {
@@ -1359,7 +1354,7 @@ type renderItem2D struct {
 func (item *renderItem2D) Entity() ecs.Entity { return item.entity }
 
 // snapshot reads the active payload without allocating or retaining ECS storage.
-func (item renderItem2D) snapshot[T renderSnapshot2D]() *T {
+func (item *renderItem2D) snapshot[T renderSnapshot2D]() *T {
 	value, _ := item.content.(*T)
 	return value
 }
@@ -2877,7 +2872,7 @@ func (item *renderItem2D) renderSortKey() renderSortKey2D {
 	}
 }
 
-func (item renderItem2D) quadTransform() mgl32.Mat4 {
+func (item *renderItem2D) quadTransform() mgl32.Mat4 {
 	return quadBaseTransform(item.transform, item.anchor, item.width, item.height, item.ui)
 }
 
@@ -2900,6 +2895,9 @@ func anchorForEntity2D(world *ecs.World, entity ecs.Entity) Anchor {
 
 func quadBaseTransform(transform mgl32.Mat4, anchor Anchor, width, height float32, screenSpace bool) mgl32.Mat4 {
 	x, y := anchor.TopLeft(width, height, screenSpace)
+	if screenSpace && x == 0 && y == 0 {
+		return transform
+	}
 	base := transform.Mul4(mgl32.Translate3D(x, y, 0))
 	if !screenSpace {
 		base = base.Mul4(mgl32.Scale3D(1, -1, 1))

@@ -2,242 +2,156 @@
 
 package audio
 
-import (
-	"bytes"
-	"errors"
-	"io"
-	"sync"
-	"time"
+import "time"
 
-	"github.com/ebitengine/oto/v3"
-)
-
-var nativeDevice struct {
-	err  error
-	ctx  *oto.Context
-	once sync.Once
-	mu   sync.Mutex
-}
-
-type nativeSource struct {
-	reader io.ReadSeekCloser
-	mu     sync.Mutex
-}
-
-func (s *nativeSource) Read(buffer []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reader == nil {
-		return 0, io.EOF
-	}
-	return s.reader.Read(buffer)
-}
-
-func (s *nativeSource) Seek(offset int64, whence int) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reader == nil {
-		return 0, io.ErrClosedPipe
-	}
-	return s.reader.Seek(offset, whence)
-}
-
-func (s *nativeSource) offset() int64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reader == nil {
-		return 0
-	}
-	position, _ := s.reader.Seek(0, io.SeekCurrent)
-	return position
-}
-
-func (s *nativeSource) close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reader == nil {
-		return nil
-	}
-	err := s.reader.Close()
-	s.reader = nil
-	return err
-}
-
+// The device mutex protects playback state. A streaming reader is detached
+// from the mixer before a seek or close can block on its decoder.
 type nativePlayer struct {
-	clip   *Clip
-	source *nativeSource
-	player *oto.Player
-	volume float64
-	closed bool
+	err     error
+	output  *outputRun
+	stream  *nativeStream
+	samples []float32
+	frame   int64
+	frames  int64
+	volume  float64
 }
 
-func newPlatformPlayer(clip *Clip) (platformPlayer, error) {
-	reader := io.ReadSeekCloser(readSeekNopCloser{ReadSeeker: bytes.NewReader(clip.pcm)})
-	if clip.Streaming() {
-		stream, err := clip.openStreamingReader()
+func (owner *Player) newPlatformPlayer(samples []float32) (platformPlayer, error) {
+	clip := owner.clip
+	p := &nativePlayer{samples: samples, frames: clip.length / bytesPerFrame, volume: 1}
+	if samples == nil {
+		reader, err := clip.openStreamingReader()
 		if err != nil {
 			return nil, err
 		}
-		reader = stream
+		p.stream = newNativeStream(reader)
+		owner.input.Store(reader)
 	}
-	return &nativePlayer{
-		clip:   clip,
-		source: &nativeSource{reader: reader},
-		volume: 1,
-	}, nil
-}
-
-func nativeContext() (*oto.Context, error) {
-	nativeDevice.once.Do(func() {
-		ctx, _, err := oto.NewContext(&oto.NewContextOptions{
-			SampleRate:      outputSampleRate,
-			ChannelCount:    outputChannels,
-			Format:          oto.FormatFloat32LE,
-			ApplicationName: "Onix",
-		})
-		nativeDevice.mu.Lock()
-		nativeDevice.ctx = ctx
-		nativeDevice.err = err
-		nativeDevice.mu.Unlock()
-	})
-	nativeDevice.mu.Lock()
-	defer nativeDevice.mu.Unlock()
-	return nativeDevice.ctx, nativeDevice.err
-}
-
-func (p *nativePlayer) ensurePlayer() error {
-	if p.closed {
-		return errPlayerClosed
-	}
-	if p.player != nil {
-		return nil
-	}
-	ctx, err := nativeContext()
-	if err != nil {
-		return err
-	}
-	p.player = ctx.NewPlayer(p.source)
-	p.player.SetVolume(p.volume)
-	return nil
+	return p, nil
 }
 
 func (p *nativePlayer) Play() error {
-	if err := p.ensurePlayer(); err != nil {
+	m := &nativeDevice
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, playing := m.players[p]; playing || p.err != nil || p.frame == p.frames {
+		return p.errLocked()
+	}
+	p.output = m.startLocked()
+	if err := p.errLocked(); err != nil {
 		return err
 	}
-	p.player.Play()
-	return p.Err()
+	if p.stream != nil {
+		p.stream.start(p.frames - p.frame)
+	}
+	m.players[p] = struct{}{}
+	if p.output != nil {
+		p.output.wake.Signal()
+	}
+	return nil
 }
 
 func (p *nativePlayer) Pause() error {
-	if p.closed {
-		return errPlayerClosed
-	}
-	if p.player != nil {
-		p.player.Pause()
-	}
-	return p.Err()
+	nativeDevice.mu.Lock()
+	defer nativeDevice.mu.Unlock()
+	delete(nativeDevice.players, p)
+	return p.errLocked()
 }
 
 func (p *nativePlayer) IsPlaying() bool {
-	return !p.closed && p.player != nil && p.player.IsPlaying()
+	nativeDevice.mu.Lock()
+	defer nativeDevice.mu.Unlock()
+	_, playing := nativeDevice.players[p]
+	return playing
 }
 
 func (p *nativePlayer) Position() time.Duration {
-	if p.closed {
-		return 0
-	}
-	offset := p.source.offset()
-	if p.player != nil {
-		offset -= int64(p.player.BufferedSize())
-	}
-	offset = max(int64(0), min(offset, p.clip.length))
-	return time.Duration(offset) * time.Second / bytesPerSecond
+	nativeDevice.mu.Lock()
+	defer nativeDevice.mu.Unlock()
+	return framesDuration(p.frame)
 }
 
 func (p *nativePlayer) Seek(position time.Duration) error {
-	if p.closed {
-		return errPlayerClosed
+	frame := p.frames
+	if position < framesDuration(frame) {
+		frame = int64(position/time.Second)*outputSampleRate + int64(position%time.Second)*outputSampleRate/int64(time.Second)
 	}
-	offset := int64(position) * bytesPerSecond / int64(time.Second)
-	offset -= offset % bytesPerFrame
-	if p.player != nil {
-		_, err := p.player.Seek(offset, io.SeekStart)
-		return err
+	var playing bool
+	m := &nativeDevice
+	m.mu.Lock()
+	if s := p.stream; s != nil {
+		_, playing = m.players[p]
+		delete(m.players, p)
+		m.mu.Unlock()
+		offset, err := s.seek(frame, p.frames, playing)
+		m.mu.Lock()
+		if err != nil {
+			p.err = err
+			m.mu.Unlock()
+			return err
+		}
+		frame = offset
 	}
-	_, err := p.source.Seek(offset, io.SeekStart)
-	return err
+	p.frame, p.err = frame, nil
+	m.mu.Unlock()
+	if playing {
+		return p.Play()
+	}
+	return nil
 }
 
 func (p *nativePlayer) Volume() float64 {
+	nativeDevice.mu.Lock()
+	defer nativeDevice.mu.Unlock()
 	return p.volume
 }
 
 func (p *nativePlayer) SetVolume(volume float64) error {
-	if p.closed {
-		return errPlayerClosed
-	}
+	nativeDevice.mu.Lock()
+	defer nativeDevice.mu.Unlock()
 	p.volume = volume
-	if p.player != nil {
-		p.player.SetVolume(volume)
-	}
-	return p.Err()
+	return p.errLocked()
 }
 
 func (p *nativePlayer) Err() error {
-	if p.closed {
-		return errPlayerClosed
-	}
-	if p.player != nil {
-		if err := p.player.Err(); err != nil {
-			return err
-		}
-	}
 	nativeDevice.mu.Lock()
-	ctx := nativeDevice.ctx
-	nativeDevice.mu.Unlock()
-	if ctx != nil {
-		return ctx.Err()
+	defer nativeDevice.mu.Unlock()
+	return p.errLocked()
+}
+
+func (p *nativePlayer) errLocked() error {
+	if p.err != nil {
+		return p.err
+	}
+	if p.output != nil {
+		return p.output.err
 	}
 	return nil
 }
 
 func (p *nativePlayer) Close() error {
-	if p.closed {
-		return nil
+	nativeDevice.mu.Lock()
+	delete(nativeDevice.players, p)
+	s := p.stream
+	p.samples, p.stream = nil, nil
+	nativeDevice.mu.Unlock()
+	if s != nil {
+		return s.close()
 	}
-	var playerErr error
-	if p.player != nil {
-		p.player.Pause()
-		playerErr = p.player.Close()
-		p.player = nil
-	}
-	var sourceErr error
-	if p.source != nil {
-		sourceErr = p.source.close()
-	}
-	p.closed = true
-	p.clip = nil
-	p.source = nil
-	return errors.Join(playerErr, sourceErr)
+	return nil
 }
 
-func suspendPlatform() error {
-	nativeDevice.mu.Lock()
-	ctx := nativeDevice.ctx
-	nativeDevice.mu.Unlock()
-	if ctx == nil {
-		return nil
+func (p *nativePlayer) mix(out []float32) int {
+	count := int(min(p.frames-p.frame, int64(len(out)/outputChannels))) * outputChannels
+	gain := float32(p.volume)
+	if p.stream == nil {
+		start := p.frame * outputChannels
+		for i, sample := range p.samples[start : start+int64(count)] {
+			out[i] += gain * sample
+		}
+	} else {
+		count, p.err = p.stream.mix(out[:count], gain)
 	}
-	return ctx.Suspend()
-}
-
-func resumePlatform() error {
-	nativeDevice.mu.Lock()
-	ctx := nativeDevice.ctx
-	nativeDevice.mu.Unlock()
-	if ctx == nil {
-		return nil
-	}
-	return ctx.Resume()
+	p.frame += int64(count / outputChannels)
+	return count
 }

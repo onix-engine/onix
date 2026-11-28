@@ -2,6 +2,7 @@ package editor
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/go-gl/mathgl/mgl32"
@@ -181,6 +182,32 @@ func TestWorkspace3DRenderTargetModelsAndGuides(t *testing.T) {
 	if id, _ := a.pickViewport3DTarget(x, y); id != "model" {
 		t.Fatalf("3D canvas picking did not select owning module: %q", id)
 	}
+	checkPasses := func(want int) {
+		t.Helper()
+		driver.clears = driver.clears[:0]
+		driver.spriteTextures = driver.spriteTextures[:0]
+		if err := a.sync(context); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.render(context); err != nil {
+			t.Fatal(err)
+		}
+		if err := canvas.FinishFrame(); err != nil {
+			t.Fatal(err)
+		}
+		if len(driver.clears) != want || !slices.Contains(driver.spriteTextures, a.viewport3D.view.colorTexture.RenderHandle()) {
+			t.Fatalf("3D viewport expected scene composite and %d offscreen passes, got %d passes", want, len(driver.clears))
+		}
+	}
+	a.action("menu-file")
+	checkPasses(0)
+	a.viewport3D.view.yaw += .1
+	checkPasses(3)
+	a.settings.Viewport3D.HideGrid = true
+	checkPasses(2)
+	a.settings.Viewport3D.Supersample = true
+	checkPasses(2)
+	checkPasses(0)
 }
 
 func TestWorkspace3DNavigationDoesNotEditDocument(t *testing.T) {
@@ -385,6 +412,7 @@ func TestWorkspace3DGuideDrawingDoesNotAllocate(t *testing.T) {
 	a, context := workspace3DEditorFixture(t)
 	a.viewport3D.view.yaw, a.viewport3D.view.pitch = -.6, .45
 	frame := func() {
+		a.viewport3D.view.renderedOn = nil // Measure guide drawing with the same warmed geometry.
 		driver.shapes, driver.clears = driver.shapes[:0], driver.clears[:0]
 		if err := a.render(context); err != nil {
 			panic(err)

@@ -239,7 +239,7 @@ func (a *ModuleEditor) inspector(b, picker *editorVNodeView) {
 	if document := a.Document.Mods[modID]; document != nil && !document.Deleted {
 		view := *document
 		view.Spec = a.viewMod(modID)
-		target := modDocumentID(modID)
+		target := document.file
 		if a.slotCreating && a.editingModule.Scene != "" {
 			a.section(b, "slot-create", "New Slot")
 			a.addDeclaration(b, "slot", "Slot", `{"type":"string","default":"","writable":true}`)
@@ -659,10 +659,11 @@ func stagedView[T stagedViewSpec](cache map[DocumentID]stagedViewEntry[T], targe
 }
 
 func (a *ModuleEditor) viewMod(id project.ModID) project.ModSpec {
-	target := modDocumentID(id)
+	mod := a.Document.Mods[id]
+	target := mod.file
 	data := a.staged[target]
 	if data == nil {
-		return a.Document.Mods[id].Spec
+		return mod.Spec
 	}
 	if a.viewMods == nil {
 		a.viewMods = make(map[DocumentID]stagedViewEntry[project.ModSpec], 1)
@@ -670,7 +671,7 @@ func (a *ModuleEditor) viewMod(id project.ModID) project.ModSpec {
 	if spec, ok := stagedView(a.viewMods, target, data); ok {
 		return spec
 	}
-	return a.Document.Mods[id].Spec
+	return mod.Spec
 }
 
 func (a *ModuleEditor) viewScene(id project.SceneID) project.SceneSpec {

@@ -24,6 +24,9 @@ var htmlBlurGLSL string
 //go:embed shaders/blur.wgsl
 var htmlBlurWGSL string
 
+// A separable pass samples at most 97 texels with a three-sigma kernel.
+const htmlGPUBlurMaxSigma = 16
+
 func htmlBlurShaderDescriptor() render.ShaderDescriptor {
 	switch render.CompiledBackend {
 	case render.BackendOpenGL, render.BackendWebGL:
@@ -98,7 +101,7 @@ func htmlGPUBlurAvailable(world *ecs.World, owner ecs.Entity, cache *htmlTexture
 	if render.CompiledBackend == render.BackendDirectX {
 		return false
 	}
-	if sigma <= 0 || sigma > 4 || math.IsNaN(sigma) || graphics.CanvasFor(world) == nil || graphics.DeviceFor(world) == nil {
+	if sigma <= 0 || sigma > htmlGPUBlurMaxSigma || math.IsNaN(sigma) || graphics.CanvasFor(world) == nil || graphics.DeviceFor(world) == nil {
 		return false
 	}
 	for parent := box.Parent; parent != nil; parent = parent.Parent {

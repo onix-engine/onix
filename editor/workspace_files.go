@@ -187,9 +187,17 @@ type workspaceResourceType struct {
 	Filter window.FileDialogFilter
 }
 
+var workspaceImageFilter = window.FileDialogFilter{Name: "Image", Extensions: []string{
+	"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ktx", "ktx2", "dds", "ontex", "hdr", "exr",
+}}
+
+func isWorkspaceImageFile(file string) bool {
+	return slices.Contains(workspaceImageFilter.Extensions, strings.TrimPrefix(strings.ToLower(path.Ext(file)), "."))
+}
+
 var workspaceResourceTypes = [...]workspaceResourceType{
 	{"font", window.FileDialogFilter{Name: "Font", Extensions: []string{"ttf", "otf", "woff", "woff2"}}},
-	{"image", window.FileDialogFilter{Name: "Image", Extensions: []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ktx", "ktx2", "dds", "ontex", "hdr", "exr"}}},
+	{"image", workspaceImageFilter},
 	{"audio", window.FileDialogFilter{Name: "Audio", Extensions: []string{"wav", "mp3", "ogg", "flac", "aac", "m4a"}}},
 	{"video", window.FileDialogFilter{Name: "Video", Extensions: []string{"mp4", "webm", "mov", "avi", "mkv"}}},
 	{"html", window.FileDialogFilter{Name: "HTML", Extensions: []string{"html"}}},
